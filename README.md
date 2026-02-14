@@ -15,8 +15,8 @@ Cloud Security Office Hours is a **vendor-neutral, free community** dedicated to
 - **Weekly Expert Zoom Sessions** - Every Friday at 7:00 AM PT with industry experts
 - **260+ Curated Resources** - CTF challenges, hands-on labs, security tools, certifications
 - **120+ News Articles** - Daily cloud security news from reputable sources
-- **Active Discord Community** - Real-time discussions, peer learning, mentorship
-- **No Vendor Lock-in** - Completely free, open, community-run initiative
+- **Discord Community** - Real-time discussions, peer learning, mentorship
+- **Vendor Neutral** - Completely free, open, community-run initiative
 
 ---
 
@@ -28,7 +28,6 @@ Central hub featuring:
 - Featured resource categories with quick navigation
 - Call-to-action buttons for Zoom registration and Discord
 - Enhanced schema markup for improved SERP visibility
-- Testimonials and member count (2000+)
 
 ### 📚 Resources (`resources.html`)
 Comprehensive catalog of **260+ cloud security resources** organized by 6 categories:
