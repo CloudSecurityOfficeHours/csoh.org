@@ -2,12 +2,23 @@ name: Deploy site to FTP
 on:
   push:
     branches: [ main ]
+  workflow_run:
+    workflows: ["Update SRI Hashes"]
+    types: [completed]
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' &&
+      !contains(github.event.head_commit.message, 'chore: update SRI hashes') ||
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
