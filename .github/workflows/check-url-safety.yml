@@ -1,0 +1,76 @@
+name: Check URL Safety
+
+on:
+  pull_request:
+    paths:
+      - '**.html'
+  push:
+    branches:
+      - main
+    paths:
+      - '**.html'
+  workflow_dispatch:
+
+jobs:
+  check-urls:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run URL safety check
+        run: |
+          python3 tools/check_all_site_urls.py > site-wide-url-safety-report.txt 2>&1 || true
+          cat site-wide-url-safety-report.txt
+          if grep -q "❌ UNSAFE" site-wide-url-safety-report.txt; then
+            echo "::error::Unsafe URLs detected in HTML files"
+            exit 1
+          fi
+
+      - name: Upload safety report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-wide-url-safety-report
+          path: site-wide-url-safety-report.txt
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Comment on PR with results
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            try {
+              report = fs.readFileSync('site-wide-url-safety-report.txt', 'utf8');
+            } catch (e) {
+              report = 'Error reading safety report';
+            }
+            
+            // Extract summary
+            const summaryMatch = report.match(/SUMMARY[\s\S]*?={50,}/);
+            const summary = summaryMatch ? summaryMatch[0] : 'See full report in artifacts';
+            
+            const unsafeMatch = report.match(/❌ UNSAFE URLS \((\d+)\):/);
+            const unsafeCount = unsafeMatch ? unsafeMatch[1] : '0';
+            
+            let comment = `## ⚠️ URL Safety Check Failed\n\n`;
+            comment += `Found **${unsafeCount} unsafe URL(s)** in HTML files\n\n`;
+            comment += `\`\`\`\n${summary}\n\`\`\`\n\n`;
+            comment += `Please review the URLs and remove any unsafe entries.\n\n`;
+            comment += `Full report is available in the workflow artifacts.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
