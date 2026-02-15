@@ -34,6 +34,81 @@ This interactive tool:
 - ✅ Creates git branch and commits
 - ✅ Provides PR creation instructions
 
+### 🧭 Beginner Walkthrough (Interactive Tool)
+
+If you are new to GitHub or the command line, this is the easiest path. Follow these steps:
+
+1. **Install Python** (if you do not already have it)
+  - Mac: Python 3 is usually installed. If not, install from python.org.
+  - Windows: Install from python.org and check the box "Add to PATH".
+
+2. **Open a terminal**
+  - Mac: Spotlight → Terminal
+  - Windows: Start → Command Prompt or PowerShell
+
+3. **Clone the repository** (one time only)
+  ```bash
+  git clone https://github.com/CloudSecurityOfficeHours/csoh.org.git
+  cd csoh.org
+  ```
+
+4. **Run the script**
+  ```bash
+  python3 tools/submit_resource.py
+  ```
+
+5. **Answer the prompts**
+  - Resource name
+  - URL
+  - Description
+  - Category
+  - Tags
+  - Confirmation
+
+6. **When it finishes**, it will tell you exactly how to push and open a PR
+
+### 🔒 URL Safety and Preview Images
+
+The script checks URL safety and can optionally generate a preview image for you.
+If you skip the preview, a GitHub Actions workflow will capture a screenshot after you open a PR.
+
+### 🧰 Common Errors and Fixes
+
+- **`python3` not found**
+  - Install Python from python.org and reopen your terminal.
+  - On Windows, make sure "Add to PATH" is checked.
+
+- **`git` not found**
+  - Install Git from git-scm.com and reopen your terminal.
+
+- **Not in a git repo**
+  - Run `cd csoh.org` before running the script.
+
+- **Working directory has uncommitted changes**
+  - Commit or stash changes, then re-run the script.
+
+- **Permission denied**
+  - Run `chmod +x tools/submit_resource.py` or use `python3 tools/submit_resource.py`.
+
+- **URL flagged as unsafe**
+  - Use the official site or GitHub repo URL and try again.
+
+### 🧪 Copy/Paste Commands
+
+**Mac or Linux (Terminal):**
+```bash
+git clone https://github.com/CloudSecurityOfficeHours/csoh.org.git
+cd csoh.org
+python3 tools/submit_resource.py
+```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/CloudSecurityOfficeHours/csoh.org.git
+cd csoh.org
+python3 tools/submit_resource.py
+```
+
 **[See full documentation →](tools/SUBMIT_RESOURCE_README.md)**
 
 If you prefer the manual web-based method, continue reading below!
