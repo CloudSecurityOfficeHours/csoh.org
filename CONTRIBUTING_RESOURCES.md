@@ -210,6 +210,64 @@ You don't need to install anything or learn command-line. Here's the easiest way
 
 ---
 
+## 🛡️ Automated URL Safety Check
+
+When you submit your pull request, our automated security system will validate all URLs in your contribution. Here's what happens:
+
+### ✅ What Gets Checked
+
+Every URL is automatically scanned for:
+- **Suspicious patterns** - URL shorteners, raw IP addresses, phishing indicators
+- **Security best practices** - HTTPS usage, domain legitimacy
+- **Blocklisted domains** - Known malicious or spam sites
+- **Whitelisted domains** - Trusted sources (GitHub, AWS, Microsoft, etc.)
+
+### 🤖 The Validation Process
+
+1. **GitHub Actions workflow runs** - Automatically triggered when any HTML file changes
+2. **All 1,000+ site URLs are scanned** - Your new URL plus all existing ones
+3. **Results posted as a check** - You'll see ✅ or ❌ in the PR
+4. **Report generated** - Full details available as a workflow artifact
+
+### 🚨 If a URL Fails Validation
+
+**Don't worry!** The workflow blocks unsafe URLs but provides clear guidance:
+
+- **⚠️ Suspicious** (warning) - URL might have minor issues but isn't blocked
+  - Example: Using HTTP instead of HTTPS
+  - Example: Very long domain names
+  - **Action:** The PR can still merge, but consider updating the URL
+
+- **❌ Unsafe** (blocked) - URL matches malicious patterns or is blocklisted
+  - Example: Known phishing domain
+  - Example: Executable files in URL
+  - **Action:** PR will be blocked. Update the URL or remove it, then re-submit
+
+### 📋 Sample Report
+
+```
+Total URLs checked: 1,018
+  ✅ Safe:        1,017 (99.9%)
+  ⚠️  Suspicious:  1 (0.1%)
+  ❌ Unsafe:      0 (0%)
+
+⚠️  SUSPICIOUS URL:
+📄 resources.html
+   http://example.com/resource
+   - Uses HTTP (not HTTPS) - may be insecure
+```
+
+### 💡 Pro Tips for URL Safety
+
+- **Always use HTTPS** when available
+- **Use official sources** - Link to official documentation or GitHub repos
+- **Avoid URL shorteners** - Use the full destination URL
+- **Test the link** - Make sure it actually works before submitting
+
+This automated check protects our 2,000+ community members from malicious links while keeping the contribution process smooth and transparent!
+
+---
+
 ## 🤔 Need Help? Links to External Resources
 
 Don't understand something? Here are links to helpful guides:

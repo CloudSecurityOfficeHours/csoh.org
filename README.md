@@ -1,6 +1,6 @@
 # Cloud Security Office Hours (CSOH)
 
-A modern, community-driven cloud security resource hub built as a fast, responsive static website. Home to **2000+ security professionals**, **260+ curated resources**, **120+ news articles**, and weekly expert-led Zoom sessions.
+A modern, community-driven cloud security resource hub built as a fast, responsive static website. Home to **2000+ security professionals**, **260+ curated resources**, **120+ news articles**, **554+ community-shared URLs**, and weekly expert-led Zoom sessions.
 
 [![GitHub](https://img.shields.io/badge/GitHub-CloudSecurityOfficeHours/csoh.org-blue)](https://github.com/CloudSecurityOfficeHours/csoh.org)
 [![Discord](https://img.shields.io/badge/Discord-2000%2B%20Members-5865F2)](https://discord.gg/AVzAY97D8E)
@@ -15,7 +15,9 @@ Cloud Security Office Hours is a **vendor-neutral, free community** dedicated to
 - **Weekly Expert Zoom Sessions** - Every Friday at 7:00 AM PT with industry experts
 - **260+ Curated Resources** - CTF challenges, hands-on labs, security tools, certifications
 - **120+ News Articles** - Daily cloud security news from reputable sources
+- **554+ Community-Shared URLs** - Secure, validated links from Zoom chat sessions
 - **Active Discord Community** - Real-time discussions, peer learning, mentorship
+- **Automated Security Validation** - All URLs checked for malicious patterns before publication
 - **Vender Neutral** - Completely free, open, community-run initiative
 
 ---
@@ -85,6 +87,14 @@ Comprehensive catalog of **260+ cloud security resources** organized by 6 catego
 - **Auto-updated daily** via Python news aggregation script
 - **Rich snippet optimization** for featured search results
 
+### 💬 Chat Resources (`chat-resources.html`)
+Community-shared resources from weekly Zoom sessions:
+- **554+ URLs** shared by community members during live sessions
+- **Security validated** - All URLs automatically checked for malicious patterns
+- **Filterable by date, person, category** - Find resources from specific sessions
+- **Descriptive titles** - Auto-generated from page content
+- **Continuous protection** - GitHub Actions workflow validates new URLs before merge
+
 ### 📅 Zoom Sessions (`sessions.html`)
 Information about weekly community gatherings:
 - **When:** Every Friday at 7:00 AM Pacific Time
@@ -108,6 +118,9 @@ Archive of past Zoom session presentations:
 - **Pure Static HTML** - No database, server-side code, or backend dependencies
 - **Instant Load Times** - Optimized CSS/JS, no external frameworks
 - **Zero Vulnerabilities** - No SQL injection, XSS, or code execution risks
+- **Automated URL Safety Checks** - All URLs validated for phishing, malware, and suspicious patterns
+- **CI/CD Security Validation** - GitHub Actions workflow blocks unsafe URLs before merge
+- **1,000+ URLs Validated** - Comprehensive site-wide security scanning
 - **CDN Ready** - Deploy anywhere (GitHub Pages, Vercel, AWS S3, etc.)
 - **100% Uptime** - Simple file hosting = maximum reliability
 
@@ -141,6 +154,7 @@ csoh.org/
 ├── index.html                  # Homepage with hero section & category overview
 ├── resources.html              # Main resource directory (260+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
+├── chat-resources.html         # Community-shared URLs from Zoom sessions (554+ URLs)
 ├── sessions.html               # Weekly Zoom session information
 ├── presentations.html          # Archive of recorded presentations
 ├── kevin-mitnick.html          # Special resource page
@@ -158,6 +172,14 @@ csoh.org/
 ├── img/                        # Images and preview thumbnails
 │   └── previews/               # Resource preview images
 │
+├── tools/                      # Automation and maintenance scripts
+│   ├── check_url_safety.py           # Core URL safety validator with pattern matching
+│   ├── check_existing_urls.py        # Batch scanner for chat-resources.html URLs
+│   ├── check_all_site_urls.py        # Comprehensive site-wide URL scanner
+│   ├── update_chat_titles.py         # Generate descriptive titles for chat URLs
+│   ├── CHECK_URL_SAFETY_README.md    # URL safety checker documentation
+│   └── CHECK_URL_SAFETY_WORKFLOW.md  # GitHub Actions workflow documentation
+│
 ├── update_news.py              # Python script to auto-update news articles
 ├── update_sri.py               # Python script to update SRI hashes & cache-bust params
 ├── calculate-sri.sh            # Shell script for manual SRI hash calculation
@@ -167,6 +189,7 @@ csoh.org/
 ├── .github/workflows/
 │   ├── update-news.yml         # Automated news updates (every 12 hours)
 │   ├── update-sri.yml          # Automated SRI hash updates (on CSS/JS changes)
+│   ├── check-url-safety.yml    # Automated URL safety validation (on HTML changes)
 │   └── deploy to csoh.org.yml  # Automated FTP deployment (on push to main)
 │
 ├── resources-data.json         # Data export of all resources (for integrations)
@@ -232,7 +255,7 @@ Edit the "Resource Categories" section in `index.html` to:
 
 ## 🤖 How Automation Works
 
-This site uses three **GitHub Actions workflows** that handle routine tasks automatically. GitHub Actions is a free automation service built into GitHub — think of it as a robot that runs scripts for you whenever certain things happen in the repo.
+This site uses four **GitHub Actions workflows** that handle routine tasks automatically. GitHub Actions is a free automation service built into GitHub — think of it as a robot that runs scripts for you whenever certain things happen in the repo.
 
 ### 1. News Auto-Updates (every 12 hours)
 
@@ -253,7 +276,21 @@ This site uses three **GitHub Actions workflows** that handle routine tasks auto
 
 **Full docs:** [UPDATE_SRI_README.md](UPDATE_SRI_README.md)
 
-### 3. Auto-Deploy to Web Server (on push to main)
+### 3. URL Safety Validation (on any HTML file change)
+
+**What it does:** Protects the site from malicious URLs by validating all links before they go live.
+
+**How it works:** Whenever any HTML file is modified in a pull request or push, a Python script (`check_all_site_urls.py`) scans **all URLs across the entire site** (1,000+ URLs) and checks them against:
+- **Suspicious patterns** - URL shorteners, raw IP addresses, executable files, phishing indicators
+- **Blocklist** - Known malicious domains
+- **Whitelist** - Trusted domains (GitHub, AWS, Microsoft, etc.)
+- **Security best practices** - HTTPS usage, domain length, subdomain depth
+
+If any **unsafe URLs** are detected, the workflow **fails and blocks the merge**, posting a detailed report as a comment on the PR. The full safety report is uploaded as an artifact for 30 days.
+
+**Full docs:** [tools/CHECK_URL_SAFETY_README.md](tools/CHECK_URL_SAFETY_README.md) and [.github/workflows/CHECK_URL_SAFETY_WORKFLOW.md](.github/workflows/CHECK_URL_SAFETY_WORKFLOW.md)
+
+### 4. Auto-Deploy to Web Server (on push to main)
 
 **What it does:** Uploads the latest site files to the web server whenever changes land on the `main` branch.
 
@@ -338,12 +375,15 @@ Want to help improve CSOH? We have **beginner-friendly guides** for contributing
 
 - **2000+** Community members
 - **260+** Curated resources
+- **554+** Community-shared URLs (from Zoom chat sessions)
 - **120+** News articles (auto-updated daily)
+- **1,000+** URLs validated for security
 - **6** Resource categories
 - **50+** Training platforms
 - **60+** Security tools catalogued
 - **~100+** Published presentations
 - **Weekly** Expert Zoom sessions
+- **4** Automated workflows (news, SRI, URL safety, deployment)
 
 ---
 
@@ -380,6 +420,6 @@ Special thanks to:
 
 ---
 
-**Last Updated**: February 14, 2026
+**Last Updated**: February 15, 2026
 
 For the latest updates and announcements, follow us on Discord!

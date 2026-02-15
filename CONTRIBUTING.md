@@ -497,6 +497,29 @@ Before you submit, make sure:
 - ✅ **Commit message is helpful** - Clearly describe what you did
 - ✅ **You're not changing too much** - Keep each PR focused on one thing
 
+### 🛡️ Automated URL Safety Check
+
+When you submit a PR that modifies any HTML file, our automated workflow will:
+
+- ✅ **Scan all URLs** across the entire site (1,000+ URLs)
+- ⚠️ **Flag suspicious patterns** (URL shorteners, HTTP-only, etc.)
+- ❌ **Block unsafe URLs** (phishing, malware, blocklisted domains)
+- 📋 **Generate a report** available as a workflow artifact
+
+**What this means for you:**
+- If your PR adds or modifies URLs, they'll be automatically validated
+- ✅ **Safe URLs** - PR can merge immediately
+- ⚠️ **Suspicious warnings** - PR can still merge, but review the warnings
+- ❌ **Unsafe URLs** - PR will be blocked until the issue is fixed
+
+**Pro tips:**
+- Always use HTTPS when available
+- Link to official sources (GitHub, AWS docs, etc.)
+- Avoid URL shorteners - use full destination URLs
+- Test links before submitting
+
+See [tools/CHECK_URL_SAFETY_README.md](tools/CHECK_URL_SAFETY_README.md) for full details.
+
 ---
 
 ## 🔗 Helpful External Resources
