@@ -77,64 +77,27 @@ jobs:
             echo "No changes to commit"
           fi
 
-      - name: Commit and push changes
-        if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add img/previews/*.jpg
-          git add preview-mapping.json
-          
-          git commit -m "Auto-generate preview images for new resources"
-          git push
-
-      - name: Commit to PR branch
-        if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add img/previews/*.jpg
-          git add preview-mapping.json
-          
-          git commit -m "Auto-generate preview images for new resources"
-          
-          # Push to the PR branch
-          git push origin HEAD:${{ github.head_ref }}
-
-      - name: Comment on PR with preview info
-        if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+      - name: Create PR with preview images
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v7
         with:
-          script: |
-            const fs = require('fs');
-            let checkOutput = '';
-            try {
-              checkOutput = fs.readFileSync('preview-check.txt', 'utf8');
-            } catch (e) {
-              checkOutput = 'Preview generation completed';
-            }
-            
-            // Extract number of previews generated
-            const match = checkOutput.match(/(\d+) resources without previews/);
-            const count = match ? match[1] : '?';
-            
-            let comment = `## Preview Images Generated\n\n`;
-            comment += `Generated **${count} preview image(s)** for the new resource(s).\n\n`;
-            comment += `### What was done:\n`;
-            comment += `- Captured screenshots of new resource URLs\n`;
-            comment += `- Optimized images (400x300, <150KB)\n`;
-            comment += `- Updated \`preview-mapping.json\`\n`;
-            comment += `- Saved to \`img/previews/\`\n\n`;
-            comment += `The preview images are now part of this PR and will be included when merged.`;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+          commit-message: "Auto-generate preview images for new resources"
+          branch: auto/preview-images
+          delete-branch: true
+          title: "Auto-generate preview images for new resources"
+          body: |
+            ## Preview Images Generated
+
+            Generated preview images for resources that were missing them.
+
+            ### What was done:
+            - Captured screenshots of new resource URLs
+            - Optimized images (400x300, <150KB)
+            - Updated `preview-mapping.json`
+            - Saved to `img/previews/`
+          add-paths: |
+            img/previews/*.jpg
+            preview-mapping.json
 
       - name: Upload preview images as artifacts
         if: steps.check.outputs.missing == 'true'
