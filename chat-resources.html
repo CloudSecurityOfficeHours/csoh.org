@@ -6288,23 +6288,6 @@
         let activeFilter = null;
         let activeDateFilter = { type: 'none', startDate: null, endDate: null };
 
-        function filterCards() {
-            const query = searchInput.value.toLowerCase();
-            cards.forEach(card => {
-                const text = card.textContent.toLowerCase();
-                const cardEl = card.querySelector('.resource-card');
-                const cat = cardEl.dataset.category;
-                const person = cardEl.dataset.person;
-                const cardDate = cardEl.dataset.date;
-
-                const matchesSearch = !query || text.includes(query);
-                const matchesFilter = !activeFilter || cat === activeFilter || person === activeFilter;
-                const matchesDate = checkDateFilter(cardDate);
-
-                card.style.display = (matchesSearch && matchesFilter && matchesDate) ? '' : 'none';
-            });
-        }
-
         function matchesDateFilter(cardDate) {
             if (activeDateFilter.type === 'none' || cardDate === 'unknown') {
                 return true;
@@ -6336,17 +6319,32 @@
 
             cardEntries.forEach(({ link, card }) => {
                 const text = link.textContent.toLowerCase();
-                const { category, person, date } = cardMeta(card);
+                const category = card?.dataset.category;
+                const person = card?.dataset.person;
+                const date = card?.dataset.date;
 
                 const matchesSearch = !query || text.includes(query);
-                const matchesFilter = !activeFilter || category === activeFilter || person === activeFilter;
+                let matchesFilter = !activeFilter;
+                
+                if (activeFilter) {
+                    if (activeFilter.startsWith('person-')) {
+                        matchesFilter = person === activeFilter;
+                    } else {
+                        matchesFilter = category === activeFilter;
+                    }
+                }
+                
                 const matchesDate = matchesDateFilter(date);
 
                 link.style.display = (matchesSearch && matchesFilter && matchesDate) ? '' : 'none';
             });
         }
 
+
         searchInput?.addEventListener('input', filterCards);
+
+        // Initialize the display on page load
+        filterCards();
 
         showAllBtn?.addEventListener('click', function(event) {
             event.preventDefault();
