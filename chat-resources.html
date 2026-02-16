@@ -6276,166 +6276,104 @@
     document.addEventListener('DOMContentLoaded', function() {
         const searchInput = document.getElementById('searchInput');
         const showAllBtn = document.getElementById('showAllBtn');
-        const filterButtonsContainer = document.getElementById('filterButtons');
+        const cards = document.querySelectorAll('.card-link');
         const filterBtns = document.querySelectorAll('.filter-btn');
-        const cardLinks = Array.from(document.querySelectorAll('.card-link'));
-
-        const cardEntries = cardLinks.map(link => ({
-            link,
-            card: link.querySelector('.resource-card')
-        })).filter(entry => entry.card);
-
         let activeFilter = null;
         let activeDateFilter = { type: 'none', startDate: null, endDate: null };
 
-        function matchesDateFilter(cardDate) {
+        function filterCards() {
+            const query = searchInput.value.toLowerCase();
+            cards.forEach(function(card) {
+                var text = card.textContent.toLowerCase();
+                var cardEl = card.querySelector('.resource-card');
+                var cat = cardEl.dataset.category;
+                var person = cardEl.dataset.person;
+                var cardDate = cardEl.dataset.date;
+
+                var matchesSearch = !query || text.includes(query);
+                var matchesFilter = !activeFilter;
+                
+                if (activeFilter) {
+                    if (activeFilter.startsWith('person-')) {
+                        matchesFilter = person === activeFilter;
+                    } else {
+                        matchesFilter = cat === activeFilter;
+                    }
+                }
+                
+                var matchesDate = checkDateFilter(cardDate);
+
+                card.style.display = (matchesSearch && matchesFilter && matchesDate) ? '' : 'none';
+            });
+        }
+
+        function checkDateFilter(cardDate) {
             if (activeDateFilter.type === 'none' || cardDate === 'unknown') {
                 return true;
             }
 
-            const { type, startDate, endDate } = activeDateFilter;
+            var filterType = activeDateFilter.type;
+            var startDate = activeDateFilter.startDate;
+            var endDate = activeDateFilter.endDate;
 
-            if ((type === 'before' || type === 'after') && !startDate) {
-                return true;
-            }
-
-            if (type === 'before') {
+            if (filterType === 'before' && startDate) {
                 return cardDate < startDate;
-            }
-
-            if (type === 'after') {
+            } else if (filterType === 'after' && startDate) {
                 return cardDate > startDate;
-            }
-
-            if (type === 'range' && startDate && endDate) {
+            } else if (filterType === 'range' && startDate && endDate) {
                 return cardDate >= startDate && cardDate <= endDate;
             }
 
             return true;
         }
 
-        function filterCards() {
-            const query = ((searchInput && searchInput.value) || '').toLowerCase();
+        searchInput.addEventListener('input', filterCards);
 
-            cardEntries.forEach(({ link, card }) => {
-                const text = link.textContent.toLowerCase();
-                const category = card && card.dataset ? card.dataset.category : '';
-                const person = card && card.dataset ? card.dataset.person : '';
-                const date = card && card.dataset ? card.dataset.date : 'unknown';
-
-                const matchesSearch = !query || text.includes(query);
-                let matchesFilter = !activeFilter;
-                
-                if (activeFilter) {
-                    if (activeFilter.startsWith('person-')) {
-                        matchesFilter = person === activeFilter;
-                    } else {
-                        matchesFilter = category === activeFilter;
-                    }
-                }
-                
-                const matchesDate = matchesDateFilter(date);
-
-                link.style.display = (matchesSearch && matchesFilter && matchesDate) ? '' : 'none';
-            });
-        }
-
-
-        if (searchInput) {
-            searchInput.addEventListener('input', filterCards);
-        }
-
-        // Initialize the display on page load
-        filterCards();
-
-        if (showAllBtn) {
-            showAllBtn.addEventListener('click', function(event) {
-            event.preventDefault();
-            if (searchInput) {
-                searchInput.value = '';
-            }
+        showAllBtn.addEventListener('click', function() {
+            searchInput.value = '';
             activeFilter = null;
-            filterBtns.forEach(button => button.classList.remove('active'));
+            filterBtns.forEach(function(b) { b.classList.remove('active'); });
 
             activeDateFilter = { type: 'none', startDate: null, endDate: null };
-
-            const dateFilterType = document.getElementById('dateFilterType');
-            const singleDateInput = document.getElementById('singleDate');
-            const startDateInput = document.getElementById('startDate');
-            const endDateInput = document.getElementById('endDate');
-            const startDateContainer = document.getElementById('startDateContainer');
-            const endDateContainer = document.getElementById('endDateContainer');
-            const singleDateContainer = document.getElementById('singleDateContainer');
-            const applyDateFilter = document.getElementById('applyDateFilter');
-            const clearDateFilter = document.getElementById('clearDateFilter');
-
+            var dateFilterType = document.getElementById('dateFilterType');
+            var singleDateInput = document.getElementById('singleDate');
+            var startDateInput = document.getElementById('startDate');
+            var endDateInput = document.getElementById('endDate');
             if (dateFilterType) {
                 dateFilterType.value = 'none';
-            }
-            if (singleDateInput) {
                 singleDateInput.value = '';
-            }
-            if (startDateInput) {
                 startDateInput.value = '';
-            }
-            if (endDateInput) {
                 endDateInput.value = '';
-            }
-            if (startDateContainer) {
-                startDateContainer.style.display = 'none';
-            }
-            if (endDateContainer) {
-                endDateContainer.style.display = 'none';
-            }
-            if (singleDateContainer) {
-                singleDateContainer.style.display = 'none';
-            }
-            if (applyDateFilter) {
-                applyDateFilter.style.display = 'none';
-            }
-            if (clearDateFilter) {
-                clearDateFilter.style.display = 'none';
+                document.getElementById('startDateContainer').style.display = 'none';
+                document.getElementById('endDateContainer').style.display = 'none';
+                document.getElementById('singleDateContainer').style.display = 'none';
+                document.getElementById('applyDateFilter').style.display = 'none';
+                document.getElementById('clearDateFilter').style.display = 'none';
             }
 
             filterCards();
-            });
-        }
+        });
 
-        if (filterButtonsContainer) {
-            filterButtonsContainer.addEventListener('click', function(event) {
-            const btn = event.target.closest('.filter-btn');
-            if (!btn) {
-                return;
-            }
-
-            event.preventDefault();
-
-            const filter = btn.dataset.filter;
-            if (!filter) {
-                return;
-            }
-
-            if (activeFilter === filter) {
-                activeFilter = null;
-                btn.classList.remove('active');
-            } else {
-                activeFilter = filter;
-                filterBtns.forEach(button => button.classList.remove('active'));
-                btn.classList.add('active');
-            }
-
-            filterCards();
-            });
-        }
-
-        const showAllContributorsBtn = document.getElementById('showAllContributorsBtn');
-        if (showAllContributorsBtn) {
-            showAllContributorsBtn.addEventListener('click', function(event) {
-                event.preventDefault();
-                const allContributorsDiv = document.getElementById('allContributors');
-                if (!allContributorsDiv) {
-                    return;
+        filterBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var filter = this.dataset.filter;
+                if (activeFilter === filter) {
+                    activeFilter = null;
+                    this.classList.remove('active');
+                } else {
+                    activeFilter = filter;
+                    filterBtns.forEach(function(b) { b.classList.remove('active'); });
+                    this.classList.add('active');
                 }
+                filterCards();
+            });
+        });
+
+        // Handle Show All Contributors button
+        var showAllContributorsBtn = document.getElementById('showAllContributorsBtn');
+        if (showAllContributorsBtn) {
+            showAllContributorsBtn.addEventListener('click', function() {
+                var allContributorsDiv = document.getElementById('allContributors');
                 if (allContributorsDiv.style.display === 'none') {
                     allContributorsDiv.style.display = '';
                     this.textContent = 'Hide Additional Contributors';
@@ -6446,130 +6384,78 @@
             });
         }
 
-        const dateFilterType = document.getElementById('dateFilterType');
-        const startDateContainer = document.getElementById('startDateContainer');
-        const endDateContainer = document.getElementById('endDateContainer');
-        const singleDateContainer = document.getElementById('singleDateContainer');
-        const startDateInput = document.getElementById('startDate');
-        const endDateInput = document.getElementById('endDate');
-        const singleDateInput = document.getElementById('singleDate');
-        const applyDateFilter = document.getElementById('applyDateFilter');
-        const clearDateFilter = document.getElementById('clearDateFilter');
+        // Handle Date Filter
+        var dateFilterType = document.getElementById('dateFilterType');
+        var startDateContainer = document.getElementById('startDateContainer');
+        var endDateContainer = document.getElementById('endDateContainer');
+        var singleDateContainer = document.getElementById('singleDateContainer');
+        var startDateInput = document.getElementById('startDate');
+        var endDateInput = document.getElementById('endDate');
+        var singleDateInput = document.getElementById('singleDate');
+        var applyDateFilter = document.getElementById('applyDateFilter');
+        var clearDateFilter = document.getElementById('clearDateFilter');
 
-        if (dateFilterType) {
-            dateFilterType.addEventListener('change', function() {
-            const filterType = this.value;
+        dateFilterType.addEventListener('change', function() {
+            var filterType = this.value;
 
-            if (startDateContainer) {
-                startDateContainer.style.display = 'none';
-            }
-            if (endDateContainer) {
-                endDateContainer.style.display = 'none';
-            }
-            if (singleDateContainer) {
-                singleDateContainer.style.display = 'none';
-            }
-            if (applyDateFilter) {
-                applyDateFilter.style.display = 'none';
-            }
-            if (clearDateFilter) {
-                clearDateFilter.style.display = 'none';
-            }
+            startDateContainer.style.display = 'none';
+            endDateContainer.style.display = 'none';
+            singleDateContainer.style.display = 'none';
+            applyDateFilter.style.display = 'none';
+            clearDateFilter.style.display = 'none';
 
             if (filterType === 'before' || filterType === 'after') {
-                if (singleDateContainer) {
-                    singleDateContainer.style.display = 'block';
-                }
-                if (applyDateFilter) {
-                    applyDateFilter.style.display = 'block';
-                }
-                if (clearDateFilter) {
-                    clearDateFilter.style.display = 'block';
-                }
+                singleDateContainer.style.display = 'block';
+                applyDateFilter.style.display = 'block';
+                clearDateFilter.style.display = 'block';
             } else if (filterType === 'range') {
-                if (startDateContainer) {
-                    startDateContainer.style.display = 'block';
-                }
-                if (endDateContainer) {
-                    endDateContainer.style.display = 'block';
-                }
-                if (applyDateFilter) {
-                    applyDateFilter.style.display = 'block';
-                }
-                if (clearDateFilter) {
-                    clearDateFilter.style.display = 'block';
-                }
+                startDateContainer.style.display = 'block';
+                endDateContainer.style.display = 'block';
+                applyDateFilter.style.display = 'block';
+                clearDateFilter.style.display = 'block';
             }
-            });
-        }
+        });
 
-        if (applyDateFilter) {
-            applyDateFilter.addEventListener('click', function(event) {
-            event.preventDefault();
-
-            const filterType = (dateFilterType && dateFilterType.value) ? dateFilterType.value : 'none';
+        applyDateFilter.addEventListener('click', function() {
+            var filterType = dateFilterType.value;
 
             if (filterType === 'before' || filterType === 'after') {
-                const dateValue = singleDateInput ? singleDateInput.value : '';
+                var dateValue = singleDateInput.value;
                 if (dateValue) {
                     activeDateFilter = {
                         type: filterType,
                         startDate: dateValue,
                         endDate: null
                     };
+                    filterCards();
                 }
             } else if (filterType === 'range') {
-                const startDate = startDateInput ? startDateInput.value : '';
-                const endDate = endDateInput ? endDateInput.value : '';
-                if (startDate && endDate) {
+                var sd = startDateInput.value;
+                var ed = endDateInput.value;
+                if (sd && ed) {
                     activeDateFilter = {
                         type: 'range',
-                        startDate,
-                        endDate
+                        startDate: sd,
+                        endDate: ed
                     };
+                    filterCards();
                 }
             }
+        });
 
-            filterCards();
-            });
-        }
-
-        if (clearDateFilter) {
-            clearDateFilter.addEventListener('click', function(event) {
-            event.preventDefault();
-
+        clearDateFilter.addEventListener('click', function() {
             activeDateFilter = { type: 'none', startDate: null, endDate: null };
-            if (dateFilterType) {
-                dateFilterType.value = 'none';
-            }
-            if (singleDateInput) {
-                singleDateInput.value = '';
-            }
-            if (startDateInput) {
-                startDateInput.value = '';
-            }
-            if (endDateInput) {
-                endDateInput.value = '';
-            }
-            if (startDateContainer) {
-                startDateContainer.style.display = 'none';
-            }
-            if (endDateContainer) {
-                endDateContainer.style.display = 'none';
-            }
-            if (singleDateContainer) {
-                singleDateContainer.style.display = 'none';
-            }
-            if (applyDateFilter) {
-                applyDateFilter.style.display = 'none';
-            }
-            if (clearDateFilter) {
-                clearDateFilter.style.display = 'none';
-            }
-
+            dateFilterType.value = 'none';
+            singleDateInput.value = '';
+            startDateInput.value = '';
+            endDateInput.value = '';
+            startDateContainer.style.display = 'none';
+            endDateContainer.style.display = 'none';
+            singleDateContainer.style.display = 'none';
+            applyDateFilter.style.display = 'none';
+            clearDateFilter.style.display = 'none';
             filterCards();
-            });
-        }
+        });
     });
     </script>
 </body>
