@@ -122,6 +122,26 @@ def update_html_file(html_path: Path, hashes: Dict[str, str],
 
         content = script_pattern.sub(replace_main_script, content)
 
+    # Update chat-resources.js: SRI hash, cache-bust param, remove crossorigin
+    if 'chat-resources.js' in hashes:
+        chat_script_pattern = re.compile(
+            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?chat-resources\.js(?:\?[^"\']*)?(\1)[^>]*>',
+            re.IGNORECASE,
+        )
+
+        def replace_chat_script(match: re.Match) -> str:
+            tag = match.group(0)
+            tag = re.sub(
+                r'(src=["\'])(?:\.?/)?chat-resources\.js(?:\?[^"\']*)?(["\'])',
+                rf'\g<1>/chat-resources.js?v={cache_busts["chat-resources.js"]}\2',
+                tag,
+            )
+            tag = upsert_attr(tag, 'integrity', hashes['chat-resources.js'])
+            tag = remove_attr(tag, 'crossorigin')
+            return tag
+
+        content = chat_script_pattern.sub(replace_chat_script, content)
+
     # Write back if changed
     if content != original_content:
         with open(html_path, 'w', encoding='utf-8') as f:
@@ -140,6 +160,7 @@ def main():
     files_to_hash = {
         'style.css': repo_root / 'style.css',
         'main.js': repo_root / 'main.js',
+        'chat-resources.js': repo_root / 'chat-resources.js',
     }
     
     # Calculate SRI hashes and cache-bust strings
