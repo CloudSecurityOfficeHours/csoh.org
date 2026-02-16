@@ -25,29 +25,50 @@ jobs:
           python-version: '3.x'
       - name: Recalculate SRI hashes
         run: python3 update_sri.py
+      - name: Ensure remote directories exist
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+
+          ensure_remote_dir() {
+            local remote_dir="$1"
+
+            set +e
+            LFTP_OUT=$(lftp -e "set ssl:verify-certificate no; set ftp:ssl-force true; set ftp:ssl-protect-data true; open -u ${FTP_USER},${FTP_PASS} ${FTP_HOST}; cls ${remote_dir}; bye" 2>&1)
+            LFTP_STATUS=$?
+            set -e
+
+            if [ $LFTP_STATUS -eq 0 ]; then
+              echo "${remote_dir} already exists; continuing"
+              return
+            fi
+
+            set +e
+            LFTP_OUT=$(lftp -e "set ssl:verify-certificate no; set ftp:ssl-force true; set ftp:ssl-protect-data true; open -u ${FTP_USER},${FTP_PASS} ${FTP_HOST}; mkdir ${remote_dir}; bye" 2>&1)
+            LFTP_STATUS=$?
+            set -e
+
+            echo "$LFTP_OUT"
+
+            if [ $LFTP_STATUS -ne 0 ]; then
+              echo "Failed to ensure ${remote_dir} exists"
+              exit $LFTP_STATUS
+            fi
+          }
+
+          ensure_remote_dir "/public_html/tools"
+          ensure_remote_dir "/public_html/.well-known"
+          ensure_remote_dir "/public_html/img"
+          ensure_remote_dir "/public_html/img/previews"
+          ensure_remote_dir "/public_html/chat-screenshots"
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
       - name: FTP Deploy
-        uses: SamKirkland/FTP-Deploy-Action@4.3.0
-        with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USER }}
-          password: ${{ secrets.FTP_PASS }}
-          protocol: ftps
-          local-dir: ./        # repo root or build output
-          server-dir: /public_html/        # remote root
-          exclude: |
-            .git*
-            .github/**
-            .venv/**
-            __pycache__/**
-            tools/
-            *.py
-            *.sh
-            *.pyc
-            *.pyo
-            README.md
-            CONTRIBUTING.md
-            CONTRIBUTING_RESOURCES.md
-            UPDATE_NEWS_README.md
-            UPDATE_SRI_README.md
-            LICENSE
-            .DS_Store
+        run: |
+          lftp -e "set ssl:verify-certificate no; set ftp:ssl-force true; set ftp:ssl-protect-data true; open -u ${FTP_USER},${FTP_PASS} ${FTP_HOST}; mirror -R ./ /public_html/ --verbose=2 --parallel=2 --exclude-glob .git* --exclude-glob .github/ --exclude-glob .venv/ --exclude-glob __pycache__/ --exclude-glob *.sh --exclude-glob *.pyc --exclude-glob *.pyo --exclude-glob README.md --exclude-glob CONTRIBUTING.md --exclude-glob CONTRIBUTING_RESOURCES.md --exclude-glob UPDATE_NEWS_README.md --exclude-glob UPDATE_SRI_README.md --exclude-glob LICENSE --exclude-glob .DS_Store; bye"
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
