@@ -28,11 +28,20 @@ function sanitize(str) {
 
 document.addEventListener('DOMContentLoaded', function() {
     document.body.classList.add('js-enabled');
-    
+
     // Initialize DOM cache
     domCache.searchInput = document.getElementById('searchInput');
     domCache.categoryHeaders = document.querySelectorAll('.category-section h3');
     domCache.cards = document.querySelectorAll('.resource-card');
+
+    // Dark mode initialization
+    initThemeToggle();
+
+    // Search suggestions initialization
+    initSearchSuggestions();
+
+    // Social sharing buttons (news page)
+    initShareButtons();
 
     // Enforce rel attributes on external links opened in new tabs.
     document.querySelectorAll('a[target="_blank"]').forEach(link => {
@@ -445,17 +454,222 @@ function updateVisibleCount() {
     // Use cached cards or query if not available
     const cards = domCache.cards.length > 0 ? domCache.cards : document.querySelectorAll('.resource-card');
     let visibleCount = 0;
-    
+
     cards.forEach(card => {
         if (getToggleTarget(card).style.display !== 'none') {
             visibleCount++;
         }
     });
-    
+
     const countElement = document.getElementById('visibleCount');
     if (countElement) {
         countElement.textContent = visibleCount;
     }
+}
+
+// =========================================================================
+// DARK MODE
+// =========================================================================
+
+function initThemeToggle() {
+    // Check saved preference or system preference
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+
+    // Find the toggle button (inserted via HTML)
+    const toggle = document.querySelector('.theme-toggle');
+    if (toggle) {
+        updateToggleIcon(toggle);
+        toggle.addEventListener('click', function() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            if (isDark) {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            updateToggleIcon(this);
+        });
+    }
+}
+
+function updateToggleIcon(btn) {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = isDark ? '☀️' : '🌙';
+    btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+}
+
+// =========================================================================
+// SEARCH SUGGESTIONS / AUTOCOMPLETE
+// =========================================================================
+
+function initSearchSuggestions() {
+    const input = domCache.searchInput;
+    if (!input) return;
+
+    // Wrap input in search-wrapper for positioning
+    const wrapper = document.createElement('div');
+    wrapper.className = 'search-wrapper';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    // Create suggestions dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'search-suggestions';
+    dropdown.setAttribute('role', 'listbox');
+    dropdown.id = 'searchSuggestions';
+    wrapper.appendChild(dropdown);
+
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-controls', 'searchSuggestions');
+    input.setAttribute('aria-expanded', 'false');
+
+    // Build suggestion index from cards
+    const suggestions = buildSuggestionIndex();
+    let highlightIndex = -1;
+
+    const debouncedSuggest = debounce(function() {
+        const query = input.value.trim().toLowerCase();
+        if (query.length < 2) {
+            closeSuggestions();
+            return;
+        }
+
+        const matches = suggestions.filter(s =>
+            s.text.toLowerCase().includes(query)
+        ).slice(0, 8);
+
+        if (matches.length === 0) {
+            closeSuggestions();
+            return;
+        }
+
+        dropdown.innerHTML = '';
+        matches.forEach((match, i) => {
+            const div = document.createElement('div');
+            div.className = 'search-suggestion';
+            div.setAttribute('role', 'option');
+            div.dataset.value = match.text;
+            div.innerHTML = `<span>${sanitize(match.text)}</span><span class="suggestion-type">${sanitize(match.type)}</span>`;
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                input.value = match.text;
+                closeSuggestions();
+                filterResources(match.text.toLowerCase());
+            });
+            dropdown.appendChild(div);
+        });
+
+        highlightIndex = -1;
+        dropdown.classList.add('visible');
+        input.setAttribute('aria-expanded', 'true');
+    }, 100);
+
+    input.addEventListener('input', debouncedSuggest);
+
+    input.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.search-suggestion');
+        if (!dropdown.classList.contains('visible') || items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightIndex = Math.min(highlightIndex + 1, items.length - 1);
+            updateHighlight(items, highlightIndex);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightIndex = Math.max(highlightIndex - 1, 0);
+            updateHighlight(items, highlightIndex);
+        } else if (e.key === 'Enter' && highlightIndex >= 0) {
+            e.preventDefault();
+            input.value = items[highlightIndex].dataset.value;
+            closeSuggestions();
+            filterResources(input.value.toLowerCase());
+        } else if (e.key === 'Escape') {
+            closeSuggestions();
+        }
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(closeSuggestions, 150);
+    });
+
+    function closeSuggestions() {
+        dropdown.classList.remove('visible');
+        dropdown.innerHTML = '';
+        highlightIndex = -1;
+        input.setAttribute('aria-expanded', 'false');
+    }
+
+    function updateHighlight(items, index) {
+        items.forEach(item => item.classList.remove('highlighted'));
+        if (index >= 0 && index < items.length) {
+            items[index].classList.add('highlighted');
+            items[index].scrollIntoView({ block: 'nearest' });
+        }
+    }
+}
+
+function buildSuggestionIndex() {
+    const seen = new Set();
+    const suggestions = [];
+    const cards = document.querySelectorAll('.resource-card');
+
+    cards.forEach(card => {
+        // Add card titles
+        const title = card.querySelector('h3')?.textContent.trim();
+        if (title && !seen.has(title.toLowerCase())) {
+            seen.add(title.toLowerCase());
+            suggestions.push({ text: title, type: 'Resource' });
+        }
+
+        // Add tags
+        card.querySelectorAll('.tag').forEach(tag => {
+            const t = tag.textContent.trim();
+            if (t && !seen.has(t.toLowerCase())) {
+                seen.add(t.toLowerCase());
+                suggestions.push({ text: t, type: 'Tag' });
+            }
+        });
+    });
+
+    return suggestions;
+}
+
+// =========================================================================
+// SOCIAL SHARING BUTTONS (News page)
+// =========================================================================
+
+function initShareButtons() {
+    if (!document.body.classList.contains('news-page')) return;
+
+    document.querySelectorAll('.resource-card').forEach(card => {
+        const cardLink = card.closest('.card-link');
+        if (!cardLink) return;
+
+        const url = cardLink.href;
+        const title = card.querySelector('h3')?.textContent.trim() || '';
+        const encodedUrl = encodeURIComponent(url);
+        const encodedTitle = encodeURIComponent(title);
+
+        const container = document.createElement('div');
+        container.className = 'share-buttons';
+
+        container.innerHTML =
+            `<a href="https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}" class="share-btn share-btn--linkedin" target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>` +
+            `<a href="https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}" class="share-btn share-btn--twitter" target="_blank" rel="noopener noreferrer" aria-label="Share on X" title="Share on X">X</a>` +
+            `<a href="https://www.reddit.com/submit?url=${encodedUrl}&title=${encodedTitle}" class="share-btn share-btn--reddit" target="_blank" rel="noopener noreferrer" aria-label="Share on Reddit" title="Share on Reddit">r/</a>`;
+
+        // Prevent share button clicks from navigating the parent card-link
+        container.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        card.appendChild(container);
+    });
 }
 
 
