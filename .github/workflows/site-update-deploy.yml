@@ -126,8 +126,12 @@ jobs:
             --exclude-glob CONTRIBUTING_RESOURCES.md --exclude-glob UPDATE_NEWS_README.md \
             --exclude-glob UPDATE_SRI_README.md --exclude-glob LICENSE \
             --exclude-glob .DS_Store --exclude img/; bye"
-          # Pass 2: mirror img/ separately, skipping files that haven't changed
-          echo "==> Syncing images (skipping unchanged)..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/ /public_html/img/ --parallel=4 \
-            --only-newer --exclude-glob .DS_Store; bye"
+          # Pass 2: only sync img/ when new previews were generated this run
+          if [[ "${{ steps.check_previews.outputs.missing }}" == "true" ]]; then
+            echo "==> Syncing new preview images..."
+            lftp -e "${LFTP_CONN}; mirror -R ./img/ /public_html/img/ --parallel=4 \
+              --exclude-glob .DS_Store; bye"
+          else
+            echo "==> No new images to sync, skipping img/ upload."
+          fi
           echo "==> Deploy complete."
