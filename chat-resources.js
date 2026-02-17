@@ -345,4 +345,43 @@ document.addEventListener('DOMContentLoaded', function() {
         clearDateFilter.style.display = 'none';
         filterCards();
     });
+
+    // Dark mode toggle
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (saved === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+
+    function updateToggleIcon(btn) {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        btn.textContent = isDark ? '☀️' : '🌙';
+        btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+    }
+
+    const themeToggle = document.querySelector('.theme-toggle');
+    if (themeToggle) {
+        updateToggleIcon(themeToggle);
+        themeToggle.addEventListener('click', function() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            updateToggleIcon(this);
+        });
+    }
+
+    // Hamburger menu toggle
+    const hamburger = document.querySelector('.hamburger');
+    if (hamburger) {
+        hamburger.addEventListener('click', function() {
+            const header = this.closest('.header-content');
+            const isOpen = document.body.classList.toggle('nav-open');
+            if (header) header.classList.toggle('nav-open', isOpen);
+            this.setAttribute('aria-expanded', String(isOpen));
+            this.textContent = isOpen ? '✕' : '☰';
+        });
+    }
 });
