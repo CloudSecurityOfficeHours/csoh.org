@@ -142,17 +142,10 @@ jobs:
               *)                                     return 1 ;;
             esac
           }
-          PARENT_COUNT=$(git cat-file -p HEAD | grep -c '^parent ' || echo "1")
-          if [ "$PARENT_COUNT" -gt 1 ]; then
-            COMMITTED=""
-            for parent in $(git rev-parse HEAD^@); do
-              COMMITTED=$(printf '%s\n%s' "$COMMITTED" \
-                "$(git diff --no-renames --name-only --diff-filter=ACMR "$parent" HEAD 2>/dev/null || echo "")")
-            done
-            COMMITTED=$(echo "$COMMITTED" | sort -u | sed '/^$/d')
-          else
-            COMMITTED=$(git diff --no-renames --name-only --diff-filter=ACMR HEAD~1 HEAD 2>/dev/null || echo "")
-          fi
+          # Collect files changed in the last two commits (HEAD and HEAD~1) to catch
+          # the case where the SRI-update commit (HTML only) follows a CSS/JS change.
+          COMMITTED=$(git diff --no-renames --name-only --diff-filter=ACMR HEAD~2 HEAD 2>/dev/null || \
+                      git diff --no-renames --name-only --diff-filter=ACMR HEAD~1 HEAD 2>/dev/null || echo "")
           WORKING=$(git diff --no-renames --name-only 2>/dev/null || echo "")
           DELETED=$(git diff --no-renames --name-only --diff-filter=D HEAD~1 HEAD 2>/dev/null || echo "")
           ALL_CHANGED=$(printf '%s\n%s' "$COMMITTED" "$WORKING" | sort -u | sed '/^$/d')
