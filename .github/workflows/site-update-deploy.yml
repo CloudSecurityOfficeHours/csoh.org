@@ -117,66 +117,12 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASS }}
         run: |
           LFTP_CONN="set ssl:verify-certificate no; set ftp:ssl-force true; set ftp:ssl-protect-data true; open -u ${FTP_USER},${FTP_PASS} ${FTP_HOST}"
-          # --- Full deploy (manual trigger or fallback) ---
-          if [ "${{ github.event.inputs.full_deploy }}" = "true" ]; then
-            echo "==> Full mirror deploy requested"
-            lftp -e "${LFTP_CONN}; mirror -R ./ /public_html/ --verbose=2 --parallel=2 \
-              --exclude-glob .git* --exclude-glob .github/ --exclude-glob .venv/ \
-              --exclude-glob __pycache__/ --exclude-glob *.sh --exclude-glob *.pyc \
-              --exclude-glob *.pyo --exclude-glob README.md --exclude-glob CONTRIBUTING.md \
-              --exclude-glob CONTRIBUTING_RESOURCES.md --exclude-glob UPDATE_NEWS_README.md \
-              --exclude-glob UPDATE_SRI_README.md --exclude-glob LICENSE \
-              --exclude-glob .DS_Store; bye"
-            exit 0
-          fi
-          # --- Incremental deploy: upload only changed files ---
-          should_exclude() {
-            case "$1" in
-              .git*|.github/*|.venv/*|__pycache__/*) return 0 ;;
-              *.sh|*.pyc|*.pyo)                      return 0 ;;
-              README.md|CONTRIBUTING.md)              return 0 ;;
-              CONTRIBUTING_RESOURCES.md)              return 0 ;;
-              UPDATE_NEWS_README.md)                  return 0 ;;
-              UPDATE_SRI_README.md)                   return 0 ;;
-              LICENSE|.DS_Store)                      return 0 ;;
-              *)                                     return 1 ;;
-            esac
-          }
-          # Collect files changed in the last two commits (HEAD and HEAD~1) to catch
-          # the case where the SRI-update commit (HTML only) follows a CSS/JS change.
-          COMMITTED=$(git diff --no-renames --name-only --diff-filter=ACMR HEAD~2 HEAD 2>/dev/null || \
-                      git diff --no-renames --name-only --diff-filter=ACMR HEAD~1 HEAD 2>/dev/null || echo "")
-          WORKING=$(git diff --no-renames --name-only 2>/dev/null || echo "")
-          DELETED=$(git diff --no-renames --name-only --diff-filter=D HEAD~1 HEAD 2>/dev/null || echo "")
-          ALL_CHANGED=$(printf '%s\n%s' "$COMMITTED" "$WORKING" | sort -u | sed '/^$/d')
-          SCRIPT=$(mktemp)
-          echo "$LFTP_CONN" > "$SCRIPT"
-          UPLOAD_COUNT=0
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            should_exclude "$f" && continue
-            [ ! -f "$f" ] && continue
-            dir=$(dirname "/public_html/$f")
-            if [ "$dir" != "/public_html" ]; then
-              echo "mkdir -p $dir"    >> "$SCRIPT"
-            fi
-            echo "put -O $dir -- $f"  >> "$SCRIPT"
-            UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
-            echo "  upload: $f"
-          done <<< "$ALL_CHANGED"
-          DELETE_COUNT=0
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            should_exclude "$f" && continue
-            echo "rm -f /public_html/$f" >> "$SCRIPT"
-            DELETE_COUNT=$((DELETE_COUNT + 1))
-            echo "  delete: $f"
-          done <<< "$DELETED"
-          echo "bye" >> "$SCRIPT"
-          if [ $UPLOAD_COUNT -eq 0 ] && [ $DELETE_COUNT -eq 0 ]; then
-            echo "==> No files changed — nothing to deploy."
-            exit 0
-          fi
-          echo "==> Deploying ${UPLOAD_COUNT} file(s), deleting ${DELETE_COUNT} file(s)"
-          lftp -f "$SCRIPT"
+          echo "==> Full mirror deploy"
+          lftp -e "${LFTP_CONN}; mirror -R ./ /public_html/ --verbose=2 --parallel=2 \
+            --exclude-glob .git* --exclude-glob .github/ --exclude-glob .venv/ \
+            --exclude-glob __pycache__/ --exclude-glob *.sh --exclude-glob *.pyc \
+            --exclude-glob *.pyo --exclude-glob README.md --exclude-glob CONTRIBUTING.md \
+            --exclude-glob CONTRIBUTING_RESOURCES.md --exclude-glob UPDATE_NEWS_README.md \
+            --exclude-glob UPDATE_SRI_README.md --exclude-glob LICENSE \
+            --exclude-glob .DS_Store; bye"
           echo "==> Deploy complete."
