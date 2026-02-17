@@ -111,17 +111,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Support ?category= URL parameter for deep-linking from footer/nav
         const categoryParam = params.get('category');
-        if (categoryParam && !query) {
-            const btn = document.querySelector(`button[data-category="${CSS.escape(categoryParam)}"]`);
-            if (btn) {
-                document.querySelectorAll('button[data-category]').forEach(b => {
+        const validCategories = ['all', 'ctf', 'tool', 'certification', 'lab', 'ai-security', 'job', 'new'];
+        if (categoryParam && !query && validCategories.includes(categoryParam)) {
+            // Defer to allow DOM to fully settle (tag filters, card icons, etc.)
+            setTimeout(function() {
+                // Activate the matching filter button
+                document.querySelectorAll('button[data-category]').forEach(function(b) {
                     b.classList.remove('active');
                     b.setAttribute('aria-pressed', 'false');
                 });
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
+                var btn = document.querySelector('button[data-category="' + categoryParam + '"]');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.setAttribute('aria-pressed', 'true');
+                }
+                // Apply the filter
                 if (categoryParam === 'all') {
-                    document.querySelectorAll('.resource-card').forEach(card => {
+                    document.querySelectorAll('.resource-card').forEach(function(card) {
                         getToggleTarget(card).style.display = '';
                     });
                 } else if (categoryParam === 'new') {
@@ -129,7 +135,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     filterBySection(categoryParam);
                 }
-            }
+                updateVisibleCount();
+            }, 50);
         }
 
         const debouncedSearch = debounce(function(e) {
