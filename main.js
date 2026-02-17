@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (categoryParam === 'new') {
                     filterByTagText('new');
                 } else {
-                    filterByTagText(categoryParam);
+                    filterBySection(categoryParam);
                 }
             }
         }
@@ -172,8 +172,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Filter by 'new' tag
                 filterByTagText('new');
             } else {
-                // Filter by category tag (ctf, tool, certification, lab, ai-security, job)
-                filterByTagText(category);
+                // Filter by section (ctf, tool, certification, lab, ai-security, job)
+                filterBySection(category);
             }
             
             updateVisibleCount();
@@ -326,6 +326,28 @@ function filterByTagText(tagText) {
     cards.forEach(card => {
         const tags = Array.from(card.querySelectorAll('.tag')).map(t => t.textContent.toLowerCase()).join(' ');
         getToggleTarget(card).style.display = tags.includes(search) ? '' : 'none';
+    });
+    updateVisibleCount();
+}
+
+// Map category button values to their section IDs in resources.html
+const categorySectionMap = {
+    'ctf': 'ctf-challenges',
+    'tool': 'security-tools',
+    'certification': 'certifications',
+    'lab': 'labs-training',
+    'ai-security': 'ai-security',
+    'job': 'job-search'
+};
+
+function filterBySection(category) {
+    const sectionId = categorySectionMap[category];
+    if (!sectionId) return;
+    const cards = document.querySelectorAll('.resource-card');
+    cards.forEach(card => {
+        const section = card.closest('.category-section');
+        const inSection = section && section.id === sectionId;
+        getToggleTarget(card).style.display = inSection ? '' : 'none';
     });
     updateVisibleCount();
 }
