@@ -144,11 +144,55 @@ If you just want to check a file's hash without running the full script, there's
 
 ## Setup Requirements
 
-The workflow uses a **Personal Access Token (PAT)** stored as a GitHub repo secret called `PAT_TOKEN`. This is needed because the GitHub organization restricts what the default `GITHUB_TOKEN` can do.
+### GitHub Secrets
 
-To set up or rotate the token:
+The workflow requires the following secrets under **Settings > Secrets and variables > Actions**:
+
+| Secret | Purpose |
+|--------|---------|
+| `PAT_TOKEN` | Fine-grained PAT for committing SRI/preview changes and managing PRs |
+| `APPROVAL_PAT_TOKEN` | Separate PAT used to auto-approve news PRs (must be a different user) |
+| `FTP_HOST` | SSH/SFTP hostname of the web server |
+| `FTP_USER` | SSH username on the web server |
+| `SSH_PRIVATE_KEY` | Ed25519 private key used for passwordless SSH deployment |
+
+### Setting up `PAT_TOKEN`
 
 1. Go to [GitHub Token Settings](https://github.com/settings/tokens) and create a **fine-grained token**
 2. Grant it access to the `CloudSecurityOfficeHours/csoh.org` repository
 3. Give it **Contents** (read/write) and **Pull requests** (read/write) permissions
-4. Go to the repo's **Settings > Secrets and variables > Actions** and save it as `PAT_TOKEN`
+4. Save it as `PAT_TOKEN` in repo secrets
+
+### Setting up the SSH deploy key (`SSH_PRIVATE_KEY`)
+
+The workflow deploys via rsync over SSH using a dedicated ed25519 key pair — no FTP password involved.
+
+To rotate or set up from scratch:
+
+1. Generate a new key pair locally:
+   ```bash
+   ssh-keygen -t ed25519 -C "github-actions@csoh.org" -f ./deploy_key -N ""
+   ```
+2. Add the **public key** (`deploy_key.pub`) to `~/.ssh/authorized_keys` on the web server (via hosting control panel → SSH Keys)
+3. Add the **private key** (`deploy_key` contents) as the `SSH_PRIVATE_KEY` repo secret
+4. Delete both key files from your local machine
+
+### Pinned GitHub Actions
+
+All actions in the workflows are pinned to exact commit SHAs (not mutable version tags) as a supply chain security measure. When updating an action to a newer version, look up the commit SHA for the new tag and update it manually:
+
+```bash
+# Example: find the SHA for a specific tag
+curl -s "https://api.github.com/repos/actions/checkout/git/ref/tags/v4.3.1" | grep sha
+```
+
+Current pinned versions:
+
+| Action | SHA | Version |
+|--------|-----|---------|
+| `actions/checkout` | `34e11487...` | v4.3.1 |
+| `actions/setup-python` | `a26af69b...` | v5.6.0 |
+| `actions/upload-artifact` | `ea165f8d...` | v4.6.2 |
+| `actions/github-script` | `f28e40c7...` | v7.1.0 |
+| `peter-evans/create-pull-request` | `c5a78066...` | v6.1.0 |
+| `peter-evans/enable-pull-request-automerge` | `a660677d...` | v3.0.0 |
