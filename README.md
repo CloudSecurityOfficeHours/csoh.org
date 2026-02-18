@@ -114,6 +114,43 @@ Archive of past Zoom session presentations:
 
 ---
 
+## 🔗 Breach Kill Chains (`breach-timeline.html`)
+
+A community-maintained library of **step-by-step cloud breach reconstructions**, mapped to MITRE ATT&CK Cloud techniques and sourced from official post-mortems.
+
+### Current incidents covered
+
+| Incident | Year | Provider | Key Techniques |
+|---|---|---|---|
+| Capital One | 2019 | AWS | T1190, T1552.005, T1619, T1530 |
+| Uber | 2022 | AWS / GCP | T1078, T1621, T1552.001, T1078.004 |
+| Storm-0558 | 2023 | Azure | T1078, T1552, T1606.001, T1114.002 |
+| SolarWinds | 2020 | Azure AD / AWS | T1195.002, T1071.004, T1606.002, T1114.002 |
+| Microsoft SAS Leak | 2023 | Azure | T1552.004, T1530 |
+
+### How to contribute a kill chain
+
+See **[CONTRIBUTING_KILL_CHAINS.md](CONTRIBUTING_KILL_CHAINS.md)** for the full guide including:
+- What qualifies as a good kill chain entry
+- A list of candidate incidents with good post-mortems
+- The HTML template to copy for a new entry
+- The quality checklist before submitting
+
+To **nominate an incident** without writing it yourself, open an issue using the **"🔗 New Kill Chain Request"** template.
+
+### The standard
+
+Kill chain entries require:
+- A real post-mortem or official technical disclosure (vendor blog, CISA advisory, court documents)
+- Step-by-step technical detail — not just a summary
+- Every step mapped to a MITRE ATT&CK Cloud technique
+- Actionable defender recommendations tied to specific controls
+
+This is intentionally high-bar. A small number of deeply researched entries is more valuable than many shallow ones.
+
+---
+
+
 ## 🚀 Features
 
 ### ⚡ Performance & Security
