@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud Breach Kill Chains – CSOH</title>
+  <meta name="description" content="Step-by-step attack kill chains for major cloud security breaches, mapped to MITRE ATT&CK Cloud techniques. A learning resource for cloud security professionals." />
+  <link rel="icon" href="favicon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root {
+      --red: #ef4444;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'DM Sans', sans-serif;
+    }
+    body { font-family: var(--sans); }
+
+    /* Hero */
+    .kc-hero {
+      background: #0a0f1e;
+      color: #f1f5f9;
+      padding: 3.5rem 1.5rem 3rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .kc-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 20% 50%, rgba(239,68,68,.12) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 80% 30%, rgba(14,165,233,.10) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .kc-hero h1 {
+      font-family: var(--mono);
+      font-size: clamp(1.4rem, 4vw, 2.4rem);
+      font-weight: 700;
+      margin: 0 0 .75rem;
+      position: relative;
+    }
+    .kc-hero h1 span { color: var(--red); }
+    .kc-hero p {
+      max-width: 620px;
+      margin: 0 auto 1.5rem;
+      color: #94a3b8;
+      font-size: 1rem;
+      line-height: 1.7;
+      position: relative;
+    }
+    .hero-chips { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; position: relative; }
+    .hero-chip { font-family: var(--mono); font-size: .7rem; padding: .3rem .75rem; border-radius: 4px; border: 1px solid; font-weight: 600; }
+    .chip-mitre { border-color: #f97316; color: #fb923c; background: rgba(249,115,22,.1); }
+    .chip-steps { border-color: #22d3ee; color: #22d3ee; background: rgba(34,211,238,.08); }
+    .chip-src   { border-color: #a78bfa; color: #c4b5fd; background: rgba(167,139,250,.08); }
+
+    /* Tabs */
+    .incident-tabs {
+      position: sticky; top: 0; z-index: 40;
+      background: #0f172a; border-bottom: 1px solid #1e293b;
+      display: flex; overflow-x: auto; scrollbar-width: none;
+    }
+    .incident-tabs::-webkit-scrollbar { display: none; }
+    .itab {
+      flex-shrink: 0; padding: .9rem 1.4rem; font-size: .82rem; font-weight: 600;
+      color: #64748b; cursor: pointer; border-bottom: 3px solid transparent;
+      transition: color .2s, border-color .2s; white-space: nowrap;
+      background: none; border-top: none; border-left: none; border-right: none;
+      font-family: var(--sans);
+    }
+    .itab:hover { color: #94a3b8; }
+    .itab.active { color: #f1f5f9; border-bottom-color: var(--red); }
+    .itab-prov {
+      display: inline-block; margin-left: .4rem; font-size: .63rem;
+      padding: .1rem .4rem; border-radius: 3px; font-family: var(--mono); font-weight: 700;
+    }
+    .prov-aws   { background: rgba(251,191,36,.15); color: #fbbf24; }
+    .prov-azure { background: rgba(96,165,250,.15);  color: #60a5fa; }
+
+    /* Main */
+    .kc-main { background: #080d18; min-height: 60vh; padding: 0 0 4rem; }
+    .incident-panel { display: none; }
+    .incident-panel.active { display: block; }
+
+    /* Incident header */
+    .inc-header {
+      background: #0f172a; border-bottom: 1px solid #1e293b;
+      padding: 2rem 1.5rem 1.5rem; max-width: 960px; margin: 0 auto;
+    }
+    .inc-meta { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: .85rem; align-items: center; }
+    .inc-year { font-family: var(--mono); font-size: .75rem; font-weight: 700; color: #64748b; }
+    .sev-badge { font-family: var(--mono); font-size: .68rem; font-weight: 700; text-transform: uppercase; padding: .2rem .6rem; border-radius: 3px; }
+    .sev-critical { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+    .prov-tag { font-family: var(--mono); font-size: .68rem; font-weight: 700; padding: .2rem .6rem; border-radius: 3px; }
+    .inc-title { font-family: var(--mono); font-size: clamp(1rem, 2.5vw, 1.45rem); font-weight: 700; color: #f1f5f9; margin: 0 0 .75rem; line-height: 1.35; }
+    .inc-summary { font-size: .91rem; color: #94a3b8; line-height: 1.7; max-width: 720px; margin-bottom: 1rem; }
+    .inc-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .inc-stat { font-size: .8rem; color: #64748b; }
+    .inc-stat strong { color: #cbd5e1; }
+    .pm-link { display: inline-flex; align-items: center; gap: .3rem; font-size: .78rem; font-family: var(--mono); color: #38bdf8; text-decoration: none; margin-top: .75rem; margin-right: .75rem; }
+    .pm-link:hover { text-decoration: underline; }
+
+    /* Kill chain */
+    .kill-chain { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; position: relative; }
+    .kill-chain::before {
+      content: ''; position: absolute;
+      left: calc(1.5rem + 19px); top: 2rem; bottom: 4rem;
+      width: 1px;
+      background: linear-gradient(to bottom, #ef4444 0%, #7c3aed 50%, #0ea5e9 100%);
+      opacity: .25;
+    }
+    @media (min-width: 640px) { .kill-chain::before { left: calc(1.5rem + 23px); } }
+
+    /* Phase label */
+    .phase-lbl {
+      font-family: var(--mono); font-size: .63rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .12em; color: #475569;
+      margin: 1.75rem 0 .7rem 3.5rem;
+      display: flex; align-items: center; gap: .75rem;
+    }
+    @media (min-width: 640px) { .phase-lbl { margin-left: 4.4rem; } }
+    .phase-lbl::after { content: ''; flex: 1; height: 1px; background: #1e293b; }
+    .ph-recon   { color: #f59e0b; }
+    .ph-init    { color: #ef4444; }
+    .ph-exec    { color: #f97316; }
+    .ph-cred    { color: #fde047; }
+    .ph-priv    { color: #a855f7; }
+    .ph-persist { color: #6366f1; }
+    .ph-exfil   { color: #22d3ee; }
+    .ph-impact  { color: #10b981; }
+    .ph-disco   { color: #94a3b8; }
+
+    /* Step */
+    .kc-step { display: flex; gap: 1rem; margin-bottom: .9rem; animation: slideIn .3s ease both; }
+    @keyframes slideIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform: none; } }
+    .kc-step:nth-child(2) { animation-delay:.05s; }
+    .kc-step:nth-child(3) { animation-delay:.10s; }
+    .kc-step:nth-child(4) { animation-delay:.15s; }
+    .kc-step:nth-child(5) { animation-delay:.20s; }
+    .kc-step:nth-child(6) { animation-delay:.25s; }
+    .kc-step:nth-child(7) { animation-delay:.30s; }
+
+    .step-num {
+      flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
+      border: 1.5px solid #334155; background: #0f172a;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: .72rem; font-weight: 700;
+      color: #475569; position: relative; z-index: 1; margin-top: .1rem;
+    }
+    .step-r .step-num  { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,.1); }
+    .step-o .step-num  { border-color: #f97316; color: #f97316; background: rgba(249,115,22,.1); }
+    .step-y .step-num  { border-color: #f59e0b; color: #f59e0b; background: rgba(245,158,11,.1); }
+    .step-p .step-num  { border-color: #a855f7; color: #a855f7; background: rgba(168,85,247,.1); }
+    .step-b .step-num  { border-color: #6366f1; color: #6366f1; background: rgba(99,102,241,.1); }
+    .step-c .step-num  { border-color: #22d3ee; color: #22d3ee; background: rgba(34,211,238,.1); }
+    .step-g .step-num  { border-color: #10b981; color: #10b981; background: rgba(16,185,129,.1); }
+
+    .step-body {
+      flex: 1; background: #0d1424; border: 1px solid #1e293b;
+      border-radius: 8px; padding: .95rem 1.2rem; transition: border-color .2s;
+    }
+    .step-body:hover { border-color: #334155; }
+
+    .step-hdr { display: flex; gap: .5rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: .45rem; }
+    .step-title { font-size: .92rem; font-weight: 700; color: #e2e8f0; flex: 1; min-width: 160px; }
+
+    .mt {
+      font-family: var(--mono); font-size: .63rem; font-weight: 700;
+      padding: .2rem .52rem; border-radius: 3px; white-space: nowrap;
+      text-decoration: none; transition: opacity .15s;
+    }
+    .mt:hover { opacity: .75; text-decoration: underline; }
+    .mt-ta { background: rgba(249,115,22,.15); color: #fb923c; border: 1px solid rgba(249,115,22,.3); }
+    .mt-ex { background: rgba(239,68,68,.15);  color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .mt-pe { background: rgba(168,85,247,.15); color: #c084fc; border: 1px solid rgba(168,85,247,.3); }
+    .mt-de { background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.3); }
+    .mt-ca { background: rgba(234,179,8,.15);  color: #fde047; border: 1px solid rgba(234,179,8,.3); }
+    .mt-di { background: rgba(20,184,166,.15); color: #5eead4; border: 1px solid rgba(20,184,166,.3); }
+    .mt-lm { background: rgba(59,130,246,.15); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .mt-co { background: rgba(16,185,129,.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,.3); }
+    .mt-ef { background: rgba(34,211,238,.15); color: #67e8f9; border: 1px solid rgba(34,211,238,.3); }
+    .mt-p2 { background: rgba(168,85,247,.15); color: #c084fc; border: 1px solid rgba(168,85,247,.3); }
+
+    .step-desc { font-size: .86rem; color: #94a3b8; line-height: 1.65; margin-bottom: .55rem; }
+    .step-code {
+      font-family: var(--mono); font-size: .73rem;
+      background: #070b14; border: 1px solid #1e293b;
+      border-radius: 5px; padding: .55rem .8rem;
+      color: #64748b; margin-bottom: .55rem; line-height: 1.6;
+    }
+    .step-code .hl { color: #f59e0b; }
+    .step-tags { display: flex; gap: .35rem; flex-wrap: wrap; }
+    .stag { font-size: .66rem; padding: .13rem .48rem; border-radius: 3px; background: #1e293b; color: #64748b; font-family: var(--mono); }
+
+    /* Defender box */
+    .def-box { margin-top: 2rem; background: #0a1628; border: 1px solid #1e3a5f; border-left: 3px solid #38bdf8; border-radius: 0 8px 8px 0; padding: 1.2rem 1.4rem; }
+    .def-box h3 { font-family: var(--mono); font-size: .75rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 .7rem; }
+    .def-items { display: flex; flex-direction: column; gap: .45rem; }
+    .def-item { display: flex; gap: .7rem; font-size: .83rem; color: #94a3b8; line-height: 1.55; }
+    .def-item::before { content: '→'; color: #38bdf8; flex-shrink: 0; font-family: var(--mono); font-weight: 700; margin-top: .05rem; }
+
+    /* Sources */
+    .src-box { margin-top: 1.4rem; padding: .9rem 1.1rem; background: #0a0f1e; border: 1px solid #1e293b; border-radius: 8px; }
+    .src-box h4 { font-family: var(--mono); font-size: .65rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 .55rem; }
+    .src-links { display: flex; gap: .45rem; flex-wrap: wrap; }
+    .src-link { font-size: .73rem; color: #38bdf8; text-decoration: none; font-family: var(--mono); padding: .18rem .52rem; border: 1px solid #1e3a5f; border-radius: 3px; transition: background .15s; }
+    .src-link:hover { background: rgba(56,189,248,.08); }
+
+    /* CTA */
+    .contribute-cta { max-width: 960px; margin: 2.5rem auto 0; padding: 1.4rem; background: #0d1424; border: 1px dashed #1e293b; border-radius: 8px; text-align: center; }
+    .contribute-cta h3 { font-family: var(--mono); color: #e2e8f0; font-size: .9rem; margin: 0 0 .35rem; }
+    .contribute-cta p { color: #64748b; font-size: .83rem; margin: 0 0 .9rem; }
+    .btn-mono { display: inline-flex; align-items: center; gap: .4rem; font-family: var(--mono); font-size: .78rem; font-weight: 700; padding: .5rem 1rem; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.35); color: #f87171; border-radius: 5px; text-decoration: none; transition: background .15s; }
+    .btn-mono:hover { background: rgba(239,68,68,.2); }
+
+    /* Light mode overrides */
+    body:not(.dark) .kc-hero { background: #0f172a; }
+    body:not(.dark) .incident-tabs { background: #1e293b; border-color: #334155; }
+    body:not(.dark) .kc-main { background: #f8fafc; }
+    body:not(.dark) .inc-header { background: #fff; border-color: #e2e8f0; }
+    body:not(.dark) .inc-title { color: #0f172a; }
+    body:not(.dark) .inc-summary { color: #475569; }
+    body:not(.dark) .inc-stat { color: #64748b; }
+    body:not(.dark) .inc-stat strong { color: #1e293b; }
+    body:not(.dark) .step-body { background: #fff; border-color: #e2e8f0; }
+    body:not(.dark) .step-body:hover { border-color: #cbd5e1; }
+    body:not(.dark) .step-title { color: #0f172a; }
+    body:not(.dark) .step-desc { color: #475569; }
+    body:not(.dark) .step-code { background: #f1f5f9; border-color: #e2e8f0; color: #475569; }
+    body:not(.dark) .step-code .hl { color: #b45309; }
+    body:not(.dark) .stag { background: #f1f5f9; color: #64748b; }
+    body:not(.dark) .kill-chain::before { opacity: .4; }
+    body:not(.dark) .phase-lbl { color: #94a3b8; }
+    body:not(.dark) .phase-lbl::after { background: #e2e8f0; }
+    body:not(.dark) .def-box { background: #eff6ff; border-color: #93c5fd; border-left-color: #3b82f6; }
+    body:not(.dark) .def-box h3 { color: #1d4ed8; }
+    body:not(.dark) .def-item { color: #334155; }
+    body:not(.dark) .def-item::before { color: #3b82f6; }
+    body:not(.dark) .src-box { background: #f8fafc; border-color: #e2e8f0; }
+    body:not(.dark) .src-box h4 { color: #94a3b8; }
+    body:not(.dark) .contribute-cta { background: #fff; border-color: #e2e8f0; }
+    body:not(.dark) .contribute-cta h3 { color: #0f172a; }
+    body:not(.dark) .contribute-cta p { color: #64748b; }
+    body:not(.dark) .itab { color: #94a3b8; }
+    body:not(.dark) .itab:hover { color: #475569; }
+    body:not(.dark) .itab.active { color: #0f172a; }
+    body:not(.dark) .step-num { border-color: #cbd5e1; background: #f8fafc; color: #94a3b8; }
+    body:not(.dark) .step-r .step-num { background: #fef2f2; }
+    body:not(.dark) .step-o .step-num { background: #fff7ed; }
+    body:not(.dark) .step-p .step-num { background: #faf5ff; }
+    body:not(.dark) .step-b .step-num { background: #eef2ff; }
+    body:not(.dark) .step-c .step-num { background: #ecfeff; }
+    body:not(.dark) .step-g .step-num { background: #f0fdf4; }
+    body:not(.dark) .step-y .step-num { background: #fefce8; }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-content">
+    <a href="index.html" class="site-logo"><span class="logo-icon">☁️</span><span class="logo-text">CSOH</span></a>
+    <nav class="main-nav">
+      <a href="index.html">Home</a>
+      <a href="resources.html">Resources</a>
+      <a href="sessions.html">Zoom Sessions</a>
+      <a href="presentations.html">Presentations</a>
+      <a href="news.html">News</a>
+      <a href="breach-timeline.html" class="active">Breach Kill Chains</a>
+      <a href="contribute.html">Contribute</a>
+    </nav>
+    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode">🌙</button>
+  </div>
+</header>
+
+<section class="kc-hero">
+  <h1>Cloud Breach <span>Kill Chains</span></h1>
+  <p>Real attacks. Real post-mortems. Step-by-step attack progression mapped to MITRE ATT&amp;CK Cloud — so you can understand exactly what happened, and stop it next time.</p>
+  <div class="hero-chips">
+    <span class="hero-chip chip-mitre">MITRE ATT&amp;CK Cloud Mapped</span>
+    <span class="hero-chip chip-steps">Full Attack Chain Per Incident</span>
+    <span class="hero-chip chip-src">Official Post-Mortems Sourced</span>
+  </div>
+</section>
+
+<nav class="incident-tabs" role="tablist">
+  <button class="itab active" data-panel="capital-one" role="tab">Capital One 2019 <span class="itab-prov prov-aws">AWS</span></button>
+  <button class="itab" data-panel="uber-2022" role="tab">Uber 2022 <span class="itab-prov prov-aws">AWS</span></button>
+  <button class="itab" data-panel="storm-0558" role="tab">Storm-0558 2023 <span class="itab-prov prov-azure">Azure</span></button>
+  <button class="itab" data-panel="solarwinds" role="tab">SolarWinds 2020 <span class="itab-prov prov-azure">Azure AD</span></button>
+  <button class="itab" data-panel="ms-sas" role="tab">Microsoft SAS Leak 2023 <span class="itab-prov prov-azure">Azure</span></button>
+</nav>
+
+<main class="kc-main">
+
+<!-- ═══════════════ CAPITAL ONE ═══════════════ -->
+<div id="capital-one" class="incident-panel active" role="tabpanel">
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">March–July 2019</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-aws">AWS</span>
+    </div>
+    <h2 class="inc-title">Capital One – SSRF → IMDSv1 → Over-Privileged IAM Role → 106M Record S3 Exfiltration</h2>
+    <p class="inc-summary">A former AWS engineer exploited a misconfigured WAF via server-side request forgery to reach the EC2 instance metadata service, stealing temporary IAM role credentials. An over-privileged role then granted access to 700+ S3 buckets containing 106 million customer records. The attack ran undetected for 77 days and directly caused AWS to build IMDSv2.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>106M</strong> records exposed</div>
+      <div class="inc-stat"><strong>77 days</strong> dwell time</div>
+      <div class="inc-stat"><strong>$80M</strong> civil penalty</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> Paige Thompson, former AWS employee</div>
+    </div>
+    <a class="pm-link" href="https://krebsonsecurity.com/2019/08/what-we-can-learn-from-the-capital-one-hack/" target="_blank" rel="noopener">📄 KrebsOnSecurity post-mortem ↗</a>
+    <a class="pm-link" href="https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af" target="_blank" rel="noopener">📄 Appsecco technical analysis ↗</a>
+    <a class="pm-link" href="https://aws.amazon.com/blogs/security/defense-in-depth-open-firewalls-reverse-proxies-ssrf-vulnerabilities-ec2-instance-metadata-service/" target="_blank" rel="noopener">📄 AWS IMDSv2 response ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🔍 Reconnaissance</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Automated scanning for AWS-hosted apps vulnerable to SSRF</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1595/" target="_blank" rel="noopener">T1595 – Active Scanning</a>
+        </div>
+        <p class="step-desc">Thompson built a custom tool to scan the internet for EC2-hosted web applications that would relay requests to the AWS instance metadata service at 169.254.169.254. SSRF was not in ModSecurity's default detection rule set — it had to be explicitly configured.</p>
+        <div class="step-code">
+          <span class="hl">Target:</span> Public-facing ModSecurity WAF running on EC2<br>
+          <span class="hl">Why SSRF wasn't blocked:</span> Not in default WAF rules — required manual configuration<br>
+          <span class="hl">Scanning approach:</span> Automated — targeted multiple AWS-hosted organisations
+        </div>
+        <div class="step-tags"><span class="stag">SSRF</span><span class="stag">EC2</span><span class="stag">WAF</span><span class="stag">ModSecurity</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access</div>
+    <div class="kc-step step-r">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">SSRF exploitation — WAF tricked into relaying requests to IMDS</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 – Exploit Public-Facing App</a>
+        </div>
+        <p class="step-desc">The WAF was misconfigured — running in logging-only mode or bypassable — so Thompson sent crafted HTTP requests containing the IMDS endpoint as the target URL. The WAF relayed these server-side, making the EC2 instance itself issue the metadata request.</p>
+        <div class="step-code">
+          <span class="hl">SSRF payload target:</span> http://169.254.169.254/latest/meta-data/<br>
+          <span class="hl">IMDSv1 behaviour:</span> No authentication — any GET request from the instance is served<br>
+          <span class="hl">WAF failure:</span> Relayed SSRF payload rather than blocking it
+        </div>
+        <div class="step-tags"><span class="stag">SSRF</span><span class="stag">IMDSv1</span><span class="stag">T1190</span><span class="stag">169.254.169.254</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">EC2 IAM role credentials retrieved from IMDS — no auth required</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/005/" target="_blank" rel="noopener">T1552.005 – Cloud Instance Metadata API</a>
+        </div>
+        <p class="step-desc">IMDSv1 returned the temporary AWS credentials (AccessKeyId, SecretAccessKey, SessionToken) for the "ISRM-WAF-Role" attached to the EC2 instance. No token, header, or authentication required — just a GET request to the metadata path from within the instance (which the SSRF provided).</p>
+        <div class="step-code">
+          <span class="hl">IMDS path:</span> /latest/meta-data/iam/security-credentials/ISRM-WAF-Role<br>
+          <span class="hl">Credentials returned:</span> AccessKeyId + SecretAccessKey + SessionToken<br>
+          <span class="hl">Key problem:</span> The role had S3 permissions far beyond what a WAF needs
+        </div>
+        <div class="step-tags"><span class="stag">IMDSv1</span><span class="stag">ISRM-WAF-Role</span><span class="stag">Temp Credentials</span><span class="stag">T1552.005</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🔼 Privilege Abuse — Over-Permissioned IAM Role</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">700+ S3 buckets enumerated using stolen role credentials</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1619/" target="_blank" rel="noopener">T1619 – Cloud Storage Object Discovery</a>
+        </div>
+        <p class="step-desc">With the stolen AWS credentials, Thompson used the CLI to list all S3 buckets accessible to the ISRM-WAF-Role. The role had been granted sweeping S3 list and read permissions — far beyond what a WAF firewall function ever needed — violating least privilege at the design level.</p>
+        <div class="step-code">
+          <span class="hl">Command:</span> aws s3 ls (authenticated with stolen session credentials)<br>
+          <span class="hl">Result:</span> 700+ buckets listed including Capital One customer data stores<br>
+          <span class="hl">Root failure:</span> IAM role permissions never reviewed against principle of least privilege
+        </div>
+        <div class="step-tags"><span class="stag">IAM</span><span class="stag">S3</span><span class="stag">Least Privilege Violation</span><span class="stag">T1619</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 Exfiltration</div>
+    <div class="kc-step step-c">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">30GB bulk S3 exfiltration — 106M customer records</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 – Data from Cloud Storage</a>
+        </div>
+        <p class="step-desc">Thompson synced S3 bucket contents to external storage using aws s3 sync. Approximately 30GB over multiple sessions — 100M US and 6M Canadian credit card application records, 140,000 SSNs, 80,000 bank account numbers, credit scores, and transaction history.</p>
+        <div class="step-code">
+          <span class="hl">Tool:</span> aws s3 sync<br>
+          <span class="hl">Data exfiltrated:</span> 106M records, 140K SSNs, 80K bank accounts, credit/financial history<br>
+          <span class="hl">Detection gap:</span> GuardDuty not enabled; S3 access logs not monitored for volume anomalies
+        </div>
+        <div class="step-tags"><span class="stag">aws s3 sync</span><span class="stag">PII</span><span class="stag">T1530</span><span class="stag">Financial Data</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🚨 Discovery</div>
+    <div class="kc-step step-g">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr"><div class="step-title">Discovered 77 days later — Thompson bragged about it on GitHub and IRC</div></div>
+        <p class="step-desc">Thompson bragged about the breach on GitHub and in Slack and IRC channels under the handle "erratic." A member of the public noticed the posts, reviewed the data, and filed a responsible disclosure with Capital One on July 17, 2019. No internal monitoring — not GuardDuty, not S3 access logs, not IAM anomaly detection — caught the breach during the 77-day dwell period.</p>
+        <div class="step-code">
+          <span class="hl">Discovery method:</span> External tipster via Capital One responsible disclosure program<br>
+          <span class="hl">Monitoring failures:</span> No GuardDuty · No S3 volume alerts · No anomalous IAM activity detection<br>
+          <span class="hl">Arrest:</span> Paige Thompson, July 29, 2019
+        </div>
+        <div class="step-tags"><span class="stag">77 Day Dwell</span><span class="stag">No Internal Detection</span><span class="stag">External Tipster</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Enforce IMDSv2 on all EC2 instances.</strong> IMDSv2 requires a session token obtained via a PUT request — SSRF attacks that can only issue GET requests cannot obtain credentials. AWS defaults new instances to IMDSv2 and you can enforce it via SCP across your organisation.</div>
+        <div class="def-item"><strong>Apply least-privilege IAM to every role.</strong> A WAF role should only write WAF logs — not list or read S3. Use IAM Access Analyzer findings and Access Advisor unused-permission reports to identify and tighten over-privileged roles.</div>
+        <div class="def-item"><strong>Enable Amazon GuardDuty.</strong> GuardDuty's UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration finding specifically detects role credentials being used from outside the EC2 instance that issued them.</div>
+        <div class="def-item"><strong>Alert on anomalous S3 access volume.</strong> Large-scale GetObject or ListBucket calls from an unexpected IP or at an unusual rate should trigger a CloudWatch + SNS alert immediately.</div>
+        <div class="def-item"><strong>Add SSRF rules to your WAF.</strong> Block requests containing 169.254.169.254 in URL, body, or headers. This is not in default WAF configurations — it must be explicitly added.</div>
+      </div>
+    </div>
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://krebsonsecurity.com/2019/08/what-we-can-learn-from-the-capital-one-hack/" target="_blank" rel="noopener">KrebsOnSecurity</a>
+        <a class="src-link" href="https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af" target="_blank" rel="noopener">Appsecco</a>
+        <a class="src-link" href="https://aws.amazon.com/blogs/security/defense-in-depth-open-firewalls-reverse-proxies-ssrf-vulnerabilities-ec2-instance-metadata-service/" target="_blank" rel="noopener">AWS IMDSv2 Blog</a>
+        <a class="src-link" href="https://dl.acm.org/doi/full/10.1145/3546068" target="_blank" rel="noopener">ACM Systematic Analysis</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1552/005/" target="_blank" rel="noopener">MITRE T1552.005</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ UBER 2022 ═══════════════ -->
+<div id="uber-2022" class="incident-panel" role="tabpanel">
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">September 15–16, 2022</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-aws">AWS</span>
+      <span class="prov-tag" style="background:rgba(34,197,94,.15);color:#4ade80;font-family:var(--mono);font-size:.68rem;font-weight:700;padding:.2rem .6rem;border-radius:3px;">GCP</span>
+    </div>
+    <h2 class="inc-title">Uber – Dark Web Creds → MFA Push Fatigue → Hardcoded PAM Secret → Full AWS/GCP Admin</h2>
+    <p class="inc-summary">An 18-year-old attacker purchased an Uber contractor's VPN credentials from a dark web infostealer marketplace, then used MFA push-bombing combined with WhatsApp social engineering to bypass two-factor auth. Once inside the corporate network, they found a PowerShell script with hardcoded admin credentials for Thycotic — Uber's PAM system — unlocking full admin access to AWS, GCP, Slack, SentinelOne, HackerOne, and more within hours.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>Full admin</strong> on AWS, GCP, Slack, SentinelOne, HackerOne</div>
+      <div class="inc-stat"><strong>&lt;24 hours</strong> initial access to full compromise</div>
+      <div class="inc-stat"><strong>Attacker:</strong> 18-year-old, allegedly LAPSUS$-affiliated</div>
+    </div>
+    <a class="pm-link" href="https://www.uber.com/newsroom/security-update/" target="_blank" rel="noopener">📄 Uber official security update ↗</a>
+    <a class="pm-link" href="https://blog.gitguardian.com/uber-breach-2022/" target="_blank" rel="noopener">📄 GitGuardian technical analysis ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">🛒 Initial Access — Purchased Credentials</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Contractor VPN credentials purchased from dark web infostealer log</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 – Valid Accounts</a>
+        </div>
+        <p class="step-desc">The targeted contractor's device had previously been infected with infostealer malware, which exfiltrated saved browser credentials to a dark web marketplace. The attacker purchased the username and password — no zero-day or technical exploit required.</p>
+        <div class="step-code">
+          <span class="hl">Source:</span> Infostealer log purchased from dark web forum<br>
+          <span class="hl">Credential type:</span> Uber contractor corporate VPN credentials<br>
+          <span class="hl">Defence gap:</span> No monitoring for credential leakage · Third-party device not enrolled in MDM or health-checked before VPN access
+        </div>
+        <div class="step-tags"><span class="stag">Infostealer</span><span class="stag">Dark Web</span><span class="stag">T1078</span><span class="stag">Third-Party Risk</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">📱 MFA Bypass — Push Fatigue + Social Engineering</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">MFA push-bombing campaign + WhatsApp impersonation of Uber IT</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1621/" target="_blank" rel="noopener">T1621 – MFA Request Generation</a>
+        </div>
+        <p class="step-desc">The attacker repeatedly attempted VPN login, flooding the contractor's phone with MFA push notifications. After approximately an hour of notifications, they contacted the contractor on WhatsApp claiming to be Uber IT support and stating the only way to stop the notifications was to approve one. The contractor complied.</p>
+        <div class="step-code">
+          <span class="hl">Technique:</span> MFA push fatigue ("push bombing") for ~1 hour<br>
+          <span class="hl">Social engineering:</span> WhatsApp message: "I'm from Uber IT. Accept the push to stop the notifications."<br>
+          <span class="hl">MFA type:</span> Push notification (not phishing-resistant FIDO2)<br>
+          <span class="hl">Why it worked:</span> No number-matching · No limit on push attempt rate
+        </div>
+        <div class="step-tags"><span class="stag">MFA Fatigue</span><span class="stag">Push Bombing</span><span class="stag">WhatsApp SE</span><span class="stag">T1621</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔌 Internal Recon</div>
+    <div class="kc-step step-o">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">VPN established; contractor-level access used to enumerate internal network shares</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1046/" target="_blank" rel="noopener">T1046 – Network Service Discovery</a>
+        </div>
+        <p class="step-desc">Once the contractor approved the push, the attacker connected to Uber's corporate VPN and began scanning the internal network. Internal infrastructure had no micro-segmentation — a contractor VPN account could reach all internal file shares.</p>
+        <div class="step-code">
+          <span class="hl">Access level at this point:</span> Contractor VPN (low privilege)<br>
+          <span class="hl">Recon target:</span> Internal file shares and intranet services<br>
+          <span class="hl">Defence gap:</span> No east-west network segmentation · Contractor VPN had broad internal network visibility
+        </div>
+        <div class="step-tags"><span class="stag">VPN</span><span class="stag">Internal Recon</span><span class="stag">No Segmentation</span><span class="stag">T1046</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">💀 Critical Discovery — Hardcoded Secret</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">PowerShell script on internal share contained hardcoded Thycotic PAM admin credentials</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 – Credentials in Files</a>
+        </div>
+        <p class="step-desc">On an internal network share accessible via the contractor VPN, the attacker found a PowerShell script containing plaintext admin credentials for Thycotic — Uber's Privileged Access Management platform. This single file became the skeleton key to every system in the organisation.</p>
+        <div class="step-code">
+          <span class="hl">Location:</span> Internal network share (contractor VPN accessible)<br>
+          <span class="hl">Contents:</span> Hardcoded Thycotic domain admin username + password in plaintext<br>
+          <span class="hl">Irony:</span> Thycotic was the PAM system specifically designed to prevent hardcoded secrets<br>
+          <span class="hl">Root cause:</span> Automation script needed PAM API access but used a static credential instead of a scoped service account
+        </div>
+        <div class="step-tags"><span class="stag">Hardcoded Credentials</span><span class="stag">PowerShell</span><span class="stag">T1552.001</span><span class="stag">Secrets Sprawl</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">👑 Total Compromise — Keys to the Kingdom</div>
+    <div class="kc-step step-p">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Thycotic admin access → all secrets extracted → full cloud and SaaS compromise</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 – Cloud Accounts</a>
+        </div>
+        <p class="step-desc">Using the admin credentials, the attacker logged into Thycotic and extracted all stored secrets. Thycotic was the single source of truth for credentials across Uber's entire cloud and SaaS footprint.</p>
+        <div class="step-code">
+          <span class="hl">Systems fully compromised:</span><br>
+          → AWS (cloud infrastructure admin)<br>
+          → GCP + Google Workspace (admin)<br>
+          → Slack workspace (admin — used to announce breach to all Uber employees)<br>
+          → SentinelOne XDR (admin — ability to suppress security alerts)<br>
+          → HackerOne admin console (access to private vulnerability reports)<br>
+          → DUO, OneLogin, VMware vSphere, Uber internal dashboards
+        </div>
+        <div class="step-tags"><span class="stag">PAM Takeover</span><span class="stag">AWS Admin</span><span class="stag">GCP Admin</span><span class="stag">Full Compromise</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🚨 Discovery</div>
+    <div class="kc-step step-g">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr"><div class="step-title">Attacker self-announces the breach in Uber's company Slack</div></div>
+        <p class="step-desc">The attacker used their Slack admin access to broadcast a message to all Uber employees announcing the breach, then posted screenshots on Twitter under "teapotuberhacker." Uber's security team discovered the breach within hours — not through monitoring, but through the attacker's announcement.</p>
+        <div class="step-code">
+          <span class="hl">Discovery method:</span> Attacker self-announced in company-wide Slack<br>
+          <span class="hl">Key gap:</span> No alert fired on new AWS admin account creation · No alert on PAM admin login from unknown device<br>
+          <span class="hl">SentinelOne access meant:</span> The attacker could have suppressed EDR alerts to cover tracks
+        </div>
+        <div class="step-tags"><span class="stag">Self-Announced</span><span class="stag">No Internal Detection</span><span class="stag">Slack Admin Abuse</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Deploy phishing-resistant MFA (FIDO2 / hardware security keys).</strong> Push notification MFA is defeated by fatigue attacks. Number-matching — requiring users to match a code shown on screen — stops automated bombing. FIDO2/passkeys are immune to both fatigue and phishing.</div>
+        <div class="def-item"><strong>Never hardcode credentials in scripts — use dynamic secrets from your PAM.</strong> Scripts should authenticate to your PAM via a scoped, short-lived service account, or use cloud-native options (AWS Secrets Manager, GCP Secret Manager with Workload Identity). Run Trufflehog or GitLeaks in CI/CD.</div>
+        <div class="def-item"><strong>Segment your network so contractor VPNs cannot reach all internal shares.</strong> Contractors should only access resources their role requires. A contractor VPN with visibility across all internal file shares is a single-hop lateral movement risk.</div>
+        <div class="def-item"><strong>Alert on anomalous PAM admin logins immediately.</strong> PAM is the crown jewels. A PAM admin login from a new device, new IP, or at an unusual time should trigger an immediate alert — not a periodic review.</div>
+        <div class="def-item"><strong>Enrol contractor devices in MDM and require health attestation before VPN admission.</strong> Device health checks can catch infostealer infections before they translate into credential theft.</div>
+      </div>
+    </div>
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.uber.com/newsroom/security-update/" target="_blank" rel="noopener">Uber Official</a>
+        <a class="src-link" href="https://blog.gitguardian.com/uber-breach-2022/" target="_blank" rel="noopener">GitGuardian</a>
+        <a class="src-link" href="https://www.upguard.com/blog/what-caused-the-uber-data-breach" target="_blank" rel="noopener">UpGuard</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1621/" target="_blank" rel="noopener">MITRE T1621</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">MITRE T1552.001</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ STORM-0558 ═══════════════ -->
+<div id="storm-0558" class="incident-panel" role="tabpanel">
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">April 2021 – June 2023 (2 year operation)</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure">Azure AD / Exchange Online</span>
+    </div>
+    <h2 class="inc-title">Storm-0558 – Compromised Engineer → Crash Dump → Stolen MSA Signing Key → Forged Tokens → Government Email Espionage</h2>
+    <p class="inc-summary">Chinese nation-state actor Storm-0558 compromised a Microsoft engineer's corporate account, discovered a consumer MSA signing key that had accidentally been included in a crash dump in a debugging environment, and used it to forge authentication tokens. A token validation bug in Exchange Online accepted these consumer tokens as enterprise credentials, enabling access to ~25 organisations' email — including 60,000 US State Department emails — for weeks before discovery.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>~25 organisations</strong> breached</div>
+      <div class="inc-stat"><strong>60,000</strong> State Dept emails exfiltrated</div>
+      <div class="inc-stat"><strong>2 years</strong> initial intrusion to exploitation</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> Storm-0558 (PRC / Chinese SVR equivalent)</div>
+    </div>
+    <a class="pm-link" href="https://msrc.microsoft.com/blog/2023/07/microsoft-mitigates-china-based-threat-actor-storm-0558-targeting-of-customer-email/" target="_blank" rel="noopener">📄 MSRC July 2023 ↗</a>
+    <a class="pm-link" href="https://msrc.microsoft.com/blog/2023/09/results-of-major-technical-investigations-for-storm-0558-key-acquisition/" target="_blank" rel="noopener">📄 MSRC key acquisition investigation ↗</a>
+    <a class="pm-link" href="https://www.wiz.io/blog/key-takeaways-from-microsofts-latest-storm-0558-report" target="_blank" rel="noopener">📄 Wiz Research analysis ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">🎯 Initial Compromise — Engineer Account</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Microsoft engineer's corporate account compromised (April 2021)</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 – Valid Accounts</a>
+        </div>
+        <p class="step-desc">Storm-0558 targeted an engineer whose device had been compromised prior to joining Microsoft (likely during a company acquisition). After the engineer joined Microsoft, the attackers used this foothold to access Microsoft's corporate network — where they would remain for approximately two years before exploiting the signing key.</p>
+        <div class="step-code">
+          <span class="hl">Hypothesis:</span> Pre-acquisition device compromise; credentials reused on Microsoft corporate account<br>
+          <span class="hl">Dwell time on Microsoft network:</span> April 2021 – ~June 2023 (2 years)<br>
+          <span class="hl">Log retention gap:</span> Microsoft could not confirm exfiltration due to log retention policy limits
+        </div>
+        <div class="step-tags"><span class="stag">Nation State APT</span><span class="stag">Corporate Account</span><span class="stag">Acquisition Risk</span><span class="stag">T1078</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Key Acquisition — The Crash Dump</div>
+    <div class="kc-step step-y">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Consumer MSA signing key found in crash dump in engineering debug environment</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 – Unsecured Credentials</a>
+        </div>
+        <p class="step-desc">A 2021 system crash in Microsoft's signing infrastructure generated a crash dump that, due to a race condition bug, incorrectly included consumer MSA signing key material that should never leave the isolated signing environment. The dump was copied to a debugging environment accessible to engineering accounts. Storm-0558, using the compromised engineer's account, accessed and exfiltrated the key.</p>
+        <div class="step-code">
+          <span class="hl">Key leaked:</span> Consumer MSA signing key (2016 vintage, still active)<br>
+          <span class="hl">How it leaked:</span> Race condition bug caused crash dump to include signing key material<br>
+          <span class="hl">How accessed:</span> Crash dump in debug environment — accessible via compromised engineer account<br>
+          <span class="hl">Microsoft quote:</span> "Operational errors resulted in key material leaving the secure token signing environment"
+        </div>
+        <div class="step-tags"><span class="stag">MSA Signing Key</span><span class="stag">Crash Dump</span><span class="stag">Race Condition</span><span class="stag">Debug Environment</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🔐 Token Forgery — The Core Technique</div>
+    <div class="kc-step step-p">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Stolen MSA key used to mint forged authentication tokens for government targets</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1606/001/" target="_blank" rel="noopener">T1606.001 – Web Token Forgery</a>
+        </div>
+        <p class="step-desc">Starting May 15, 2023, Storm-0558 used the stolen MSA consumer signing key to forge OpenID v2.0 access tokens impersonating specific users at targeted government organisations. The tokens were correctly signed — any service validating them against Microsoft's published public keys would accept them as legitimate.</p>
+        <div class="step-code">
+          <span class="hl">Token type:</span> OpenID v2.0 access tokens (signed with MSA consumer key)<br>
+          <span class="hl">Blast radius (per Wiz):</span> Could forge tokens for any Azure AD app supporting personal account auth — not just Exchange<br>
+          <span class="hl">Services potentially at risk:</span> OneDrive, SharePoint, Teams, any app using "Login with Microsoft"
+        </div>
+        <div class="step-tags"><span class="stag">Token Forgery</span><span class="stag">MSA Key</span><span class="stag">OpenID v2.0</span><span class="stag">T1606.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🐛 Exploitation — Token Validation Bug</div>
+    <div class="kc-step step-o">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Exchange Online accepted consumer-signed tokens as enterprise credentials (SDK validation bug)</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1212/" target="_blank" rel="noopener">T1212 – Exploitation for Credential Access</a>
+        </div>
+        <p class="step-desc">Consumer and enterprise signing keys are separate systems and should only be valid for their respective scopes. However, the Exchange Online team had incorrectly assumed the Azure AD SDK validated token issuers by default — it didn't. This meant Exchange Online accepted the forged consumer-scoped tokens as valid enterprise credentials. An additional OWA GetAccessTokenForResource API bug let attackers generate fresh Exchange tokens from forged tokens.</p>
+        <div class="step-code">
+          <span class="hl">The validation bug:</span> Exchange Online assumed Azure AD SDK performed issuer validation — it didn't<br>
+          <span class="hl">OWA additional bug:</span> GetAccessTokenForResource API issued fresh tokens from already-issued forged tokens<br>
+          <span class="hl">Result:</span> Consumer MSA token → accepted as enterprise Exchange Online credential
+        </div>
+        <div class="step-tags"><span class="stag">Token Validation Bug</span><span class="stag">Exchange Online</span><span class="stag">OWA API</span><span class="stag">Azure AD SDK</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📬 Collection and Exfiltration</div>
+    <div class="kc-step step-c">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Email access and exfiltration across ~25 government organisations via OWA REST API</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1114/002/" target="_blank" rel="noopener">T1114.002 – Remote Email Collection</a>
+        </div>
+        <p class="step-desc">Using PowerShell and Python scripts against the OWA REST API with forged tokens, Storm-0558 read and exfiltrated email from ~25 organisations including senior US State Department and Commerce Department officials. Access ran for at least 6 weeks before discovery.</p>
+        <div class="step-code">
+          <span class="hl">Method:</span> OWA Exchange Store REST API calls using forged tokens<br>
+          <span class="hl">State Dept loss:</span> ~60,000 emails including communications of the US Ambassador to China<br>
+          <span class="hl">Other victims:</span> Commerce Secretary Raimondo + senior officials across ~25 organisations
+        </div>
+        <div class="step-tags"><span class="stag">OWA REST API</span><span class="stag">Email Exfiltration</span><span class="stag">Government Espionage</span><span class="stag">T1114.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🚨 Discovery</div>
+    <div class="kc-step step-g">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr"><div class="step-title">US State Dept detects via custom MailItemsAccessed alert ("Big Yellow Taxi") — June 16, 2023</div></div>
+        <p class="step-desc">The State Dept detected the breach via a custom alert rule triggered by the MailItemsAccessed audit event — which was only available to organisations that had purchased Microsoft's E5 license tier. Organisations on lower tiers could not see this event and were unable to detect the breach independently. Following CISA pressure, Microsoft extended MailItemsAccessed to E3 customers in September 2023.</p>
+        <div class="step-code">
+          <span class="hl">Detection event:</span> MailItemsAccessed — unknown application ID accessing mailboxes<br>
+          <span class="hl">Critical licensing gap:</span> MailItemsAccessed was E5-only at time of breach · Most victims couldn't see it<br>
+          <span class="hl">Dwell time:</span> ~6 weeks of confirmed email access; potentially 2 months total
+        </div>
+        <div class="step-tags"><span class="stag">MailItemsAccessed</span><span class="stag">E5 Logging Gap</span><span class="stag">Custom Alert</span><span class="stag">6 Week Dwell</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Enable MailItemsAccessed auditing in Exchange Online — now available to E3.</strong> Alert on unknown application IDs accessing mailboxes. This was the only control that detected Storm-0558.</div>
+        <div class="def-item"><strong>Explicitly validate token issuers in your applications — don't assume the SDK does it.</strong> For Azure AD apps, confirm tokens are signed by the correct key type for your audience. Don't rely on library defaults.</div>
+        <div class="def-item"><strong>Protect crash dump pipelines — scan for key material before copying to non-isolated environments.</strong> Crash dumps should be treated as potentially sensitive and scanned for credentials and key material before being moved to debugging environments.</div>
+        <div class="def-item"><strong>Treat acquired companies' devices as untrusted until fully re-enrolled under your MDM.</strong> Devices from acquisitions should go through a full wipe-and-re-enrol process before receiving corporate credentials.</div>
+        <div class="def-item"><strong>Maintain an approved OAuth application inventory and alert on deviations.</strong> Alert on any application accessing mailboxes that is not in your approved inventory. Conditional Access policies can enforce application restrictions.</div>
+      </div>
+    </div>
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://msrc.microsoft.com/blog/2023/07/microsoft-mitigates-china-based-threat-actor-storm-0558-targeting-of-customer-email/" target="_blank" rel="noopener">MSRC July</a>
+        <a class="src-link" href="https://msrc.microsoft.com/blog/2023/09/results-of-major-technical-investigations-for-storm-0558-key-acquisition/" target="_blank" rel="noopener">MSRC September</a>
+        <a class="src-link" href="https://www.wiz.io/blog/storm-0558-compromised-microsoft-key-enables-authentication-of-countless-micr" target="_blank" rel="noopener">Wiz Research</a>
+        <a class="src-link" href="https://www.microsoft.com/en-us/security/blog/2023/07/14/analysis-of-storm-0558-techniques-for-unauthorized-email-access/" target="_blank" rel="noopener">MS Security Blog</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1606/001/" target="_blank" rel="noopener">MITRE T1606.001</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SOLARWINDS ═══════════════ -->
+<div id="solarwinds" class="incident-panel" role="tabpanel">
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">October 2019 – December 2020 (14 months)</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure">Azure AD</span>
+      <span class="prov-tag prov-aws">AWS</span>
+    </div>
+    <h2 class="inc-title">SolarWinds – Build System Compromise → SUNBURST Backdoor → On-Prem to Cloud Pivot → Golden SAML → US Government Espionage</h2>
+    <p class="inc-summary">Russian SVR (APT29 / Cozy Bear) breached SolarWinds' build pipeline and injected the SUNBURST backdoor into signed Orion software updates sent to 18,000+ customers. At high-value government targets, they used SUNBURST to achieve domain admin on-premises, then stole the ADFS token-signing certificate to forge Golden SAML tokens — bypassing MFA entirely to access Azure AD and Microsoft 365 environments for months. This was the first major nation-state supply chain attack that explicitly pivoted from on-premises to cloud identity.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>18,000+</strong> orgs received malicious update</div>
+      <div class="inc-stat"><strong>~100</strong> actively exploited</div>
+      <div class="inc-stat"><strong>14 months</strong> from build compromise to discovery</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> APT29 / Cozy Bear (Russian SVR)</div>
+    </div>
+    <a class="pm-link" href="https://attack.mitre.org/campaigns/C0024/" target="_blank" rel="noopener">📄 MITRE Campaign C0024 ↗</a>
+    <a class="pm-link" href="https://www.cisa.gov/news-events/news/remediating-networks-affected-solarwinds-and-active-directorym365-compromise" target="_blank" rel="noopener">📄 CISA remediation guidance ↗</a>
+    <a class="pm-link" href="https://unit42.paloaltonetworks.com/solarstorm-supply-chain-attack-timeline/" target="_blank" rel="noopener">📄 Palo Alto timeline ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">🏗 Supply Chain — Build System Compromise</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">SolarWinds build environment breached; SUNSPOT implant injected into Orion DLL at compile time (Oct 2019)</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 – Software Supply Chain</a>
+        </div>
+        <p class="step-desc">SVR gained access to SolarWinds' internal build system and installed SUNSPOT — a build-time implant that monitored the MSBuild.exe process and injected SUNBURST malicious code into Orion.Core.BusinessLayer.dll during compilation. The resulting DLL was then signed with SolarWinds' legitimate code-signing certificate, making it appear authentic.</p>
+        <div class="step-code">
+          <span class="hl">Implant:</span> SUNSPOT — intercepted MSBuild.exe and injected SUNBURST into target DLL<br>
+          <span class="hl">Code signing:</span> Trojanized DLL signed with SolarWinds' legitimate certificate (trusted by customers)<br>
+          <span class="hl">Dormancy:</span> SUNBURST waited ~2 weeks post-installation before activating (to evade sandbox detection)
+        </div>
+        <div class="step-tags"><span class="stag">SUNSPOT</span><span class="stag">Build Tampering</span><span class="stag">Code Signing Abuse</span><span class="stag">T1195.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">📡 Backdoor Activation and C2 Beaconing</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">SUNBURST distributed via Orion updates; C2 beacon to avsvmcloud[.]com via DNS (March 2020)</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1071/004/" target="_blank" rel="noopener">T1071.004 – DNS C2</a>
+        </div>
+        <p class="step-desc">From March 2020, trojanized Orion updates were installed by customers. SUNBURST beaconed to the attacker-controlled domain avsvmcloud[.]com using DNS subdomain queries that encoded victim environment information. SVR then selectively activated only high-value targets for further exploitation — the majority of the 18,000 infected organisations were never actively exploited.</p>
+        <div class="step-code">
+          <span class="hl">C2 mechanism:</span> DNS subdomain encoding — victim fingerprint data encoded in DNS query subdomains<br>
+          <span class="hl">Evasion:</span> Traffic mimicked legitimate SolarWinds telemetry · Dormancy period bypassed sandbox detection<br>
+          <span class="hl">Selective exploitation:</span> 18,000 infected · ~100 actively pursued by SVR
+        </div>
+        <div class="step-tags"><span class="stag">SUNBURST</span><span class="stag">DNS C2</span><span class="stag">avsvmcloud.com</span><span class="stag">T1071.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🔼 On-Prem Privilege Escalation</div>
+    <div class="kc-step step-p">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">TEARDROP dropper deploys Cobalt Strike BEACON; domain admin privileges obtained on-premises</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1078/002/" target="_blank" rel="noopener">T1078.002 – Domain Accounts</a>
+        </div>
+        <p class="step-desc">At selected high-value targets, SUNBURST delivered TEARDROP — a memory-resident dropper — which deployed Cobalt Strike BEACON for interactive C2 and lateral movement. SVR used BEACON to escalate to domain admin privileges on the victim's on-premises Active Directory, positioning themselves to attack cloud identity via the ADFS server.</p>
+        <div class="step-code">
+          <span class="hl">Second-stage malware:</span> TEARDROP (memory-resident dropper) → Cobalt Strike BEACON (C2)<br>
+          <span class="hl">Goal of on-prem access:</span> Reach ADFS server to steal the SAML token-signing certificate<br>
+          <span class="hl">Evasion:</span> All traffic masqueraded as legitimate SolarWinds API activity
+        </div>
+        <div class="step-tags"><span class="stag">TEARDROP</span><span class="stag">Cobalt Strike</span><span class="stag">Domain Admin</span><span class="stag">Lateral Movement</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">☁️ On-Prem to Cloud Pivot — Golden SAML</div>
+    <div class="kc-step step-b">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">ADFS token-signing certificate stolen; Golden SAML tokens forged for Azure AD / M365 (bypasses MFA)</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1606/002/" target="_blank" rel="noopener">T1606.002 – SAML Token Forgery</a>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1550/" target="_blank" rel="noopener">T1550 – Use Alternate Auth Material</a>
+        </div>
+        <p class="step-desc">With domain admin privileges, SVR extracted the ADFS token-signing private key and certificate from the on-premises federation server. Using this key, they could forge SAML assertions impersonating any user — "Golden SAML." Forged SAML tokens bypass MFA entirely because the SAML assertion IS the proof of authentication — no second factor is requested when a valid SAML response is presented.</p>
+        <div class="step-code">
+          <span class="hl">Golden SAML attack steps:</span><br>
+          1. Extract ADFS private signing key + certificate (requires domain admin)<br>
+          2. Forge SAML assertion claiming to be any privileged user (Global Admin, etc.)<br>
+          3. Present to Azure AD / M365 — accepted as fully legitimate<br>
+          4. MFA bypassed — the forged SAML IS the authentication proof<br>
+          <span class="hl">Persistence:</span> SAML signing certs rarely rotated — access persisted indefinitely without re-exploitation
+        </div>
+        <div class="step-tags"><span class="stag">Golden SAML</span><span class="stag">ADFS</span><span class="stag">MFA Bypass</span><span class="stag">T1606.002</span><span class="stag">On-Prem to Cloud</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📬 Cloud Espionage and Persistence</div>
+    <div class="kc-step step-c">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Long-term M365 email access; Azure AD backdoors added to survive Orion removal</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1114/002/" target="_blank" rel="noopener">T1114.002 – Remote Email Collection</a>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 – Account Manipulation</a>
+        </div>
+        <p class="step-desc">SVR accessed M365 environments at multiple US government agencies including Treasury, Commerce, DHS, State Department, and DOJ. Critically, they also modified Azure AD to add trusted federated identity providers and OAuth application permissions — cloud-layer backdoors that persisted even after SolarWinds Orion was removed from victim networks.</p>
+        <div class="step-code">
+          <span class="hl">Victims:</span> US Treasury, Commerce, DHS, State Dept, DOJ, and ~95 other organisations<br>
+          <span class="hl">Cloud persistence mechanisms added:</span><br>
+          → New federated identity providers added to Azure AD<br>
+          → OAuth app permissions granted for API-based access<br>
+          → Service principal credentials added for ongoing access<br>
+          <span class="hl">Key lesson:</span> Removing Orion did NOT remove cloud access — Azure AD had to be separately evicted
+        </div>
+        <div class="step-tags"><span class="stag">M365 Email Access</span><span class="stag">Azure AD Persistence</span><span class="stag">OAuth Backdoors</span><span class="stag">US Government</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🚨 Discovery</div>
+    <div class="kc-step step-g">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr"><div class="step-title">FireEye discovers its own red team tools stolen; traces back to trojanized Orion — December 13, 2020</div></div>
+        <p class="step-desc">FireEye discovered theft of its proprietary red team offensive tools during an internal investigation and traced the intrusion to a trojanized SolarWinds Orion update. Their public disclosure on December 13, 2020 triggered a global incident response and CISA Emergency Directive 21-01 requiring all federal agencies to immediately disconnect Orion. Crucially, removing Orion did not remove cloud persistence — Azure AD backdoors required a separate, comprehensive eviction process.</p>
+        <div class="step-code">
+          <span class="hl">Discovered by:</span> FireEye (investigating their own breach, Dec 13 2020)<br>
+          <span class="hl">Time from build compromise to discovery:</span> ~14 months<br>
+          <span class="hl">CISA ED 21-01:</span> All federal agencies ordered to disconnect SolarWinds Orion immediately<br>
+          <span class="hl">Critical complication:</span> Cloud-layer backdoors (Azure AD federation, OAuth apps) persisted after Orion removal
+        </div>
+        <div class="step-tags"><span class="stag">14 Month Dwell</span><span class="stag">FireEye Discovery</span><span class="stag">CISA ED 21-01</span><span class="stag">Cloud Persistence Remained</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Treat your ADFS / identity provider as a Tier 0 asset equal to domain controllers.</strong> The ADFS server holds the keys to all federated services. Protect it with privileged access workstations, no internet exposure, and HSM-protected signing keys. Monitor it as you would your most critical production system.</div>
+        <div class="def-item"><strong>Detect Golden SAML by correlating ADFS event logs with Azure AD sign-in logs.</strong> Legitimate ADFS authentications leave traces in both systems. An Azure AD sign-in with no corresponding ADFS authentication event (IDs 1202, 1200) is highly suspicious.</div>
+        <div class="def-item"><strong>Audit Azure AD federated identity providers, OAuth app permissions, and service principals regularly.</strong> SVR's cloud persistence survived Orion removal. Use Microsoft Entra audit logs or Defender for Cloud Apps to detect new high-privilege applications.</div>
+        <div class="def-item"><strong>Implement software supply chain integrity verification for build systems.</strong> Monitor build environments with endpoint security. Verify build artifact integrity. Implement reproducible builds. Treat your CI/CD pipeline as production infrastructure.</div>
+        <div class="def-item"><strong>Plan for cloud-specific eviction as a separate step from on-prem remediation.</strong> Any on-prem compromise may have resulted in cloud-layer backdoors. Azure AD, OAuth app permissions, and federated IdPs must be independently reviewed and evicted.</div>
+      </div>
+    </div>
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://attack.mitre.org/campaigns/C0024/" target="_blank" rel="noopener">MITRE C0024</a>
+        <a class="src-link" href="https://www.cisa.gov/news-events/news/remediating-networks-affected-solarwinds-and-active-directorym365-compromise" target="_blank" rel="noopener">CISA Remediation</a>
+        <a class="src-link" href="https://www.cyberark.com/resources/blog/the-anatomy-of-the-solarwinds-attack-chain" target="_blank" rel="noopener">CyberArk Golden SAML</a>
+        <a class="src-link" href="https://www.sygnia.co/threat-reports-and-advisories/golden-saml-attack/" target="_blank" rel="noopener">Sygnia Detection</a>
+        <a class="src-link" href="https://unit42.paloaltonetworks.com/solarstorm-supply-chain-attack-timeline/" target="_blank" rel="noopener">Palo Alto Timeline</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1606/002/" target="_blank" rel="noopener">MITRE T1606.002</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MICROSOFT SAS LEAK ═══════════════ -->
+<div id="ms-sas" class="incident-panel" role="tabpanel">
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">July 2020 – June 2023 (3-year exposure)</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure">Azure Blob Storage</span>
+    </div>
+    <h2 class="inc-title">Microsoft AI Research SAS Token — Over-Permissioned Token → Public GitHub → 38TB Internal Data Exposed for 3 Years</h2>
+    <p class="inc-summary">A Microsoft AI researcher shared a URL to open-source training data on a public GitHub repository. The URL contained an Azure Shared Access Signature token — but instead of being scoped to a specific file or container, it was an Account SAS with full-control permissions to the entire storage account, set to expire in 2051. Anyone who found the URL could read, modify, or delete 38TB of internal Microsoft data including employee workstation backups, private keys, saved passwords, and 30,000+ internal Teams messages. Discovered and responsibly disclosed by Wiz Research in June 2023 after ~3 years of exposure.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>38 TB</strong> exposed</div>
+      <div class="inc-stat"><strong>3 years</strong> exposure window</div>
+      <div class="inc-stat"><strong>Full control</strong> permissions (read + write + delete)</div>
+      <div class="inc-stat"><strong>Discovered by:</strong> Wiz Research (responsible disclosure)</div>
+    </div>
+    <a class="pm-link" href="https://www.wiz.io/blog/38-terabytes-of-private-data-accidentally-exposed-by-microsoft-ai-researchers" target="_blank" rel="noopener">📄 Wiz Research disclosure ↗</a>
+    <a class="pm-link" href="https://www.bleepingcomputer.com/news/microsoft/microsoft-leaks-38tb-of-private-data-via-unsecured-azure-storage/" target="_blank" rel="noopener">📄 BleepingComputer ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">🔧 Root Cause — Misconfigured SAS Token</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Researcher creates Account SAS with full-control permissions, 30-year expiry</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1098/004/" target="_blank" rel="noopener">T1098.004 – SSH Authorized Keys (analogous: overpermissioned access token)</a>
+        </div>
+        <p class="step-desc">When sharing open-source AI training data publicly, the researcher used Azure's SAS token feature but chose the broadest option — an Account SAS — rather than a narrowly-scoped Service SAS. They set permissions to "full control" (read, write, delete) and the expiry to October 2051. Azure does not audit SAS token generation, making this invisible to administrators.</p>
+        <div class="step-code">
+          <span class="hl">SAS type:</span> Account SAS (entire storage account) — should have been Service SAS (single container)<br>
+          <span class="hl">Permissions set:</span> Full control — read, write, delete, list everything<br>
+          <span class="hl">Expiry set:</span> October 6, 2051 (30+ years)<br>
+          <span class="hl">Azure's own warning:</span> "Not possible to audit generation of SAS tokens" — no admin visibility
+        </div>
+        <div class="step-tags"><span class="stag">Account SAS</span><span class="stag">Full Control</span><span class="stag">30-Year Expiry</span><span class="stag">Misconfiguration</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">📢 Exposure — Committed to Public GitHub</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Full SAS token URL committed to public GitHub repository README (July 20, 2020)</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/004/" target="_blank" rel="noopener">T1552.004 – Private Keys</a>
+        </div>
+        <p class="step-desc">The researcher committed the complete SAS token URL to the public GitHub repository "robust-models-transfer" as download instructions. GitHub's secret scanning did not cover Account SAS token patterns at the time. The URL was publicly visible for nearly 3 years. In October 2021, the token was renewed — with the expiry extended to October 2051.</p>
+        <div class="step-code">
+          <span class="hl">Repository:</span> github.com/microsoft/robust-models-transfer (public)<br>
+          <span class="hl">Exposed from:</span> July 20, 2020 to June 24, 2023 (2 years 11 months)<br>
+          <span class="hl">Token renewed:</span> October 2021 — expiry extended to 2051 (30 more years)<br>
+          <span class="hl">Scanning gap:</span> GitHub secret scanning did not cover Account SAS tokens until after this disclosure
+        </div>
+        <div class="step-tags"><span class="stag">GitHub</span><span class="stag">Public Repository</span><span class="stag">Secret in README</span><span class="stag">T1552.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">📂 Data Accessible — 38TB Including Credentials</div>
+    <div class="kc-step step-p">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Full storage account accessible — 38TB including employee backups, keys, Teams messages</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 – Data from Cloud Storage</a>
+        </div>
+        <p class="step-desc">Anyone with the URL had full access to an internal Azure Blob storage account — not just the intended training data folder. The account contained disk backups of two Microsoft employees' workstations with saved passwords, private keys, and an archive of 30,000+ internal Microsoft Teams messages. Full-control permissions also meant a malicious actor could have injected code into AI model files, creating a supply chain attack vector.</p>
+        <div class="step-code">
+          <span class="hl">Exposed data:</span><br>
+          → Disk backups of 2 employee workstations (passwords, private keys, personal data)<br>
+          → 30,000+ Microsoft Teams messages from 359 employees<br>
+          → Internal credentials and secret keys<br>
+          → Intended open-source AI training data<br>
+          <span class="hl">Supply chain risk:</span> Write access meant an attacker could have injected malicious code into AI model files
+        </div>
+        <div class="step-tags"><span class="stag">38TB</span><span class="stag">Employee Creds</span><span class="stag">Teams Messages</span><span class="stag">AI Supply Chain Risk</span><span class="stag">T1530</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔬 Discovery — Wiz Research Internet Scan</div>
+    <div class="kc-step step-g">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr"><div class="step-title">Wiz Research discovers token while scanning GitHub for misconfigured cloud storage — June 22, 2023</div></div>
+        <p class="step-desc">Wiz Research runs an ongoing project scanning the internet and public repositories for misconfigured cloud storage. While reviewing Microsoft's public AI GitHub repositories, they found the SAS token URL, followed it, and discovered the full scope of exposure. They reported to Microsoft MSRC on June 22; the token was revoked on June 24, 2023 — 2 days later. Coordinated public disclosure followed on September 18, 2023.</p>
+        <div class="step-code">
+          <span class="hl">Discovered by:</span> Wiz Research (scanning public GitHub repos for cloud misconfigurations)<br>
+          <span class="hl">Reported:</span> June 22, 2023 | <span class="hl">Token revoked:</span> June 24, 2023 (48 hours)<br>
+          <span class="hl">GitHub URL updated:</span> July 7, 2023 | <span class="hl">Public disclosure:</span> September 18, 2023<br>
+          <span class="hl">No evidence:</span> Microsoft found no evidence of malicious exfiltration beyond Wiz's research
+        </div>
+        <div class="step-tags"><span class="stag">Responsible Disclosure</span><span class="stag">Wiz Research</span><span class="stag">3 Year Exposure</span><span class="stag">No Malicious Exfil Confirmed</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Never use Account SAS for external sharing — always use Service SAS with a Stored Access Policy.</strong> Service SAS scopes access to a single container. A Stored Access Policy allows central management and instant revocation without rotating the account key.</div>
+        <div class="def-item"><strong>Configure and enforce SAS expiration policies at the Azure storage account level.</strong> Azure allows you to set a maximum SAS token lifetime. A 30-year token should never be possible. Set limits (e.g., 24 hours for external sharing) and alert on violations.</div>
+        <div class="def-item"><strong>Run secret scanning across all repositories including SAS token patterns.</strong> Trufflehog, GitLeaks, and GitHub Advanced Security can detect SAS tokens in code. Microsoft added Account SAS token patterns to GitHub's secret scanning service following this disclosure.</div>
+        <div class="def-item"><strong>Separate internal data from public data at the storage account boundary.</strong> Open-source training data should live in a dedicated storage account with no internal data co-located. Misconfiguration then limits the blast radius to the public data account only.</div>
+        <div class="def-item"><strong>Monitor SAS-authenticated access via Azure Monitor and Storage Analytics logs.</strong> Alert on access from unexpected IPs or at unusual times for storage accounts holding sensitive data. Enable SAS token expiration policies to catch long-lived tokens automatically.</div>
+      </div>
+    </div>
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.wiz.io/blog/38-terabytes-of-private-data-accidentally-exposed-by-microsoft-ai-researchers" target="_blank" rel="noopener">Wiz Research</a>
+        <a class="src-link" href="https://www.bleepingcomputer.com/news/microsoft/microsoft-leaks-38tb-of-private-data-via-unsecured-azure-storage/" target="_blank" rel="noopener">BleepingComputer</a>
+        <a class="src-link" href="https://blog.gitguardian.com/microsoft-ai-involuntarily-exposed-a-secret-giving-access-to-38tb-of-confidential-data-for-3-years/" target="_blank" rel="noopener">GitGuardian Analysis</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1552/004/" target="_blank" rel="noopener">MITRE T1552.004</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">MITRE T1530</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Contribute CTA -->
+<div class="contribute-cta">
+  <h3>// Know a breach with a detailed post-mortem?</h3>
+  <p>This is a community resource. Submit a PR to add a new kill chain — include MITRE technique IDs and link to primary sources.</p>
+  <a class="btn-mono" href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener">→ Contribute on GitHub</a>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-content">
+    <div class="footer-section">
+      <h4>Cloud Security Office Hours</h4>
+      <p>Free, vendor-neutral community. Fridays at 7 AM PT on Zoom.</p>
+    </div>
+    <div class="footer-section">
+      <h4>Quick Links</h4>
+      <ul>
+        <li><a href="resources.html">Resources</a></li>
+        <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+        <li><a href="news.html">News</a></li>
+        <li><a href="sessions.html">Zoom Sessions</a></li>
+      </ul>
+    </div>
+    <div class="footer-section">
+      <h4>Community</h4>
+      <ul>
+        <li><a href="mailto:admin@csoh.org">Contact</a></li>
+        <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener">GitHub</a></li>
+        <li><a href="https://sendfox.com/CSOH" target="_blank" rel="noopener">Zoom Registration</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2023-2026 Cloud Security Office Hours. Educational use only. All breach details sourced from public post-mortems and official disclosures.</p>
+  </div>
+</footer>
+
+<script src="main.js"></script>
+<script>
+  document.querySelectorAll('.itab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.itab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.incident-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = document.getElementById(tab.dataset.panel);
+      if (panel) panel.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
