@@ -301,7 +301,7 @@ This site uses **GitHub Actions workflows** to automate all major site updates. 
 **What it does:**
 - Updates SRI hashes and cache-busting tags if CSS/JS changed (using `update_sri.py`)
 - Generates preview images for new resources in `resources.html` (using `generate_preview.py`)
-- Deploys the site to the web server via FTP in smart passes:
+- Deploys the site to the web server via rsync over SSH in smart passes:
   - **Pass 1:** Always deploys all HTML/CSS/JS and other site files (excludes images)
   - **Pass 2:** Only uploads `img/previews/` when new preview images were generated
   - **Pass 3:** Only uploads `chat-screenshots/` when new screenshots were added

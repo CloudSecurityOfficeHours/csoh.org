@@ -114,7 +114,7 @@ SRI and cache-busting are handled as part of the unified workflow, not a separat
 2. Runs `python3 update_sri.py` to recalculate SRI hashes and `?v=` cache-busting params
 3. Commits and pushes updated HTML files if hashes changed
 4. Generates preview images for any new resources in `resources.html`
-5. Deploys the site via FTP in smart passes:
+5. Deploys the site via rsync over SSH in smart passes:
    - **Pass 1:** Always — all HTML/CSS/JS and site files (skips image directories)
    - **Pass 2:** Only when new previews were generated — uploads `img/previews/`
    - **Pass 3:** Only when new files exist in `chat-screenshots/` — uploads `chat-screenshots/`

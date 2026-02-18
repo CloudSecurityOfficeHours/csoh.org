@@ -442,24 +442,12 @@ function addPreviewImagesToCards() {
         img.height = 160;
 
 
-        // Use local preview when available; otherwise fall back to remote mShots.
+        // Use local preview when available; no third-party fallback.
         if (previewMap[url]) {
             img.src = previewMap[url];
             img.onerror = function() { img.remove(); };
         } else {
-            // fallback to mShots for sites without local previews
-            img.src = `https://s.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=600`;
-            // remove the image if it fails to load or appears to be a tiny placeholder
-            img.onerror = function() { img.remove(); };
-            img.onload = function() {
-                try {
-                    if ((img.naturalWidth && img.naturalWidth < 50) || (img.naturalHeight && img.naturalHeight < 50)) {
-                        img.remove();
-                    }
-                } catch (e) {
-                    // ignore
-                }
-            };
+            img.remove();
         }
 
         // Place the preview after any icon but before the title
