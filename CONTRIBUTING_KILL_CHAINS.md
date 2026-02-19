@@ -100,12 +100,14 @@ Also add a tab button to the `<nav class="incident-tabs">` section at the top.
 ### Tab button (add to nav)
 
 ```html
-<button class="itab" data-panel="YOUR-PANEL-ID" role="tab">
+<button class="itab" data-panel="YOUR-PANEL-ID" data-year="YYYY" role="tab">
   Incident Name YEAR
   <span class="itab-prov prov-aws">AWS</span>
   <!-- Use prov-azure for Azure incidents -->
 </button>
 ```
+
+> **Important:** The `data-year="YYYY"` attribute is required — it's what the page uses to automatically sort tabs into chronological order. Replace `YYYY` with the 4-digit year the incident occurred. If you forget it, your tab will sort to the beginning.
 
 ### Full panel template
 
