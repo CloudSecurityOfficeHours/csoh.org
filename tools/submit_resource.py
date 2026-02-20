@@ -192,7 +192,7 @@ def find_category_section(html_content, category_id):
         return None, None
     
     # Find the section by ID
-    section_pattern = rf'<section[^>]+id="{section_id}"[^>]*>(.*?)</section>'
+    section_pattern = rf'<div[^>]+class="category-section"[^>]+id="{section_id}"[^>]*>(.*)</div>'
     match = re.search(section_pattern, html_content, re.DOTALL)
     
     if not match:
