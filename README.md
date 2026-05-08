@@ -2,10 +2,10 @@
 
 **Vendor-neutral cloud-security community. 2,000+ practitioners. Free weekly Zoom on Fridays. No marketing.**
 
-🌐 **[csoh.org](https://csoh.org)** · 📅 **[Friday Zoom 7am PT](https://sendfox.com/CSOH)** · 📡 **[RSS](https://csoh.org/feed.xml)**
+🌐 **[csoh.org](https://csoh.org)** · 📅 **[Friday Zoom 7am PT](https://csoh.kit.com/39feb4f397)** · 📡 **[RSS](https://csoh.org/feed.xml)**
 
 [![GitHub](https://img.shields.io/badge/GitHub-CloudSecurityOfficeHours/csoh.org-blue)](https://github.com/CloudSecurityOfficeHours/csoh.org)
-[![Mailing List](https://img.shields.io/badge/Mailing%20List-2000%2B%20Members-orange)](https://sendfox.com/CSOH)
+[![Mailing List](https://img.shields.io/badge/Mailing%20List-2000%2B%20Members-orange)](https://csoh.kit.com/39feb4f397)
 [![License](https://img.shields.io/badge/License-Open%20Content-green)](LICENSE)
 
 ---
@@ -45,7 +45,7 @@ The vendor-neutral pillars of cloud security, written by practitioners:
 
 Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything is free, nothing is sponsored, no trackers, no marketing.
 
-Sign up for the weekly Zoom link at **[sendfox.com/CSOH](https://sendfox.com/CSOH)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
+Sign up for the weekly Zoom link at **[csoh.kit.com](https://csoh.kit.com/39feb4f397)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
 
 ---
 
@@ -62,7 +62,7 @@ Our recommended learning sequence:
 5. **Get Hands-On**: [CTF Challenges](https://csoh.org/ctfs.html) and [Resources](https://csoh.org/resources.html) for practice
 6. **Choose a Certification**: [Cloud Security Certifications guide](https://csoh.org/cloud-security-certifications.html) — CCSK, CCSP, AWS, Azure, GCP, CKS
 7. **Read Real Breaches**: [Breach Kill Chains](https://csoh.org/breach-timeline.html) — see how attacks actually happen
-8. **Join the Community**: [sendfox.com/CSOH](https://sendfox.com/CSOH) for the Friday Zoom link
+8. **Join the Community**: [csoh.kit.com](https://csoh.kit.com/39feb4f397) for the Friday Zoom link
 9. **Stay Updated**: [News](https://csoh.org/news.html), [RSS feed](https://csoh.org/feed.xml), or any [Friday Zoom recap](https://csoh.org/meetings.html)
 
 ---
@@ -175,7 +175,7 @@ Information about weekly community gatherings:
 - **When:** Every Friday at 7am PT
 - **Format:** Expert presentations + open discussion + Q&A
 - **Cost:** Completely free
-- **Registration Link:** https://sendfox.com/CSOH
+- **Registration Link:** https://csoh.kit.com/39feb4f397
 - Format details and speaker information
 
 ### 🏟️ Conferences (`conferences.html`)
@@ -684,7 +684,7 @@ Want to help improve CSOH? We have **beginner-friendly guides** for contributing
 
 **Easy options (no coding required):**
 1. [Report an issue](https://github.com/CloudSecurityOfficeHours/csoh.org/issues) - Found a bug? Have a suggestion?
-2. [Join the mailing list](https://sendfox.com/CSOH) - Get the weekly Zoom link and meeting info
+2. [Join the mailing list](https://csoh.kit.com/39feb4f397) - Get the weekly Zoom link and meeting info
 3. [Add a resource](contribute-resources.html) - Use our web-based guide (copy/paste method)
 4. [Use the submission tool](tools/SUBMIT_RESOURCE_README.md) - Interactive Python script (automated)
 5. [Add a news source](tools/SUBMIT_NEWS_SOURCE_README.md) - Interactive Python script
@@ -713,13 +713,13 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 ## 📞 Community & Support
 
 ### Join the Community
-- **Mailing List**: https://sendfox.com/CSOH - 2000+ subscribers; sign up to receive the weekly Friday Zoom link (7am PT)
+- **Mailing List**: https://csoh.kit.com/39feb4f397 - 2000+ subscribers; sign up to receive the weekly Friday Zoom link (7am PT)
 - **GitHub**: https://github.com/CloudSecurityOfficeHours/csoh.org
 
 ### Need Help?
 - **Email**: admin@csoh.org for general questions or to reach community admins
 - **Issues**: Create a [GitHub issue](https://github.com/CloudSecurityOfficeHours/csoh.org/issues)
-- **Friday Zoom**: Bring questions live — sign up at [sendfox.com/CSOH](https://sendfox.com/CSOH) for the link
+- **Friday Zoom**: Bring questions live — sign up at [csoh.kit.com](https://csoh.kit.com/39feb4f397) for the link
 
 ### Support CSOH
 - ❤️ **Star** this repository
@@ -745,4 +745,4 @@ Copyright © 2023-2026 Cloud Security Office Hours
 
 ---
 
-For the latest updates and announcements, sign up for the [mailing list](https://sendfox.com/CSOH).
+For the latest updates and announcements, sign up for the [mailing list](https://csoh.kit.com/39feb4f397).

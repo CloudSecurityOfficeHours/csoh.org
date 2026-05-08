@@ -452,4 +452,4 @@ python3 -m http.server 8092
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Resource submissions:** [CONTRIBUTING_RESOURCES.md](CONTRIBUTING_RESOURCES.md)
 - **Kill chains:** [CONTRIBUTING_KILL_CHAINS.md](CONTRIBUTING_KILL_CHAINS.md)
-- **Mailing list:** [Sign up](https://sendfox.com/CSOH) to get the Friday Zoom link and bring questions live
+- **Mailing list:** [Sign up](https://csoh.kit.com/39feb4f397) to get the Friday Zoom link and bring questions live

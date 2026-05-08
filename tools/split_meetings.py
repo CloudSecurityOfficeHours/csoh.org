@@ -305,7 +305,7 @@ def page_template(*, m: dict, prev_link: str, next_link: str) -> str:
                 <h3>Community</h3>
                 <ul>
                     <li><a href="mailto:admin@csoh.org">Contact Us</a></li>
-                    <li><a href="https://sendfox.com/CSOH" target="_blank" rel="noopener noreferrer">Zoom Registration</a></li>
+                    <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Zoom Registration</a></li>
                     <li><a href="https://www.paypal.com/biz/profile/cloudsec" target="_blank" rel="noopener noreferrer">Support CSOH</a></li>
                     <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
                     <li><a href="../privacy.html">Privacy Policy</a></li>
@@ -543,7 +543,7 @@ def index_template(meetings: list[dict]) -> str:
                 <h3>Community</h3>
                 <ul>
                     <li><a href="mailto:admin@csoh.org">Contact Us</a></li>
-                    <li><a href="https://sendfox.com/CSOH" target="_blank" rel="noopener noreferrer">Zoom Registration</a></li>
+                    <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Zoom Registration</a></li>
                     <li><a href="https://www.paypal.com/biz/profile/cloudsec" target="_blank" rel="noopener noreferrer">Support CSOH</a></li>
                     <li><a href="/code-of-conduct.html">Code of Conduct</a></li>
                     <li><a href="/privacy.html">Privacy Policy</a></li>

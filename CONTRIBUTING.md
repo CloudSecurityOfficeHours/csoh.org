@@ -641,7 +641,7 @@ A: If it would help a cloud security professional learn or advance, it's worth s
 
 ## 📞 Need Help?
 
-- **General questions** → Email admin@csoh.org or bring them to a [Friday Zoom session](https://sendfox.com/CSOH)
+- **General questions** → Email admin@csoh.org or bring them to a [Friday Zoom session](https://csoh.kit.com/39feb4f397)
 - **GitHub questions** → Ask in [GitHub Issues](https://github.com/CloudSecurityOfficeHours/csoh.org/issues)
 - **Security issues** → Email security@csoh.org or see [security-policy.html](security-policy.html)
 - **Code of Conduct concerns** → Email admin@csoh.org or see [code-of-conduct.html](code-of-conduct.html)
