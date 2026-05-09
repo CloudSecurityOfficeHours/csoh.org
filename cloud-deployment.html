@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description"
+        content="How CSOH deploys to Google Cloud Run with WIF (no service account keys), Cloud Armor WAF, immutable container tags, and Trivy scanning — a security showcase for static sites in GCP.">
+    <meta name="keywords"
+        content="GCP Cloud Run deployment, Workload Identity Federation, GCP WIF GitHub Actions, Cloud Armor WAF, Cloud CDN, immutable image tags, Trivy container scanning, GCP load balancer, managed TLS, secure cloud deployment, Terraform GCP, supply chain security">
+    <title>How We Deploy to GCP - Cloud Security Office Hours</title>
+
+    <link rel="canonical" href="https://csoh.org/cloud-deployment.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#2c3e50">
+
+    <meta property="og:title" content="How We Deploy to GCP - CSOH">
+    <meta property="og:description"
+        content="Cloud Run + Cloud Armor + Workload Identity Federation, explained against CSOH's actual Terraform and GitHub Actions. The deployment as a teaching artifact.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://csoh.org/cloud-deployment.html">
+    <meta property="og:image" content="https://csoh.org/banner.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="How We Deploy to GCP">
+    <meta name="twitter:description"
+        content="A keyless, scanned, WAF-fronted deployment of a static site to Google Cloud Run.">
+    <meta name="twitter:image" content="https://csoh.org/banner.png">
+
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+
+    <link rel="preload" href="/style.css?v=00c7245c" as="style"
+        integrity="sha384-4AZB/PKAjmUqHAs33a955BQrnJFlyzT/H2P183T9zYzwES5tNyeGjLAvZEEZrvFc">
+    <link rel="stylesheet" href="/style.css?v=00c7245c"
+        integrity="sha384-4AZB/PKAjmUqHAs33a955BQrnJFlyzT/H2P183T9zYzwES5tNyeGjLAvZEEZrvFc">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "How We Deploy to GCP",
+      "description": "CSOH's GCP deployment as a security showcase — Cloud Run behind a Cloud Armor-fronted load balancer, deployed via GitHub Actions with Workload Identity Federation (no service account keys).",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "datePublished": "2026-05-08",
+      "dateModified": "2026-05-08",
+      "mainEntityOfPage": "https://csoh.org/cloud-deployment.html",
+      "image": "https://csoh.org/banner.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://csoh.org/" },
+        { "@type": "ListItem", "position": 2, "name": "How We Deploy to GCP", "item": "https://csoh.org/cloud-deployment.html" }
+      ]
+    }
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="index.html" class="logo-link">
+                <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="news.html">News</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="what-is-cloud-security.html">What is Cloud Security?</a></li>
+                        <li><a href="learning-path.html">Learning Path</a></li>
+                        <li><a href="ai-learning.html">AI Learning</a></li>
+                        <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>
+                        <li><a href="cloud-security-careers.html">Careers</a></li>
+                        <li><a href="cloud-security-home-lab.html">Home Lab</a></li>
+                        <li><a href="cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                        <li><a href="cloud-security-certifications.html">Certifications</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Reference <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="cloud-security-best-practices.html">Best Practices</a></li>
+                        <li><a href="shared-responsibility-model.html">Shared Responsibility</a></li>
+                        <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                        <li><a href="cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="ctfs.html">CTFs</a></li>
+                        <li><a href="github-actions.html">GitHub Actions</a></li>
+                        <li><a href="cloud-deployment.html" aria-current="page">Cloud Deployment</a></li>
+                        <li><a href="resources.html">Resources</a></li>
+                        <li><a href="glossary.html">Glossary</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Defend <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="threat-research.html">Threat Research</a></li>
+                        <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Attend <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="sessions.html">Zoom Sessions</a></li>
+                        <li><a href="community.html">Community &amp; Signal</a></li>
+                        <li><a href="conferences.html">Conferences</a></li>
+                        <li><a href="meetings.html">Meeting Recaps</a></li>
+                        <li><a href="presentations.html">Presentations</a></li>
+                        <li><a href="chat-resources.html">Chat Resources</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Contribute <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="contribute.html">Contribute Overview</a></li>
+                        <li><a href="contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li><a href="faq.html">FAQ</a></li>
+                    <li><a href="index.html#about">About</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="index.html">Home</a></li>
+            <li><span aria-current="page">Cloud Deployment</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>How We Deploy csoh.org to GCP</h1>
+          <p>This page explains the deployment of csoh.org as a security showcase: every control we put in place, why it's there, and what we explicitly chose <em>not</em> to do. The site is static — there is no server-side code to defend — so the interesting target surface is the deployment pipeline and the edge.</p>
+          <div class="cta-buttons">
+            <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Browse the Terraform</a>
+            <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Read the workflow</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main class="container contribute-article" id="main-content">
+
+        <p class="page-meta"><time datetime="2026-05-08">Last updated <strong>2026-05-08</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-specific (GCP) · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/cloud-deployment.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+
+        <div class="info-box--blue">
+            <p><strong>Why this page exists.</strong> csoh.org is a community for cloud security practitioners, run by people who do this for a living. It would be embarrassing to host the site without taking the deployment seriously. This page is the receipt — a control-by-control walkthrough of the GCP setup you can adapt for your own static site, with all the Terraform and GitHub Actions YAML linked so you can read what we actually run.</p>
+            <p style="margin-top:0.75rem;"><strong>Audience:</strong> security engineers, cloud architects, and anyone deploying a small thing to GCP and wanting to do it well. Familiarity with GCP basics, IAM, and CI/CD assumed; we link the glossary terms when we use jargon.</p>
+        </div>
+
+        <div class="toc">
+            <h2>📖 On this page</h2>
+            <ol>
+                <li><a href="#threat-model">The threat model for a static site</a></li>
+                <li><a href="#architecture">Architecture at a glance</a></li>
+                <li><a href="#identity">Identity &amp; access (the WIF story)</a></li>
+                <li><a href="#supply-chain">Image supply chain</a></li>
+                <li><a href="#edge">Edge defenses (LB, WAF, CDN, TLS)</a></li>
+                <li><a href="#pipeline">CI/CD pipeline</a></li>
+                <li><a href="#logging">Logging &amp; detection</a></li>
+                <li><a href="#did-not-do">What we didn't do (and why)</a></li>
+                <li><a href="#cost">Cost</a></li>
+                <li><a href="#further">Further reading</a></li>
+            </ol>
+        </div>
+
+        <section id="threat-model">
+            <h2>The threat model for a static site</h2>
+            <p>Before any controls: what are we actually defending against? Static sites have a small attack surface compared to anything stateful. There is no database to inject into, no auth flow to bypass, no session to hijack, no per-user data to exfiltrate. That eliminates whole chapters of the OWASP Top 10 from worry.</p>
+            <p>What's left, ranked roughly by likelihood:</p>
+            <ol>
+                <li><strong>Supply-chain compromise of the build.</strong> Attacker tampers with the base image, an Action we use, or a dependency such that a malicious build artifact ends up in production. Mitigated by digest-pinning, locked Actions, immutable image tags, container scanning.</li>
+                <li><strong>Credential theft from the deploy pipeline.</strong> A leaked CI token can push malicious bytes that look authentic. Mitigated by Workload Identity Federation (no long-lived credential exists to leak), short-lived everything, repo-scoped trust, branch-protection on the deployer workflow file itself.</li>
+                <li><strong>DNS / TLS attacks at the edge.</strong> Misissued cert, cache poisoning, downgrade. Mitigated by HSTS preload, modern TLS policy (1.2+), managed certs that auto-renew, registrar lock + Cloudflare 2FA on DNS.</li>
+                <li><strong>Defacement.</strong> Attacker who got into the build pipeline pushes embarrassing content. Mitigated by everything in (1) and (2), plus a fast-rollback story (Cloud Run revisions pin specific image SHAs; one <code>gcloud</code> command moves traffic back to the previous revision).</li>
+                <li><strong>Volumetric DDoS.</strong> Mitigated by Cloud CDN absorption, Cloud Armor adaptive L7 protection, and per-IP rate limiting. Static content amplifies CDN effectiveness.</li>
+                <li><strong>Bot scraping / abuse.</strong> Mitigated weakly — we don't really care about scraping the public site, but Cloud Armor's WAF rules handle classic SQLi/XSS/LFI probes that bots throw at every endpoint.</li>
+            </ol>
+            <p>Things we explicitly do <em>not</em> defend against because they don't apply: authenticated session theft, broken access control, business-logic abuse, privileged-pivot from an application server. The corollary: anyone reading this for a non-static site needs more controls than what's on this page.</p>
+        </section>
+
+        <section id="architecture">
+            <h2>Architecture at a glance</h2>
+            <pre style="background:var(--code-bg, #f5f5f5);padding:1rem;border-radius:6px;overflow-x:auto;font-size:0.9rem;line-height:1.4;">
+Browser
+   │
+   ▼
+Cloudflare DNS (registrar lock, 2FA, audit log)
+   │
+   ▼
+Google Cloud Global HTTPS Load Balancer  (anycast IP)
+   ├── Modern TLS policy — TLS 1.2+ only, restricted ciphers
+   ├── Managed cert (auto-renew, ACME HTTP-01)
+   ├── HTTP → HTTPS redirect (301, separate forwarding rule)
+   ├── Cloud Armor — OWASP CRS WAF + per-IP rate limit + adaptive L7 DDoS
+   └── Cloud CDN — edge cache for static assets
+   │
+   ▼
+Serverless NEG → Cloud Run (csoh-site)
+   ├── ingress = INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER (no public Run URL)
+   ├── runtime SA: csoh-run-runtime  (zero IAM roles)
+   └── nginx:1.27-alpine (digest-pinned) + apk upgrade + custom CSP/HSTS/COOP/CORP
+
+Build path (out of band):
+GitHub push → Actions runner → OIDC token → WIF exchange → 1-hour GCP token
+            → docker build → Trivy scan → Artifact Registry (immutable tags)
+            → gcloud run deploy (revision pinned to image SHA)
+
+Telemetry:
+Cloud Armor decisions, LB 4xx/5xx, IAM admin activity, audit logs
+            → Cloud Logging sink → 400-day retention bucket</pre>
+            <p>Every box on that diagram is provisioned by Terraform (<a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>). There is no click-ops; the GCP console is read-only for normal operation.</p>
+        </section>
+
+        <section id="identity">
+            <h2>Identity &amp; access (the WIF story)</h2>
+            <p>The single most consequential control on this page is that <strong>there is no service account key anywhere in the system.</strong> GitHub Actions does not have a JSON key to push containers, deploy Cloud Run revisions, or do anything else against GCP. Instead:</p>
+            <ol>
+                <li>The workflow declares <code>permissions: id-token: write</code>. GitHub will mint an <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a> token at run-time, signed by GitHub's identity provider.</li>
+                <li>The token's claims include <code>repository</code>, <code>ref</code>, <code>workflow</code>, <code>job_workflow_ref</code>, etc. — facts about <em>which</em> workflow run is asking.</li>
+                <li>A <strong>Workload Identity Pool</strong> in our GCP project trusts that GitHub OIDC issuer.</li>
+                <li>An <strong>attribute condition</strong> on the pool gates the exchange:
+<pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">attribute_condition = "assertion.repository == 'CloudSecurityOfficeHours/csoh.org'"</pre>
+                Any other repository trying to authenticate to this pool is rejected outright. A leaked workflow file from a different repo cannot mint a token for our project.</li>
+                <li>The exchanged GCP access token is short-lived (~1 hour) and scoped via <code>roles/iam.workloadIdentityUser</code> to impersonating <em>one</em> service account: <code>csoh-deployer</code>.</li>
+                <li><code>csoh-deployer</code> has the minimum roles to do its job: <code>roles/run.admin</code> on the project, <code>roles/artifactregistry.writer</code>, and <code>roles/iam.serviceAccountUser</code> on the runtime SA (so it can set the runtime identity on a deploy). Nothing else.</li>
+                <li>The runtime service account that the actual container runs as — <code>csoh-run-runtime</code> — has <strong>zero IAM roles</strong>. The container is static nginx that makes no GCP API calls. There is nothing to grant.</li>
+            </ol>
+            <p>What a leaked workflow log gets an attacker: ~1 hour of access to push images and deploy revisions in one project. No persistence, no lateral movement, no read access to other projects. There is no key in GitHub Secrets to rotate, no expiry to track, no offboarding ritual. The Terraform that wires this up is in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> — about 30 lines.</p>
+
+            <h3>The runtime SA having zero roles is on purpose</h3>
+            <p>It's tempting to grant the container <em>some</em> roles "just in case." Don't. The <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a> of an exploited container is bounded by what its identity can do; if its identity can't do anything, an exploited container can't do anything either. If the day comes when the site needs a backend service, that service gets its <em>own</em> SA with <em>only</em> the roles that service needs — not a single shared "the website" SA whose permissions accumulate over time.</p>
+        </section>
+
+        <section id="supply-chain">
+            <h2>Image supply chain</h2>
+            <p>The container we run in production has to be <em>this</em> nginx with <em>this</em> config and nothing else. The supply chain has three honest places where someone could substitute "this" with "something the attacker prefers":</p>
+
+            <h3>1. The base image</h3>
+            <p>Unpinned tags are a registry-write vulnerability. <code>FROM nginx:1.27-alpine</code> means "whatever bytes the registry returns when we ask for that tag today" — and registries occasionally have bad days. Our <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/Dockerfile" target="_blank" rel="noopener noreferrer">Dockerfile</a> pins to a digest:</p>
+<pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10</pre>
+            <p>That is content-addressed: the registry cannot serve different bytes without changing the digest, and Docker fails the build if they don't match. The trade-off is that we have to update the digest manually as new base images come out — a deliberate maintenance friction in exchange for tamper-evidence.</p>
+
+            <h3>2. Stale packages on top of the pinned base</h3>
+            <p>The catch with digest-pinning a base image: the OS packages baked into that digest age. Alpine ships security fixes for libssl, libxml2, libpng, etc. constantly; a digest from 6 months ago has 6 months of accumulated CVEs. We resolve this by running <code>apk upgrade --no-cache</code> immediately after <code>FROM</code>:</p>
+<pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">RUN apk upgrade --no-cache &amp;&amp; \
+    rm -rf /var/cache/apk/*</pre>
+            <p>Net effect: we start from <em>known bytes</em> (the digest pin) and end with <em>current packages</em> (the apk upgrade). The Trivy scan in the next step verifies we haven't slipped on either dimension.</p>
+
+            <h3>3. The CI build artifact</h3>
+            <p>Every PR's container goes through <a href="https://aquasecurity.github.io/trivy/" target="_blank" rel="noopener noreferrer">Trivy</a>:</p>
+<pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">trivy image \
+  --exit-code 1 \
+  --ignore-unfixed \
+  --severity HIGH,CRITICAL \
+  "${IMAGE}"</pre>
+            <p>The build fails on any HIGH or CRITICAL CVE that has a fix available. <code>--ignore-unfixed</code> filters CVEs whose upstreams haven't shipped a patch — those are noise we can't act on, and including them would just train people to ignore the scan output. After the scan passes, the image is pushed to Artifact Registry with two important properties:</p>
+            <ul>
+                <li><strong>Immutable tags.</strong> Once an image is pushed at <code>csoh-site:&lt;sha&gt;</code>, the tag cannot be overwritten or moved. There is no way for an attacker (or a careless engineer) to silently swap what bytes that tag refers to.</li>
+                <li><strong>SHA-based, not <code>:latest</code>.</strong> The Cloud Run revision pins a specific SHA tag. Rollback is <code>gcloud run services update-traffic --to-revisions &lt;name&gt;=100</code>, and there is zero ambiguity about what bytes the rolled-back revision is running.</li>
+            </ul>
+            <p>The Artifact Registry repo also has a cleanup policy — keep the most recent 30 versions, delete untagged versions older than 7 days. That keeps the storage bill small without losing rollback targets.</p>
+        </section>
+
+        <section id="edge">
+            <h2>Edge defenses (LB, WAF, CDN, TLS)</h2>
+            <p>Cloud Run sits behind a Global External HTTPS Load Balancer with the ingress restricted to <code>INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER</code>. Direct HTTPS hits to the Run service URL get a 404 from the GCP frontend — the only valid path to the application is through the LB. That matters because all of the controls below live <em>on</em> the LB; if you could reach the app directly, you'd skip them.</p>
+
+            <h3>Cloud Armor — the WAF and rate limiter</h3>
+            <p>Defined in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloud_armor.tf" target="_blank" rel="noopener noreferrer">cloud_armor.tf</a>. We're running OWASP Core Rule Set rules at sensitivity level 1 — the lowest false-positive setting — against SQLi, XSS, LFI, RFI, and RCE patterns. For a static site that doesn't <em>have</em> SQLi-vulnerable endpoints, this is more about demonstrating the control than blocking real attacks; it does, however, eat the noise of generic bot probes.</p>
+            <p>The rate limiter is more practically useful: per-source-IP, 600 requests/minute, 10-minute ban on exceed. That's <em>generous</em> for a human reader (you'd have to refresh every 100ms), and the ban dampens both crawl floods and password-spray-style traffic from a single host. <strong>Adaptive L7 DDoS defense</strong> is enabled — Cloud Armor will auto-generate signatures for unusual traffic patterns and apply them as additional rules during an actual attack.</p>
+
+            <h3>Cloud CDN</h3>
+            <p>Cache mode <code>CACHE_ALL_STATIC</code>, default TTL 1 hour, max 24 hours, with <code>negative_caching</code> on so 404s and 410s cache too (this matters during a deploy: stale 404s during cache invalidation aren't expensive). <code>serve_while_stale</code> is 24 hours — if the origin (Cloud Run) is unreachable, the CDN keeps serving the last known good version for up to a day. That's a free availability buffer for a static site.</p>
+            <p>The performance side of the CDN is also doing the security work of <em>absorbing</em> floods. Volumetric traffic hits the edge, not Cloud Run.</p>
+
+            <h3>TLS</h3>
+            <p>The LB has a <strong>Modern TLS policy</strong> attached: TLS 1.2 minimum, no insecure cipher suites. The cert is a Google-managed cert with three SANs (<code>csoh.org</code>, <code>www.csoh.org</code>, <code>gcp.csoh.org</code>) that auto-renews on Google's normal cadence. There is no manual cert rotation in our calendar.</p>
+            <p>We send <strong>HSTS with <code>includeSubDomains; preload</code></strong> from nginx, plus <code>X-Content-Type-Options</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, <code>Cross-Origin-Opener-Policy</code>, <code>Cross-Origin-Resource-Policy</code>, and a strict <strong>CSP</strong> (no inline scripts, no unsafe-eval). The CSP is identical between the legacy <code>.htaccess</code> and the new <code>nginx.conf</code>, by design, so you can grep one and trust the other matches.</p>
+            <p>The HTTP listener (port 80) on the LB is a bare 301 redirect to HTTPS, served by a separate URL map. That means we don't even reach the application code on plain HTTP requests, which simplifies CSP and makes the redirect cacheable.</p>
+        </section>
+
+        <section id="pipeline">
+            <h2>CI/CD pipeline</h2>
+            <p>The full deploy path is in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>. Walking it top to bottom:</p>
+            <ol>
+                <li><strong>Triggers</strong> on pushes to <code>main</code> matching specific paths (HTML, CSS, JS, Dockerfile, nginx.conf, the workflow file itself), plus <code>workflow_dispatch</code> for manual runs.</li>
+                <li><strong>Concurrency group</strong> <code>gcp-deploy</code> with <code>cancel-in-progress: true</code> — if a newer commit lands while an older deploy is mid-flight, the older one is cancelled. Prevents the stale-content race where an older deploy publishes <em>after</em> a newer one finishes.</li>
+                <li><strong>Permissions</strong> block scopes the auto-injected <code>GITHUB_TOKEN</code> to <code>contents: read</code> + <code>id-token: write</code>. Nothing else.</li>
+                <li><strong>Environment gate</strong> — the job declares <code>environment: production</code>. The repo's <code>production</code> environment is configured to allow deployments only from <code>main</code>, and required reviewers can be added. A PR from a fork cannot run this job.</li>
+                <li><strong>WIF auth</strong> via <code>google-github-actions/auth</code>, pinned to a specific commit SHA (not a tag). The action exchanges the OIDC token for a 1-hour GCP access token.</li>
+                <li><strong>Docker build</strong> with descriptive <code>org.opencontainers.image.*</code> labels (source repo, revision SHA, build timestamp). These labels are visible on the image in Artifact Registry and make incident triage faster.</li>
+                <li><strong>Trivy install + scan</strong> — install via Aqua's apt repo (signed package), scan the freshly-built image, fail on HIGH/CRITICAL.</li>
+                <li><strong>Push</strong> to Artifact Registry, single immutable SHA tag.</li>
+                <li><strong>Deploy</strong> a new Cloud Run revision via <code>gcloud run deploy</code>, which atomically swaps traffic. The revision is named (e.g. <code>csoh-site-00007-abc</code>); rollback to a previous revision is one CLI call.</li>
+            </ol>
+
+            <h3>What protects the workflow file itself</h3>
+            <p>The workflow can deploy with a lot of authority — so the file that defines it is an <em>extra-sensitive</em> piece of code. Two layers protect it:</p>
+            <ul>
+                <li><strong><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/CODEOWNERS" target="_blank" rel="noopener noreferrer">CODEOWNERS</a></strong> requires <code>@Nunley</code> review on any change to <code>.github/workflows/</code>, <code>infra/</code>, <code>Dockerfile</code>, <code>nginx.conf</code>, and security docs. The branch ruleset enforces "require Code Owners review" — a PR touching these surfaces cannot merge without that explicit approval.</li>
+                <li><strong>Branch ruleset on <code>main</code></strong> requires PR with 1 approval, blocks deletion and non-fast-forward, and gates merging on three required status checks (<code>ruff</code>, <code>actionlint</code>, <code>yamllint</code>). Combined with the <code>production</code> environment's main-only branch policy, a malicious PR cannot reach the deploy code path.</li>
+            </ul>
+            <p>Repository-side hardening that's not GCP-specific but worth naming: <strong>secret scanning</strong> + <strong>push protection</strong> are on (any commit containing a known credential pattern is blocked at push time), <strong>Dependabot security updates</strong> are on, and every third-party Action in every workflow is pinned to a commit SHA, not a tag.</p>
+        </section>
+
+        <section id="logging">
+            <h2>Logging &amp; detection</h2>
+            <p>The default Cloud Logging configuration retains logs for 30 days in the <code>_Default</code> bucket. For security-relevant events that's not enough — incidents are often discovered weeks or months after the fact, especially supply-chain ones. We define a <strong>custom 400-day retention bucket</strong> and a <strong>log sink</strong> that routes the events worth keeping into it (<a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/logging.tf" target="_blank" rel="noopener noreferrer">logging.tf</a>):</p>
+<pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">(resource.type="http_load_balancer"
+   AND jsonPayload.enforcedSecurityPolicy.outcome="DENY")
+OR (resource.type="http_load_balancer" AND httpRequest.status&gt;=400)
+OR protoPayload.serviceName="iam.googleapis.com"
+OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"</pre>
+            <p>That filter captures: every Cloud Armor block decision (so we can tune rules and spot real attacks), every 4xx/5xx response from the LB (for both performance and abuse triage), every IAM policy change (the highest-leverage admin events in any GCP project), and the full audit-log stream.</p>
+            <p>We do <em>not</em> currently route to a SIEM — for a community site, the cost/benefit doesn't pencil out. For a production SaaS workload, you'd want this same sink plus an export to BigQuery (long-term analytics) and/or Pub/Sub (streaming detection).</p>
+        </section>
+
+        <section id="did-not-do">
+            <h2>What we didn't do (and why)</h2>
+            <p>Listing controls we considered and rejected is more honest than pretending the design is finished. Each of these is a defensible choice for a small static site, and a less-defensible choice as the surface area grows.</p>
+            <ul>
+                <li><strong>Binary Authorization with attestation.</strong> We enabled the API but don't enforce a Binary Auth policy yet. Trivy + immutable AR tags + WIF-restricted push already cover most of what Binary Auth would add for a single-image, single-deployer setup. We'll add it when there's a multi-image / multi-environment story to enforce.</li>
+                <li><strong>Cloudflare proxy mode (orange cloud).</strong> Cloudflare is currently DNS-only (gray cloud) so Cloud Armor sees real client IPs. Going proxied would add CF's WAF in front of GCP's, but at the cost of degrading our per-IP rate limiting (everything would look like a Cloudflare egress IP unless we also wired up <code>X-Forwarded-For</code> trust). For a static showcase, real-IP visibility wins.</li>
+                <li><strong>Custom VPC-SC perimeter.</strong> Service Perimeters are heavyweight; they make sense around services holding sensitive data. The runtime SA has no access to anything sensitive, so there's nothing to perimeterize.</li>
+                <li><strong>SLSA provenance attestation.</strong> Worth doing; on the to-do list. The <a href="https://github.com/slsa-framework/slsa-github-generator" target="_blank" rel="noopener noreferrer">slsa-github-generator</a> emits a signed build provenance record we could attach to each image and verify before deploy.</li>
+                <li><strong>Image signing with cosign.</strong> Same shape — would prove "this image was built by our pipeline" and let us reject unsigned images at deploy time. A natural follow-up to SLSA provenance.</li>
+                <li><strong>Distroless or scratch base.</strong> nginx-on-alpine has more attack surface than a single static binary in a scratch container. We're staying on nginx-alpine because it gives us the URL-rewriting, header-injection, and config flexibility we use today; the Trivy scan + apk upgrade keeps the package surface honest.</li>
+                <li><strong>Multi-region failover.</strong> Cloud Run is single-region. The CDN absorbs most of the load, and the site is content-static (no db to replicate), so a region outage means stale content from CDN edges, not downtime. Global multi-region adds cost and complexity that only pays off above our scale.</li>
+                <li><strong>SIEM integration.</strong> See the logging section above. Logs are retained; alerting is not yet.</li>
+            </ul>
+        </section>
+
+        <section id="cost">
+            <h2>Cost</h2>
+            <p>Approximate monthly run-rate at our traffic level:</p>
+            <table style="border-collapse:collapse;width:100%;max-width:600px;">
+                <thead><tr><th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">Component</th><th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">Approx / month</th></tr></thead>
+                <tbody>
+                    <tr><td style="padding:0.5rem;">LB forwarding rules (×2)</td><td style="padding:0.5rem;">~$18</td></tr>
+                    <tr><td style="padding:0.5rem;">Cloud Armor policy</td><td style="padding:0.5rem;">~$5 + $0.75/rule</td></tr>
+                    <tr><td style="padding:0.5rem;">Cloud Run (scale-to-zero)</td><td style="padding:0.5rem;">$0–2</td></tr>
+                    <tr><td style="padding:0.5rem;">Artifact Registry storage</td><td style="padding:0.5rem;">&lt; $1</td></tr>
+                    <tr><td style="padding:0.5rem;">Cloud Logging (low volume)</td><td style="padding:0.5rem;">&lt; $2</td></tr>
+                    <tr><td style="padding:0.5rem;">Egress + CDN</td><td style="padding:0.5rem;">~$1–3</td></tr>
+                    <tr><td style="padding:0.5rem;font-weight:600;">Total</td><td style="padding:0.5rem;font-weight:600;">~$30/mo</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top:1rem;">For comparison: shared LiteSpeed hosting (the previous setup) was a small flat fee and provided none of the controls on this page. We're paying ~10× the hosting cost to run the site as a security demonstration. That's a deliberate trade-off; for a private project with no showcase value, the cheaper static-host-on-someone-else's-server is a perfectly reasonable answer.</p>
+        </section>
+
+        <section id="further">
+            <h2>Further reading</h2>
+            <ul>
+                <li><strong>The Terraform itself</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>. Every resource above is one file. Start with <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> if you want the keyless story; <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloud_armor.tf" target="_blank" rel="noopener noreferrer">cloud_armor.tf</a> for the WAF rules.</li>
+                <li><strong>The deploy workflow</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>. About 130 lines, heavily commented.</li>
+                <li><strong>The site security model</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a> in the repo. Covers the headers, the CI auth model, the secrets in use, and the rotation cadence.</li>
+                <li><strong>GitHub side</strong> — see <a href="github-actions.html">How We Use GitHub Actions</a> for the full workflow tour.</li>
+                <li><strong>External</strong>:
+                    <ul>
+                        <li><a href="https://cloud.google.com/iam/docs/workload-identity-federation" target="_blank" rel="noopener noreferrer">GCP — Workload Identity Federation overview</a></li>
+                        <li><a href="https://github.com/google-github-actions/auth" target="_blank" rel="noopener noreferrer">google-github-actions/auth</a> — the action that does the OIDC exchange</li>
+                        <li><a href="https://cloud.google.com/armor/docs/cloud-armor-overview" target="_blank" rel="noopener noreferrer">GCP — Cloud Armor overview</a></li>
+                        <li><a href="https://cloud.google.com/run/docs/securing/ingress" target="_blank" rel="noopener noreferrer">GCP — Cloud Run ingress controls</a></li>
+                        <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA</a> — the provenance framework we'll add next</li>
+                    </ul>
+                </li>
+            </ul>
+        </section>
+
+        <section class="cta-section">
+            <h2>Questions?</h2>
+            <p>Bring them to <a href="sessions.html">Friday Zoom</a>. Several of our regulars run nontrivial GCP setups (multi-project orgs, Binary Authorization in production, signed build artifacts) and are happy to walk through specifics for your environment. The <a href="meetings.html">meeting recaps</a> often include cloud-deployment war stories.</p>
+        </section>
+
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
+    </main>
+
+    <footer>
+      <div class="footer-content">
+        <div class="footer-section">
+          <h3>Learn</h3>
+          <ul>
+            <li><a href="/what-is-cloud-security.html">What is Cloud Security?</a></li>
+            <li><a href="/learning-path.html">Learning Path</a></li>
+            <li><a href="/ai-learning.html">AI Learning</a></li>
+            <li><a href="/cloud-security-degree-programs.html">Degree Programs</a></li>
+            <li><a href="/cloud-security-careers.html">Careers</a></li>
+            <li><a href="/cloud-security-home-lab.html">Home Lab</a></li>
+            <li><a href="/cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+            <li><a href="/cloud-security-certifications.html">Certifications</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h3>Reference</h3>
+          <ul>
+            <li><a href="/cloud-security-best-practices.html">Best Practices</a></li>
+            <li><a href="/shared-responsibility-model.html">Shared Responsibility</a></li>
+            <li><a href="/cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+            <li><a href="/cloud-security-reading-list.html">Reading List</a></li>
+            <li><a href="/ctfs.html">CTFs</a></li>
+            <li><a href="/github-actions.html">GitHub Actions</a></li>
+            <li><a href="/cloud-deployment.html">Cloud Deployment</a></li>
+            <li><a href="/resources.html">Resources</a></li>
+            <li><a href="/glossary.html">Glossary</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h3>News &amp; Defend</h3>
+          <ul>
+            <li><a href="/news.html">News</a></li>
+            <li><a href="/threat-research.html">Threat Research</a></li>
+            <li><a href="/breach-timeline.html">Breach Kill Chains</a></li>
+            <li><a href="/faq.html">FAQ</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h3>Attend</h3>
+          <ul>
+            <li><a href="/sessions.html">Zoom Sessions</a></li>
+            <li><a href="/community.html">Community &amp; Signal</a></li>
+            <li><a href="/conferences.html">Conferences</a></li>
+            <li><a href="/meetings.html">Meeting Recaps</a></li>
+            <li><a href="/presentations.html">Presentations</a></li>
+            <li><a href="/chat-resources.html">Chat Resources</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h3>Community</h3>
+          <ul>
+            <li><a href="mailto:admin@csoh.org">Contact Us</a></li>
+            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            <li><a href="/contribute.html">Contribute</a></li>
+            <li><a href="/code-of-conduct.html">Code of Conduct</a></li>
+            <li><a href="/privacy.html">Privacy Policy</a></li>
+            <li><a href="/security-policy.html">Security Policy</a></li>
+            <li><a href="/rss.html">RSS Feed</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h3>About CSOH</h3>
+          <p>Cloud Security Office Hours is a vendor-neutral community for cloud
+          security professionals. We meet weekly on Zoom and maintain this curated
+          collection of resources.</p>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2023-2026 Cloud Security Office Hours. All resources are provided as-is for educational purposes.</p>
+      </div>
+    </footer>
+
+    <script src="/main.js?v=b517f39d" integrity="sha384-8/1Y6zmSmGcKtdeoSJDd4JadBZUwI1F4M7uqeUVQt8uwrLkszhyRCqoPGfhKfKA7"
+        defer></script>
+</body>
+
+</html>

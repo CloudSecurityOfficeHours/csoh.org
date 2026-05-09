@@ -62,15 +62,24 @@ resource "google_compute_url_map" "https_redirect" {
   }
 }
 
-# Managed TLS cert. STAGING ONLY for now — only gcp.csoh.org. We'll add
-# csoh.org and www.csoh.org back when we're ready to cut prod DNS over.
-# Changing the domain set forces cert recreation (and a brief HTTPS outage
-# on hostnames covered by both the old and new cert).
+# Managed TLS cert covering production + staging hostnames.
+# `create_before_destroy` ensures Terraform creates a new cert and swaps
+# the target_https_proxy over before destroying the old cert (avoids the
+# "cert in use, cannot delete" cascade).
+#
+# IMPORTANT: Google managed certs use HTTP-01 ACME validation. Each domain
+# in the SAN list MUST resolve to this LB's IP at the time of validation,
+# or PROVISIONING will hang on FAILED_NOT_VISIBLE for that domain.
+# Workflow when adding a new domain:
+#   1. Add the domain here.
+#   2. terraform apply (cert enters PROVISIONING).
+#   3. Point Cloudflare DNS for that domain at the LB IP.
+#   4. Wait 15–30 min for Google's ACME to retry validation.
 resource "google_compute_managed_ssl_certificate" "site" {
   project = var.project_id
-  name    = "csoh-cert-staging"
+  name    = "csoh-cert-prod"
   managed {
-    domains = [var.staging_domain]
+    domains = [var.domain, "www.${var.domain}", var.staging_domain]
   }
   lifecycle {
     create_before_destroy = true
