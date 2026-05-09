@@ -37,16 +37,22 @@ resource "google_service_account_iam_member" "deployer_act_as_runtime" {
   member             = "serviceAccount:${google_service_account.deployer.email}"
 }
 
-# Narrow custom role: just the one permission needed to invalidate the
-# Cloud CDN cache after a deploy. Predefined alternatives (loadBalancerAdmin,
-# urlMapAdmin) include rights to *modify* the URL map and CDN policy, which
-# the deployer has no business doing — those changes belong in Terraform.
+# Narrow custom role: the two permissions needed to invalidate the Cloud
+# CDN cache after a deploy. `gcloud compute url-maps invalidate-cdn-cache`
+# does an implicit GET on the URL map before issuing the invalidation, so
+# both `get` and `invalidateCache` are required. Predefined alternatives
+# (loadBalancerAdmin, urlMapAdmin) include rights to *modify* the URL map
+# and CDN policy, which the deployer has no business doing — those
+# changes belong in Terraform.
 resource "google_project_iam_custom_role" "cdn_cache_invalidator" {
   project     = var.project_id
   role_id     = "csohCdnCacheInvalidator"
   title       = "CSOH Cloud CDN Cache Invalidator"
-  description = "Single permission needed to invalidate Cloud CDN entries after a Cloud Run deploy."
-  permissions = ["compute.urlMaps.invalidateCache"]
+  description = "Permissions needed to invalidate Cloud CDN entries after a Cloud Run deploy."
+  permissions = [
+    "compute.urlMaps.get",
+    "compute.urlMaps.invalidateCache",
+  ]
 }
 
 resource "google_project_iam_member" "deployer_cdn_invalidator" {
