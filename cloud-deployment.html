@@ -252,7 +252,7 @@
                 <li><strong>Google Cloud Load Balancer</strong> with <a class="glossary-link" href="glossary.html#term-waf">Cloud Armor (a WAF)</a> — pattern-matches incoming requests for SQL injection, <a class="glossary-link" href="glossary.html#term-xss">XSS</a>, and other classic attacks; rate-limits abusive callers.</li>
                 <li><strong>TLS at two layers</strong> (browser → Cloudflare, Cloudflare → us) — encrypted, modern ciphers, certificates that auto-renew.</li>
                 <li><strong>Cloud Run</strong> — the actual server the site runs on, locked so the only way to reach it is through the load balancer above.</li>
-                <li><strong>The container itself</strong> — pinned to known-good bytes, security-patched at build time, scanned for known vulnerabilities before every deploy.</li>
+                <li><strong>The container itself</strong> — <a class="glossary-link" href="glossary.html#term-pinning">pinned</a> to known-good bytes, security-patched at build time, scanned for known vulnerabilities before every deploy.</li>
                 <li><strong>The deploy identity</strong> — GitHub Actions can deploy without a stored password, using a federated identity that grants ~1 hour of narrowly-scoped access per workflow run.</li>
                 <li><strong>The pipeline itself</strong> — Code Owners review on the deploy workflow, branch protection on <code>main</code>, secret scanning, push protection.</li>
                 <li><strong>Logging</strong> — every block decision, every error response, every IAM change kept for 400 days.</li>
@@ -271,7 +271,7 @@
             </ul>
             <p>That eliminates most of the <a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">OWASP Top 10</a> right off the bat. What's actually left, ranked from most-to-least likely:</p>
             <ol>
-                <li><strong>Someone tampers with the build.</strong> An attacker compromises the base image we use, a GitHub Action we depend on, or a CI token, and slips malicious bytes into our deploy. The site visibly looks normal but ships malware to readers. <em>Mitigated by:</em> pinning the base image to its content hash, pinning every GitHub Action to a specific commit, scanning the built image for vulnerabilities, and refusing to overwrite image tags after they're published.</li>
+                <li><strong>Someone tampers with the build.</strong> An attacker compromises the base image we use, a GitHub Action we depend on, or a CI token, and slips malicious bytes into our deploy. The site visibly looks normal but ships malware to readers. <em>Mitigated by:</em> <a class="glossary-link" href="glossary.html#term-pinning">pinning</a> the base image to its content hash, pinning every GitHub Action to a specific commit, scanning the built image for vulnerabilities, and refusing to overwrite image tags after they're published.</li>
                 <li><strong>Someone steals the deploy credentials.</strong> Historically the worst single way to compromise a website: leak the CI's deploy password and now anyone with that password can publish whatever they want. <em>Mitigated by:</em> not having a deploy password at all (see <a href="#identity">Layer 6 — keyless deploys</a>).</li>
                 <li><strong>Someone messes with our DNS or TLS.</strong> Misissued certificate, an on-path attacker downgrading HTTPS to HTTP, DNS hijack. <em>Mitigated by:</em> two-factor on Cloudflare, registrar lock on the domain, HSTS preload (browsers refuse plain HTTP for our domain, period), modern TLS only.</li>
                 <li><strong>Someone defaces the site.</strong> Got into the build pipeline somehow and pushed an embarrassing change. <em>Mitigated by:</em> everything in (1) and (2), plus a one-command rollback (every Cloud Run revision is pinned to a specific image hash; "go back to yesterday's deploy" is a single CLI call).</li>
@@ -424,6 +424,7 @@
         <section id="cloudflare">
             <h2>Layer 1 — Cloudflare in front of everything</h2>
             <p><strong>What it stops:</strong> volumetric attacks (DDoS), known-bad bots, exposing our origin server's IP address to the public internet.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1498/" target="_blank" rel="noopener noreferrer">T1498</a> (Network Denial of Service), <a href="https://attack.mitre.org/techniques/T1499/" target="_blank" rel="noopener noreferrer">T1499</a> (Endpoint Denial of Service), <a href="https://attack.mitre.org/techniques/T1595/" target="_blank" rel="noopener noreferrer">T1595</a> (Active Scanning).</p>
             <p><strong>How it works in plain English.</strong> When you type <code>csoh.org</code> in your browser, the DNS lookup returns a <a class="glossary-link" href="glossary.html#term-cdn">Cloudflare</a> IP — not ours. Your browser opens a TLS connection to Cloudflare. Cloudflare looks at the request and one of three things happens:</p>
             <ol>
                 <li><strong>The page is cached at Cloudflare's edge.</strong> Cloudflare returns the cached response directly. We never see this request. (For a static site like ours, this is most traffic.)</li>
@@ -442,6 +443,7 @@
         <section id="load-balancer">
             <h2>Layer 2 — The Google Cloud Load Balancer + WAF</h2>
             <p><strong>What it stops:</strong> classic web attacks (SQL injection, cross-site scripting, path traversal), abusive request rates, anything trying to connect on plain HTTP.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener noreferrer">T1190</a> (Exploit Public-Facing Application), <a href="https://attack.mitre.org/techniques/T1499/003/" target="_blank" rel="noopener noreferrer">T1499.003</a> (Application Exhaustion Flood), <a href="https://attack.mitre.org/techniques/T1557/" target="_blank" rel="noopener noreferrer">T1557</a> (Adversary-in-the-Middle, via HTTPS-only redirect).</p>
             <p><strong>What's a load balancer, really?</strong> A managed front door that sits between the internet and your application. In our case, it's also where most of the security policy lives. The load balancer has a single, globally-routed IP address; requests to that IP are inspected and either allowed through to our application or blocked.</p>
 
             <h3>Cloud Armor — the Web Application Firewall</h3>
@@ -468,6 +470,7 @@
         <section id="tls">
             <h2>Layer 3 — TLS (the lock icon in the browser)</h2>
             <p><strong>What it stops:</strong> someone reading or modifying the page in transit between the user's browser and us.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1557/" target="_blank" rel="noopener noreferrer">T1557</a> (Adversary-in-the-Middle), <a href="https://attack.mitre.org/techniques/T1040/" target="_blank" rel="noopener noreferrer">T1040</a> (Network Sniffing), <a href="https://attack.mitre.org/techniques/T1565/002/" target="_blank" rel="noopener noreferrer">T1565.002</a> (Transmitted Data Manipulation).</p>
             <p><strong>What's TLS?</strong> <a class="glossary-link" href="glossary.html#term-tls">TLS</a> (Transport Layer Security) is the modern name for what people called SSL — the encryption layer that makes URLs <code>https://</code> instead of <code>http://</code>. Two computers establish a TLS connection, prove identity to each other with certificates, agree on a shared secret, and from there everything is encrypted. The lock icon in the browser is the user-facing signal.</p>
             <p>Our setup has TLS at <strong>two separate layers</strong>, which often confuses people the first time they see it:</p>
             <ol>
@@ -499,6 +502,7 @@
         <section id="cloud-run">
             <h2>Layer 4 — Cloud Run (where the site actually runs)</h2>
             <p><strong>What it stops:</strong> direct attacks on the application bypassing the load balancer + WAF; over-permissive cloud access if the application were ever compromised.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener noreferrer">T1190</a> (Exploit Public-Facing Application, bypass path), <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004</a> (Valid Accounts: Cloud Accounts), <a href="https://attack.mitre.org/techniques/T1098/003/" target="_blank" rel="noopener noreferrer">T1098.003</a> (Account Manipulation: Additional Cloud Roles).</p>
             <p><strong>What's Cloud Run?</strong> Cloud Run is Google's <a class="glossary-link" href="glossary.html#term-serverless">serverless</a> <a class="glossary-link" href="glossary.html#term-container">container</a> platform. You hand it a container image; it runs the container, scales it from zero to many instances based on traffic, and bills you per request. We don't manage virtual machines, patch operating systems, or maintain auto-scaling groups. Google does all that.</p>
             <p>Our Cloud Run service is configured for two specific security wins:</p>
 
@@ -515,7 +519,9 @@
         <section id="supply-chain">
             <h2>Layer 5 — The container we ship</h2>
             <p><strong>What it stops:</strong> shipping a malicious or vulnerable container to production by accident.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener noreferrer">T1195.002</a> (Compromise Software Supply Chain), <a href="https://attack.mitre.org/techniques/T1525/" target="_blank" rel="noopener noreferrer">T1525</a> (Implant Internal Image), <a href="https://attack.mitre.org/techniques/T1554/" target="_blank" rel="noopener noreferrer">T1554</a> (Compromise Host Software Binary).</p>
             <p><strong>What's a container <a class="glossary-link" href="glossary.html#term-image">image</a>?</strong> A container image is a packaged-up filesystem snapshot — your application code, plus the operating system files it needs to run, frozen as one shippable unit. We push the image to a <a class="glossary-link" href="glossary.html#term-registry">registry</a> (Google's Artifact Registry); Cloud Run pulls it from there and runs it.</p>
+            <p><strong>What's <a class="glossary-link" href="glossary.html#term-pinning">pinning</a>?</strong> Pinning is naming a dependency by something the publisher cannot quietly redefine. A version like <code>nginx:1.27-alpine</code> or <code>actions/checkout@v4</code> looks specific, but it's just a label — whoever owns it can repoint that label at different bytes tomorrow, and your build will pull the new bytes the next time it runs. <em>Pinning</em> means replacing that label with an <strong>immutable identifier</strong> — for container images, the SHA-256 digest of the exact bytes (<code>@sha256:65645c…</code>); for GitHub Actions, the full commit SHA (<code>@a1b2c3d…</code>). The label can move; the hash can't. If anyone tampers with the artifact upstream, the hash no longer matches, and the build fails closed instead of silently shipping the new bytes. We pin every external thing our deploy depends on (base image, every GitHub Action, the Cloud Run revision we route traffic to) for exactly this reason: it makes our deploy <em>tamper-evident</em> and <em>reproducible</em>. The trade-off is friction — somebody has to manually update the pin when we want a newer version — but that friction is the feature: an automated supply-chain attack can't propagate to us silently.</p>
             <p>The <a class="glossary-link" href="glossary.html#term-supply-chain">supply chain</a> for our container has three places where an attacker could substitute "what we meant to ship" with "what they preferred to ship." Each one gets a control:</p>
 
             <h3>1. The base image we start from</h3>
@@ -551,6 +557,7 @@
         <section id="identity">
             <h2>Layer 6 — How we deploy <em>without</em> a saved password</h2>
             <p><strong>What it stops:</strong> credential theft from the deploy pipeline. The most common single vector of website compromise.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener noreferrer">T1552.001</a> (Credentials In Files), <a href="https://attack.mitre.org/techniques/T1552/004/" target="_blank" rel="noopener noreferrer">T1552.004</a> (Private Keys), <a href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener noreferrer">T1528</a> (Steal Application Access Token).</p>
             <p>This is the most consequential design choice on this page. Read it carefully.</p>
 
             <h3>The traditional approach (don't do this)</h3>
@@ -672,6 +679,7 @@
         <section id="pipeline">
             <h2>Layer 7 — Protecting the deploy pipeline itself</h2>
             <p><strong>What it stops:</strong> a malicious or accidental change to the workflow that does the deploying.</p>
+            <p><strong>MITRE ATT&amp;CK mitigated:</strong> <a href="https://attack.mitre.org/techniques/T1195/001/" target="_blank" rel="noopener noreferrer">T1195.001</a> (Compromise Software Dependencies and Development Tools), <a href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener noreferrer">T1199</a> (Trusted Relationship), <a href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener noreferrer">T1078</a> (Valid Accounts).</p>
             <p>The <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">deploy workflow file</a> can ship code to production. That makes <em>the file itself</em> as sensitive as a production secret — anyone who can change it can change what gets shipped. We protect it with multiple layers on the GitHub side:</p>
             <ul>
                 <li><strong><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/CODEOWNERS" target="_blank" rel="noopener noreferrer">CODEOWNERS</a></strong> — a special file that says "any change to <code>.github/workflows/</code>, <code>infra/</code>, the <code>Dockerfile</code>, or security docs requires review from <code>@Nunley</code>." A pull request touching those paths can't merge without that explicit approval.</li>
@@ -679,7 +687,7 @@
                 <li><strong>"Production" environment gate</strong> — the deploy job declares <code>environment: production</code>. GitHub's environment configuration says only the <code>main</code> branch can deploy to it. A pull request from a fork can't run this workflow even if the fork's author is sneaky about it.</li>
                 <li><strong>Secret scanning + push protection</strong> are on. If anyone ever commits a credential-shaped string (an AWS key, a GitHub token, anything Git knows the pattern of), the push is blocked at the moment of <code>git push</code>.</li>
                 <li><strong>Dependabot security updates</strong> are on. Anything we depend on that ships a CVE generates an automatic PR for us to review.</li>
-                <li><strong>Every third-party GitHub Action is pinned to a specific commit SHA</strong>, not a version tag. Tags can be moved silently. SHAs can't.</li>
+                <li><strong>Every third-party GitHub Action is <a class="glossary-link" href="glossary.html#term-pinning">pinned</a> to a specific commit SHA</strong>, not a version tag. Tags can be moved silently. SHAs can't.</li>
             </ul>
             <p>Walking the workflow top to bottom (<a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>):</p>
             <ol>
@@ -697,6 +705,7 @@
         <section id="logging">
             <h2>Layer 8 — Logging and what we'd see during an attack</h2>
             <p><strong>What it stops:</strong> nothing directly — but it's how we'd notice if any of the layers above failed.</p>
+            <p><strong>MITRE ATT&amp;CK detection coverage:</strong> <a href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener noreferrer">T1190</a> (Exploit Public-Facing Application, via WAF block logs), <a href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener noreferrer">T1098</a> (Account Manipulation, via IAM change logs), <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004</a> (Valid Accounts: Cloud Accounts, via the audit log stream).</p>
             <p>Even with everything above, you should assume something will eventually go wrong. A vulnerability in nginx, a leaked credential we didn't anticipate, a configuration drift no one caught — there's always a possibility. Logging is what turns "an attack happened" into "an attack happened, here's exactly when, here's exactly what they did, and here's what we need to fix." Without logs, you have no idea.</p>
             <p>By default, Google Cloud Logging keeps logs for 30 days. That's not enough for security work — supply-chain attacks specifically are often discovered months after the fact, and the logs you'd need for forensics are gone. We define a custom <strong>400-day retention bucket</strong> and a <strong>log sink</strong> that routes the security-relevant events into it (see <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/logging.tf" target="_blank" rel="noopener noreferrer">logging.tf</a>).</p>
             <p>The filter captures four categories:</p>
