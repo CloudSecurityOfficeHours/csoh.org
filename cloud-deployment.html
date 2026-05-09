@@ -462,6 +462,7 @@
 
             <h3>Cloud CDN</h3>
             <p>Yes, we have <em>two</em> CDNs (Cloudflare's and Google's). They cache different things at different layers, and the second one mostly helps if a request slipped past Cloudflare's cache. Cache mode is "all static" with default TTL of 1 hour, plus <code>negative_caching</code> (cache 404s and 410s too — saves us from a flood of "/wp-admin" probes) and <code>serve_while_stale</code> (if our Cloud Run service goes down, the CDN keeps serving the last good copy of each page for up to 24 hours). That last one is a free availability buffer.</p>
+            <p><strong>The deploy implication.</strong> Cloud CDN honors nginx's <code>Cache-Control: max-age=3600</code>, which means after a Cloud Run rollout the new revision is live but Cloud CDN will keep serving the previously-cached bytes for up to an hour. A Cloudflare cache purge can't reach into Cloud CDN. The fix isn't to disable caching (we still want it); the fix is to <em>invalidate</em> Cloud CDN as part of every deploy — see <a href="#pipeline">Layer 7, step 9</a> for the workflow step that does it. We learned this the obvious way: the first version of the deploy workflow didn't invalidate, the docs you're reading now took an hour to actually appear, and we patched it.</p>
 
             <h3>HTTP → HTTPS redirect</h3>
             <p>The load balancer also listens on port 80 (plain HTTP). Anything arriving there gets a 301 redirect to the HTTPS URL. There's no application code reachable on HTTP — it's a bare redirect handled at the load balancer itself, which means it's faster, cacheable, and impossible to bypass via a misconfigured backend.</p>
@@ -666,13 +667,14 @@
             <p>The Terraform that wires this up is in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> — about 30 lines.</p>
 
             <h3>The deploy identity has narrow permissions</h3>
-            <p>The <code>csoh-deployer</code> service account that the workflow impersonates can do exactly three things, and nothing else:</p>
+            <p>The <code>csoh-deployer</code> service account that the workflow impersonates can do exactly four things, and nothing else:</p>
             <ul>
                 <li>Push container images to our Artifact Registry repo.</li>
                 <li>Create Cloud Run revisions and shift traffic between them.</li>
                 <li>Set the runtime identity on a Cloud Run revision (so deploys can specify which service account the running container will use).</li>
+                <li>Invalidate the Cloud CDN cache on the load balancer's URL map (so a fresh deploy reaches readers immediately instead of after the cache TTL).</li>
             </ul>
-            <p>It can't read other GCP projects. It can't disable logging. It can't escalate to admin. The set of bad things it can do is bounded by what those three operations allow.</p>
+            <p>It can't read other GCP projects. It can't disable logging. It can't escalate to admin. It can't <em>modify</em> the load balancer or the CDN policy — the predefined GCP role for invalidation (<code>roles/compute.loadBalancerAdmin</code>) would let it do both, so we wrote a one-line custom role (<code>csohCdnCacheInvalidator</code>) that grants exactly two permissions: <code>compute.urlMaps.get</code> and <code>compute.urlMaps.invalidateCache</code>. Whenever a predefined role is dramatically broader than what you actually need, a narrow custom role is worth the small Terraform investment.</p>
             <p>And remember from the Cloud Run section above: the runtime identity (<code>csoh-run-runtime</code>) the deployer sets on the running container has <em>zero</em> permissions. So even an attacker who compromises the deploy identity AND uses it to ship a malicious container to production… ends up with a malicious container that has no cloud access. The blast radius is bounded at every layer.</p>
         </section>
 
@@ -697,7 +699,7 @@
                 <li><strong>WIF auth</strong> via <code>google-github-actions/auth</code>, pinned to a specific commit SHA. The action does the OIDC-token-to-GCP-access-token exchange explained in Layer 6.</li>
                 <li><strong>Docker build</strong> with descriptive <code>org.opencontainers.image.*</code> labels (source repo, revision SHA, build timestamp). These labels are visible on the image in Artifact Registry and make incident triage faster.</li>
                 <li><strong>Trivy install + scan</strong> — installed via Aqua's apt repo (signed package), scans the freshly-built image, fails on HIGH/CRITICAL.</li>
-                <li><strong>Push</strong> to Artifact Registry, single immutable hash-based tag.</li>
+                <li><strong>Push</strong> to Artifact Registry, single immutable hash-based tag. The push step first checks whether the tag already exists (<code>gcloud artifacts docker images describe</code>); if it does, the push is skipped. This makes the whole workflow idempotent — if a later step fails (the deploy, the invalidation), re-running the workflow doesn't trip over Artifact Registry's <code>immutable_tags=true</code> rejecting a re-push of the same SHA. The supply-chain protection is unchanged: a different image still cannot overwrite the existing tag.</li>
                 <li><strong>Deploy</strong> a new Cloud Run revision via <code>gcloud run deploy</code>, which atomically swaps traffic.</li>
                 <li><strong>Invalidate the Cloud CDN cache</strong> at the load balancer (<code>gcloud compute url-maps invalidate-cdn-cache</code>). The GCLB has Cloud CDN enabled, which honors nginx's <code>Cache-Control: max-age=3600</code> — without this step, the new revision is live but readers keep seeing the old bytes until the TTL expires, and Cloudflare can't reach into Cloud CDN to fix it. The deploy job waits for propagation so "succeeded" means "actually live."</li>
             </ol>
