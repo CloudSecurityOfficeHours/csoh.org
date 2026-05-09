@@ -134,8 +134,22 @@ jobs:
             --no-progress \
             "${{ steps.tag.outputs.image }}"
 
-      - name: Push container image
-        run: docker push "${{ steps.tag.outputs.image }}"
+      # Artifact Registry has immutable_tags=true (a supply-chain control —
+      # see Layer 5 of cloud-deployment.html), so re-pushing a tag fails.
+      # That's the desired behavior for tampering, but it makes a workflow
+      # rerun impossible whenever an earlier run pushed the image and then
+      # failed at a later step (e.g. deploy or CDN invalidate). We make
+      # push idempotent by checking AR first; the locally-built image was
+      # already Trivy-scanned this run, and the AR image was scanned on
+      # the original run, so either way the deployed bytes are scanned.
+      - name: Push container image (skip if already in registry)
+        run: |
+          set -euo pipefail
+          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
+            echo "Image already exists in Artifact Registry — skipping push (idempotent rerun)."
+          else
+            docker push "${{ steps.tag.outputs.image }}"
+          fi
 
       - name: Deploy to Cloud Run
         run: |
