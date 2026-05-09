@@ -585,9 +585,33 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
 
 A manual-trigger-only workflow that force-pushes the entire site to the FTP host. Use it when the auto-deploy skipped a push (no relevant files changed) or the server got out of sync with `main`. Triggered from the GitHub Actions tab — it never runs on push.
 
+### GCP Cloud Run Deploy Workflow (in migration)
+
+**Workflow file:** `.github/workflows/gcp-deploy.yml`
+
+Builds a container image, scans it for HIGH/CRITICAL CVEs, pushes to Artifact Registry, and deploys to Cloud Run. **Currently runs in parallel with the FTPS deploy** while we migrate hosting from LiteSpeed to GCP. After the Cloudflare DNS cutover for `csoh.org`/`www.csoh.org` is complete and verified, the FTPS step in `site-update-deploy.yml` is removed and `manual-deploy.yml` is deleted.
+
+**Triggers on pushes to `main` when these files change:**
+- The same path filters as `site-update-deploy.yml` (HTML, CSS, JS, screenshots, images)
+- `Dockerfile`, `nginx.conf`, `.github/workflows/gcp-deploy.yml`
+- Manual trigger via the GitHub Actions tab
+
+**What it does:**
+- Authenticates to GCP via **Workload Identity Federation** — no service account JSON key is stored or rotated. The OIDC token GitHub mints for the run is exchanged at run-time for a 1-hour GCP access token, gated to this repository only.
+- Builds the container with `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade` + the `nginx-security-headers.conf` snippet that's `include`d into every location block).
+- Runs Trivy against the built image; build fails on any HIGH or CRITICAL CVE that has a fix available.
+- Pushes to Artifact Registry with an immutable SHA-based tag (no `:latest`).
+- Deploys a new Cloud Run revision pinned to that SHA.
+
+**Edge in front of Cloud Run:** Global HTTPS load balancer with Cloud CDN and Cloud Armor (OWASP CRS WAF, per-IP rate limit, adaptive L7 DDoS), modern TLS policy (1.2+), HTTP→HTTPS redirect. Logs (LB requests, Cloud Armor blocks, IAM admin activity, audit logs) route to a 400-day-retention bucket.
+
+**Full architecture and bootstrap steps:** [infra/README.md](infra/README.md). Security model and rotation: [SECURITY.md → Deployment Security](SECURITY.md#deployment-security).
+
 ### Setup Note
 
 Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints short-lived (~1h) installation tokens at job start, plus a small fine-grained PAT (`CSOH_PAT`) used only to approve App-opened PRs (GitHub blocks self-approval). The full model — App config, ruleset bypass, why one PAT remains — is documented in [SECURITY.md → CI/CD Authentication](SECURITY.md#cicd-authentication). Setup / rotation steps for the PAT are in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md#setup-requirements).
+
+`gcp-deploy.yml` does *not* use the GitHub App — it authenticates to GCP via Workload Identity Federation and only needs the auto-injected `GITHUB_TOKEN` (with `id-token: write` for the OIDC exchange). There is no GCP-side credential to set up or rotate.
 
 ---
 

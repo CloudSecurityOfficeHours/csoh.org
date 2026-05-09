@@ -571,7 +571,7 @@ Before you submit, make sure:
 
 ### What happens after your PR merges
 
-`site-update-deploy.yml` runs SRI hashing, URL safety checks, URL normalization, preview-image generation, broken-link checks, and the FTP deploy. You don't need to run any of that locally — see [README.md#how-automation-works](README.md#-how-automation-works) for the full pipeline.
+Two deploy workflows run in parallel during the LiteSpeed → GCP migration: `site-update-deploy.yml` (SRI hashing, URL safety checks, URL normalization, preview-image generation, broken-link checks, plus FTPS deploy to LiteSpeed) and `gcp-deploy.yml` (build, Trivy scan, deploy to Cloud Run via Workload Identity Federation). After Cloudflare DNS for `csoh.org`/`www.csoh.org` cuts over to the GCP load balancer, the FTPS path is retired. You don't need to run any of this locally — see [README.md#how-automation-works](README.md#-how-automation-works) for the full pipeline.
 
 **Quick tips for URLs you add:**
 - Use HTTPS when available.
