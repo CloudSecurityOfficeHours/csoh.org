@@ -62,24 +62,31 @@ resource "google_compute_url_map" "https_redirect" {
   }
 }
 
-# Managed TLS cert covering production + staging hostnames.
+# Managed TLS cert — gcp.csoh.org only.
+#
+# Production hostnames (csoh.org, www.csoh.org) are served via Cloudflare
+# proxy mode. Cloudflare terminates browser TLS with its own Universal SSL
+# cert, then proxies to this LB on origin. The GCP managed cert therefore
+# only needs to cover the staging hostname that hits the LB directly via
+# DNS-only Cloudflare records.
+#
+# Why we don't put csoh.org / www.csoh.org in this cert: Google managed
+# cert validation uses HTTP-01 ACME, which requires the domain to resolve
+# directly to the LB. While Cloudflare is in proxy mode for those names,
+# the validator can't see the LB and the cert hangs in FAILED_NOT_VISIBLE.
+# We chose the proxy architecture (instead of gray-cloud direct DNS)
+# because it eliminates the TLS-error window during cert recreation and
+# absorbs traffic at Cloudflare's edge before it ever reaches our origin.
+# Trade-off documented in cloud-deployment.html.
+#
 # `create_before_destroy` ensures Terraform creates a new cert and swaps
 # the target_https_proxy over before destroying the old cert (avoids the
 # "cert in use, cannot delete" cascade).
-#
-# IMPORTANT: Google managed certs use HTTP-01 ACME validation. Each domain
-# in the SAN list MUST resolve to this LB's IP at the time of validation,
-# or PROVISIONING will hang on FAILED_NOT_VISIBLE for that domain.
-# Workflow when adding a new domain:
-#   1. Add the domain here.
-#   2. terraform apply (cert enters PROVISIONING).
-#   3. Point Cloudflare DNS for that domain at the LB IP.
-#   4. Wait 15–30 min for Google's ACME to retry validation.
 resource "google_compute_managed_ssl_certificate" "site" {
   project = var.project_id
-  name    = "csoh-cert-prod"
+  name    = "csoh-cert-staging-only"
   managed {
-    domains = [var.domain, "www.${var.domain}", var.staging_domain]
+    domains = [var.staging_domain]
   }
   lifecycle {
     create_before_destroy = true
