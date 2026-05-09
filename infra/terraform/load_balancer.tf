@@ -84,7 +84,7 @@ resource "google_compute_url_map" "https_redirect" {
 # "cert in use, cannot delete" cascade).
 resource "google_compute_managed_ssl_certificate" "site" {
   project = var.project_id
-  name    = "csoh-cert-staging-only"
+  name    = "csoh-cert-gcp"
   managed {
     domains = [var.staging_domain]
   }
