@@ -7,6 +7,15 @@
 #             docker inspect --format='{{index .RepoDigests 0}}' nginx:1.27-alpine`
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
 
+# Refresh Alpine packages on top of the pinned base. The digest pin
+# guarantees we start from known bytes, but the packages baked into that
+# digest age — `apk upgrade` pulls current versions from Alpine's repos,
+# picking up security patches (libssl3, libxml2, libpng, etc.) without
+# losing reproducibility on the base layer. Trivy will catch any HIGH/
+# CRITICAL CVEs that survive this step.
+RUN apk upgrade --no-cache && \
+    rm -rf /var/cache/apk/*
+
 # Copy custom nginx config that mirrors .htaccess security rules.
 # The security-headers snippet is `include`d into every location block;
 # without that, nginx's add_header inheritance gets clobbered by the
