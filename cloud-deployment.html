@@ -59,7 +59,7 @@
         }
       },
       "datePublished": "2026-05-08",
-      "dateModified": "2026-05-08",
+      "dateModified": "2026-05-09",
       "mainEntityOfPage": "https://csoh.org/cloud-deployment.html",
       "image": "https://csoh.org/banner.png"
     }
@@ -164,7 +164,7 @@
       <div class="hero-inner">
         <div class="hero-text">
           <h1>How We Deploy csoh.org to GCP</h1>
-          <p>This page explains the deployment of csoh.org as a security showcase: every control we put in place, why it's there, and what we explicitly chose <em>not</em> to do. The site is static — there is no server-side code to defend — so the interesting target surface is the deployment pipeline and the edge.</p>
+          <p>A plain-English tour of how we host this site — eight layers of security, what each one defends against, and the actual config files that make it work. Written for anyone who's ever deployed a website and wondered what a "real" cloud setup looks like underneath.</p>
           <div class="cta-buttons">
             <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Browse the Terraform</a>
             <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Read the workflow</a>
@@ -175,232 +175,411 @@
 
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-08">Last updated <strong>2026-05-08</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-specific (GCP) · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/cloud-deployment.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-05-09">Last updated <strong>2026-05-09</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-specific (GCP) · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/cloud-deployment.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
-            <p><strong>Why this page exists.</strong> csoh.org is a community for cloud security practitioners, run by people who do this for a living. It would be embarrassing to host the site without taking the deployment seriously. This page is the receipt — a control-by-control walkthrough of the GCP setup you can adapt for your own static site, with all the Terraform and GitHub Actions YAML linked so you can read what we actually run.</p>
-            <p style="margin-top:0.75rem;"><strong>Audience:</strong> security engineers, cloud architects, and anyone deploying a small thing to GCP and wanting to do it well. Familiarity with GCP basics, IAM, and CI/CD assumed; we link the glossary terms when we use jargon.</p>
+            <p><strong>Why this page exists.</strong> csoh.org is a community for cloud security practitioners. We host it ourselves, on Google Cloud, and we treat the deployment as a teaching artifact: every choice we made is on this page, with a plain-English explanation of <em>why</em> it's there and <em>what attack it stops</em>. The Terraform and GitHub Actions YAML that actually runs in production is linked throughout so you can read the real thing.</p>
+            <p style="margin-top:0.75rem;"><strong>Who this is for.</strong> If you've ever deployed a website to a shared web host (cPanel, Netlify, GitHub Pages) and you want to understand what a "real" cloud deployment looks like — this is your page. We assume you know HTML/HTTP basics. We don't assume you know GCP, <a class="glossary-link" href="glossary.html#term-iam">IAM</a>, <a class="glossary-link" href="glossary.html#term-ci-cd">CI/CD</a>, or container security. Every term we use links to the <a href="glossary.html">glossary</a> on first use.</p>
+            <p style="margin-top:0.75rem;"><strong>How to read this page.</strong> Top-to-bottom for the full tour, or jump straight to the section you care about via the table of contents below. Each layer of defense gets its own section that opens with <em>"the attack we're stopping"</em> in plain language before we touch the technical detail.</p>
         </div>
 
         <div class="toc">
             <h2>📖 On this page</h2>
             <ol>
-                <li><a href="#threat-model">The threat model for a static site</a></li>
-                <li><a href="#architecture">Architecture at a glance</a></li>
-                <li><a href="#identity">Identity &amp; access (the WIF story)</a></li>
-                <li><a href="#supply-chain">Image supply chain</a></li>
-                <li><a href="#edge">Edge defenses (LB, WAF, CDN, TLS)</a></li>
-                <li><a href="#pipeline">CI/CD pipeline</a></li>
-                <li><a href="#logging">Logging &amp; detection</a></li>
+                <li><a href="#big-picture">The big picture: defense in depth</a></li>
+                <li><a href="#threat-model">What attacks are we actually defending against?</a></li>
+                <li><a href="#architecture">Architecture diagram</a></li>
+                <li><a href="#cloudflare">Layer 1 — Cloudflare in front of everything</a></li>
+                <li><a href="#load-balancer">Layer 2 — The Google Cloud Load Balancer + WAF</a></li>
+                <li><a href="#tls">Layer 3 — TLS (the lock icon in the browser)</a></li>
+                <li><a href="#cloud-run">Layer 4 — Cloud Run (where the site actually runs)</a></li>
+                <li><a href="#supply-chain">Layer 5 — The container we ship</a></li>
+                <li><a href="#identity">Layer 6 — How we deploy <em>without</em> a saved password</a></li>
+                <li><a href="#pipeline">Layer 7 — Protecting the deploy pipeline itself</a></li>
+                <li><a href="#logging">Layer 8 — Logging and what we'd see during an attack</a></li>
                 <li><a href="#did-not-do">What we didn't do (and why)</a></li>
-                <li><a href="#cost">Cost</a></li>
+                <li><a href="#cost">What this costs to run</a></li>
+                <li><a href="#starter">If you want to copy this for your own site</a></li>
                 <li><a href="#further">Further reading</a></li>
             </ol>
         </div>
 
-        <section id="threat-model">
-            <h2>The threat model for a static site</h2>
-            <p>Before any controls: what are we actually defending against? Static sites have a small attack surface compared to anything stateful. There is no database to inject into, no auth flow to bypass, no session to hijack, no per-user data to exfiltrate. That eliminates whole chapters of the OWASP Top 10 from worry.</p>
-            <p>What's left, ranked roughly by likelihood:</p>
+        <section id="big-picture">
+            <h2>The big picture: defense in depth</h2>
+            <p>The single most important idea on this page is called <strong>defense in depth</strong>: instead of relying on one strong wall, we stack many imperfect ones. If an attacker bypasses one layer, the next one is still in their way. None of the individual controls below are unbreakable — but together, an attacker has to be lucky on every layer at once, while we only have to be lucky on one.</p>
+            <p>Our stack has eight layers. Each one is a section on this page:</p>
             <ol>
-                <li><strong>Supply-chain compromise of the build.</strong> Attacker tampers with the base image, an Action we use, or a dependency such that a malicious build artifact ends up in production. Mitigated by digest-pinning, locked Actions, immutable image tags, container scanning.</li>
-                <li><strong>Credential theft from the deploy pipeline.</strong> A leaked CI token can push malicious bytes that look authentic. Mitigated by Workload Identity Federation (no long-lived credential exists to leak), short-lived everything, repo-scoped trust, branch-protection on the deployer workflow file itself.</li>
-                <li><strong>DNS / TLS attacks at the edge.</strong> Misissued cert, cache poisoning, downgrade. Mitigated by HSTS preload, modern TLS policy (1.2+), managed certs that auto-renew, registrar lock + Cloudflare 2FA on DNS.</li>
-                <li><strong>Defacement.</strong> Attacker who got into the build pipeline pushes embarrassing content. Mitigated by everything in (1) and (2), plus a fast-rollback story (Cloud Run revisions pin specific image SHAs; one <code>gcloud</code> command moves traffic back to the previous revision).</li>
-                <li><strong>Volumetric DDoS.</strong> Mitigated by Cloud CDN absorption, Cloud Armor adaptive L7 protection, and per-IP rate limiting. Static content amplifies CDN effectiveness.</li>
-                <li><strong>Bot scraping / abuse.</strong> Mitigated weakly — we don't really care about scraping the public site, but Cloud Armor's WAF rules handle classic SQLi/XSS/LFI probes that bots throw at every endpoint.</li>
+                <li><strong>Cloudflare</strong> in front of everything — absorbs floods, blocks known bad bots, terminates the browser's TLS connection.</li>
+                <li><strong>Google Cloud Load Balancer</strong> with <a class="glossary-link" href="glossary.html#term-waf">Cloud Armor (a WAF)</a> — pattern-matches incoming requests for SQL injection, <a class="glossary-link" href="glossary.html#term-xss">XSS</a>, and other classic attacks; rate-limits abusive callers.</li>
+                <li><strong>TLS at two layers</strong> (browser → Cloudflare, Cloudflare → us) — encrypted, modern ciphers, certificates that auto-renew.</li>
+                <li><strong>Cloud Run</strong> — the actual server the site runs on, locked so the only way to reach it is through the load balancer above.</li>
+                <li><strong>The container itself</strong> — pinned to known-good bytes, security-patched at build time, scanned for known vulnerabilities before every deploy.</li>
+                <li><strong>The deploy identity</strong> — GitHub Actions can deploy without a stored password, using a federated identity that grants ~1 hour of narrowly-scoped access per workflow run.</li>
+                <li><strong>The pipeline itself</strong> — Code Owners review on the deploy workflow, branch protection on <code>main</code>, secret scanning, push protection.</li>
+                <li><strong>Logging</strong> — every block decision, every error response, every IAM change kept for 400 days.</li>
             </ol>
-            <p>Things we explicitly do <em>not</em> defend against because they don't apply: authenticated session theft, broken access control, business-logic abuse, privileged-pivot from an application server. The corollary: anyone reading this for a non-static site needs more controls than what's on this page.</p>
+            <p>Read on for the plain-English version of each layer, what it's defending against, and what the actual config looks like.</p>
+        </section>
+
+        <section id="threat-model">
+            <h2>What attacks are we actually defending against?</h2>
+            <p>Before designing controls, you need a <strong>threat model</strong> — a list of "what could go wrong, and roughly how likely is it?" For a public, static site, the surface is smaller than you might think:</p>
+            <ul>
+                <li>There's no database to inject into.</li>
+                <li>There's no login form to brute-force.</li>
+                <li>There are no user accounts, sessions, or cookies to hijack.</li>
+                <li>There's no per-user data to steal.</li>
+            </ul>
+            <p>That eliminates most of the <a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">OWASP Top 10</a> right off the bat. What's actually left, ranked from most-to-least likely:</p>
+            <ol>
+                <li><strong>Someone tampers with the build.</strong> An attacker compromises the base image we use, a GitHub Action we depend on, or a CI token, and slips malicious bytes into our deploy. The site visibly looks normal but ships malware to readers. <em>Mitigated by:</em> pinning the base image to its content hash, pinning every GitHub Action to a specific commit, scanning the built image for vulnerabilities, and refusing to overwrite image tags after they're published.</li>
+                <li><strong>Someone steals the deploy credentials.</strong> Historically the worst single way to compromise a website: leak the CI's deploy password and now anyone with that password can publish whatever they want. <em>Mitigated by:</em> not having a deploy password at all (see <a href="#identity">Layer 6 — keyless deploys</a>).</li>
+                <li><strong>Someone messes with our DNS or TLS.</strong> Misissued certificate, an on-path attacker downgrading HTTPS to HTTP, DNS hijack. <em>Mitigated by:</em> two-factor on Cloudflare, registrar lock on the domain, HSTS preload (browsers refuse plain HTTP for our domain, period), modern TLS only.</li>
+                <li><strong>Someone defaces the site.</strong> Got into the build pipeline somehow and pushed an embarrassing change. <em>Mitigated by:</em> everything in (1) and (2), plus a one-command rollback (every Cloud Run revision is pinned to a specific image hash; "go back to yesterday's deploy" is a single CLI call).</li>
+                <li><strong>Volumetric attack (DDoS).</strong> Someone tries to take the site offline by sending an enormous amount of traffic. <em>Mitigated by:</em> Cloudflare absorbing the bulk of traffic at its edge, Cloud Armor's adaptive DDoS protection, per-IP rate limiting, the CDN serving cached content even if our origin goes down.</li>
+                <li><strong>Bot scraping and probing.</strong> Bots constantly throw classic attack patterns (<code>?id=1' OR 1=1--</code>) at every endpoint on the public internet. <em>Mitigated by:</em> Cloud Armor's WAF rules silently dropping those requests so they never reach our application.</li>
+            </ol>
+            <p><strong>What we explicitly do <em>not</em> defend against</strong>, because none of it applies to a static site: authenticated session theft, broken access control, business-logic abuse, privilege escalation from an application server. If you're reading this page to copy the design for a site that <em>does</em> have logged-in users — you need more than what's here.</p>
         </section>
 
         <section id="architecture">
-            <h2>Architecture at a glance</h2>
+            <h2>Architecture diagram</h2>
+            <p>Here's the whole system in one picture. Don't worry if some of the labels are unfamiliar — every box is explained in detail in its own section below.</p>
             <pre style="background:var(--code-bg, #f5f5f5);padding:1rem;border-radius:6px;overflow-x:auto;font-size:0.9rem;line-height:1.4;">
-Browser
-   │
-   ▼
-Cloudflare (proxy mode for csoh.org/www, terminates browser TLS,
-            absorbs traffic at edge before our origin sees it)
-   │  origin TLS
-   ▼
-Google Cloud Global HTTPS Load Balancer  (anycast IP)
-   ├── Modern TLS policy — TLS 1.2+ only, restricted ciphers
-   ├── Managed cert (auto-renew, ACME HTTP-01)
-   ├── HTTP → HTTPS redirect (301, separate forwarding rule)
-   ├── Cloud Armor — OWASP CRS WAF + per-IP rate limit + adaptive L7 DDoS
-   └── Cloud CDN — edge cache for static assets
-   │
-   ▼
-Serverless NEG → Cloud Run (csoh-site)
-   ├── ingress = INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER (no public Run URL)
-   ├── runtime SA: csoh-run-runtime  (zero IAM roles)
-   └── nginx:1.27-alpine (digest-pinned) + apk upgrade + custom CSP/HSTS/COOP/CORP
+[ Reader's browser ]
+        │
+        │  HTTPS (browser sees Cloudflare's certificate)
+        ▼
+┌────────────────────────────────────────────────────────────────┐
+│ Cloudflare                                                     │
+│ • Acts as a global cache (CDN) — most pages served from edge   │
+│ • Blocks known-bad bots and absorbs DDoS traffic               │
+│ • Terminates browser TLS                                       │
+└────────────────────────────────────────────────────────────────┘
+        │
+        │  HTTPS (Cloudflare ↔ us, separate connection)
+        ▼
+┌────────────────────────────────────────────────────────────────┐
+│ Google Cloud HTTPS Load Balancer  (anycast IP: 35.190.41.31)   │
+│ • Modern TLS only (1.2+, restricted ciphers)                   │
+│ • Cloud Armor (WAF): OWASP rules + per-IP rate limit           │
+│ • Cloud CDN: also caches static assets at GCP's edge           │
+│ • HTTP → HTTPS redirect (port 80 → 301 to port 443)            │
+└────────────────────────────────────────────────────────────────┘
+        │
+        │  internal traffic only (Cloud Run rejects everything else)
+        ▼
+┌────────────────────────────────────────────────────────────────┐
+│ Cloud Run service: csoh-site                                   │
+│ • Container: nginx:1.27-alpine (pinned to a specific hash)     │
+│ • OS packages refreshed at every build (apk upgrade)           │
+│ • Adds security headers: HSTS, CSP, X-Frame-Options, etc.      │
+│ • Runtime identity has zero IAM permissions                    │
+│ • Auto-scales 0 → 10 containers as needed                      │
+└────────────────────────────────────────────────────────────────┘
 
-Build path (out of band):
-GitHub push → Actions runner → OIDC token → WIF exchange → 1-hour GCP token
-            → docker build → Trivy scan → Artifact Registry (immutable tags)
-            → gcloud run deploy (revision pinned to image SHA)
+Build &amp; deploy (separate, runs in GitHub Actions on every push):
 
-Telemetry:
-Cloud Armor decisions, LB 4xx/5xx, IAM admin activity, audit logs
-            → Cloud Logging sink → 400-day retention bucket</pre>
-            <p>Every box on that diagram is provisioned by Terraform (<a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>). There is no click-ops; the GCP console is read-only for normal operation.</p>
+   git push to main
+        ↓
+   GitHub Actions runs gcp-deploy.yml
+        ↓
+   GitHub mints an OIDC token (proof: "this run is from this repo")
+        ↓
+   Google STS exchanges it for a 1-hour GCP access token
+        ↓
+   docker build → Trivy scan (fail on HIGH/CRITICAL CVEs)
+        ↓
+   Push image to Artifact Registry (immutable hash-based tag)
+        ↓
+   Deploy a new Cloud Run revision pinned to that hash
+
+Logging (everything below is automatic, runs in the background):
+
+   LB request logs + Cloud Armor decisions + IAM changes + audit logs
+        ↓
+   Cloud Logging sink → custom 400-day retention bucket</pre>
+            <p>Everything in that diagram — every Cloud Run setting, every WAF rule, every IAM permission — is defined as code in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>. We never click around in the GCP console to make changes; the console is read-only for normal operation. This is called <strong>infrastructure as code</strong>, and it's how you keep a real cloud setup from drifting into a snowflake nobody can rebuild.</p>
         </section>
 
-        <section id="identity">
-            <h2>Identity &amp; access (the WIF story)</h2>
-            <p>The single most consequential control on this page is that <strong>there is no service account key anywhere in the system.</strong> GitHub Actions does not have a JSON key to push containers, deploy Cloud Run revisions, or do anything else against GCP. Instead:</p>
+        <section id="cloudflare">
+            <h2>Layer 1 — Cloudflare in front of everything</h2>
+            <p><strong>What it stops:</strong> volumetric attacks (DDoS), known-bad bots, exposing our origin server's IP address to the public internet.</p>
+            <p><strong>How it works in plain English.</strong> When you type <code>csoh.org</code> in your browser, the DNS lookup returns a <a class="glossary-link" href="glossary.html#term-cdn">Cloudflare</a> IP — not ours. Your browser opens a TLS connection to Cloudflare. Cloudflare looks at the request and one of three things happens:</p>
             <ol>
-                <li>The workflow declares <code>permissions: id-token: write</code>. GitHub will mint an <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a> token at run-time, signed by GitHub's identity provider.</li>
-                <li>The token's claims include <code>repository</code>, <code>ref</code>, <code>workflow</code>, <code>job_workflow_ref</code>, etc. — facts about <em>which</em> workflow run is asking.</li>
-                <li>A <strong>Workload Identity Pool</strong> in our GCP project trusts that GitHub OIDC issuer.</li>
-                <li>An <strong>attribute condition</strong> on the pool gates the exchange:
-<pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">attribute_condition = "assertion.repository == 'CloudSecurityOfficeHours/csoh.org'"</pre>
-                Any other repository trying to authenticate to this pool is rejected outright. A leaked workflow file from a different repo cannot mint a token for our project.</li>
-                <li>The exchanged GCP access token is short-lived (~1 hour) and scoped via <code>roles/iam.workloadIdentityUser</code> to impersonating <em>one</em> service account: <code>csoh-deployer</code>.</li>
-                <li><code>csoh-deployer</code> has the minimum roles to do its job: <code>roles/run.admin</code> on the project, <code>roles/artifactregistry.writer</code>, and <code>roles/iam.serviceAccountUser</code> on the runtime SA (so it can set the runtime identity on a deploy). Nothing else.</li>
-                <li>The runtime service account that the actual container runs as — <code>csoh-run-runtime</code> — has <strong>zero IAM roles</strong>. The container is static nginx that makes no GCP API calls. There is nothing to grant.</li>
+                <li><strong>The page is cached at Cloudflare's edge.</strong> Cloudflare returns the cached response directly. We never see this request. (For a static site like ours, this is most traffic.)</li>
+                <li><strong>The page isn't cached.</strong> Cloudflare opens its own connection to our load balancer and fetches it on your behalf, then caches the result so the next reader gets the cached version.</li>
+                <li><strong>The request is bad.</strong> Cloudflare's bot mitigation, rate limiting, or threat intelligence flags it; the request is blocked before it ever reaches us.</li>
             </ol>
-            <p>What a leaked workflow log gets an attacker: ~1 hour of access to push images and deploy revisions in one project. No persistence, no lateral movement, no read access to other projects. There is no key in GitHub Secrets to rotate, no expiry to track, no offboarding ritual. The Terraform that wires this up is in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> — about 30 lines.</p>
+            <p>This pattern is called a <strong>reverse proxy</strong> or <strong>CDN</strong>. The security wins are big:</p>
+            <ul>
+                <li><strong>Our origin IP is hidden.</strong> Public DNS only ever points to Cloudflare. An attacker who wants to attack <em>us</em> has to attack Cloudflare first.</li>
+                <li><strong>Floods get absorbed at the edge.</strong> Cloudflare's network is much bigger than ours. A DDoS that would take us offline is unnoticed at their scale.</li>
+                <li><strong>The browser sees Cloudflare's certificate.</strong> Cloudflare manages its own TLS cert with its own auto-renewal. We don't have to hand-feed it our domain.</li>
+            </ul>
+            <p>The trade-off, which is worth being honest about: when our origin <em>does</em> get a request from Cloudflare, the request comes from a Cloudflare IP, not the real reader's IP. So our WAF (the next layer) sees "Cloudflare" as the client, which weakens per-IP rate limiting at our origin. We documented that in the <a href="#did-not-do">"What we didn't do"</a> section below.</p>
+        </section>
 
-            <h3>The runtime SA having zero roles is on purpose</h3>
-            <p>It's tempting to grant the container <em>some</em> roles "just in case." Don't. The <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a> of an exploited container is bounded by what its identity can do; if its identity can't do anything, an exploited container can't do anything either. If the day comes when the site needs a backend service, that service gets its <em>own</em> SA with <em>only</em> the roles that service needs — not a single shared "the website" SA whose permissions accumulate over time.</p>
+        <section id="load-balancer">
+            <h2>Layer 2 — The Google Cloud Load Balancer + WAF</h2>
+            <p><strong>What it stops:</strong> classic web attacks (SQL injection, cross-site scripting, path traversal), abusive request rates, anything trying to connect on plain HTTP.</p>
+            <p><strong>What's a load balancer, really?</strong> A managed front door that sits between the internet and your application. In our case, it's also where most of the security policy lives. The load balancer has a single, globally-routed IP address; requests to that IP are inspected and either allowed through to our application or blocked.</p>
+
+            <h3>Cloud Armor — the Web Application Firewall</h3>
+            <p>A <a class="glossary-link" href="glossary.html#term-waf">WAF</a> is a layer that pattern-matches incoming HTTP requests against known attack signatures and drops the bad ones. Ours uses <strong>OWASP Core Rule Set</strong> — an open, well-maintained set of rules that catches the classic attacks every web developer has heard of:</p>
+            <ul>
+                <li><strong>SQL injection</strong> — attempts to break out of a query parameter and inject SQL into a backend database.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-xss">Cross-site scripting</a></strong> — attempts to inject JavaScript into a page so it runs in another user's browser.</li>
+                <li><strong>Local file inclusion / remote file inclusion</strong> — attempts to make the server read or fetch arbitrary files (<code>../../../etc/passwd</code>).</li>
+                <li><strong>Remote code execution</strong> — attempts to make the server run arbitrary commands.</li>
+            </ul>
+            <p>Be honest: a static site doesn't <em>have</em> SQL queries to inject into. None of these attacks would actually do anything to us even without the WAF. We run it anyway because (1) it eats the noise of constant bot probing so it doesn't fill our logs, (2) it demonstrates the control for visitors learning from this page, and (3) when someday we add something dynamic, the WAF is already in place.</p>
+
+            <h3>Rate limiting</h3>
+            <p>Built into Cloud Armor. Configured to: <strong>600 requests per minute per source IP</strong>, with a 10-minute ban once you exceed that. A normal human reader won't get within an order of magnitude of 600/min; only crawlers and abuse get that high.</p>
+            <p><em>Honest caveat:</em> because Cloudflare proxies our traffic, every request looks like it's from a Cloudflare IP. So the rate limit applies "per Cloudflare egress IP," which is much more permissive than per-end-user. Cloudflare itself does its own rate limiting at its edge, which catches most of what we'd want to catch here. Wiring up <a class="glossary-link" href="glossary.html#term-zero-trust">trust</a> for the <code>X-Forwarded-For</code> header (so Cloud Armor can see the real client IP through Cloudflare) is on our to-do list.</p>
+
+            <h3>Cloud CDN</h3>
+            <p>Yes, we have <em>two</em> CDNs (Cloudflare's and Google's). They cache different things at different layers, and the second one mostly helps if a request slipped past Cloudflare's cache. Cache mode is "all static" with default TTL of 1 hour, plus <code>negative_caching</code> (cache 404s and 410s too — saves us from a flood of "/wp-admin" probes) and <code>serve_while_stale</code> (if our Cloud Run service goes down, the CDN keeps serving the last good copy of each page for up to 24 hours). That last one is a free availability buffer.</p>
+
+            <h3>HTTP → HTTPS redirect</h3>
+            <p>The load balancer also listens on port 80 (plain HTTP). Anything arriving there gets a 301 redirect to the HTTPS URL. There's no application code reachable on HTTP — it's a bare redirect handled at the load balancer itself, which means it's faster, cacheable, and impossible to bypass via a misconfigured backend.</p>
+        </section>
+
+        <section id="tls">
+            <h2>Layer 3 — TLS (the lock icon in the browser)</h2>
+            <p><strong>What it stops:</strong> someone reading or modifying the page in transit between the user's browser and us.</p>
+            <p><strong>What's TLS?</strong> <a class="glossary-link" href="glossary.html#term-tls">TLS</a> (Transport Layer Security) is the modern name for what people called SSL — the encryption layer that makes URLs <code>https://</code> instead of <code>http://</code>. Two computers establish a TLS connection, prove identity to each other with certificates, agree on a shared secret, and from there everything is encrypted. The lock icon in the browser is the user-facing signal.</p>
+            <p>Our setup has TLS at <strong>two separate layers</strong>, which often confuses people the first time they see it:</p>
+            <ol>
+                <li><strong>Browser ↔ Cloudflare.</strong> Cloudflare's "Universal SSL" certificate, valid for <code>csoh.org</code> and <code>www.csoh.org</code>. This is the cert your browser actually validates and shows the lock icon for. It auto-renews on Cloudflare's normal cadence; we don't manage it.</li>
+                <li><strong>Cloudflare ↔ our load balancer.</strong> A separate TLS connection on the back side of Cloudflare. Our load balancer presents a Google-managed certificate. Cloudflare's "SSL/TLS Mode" setting controls how strict Cloudflare is about that backend cert.</li>
+            </ol>
+            <p>Why two layers and not just one? Because Cloudflare doesn't have your domain's <em>private key</em>. They generated their own cert that the browser trusts (Cloudflare is a public Certificate Authority); we generate our own cert for the back-side connection. Each cert covers what its owner can prove they control, and neither side has to share secrets.</p>
+
+            <h3>The hardening details</h3>
+            <ul>
+                <li><strong>Modern TLS policy.</strong> Our load balancer is configured to refuse TLS 1.0 and 1.1 — only 1.2 and 1.3, both with restricted cipher suites. Old TLS versions have known weaknesses; refusing them is the easiest "free" hardening you can do.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-hsts">HSTS</a> with <code>preload</code>.</strong> Every response from our site includes an HTTP header telling the browser "always use HTTPS for csoh.org for the next year." With <code>preload</code> we get added to a list browsers ship with by default, so the protection is active on the very first visit too — even before any of our HTTPS responses have been seen.</li>
+                <li><strong>Auto-renewing certificates.</strong> Both certs (Cloudflare's edge cert + our backend cert) renew themselves on a schedule. We don't have a calendar reminder. Expired certs cause more outages than they prevent attacks; eliminating manual renewal eliminates that risk.</li>
+            </ul>
+
+            <h3>Other security headers we send</h3>
+            <p>HSTS is the highest-impact header but not the only one. We send all of these from nginx (the web server inside our container):</p>
+            <ul>
+                <li><strong><a class="glossary-link" href="glossary.html#term-csp">Content Security Policy (CSP)</a></strong> — a strict policy: only first-party scripts, no inline JS, no <code>eval()</code>, only specific image and frame sources allowed. The single highest-impact defense against XSS, even if an attacker were able to inject a <code>&lt;script&gt;</code> tag into our HTML.</li>
+                <li><strong>X-Frame-Options: DENY</strong> + <strong>frame-ancestors 'none'</strong> in CSP — prevents anyone from embedding our pages in an iframe on their site. Stops <em>clickjacking</em>, where an attacker invisibly overlays our page under their own UI.</li>
+                <li><strong>X-Content-Type-Options: nosniff</strong> — tells the browser to trust the content-type we declared, instead of guessing from the first bytes. Closes some old MIME-confusion attacks.</li>
+                <li><strong>Referrer-Policy: strict-origin-when-cross-origin</strong> — when a reader clicks an external link from our site, the destination only sees that they came "from csoh.org," not the specific page or query parameters.</li>
+                <li><strong>Permissions-Policy</strong> — explicitly disables camera, microphone, geolocation, payment, USB, and motion-sensor APIs. We don't use any of them, so we deny them.</li>
+                <li><strong>Cross-Origin-Opener-Policy</strong> + <strong>Cross-Origin-Resource-Policy</strong> — limit how other origins can interact with windows or load resources from ours. Defends against newer-class side-channel attacks.</li>
+            </ul>
+            <p>You can see all of these by running <code>curl -I https://csoh.org/</code> from any terminal. They're public; that's the point.</p>
+        </section>
+
+        <section id="cloud-run">
+            <h2>Layer 4 — Cloud Run (where the site actually runs)</h2>
+            <p><strong>What it stops:</strong> direct attacks on the application bypassing the load balancer + WAF; over-permissive cloud access if the application were ever compromised.</p>
+            <p><strong>What's Cloud Run?</strong> Cloud Run is Google's <a class="glossary-link" href="glossary.html#term-serverless">serverless</a> <a class="glossary-link" href="glossary.html#term-container">container</a> platform. You hand it a container image; it runs the container, scales it from zero to many instances based on traffic, and bills you per request. We don't manage virtual machines, patch operating systems, or maintain auto-scaling groups. Google does all that.</p>
+            <p>Our Cloud Run service is configured for two specific security wins:</p>
+
+            <h3>The application is unreachable except through the load balancer</h3>
+            <p>Cloud Run gives every service a public URL by default (<code>https://csoh-site-23727240440.us-central1.run.app</code>). We turn that off. The setting is called <code>ingress = INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER</code>, and what it means in plain English: <em>only allow connections that came through our specific load balancer; reject everything else.</em></p>
+            <p>If you try to reach that public Cloud Run URL directly, you get a 404 from Google's edge — the request never even reaches our application. That matters because every defense in the previous three layers (Cloudflare, the WAF, the rate limiter, the security headers) only fires on requests that go <em>through</em> the load balancer. If an attacker could connect directly to the Cloud Run URL, they'd skip all of them. We close that door.</p>
+
+            <h3>The application's identity has zero permissions</h3>
+            <p>Every workload in GCP runs as a <strong>service account</strong> — an identity that holds the cloud permissions for whatever code is using it. A misconfigured workload SA is one of the most common cloud security mistakes: people grant "Editor" to the application's identity "to make it work," and now every <a class="glossary-link" href="glossary.html#term-cve">CVE</a> in the application is potentially also a path to "rewrite all the GCP resources in this project."</p>
+            <p>Our application is static nginx that makes no GCP API calls. It has no reason to access cloud resources. So we created a dedicated service account (<code>csoh-run-runtime</code>) with <strong>zero IAM roles</strong> and configured Cloud Run to run as that identity. If the container were ever compromised — RCE in nginx, malicious bytes in the image, anything — the attacker gets a foothold in a process that can't talk to anything else in the cloud project. Its <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a> is the container itself; that's the whole point.</p>
+            <p>This is a practical example of <a class="glossary-link" href="glossary.html#term-zero-trust">zero trust</a> applied to your own application: don't grant your code anything you can't justify, and "I might need it later" is not a justification.</p>
         </section>
 
         <section id="supply-chain">
-            <h2>Image supply chain</h2>
-            <p>The container we run in production has to be <em>this</em> nginx with <em>this</em> config and nothing else. The supply chain has three honest places where someone could substitute "this" with "something the attacker prefers":</p>
+            <h2>Layer 5 — The container we ship</h2>
+            <p><strong>What it stops:</strong> shipping a malicious or vulnerable container to production by accident.</p>
+            <p><strong>What's a container <a class="glossary-link" href="glossary.html#term-image">image</a>?</strong> A container image is a packaged-up filesystem snapshot — your application code, plus the operating system files it needs to run, frozen as one shippable unit. We push the image to a <a class="glossary-link" href="glossary.html#term-registry">registry</a> (Google's Artifact Registry); Cloud Run pulls it from there and runs it.</p>
+            <p>The <a class="glossary-link" href="glossary.html#term-supply-chain">supply chain</a> for our container has three places where an attacker could substitute "what we meant to ship" with "what they preferred to ship." Each one gets a control:</p>
 
-            <h3>1. The base image</h3>
-            <p>Unpinned tags are a registry-write vulnerability. <code>FROM nginx:1.27-alpine</code> means "whatever bytes the registry returns when we ask for that tag today" — and registries occasionally have bad days. Our <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/Dockerfile" target="_blank" rel="noopener noreferrer">Dockerfile</a> pins to a digest:</p>
+            <h3>1. The base image we start from</h3>
+            <p>A typical Dockerfile starts with a line like <code>FROM nginx:1.27-alpine</code>, meaning "use whatever the nginx 1.27-alpine image is right now." But "right now" is whatever the registry returns. If someone compromised the registry, or the image owner's account, or any link in their build chain — that <code>FROM</code> line ships a malicious base layer into your image, and you'd never know unless you bought tooling specifically to detect it.</p>
+            <p>We pin to the <strong>content hash</strong> instead:</p>
 <pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10</pre>
-            <p>That is content-addressed: the registry cannot serve different bytes without changing the digest, and Docker fails the build if they don't match. The trade-off is that we have to update the digest manually as new base images come out — a deliberate maintenance friction in exchange for tamper-evidence.</p>
+            <p>That long string after the <code>@</code> is the cryptographic hash of the exact bytes we expect. Docker downloads the image, computes the hash, and refuses to use it if the hash doesn't match. The registry can't substitute different bytes without changing the hash, and the changed hash would make our build fail. <em>Tamper-evident.</em></p>
+            <p>The trade-off: we have to manually update the hash when we want a newer base image. That's friction by design — it means an automated supply-chain attack doesn't propagate to us silently.</p>
 
             <h3>2. Stale packages on top of the pinned base</h3>
-            <p>The catch with digest-pinning a base image: the OS packages baked into that digest age. Alpine ships security fixes for libssl, libxml2, libpng, etc. constantly; a digest from 6 months ago has 6 months of accumulated CVEs. We resolve this by running <code>apk upgrade --no-cache</code> immediately after <code>FROM</code>:</p>
+            <p>Pinning the hash freezes the base image's bytes. But the OS packages inside that base image (libssl, libxml2, libpng, etc.) keep getting new security fixes upstream. A digest pinned 6 months ago has 6 months of accumulated <a class="glossary-link" href="glossary.html#term-cve">CVEs</a> baked in.</p>
+            <p>We solve this by running <code>apk upgrade</code> immediately after the pinned base, in our Dockerfile:</p>
 <pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">RUN apk upgrade --no-cache &amp;&amp; \
     rm -rf /var/cache/apk/*</pre>
-            <p>Net effect: we start from <em>known bytes</em> (the digest pin) and end with <em>current packages</em> (the apk upgrade). The Trivy scan in the next step verifies we haven't slipped on either dimension.</p>
+            <p>That tells the package manager: "fetch the current versions of every installed package, in this build." We start from a known good snapshot (the digest pin) and end with current security patches (the upgrade). The next layer (Trivy scanning) verifies we haven't missed anything.</p>
 
             <h3>3. The CI build artifact</h3>
-            <p>Every PR's container goes through <a href="https://trivy.dev/" target="_blank" rel="noopener noreferrer">Trivy</a>:</p>
+            <p>Even with both controls above, a clever attacker might find a CVE in a newly-disclosed package that we just included. So every container we build gets scanned, in CI, by <a href="https://trivy.dev/" target="_blank" rel="noopener noreferrer">Trivy</a> — an open-source vulnerability scanner. The scan walks every package in the image, cross-references it against public CVE databases, and the build fails if anything <strong>HIGH</strong> or <strong>CRITICAL</strong> shows up:</p>
 <pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">trivy image \
   --exit-code 1 \
   --ignore-unfixed \
   --severity HIGH,CRITICAL \
   "${IMAGE}"</pre>
-            <p>The build fails on any HIGH or CRITICAL CVE that has a fix available. <code>--ignore-unfixed</code> filters CVEs whose upstreams haven't shipped a patch — those are noise we can't act on, and including them would just train people to ignore the scan output. After the scan passes, the image is pushed to Artifact Registry with two important properties:</p>
+            <p>The <code>--ignore-unfixed</code> flag filters CVEs that don't have a fix available yet — those are noise we can't act on, and including them would just train people to ignore the scan output.</p>
+            <p>If the scan passes, the image is pushed to <strong>Artifact Registry</strong> (Google's container registry) with two important properties:</p>
             <ul>
-                <li><strong>Immutable tags.</strong> Once an image is pushed at <code>csoh-site:&lt;sha&gt;</code>, the tag cannot be overwritten or moved. There is no way for an attacker (or a careless engineer) to silently swap what bytes that tag refers to.</li>
-                <li><strong>SHA-based, not <code>:latest</code>.</strong> The Cloud Run revision pins a specific SHA tag. Rollback is <code>gcloud run services update-traffic --to-revisions &lt;name&gt;=100</code>, and there is zero ambiguity about what bytes the rolled-back revision is running.</li>
+                <li><strong>Immutable tags.</strong> Once we push <code>csoh-site:abc123</code>, the tag <code>abc123</code> can't be overwritten or moved. Nobody — not an attacker who got into our deploy account, not a careless engineer — can silently change what bytes that tag refers to.</li>
+                <li><strong>Hash-based, not <code>:latest</code>.</strong> Each Cloud Run deploy points to a specific image hash. <em>Rollback is one CLI command:</em> <code>gcloud run services update-traffic --to-revisions &lt;old-revision&gt;=100</code>, and there's zero ambiguity about what bytes the rolled-back revision is running.</li>
             </ul>
-            <p>The Artifact Registry repo also has a cleanup policy — keep the most recent 30 versions, delete untagged versions older than 7 days. That keeps the storage bill small without losing rollback targets.</p>
+            <p>The Artifact Registry repo also has a retention policy: keep the 30 most recent images, delete untagged ones older than 7 days. We keep enough history for any sane rollback without paying for unbounded storage.</p>
         </section>
 
-        <section id="edge">
-            <h2>Edge defenses (LB, WAF, CDN, TLS)</h2>
-            <p>Cloud Run sits behind a Global External HTTPS Load Balancer with the ingress restricted to <code>INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER</code>. Direct HTTPS hits to the Run service URL get a 404 from the GCP frontend — the only valid path to the application is through the LB. That matters because all of the controls below live <em>on</em> the LB; if you could reach the app directly, you'd skip them.</p>
+        <section id="identity">
+            <h2>Layer 6 — How we deploy <em>without</em> a saved password</h2>
+            <p><strong>What it stops:</strong> credential theft from the deploy pipeline. The most common single vector of website compromise.</p>
+            <p>This is the most consequential design choice on this page. Read it carefully.</p>
 
-            <h3>Cloud Armor — the WAF and rate limiter</h3>
-            <p>Defined in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloud_armor.tf" target="_blank" rel="noopener noreferrer">cloud_armor.tf</a>. We're running OWASP Core Rule Set rules at sensitivity level 1 — the lowest false-positive setting — against SQLi, XSS, LFI, RFI, and RCE patterns. For a static site that doesn't <em>have</em> SQLi-vulnerable endpoints, this is more about demonstrating the control than blocking real attacks; it does, however, eat the noise of generic bot probes.</p>
-            <p>The rate limiter is per-source-IP, 600 requests/minute, 10-minute ban on exceed. <strong>Important caveat for our setup:</strong> because Cloudflare proxies production traffic, Cloud Armor sees Cloudflare's egress IPs rather than real client IPs. The per-IP rate limit therefore applies per-Cloudflare-IP — a meaningfully looser bound than per-end-user. Cloudflare itself does its own rate limiting at the edge, which catches most of what we'd otherwise want Cloud Armor to catch; the Cloud Armor rule mostly protects us from anything that gets past Cloudflare or hits us via the gray-cloud staging hostname. A future improvement is to wire <code>X-Forwarded-For</code> trust into Cloud Armor for Cloudflare's IP ranges so we can rate-limit on the real client IP. <strong>Adaptive L7 DDoS defense</strong> is enabled — Cloud Armor will auto-generate signatures for unusual traffic patterns and apply them as additional rules during an actual attack.</p>
+            <h3>The traditional approach (don't do this)</h3>
+            <p>Most CI/CD pipelines deploy by storing a long-lived credential in a secret manager. For GCP, that means a <strong>service account key</strong> — a JSON file with cryptographic material that proves "I am this service account." Workflow runs read the JSON from secrets, presents it to GCP, and uses the resulting access. This works. It's also the source of countless real breaches, because:</p>
+            <ul>
+                <li>The JSON key never expires unless someone manually rotates it.</li>
+                <li>Anyone who reads the secrets store gets it.</li>
+                <li>It survives the engineer who created it leaving the company, until someone notices.</li>
+                <li>If a leaked secret ends up on GitHub or a Pastebin, it's still useful to attackers months later.</li>
+            </ul>
 
-            <h3>Cloud CDN</h3>
-            <p>Cache mode <code>CACHE_ALL_STATIC</code>, default TTL 1 hour, max 24 hours, with <code>negative_caching</code> on so 404s and 410s cache too (this matters during a deploy: stale 404s during cache invalidation aren't expensive). <code>serve_while_stale</code> is 24 hours — if the origin (Cloud Run) is unreachable, the CDN keeps serving the last known good version for up to a day. That's a free availability buffer for a static site.</p>
-            <p>The performance side of the CDN is also doing the security work of <em>absorbing</em> floods. Volumetric traffic hits the edge, not Cloud Run.</p>
+            <h3>What we do instead: Workload Identity Federation</h3>
+            <p><a class="glossary-link" href="glossary.html#term-wif">Workload Identity Federation (WIF)</a> replaces "stored credential" with <em>"prove who you are at the moment you ask for access."</em> The flow is:</p>
+            <ol>
+                <li>Our GitHub Actions workflow runs. As part of starting up, GitHub mints a short-lived <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a> token for that specific workflow run. The token is signed by GitHub's identity service and includes verifiable claims: <em>this is repo CloudSecurityOfficeHours/csoh.org, on branch main, in workflow gcp-deploy.yml, workflow run #12345</em>.</li>
+                <li>The workflow hands that token to Google Cloud's STS (Security Token Service), saying "exchange this for an access token, please."</li>
+                <li>Google Cloud's STS checks: do I trust GitHub's identity service as a token issuer? <em>Yes</em> (we configured it to). And does this token's <code>repository</code> claim match the policy I've set? Our policy says it must equal exactly <code>CloudSecurityOfficeHours/csoh.org</code>. <em>Yes.</em></li>
+                <li>STS returns a 1-hour Google Cloud access token, scoped to impersonating <em>one specific service account</em> — <code>csoh-deployer</code>, our deploy-only identity.</li>
+                <li>The workflow uses that token to push containers and deploy revisions. After 1 hour, the token expires.</li>
+            </ol>
+            <p>Crucially: <strong>there is no JSON key anywhere in this flow</strong>. There's nothing for a leaked GitHub secret to reveal — the deploy auth is created on-demand, scoped to one workflow run, and discarded. If a workflow log somehow leaked, an attacker would get an access token that's valid for at most one hour, scoped to "deploy to this one project," and they'd have to use it before it expired. There's nothing to rotate, because there's nothing stored.</p>
+            <p>The Terraform that wires this up is in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> — about 30 lines.</p>
 
-            <h3>TLS — two layers</h3>
-            <p><strong>Browser ↔ Cloudflare:</strong> Cloudflare terminates browser TLS using its <strong>Universal SSL</strong> cert, valid for <code>csoh.org</code> and <code>www.csoh.org</code>. This is what end users see; it's free, auto-renews, and is signed by a CA the browser already trusts.</p>
-            <p><strong>Cloudflare ↔ GCP LB origin:</strong> Cloudflare connects to the GCP load balancer over TLS on its origin connection. The LB has a Google-managed cert and a <strong>Modern TLS policy</strong> attached (TLS 1.2 minimum, restricted cipher suite). Cloudflare's SSL/TLS mode for the origin connection determines how strict the validation of that origin cert is — <code>Full (strict)</code> is the right setting once the GCP cert covers the origin hostname; <code>Full</code> is a defensible middle-ground while you stabilise.</p>
-            <p>Why we don't put production hostnames in the GCP managed cert: Google managed certs use HTTP-01 ACME validation, which requires the domain to resolve directly to the LB. While Cloudflare proxies <code>csoh.org</code>, Google's ACME validator can't see the LB and the cert hangs in <code>FAILED_NOT_VISIBLE</code>. The GCP cert therefore only covers <code>gcp.csoh.org</code>, which is a DNS-only Cloudflare record pointing straight at the LB IP.</p>
-            <p>We send <strong>HSTS with <code>includeSubDomains; preload</code></strong> from nginx, plus <code>X-Content-Type-Options</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, <code>Cross-Origin-Opener-Policy</code>, <code>Cross-Origin-Resource-Policy</code>, and a strict <strong>CSP</strong> (no inline scripts, no unsafe-eval).</p>
-            <p>The HTTP listener (port 80) on the LB is a bare 301 redirect to HTTPS, served by a separate URL map. Cloudflare also enforces "Always Use HTTPS" at the edge, so plain HTTP rarely reaches our origin.</p>
+            <h3>The deploy identity has narrow permissions</h3>
+            <p>The <code>csoh-deployer</code> service account that the workflow impersonates can do exactly three things, and nothing else:</p>
+            <ul>
+                <li>Push container images to our Artifact Registry repo.</li>
+                <li>Create Cloud Run revisions and shift traffic between them.</li>
+                <li>Set the runtime identity on a Cloud Run revision (so deploys can specify which service account the running container will use).</li>
+            </ul>
+            <p>It can't read other GCP projects. It can't disable logging. It can't escalate to admin. The set of bad things it can do is bounded by what those three operations allow.</p>
+            <p>And remember from the Cloud Run section above: the runtime identity (<code>csoh-run-runtime</code>) the deployer sets on the running container has <em>zero</em> permissions. So even an attacker who compromises the deploy identity AND uses it to ship a malicious container to production… ends up with a malicious container that has no cloud access. The blast radius is bounded at every layer.</p>
         </section>
 
         <section id="pipeline">
-            <h2>CI/CD pipeline</h2>
-            <p>The full deploy path is in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>. Walking it top to bottom:</p>
+            <h2>Layer 7 — Protecting the deploy pipeline itself</h2>
+            <p><strong>What it stops:</strong> a malicious or accidental change to the workflow that does the deploying.</p>
+            <p>The <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">deploy workflow file</a> can ship code to production. That makes <em>the file itself</em> as sensitive as a production secret — anyone who can change it can change what gets shipped. We protect it with multiple layers on the GitHub side:</p>
+            <ul>
+                <li><strong><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/CODEOWNERS" target="_blank" rel="noopener noreferrer">CODEOWNERS</a></strong> — a special file that says "any change to <code>.github/workflows/</code>, <code>infra/</code>, the <code>Dockerfile</code>, or security docs requires review from <code>@Nunley</code>." A pull request touching those paths can't merge without that explicit approval.</li>
+                <li><strong>Branch protection on <code>main</code></strong> — pull requests are required (no direct push to main), each PR needs at least 1 approving review from a code owner, and three required status checks (<code>ruff</code>, <code>actionlint</code>, <code>yamllint</code>) must pass before merging is allowed.</li>
+                <li><strong>"Production" environment gate</strong> — the deploy job declares <code>environment: production</code>. GitHub's environment configuration says only the <code>main</code> branch can deploy to it. A pull request from a fork can't run this workflow even if the fork's author is sneaky about it.</li>
+                <li><strong>Secret scanning + push protection</strong> are on. If anyone ever commits a credential-shaped string (an AWS key, a GitHub token, anything Git knows the pattern of), the push is blocked at the moment of <code>git push</code>.</li>
+                <li><strong>Dependabot security updates</strong> are on. Anything we depend on that ships a CVE generates an automatic PR for us to review.</li>
+                <li><strong>Every third-party GitHub Action is pinned to a specific commit SHA</strong>, not a version tag. Tags can be moved silently. SHAs can't.</li>
+            </ul>
+            <p>Walking the workflow top to bottom (<a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>):</p>
             <ol>
                 <li><strong>Triggers</strong> on pushes to <code>main</code> matching specific paths (HTML, CSS, JS, Dockerfile, nginx.conf, the workflow file itself), plus <code>workflow_dispatch</code> for manual runs.</li>
                 <li><strong>Concurrency group</strong> <code>gcp-deploy</code> with <code>cancel-in-progress: true</code> — if a newer commit lands while an older deploy is mid-flight, the older one is cancelled. Prevents the stale-content race where an older deploy publishes <em>after</em> a newer one finishes.</li>
                 <li><strong>Permissions</strong> block scopes the auto-injected <code>GITHUB_TOKEN</code> to <code>contents: read</code> + <code>id-token: write</code>. Nothing else.</li>
-                <li><strong>Environment gate</strong> — the job declares <code>environment: production</code>. The repo's <code>production</code> environment is configured to allow deployments only from <code>main</code>, and required reviewers can be added. A PR from a fork cannot run this job.</li>
-                <li><strong>WIF auth</strong> via <code>google-github-actions/auth</code>, pinned to a specific commit SHA (not a tag). The action exchanges the OIDC token for a 1-hour GCP access token.</li>
+                <li><strong>WIF auth</strong> via <code>google-github-actions/auth</code>, pinned to a specific commit SHA. The action does the OIDC-token-to-GCP-access-token exchange explained in Layer 6.</li>
                 <li><strong>Docker build</strong> with descriptive <code>org.opencontainers.image.*</code> labels (source repo, revision SHA, build timestamp). These labels are visible on the image in Artifact Registry and make incident triage faster.</li>
-                <li><strong>Trivy install + scan</strong> — install via Aqua's apt repo (signed package), scan the freshly-built image, fail on HIGH/CRITICAL.</li>
-                <li><strong>Push</strong> to Artifact Registry, single immutable SHA tag.</li>
-                <li><strong>Deploy</strong> a new Cloud Run revision via <code>gcloud run deploy</code>, which atomically swaps traffic. The revision is named (e.g. <code>csoh-site-00007-abc</code>); rollback to a previous revision is one CLI call.</li>
+                <li><strong>Trivy install + scan</strong> — installed via Aqua's apt repo (signed package), scans the freshly-built image, fails on HIGH/CRITICAL.</li>
+                <li><strong>Push</strong> to Artifact Registry, single immutable hash-based tag.</li>
+                <li><strong>Deploy</strong> a new Cloud Run revision via <code>gcloud run deploy</code>, which atomically swaps traffic.</li>
             </ol>
-
-            <h3>What protects the workflow file itself</h3>
-            <p>The workflow can deploy with a lot of authority — so the file that defines it is an <em>extra-sensitive</em> piece of code. Two layers protect it:</p>
-            <ul>
-                <li><strong><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/CODEOWNERS" target="_blank" rel="noopener noreferrer">CODEOWNERS</a></strong> requires <code>@Nunley</code> review on any change to <code>.github/workflows/</code>, <code>infra/</code>, <code>Dockerfile</code>, <code>nginx.conf</code>, and security docs. The branch ruleset enforces "require Code Owners review" — a PR touching these surfaces cannot merge without that explicit approval.</li>
-                <li><strong>Branch ruleset on <code>main</code></strong> requires PR with 1 approval, blocks deletion and non-fast-forward, and gates merging on three required status checks (<code>ruff</code>, <code>actionlint</code>, <code>yamllint</code>). Combined with the <code>production</code> environment's main-only branch policy, a malicious PR cannot reach the deploy code path.</li>
-            </ul>
-            <p>Repository-side hardening that's not GCP-specific but worth naming: <strong>secret scanning</strong> + <strong>push protection</strong> are on (any commit containing a known credential pattern is blocked at push time), <strong>Dependabot security updates</strong> are on, and every third-party Action in every workflow is pinned to a commit SHA, not a tag.</p>
         </section>
 
         <section id="logging">
-            <h2>Logging &amp; detection</h2>
-            <p>The default Cloud Logging configuration retains logs for 30 days in the <code>_Default</code> bucket. For security-relevant events that's not enough — incidents are often discovered weeks or months after the fact, especially supply-chain ones. We define a <strong>custom 400-day retention bucket</strong> and a <strong>log sink</strong> that routes the events worth keeping into it (<a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/logging.tf" target="_blank" rel="noopener noreferrer">logging.tf</a>):</p>
+            <h2>Layer 8 — Logging and what we'd see during an attack</h2>
+            <p><strong>What it stops:</strong> nothing directly — but it's how we'd notice if any of the layers above failed.</p>
+            <p>Even with everything above, you should assume something will eventually go wrong. A vulnerability in nginx, a leaked credential we didn't anticipate, a configuration drift no one caught — there's always a possibility. Logging is what turns "an attack happened" into "an attack happened, here's exactly when, here's exactly what they did, and here's what we need to fix." Without logs, you have no idea.</p>
+            <p>By default, Google Cloud Logging keeps logs for 30 days. That's not enough for security work — supply-chain attacks specifically are often discovered months after the fact, and the logs you'd need for forensics are gone. We define a custom <strong>400-day retention bucket</strong> and a <strong>log sink</strong> that routes the security-relevant events into it (see <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/logging.tf" target="_blank" rel="noopener noreferrer">logging.tf</a>).</p>
+            <p>The filter captures four categories:</p>
 <pre style="background:var(--code-bg, #f5f5f5);padding:0.75rem;border-radius:6px;font-size:0.85rem;">(resource.type="http_load_balancer"
    AND jsonPayload.enforcedSecurityPolicy.outcome="DENY")
 OR (resource.type="http_load_balancer" AND httpRequest.status&gt;=400)
 OR protoPayload.serviceName="iam.googleapis.com"
 OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"</pre>
-            <p>That filter captures: every Cloud Armor block decision (so we can tune rules and spot real attacks), every 4xx/5xx response from the LB (for both performance and abuse triage), every IAM policy change (the highest-leverage admin events in any GCP project), and the full audit-log stream.</p>
-            <p>We do <em>not</em> currently route to a SIEM — for a community site, the cost/benefit doesn't pencil out. For a production SaaS workload, you'd want this same sink plus an export to BigQuery (long-term analytics) and/or Pub/Sub (streaming detection).</p>
+            <ol>
+                <li><strong>Every Cloud Armor block.</strong> If a request matched one of our WAF rules, we have it: source IP (well, Cloudflare's egress IP — see the WAF caveat above), the rule that matched, the request URL. Useful both for tuning rules (catching false positives) and for spotting real attacks.</li>
+                <li><strong>Every 4xx and 5xx response from the load balancer.</strong> Tells us about scrapers, broken links, and any time our origin returned an error. Helpful for both performance triage and abuse detection.</li>
+                <li><strong>Every IAM change.</strong> If anyone modifies a permission, grants a role, creates a service account — we have it. The single highest-leverage admin event in any cloud project; you almost always want to know about it before the audit happens.</li>
+                <li><strong>The full audit log stream.</strong> Every API call against this project, who made it, when, with what outcome.</li>
+            </ol>
+            <p>What we <em>don't</em> have (yet): a SIEM, real-time alerting, or anomaly detection. For a community site the cost/benefit doesn't justify it; for a production SaaS workload, you'd want this same sink plus an export to BigQuery for long-term analytics or Pub/Sub for streaming detection. We've already wired up a <strong>Cloud Monitoring dashboard</strong> for the day-to-day metrics — request rate, latency percentiles, response code breakdown, Cloud Run instance count — so we can spot trends without diving into logs.</p>
         </section>
 
         <section id="did-not-do">
             <h2>What we didn't do (and why)</h2>
-            <p>Listing controls we considered and rejected is more honest than pretending the design is finished. Each of these is a defensible choice for a small static site, and a less-defensible choice as the surface area grows.</p>
+            <p>Listing controls we <em>considered and rejected</em> is more honest than pretending the design is finished. Each of these is a defensible choice for a small static site and a less-defensible choice as the threat surface grows. If you're copying this design for something bigger, this list is your homework.</p>
             <ul>
-                <li><strong>Binary Authorization with attestation.</strong> We enabled the API but don't enforce a Binary Auth policy yet. Trivy + immutable AR tags + WIF-restricted push already cover most of what Binary Auth would add for a single-image, single-deployer setup. We'll add it when there's a multi-image / multi-environment story to enforce.</li>
-                <li><strong>Gray-cloud DNS (DNS-only Cloudflare records).</strong> We tried this — gray cloud lets Cloud Armor see real client IPs, but it forces a TLS-error window every time the GCP managed cert is recreated, because Google's HTTP-01 ACME validation requires DNS-direct resolution. After running into <code>FAILED_NOT_VISIBLE</code> on cert SAN expansion mid-cutover, we settled on Cloudflare proxy mode (orange cloud) for production hostnames and gray cloud only for the staging hostname (<code>gcp.csoh.org</code>) where the GCP cert lives. Trade-offs documented in the TLS and Cloud Armor sections above.</li>
-                <li><strong>Wiring <code>X-Forwarded-For</code> trust into Cloud Armor.</strong> This is the natural follow-up to the proxy decision: tell Cloud Armor to trust the <code>X-Forwarded-For</code> header from Cloudflare's IP ranges so it rate-limits on the real client IP. We have it on the to-do list; it requires keeping a current allowlist of Cloudflare egress ranges in Terraform, which is a non-zero maintenance ask.</li>
-                <li><strong>Custom VPC-SC perimeter.</strong> Service Perimeters are heavyweight; they make sense around services holding sensitive data. The runtime SA has no access to anything sensitive, so there's nothing to perimeterize.</li>
-                <li><strong>SLSA provenance attestation.</strong> Worth doing; on the to-do list. The <a href="https://github.com/slsa-framework/slsa-github-generator" target="_blank" rel="noopener noreferrer">slsa-github-generator</a> emits a signed build provenance record we could attach to each image and verify before deploy.</li>
-                <li><strong>Image signing with cosign.</strong> Same shape — would prove "this image was built by our pipeline" and let us reject unsigned images at deploy time. A natural follow-up to SLSA provenance.</li>
-                <li><strong>Distroless or scratch base.</strong> nginx-on-alpine has more attack surface than a single static binary in a scratch container. We're staying on nginx-alpine because it gives us the URL-rewriting, header-injection, and config flexibility we use today; the Trivy scan + apk upgrade keeps the package surface honest.</li>
-                <li><strong>Multi-region failover.</strong> Cloud Run is single-region. The CDN absorbs most of the load, and the site is content-static (no db to replicate), so a region outage means stale content from CDN edges, not downtime. Global multi-region adds cost and complexity that only pays off above our scale.</li>
-                <li><strong>SIEM integration.</strong> See the logging section above. Logs are retained; alerting is not yet.</li>
+                <li><strong>Binary Authorization (signed-image enforcement).</strong> Google Cloud has a feature where you can configure Cloud Run to refuse to start a container unless its image has been cryptographically signed by an approved party. We've enabled the API but don't enforce a policy yet — Trivy + immutable image tags + WIF-restricted push already cover most of what this would add for a single-image, single-deployer setup. The day we have multiple environments (staging vs. production) or multiple services, we'll turn it on.</li>
+                <li><strong>Real client IP visibility through Cloudflare.</strong> Cloudflare proxy hides the real reader's IP from us. There's a standard way to surface it (Cloudflare adds an <code>X-Forwarded-For</code> header; you configure your origin to trust that header from Cloudflare's IP ranges). We haven't wired this up yet because it requires keeping a current allowlist of Cloudflare egress IPs in Terraform, which is a non-zero maintenance ask. On the to-do list.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-slsa">SLSA</a> provenance attestation.</strong> A standard for cryptographically attesting "this image was built by this pipeline from this source commit." The <a href="https://github.com/slsa-framework/slsa-github-generator" target="_blank" rel="noopener noreferrer">slsa-github-generator</a> action makes this fairly easy to add. On the to-do list; would deepen the supply-chain story above.</li>
+                <li><strong>Image signing with <a href="https://github.com/sigstore/cosign" target="_blank" rel="noopener noreferrer">cosign</a>.</strong> Same shape as SLSA — would let us reject unsigned images at deploy time. Natural follow-up to SLSA provenance.</li>
+                <li><strong>Distroless or scratch base image.</strong> A truly minimal container has only the application binary, with no shell, no package manager, no system utilities. nginx-on-alpine is bigger than that — but it gives us the URL-rewriting, header-injection, and config flexibility we need today. The Trivy scan + apk upgrade keeps the alpine package surface honest.</li>
+                <li><strong>Multi-region failover.</strong> Cloud Run is single-region. The CDN absorbs most load, and the site is static (no DB to replicate), so a region outage means stale content from CDN edges, not downtime. Global multi-region adds cost + complexity that doesn't pay off until you have global DAU.</li>
+                <li><strong>SIEM integration / real-time alerting.</strong> Logs are retained; we'd notice an attack on the next dashboard check. We don't get woken up at 3am. For a community site, that's the right call. For something with real users and revenue, you'd want at least PagerDuty integration on the most-critical filters.</li>
+                <li><strong>Custom VPC-SC service perimeter.</strong> GCP's heaviest network-isolation feature — useful when you have services holding sensitive data and want to forbid all data egress outside a defined boundary. Our runtime SA has access to nothing, so there's nothing to perimeterize.</li>
             </ul>
         </section>
 
         <section id="cost">
-            <h2>Cost</h2>
-            <p>Approximate monthly run-rate at our traffic level:</p>
+            <h2>What this costs to run</h2>
+            <p>Approximate monthly bill at our traffic level (low — we're a community site):</p>
             <table style="border-collapse:collapse;width:100%;max-width:600px;">
                 <thead><tr><th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">Component</th><th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">Approx / month</th></tr></thead>
                 <tbody>
-                    <tr><td style="padding:0.5rem;">LB forwarding rules (×2)</td><td style="padding:0.5rem;">~$18</td></tr>
+                    <tr><td style="padding:0.5rem;">Load balancer forwarding rules (×2: HTTP + HTTPS)</td><td style="padding:0.5rem;">~$18</td></tr>
                     <tr><td style="padding:0.5rem;">Cloud Armor policy</td><td style="padding:0.5rem;">~$5 + $0.75/rule</td></tr>
-                    <tr><td style="padding:0.5rem;">Cloud Run (scale-to-zero)</td><td style="padding:0.5rem;">$0–2</td></tr>
+                    <tr><td style="padding:0.5rem;">Cloud Run (scale-to-zero billing)</td><td style="padding:0.5rem;">$0–2</td></tr>
                     <tr><td style="padding:0.5rem;">Artifact Registry storage</td><td style="padding:0.5rem;">&lt; $1</td></tr>
                     <tr><td style="padding:0.5rem;">Cloud Logging (low volume)</td><td style="padding:0.5rem;">&lt; $2</td></tr>
-                    <tr><td style="padding:0.5rem;">Egress + CDN</td><td style="padding:0.5rem;">~$1–3</td></tr>
+                    <tr><td style="padding:0.5rem;">Egress + Cloud CDN</td><td style="padding:0.5rem;">~$1–3</td></tr>
                     <tr><td style="padding:0.5rem;font-weight:600;">Total</td><td style="padding:0.5rem;font-weight:600;">~$30/mo</td></tr>
                 </tbody>
             </table>
-            <p style="margin-top:1rem;">For comparison: shared LiteSpeed hosting (the previous setup) was a small flat fee and provided none of the controls on this page. We're paying ~10× the hosting cost to run the site as a security demonstration. That's a deliberate trade-off; for a private project with no showcase value, the cheaper static-host-on-someone-else's-server is a perfectly reasonable answer.</p>
+            <p style="margin-top:1rem;">A few honest notes on cost:</p>
+            <ul>
+                <li>The load balancer forwarding rule is the dominant fixed cost, and it doesn't scale with traffic. If you're running zero-traffic experiments, you'll still pay ~$18/month just to keep the LB alive.</li>
+                <li>Cloud Run truly scales to zero — if no one visits the site for an hour, we pay nothing for compute during that hour. Most static-site CDN architectures share this property.</li>
+                <li>For comparison: shared LiteSpeed hosting (csoh.org's previous setup) was a small flat fee and provided <em>none</em> of the controls on this page. We're paying ~10× the hosting cost to run the site as a security demonstration. For a private project where the deployment isn't part of the value proposition, the cheap static-host-on-someone-else's-server is a perfectly defensible choice. We're a security community; the deployment <em>is</em> the value proposition.</li>
+                <li>Google gives new accounts a $300 free trial credit. That covers about 10 months of this stack at our rate, which is a fine way to bootstrap and decide later if you want to keep going.</li>
+            </ul>
+        </section>
+
+        <section id="starter">
+            <h2>If you want to copy this for your own site</h2>
+            <p>This isn't a step-by-step tutorial — it's a checklist. Each item links to the actual file we use, so you can read the working version. If you want to copy this for your own static site, the path is roughly:</p>
+            <ol>
+                <li><strong>Create a GCP project + a Terraform state bucket.</strong> About 5 commands. See our <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md" target="_blank" rel="noopener noreferrer">infra/README.md</a> bootstrap section for the exact commands we ran.</li>
+                <li><strong>Copy the <code>infra/terraform/</code> directory</strong> from our repo, replace the variables in <code>variables.tf</code> (project ID, project number, domain, GitHub org/repo), and run <code>terraform apply</code>. That builds the entire stack: Cloud Run, load balancer, Cloud Armor, Artifact Registry, WIF, log retention.</li>
+                <li><strong>Adapt the Dockerfile</strong> to whatever your site's structure is. Ours is just nginx serving static HTML; yours might be different. Keep the digest pin and the <code>apk upgrade</code> line.</li>
+                <li><strong>Copy <code>.github/workflows/gcp-deploy.yml</code></strong> and update the project ID, region, and service name at the top. The WIF auth, Trivy scan, and deploy steps need no changes.</li>
+                <li><strong>On GitHub:</strong> create a <code>production</code> environment scoped to <code>main</code>; create a CODEOWNERS file requiring your review on workflow + infra paths; turn on branch protection, secret scanning, and Dependabot.</li>
+                <li><strong>Point your DNS at the load balancer IP</strong> (Terraform outputs it). If you're behind Cloudflare, set the SSL/TLS mode to "Full." If you're going DNS-only direct-to-LB, expect a 15-minute TLS provisioning window when the cert first issues.</li>
+            </ol>
+            <p>Realistic time investment if you've never used Terraform or GCP before: a weekend to read everything carefully and one afternoon to actually run it. If you're comfortable with both: an evening. If you hit a wall, bring it to <a href="sessions.html">Friday Zoom</a>.</p>
         </section>
 
         <section id="further">
             <h2>Further reading</h2>
             <ul>
-                <li><strong>The Terraform itself</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>. Every resource above is one file. Start with <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> if you want the keyless story; <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloud_armor.tf" target="_blank" rel="noopener noreferrer">cloud_armor.tf</a> for the WAF rules.</li>
+                <li><strong>The Terraform itself</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>. Every resource above is one file. Start with <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/wif.tf" target="_blank" rel="noopener noreferrer">wif.tf</a> if you want the keyless story; <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloud_armor.tf" target="_blank" rel="noopener noreferrer">cloud_armor.tf</a> for the WAF rules; <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/logging.tf" target="_blank" rel="noopener noreferrer">logging.tf</a> for the security log sink.</li>
                 <li><strong>The deploy workflow</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>. About 130 lines, heavily commented.</li>
-                <li><strong>The site security model</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a> in the repo. Covers the headers, the CI auth model, the secrets in use, and the rotation cadence.</li>
-                <li><strong>GitHub side</strong> — see <a href="github-actions.html">How We Use GitHub Actions</a> for the full workflow tour.</li>
-                <li><strong>External</strong>:
+                <li><strong>Our broader security writeup</strong> — <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>. Covers the security headers, the CI auth model, every secret in the repo, and rotation cadence.</li>
+                <li><strong>How CSOH uses GitHub Actions</strong> — the <a href="github-actions.html">companion learning page</a> walks through every workflow file in the repo.</li>
+                <li><strong>Glossary</strong> — every acronym we used here is in the <a href="glossary.html">CSOH glossary</a> with cross-links.</li>
+                <li><strong>External documentation</strong>:
                     <ul>
                         <li><a href="https://docs.cloud.google.com/iam/docs/workload-identity-federation" target="_blank" rel="noopener noreferrer">GCP — Workload Identity Federation overview</a></li>
                         <li><a href="https://github.com/google-github-actions/auth" target="_blank" rel="noopener noreferrer">google-github-actions/auth</a> — the action that does the OIDC exchange</li>
                         <li><a href="https://docs.cloud.google.com/armor/docs/cloud-armor-overview" target="_blank" rel="noopener noreferrer">GCP — Cloud Armor overview</a></li>
                         <li><a href="https://docs.cloud.google.com/run/docs/securing/ingress" target="_blank" rel="noopener noreferrer">GCP — Cloud Run ingress controls</a></li>
-                        <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA</a> — the provenance framework we'll add next</li>
+                        <li><a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">OWASP Top 10</a> — the canonical list of common web app vulnerabilities</li>
+                        <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA</a> — the supply-chain provenance framework we'll add next</li>
                     </ul>
                 </li>
             </ul>
