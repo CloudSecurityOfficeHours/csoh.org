@@ -7,8 +7,12 @@
 #             docker inspect --format='{{index .RepoDigests 0}}' nginx:1.27-alpine`
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
 
-# Copy custom nginx config that mirrors .htaccess security rules
+# Copy custom nginx config that mirrors .htaccess security rules.
+# The security-headers snippet is `include`d into every location block;
+# without that, nginx's add_header inheritance gets clobbered by the
+# per-location Cache-Control headers and HSTS/CSP/etc. silently disappear.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-security-headers.conf /etc/nginx/conf.d/security-headers.conf
 
 # Copy site files. The .dockerignore at the repo root excludes secrets,
 # private keys, internal directories, etc., so they never enter the build
@@ -28,6 +32,7 @@ RUN rm -rf /usr/share/nginx/html/.git \
            /usr/share/nginx/html/Dockerfile \
            /usr/share/nginx/html/docker-compose.yml \
            /usr/share/nginx/html/nginx.conf \
+           /usr/share/nginx/html/nginx-security-headers.conf \
            /usr/share/nginx/html/.gitignore \
            /usr/share/nginx/html/.htaccess \
            /usr/share/nginx/html/.dockerignore

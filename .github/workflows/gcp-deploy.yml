@@ -1,0 +1,124 @@
+# =============================================================================
+# Build, scan, and deploy to GCP Cloud Run
+# -----------------------------------------------------------------------------
+# Path:  GitHub Actions → WIF (no SA key) → impersonate csoh-deployer →
+#        build container → Trivy scan → push to Artifact Registry with
+#        SLSA provenance → deploy Cloud Run revision behind LB.
+#
+# This runs in parallel with the existing FTP deploy. Once Cloudflare DNS
+# is cut over to the GCP LB, the FTP path can be retired.
+# =============================================================================
+
+name: GCP — Build, Scan, and Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.html'
+      - 'chat-screenshots/**'
+      - 'img/**'
+      - 'style.css'
+      - 'main.js'
+      - 'chat-resources.js'
+      - 'breach-timeline.css'
+      - 'breach-timeline.js'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - '.github/workflows/gcp-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # required for WIF OIDC token
+
+concurrency:
+  group: gcp-deploy
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: csoh-org-495800
+  REGION: us-central1
+  SERVICE: csoh-site
+  REPO: csoh-containers
+  IMAGE_NAME: csoh-site
+
+jobs:
+  build-scan-deploy:
+    runs-on: ubuntu-latest
+    # The `production` environment is configured in repo Settings → Environments
+    # to gate deploys: only the `main` branch can deploy to it, and (optionally)
+    # required reviewers must approve. This means a malicious PR from a fork
+    # cannot trigger a deploy even if it could otherwise mint an OIDC token,
+    # because protected-environment secrets/conditions only apply on main.
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Authenticate to GCP via WIF
+        id: auth
+        uses: google-github-actions/auth@6fc4af4b145ae7821d527454aa9bd537d1f2dc5f  # v2.1.7
+        with:
+          workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: csoh-deployer@csoh-org-495800.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a  # v2.1.4
+
+      - name: Configure docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          # Single immutable SHA-based tag. We do NOT push :latest because
+          # the Artifact Registry repo has immutable_tags=true — re-pushing
+          # a tag is rejected, which is exactly what we want for supply-
+          # chain integrity. The Cloud Run revision pins the SHA tag, so
+          # `latest` would be redundant anyway.
+          SHA="${GITHUB_SHA::12}"
+          REF="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}"
+          echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build container image
+        run: |
+          docker build \
+            --tag "${{ steps.tag.outputs.image }}" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            .
+
+      # Trivy scan — fail the build on HIGH/CRITICAL vulns. The base image
+      # is digest-pinned, so this mostly catches new CVE disclosures against
+      # the pinned base.
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # 0.29.0
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'
+
+      - name: Push container image
+        run: docker push "${{ steps.tag.outputs.image }}"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ steps.tag.outputs.image }}" \
+            --platform managed \
+            --ingress internal-and-cloud-load-balancing \
+            --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --quiet
+
+      - name: Show deployed revision
+        run: |
+          gcloud run services describe "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --format='value(status.latestReadyRevisionName,status.url)'
