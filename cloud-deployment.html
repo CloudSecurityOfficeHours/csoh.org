@@ -207,6 +207,45 @@
         <section id="big-picture">
             <h2>The big picture: defense in depth</h2>
             <p>The single most important idea on this page is called <strong>defense in depth</strong>: instead of relying on one strong wall, we stack many imperfect ones. If an attacker bypasses one layer, the next one is still in their way. None of the individual controls below are unbreakable — but together, an attacker has to be lucky on every layer at once, while we only have to be lucky on one.</p>
+
+            <figure style="margin:2rem auto;max-width:560px;">
+              <svg viewBox="0 0 560 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="dind-title dind-desc">
+                <title id="dind-title">Defense-in-depth onion: eight concentric layers around the application</title>
+                <desc id="dind-desc">A diagram showing the application at the center surrounded by eight concentric rings. From outermost to innermost: Cloudflare, GCP load balancer + WAF, TLS, Cloud Run sandbox, hardened container, deploy identity (WIF), pipeline guards, logging.</desc>
+                <defs>
+                  <radialGradient id="dd-core" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#fde68a"/>
+                    <stop offset="100%" stop-color="#f59e0b"/>
+                  </radialGradient>
+                </defs>
+                <!-- 8 rings, outer to inner -->
+                <circle cx="280" cy="280" r="270" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="240" fill="none" stroke="#2563eb" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="210" fill="none" stroke="#7c3aed" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="180" fill="none" stroke="#a855f7" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="150" fill="none" stroke="#ec4899" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="120" fill="none" stroke="#f97316" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="90"  fill="none" stroke="#22c55e" stroke-width="2" stroke-opacity="0.55"/>
+                <circle cx="280" cy="280" r="60"  fill="none" stroke="#06b6d4" stroke-width="2" stroke-opacity="0.55"/>
+                <!-- Core: the application -->
+                <circle cx="280" cy="280" r="40" fill="url(#dd-core)" stroke="#b45309" stroke-width="2"/>
+                <text x="280" y="278" text-anchor="middle" font-size="13" font-weight="700" fill="#451a03">the</text>
+                <text x="280" y="294" text-anchor="middle" font-size="13" font-weight="700" fill="#451a03">site</text>
+                <!-- Ring labels (positioned along right side, slight rotation suggested by left-aligned anchor) -->
+                <g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12" fill="currentColor">
+                  <text x="280" y="22"  text-anchor="middle" font-weight="700" fill="#0ea5e9">1. Cloudflare (CDN, DDoS, edge cert)</text>
+                  <text x="280" y="52"  text-anchor="middle" font-weight="700" fill="#2563eb">2. Load Balancer + Cloud Armor (WAF)</text>
+                  <text x="280" y="82"  text-anchor="middle" font-weight="700" fill="#7c3aed">3. TLS &amp; security headers (HSTS, CSP, …)</text>
+                  <text x="280" y="112" text-anchor="middle" font-weight="700" fill="#a855f7">4. Cloud Run ingress: LB-only</text>
+                  <text x="280" y="142" text-anchor="middle" font-weight="700" fill="#ec4899">5. Hardened container (digest pin + scan)</text>
+                  <text x="280" y="172" text-anchor="middle" font-weight="700" fill="#f97316">6. Keyless deploy (WIF, 1-hour token)</text>
+                  <text x="280" y="202" text-anchor="middle" font-weight="700" fill="#22c55e">7. Pipeline guards (CODEOWNERS, env)</text>
+                  <text x="280" y="232" text-anchor="middle" font-weight="700" fill="#06b6d4">8. 400-day audit logs</text>
+                </g>
+              </svg>
+              <figcaption style="text-align:center;font-size:0.85rem;color:var(--text-muted, #555);margin-top:0.5rem;">Defense in depth visualised. The site is at the center; each ring is a separate layer of defense an attacker would have to defeat to reach it.</figcaption>
+            </figure>
+
             <p>Our stack has eight layers. Each one is a section on this page:</p>
             <ol>
                 <li><strong>Cloudflare</strong> in front of everything — absorbs floods, blocks known bad bots, terminates the browser's TLS connection.</li>
@@ -244,61 +283,138 @@
 
         <section id="architecture">
             <h2>Architecture diagram</h2>
-            <p>Here's the whole system in one picture. Don't worry if some of the labels are unfamiliar — every box is explained in detail in its own section below.</p>
-            <pre style="background:var(--code-bg, #f5f5f5);padding:1rem;border-radius:6px;overflow-x:auto;font-size:0.9rem;line-height:1.4;">
-[ Reader's browser ]
-        │
-        │  HTTPS (browser sees Cloudflare's certificate)
-        ▼
-┌────────────────────────────────────────────────────────────────┐
-│ Cloudflare                                                     │
-│ • Acts as a global cache (CDN) — most pages served from edge   │
-│ • Blocks known-bad bots and absorbs DDoS traffic               │
-│ • Terminates browser TLS                                       │
-└────────────────────────────────────────────────────────────────┘
-        │
-        │  HTTPS (Cloudflare ↔ us, separate connection)
-        ▼
-┌────────────────────────────────────────────────────────────────┐
-│ Google Cloud HTTPS Load Balancer  (anycast IP: 35.190.41.31)   │
-│ • Modern TLS only (1.2+, restricted ciphers)                   │
-│ • Cloud Armor (WAF): OWASP rules + per-IP rate limit           │
-│ • Cloud CDN: also caches static assets at GCP's edge           │
-│ • HTTP → HTTPS redirect (port 80 → 301 to port 443)            │
-└────────────────────────────────────────────────────────────────┘
-        │
-        │  internal traffic only (Cloud Run rejects everything else)
-        ▼
-┌────────────────────────────────────────────────────────────────┐
-│ Cloud Run service: csoh-site                                   │
-│ • Container: nginx:1.27-alpine (pinned to a specific hash)     │
-│ • OS packages refreshed at every build (apk upgrade)           │
-│ • Adds security headers: HSTS, CSP, X-Frame-Options, etc.      │
-│ • Runtime identity has zero IAM permissions                    │
-│ • Auto-scales 0 → 10 containers as needed                      │
-└────────────────────────────────────────────────────────────────┘
+            <p>Here's the whole system in one picture. Don't worry if some of the labels are unfamiliar — every box is explained in its own section below.</p>
+            <figure style="margin:1.5rem auto;max-width:880px;">
+              <svg viewBox="0 0 880 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-title arch-desc">
+                <title id="arch-title">csoh.org production architecture</title>
+                <desc id="arch-desc">A top-to-bottom flow diagram showing the request path from browser through Cloudflare, GCP HTTPS load balancer, and Cloud Run; a parallel build path on the right showing GitHub Actions, OIDC, and Artifact Registry; and a logging sink underneath.</desc>
+                <defs>
+                  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+                  </marker>
+                </defs>
+                <style>
+                  .arch-box { fill: #fff; stroke: #475569; stroke-width: 1.5; }
+                  .arch-box-cf  { fill: #fef3c7; stroke: #f59e0b; }
+                  .arch-box-lb  { fill: #dbeafe; stroke: #2563eb; }
+                  .arch-box-run { fill: #ddd6fe; stroke: #7c3aed; }
+                  .arch-box-ci  { fill: #d1fae5; stroke: #059669; }
+                  .arch-box-ar  { fill: #fce7f3; stroke: #db2777; }
+                  .arch-box-log { fill: #e0f2fe; stroke: #0891b2; }
+                  .arch-title { font: 700 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #0f172a; }
+                  .arch-sub   { font: 11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #334155; }
+                  .arch-tag   { font: 10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #64748b; }
+                  .arch-edge  { stroke: #475569; stroke-width: 1.6; fill: none; }
+                  .arch-edge-dash { stroke: #94a3b8; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+                </style>
 
-Build &amp; deploy (separate, runs in GitHub Actions on every push):
+                <!-- Browser -->
+                <ellipse cx="200" cy="40" rx="80" ry="22" class="arch-box"/>
+                <text x="200" y="45" text-anchor="middle" class="arch-title">Reader's browser</text>
 
-   git push to main
-        ↓
-   GitHub Actions runs gcp-deploy.yml
-        ↓
-   GitHub mints an OIDC token (proof: "this run is from this repo")
-        ↓
-   Google STS exchanges it for a 1-hour GCP access token
-        ↓
-   docker build → Trivy scan (fail on HIGH/CRITICAL CVEs)
-        ↓
-   Push image to Artifact Registry (immutable hash-based tag)
-        ↓
-   Deploy a new Cloud Run revision pinned to that hash
+                <!-- Arrow to Cloudflare -->
+                <line x1="200" y1="62" x2="200" y2="98" class="arch-edge" marker-end="url(#arr)"/>
+                <text x="210" y="84" class="arch-tag">HTTPS · sees Cloudflare's cert</text>
 
-Logging (everything below is automatic, runs in the background):
+                <!-- Cloudflare -->
+                <rect x="40" y="100" width="320" height="100" rx="8" class="arch-box arch-box-cf"/>
+                <text x="200" y="124" text-anchor="middle" class="arch-title">Cloudflare</text>
+                <text x="60" y="148" class="arch-sub">• Global edge cache (CDN)</text>
+                <text x="60" y="166" class="arch-sub">• Blocks known-bad bots, absorbs DDoS</text>
+                <text x="60" y="184" class="arch-sub">• Terminates browser TLS (Universal SSL)</text>
 
-   LB request logs + Cloud Armor decisions + IAM changes + audit logs
-        ↓
-   Cloud Logging sink → custom 400-day retention bucket</pre>
+                <!-- Arrow to LB -->
+                <line x1="200" y1="200" x2="200" y2="240" class="arch-edge" marker-end="url(#arr)"/>
+                <text x="210" y="225" class="arch-tag">HTTPS · separate connection</text>
+
+                <!-- Load balancer -->
+                <rect x="40" y="242" width="320" height="130" rx="8" class="arch-box arch-box-lb"/>
+                <text x="200" y="266" text-anchor="middle" class="arch-title">GCP HTTPS Load Balancer</text>
+                <text x="200" y="282" text-anchor="middle" class="arch-tag">anycast IP: 35.190.41.31</text>
+                <text x="60" y="304" class="arch-sub">• Modern TLS only (1.2+, restricted ciphers)</text>
+                <text x="60" y="322" class="arch-sub">• Cloud Armor: OWASP WAF + rate limiting</text>
+                <text x="60" y="340" class="arch-sub">• Cloud CDN: edge cache for static assets</text>
+                <text x="60" y="358" class="arch-sub">• Port 80 → 301 redirect to port 443</text>
+
+                <!-- Arrow to Cloud Run -->
+                <line x1="200" y1="372" x2="200" y2="412" class="arch-edge" marker-end="url(#arr)"/>
+                <text x="210" y="397" class="arch-tag">internal-only ingress</text>
+
+                <!-- Cloud Run -->
+                <rect x="40" y="414" width="320" height="140" rx="8" class="arch-box arch-box-run"/>
+                <text x="200" y="438" text-anchor="middle" class="arch-title">Cloud Run service: csoh-site</text>
+                <text x="60" y="460" class="arch-sub">• nginx:1.27-alpine (digest-pinned)</text>
+                <text x="60" y="478" class="arch-sub">• apk upgrade at build time</text>
+                <text x="60" y="496" class="arch-sub">• Sends HSTS, CSP, X-Frame-Options, etc.</text>
+                <text x="60" y="514" class="arch-sub">• Runtime SA has zero IAM permissions</text>
+                <text x="60" y="532" class="arch-sub">• Auto-scales 0 → 10 instances</text>
+
+                <!-- ===== Right column: build/deploy path ===== -->
+                <!-- Header -->
+                <rect x="500" y="20" width="340" height="32" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+                <text x="670" y="40" text-anchor="middle" class="arch-title">Build &amp; deploy path (out of band)</text>
+
+                <!-- 1. Push -->
+                <rect x="540" y="68" width="260" height="46" rx="6" class="arch-box arch-box-ci"/>
+                <text x="670" y="88" text-anchor="middle" class="arch-title">git push to main</text>
+                <text x="670" y="105" text-anchor="middle" class="arch-sub">triggers gcp-deploy.yml</text>
+
+                <line x1="670" y1="114" x2="670" y2="142" class="arch-edge" marker-end="url(#arr)"/>
+
+                <!-- 2. OIDC -->
+                <rect x="540" y="144" width="260" height="56" rx="6" class="arch-box arch-box-ci"/>
+                <text x="670" y="164" text-anchor="middle" class="arch-title">GitHub mints OIDC token</text>
+                <text x="670" y="181" text-anchor="middle" class="arch-sub">claims: repo, branch, workflow</text>
+                <text x="670" y="195" text-anchor="middle" class="arch-tag">no stored credential</text>
+
+                <line x1="670" y1="200" x2="670" y2="228" class="arch-edge" marker-end="url(#arr)"/>
+
+                <!-- 3. STS exchange -->
+                <rect x="540" y="230" width="260" height="56" rx="6" class="arch-box arch-box-ci"/>
+                <text x="670" y="250" text-anchor="middle" class="arch-title">GCP STS exchange</text>
+                <text x="670" y="267" text-anchor="middle" class="arch-sub">policy: repo == csoh.org only</text>
+                <text x="670" y="281" text-anchor="middle" class="arch-tag">→ 1-hour access token</text>
+
+                <line x1="670" y1="286" x2="670" y2="314" class="arch-edge" marker-end="url(#arr)"/>
+
+                <!-- 4. Build + scan -->
+                <rect x="540" y="316" width="260" height="56" rx="6" class="arch-box arch-box-ci"/>
+                <text x="670" y="336" text-anchor="middle" class="arch-title">docker build · Trivy scan</text>
+                <text x="670" y="353" text-anchor="middle" class="arch-sub">fails on HIGH/CRITICAL CVEs</text>
+                <text x="670" y="367" text-anchor="middle" class="arch-tag">scan must pass to push</text>
+
+                <line x1="670" y1="372" x2="670" y2="400" class="arch-edge" marker-end="url(#arr)"/>
+
+                <!-- 5. Artifact Registry -->
+                <rect x="540" y="402" width="260" height="56" rx="6" class="arch-box arch-box-ar"/>
+                <text x="670" y="422" text-anchor="middle" class="arch-title">Artifact Registry</text>
+                <text x="670" y="439" text-anchor="middle" class="arch-sub">immutable hash-based tag</text>
+                <text x="670" y="453" text-anchor="middle" class="arch-tag">tag can never be overwritten</text>
+
+                <line x1="670" y1="458" x2="670" y2="486" class="arch-edge" marker-end="url(#arr)"/>
+
+                <!-- 6. Deploy -->
+                <rect x="540" y="488" width="260" height="56" rx="6" class="arch-box arch-box-run"/>
+                <text x="670" y="508" text-anchor="middle" class="arch-title">gcloud run deploy</text>
+                <text x="670" y="525" text-anchor="middle" class="arch-sub">new revision pinned to hash</text>
+                <text x="670" y="539" text-anchor="middle" class="arch-tag">rollback = 1 CLI command</text>
+
+                <!-- Cross-arrow: deploy → Cloud Run service -->
+                <path d="M 540 516 Q 460 516 410 484" class="arch-edge-dash" marker-end="url(#arr)"/>
+                <text x="430" y="510" class="arch-tag" text-anchor="end">configures →</text>
+
+                <!-- ===== Bottom: logging ===== -->
+                <rect x="100" y="608" width="680" height="80" rx="8" class="arch-box arch-box-log"/>
+                <text x="440" y="632" text-anchor="middle" class="arch-title">Cloud Logging sink → 400-day retention bucket</text>
+                <text x="440" y="654" text-anchor="middle" class="arch-sub">Cloud Armor decisions · LB 4xx/5xx · IAM admin activity · audit logs</text>
+                <text x="440" y="672" text-anchor="middle" class="arch-tag">background, no extra config</text>
+
+                <!-- Arrows from LB and from Cloud Run + STS exchange to logging (dashed = always-on observation) -->
+                <path d="M 200 554 Q 200 580 440 608" class="arch-edge-dash"/>
+                <path d="M 670 544 Q 670 580 440 608" class="arch-edge-dash"/>
+              </svg>
+              <figcaption style="text-align:center;font-size:0.85rem;color:var(--text-muted, #555);margin-top:0.5rem;">The full request path on the left, the build &amp; deploy path on the right, the logging pipeline running underneath both. Every box and arrow is config in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>.</figcaption>
+            </figure>
             <p>Everything in that diagram — every Cloud Run setting, every WAF rule, every IAM permission — is defined as code in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">infra/terraform/</a>. We never click around in the GCP console to make changes; the console is read-only for normal operation. This is called <strong>infrastructure as code</strong>, and it's how you keep a real cloud setup from drifting into a snowflake nobody can rebuild.</p>
         </section>
 
@@ -444,7 +560,98 @@ Logging (everything below is automatic, runs in the background):
             </ul>
 
             <h3>What we do instead: Workload Identity Federation</h3>
-            <p><a class="glossary-link" href="glossary.html#term-wif">Workload Identity Federation (WIF)</a> replaces "stored credential" with <em>"prove who you are at the moment you ask for access."</em> The flow is:</p>
+            <p><a class="glossary-link" href="glossary.html#term-wif">Workload Identity Federation (WIF)</a> replaces "stored credential" with <em>"prove who you are at the moment you ask for access."</em></p>
+
+            <figure style="margin:1.5rem auto;max-width:880px;">
+              <svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="wif-title wif-desc">
+                <title id="wif-title">WIF token-exchange sequence diagram</title>
+                <desc id="wif-desc">A sequence diagram showing five steps for the GitHub Actions runner to obtain a 1-hour Google Cloud access token without any stored credential: GitHub mints an OIDC token, the runner presents it to GCP STS, STS verifies it against a policy that pins the repo, STS returns a short-lived access token, the runner uses it to deploy.</desc>
+                <defs>
+                  <marker id="wif-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+                  </marker>
+                </defs>
+                <style>
+                  .wif-actor   { fill: #fff; stroke: #334155; stroke-width: 1.5; }
+                  .wif-gha     { fill: #d1fae5; stroke: #059669; }
+                  .wif-gh-id   { fill: #fef3c7; stroke: #f59e0b; }
+                  .wif-sts     { fill: #dbeafe; stroke: #2563eb; }
+                  .wif-gcp     { fill: #ddd6fe; stroke: #7c3aed; }
+                  .wif-h       { font: 700 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #0f172a; }
+                  .wif-s       { font: 700 11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #0f172a; }
+                  .wif-d       { font: 11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #475569; }
+                  .wif-tag     { font: 10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; fill: #64748b; }
+                  .wif-edge    { stroke: #475569; stroke-width: 1.6; fill: none; }
+                  .wif-life    { stroke: #cbd5e1; stroke-width: 1; stroke-dasharray: 3 3; }
+                </style>
+
+                <!-- Actor headers -->
+                <rect x="40"  y="20" width="180" height="48" rx="6" class="wif-actor wif-gha"/>
+                <text x="130" y="42" text-anchor="middle" class="wif-h">GitHub Actions</text>
+                <text x="130" y="58" text-anchor="middle" class="wif-d">runner (the workflow)</text>
+
+                <rect x="260" y="20" width="160" height="48" rx="6" class="wif-actor wif-gh-id"/>
+                <text x="340" y="42" text-anchor="middle" class="wif-h">GitHub Identity</text>
+                <text x="340" y="58" text-anchor="middle" class="wif-d">OIDC issuer</text>
+
+                <rect x="460" y="20" width="180" height="48" rx="6" class="wif-actor wif-sts"/>
+                <text x="550" y="42" text-anchor="middle" class="wif-h">Google Cloud STS</text>
+                <text x="550" y="58" text-anchor="middle" class="wif-d">Security Token Service</text>
+
+                <rect x="680" y="20" width="160" height="48" rx="6" class="wif-actor wif-gcp"/>
+                <text x="760" y="42" text-anchor="middle" class="wif-h">GCP resources</text>
+                <text x="760" y="58" text-anchor="middle" class="wif-d">Cloud Run, AR, etc.</text>
+
+                <!-- Lifelines -->
+                <line x1="130" y1="68" x2="130" y2="400" class="wif-life"/>
+                <line x1="340" y1="68" x2="340" y2="400" class="wif-life"/>
+                <line x1="550" y1="68" x2="550" y2="400" class="wif-life"/>
+                <line x1="760" y1="68" x2="760" y2="400" class="wif-life"/>
+
+                <!-- Step 1: workflow asks for OIDC token -->
+                <line x1="130" y1="100" x2="340" y2="100" class="wif-edge" marker-end="url(#wif-arr)"/>
+                <circle cx="118" cy="100" r="11" fill="#059669"/>
+                <text x="118" y="104" text-anchor="middle" class="wif-s" fill="#fff">1</text>
+                <text x="235" y="92"  text-anchor="middle" class="wif-d">"give me an OIDC token for this run"</text>
+                <text x="235" y="115" text-anchor="middle" class="wif-tag">permissions: id-token: write</text>
+
+                <!-- Step 2: GitHub returns OIDC token -->
+                <line x1="340" y1="148" x2="130" y2="148" class="wif-edge" marker-end="url(#wif-arr)"/>
+                <circle cx="118" cy="148" r="11" fill="#f59e0b"/>
+                <text x="118" y="152" text-anchor="middle" class="wif-s" fill="#fff">2</text>
+                <text x="235" y="140" text-anchor="middle" class="wif-d">signed JWT with claims:</text>
+                <text x="235" y="155" text-anchor="middle" class="wif-tag">repository, ref, workflow, run_id</text>
+
+                <!-- Step 3: workflow presents to STS -->
+                <line x1="130" y1="200" x2="550" y2="200" class="wif-edge" marker-end="url(#wif-arr)"/>
+                <circle cx="118" cy="200" r="11" fill="#059669"/>
+                <text x="118" y="204" text-anchor="middle" class="wif-s" fill="#fff">3</text>
+                <text x="340" y="192" text-anchor="middle" class="wif-d">"exchange this OIDC token for a GCP access token"</text>
+                <text x="340" y="215" text-anchor="middle" class="wif-tag">workloadidentity.exchangeToken</text>
+
+                <!-- Step 4: STS validates and returns -->
+                <rect x="445" y="240" width="210" height="58" rx="4" fill="#fef9c3" stroke="#facc15"/>
+                <text x="550" y="258" text-anchor="middle" class="wif-s">policy check</text>
+                <text x="550" y="275" text-anchor="middle" class="wif-d">assertion.repository ==</text>
+                <text x="550" y="290" text-anchor="middle" class="wif-tag">'CloudSecurityOfficeHours/csoh.org'</text>
+
+                <line x1="550" y1="318" x2="130" y2="318" class="wif-edge" marker-end="url(#wif-arr)"/>
+                <circle cx="118" cy="318" r="11" fill="#2563eb"/>
+                <text x="118" y="322" text-anchor="middle" class="wif-s" fill="#fff">4</text>
+                <text x="340" y="310" text-anchor="middle" class="wif-d">1-hour GCP access token, scoped to impersonate</text>
+                <text x="340" y="333" text-anchor="middle" class="wif-tag">csoh-deployer service account</text>
+
+                <!-- Step 5: workflow uses token -->
+                <line x1="130" y1="370" x2="760" y2="370" class="wif-edge" marker-end="url(#wif-arr)"/>
+                <circle cx="118" cy="370" r="11" fill="#7c3aed"/>
+                <text x="118" y="374" text-anchor="middle" class="wif-s" fill="#fff">5</text>
+                <text x="445" y="362" text-anchor="middle" class="wif-d">push image, deploy revision (token expires in 1 hour)</text>
+                <text x="445" y="385" text-anchor="middle" class="wif-tag">no stored credential anywhere in this flow</text>
+              </svg>
+              <figcaption style="text-align:center;font-size:0.85rem;color:var(--text-muted, #555);margin-top:0.5rem;">How a GitHub Actions run gets a Google Cloud access token without any stored password. The whole exchange takes a few hundred milliseconds at the start of every workflow run; the resulting token expires after one hour.</figcaption>
+            </figure>
+
+            <p>Walking the diagram step-by-step:</p>
             <ol>
                 <li>Our GitHub Actions workflow runs. As part of starting up, GitHub mints a short-lived <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a> token for that specific workflow run. The token is signed by GitHub's identity service and includes verifiable claims: <em>this is repo CloudSecurityOfficeHours/csoh.org, on branch main, in workflow gcp-deploy.yml, workflow run #12345</em>.</li>
                 <li>The workflow hands that token to Google Cloud's STS (Security Token Service), saying "exchange this for an access token, please."</li>
