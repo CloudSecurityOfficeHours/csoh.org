@@ -98,18 +98,29 @@ jobs:
       # has been yanked from the Marketplace, breaking action resolution.
       - name: Install Trivy
         run: |
-          # Install via Aqua's apt repository. Stable, signed packages, no
-          # asset-name guessing. The previous attempts (direct GH release
-          # tarball, `install.sh`) failed silently — apt is what Aqua
-          # recommends in their docs for CI runners and gives clear errors.
+          # Pinned download from Aqua's GitHub releases + SHA-256 verify.
+          #
+          # Why pin instead of `apt install trivy` from Aqua's repo: the
+          # apt repo serves whatever Trivy version Aqua last published —
+          # works in practice, but it means every CI run pulls a different
+          # scanner binary as new releases ship, with no record in this
+          # repo of which scanner actually ran. Hardcoding version +
+          # checksum here gives us supply-chain reproducibility (today's
+          # CI run uses the exact same scanner code as last week's), and
+          # any tampering with the download fails the sha256sum check.
+          #
+          # To bump: pick a new version from
+          #   https://github.com/aquasecurity/trivy/releases
+          # and copy the matching SHA from the release's checksums.txt
+          # (also available as a `*.sigstore.json` signed attestation).
           set -euo pipefail
-          sudo apt-get install -y wget gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
-            | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
-            | sudo tee /etc/apt/sources.list.d/trivy.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y trivy
+          TRIVY_VERSION="0.70.0"
+          TRIVY_SHA256="8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9"
+          curl -fsSL -o /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          rm /tmp/trivy.tar.gz
           trivy --version
 
       - name: Trivy scan (fail on HIGH/CRITICAL)
