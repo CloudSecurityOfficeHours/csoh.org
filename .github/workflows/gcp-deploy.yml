@@ -92,15 +92,28 @@ jobs:
 
       # Trivy scan — fail the build on HIGH/CRITICAL vulns. The base image
       # is digest-pinned, so this mostly catches new CVE disclosures against
-      # the pinned base.
+      # the pinned base. We invoke the Trivy CLI directly rather than the
+      # `aquasecurity/trivy-action` wrapper because that wrapper has a
+      # transitive dependency on `aquasecurity/setup-trivy@v0.2.2` which
+      # has been yanked from the Marketplace, breaking action resolution.
+      - name: Install Trivy
+        run: |
+          # Pin to a specific Trivy CLI version. Reproducible scans + we
+          # can audit what scanner code ran.
+          TRIVY_VERSION="0.59.1"
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin trivy
+          trivy --version
+
       - name: Trivy scan (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # 0.29.0
-        with:
-          image-ref: ${{ steps.tag.outputs.image }}
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          severity: 'HIGH,CRITICAL'
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --no-progress \
+            "${{ steps.tag.outputs.image }}"
 
       - name: Push container image
         run: docker push "${{ steps.tag.outputs.image }}"
