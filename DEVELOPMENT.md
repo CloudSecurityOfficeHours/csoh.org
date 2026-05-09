@@ -362,7 +362,7 @@ When you add a new HTML page, do all of the following — none are automated:
 Every script in `tools/` (and `update_sri.py`, `update_news.py` at the repo root) wraps its file writes in a `if content != original_content` check. Two reasons:
 
 1. **Clean git history.** A no-op run produces no diff and no commits.
-2. **Incremental deploys.** The `site-update-deploy` workflow rewinds each file's mtime to its last-commit date before any housekeeping runs. `lftp mirror` then uploads only files whose local mtime is newer than the server — i.e., only files the housekeeping scripts actually modified. If your script `open(..., 'w')`s a file unconditionally, every run will give it a fresh "now" mtime and force a re-upload of unchanged content. The whole site re-uploads. Don't.
+2. **Cheap downstream deploys.** `gcp-deploy.yml` triggers off the housekeeping commits this workflow produces. If your script `open(..., 'w')`s a file unconditionally, every run produces a no-op commit that pointlessly triggers a full container rebuild and Cloud Run revision deploy. Don't.
 
 If your script needs to be sure it overwrote even an identical file (e.g., to re-run a destructive transformation), do that work explicitly — don't make it the default.
 

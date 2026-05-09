@@ -8,14 +8,9 @@ This document describes the security measures in place for [csoh.org](https://cs
 
 csoh.org is a **pure static site** — no server-side code, no database, no user accounts, no cookies, no sessions. This eliminates entire classes of vulnerabilities (SQL injection, RCE, auth bypass, session hijacking, CSRF).
 
-**Hosting is being migrated from shared LiteSpeed (FTPS-deployed) to Google Cloud Run (container-based, GitHub Actions-deployed via Workload Identity Federation).** Both paths run in parallel during the transition:
+**Hosting is on Google Cloud Run**, fronted by Cloudflare (proxy mode) and a Google Cloud HTTPS load balancer with Cloud Armor (WAF), Cloud CDN, and modern TLS. Container images are built, scanned, and deployed by GitHub Actions via Workload Identity Federation — there is no long-lived service-account key. The full architecture (Cloud Run, LB + WAF, Workload Identity Federation, Artifact Registry with immutable tags, 400-day log retention) is documented in [infra/README.md](infra/README.md).
 
-| Path | Status | Domain | Deploy mechanism |
-|------|--------|--------|------------------|
-| LiteSpeed shared host | Production today | `csoh.org`, `www.csoh.org` | FTPS via `lftp` from `site-update-deploy.yml`, credentials in GitHub Secrets |
-| Google Cloud Run | Staging (verified) | `gcp.csoh.org` | Container deploy via `gcp-deploy.yml`, **no service-account key** — auth is short-lived OIDC tokens minted by GitHub and exchanged for GCP access tokens via Workload Identity Federation |
-
-After the Cloudflare DNS cutover (`csoh.org` and `www` move to the GCP load balancer), the FTPS path is retired and FTP secrets are removed from the repo. The full GCP architecture — Cloud Run, HTTPS load balancer, Cloud Armor WAF, Cloud CDN, managed TLS, Workload Identity Federation, Artifact Registry with immutable tags, 400-day log retention — is documented in [infra/README.md](infra/README.md).
+The site previously deployed via FTPS to a LiteSpeed shared host. That path was retired after the cutover to GCP — the FTPS step is removed from `site-update-deploy.yml`, the standalone `manual-deploy.yml` workflow is deleted, and the `FTP_*` secrets are gone.
 
 ---
 
@@ -202,12 +197,11 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 |----------|---------|----------------------|------|
 | `update-news.yml` | `csoh-ci` App + `CSOH_PAT` (for auto-approve) | n/a | via PR + auto-merge |
 | `normalize-urls.yml` | `csoh-ci` App | n/a | via PR (human reviews + merges) |
-| `site-update-deploy.yml` | `csoh-ci` App | FTPS — `FTP_HOST`/`FTP_USER`/`FTP_PASS` secrets | direct (App is on ruleset bypass) |
-| `manual-deploy.yml` | n/a | FTPS — same secrets | no |
+| `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only — deploy is `gcp-deploy.yml`) | direct (App is on ruleset bypass) |
 | `gcp-deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **WIF — no key** (impersonates `csoh-deployer` SA via OIDC) | no |
 | `lint.yml`, `validate-html.yml`, `check-broken-links.yml`, `check-url-safety.yml` | auto-injected `GITHUB_TOKEN` | n/a | no |
 
-Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The four read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The four write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`, `manual-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App or PAT instead — keeping the default token strictly minimal.
+Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead — keeping the default token strictly minimal. `gcp-deploy.yml` adds `id-token: write` for the OIDC token GitHub mints for WIF.
 
 ### Why we migrated from PATs to a GitHub App
 
@@ -279,7 +273,6 @@ GitHub's auto-merge feature evaluates `reviewDecision` independently and does no
 | `CSOH_CI_CLIENT_ID` | GitHub App's Client ID (`Iv23.*`) | identifier (not sensitive on its own) |
 | `CSOH_CI_PRIVATE_KEY` | GitHub App's RSA private key | high-sensitivity |
 | `CSOH_PAT` | Approve App-opened PRs (auto-merge driver) | medium-sensitivity (narrow scope) |
-| `FTP_HOST`, `FTP_USER`, `FTP_PASS` | FTPS deploy credentials (**retired post-cutover**) | high-sensitivity |
 | `SSH_PRIVATE_KEY` | Reserved for future use | high-sensitivity |
 
 **No GCP secret in this list — that's deliberate.** The `gcp-deploy.yml` workflow needs no service-account key, no project-scoped PAT, and no GCP-side stored secret. It authenticates by:
@@ -304,7 +297,6 @@ Net effect: a leaked workflow log compromises one ~1-hour token scoped to one re
 | App installation token | Automatic, every ~1 hour | None — handled by GitHub |
 | App private key | Annually or on suspected compromise | Generate new key in App settings; replace `CSOH_CI_PRIVATE_KEY` secret; revoke old key |
 | `CSOH_PAT` | Every 6–12 months (or before its set expiry) | Generate new fine-grained PAT (resource owner: `CloudSecurityOfficeHours`, repo: `csoh.org`, permission: pull-requests: write only); replace org-level Actions secret |
-| `FTP_PASS` (retired post-cutover) | Every 6–12 months while in use | Rotate via hosting panel; replace secret. After GCP cutover, delete all three FTP secrets. |
 | GCP WIF access token | Automatic, every ~1 hour | None — minted per workflow run, no stored credential |
 | GCP runtime SA roles | On every Terraform apply | The runtime SA's IAM bindings live in [`infra/terraform/service_accounts.tf`](infra/terraform/service_accounts.tf) — review on every change |
 
@@ -312,9 +304,7 @@ Net effect: a leaked workflow log compromises one ~1-hour token scoped to one re
 
 ## Deployment Security
 
-Two deploy paths run in parallel during the LiteSpeed → GCP migration. After Cloudflare DNS cuts over to the GCP load balancer, the FTPS path is retired and the FTP secrets are deleted.
-
-### Cloud Run Deployment (post-migration target)
+### Cloud Run Deployment
 
 `gcp-deploy.yml` builds a container image, scans it, and deploys to Cloud Run on every push to `main` that touches site files.
 
@@ -343,20 +333,6 @@ Two deploy paths run in parallel during the LiteSpeed → GCP migration. After C
 
 **Logging:**
 - LB request logs, Cloud Armor decisions, IAM admin activity, and audit logs are routed to a 400-day retention bucket via the security log sink in [`infra/terraform/logging.tf`](infra/terraform/logging.tf) (the default `_Default` sink only retains 30 days).
-
-### FTPS Deployment (legacy, retiring during cutover)
-
-The site currently deploys via FTPS (FTP over TLS) using `lftp` from GitHub Actions to LiteSpeed shared hosting. This path **runs in parallel** with `gcp-deploy.yml` during migration; both publish the same source-of-truth bytes to different hosts.
-
-- `ssl:verify-certificate yes` — **validates the FTP host's TLS cert chain and hostname.** An on-path attacker cannot present a forged cert and capture the FTP credentials.
-- `ftp:ssl-force true` — enforces TLS encryption on the control channel (refuses plaintext FTP)
-- `ftp:ssl-protect-data true` — encrypts file transfers, not just the control channel
-- Credentials are written to a temporary `~/.netrc` (mode 600) at job start and lftp picks them up from there. They are **not** passed on the command line, so `FTP_PASS` never appears in `/proc/<pid>/cmdline`.
-- Credentials are stored as GitHub repository secrets (`FTP_HOST`, `FTP_USER`, `FTP_PASS`).
-
-The deploy workflow (`site-update-deploy.yml`) authenticates to GitHub via the `csoh-ci` App for its housekeeping commits (SRI hash updates, sitemap refreshes, etc.) — see [CI/CD Authentication](#cicd-authentication) above. FTP credentials are entirely separate and not affected by App-token rotation.
-
-**Retirement plan:** after Cloudflare DNS for `csoh.org` and `www.csoh.org` is moved to the GCP LB and traffic is verified, the FTP `lftp` step in `site-update-deploy.yml` is removed (the housekeeping steps stay), `manual-deploy.yml` is deleted, and the three FTP secrets are removed from the repo.
 
 ### Deployment Exclusions
 

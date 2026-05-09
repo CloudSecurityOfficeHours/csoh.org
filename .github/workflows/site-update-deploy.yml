@@ -1,23 +1,28 @@
 # =============================================================================
-# Update SRI, Generate Previews, and Deploy
+# Site housekeeping — SRI hashes, URL safety, sitemap, preview images
 # -----------------------------------------------------------------------------
-# The big one. Runs on every push to main that touches site files. Walks
-# through a sequence of housekeeping steps (SRI hashes, URL safety, URL
-# normalization, presentations schema, sitemap dates, preview screenshots),
-# committing each one back to main if anything changed. Then mirrors the
-# whole tree to the FTP server.
+# Runs on every push to main that touches site files. Walks through a
+# sequence of housekeeping steps (SRI hashes, URL safety, URL normalization,
+# presentations schema, sitemap dates, preview screenshots), committing each
+# one back to main if anything changed. The actual deploy to production is
+# done by `gcp-deploy.yml` — this workflow only does the housekeeping that
+# belongs upstream of the deploy.
 #
 # Each step that commits-and-pushes uses
 #     git push || (git pull --rebase origin main && git push)
-# so that if another deploy-pipeline workflow pushed a commit while this one
-# was working, this run rebases on top and tries again instead of failing.
+# so that if another workflow pushed a commit while this one was working,
+# this run rebases on top and tries again instead of failing.
+#
+# The downstream gcp-deploy.yml is triggered by the housekeeping commits
+# this workflow pushes (since they're authored by the csoh-ci App, not the
+# default GITHUB_TOKEN, so they trigger downstream workflows correctly).
 # =============================================================================
 
-name: Update SRI, Generate Previews, and Deploy
+name: Site Housekeeping (SRI, sitemap, previews)
 
 on:
   # Auto-run on every push to main, but ONLY when one of the listed file
-  # patterns changed. Editing tools/ or docs alone won't trigger a deploy.
+  # patterns changed. Editing tools/ or docs alone won't trigger a run.
   push:
     branches:
       - main
@@ -31,32 +36,22 @@ on:
       - 'breach-timeline.css'
       - 'breach-timeline.js'
       - 'update_sri.py'
-      - '.htaccess'
-  # Manual trigger from the Actions tab. The `full_deploy` input is purely
-  # cosmetic right now — kept for compatibility with the older Actions UI.
+  # Manual trigger from the Actions tab.
   workflow_dispatch:
-    inputs:
-      full_deploy:
-        description: 'Force a full mirror deploy'
-        required: false
-        default: 'true'
 
 # Read-only on the auto-injected GITHUB_TOKEN. Every step that pushes
 # commits (SRI, sitemap, previews, etc.) uses an installation token minted
-# from the csoh-ci GitHub App, and the FTP deploy uses secrets.FTP_*. The
-# default token only needs to clone the repo.
+# from the csoh-ci GitHub App. The default token only needs to clone the repo.
 permissions:
   contents: read
 
-# Shared concurrency group across all workflows that push commits to main
-# or run an FTP deploy: site-update-deploy, manual-deploy, update-news,
-# normalize-urls. They queue serially rather than racing.
+# Shared concurrency group across all workflows that push commits to main:
+# site-update-deploy, update-news, normalize-urls. They queue serially
+# rather than racing.
 #
-# cancel-in-progress: true (deploy only) — if a newer deploy is queued while
-# an older one is running, cancel the older one. This prevents the stale-
-# content race where update-news's auto-merge triggers a fresh deploy while
-# the pre-merge deploy is still mid-flight publishing the older state. Update
-# News and other group members keep cancel-in-progress: false elsewhere.
+# cancel-in-progress: true — if a newer push is queued while an older
+# housekeeping run is in flight, cancel the older one so we don't push
+# stale SRI/sitemap state on top of a newer base.
 concurrency:
   group: deploy-pipeline
   cancel-in-progress: true
@@ -82,8 +77,8 @@ jobs:
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
       # App-authenticated full clone. fetch-depth: 0 = no shallow clone, so
-      # `git diff` and `git log` see full history (needed for the mtime
-      # restore step and the diff-against-original-SHA checks below).
+      # `git diff` and `git log` see full history (needed for the
+      # diff-against-original-SHA checks below).
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -96,31 +91,6 @@ jobs:
       - name: Save original commit SHA
         id: original_sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      # A fresh `actions/checkout` gives every file the SAME mtime — the
-      # moment of the checkout. lftp's `mirror` decides what to upload
-      # based on size + mtime; if every local file looks "new" relative to
-      # the server, lftp re-uploads literally everything every run.
-      #
-      # Fix: rewind each file's mtime to the date of its last git commit.
-      # Files we DON'T touch this run keep their historical mtime → lftp
-      # sees they match the server and skips them. Files the housekeeping
-      # steps below modify (SRI rewrites, sitemap, previews) get a fresh
-      # "now" mtime → lftp sees they're newer than the server and uploads
-      # only those.
-      #
-      # Result: the deploy uploads only what actually changed, not the
-      # whole tree. Saves a couple of minutes per run and a lot of FTP
-      # round-trips on the host.
-      - name: Restore file mtimes from git history
-        run: |
-          # `ls-files -z` = NUL-terminated paths (handles spaces in names)
-          # `git log -1 --format=%ct -- <file>` = unix timestamp of last commit
-          # `touch -d @<unix>` = set file's modification time
-          git ls-files -z | while IFS= read -r -d '' file; do
-            ts=$(git log -1 --format=%ct -- "$file" 2>/dev/null)
-            [ -n "$ts" ] && touch -d "@$ts" "$file"
-          done
 
       # Install Python — most of the housekeeping scripts are Python.
       - name: Set up Python
@@ -349,161 +319,3 @@ jobs:
             git commit -m "chore: auto-generate preview images for new resources [skip ci]"
             git push || (git pull --rebase origin main && git push)
           fi
-
-      # Did the original push (the one that triggered this workflow) include
-      # any chat-screenshots? Sets a flag the deploy step uses to decide
-      # whether to upload the chat-screenshots/ directory.
-      - name: Check for new chat-screenshots
-        id: check_chat_screenshots
-        run: |
-          ORIG_SHA="${{ steps.original_sha.outputs.sha }}"
-          # `${ORIG_SHA}^` = the parent of the original commit. Diff between
-          # that and the original commit shows what THIS push introduced.
-          if git diff --name-only "${ORIG_SHA}^" "${ORIG_SHA}" -- 'chat-screenshots/' | grep -q .; then
-            echo "new=true" >> "$GITHUB_OUTPUT"
-            echo "New chat-screenshots detected"
-          else
-            echo "new=false" >> "$GITHUB_OUTPUT"
-            echo "No new chat-screenshots"
-          fi
-
-      # Same shape as above but for HTML files. Used by the deploy gate.
-      - name: Check if HTML content changed
-        id: html_changed
-        run: |
-          ORIG_SHA="${{ steps.original_sha.outputs.sha }}"
-          if git diff --name-only "${ORIG_SHA}^" "${ORIG_SHA}" -- '*.html' | grep -q .; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # .htaccess is server config — when it changes (CSP rule tweak, new
-      # rewrite rule, etc.) we MUST redeploy or the live site keeps using
-      # the stale config. The HTML-only check above misses this.
-      - name: Check if .htaccess changed
-        id: htaccess_changed
-        run: |
-          ORIG_SHA="${{ steps.original_sha.outputs.sha }}"
-          if git diff --name-only "${ORIG_SHA}^" "${ORIG_SHA}" -- '.htaccess' | grep -q .; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Decide whether the FTP deploy actually needs to run. We deploy when
-      # ANY of these are true:
-      #   - SRI hashes changed
-      #   - sitemap was refreshed
-      #   - previews were generated
-      #   - new chat-screenshots
-      #   - any HTML changed
-      #   - .htaccess changed (server config — must push to live)
-      #   - manual workflow_dispatch trigger
-      # If none of the above, we skip the deploy entirely — saves the FTP
-      # bandwidth and surface area for nothing-to-do runs.
-      - name: Check if deploy is needed
-        id: deploy_needed
-        run: |
-          if [[ "${{ steps.sri.outputs.changed }}" == "true" || "${{ steps.sitemap.outputs.changed }}" == "true" || "${{ steps.check_previews.outputs.missing }}" == "true" || "${{ steps.check_chat_screenshots.outputs.new }}" == "true" || "${{ steps.html_changed.outputs.changed }}" == "true" || "${{ steps.htaccess_changed.outputs.changed }}" == "true" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Install lftp only if we're actually going to deploy.
-      - name: Install lftp
-        if: steps.deploy_needed.outputs.deploy == 'true'
-        run: sudo apt-get update && sudo apt-get install -y lftp
-
-      # The actual FTP deploy. Uploads the site to the live server.
-      - name: Deploy to FTP
-        if: steps.deploy_needed.outputs.deploy == 'true'
-        # Hard cap so a hung lftp doesn't burn the 6-hour job budget.
-        timeout-minutes: 20
-        env:
-          FTP_HOST: ${{ secrets.FTP_HOST }}
-          FTP_USER: ${{ secrets.FTP_USER }}
-          FTP_PASS: ${{ secrets.FTP_PASS }}
-        run: |
-          # Write FTP credentials to ~/.netrc instead of passing them on the
-          # lftp command line. lftp picks them up automatically when no -u is
-          # specified. Keeps FTP_PASS out of /proc/<pid>/cmdline (matters on
-          # multi-tenant runners; defense-in-depth on hosted runners too).
-          { umask 077; cat > "$HOME/.netrc" <<NETRC
-          machine $FTP_HOST
-          login $FTP_USER
-          password $FTP_PASS
-          NETRC
-          }
-          # net:timeout      — fail any operation stuck >30s instead of hanging
-          # net:max-retries  — try twice then give up rather than retrying forever
-          # net:idle         — close idle control connections after 30s
-          # ssl:verify-certificate yes — actually validate the FTP host's TLS
-          #   cert (chain + hostname). Was previously `no`; flipped to `yes`
-          #   on 2026-05-08 after FTP_HOST was updated to match the cert's
-          #   subject. Closes finding 1.2 from the security review.
-          # ftp:ssl-force          — refuse plaintext FTP
-          # ftp:ssl-protect-data   — encrypt the data channel too
-          LFTP_CONN="set net:timeout 30; \
-                     set net:max-retries 2; \
-                     set net:reconnect-interval-base 5; \
-                     set net:idle 30; \
-                     set ssl:verify-certificate yes; \
-                     set ftp:ssl-force true; \
-                     set ftp:ssl-protect-data true; \
-                     open ${FTP_HOST}"
-          # --parallel=2 is gentler on hosts that throttle concurrent transfers;
-          # the previous --parallel=4 stalled mid-mirror in late April 2026.
-
-          # Pass 1: site files. `mirror -R` = REVERSE mirror (local → remote).
-          # We exclude img/ and chat-screenshots/ because we sync those in
-          # dedicated passes below — they have their own rules and timing.
-          # The other --exclude rules drop dev-only files (.git, README, etc.)
-          # that don't belong on the public server.
-          echo "==> Deploying site files..."
-          lftp -e "${LFTP_CONN}; mirror -R ./ /public_html/ --verbose=2 --parallel=2 \
-            --exclude .git/ --exclude .github/ --exclude .venv/ --exclude __pycache__/ \
-            --exclude img/ --exclude chat-screenshots/ \
-            --exclude-glob *.sh --exclude-glob *.pyc --exclude-glob *.pyo \
-            --exclude README.md --exclude CONTRIBUTING.md \
-            --exclude CONTRIBUTING_RESOURCES.md --exclude LICENSE \
-            --exclude-glob .DS_Store --exclude tools/; bye"
-          # Pass 2: always sync img/previews/. lftp mirror only uploads changed
-          # files, so it's fast when nothing changed and catches any stale
-          # images on the server that were regenerated in the repo without
-          # triggering a `missing` signal.
-          echo "==> Syncing preview images..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/previews/ /public_html/img/previews/ --verbose=2 --parallel=2 \
-            --exclude-glob .DS_Store; bye"
-          # Pass 3: always sync news source banners (small, static set of ~19 images)
-          echo "==> Syncing news banners..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/news-banners/ /public_html/img/news-banners/ --verbose=2 --parallel=2 \
-            --exclude-glob .DS_Store; bye"
-          # Pass 3.5: always sync per-page social share images referenced by og:image meta tags
-          echo "==> Syncing OG/social share images..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/og/ /public_html/img/og/ --verbose=2 --parallel=2 \
-            --exclude-glob .DS_Store; bye"
-          # Pass 3a: always sync author bio photos (very small, rarely changes)
-          echo "==> Syncing author photos..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/authors/ /public_html/img/authors/ --verbose=2 --parallel=2 \
-            --exclude-glob .DS_Store; bye"
-          # Pass 3b: always sync PWA icons referenced by manifest.json
-          echo "==> Syncing PWA icons..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/icons/ /public_html/img/icons/ --verbose=2 --parallel=2 \
-            --exclude-glob .DS_Store; bye"
-          # Pass 3c: always sync per-page Pexels-sourced photos used in <picture>
-          # blocks across pillar / community / listing pages.
-          echo "==> Syncing page photos..."
-          lftp -e "${LFTP_CONN}; mirror -R ./img/photos/ /public_html/img/photos/ --verbose=2 --parallel=2 \
-            --exclude-glob .DS_Store; bye"
-          # Pass 4: only sync chat-screenshots/ when new ones were added this run
-          # (they're large; skip the full mirror when nothing changed).
-          if [[ "${{ steps.check_chat_screenshots.outputs.new }}" == "true" ]]; then
-            echo "==> Syncing new chat-screenshots..."
-            lftp -e "${LFTP_CONN}; mirror -R ./chat-screenshots/ /public_html/chat-screenshots/ --verbose=2 --parallel=2 \
-              --exclude-glob .DS_Store; bye"
-          else
-            echo "==> No new chat-screenshots to sync, skipping."
-          fi
-          echo "==> Deploy complete."

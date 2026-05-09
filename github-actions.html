@@ -204,7 +204,7 @@
                 <li><a href="#what-is-it">What GitHub Actions actually is</a></li>
                 <li><a href="#why-cool">Why it's cool (and where it isn't)</a></li>
                 <li><a href="#anatomy">Anatomy of a workflow file</a></li>
-                <li><a href="#workflows-tour">A tour of CSOH's nine workflows</a></li>
+                <li><a href="#workflows-tour">A tour of CSOH's eight workflows</a></li>
                 <li><a href="#concepts">Concepts that bite newcomers</a></li>
                 <li><a href="#security">Security baseline</a></li>
                 <li><a href="#using-our-repo">Using our repo as a learning resource</a></li>
@@ -478,7 +478,7 @@ jobs:
             <rect x="280" y="212" width="260" height="14" rx="8" fill="#dc2626"/>
             <text x="410" y="223" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">CONCURRENCY GATE</text>
             <text x="410" y="240" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a" font-family="monospace">group: deploy-pipeline</text>
-            <text x="410" y="252" text-anchor="middle" font-size="9" fill="#475569">queues serially with normalize-urls + manual-deploy</text>
+            <text x="410" y="252" text-anchor="middle" font-size="9" fill="#475569">queues serially with normalize-urls</text>
 
             <path d="M 410 256 L 410 276" stroke="#475569" stroke-width="2" marker-end="url(#orch-arrow)"/>
 
@@ -555,32 +555,29 @@ jobs:
               <text x="20" y="110" font-size="9" fill="#475569">links, so its safety check</text>
               <text x="20" y="122" font-size="9" fill="#475569">runs <tspan font-weight="600">before</tspan> any commit-back.</text>
               <text x="20" y="146" font-size="9" fill="#475569">Concurrency group prevents</text>
-              <text x="20" y="158" font-size="9" fill="#475569">races between this pipeline,</text>
-              <text x="20" y="170" font-size="9" fill="#475569">manual-deploy, and the</text>
-              <text x="20" y="182" font-size="9" fill="#475569">monthly normalize PR.</text>
+              <text x="20" y="158" font-size="9" fill="#475569">races between this pipeline</text>
+              <text x="20" y="170" font-size="9" fill="#475569">and the monthly normalize</text>
+              <text x="20" y="182" font-size="9" fill="#475569">PR.</text>
             </g>
           </svg>
           <figcaption>This pipeline replaces a traditional CI server. Every box is a real <code>step</code> in <code>site-update-deploy.yml</code>; the side panels show what else can trigger the same surface.</figcaption>
         </figure>
 
         <section id="workflows-tour">
-            <h2>A tour of CSOH's nine workflows</h2>
+            <h2>A tour of CSOH's eight workflows</h2>
             <p>Each one solves a single, named problem. Click through to read the source — every file is heavily commented for new readers.</p>
 
             <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a> — Container build, scan, deploy to Google Cloud Run</h3>
             <p>Runs on every push to main that touches site or Docker files. Authenticates to GCP via <strong>Workload Identity Federation</strong> — no service account JSON key, just a short-lived OIDC token GitHub mints for the run and exchanges for a 1-hour GCP access token (the WIF policy only accepts tokens claiming this exact repo). Builds the container, scans it with <a href="https://trivy.dev/" target="_blank" rel="noopener noreferrer">Trivy</a> failing on HIGH/CRITICAL CVEs, pushes to Artifact Registry with an <strong>immutable</strong> SHA-based tag, then deploys a new Cloud Run revision pinned to that SHA. Gated by GitHub's <code>environment: production</code> so only commits on <code>main</code> can deploy. The full architecture (Cloud Run → HTTPS LB with Cloud Armor WAF + Cloud CDN → managed TLS) is written up in <a href="cloud-deployment.html">our cloud deployment page</a>.</p>
 
-            <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml" target="_blank" rel="noopener noreferrer">site-update-deploy.yml</a> — Housekeeping + legacy FTP deploy</h3>
-            <p>Runs on every push to main that touches site files. Walks through ten housekeeping steps (SRI hashes, URL safety check, URL normalization, presentations schema, sitemap dates, preview screenshot generation, image optimization), commits each one back to main if anything changed, then mirrors only the changed files via FTPS to the legacy LiteSpeed host. Read this if you want to see <strong>conditional steps</strong>, <strong>step outputs</strong>, <strong>committing back to the same repo</strong>, <strong>incremental FTP deploys via mtime restoration</strong>, and <strong>lftp with timeout safety</strong>. <em>The FTPS mirror step is being retired now that <code>gcp-deploy.yml</code> serves production from Cloud Run; the housekeeping steps stay.</em></p>
+            <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml" target="_blank" rel="noopener noreferrer">site-update-deploy.yml</a> — Site housekeeping</h3>
+            <p>Runs on every push to main that touches site files. Walks through several housekeeping steps (SRI hashes, URL safety check, URL normalization, presentations schema, sitemap dates, preview screenshot generation, image optimization), committing each one back to main if anything changed. Those housekeeping commits then trigger <code>gcp-deploy.yml</code> to ship the post-housekeeping state. Read this if you want to see <strong>conditional steps</strong>, <strong>step outputs</strong>, <strong>committing back to the same repo</strong>, and <strong>chained workflows via push events</strong>.</p>
 
             <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml" target="_blank" rel="noopener noreferrer">update-news.yml</a> — Scheduled content updates</h3>
             <p>Every 3 hours, refreshes <a href="news.html">news.html</a> from configured RSS/Atom feeds, opens a PR with the changes, auto-approves it (using a separate bot account so we don't violate "can't approve your own PR"), and auto-merges if only news files were touched. Read this if you want to see <strong>cron schedules</strong>, <strong>auto-PR creation</strong>, and the <strong>two-PAT pattern</strong>.</p>
 
             <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml" target="_blank" rel="noopener noreferrer">normalize-urls.yml</a> — Monthly maintenance</h3>
             <p>Once a month, strips tracking parameters and resolves redirects on every link, then opens a PR for human review. Auto-approved but not auto-merged because cross-domain redirects deserve eyes. Good example of <strong>auto-PR with mandatory human gate</strong>.</p>
-
-            <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/manual-deploy.yml" target="_blank" rel="noopener noreferrer">manual-deploy.yml</a> — On-demand FTP deploy (legacy)</h3>
-            <p>Pure <code>workflow_dispatch</code>. Force-pushes the entire site to FTP when you click "Run workflow." Useful for "the auto-deploy skipped this push and I need it live now." Smallest workflow — good for reading the deploy plumbing without distractions. <em>Being retired alongside the FTPS path; for forced GCP redeploys, click "Run workflow" on <code>gcp-deploy.yml</code> instead.</em></p>
 
             <h3><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml" target="_blank" rel="noopener noreferrer">validate-html.yml</a> — PR check</h3>
             <p>Runs the <a href="https://github.com/Cyb3r-Jak3/html5validator-action" target="_blank" rel="noopener noreferrer">W3C HTML5 validator</a> on every HTML-touching PR. Posts a comment on failure with the first 50 lines of the error log. Read this for <strong>PR comments via github-script</strong> and <strong>conditional posting (<code>if: failure() &amp;&amp; github.event_name == 'pull_request'</code>)</strong>.</p>
@@ -614,9 +611,10 @@ jobs:
             </ul>
             <p>How CSOH currently splits these:</p>
             <ul>
-                <li><strong><code>site-update-deploy</code> (deploy-pipeline group, cancel old):</strong> deploys are idempotent — the latest content is always the right thing to ship. Cancelling an in-flight deploy when a new push arrives avoids the "stale-content deploy wins the race" failure mode.</li>
-                <li><strong><code>manual-deploy</code> + <code>normalize-urls</code> (same deploy-pipeline group, queue):</strong> share the lock with site-update-deploy so an FTP transfer never collides with another, but stay queued because losing a manual deploy or a URL-normalization sweep would be silent and surprising.</li>
-                <li><strong><code>update-news</code> (its own group, queue):</strong> opens a PR on its own branch — doesn't push to main or run a deploy, so it doesn't need the deploy-pipeline lock. Keeping a separate group means a freshly queued site deploy doesn't cancel a news refresh mid-run.</li>
+                <li><strong><code>site-update-deploy</code> (deploy-pipeline group, cancel old):</strong> housekeeping is idempotent — the latest commit always reflects the right state. Cancelling an in-flight run when a new push arrives avoids the "stale SRI commit wins the race" failure mode.</li>
+                <li><strong><code>normalize-urls</code> (same deploy-pipeline group, queue):</strong> shares the lock with site-update-deploy so the two never collide on the same commit-push sequence, but stays queued because losing a URL-normalization sweep would be silent and surprising.</li>
+                <li><strong><code>gcp-deploy</code> (its own group, cancel old):</strong> Cloud Run deploys are idempotent — only the latest image needs to ship. Cancelling avoids racing two deploys that could deploy out of order.</li>
+                <li><strong><code>update-news</code> (its own group, queue):</strong> opens a PR on its own branch — doesn't push to main or run a deploy, so it doesn't need the deploy-pipeline lock. Keeping a separate group means a freshly queued site update doesn't cancel a news refresh mid-run.</li>
                 <li><strong>Per-PR check workflows (per-ref group, cancel old):</strong> push a fix, kill the stale check, start fresh on the new commit.</li>
             </ul>
             <p>Mistake we made: at first, our deploy workflow had no concurrency at all. Two news-update commits within a minute spawned two simultaneous deploys that interleaved their commits and corrupted the deployed site. Adding any concurrency group fixed the corruption; getting the queue/cancel split right took a few iterations.</p>
@@ -683,10 +681,11 @@ done</pre></div>
             <h2>Using our repo as a learning resource</h2>
             <p>The whole point of this page is that <a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">our repo</a> is a working, in-production reference. A suggested reading order:</p>
             <ol>
-                <li><strong>Start with the smallest:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/manual-deploy.yml" target="_blank" rel="noopener noreferrer">manual-deploy.yml</a>. ~90 lines, one job, one trigger, demonstrates the FTP deploy plumbing without distractions.</li>
-                <li><strong>Read the validators:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml" target="_blank" rel="noopener noreferrer">validate-html.yml</a> and <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-broken-links.yml" target="_blank" rel="noopener noreferrer">check-broken-links.yml</a>. PR-comment patterns, caching, and the read-only check shape.</li>
+                <li><strong>Start with the smallest:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml" target="_blank" rel="noopener noreferrer">validate-html.yml</a>. Short, single-purpose: runs an HTML validator on PRs and posts a comment. A good first read for the trigger / step / output / annotation shape.</li>
+                <li><strong>Read the validators:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-broken-links.yml" target="_blank" rel="noopener noreferrer">check-broken-links.yml</a> and <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-url-safety.yml" target="_blank" rel="noopener noreferrer">check-url-safety.yml</a>. PR-comment patterns, caching, and the read-only check shape.</li>
                 <li><strong>Then the auto-PR ones:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml" target="_blank" rel="noopener noreferrer">update-news.yml</a> and <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml" target="_blank" rel="noopener noreferrer">normalize-urls.yml</a>. Scheduling, two-PAT auto-approve dance, conditional auto-merge.</li>
-                <li><strong>Finally, the big one:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml" target="_blank" rel="noopener noreferrer">site-update-deploy.yml</a>. Step outputs, conditional steps, committing back to the repo, deploy gating, FTP mirroring with retry.</li>
+                <li><strong>Then the WIF-deploy one:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/gcp-deploy.yml" target="_blank" rel="noopener noreferrer">gcp-deploy.yml</a>. The OIDC-token-to-cloud-credential exchange in action, plus container build / scan / deploy. Short, but every line is doing real security work.</li>
+                <li><strong>Finally, the big one:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml" target="_blank" rel="noopener noreferrer">site-update-deploy.yml</a>. Step outputs, conditional steps, committing back to the repo, chained workflows via push events.</li>
             </ol>
             <p>Every workflow file in our repo is heavily commented — every non-obvious line has a 1–3 line explanation aimed at someone who has never written GitHub Actions before.</p>
             <p>You can fork the repo, gut the content, keep the workflow scaffolding, and have a working static-site CI/CD in an hour. We'd love it if you did. Send us a link in the <a href="sessions.html">Friday Zoom</a>.</p>

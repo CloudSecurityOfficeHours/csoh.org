@@ -408,7 +408,7 @@ csoh.org/
 │   ├── validate-html.yml            # HTML5 validation on PRs + weekly
 │   ├── lint.yml                     # actionlint + ruff + yamllint on every push/PR
 │   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
-│   ├── manual-deploy.yml            # On-demand full site deploy (manual trigger only)
+│   ├── gcp-deploy.yml               # Build, scan, deploy to Cloud Run via WIF
 │   └── CHECK_URL_SAFETY_WORKFLOW.md # Workflow configuration notes
 │
 ├── preview-mapping.json        # Metadata for resource previews
@@ -529,39 +529,31 @@ Edit the "Resource Categories" section in `index.html` to:
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Most automation is now handled by a **unified workflow** that runs all key steps in sequence, only when needed.
 
-### Unified Site Update & Deploy Workflow
+### Site Housekeeping Workflow
 
 **Workflow file:** `.github/workflows/site-update-deploy.yml`
 
 **Triggers on pushes to `main` when these files change:**
-- `style.css`, `main.js`, `chat-resources.js`, `update_sri.py`
-- `resources.html`, `chat-resources.html`
-- `chat-screenshots/**` (new chat resource screenshots)
+- `*.html`
+- `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
+- `chat-screenshots/**`, `img/**`
+- `update_sri.py`
 - Manual trigger via the GitHub Actions tab
 
-**What it does:**
-- Restores file modification times from git history (so the FTP step uploads only what actually changed — see "Incremental deploys" below)
+**What it does (housekeeping only — actual deploy is `gcp-deploy.yml`):**
 - Updates SRI hashes and cache-busting tags if CSS/JS changed (using `update_sri.py`)
-- Checks URL safety — blocks deploy if unsafe URLs are detected (using `check_all_site_urls.py`)
+- Checks URL safety — blocks normalization if unsafe URLs are detected (using `check_all_site_urls.py`)
 - Normalizes URLs — strips tracking parameters, upgrades HTTP to HTTPS, resolves redirects (using `normalize_urls.py`)
 - Regenerates the `VideoObject` JSON-LD on `presentations.html` (using `update_presentations_schema.py`)
+- Rebuilds the meetings.html search index
 - Refreshes `<lastmod>` dates in `sitemap.xml` from git history (using `update_sitemap.py`)
 - Generates preview images for new resources in `resources.html` (using `generate_preview.py`)
-- Checks for broken links (non-blocking warning)
-- Deploys the site to the web server via FTP in four passes:
-  - **Pass 1:** Site files (HTML/CSS/JS, excludes `img/` and `chat-screenshots/`)
-  - **Pass 2:** `img/previews/` (always synced; only changed files transfer)
-  - **Pass 3:** `img/news-banners/` (always synced; only changed files transfer)
-  - **Pass 4:** `chat-screenshots/` only when new screenshots were added
+- Optimizes generated images
+- Each step that mutates files commits the change back to `main` (with `[skip ci]` markers) so the next workflow run sees fresh state
 
-**How it works:**
-1. Checks for any changes that require SRI updates, URL normalization, new previews, or new chat screenshots
-2. Runs each step in order: SRI → URL safety → URL normalization → previews → link check → deploy
-3. URL safety check and normalization must pass before previews are generated or the site is deployed
+**Why this is separate from the deploy:** the housekeeping commits this workflow makes (SRI updates, sitemap refreshes, etc.) are themselves what triggers `gcp-deploy.yml` — that workflow watches the same paths and picks up the post-housekeeping state. Splitting them keeps each workflow's responsibility narrow.
 
-**Incremental deploys:** A fresh `actions/checkout` gives every file the same mtime (the moment of the checkout), which would make `lftp mirror` re-upload the entire tree on every run. The workflow rewinds each tracked file's mtime to its last-commit date before any housekeeping runs; the housekeeping scripts then only modify files that actually need changes (they all wrap their writes in `if content != original_content`). Net effect: lftp uploads only files with new bytes — typically a few HTML files per run, not the whole site.
-
-**News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the unified workflow deploys the site.
+**News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `gcp-deploy.yml` ships it.
 
 ### Standalone URL Normalization Workflow
 
@@ -579,17 +571,11 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
 
 **Full docs:** See [tools/UPDATE_SRI_README.md](tools/UPDATE_SRI_README.md), [tools/GENERATE_PREVIEW_README.md](tools/GENERATE_PREVIEW_README.md), [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md), and [tools/CHECK_URL_SAFETY_README.md](tools/CHECK_URL_SAFETY_README.md)
 
-### Manual Deploy Workflow
-
-**Workflow file:** `.github/workflows/manual-deploy.yml`
-
-A manual-trigger-only workflow that force-pushes the entire site to the FTP host. Use it when the auto-deploy skipped a push (no relevant files changed) or the server got out of sync with `main`. Triggered from the GitHub Actions tab — it never runs on push.
-
-### GCP Cloud Run Deploy Workflow (in migration)
+### GCP Cloud Run Deploy Workflow
 
 **Workflow file:** `.github/workflows/gcp-deploy.yml`
 
-Builds a container image, scans it for HIGH/CRITICAL CVEs, pushes to Artifact Registry, and deploys to Cloud Run. **Currently runs in parallel with the FTPS deploy** while we migrate hosting from LiteSpeed to GCP. After the Cloudflare DNS cutover for `csoh.org`/`www.csoh.org` is complete and verified, the FTPS step in `site-update-deploy.yml` is removed and `manual-deploy.yml` is deleted.
+Builds a container image, scans it for HIGH/CRITICAL CVEs, pushes to Artifact Registry, and deploys to Cloud Run. This is the workflow that actually publishes csoh.org to production.
 
 **Triggers on pushes to `main` when these files change:**
 - The same path filters as `site-update-deploy.yml` (HTML, CSS, JS, screenshots, images)
