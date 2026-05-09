@@ -98,12 +98,18 @@ jobs:
       # has been yanked from the Marketplace, breaking action resolution.
       - name: Install Trivy
         run: |
-          # Aqua's official install script — handles version + arch
-          # detection without us guessing the asset filename. Pinned to a
-          # specific Trivy release for reproducibility.
-          TRIVY_VERSION="v0.58.1"
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sudo sh -s -- -b /usr/local/bin "${TRIVY_VERSION}"
+          # Install via Aqua's apt repository. Stable, signed packages, no
+          # asset-name guessing. The previous attempts (direct GH release
+          # tarball, `install.sh`) failed silently — apt is what Aqua
+          # recommends in their docs for CI runners and gives clear errors.
+          set -euo pipefail
+          sudo apt-get install -y wget gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
+            | sudo tee /etc/apt/sources.list.d/trivy.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y trivy
           trivy --version
 
       - name: Trivy scan (fail on HIGH/CRITICAL)
