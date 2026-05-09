@@ -42,6 +42,7 @@ env:
   SERVICE: csoh-site
   REPO: csoh-containers
   IMAGE_NAME: csoh-site
+  URL_MAP: csoh-urlmap
 
 jobs:
   build-scan-deploy:
@@ -146,6 +147,21 @@ jobs:
             --ingress internal-and-cloud-load-balancing \
             --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
             --quiet
+
+      # Cloud CDN at the GCLB caches responses per the origin's
+      # Cache-Control header (max-age=3600 from nginx). After a deploy,
+      # the new Cloud Run revision is live but Cloud CDN keeps serving
+      # the previously-cached bytes until the TTL expires — readers see
+      # stale content for up to an hour, and a Cloudflare cache purge
+      # cannot reach into Cloud CDN. Invalidate "/*" so the very next
+      # request through the load balancer fetches the new revision.
+      # We omit `--async` so the workflow waits for propagation; that
+      # makes "deploy job succeeded" mean "the change is actually live."
+      - name: Invalidate Cloud CDN cache
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache "${{ env.URL_MAP }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --path "/*"
 
       - name: Show deployed revision
         run: |
