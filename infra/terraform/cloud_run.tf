@@ -8,6 +8,15 @@ resource "google_cloud_run_v2_service" "site" {
 
   ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
 
+  # Service-level scaling. This is separate from `template.scaling` (which
+  # configures per-revision auto-scaling). The Cloud Run v2 API populates
+  # this block with default zeros on every service whether you declare it
+  # or not — declaring it explicitly here keeps `terraform plan` clean
+  # rather than showing a perpetual "remove this block" no-op diff.
+  scaling {
+    min_instance_count = 0
+  }
+
   template {
     service_account = google_service_account.cloud_run_runtime.email
 
