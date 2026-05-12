@@ -596,7 +596,7 @@ def main(argv: list[str] | None = None) -> int:
     update_meetings_index(meeting, headline)
     update_sitemap(iso)
     update_search_index(meeting, headline)
-    print(f"  updated meetings.html, sitemap.xml, meetings-search-index.json")
+    print("  updated meetings.html, sitemap.xml, meetings-search-index.json")
     return 0
 
 
