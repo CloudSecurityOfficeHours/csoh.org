@@ -1,6 +1,6 @@
 # Add Meeting Recap Tool
 
-Append a new CSOH meeting recap to [`meetings.html`](../meetings.html) from a saved Apple Notes note.
+Publish a new CSOH meeting recap from a saved Apple Notes note.
 
 ## Quick Start
 
@@ -12,12 +12,13 @@ The script:
 
 1. Parses the note (HTML export from Apple Notes, or markdown/plain text).
 2. Finds the meeting date in the `CSOH YYYY-MM-DD` title.
-3. Renders a new `<article class="section" id="meeting-YYYY-MM-DD">` block.
-4. Injects it at the top of the meetings list on `meetings.html`.
-5. Adds a matching entry to the in-page index and bumps the "All meetings (N)" count.
-6. Fixes broken entities common in Apple Notes exports (`&quot` → `"`, `&amp` → `&`).
+3. Writes a standalone `meetings/YYYY-MM-DD.html` page using the previously-newest meeting page as the template (so CSS/JS hash bumps and other cross-cutting tweaks carry through automatically).
+4. Inserts a card at the top of `meetings.html`, renumbers the ItemList JSON-LD, and refreshes count copy.
+5. Patches the previously-newest meeting page's pager to add a "Newer meeting →" link to the new page.
+6. Adds a `<url>` entry to `sitemap.xml` and a record to `meetings-search-index.json`.
+7. Fixes broken entities common in Apple Notes exports (`&quot` → `"`, `&amp` → `&`).
 
-Re-running with the same date is idempotent — the existing entry is replaced in place.
+Re-running with the same date is idempotent — the existing page is replaced in place.
 
 ## Workflow from an Apple Notes note
 
@@ -96,9 +97,9 @@ An empty `<h2>Summary</h2>` placeholder (as produced by some Apple Notes transcr
 
 ## What doesn't happen automatically
 
-- **Commits and pushes.** Run `git add meetings.html && git commit -m "Add CSOH meeting recap for YYYY-MM-DD"` yourself — the script never touches git.
-- **Removing meetings.** To remove a stale meeting, delete both the `<article id="meeting-YYYY-MM-DD">` block and the matching `<li>` in the TOC by hand.
-- **Renaming/redating.** If you got the date wrong, delete the old block and re-run the tool with the corrected note.
+- **Commits and pushes.** Stage and commit the changes yourself — the script never touches git. Affected files: `meetings/YYYY-MM-DD.html` (new), `meetings.html`, `meetings-search-index.json`, `sitemap.xml`, and the previously-newest meeting page (its pager is patched).
+- **Removing meetings.** To remove a stale meeting, delete `meetings/YYYY-MM-DD.html`, the matching card in `meetings.html`, the search-index record, and the sitemap entry. Fix the pager on neighboring meeting pages by hand.
+- **Renaming/redating.** If you got the date wrong, delete the old page and re-run the tool with the corrected note.
 
 ## Requirements
 

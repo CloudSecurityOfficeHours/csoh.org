@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Append a new CSOH meeting recap section to meetings.html.
+"""Publish a new CSOH meeting recap.
 
 Input is an Apple Notes-style export of a "CSOH YYYY-MM-DD" note, saved to
-a file (HTML or plain text). The script parses headings and paragraphs, then
-injects a rendered <article class="section" id="meeting-YYYY-MM-DD"> block at
-the top of the meetings list on meetings.html and a new entry into the
-in-page index.
+a file (HTML or plain text). The script:
+
+1. Writes a standalone per-meeting page at /meetings/YYYY-MM-DD.html (using
+   the previously-newest meeting page as the template).
+2. Inserts a card at the top of /meetings.html and updates counts plus the
+   ItemList JSON-LD.
+3. Patches the previously-newest meeting page's pager to add a
+   "Newer meeting →" link to the new page.
+4. Adds an entry to sitemap.xml and meetings-search-index.json.
 
 Supported input formats:
 
@@ -23,12 +28,10 @@ Expected content:
 Usage:
 
     python3 tools/add_meeting.py path/to/note.html
-    python3 tools/add_meeting.py path/to/note.txt --headline "Short headline"
+    python3 tools/add_meeting.py path/to/note.txt --headline "Short headline" \\
+        --tag AI --tag "Supply Chain"
 
-The `--headline` flag lets you override the TOC entry's short headline. If
-omitted, the headline is derived from the first subtopic heading.
-
-Re-running the script for an existing date replaces the prior entry in place.
+Re-running for an existing date replaces the prior page in place.
 """
 
 from __future__ import annotations
@@ -41,7 +44,11 @@ import sys
 from pathlib import Path
 
 
-MEETINGS_HTML = Path(__file__).resolve().parent.parent / "meetings.html"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MEETINGS_HTML = REPO_ROOT / "meetings.html"
+MEETINGS_DIR = REPO_ROOT / "meetings"
+SITEMAP_XML = REPO_ROOT / "sitemap.xml"
+SEARCH_INDEX = REPO_ROOT / "meetings-search-index.json"
 
 TITLE_RE = re.compile(r"CSOH\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 ENTITY_FIXES = [
@@ -181,112 +188,368 @@ def human_date(iso: str) -> str:
     return d.strftime("%A, %B %-d, %Y")
 
 
-def render_meeting_block(meeting: dict) -> str:
-    iso = meeting["date"]
-    human = human_date(iso)
-    topics = meeting["topics"]
-    topic_html = "\n".join(
-        f'            <h3>{h.escape(heading)}</h3>\n            <p>{h.escape(body)}</p>'
-        for heading, body in topics
-    )
-    # Month tag is always present; topical tags come from --tag / parsed input.
-    month = iso[:7]
-    tags = [month] + list(dict.fromkeys(meeting.get("tags") or []))  # dedupe, preserve order
-    tag_spans = "".join(f'<span class="tag">{h.escape(t)}</span>' for t in tags)
-    tags_block = f'            <div class="resource-tags meeting-tags">{tag_spans}</div>\n'
-    n = len(topics)
-    summary_label = f"Show {n} discussion topics" if n != 1 else "Show discussion topic"
-    headline = (meeting.get("headline") or default_headline(meeting)).strip()
-    return (
-        f'        <article class="section" id="meeting-{iso}">\n'
-        f'            <h2><time datetime="{iso}">{h.escape(human)}</time> — {h.escape(headline)}</h2>\n'
-        f'            <p><strong>Quick recap.</strong> {h.escape(meeting["recap"])}</p>\n'
-        f'{tags_block}'
-        f'            <details class="meeting-topics">\n'
-        f'                <summary>{summary_label}</summary>\n'
-        f'{topic_html}\n'
-        f'            </details>\n'
-        f'            <p class="small"><a href="#table-of-contents">↑ Back to index</a></p>\n'
-        f'        </article>\n'
-    )
-
-
-def render_toc_item(meeting: dict, headline: str) -> str:
-    return (
-        f'                <li><a href="#meeting-{meeting["date"]}">'
-        f'<strong>CSOH {meeting["date"]}</strong> — {h.escape(headline)}</a></li>'
-    )
-
-
-def replace_or_insert_article(html_text: str, meeting: dict) -> str:
-    new_block = render_meeting_block(meeting)
-    article_re = re.compile(
-        rf'        <article class="section" id="meeting-{re.escape(meeting["date"])}">.*?</article>\n',
-        re.DOTALL,
-    )
-    if article_re.search(html_text):
-        return article_re.sub(new_block.rstrip("\n") + "\n", html_text, count=1)
-
-    # Insert after the </section> that closes the TOC (#table-of-contents).
-    toc_close = re.compile(
-        r'(<section class="section" id="table-of-contents">.*?</section>\s*\n)',
-        re.DOTALL,
-    )
-    m = toc_close.search(html_text)
-    if not m:
-        raise RuntimeError("Could not locate the table-of-contents section in meetings.html.")
-    insert_at = m.end()
-    return html_text[:insert_at] + "\n" + new_block + html_text[insert_at:]
-
-
-def replace_or_insert_toc(html_text: str, meeting: dict, headline: str) -> str:
-    item = render_toc_item(meeting, headline)
-    existing_re = re.compile(
-        rf'                <li><a href="#meeting-{re.escape(meeting["date"])}">.*?</a></li>',
-        re.DOTALL,
-    )
-    if existing_re.search(html_text):
-        return existing_re.sub(item, html_text, count=1)
-
-    # Insert as the new first item inside the #table-of-contents ul.
-    ul_open = re.compile(
-        r'(<section class="section" id="table-of-contents">.*?<ul>\n)',
-        re.DOTALL,
-    )
-    m = ul_open.search(html_text)
-    if not m:
-        raise RuntimeError("Could not locate the TOC <ul> in meetings.html.")
-    insert_at = m.end()
-    return html_text[:insert_at] + item + "\n" + html_text[insert_at:]
-
-
-def bump_toc_count(html_text: str) -> str:
-    # Count current article entries AFTER insertion and reflect in TOC heading.
-    count = len(re.findall(r'<article class="section" id="meeting-', html_text))
-    if count == 0:
-        return html_text
-    return re.sub(
-        r'<h2>All meetings \(\d+\)</h2>',
-        f'<h2>All meetings ({count})</h2>',
-        html_text,
-        count=1,
-    )
-
-
 def default_headline(meeting: dict) -> str:
     if meeting["topics"]:
         return meeting["topics"][0][0]
     return "Meeting recap"
 
 
+def truncate(s: str, n: int) -> str:
+    if len(s) <= n:
+        return s
+    cut = s[: n - 1].rsplit(" ", 1)[0]
+    return cut + "…"
+
+
+def render_article_body(meeting: dict, headline: str) -> str:
+    """Render the inner content of <article class="section meeting-page"> for
+    a per-meeting page."""
+    iso = meeting["date"]
+    human = human_date(iso)
+    month = iso[:7]
+    tags = [month] + list(dict.fromkeys(meeting.get("tags") or []))
+    tag_spans = "".join(f'<span class="tag">{h.escape(t)}</span>' for t in tags)
+    topic_html = "\n".join(
+        f"            <h3>{h.escape(hd)}</h3>\n            <p>{h.escape(bd)}</p>\n"
+        for hd, bd in meeting["topics"]
+    )
+    n = len(meeting["topics"])
+    summary_label = f"Show {n} discussion topics" if n != 1 else "Show discussion topic"
+    return (
+        f'<h2><time datetime="{iso}">{h.escape(human)}</time> — {h.escape(headline)}</h2>\n'
+        f'            <p><strong>Quick recap.</strong> {h.escape(meeting["recap"])}</p>\n'
+        f'            <div class="resource-tags meeting-tags">{tag_spans}</div>\n'
+        f'            <details class="meeting-topics">\n'
+        f'                <summary>{summary_label}</summary>\n'
+        f'{topic_html}'
+        f'            </details>\n'
+        f'            <p class="small"><a href="../meetings.html">↑ All meeting recaps</a></p>'
+    )
+
+
+def find_template_page() -> Path:
+    """Find the previously-newest per-meeting page to use as the page template
+    (preserves CSS/JS version hashes and any cross-cutting page updates)."""
+    candidates = sorted(
+        MEETINGS_DIR.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html"),
+        reverse=True,
+    )
+    if not candidates:
+        raise RuntimeError(f"No existing meeting pages found in {MEETINGS_DIR}")
+    return candidates[0]
+
+
+def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str) -> str:
+    """Build the full HTML for /meetings/YYYY-MM-DD.html by deriving from the
+    current newest page."""
+    import json
+
+    iso = meeting["date"]
+    human = human_date(iso)
+    body = render_article_body(meeting, headline)
+    meta_desc = truncate(meeting["recap"], 155)
+    headline_safe = headline.replace('"', "&quot;")
+    headline_clean = headline[:90]
+
+    pager_parts = []
+    if prev_iso:
+        pager_parts.append(
+            f'<a class="pager-link pager-prev" href="{prev_iso}.html">← Older meeting</a>'
+        )
+    pager_parts.append(
+        '<a class="pager-link pager-index" href="../meetings.html">All meetings</a>'
+    )
+    if next_iso:
+        pager_parts.append(
+            f'<a class="pager-link pager-next" href="{next_iso}.html">Newer meeting →</a>'
+        )
+    pager_html = "\n            ".join(pager_parts)
+
+    template_path = find_template_page()
+    template_date = template_path.stem  # YYYY-MM-DD
+    out = template_path.read_text(encoding="utf-8")
+
+    template_human = human_date(template_date)
+    out = out.replace(template_human, human)
+    out = out.replace(template_date, iso)
+    out = re.sub(
+        r'<meta name="description" content="[^"]*">',
+        f'<meta name="description" content="{h.escape(meta_desc, quote=True)}">',
+        out, count=1,
+    )
+    out = re.sub(
+        r'<meta name="keywords" content="[^"]*">',
+        f'<meta name="keywords" content="cloud security meeting recap, CSOH, {iso}, Friday Zoom, {h.escape(headline_clean, quote=True)}">',
+        out, count=1,
+    )
+    out = re.sub(
+        r"<title>[^<]*</title>",
+        f"<title>{human} — CSOH Meeting Recap</title>",
+        out, count=1,
+    )
+    out = re.sub(
+        r'<meta property="og:title" content="[^"]*">',
+        f'<meta property="og:title" content="{human} CSOH Recap — {h.escape(headline_safe[:80], quote=True)}">',
+        out, count=1,
+    )
+    out = re.sub(
+        r'<meta property="og:description" content="[^"]*">',
+        f'<meta property="og:description" content="{h.escape(meta_desc, quote=True)}">',
+        out, count=1,
+    )
+    out = re.sub(
+        r'<meta name="twitter:title" content="[^"]*">',
+        f'<meta name="twitter:title" content="{human} CSOH Recap">',
+        out, count=1,
+    )
+    out = re.sub(
+        r'<meta name="twitter:description" content="[^"]*">',
+        f'<meta name="twitter:description" content="{h.escape(meta_desc, quote=True)}">',
+        out, count=1,
+    )
+    headline_json = json.dumps(headline)
+    out = re.sub(
+        r'"headline":\s*"[^"]+",',
+        lambda mm: f'"headline": {headline_json},',
+        out, count=1,
+    )
+    desc_json = json.dumps(meta_desc)
+    out = re.sub(
+        r'"description":\s*"[^"]*"',
+        lambda mm: f'"description": {desc_json}',
+        out, count=1,
+    )
+    # Breadcrumb final item (name/item pair). The Apple Notes-generated
+    # template uses single quotes around the name, so handle both quote styles.
+    name_json = json.dumps(human)
+    repl = f'"name": {name_json},\n          "item": "https://csoh.org/meetings/{iso}.html"'
+    out = re.sub(
+        r"\"name\":\s*['\"][^'\"]+['\"],\s*\n\s*\"item\":\s*\"https://csoh\.org/meetings/[^\"]+\"",
+        lambda mm: repl,
+        out, count=1,
+    )
+    out = re.sub(
+        r"<h1>[^<]+— Meeting Recap</h1>",
+        f"<h1>{human} — Meeting Recap</h1>",
+        out, count=1,
+    )
+    # Hero subtitle <p> immediately after the <h1>
+    out = re.sub(
+        r'(<section class="hero hero--compact">.*?<h1>[^<]+</h1>\s*<p>)[^<]*(</p>)',
+        lambda mm: mm.group(1) + h.escape(headline) + mm.group(2),
+        out, count=1, flags=re.DOTALL,
+    )
+    out = re.sub(
+        r'<li><span aria-current="page">[^<]+</span></li>',
+        f'<li><span aria-current="page">{human}</span></li>',
+        out, count=1,
+    )
+    out = re.sub(
+        r'(<article class="section meeting-page">\s*)(.*?)(\s*</article>)',
+        lambda mm: mm.group(1) + body + mm.group(3),
+        out, count=1, flags=re.DOTALL,
+    )
+    out = re.sub(
+        r'(<nav class="incident-pager" aria-label="Other meeting recaps">\s*)(.*?)(\s*</nav>)',
+        lambda mm: mm.group(1) + pager_html + mm.group(3),
+        out, count=1, flags=re.DOTALL,
+    )
+    return out
+
+
+def patch_prev_pager(prev_iso: str, new_iso: str) -> None:
+    """Add or update a 'Newer meeting →' link on the previously-newest page."""
+    p = MEETINGS_DIR / f"{prev_iso}.html"
+    if not p.exists():
+        return
+    txt = p.read_text(encoding="utf-8")
+    if re.search(r'class="pager-link pager-next"', txt):
+        txt = re.sub(
+            r'(<a class="pager-link pager-next" href=")[^"]+(">[^<]*</a>)',
+            rf"\g<1>{new_iso}.html\g<2>",
+            txt, count=1,
+        )
+    else:
+        txt = re.sub(
+            r'(<a class="pager-link pager-index" href="\.\./meetings\.html">All meetings</a>)',
+            rf'\1\n            <a class="pager-link pager-next" href="{new_iso}.html">Newer meeting →</a>',
+            txt, count=1,
+        )
+    p.write_text(txt, encoding="utf-8")
+
+
+def find_existing_newest_other_than(iso: str) -> str:
+    """Find the existing newest meeting iso, excluding the supplied one."""
+    candidates = sorted(
+        (p.stem for p in MEETINGS_DIR.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html")),
+        reverse=True,
+    )
+    for d in candidates:
+        if d != iso:
+            return d
+    return ""
+
+
+def render_card(meeting: dict, headline: str) -> str:
+    iso = meeting["date"]
+    human = human_date(iso)
+    teaser = truncate(meeting["recap"], 240)
+    tags = [iso[:7]] + list(dict.fromkeys(meeting.get("tags") or []))
+    tags_html = "".join(f'<span class="tag">{h.escape(t)}</span>' for t in tags)
+    return (
+        f'        <article class="section meeting-card" id="meeting-{iso}">\n'
+        f'            <a class="meeting-card-link" href="meetings/{iso}.html">\n'
+        f'                <h2><time datetime="{iso}">{h.escape(human)}</time> — {h.escape(headline)}</h2>\n'
+        f'                <p class="meeting-card-summary">{h.escape(teaser)}</p>\n'
+        f'                <div class="resource-tags meeting-tags">{tags_html}</div>\n'
+        f'                <span class="meeting-card-cta">Read recap →</span>\n'
+        f'            </a>\n'
+        f'        </article>'
+    )
+
+
+def update_meetings_index(meeting: dict, headline: str) -> None:
+    """Insert or replace the meeting card in meetings.html and refresh counts
+    plus the ItemList JSON-LD."""
+    import json
+
+    iso = meeting["date"]
+    txt = MEETINGS_HTML.read_text(encoding="utf-8")
+
+    # Replace existing card if present, otherwise insert at top.
+    card = render_card(meeting, headline)
+    existing_card_re = re.compile(
+        rf'        <article class="section meeting-card" id="meeting-{re.escape(iso)}">.*?</article>',
+        re.DOTALL,
+    )
+    if existing_card_re.search(txt):
+        txt = existing_card_re.sub(card, txt, count=1)
+    else:
+        txt = re.sub(
+            r'(<div class="meeting-list">\s*\n)',
+            rf"\g<1>{card}\n",
+            txt, count=1,
+        )
+
+    n_now = len(re.findall(r'<article class="section meeting-card"', txt))
+
+    # Rebuild ItemList JSON-LD positions/numberOfItems.
+    ld_match = re.search(
+        r'(<script type="application/ld\+json">\s*\{[^{}]*"@type":\s*"ItemList".*?</script>)',
+        txt, re.DOTALL,
+    )
+    if ld_match:
+        block = ld_match.group(1)
+        existing = []
+        for em in re.finditer(
+            r'\{\s*"@type":\s*"ListItem",\s*"position":\s*\d+,\s*"url":\s*"([^"]+)",\s*"name":\s*"([^"]+)"\s*\}',
+            block, re.DOTALL,
+        ):
+            existing.append((em.group(1), em.group(2)))
+        new_url = f"https://csoh.org/meetings/{iso}.html"
+        new_name = f"{iso}: {headline.replace(chr(34), chr(39))}"
+        # Drop any prior entry for this iso (replace path).
+        existing = [(u, n) for (u, n) in existing if iso not in u]
+        full = [(new_url, new_name)] + existing
+        rebuilt = []
+        for pos, (url, name) in enumerate(full, start=1):
+            rebuilt.append(
+                "    {\n"
+                '      "@type": "ListItem",\n'
+                f'      "position": {pos},\n'
+                f"      \"url\": {json.dumps(url)},\n"
+                f"      \"name\": {json.dumps(name)}\n"
+                "    }"
+            )
+        items_str = ",\n".join(rebuilt)
+        new_block = re.sub(
+            r'"numberOfItems":\s*\d+',
+            f'"numberOfItems": {len(full)}',
+            block, count=1,
+        )
+        new_block = re.sub(
+            r'"itemListElement":\s*\[.*?\]',
+            f'"itemListElement": [\n{items_str}\n  ]',
+            new_block, count=1, flags=re.DOTALL,
+        )
+        txt = txt.replace(block, new_block, 1)
+
+    # Counts in copy + meta tags.
+    txt = re.sub(r"(notes from )\d+( CSOH sessions)", rf"\g<1>{n_now}\g<2>", txt)
+    txt = re.sub(r"(\b)\d+( CSOH sessions)", rf"\g<1>{n_now}\g<2>", txt)
+    txt = re.sub(
+        r"(\b)\d+( sessions of vendor-neutral practitioner discussion)",
+        rf"\g<1>{n_now}\g<2>", txt,
+    )
+    txt = re.sub(
+        r"(Topic-by-topic recaps from )\d+( weekly CSOH sessions)",
+        rf"\g<1>{n_now}\g<2>", txt,
+    )
+    txt = re.sub(
+        r'<p class="meeting-count"><span id="visibleMeetings">\d+(</span> meetings)',
+        rf'<p class="meeting-count"><span id="visibleMeetings">{n_now}\g<1>',
+        txt,
+    )
+
+    MEETINGS_HTML.write_text(txt, encoding="utf-8")
+
+
+def update_sitemap(iso: str) -> None:
+    if not SITEMAP_XML.exists():
+        return
+    txt = SITEMAP_XML.read_text(encoding="utf-8")
+    if f"meetings/{iso}.html" in txt:
+        return  # Already present; update_sitemap.py refreshes lastmod separately.
+    today = dt.date.today().isoformat()
+    # Insert before the closing </urlset>.
+    block = (
+        "  <url>\n"
+        f"    <loc>https://csoh.org/meetings/{iso}.html</loc>\n"
+        f"    <lastmod>{today}</lastmod>\n"
+        "    <changefreq>yearly</changefreq>\n"
+        "    <priority>0.5</priority>\n"
+        "  </url>\n"
+    )
+    txt = txt.replace("</urlset>", block + "</urlset>", 1)
+    SITEMAP_XML.write_text(txt, encoding="utf-8")
+
+
+def update_search_index(meeting: dict, headline: str) -> None:
+    if not SEARCH_INDEX.exists():
+        return
+    import json
+
+    data = json.loads(SEARCH_INDEX.read_text(encoding="utf-8"))
+    iso = meeting["date"]
+    human = human_date(iso).lower()
+    parts = [
+        f"{human} — {headline.lower()}",
+        "quick recap.", meeting["recap"].lower(),
+    ]
+    for hd, bd in meeting["topics"]:
+        parts.append(hd.lower())
+        parts.append(bd.lower())
+    parts.append(" ".join((iso[:7], *(meeting.get("tags") or []))).lower())
+    record = {
+        "id": f"meeting-{iso}",
+        "text": re.sub(r"\s+", " ", " ".join(parts)).strip(),
+    }
+    existing = next((i for i, r in enumerate(data) if r["id"] == record["id"]), None)
+    if existing is not None:
+        data[existing] = record
+    else:
+        data.insert(0, record)
+    SEARCH_INDEX.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Add a CSOH meeting recap to meetings.html")
+    parser = argparse.ArgumentParser(description="Publish a CSOH meeting recap.")
     parser.add_argument("note", type=Path, help="Path to the Apple Notes export (HTML or text)")
     parser.add_argument(
         "--headline",
         type=str,
         default=None,
-        help="Short headline for the table of contents (default: first topic heading).",
+        help="Short headline for the card and h2 (default: first topic heading).",
     )
     parser.add_argument(
         "--tag",
@@ -305,9 +568,6 @@ def main(argv: list[str] | None = None) -> int:
     if not args.note.exists():
         print(f"Error: {args.note} not found", file=sys.stderr)
         return 1
-    if not args.meetings_file.exists():
-        print(f"Error: {args.meetings_file} not found", file=sys.stderr)
-        return 1
 
     try:
         meeting = parse_note(args.note)
@@ -316,25 +576,27 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     meeting["tags"] = [t.strip() for t in args.tag if t.strip()]
+    headline = (args.headline or default_headline(meeting)).strip()
 
-    headline = args.headline or default_headline(meeting)
-    meeting["headline"] = headline  # picked up by render_meeting_block for the h2
-    html_text = args.meetings_file.read_text(encoding="utf-8")
+    iso = meeting["date"]
+    existing_newest = find_existing_newest_other_than(iso)
 
-    updated = replace_or_insert_article(html_text, meeting)
-    updated = replace_or_insert_toc(updated, meeting, headline)
-    updated = bump_toc_count(updated)
+    # Per-meeting page. New meeting becomes the newest, so next_iso is empty;
+    # prev_iso is the previously-newest (or its prior link if we're replacing).
+    page = render_full_page(meeting, headline, prev_iso=existing_newest, next_iso="")
+    out_path = MEETINGS_DIR / f"{iso}.html"
+    action = "Replaced" if out_path.exists() else "Wrote"
+    out_path.write_text(page, encoding="utf-8")
+    print(f"{action} {out_path.relative_to(REPO_ROOT)}")
 
-    if updated == html_text:
-        print("No changes (meeting already present with identical content).")
-        return 0
+    if existing_newest and existing_newest != iso:
+        patch_prev_pager(existing_newest, iso)
+        print(f"  patched {existing_newest}.html pager → next={iso}")
 
-    args.meetings_file.write_text(updated, encoding="utf-8")
-    action = "Replaced" if html_text.count(f'id="meeting-{meeting["date"]}"') else "Inserted"
-    print(
-        f"{action} CSOH {meeting['date']} "
-        f"({len(meeting['topics'])} topics) in {args.meetings_file.name}."
-    )
+    update_meetings_index(meeting, headline)
+    update_sitemap(iso)
+    update_search_index(meeting, headline)
+    print(f"  updated meetings.html, sitemap.xml, meetings-search-index.json")
     return 0
 
 
