@@ -49,7 +49,7 @@ TRACKING_PARAMS = {
 
 # Domains that block bots — skip HTTP resolution (sourced from .lychee.toml)
 BOT_BLOCKED_DOMAINS = [
-    'linkedin.com', 'web.archive.org', 'sendfox.com',
+    'linkedin.com', 'web.archive.org',
     'blog.appsecco.com', 'bleepingcomputer.com', 'community.sap.com',
     'darkreading.com', 'dl.acm.org', 'fiverr.com', 'glassdoor.com',
     'imdb.com', 'indeed.com', 'instagram.com', 'mdpi.com', 'meco.org',
