@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description"
+        content="Kubernetes and managed Kubernetes (EKS, AKS, GKE) for cloud security — the threat model, the shared responsibility split, and the real risks: pod escapes, identity chaining, RBAC, networking, and supply chain. Vendor-neutral.">
+    <meta name="keywords"
+        content="Kubernetes, K8s, EKS, AKS, GKE, managed Kubernetes, pod security, IRSA, workload identity, RBAC, network policy, admission controllers, Pod Security Standards, container escape, cluster security">
+    <title>Kubernetes &amp; Managed Kubernetes - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/kubernetes.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#2c3e50">
+
+    <meta property="og:title" content="Kubernetes &amp; Managed Kubernetes - CSOH">
+    <meta property="og:description"
+        content="What managed Kubernetes (EKS, AKS, GKE) actually manages, what you still own, and the cluster-specific risks: workload identity chaining, pod escapes, RBAC sprawl, flat pod networking, and admission control.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://csoh.org/kubernetes.html">
+    <meta property="og:image" content="https://csoh.org/banner.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kubernetes &amp; Managed Kubernetes">
+    <meta name="twitter:description"
+        content="Vendor-neutral guide to Kubernetes security in the cloud — shared responsibility, identity, RBAC, networking, admission.">
+    <meta name="twitter:image" content="https://csoh.org/banner.png">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+
+    <link rel="preload" href="/style.css?v=0d8fc81d" as="style"
+        integrity="sha384-T2RglkzlwLN3tjrobi8W8V4aTwvuaVZzMON0R16FuXpbTuQimufZPvR4j4UupkNE">
+    <link rel="stylesheet" href="/style.css?v=0d8fc81d"
+        integrity="sha384-T2RglkzlwLN3tjrobi8W8V4aTwvuaVZzMON0R16FuXpbTuQimufZPvR4j4UupkNE">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Kubernetes & Managed Kubernetes",
+      "description": "A vendor-neutral practitioner's guide to Kubernetes security in the cloud — the shared responsibility split, pod escapes, workload identity chaining, RBAC, networking, and admission control on EKS, AKS, and GKE.",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "datePublished": "2026-05-15",
+      "dateModified": "2026-05-15",
+      "mainEntityOfPage": "https://csoh.org/kubernetes.html",
+      "image": "https://csoh.org/banner.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://csoh.org/"},
+        {"@type": "ListItem", "position": 2, "name": "Kubernetes", "item": "https://csoh.org/kubernetes.html"}
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the difference between Kubernetes and managed Kubernetes?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Kubernetes is the open-source orchestrator. 'Managed Kubernetes' is a cloud-hosted version (EKS on AWS, AKS on Azure, GKE on Google) where the cloud runs the control plane — etcd, API server, scheduler, controller manager — and you run only the worker nodes (or, in fully-managed modes like GKE Autopilot and EKS Auto Mode, the cloud runs those too). The Kubernetes API surface is the same; the operational responsibility moves to the cloud. The shared-responsibility split is what makes this a security topic — see the Shared Responsibility section on this page."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is a Kubernetes cluster a security boundary?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A namespace inside a cluster is not a security boundary — it's an organizational one. RBAC and NetworkPolicy can make it more boundary-like, but pods in different namespaces still share the same kernel on whatever node they happen to land on. The cluster itself can be a security boundary if you treat the cloud account it lives in as the actual perimeter — separate cluster per environment (prod, staging, sandbox) is the standard pattern for workloads with different trust levels. Do not mix prod and untrusted workloads in one cluster."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is workload identity in Kubernetes?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Workload identity is the mechanism by which a Kubernetes pod gets short-lived cloud credentials scoped to itself rather than inheriting the broad role attached to the worker node. AWS calls it IAM Roles for Service Accounts (IRSA) and EKS Pod Identity; Azure calls it AKS Workload Identity (federated to Entra); GCP calls it Workload Identity Federation. All three work the same way: the pod presents a signed Kubernetes service-account token to the cloud, which trusts the cluster's OIDC issuer and returns a short-lived cloud credential. This is the single most important Kubernetes-on-cloud security control — it breaks the chain from 'compromised pod' to 'node IAM role.'"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why do people say Kubernetes is hard to secure?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Because the default posture is permissive. Pods can talk to any pod by default. Service accounts get a token mounted automatically. The cluster API server has its own RBAC that can grant access to everything. Worker nodes share a kernel across all pods on them. Add multiple namespaces, third-party operators, helm charts you didn't write, and a CNI plugin you barely understand — and the configuration surface is enormous. None of this is unfixable, but the default config is the worst case and security has to be opted into deliberately at every layer."
+          }
+        }
+      ]
+    }
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="index.html" class="logo-link">
+                <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="news.html">News</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="what-is-cloud-security.html">What is Cloud Security?</a></li>
+                        <li><a href="learning-path.html">Learning Path</a></li>
+                        <li><a href="ai-learning.html">AI Learning</a></li>
+                        <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>
+                        <li><a href="cloud-security-careers.html">Careers</a></li>
+                        <li><a href="cloud-security-home-lab.html">Home Lab</a></li>
+                        <li><a href="cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                        <li><a href="cloud-security-certifications.html">Certifications</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Reference <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="cloud-security-best-practices.html">Best Practices</a></li>
+                        <li><a href="shared-responsibility-model.html">Shared Responsibility</a></li>
+                        <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                        <li><a href="landing-zones.html">Landing Zones</a></li>
+                        <li><a href="containers.html">Containers</a></li>
+                        <li><a href="kubernetes.html" aria-current="page">Kubernetes</a></li>
+                        <li><a href="ci-cd.html">CI/CD</a></li>
+                        <li><a href="cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="ctfs.html">CTFs</a></li>
+                        <li><a href="github-actions.html">GitHub Actions</a></li>
+                        <li><a href="cloud-deployment.html">Cloud Deployment</a></li>
+                        <li><a href="resources.html">Resources</a></li>
+                        <li><a href="glossary.html">Glossary</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Defend <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="threat-research.html">Threat Research</a></li>
+                        <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Attend <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="sessions.html">Zoom Sessions</a></li>
+                        <li><a href="community.html">Community &amp; Signal</a></li>
+                        <li><a href="conferences.html">Conferences</a></li>
+                        <li><a href="meetings.html">Meeting Recaps</a></li>
+                        <li><a href="presentations.html">Presentations</a></li>
+                        <li><a href="chat-resources.html">Chat Resources</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Contribute <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="contribute.html">Contribute Overview</a></li>
+                        <li><a href="contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li><a href="faq.html">FAQ</a></li>
+                    <li><a href="index.html#about">About</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="index.html">Home</a></li>
+            <li><span aria-current="page">Kubernetes</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--illustrated">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>Kubernetes &amp; Managed Kubernetes</h1>
+          <p>The orchestrator that runs most cloud-native production workloads — and the single largest source of cloud-security misconfiguration. Vendor-neutral guide to what EKS, AKS, and GKE actually manage, what you still own, and the cluster-specific risks: pod escapes, identity chaining, RBAC sprawl, flat pod networking, and admission control.</p>
+          <div class="cta-buttons">
+            <a href="#shared-resp" class="btn btn-primary">Shared responsibility →</a>
+            <a href="#comparison" class="btn btn-secondary">EKS / AKS / GKE comparison</a>
+          </div>
+        </div>
+        <div class="hero-illustration" aria-hidden="true">
+          <svg viewBox="0 0 600 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration of a Kubernetes cluster with a managed control plane in the cloud and worker nodes running pods">
+            <defs>
+              <linearGradient id="k-cloud" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#bae6fd"/><stop offset="60%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+              <linearGradient id="k-cp" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7e22ce"/><stop offset="100%" stop-color="#4c1d95"/></linearGradient>
+              <linearGradient id="k-node" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>
+              <radialGradient id="k-halo" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.35"/><stop offset="100%" stop-color="#7dd3fc" stop-opacity="0"/></radialGradient>
+            </defs>
+            <circle cx="300" cy="240" r="200" fill="url(#k-halo)"/>
+            <!-- Control plane in cloud -->
+            <path d="M 160,60 a 50,50 0 0,1 60,-30 a 70,70 0 0,1 160,0 a 50,50 0 0,1 50,30 a 45,45 0 0,1 -25,80 H 180 a 45,45 0 0,1 -20,-80 z" fill="url(#k-cloud)" stroke="#fff" stroke-width="1.5" stroke-opacity="0.4"/>
+            <g>
+              <rect x="195" y="55" width="80" height="32" rx="5" fill="url(#k-cp)" stroke="#a78bfa" stroke-width="1"/>
+              <text x="235" y="76" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">API server</text>
+              <rect x="285" y="55" width="80" height="32" rx="5" fill="url(#k-cp)" stroke="#a78bfa" stroke-width="1"/>
+              <text x="325" y="76" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">etcd</text>
+              <rect x="375" y="55" width="80" height="32" rx="5" fill="url(#k-cp)" stroke="#a78bfa" stroke-width="1"/>
+              <text x="415" y="76" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">scheduler</text>
+            </g>
+            <text x="300" y="110" text-anchor="middle" fill="#0c4a6e" font-size="12" font-weight="700">Managed control plane</text>
+            <!-- Worker nodes -->
+            <g>
+              <rect x="80" y="190" width="155" height="180" rx="10" fill="url(#k-node)" stroke="#475569" stroke-width="1.5"/>
+              <text x="158" y="215" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="700">Worker node 1</text>
+              <rect x="95" y="230" width="60" height="50" rx="6" fill="#0d1424" stroke="#34d399" stroke-width="1.5"/>
+              <text x="125" y="252" text-anchor="middle" fill="#34d399" font-size="10" font-weight="700">Pod A</text>
+              <text x="125" y="266" text-anchor="middle" fill="#cbd5e1" font-size="8">SA: app</text>
+              <rect x="165" y="230" width="60" height="50" rx="6" fill="#0d1424" stroke="#38bdf8" stroke-width="1.5"/>
+              <text x="195" y="252" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="700">Pod B</text>
+              <text x="195" y="266" text-anchor="middle" fill="#cbd5e1" font-size="8">SA: app</text>
+              <rect x="95" y="290" width="130" height="60" rx="6" fill="#0d1424" stroke="#7e22ce" stroke-width="1"/>
+              <text x="160" y="312" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="700">kubelet</text>
+              <text x="160" y="328" text-anchor="middle" fill="#cbd5e1" font-size="9">shared kernel</text>
+
+              <rect x="365" y="190" width="155" height="180" rx="10" fill="url(#k-node)" stroke="#475569" stroke-width="1.5"/>
+              <text x="442" y="215" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="700">Worker node 2</text>
+              <rect x="380" y="230" width="60" height="50" rx="6" fill="#0d1424" stroke="#fbbf24" stroke-width="1.5"/>
+              <text x="410" y="252" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="700">Pod C</text>
+              <text x="410" y="266" text-anchor="middle" fill="#fbbf24" font-size="8">privileged</text>
+              <rect x="450" y="230" width="60" height="50" rx="6" fill="#0d1424" stroke="#fb7185" stroke-width="1.5"/>
+              <text x="480" y="252" text-anchor="middle" fill="#fb7185" font-size="10" font-weight="700">Pod D</text>
+              <text x="480" y="266" text-anchor="middle" fill="#fb7185" font-size="8">hostPID ⚠</text>
+              <rect x="380" y="290" width="130" height="60" rx="6" fill="#0d1424" stroke="#7e22ce" stroke-width="1"/>
+              <text x="445" y="312" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="700">kubelet</text>
+              <text x="445" y="328" text-anchor="middle" fill="#cbd5e1" font-size="9">shared kernel</text>
+            </g>
+            <!-- Arrows -->
+            <g stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="3 4" fill="none" opacity="0.6">
+              <line x1="300" y1="140" x2="158" y2="195"/>
+              <line x1="300" y1="140" x2="442" y2="195"/>
+            </g>
+            <!-- Identity callout -->
+            <g>
+              <rect x="155" y="395" width="290" height="50" rx="8" fill="#0f172a" stroke="#a78bfa" stroke-width="1.5"/>
+              <text x="300" y="416" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">Workload identity (IRSA / WIF)</text>
+              <text x="300" y="434" text-anchor="middle" fill="#e2e8f0" font-size="10">per-pod cloud credentials, OIDC-federated</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <main class="container contribute-article" id="main-content">
+
+        <figure class="page-photo">
+          <picture>
+            <source srcset="/img/photos/server-room.webp" type="image/webp">
+            <img src="/img/photos/server-room.jpg" alt="A modern server room featuring network equipment with blue illumination" width="1880" height="1253" loading="lazy" decoding="async">
+          </picture>
+          <figcaption>Photo by panumas nikhomkhai on Pexels</figcaption>
+        </figure>
+
+        <p class="page-meta"><time datetime="2026-05-15">Last updated <strong>2026-05-15</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/kubernetes.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+
+        <div class="info-box--blue">
+            <p><strong>The 30-second version:</strong> <strong>Kubernetes</strong> orchestrates containers across a fleet of machines. <strong>Managed Kubernetes</strong> (EKS on AWS, AKS on Azure, GKE on GCP) hosts the control plane for you — you still own the workloads, the workload identity, the network policy, the RBAC, and the admission controls. The Kubernetes API surface is the same on every cloud; the configuration surface is enormous; and the default posture is permissive.</p>
+            <p style="margin-top:0.75rem;">The two largest cloud-specific Kubernetes risks: <strong>identity chaining</strong> (a compromised pod stealing the worker node's cloud role via IMDS) and <strong>RBAC sprawl</strong> (some operator you installed has cluster-admin and can read every secret). Fix those first, then layer on network policy, admission control, and runtime detection.</p>
+        </div>
+
+        <div class="toc">
+            <h2>📖 On this page</h2>
+            <ol>
+                <li><a href="#what-is">What Kubernetes actually is</a></li>
+                <li><a href="#why-cloud">Why Kubernetes runs the cloud-native world</a></li>
+                <li><a href="#shared-resp">Shared responsibility — managed K8s edition</a></li>
+                <li><a href="#threat-model">The Kubernetes threat model</a></li>
+                <li><a href="#identity">Identity chaining — pod to node to cloud</a></li>
+                <li><a href="#rbac">RBAC and the API server</a></li>
+                <li><a href="#pod-security">Pod security &amp; escapes</a></li>
+                <li><a href="#networking">Networking — flat by default</a></li>
+                <li><a href="#admission">Admission control — the policy chokepoint</a></li>
+                <li><a href="#supply-chain">Supply chain — what runs in your cluster</a></li>
+                <li><a href="#comparison">EKS, AKS, and GKE side-by-side</a></li>
+                <li><a href="#hardening">Hardening checklist</a></li>
+                <li><a href="#pitfalls">Common pitfalls</a></li>
+                <li><a href="#further">Further reading</a></li>
+                <li><a href="#faq">FAQ</a></li>
+            </ol>
+        </div>
+
+        <section id="what-is">
+            <h2>What Kubernetes actually is</h2>
+            <p>Kubernetes is a cluster orchestrator. You declare what you want — "run three replicas of this container with these env vars and this much memory, expose port 8080, restart on failure" — and Kubernetes places that across a fleet of worker nodes, restarts containers that crash, redirects traffic when something fails, and rolls out new versions without downtime.</p>
+            <p>The architecture is split in two:</p>
+            <ul>
+                <li><strong>The control plane.</strong> The <code>kube-apiserver</code> (your front door, REST API), <code>etcd</code> (the cluster's source of truth — all configuration and secret material lives here), the <code>scheduler</code> (decides which pod goes on which node), and the <code>controller-manager</code> (reconciles desired state with actual state).</li>
+                <li><strong>The data plane.</strong> Worker nodes — VMs (or bare-metal hosts) running the <code>kubelet</code> agent, a container runtime (containerd, CRI-O), the <code>kube-proxy</code> network agent, and your actual workload pods.</li>
+            </ul>
+            <p>A <strong>pod</strong> is the unit of scheduling — one or more containers that share a network namespace and storage, scheduled together on the same node. A <strong>namespace</strong> is a logical grouping for pods, services, and policies. A <strong>service account</strong> is the pod's identity inside the cluster; combined with workload identity, it's also the pod's identity to the cloud.</p>
+            <p>None of this is cloud-specific — Kubernetes runs on bare metal, on your laptop (kind, minikube), on a Raspberry Pi cluster. But the dominant deployment shape today is managed Kubernetes in a cloud account.</p>
+        </section>
+
+        <section id="why-cloud">
+            <h2>Why Kubernetes runs the cloud-native world</h2>
+            <p>Kubernetes hit critical mass in cloud because it solved problems the cloud's first-party services left open:</p>
+            <ul>
+                <li><strong>Cloud-portable workload definitions.</strong> A Helm chart or set of YAML manifests describes a workload identically on EKS, AKS, GKE, on-prem, and in a developer's <code>kind</code> cluster. Cloud-specific services (ECS task definitions, App Service deployment slots) don't move.</li>
+                <li><strong>A single operational model for everything.</strong> Stateless apps, stateful databases, batch jobs, scheduled tasks, ML workloads — all use the same primitives. One operability story across a heterogeneous workload portfolio.</li>
+                <li><strong>An enormous ecosystem.</strong> Service meshes, ingress controllers, GitOps controllers, secret managers, observability stacks — the CNCF landscape is roughly 1,500 projects, all interoperating through Kubernetes primitives.</li>
+                <li><strong>Multi-tenant density at scale.</strong> Bin-packing many workloads onto fewer larger nodes is dramatically cheaper than one VM per service. At >50 services, the math is decisive.</li>
+            </ul>
+            <p>The security cost: Kubernetes is also the largest source of misconfiguration in cloud environments. Wiz, Snyk, and Datadog all publish State-of-Cloud reports — every year, Kubernetes-specific misconfigurations top the list. The platform is powerful precisely because its configuration surface is huge; that surface is also the attack surface.</p>
+        </section>
+
+        <section id="shared-resp">
+            <h2>Shared responsibility — managed K8s edition</h2>
+            <p>The single most useful diagram for cloud-Kubernetes security is the responsibility split. The cloud takes more on the higher-tier managed modes; the user always owns the workload layer.</p>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="ct-row-head">Layer</th>
+                            <th scope="col">Self-managed K8s on VMs</th>
+                            <th scope="col">Standard managed (EKS / AKS / GKE Standard)</th>
+                            <th scope="col">Fully-managed (GKE Autopilot / EKS Auto Mode)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">Control plane</th>
+                            <td>You</td>
+                            <td>Cloud</td>
+                            <td>Cloud</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">etcd encryption &amp; backup</th>
+                            <td>You</td>
+                            <td>Cloud (with user-managed KMS option)</td>
+                            <td>Cloud</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Worker node OS patching</th>
+                            <td>You</td>
+                            <td>You (with managed node groups: cloud auto-upgrades but you trigger)</td>
+                            <td>Cloud</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Cluster networking (CNI)</th>
+                            <td>You</td>
+                            <td>You (cloud provides default; you can swap)</td>
+                            <td>Cloud (Autopilot fixes choices)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Workload identity setup</th>
+                            <td>You</td>
+                            <td>You (cloud provides plumbing)</td>
+                            <td>You</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">RBAC</th>
+                            <td>You</td>
+                            <td>You</td>
+                            <td>You</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Network policy / pod isolation</th>
+                            <td>You</td>
+                            <td>You</td>
+                            <td>You (Autopilot enforces some defaults)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Admission control</th>
+                            <td>You</td>
+                            <td>You</td>
+                            <td>You (Autopilot pre-installs some controls)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Pod / workload security context</th>
+                            <td>You</td>
+                            <td>You</td>
+                            <td>You</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Image security</th>
+                            <td>You</td>
+                            <td>You</td>
+                            <td>You</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Runtime threat detection</th>
+                            <td>You</td>
+                            <td>Cloud detection available; you install runtime agents</td>
+                            <td>Cloud detection available; you install runtime agents</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>What this table shows: even on the most managed offering, <em>everything above the node OS is yours</em>. The cloud cannot configure your RBAC; it cannot decide which workloads should talk to which; it cannot decide whether a sidecar's permissions are reasonable. That is the security work of running Kubernetes in the cloud.</p>
+        </section>
+
+        <section id="threat-model">
+            <h2>The Kubernetes threat model</h2>
+            <p>Almost every Kubernetes-in-cloud breach narrative follows the same arc:</p>
+            <ol>
+                <li><strong>Initial foothold in a pod.</strong> Vulnerable web app, leaked credentials, supply chain attack in a base image. Any code-execution primitive will do.</li>
+                <li><strong>Use the pod's service-account token</strong> to talk to the API server. Default token is auto-mounted into every pod. RBAC determines how far this gets — too often, to <code>cluster-admin</code> via some operator that was installed unaudited.</li>
+                <li><strong>Reach the worker node's IMDS</strong> if workload identity isn't configured. Steal the node IAM role. Now you have the node's full cloud permissions — usually broad, because the node needs to pull images, mount volumes, write logs, manage load balancers.</li>
+                <li><strong>Move laterally to other pods</strong> on the same node (shared kernel) or to other pods over the flat pod network. Default-allow networking makes this trivial.</li>
+                <li><strong>Persist via a workload</strong> — deploy a new DaemonSet, create a backdoor service account, modify a ConfigMap. With cluster-admin, persistence is trivial.</li>
+                <li><strong>Exfiltrate</strong> via the cluster's outbound network — typically unrestricted to the public internet.</li>
+            </ol>
+            <p>Every defense on this page targets a step in that arc. Workload identity breaks step 3. Network policy breaks step 4. RBAC scoping breaks step 2 and step 5. Admission control prevents step 1's worst-case primitives (privileged pods, hostPath). Runtime detection catches steps that slip through.</p>
+        </section>
+
+        <section id="identity">
+            <h2>Identity chaining — pod to node to cloud</h2>
+            <p>This is the cloud-Kubernetes security failure that produces the worst outcomes. Same shape as the container version (see <a href="containers.html#identity">Containers</a>), with two added wrinkles:</p>
+            <ul>
+                <li><strong>The default service-account token.</strong> Every pod gets a Kubernetes service-account JWT auto-mounted at <code>/var/run/secrets/kubernetes.io/serviceaccount/token</code>. It's the pod's identity <em>to the API server</em>. With default RBAC, that token can list pods in its own namespace — but if any RoleBinding or ClusterRoleBinding has elevated the default service account, that's the attacker's stepping stone.</li>
+                <li><strong>The node IAM role.</strong> Worker nodes need an IAM role with permissions to pull images, attach volumes, write logs, register with the cluster's load balancer. That role is reachable via the node's IMDS — and from any pod with <code>hostNetwork: true</code> or no IMDS hop-limit enforcement.</li>
+            </ul>
+            <h3>The fix is workload identity</h3>
+            <p>Every cloud now offers a per-pod identity that breaks both legs:</p>
+            <ul>
+                <li><strong>AWS — <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a></strong> — EKS cluster runs an OIDC issuer; you annotate a Kubernetes service account with an IAM role; pods using that SA exchange the SA token for a scoped role session. <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a> is the newer, simpler alternative.</li>
+                <li><strong>Azure — <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">AKS Workload Identity</a></strong> — federated to Entra ID, same OIDC pattern.</li>
+                <li><strong>GCP — <a href="https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">GKE Workload Identity</a></strong> — Kubernetes SAs map to Google service accounts via Workload Identity Federation.</li>
+            </ul>
+            <p>Once workload identity is configured, also <strong>block IMDS from pods</strong>. On EKS, enforce IMDSv2 with hop-limit 1 (so containers can't reach the metadata interface through the host). On AKS and GKE, the network plugin / hostNetwork enforcement does the equivalent.</p>
+            <p>Finally — <strong>disable automatic service-account token mounting</strong> for pods that don't need to talk to the API server. <code>automountServiceAccountToken: false</code> on every workload that isn't an operator. This removes one of the attacker's default tools.</p>
+        </section>
+
+        <section id="rbac">
+            <h2>RBAC and the API server</h2>
+            <p>Kubernetes RBAC is the equivalent of cloud IAM, scoped to the API server. <strong>Roles</strong> grant verbs (<code>get</code>, <code>list</code>, <code>create</code>, <code>delete</code>) on resource types within a namespace. <strong>ClusterRoles</strong> grant them cluster-wide. <strong>RoleBindings</strong> and <strong>ClusterRoleBindings</strong> attach roles to users, groups, or service accounts.</p>
+            <p>Common ways RBAC goes wrong:</p>
+            <ul>
+                <li><strong>cluster-admin to a service account.</strong> Some Helm chart for a logging agent, monitoring operator, or autoscaler ships with a default ClusterRoleBinding granting cluster-admin "just to be safe." Now any pod compromised in that namespace is cluster-admin.</li>
+                <li><strong>Wildcard verbs.</strong> <code>verbs: ["*"]</code> on <code>resources: ["*"]</code> is functionally cluster-admin in a different shape. Audit for these.</li>
+                <li><strong>secrets read in unexpected places.</strong> Granting <code>get</code> on <code>secrets</code> is granting access to every credential in the namespace. Service accounts almost never need this; if they do, restrict to a specific secret name.</li>
+                <li><strong>impersonate / escalate / bind.</strong> Any verb that lets a principal change its own permissions or impersonate someone else. Hard to audit, easy to abuse. Avoid.</li>
+                <li><strong>Aggregated ClusterRoles.</strong> Kubernetes default ClusterRoles like <code>view</code>, <code>edit</code>, <code>admin</code> are aggregated — they automatically pick up new permissions from CRDs that opt in. A CRD installed later can silently expand what <code>edit</code> means.</li>
+            </ul>
+            <h3>What good looks like</h3>
+            <ul>
+                <li>One service account per workload. Workload-specific Role with the narrowest permission set that works. RoleBinding scoped to a single namespace.</li>
+                <li>Humans access via cloud SSO mapped to ClusterRoles, not via long-lived kubeconfig tokens.</li>
+                <li>Use <a href="https://github.com/aquasecurity/kube-bench" target="_blank" rel="noopener noreferrer">kube-bench</a> and <a href="https://github.com/cyberark/KubiScan" target="_blank" rel="noopener noreferrer">KubiScan</a> to audit RBAC for over-permissioned bindings.</li>
+                <li>API server audit logs flowing to your SIEM. The audit log catches "service account X created a pod with privileged: true" in a way that nothing else does.</li>
+            </ul>
+        </section>
+
+        <section id="pod-security">
+            <h2>Pod security &amp; escapes</h2>
+            <p>The escape paths covered on the <a href="containers.html#escapes">Containers page</a> all apply inside Kubernetes — privileged pods, sensitive capabilities, hostPath / hostPID / hostNetwork, kernel CVEs. Kubernetes adds tooling to enforce hardening cluster-wide:</p>
+            <h3>Pod Security Standards (PSS)</h3>
+            <p>Kubernetes ships three baseline standards: <strong>Privileged</strong> (no restrictions), <strong>Baseline</strong> (blocks the worst known escape paths — privileged, hostPath, hostPID, hostNetwork, hostIPC, certain capabilities), and <strong>Restricted</strong> (enforces hardened defaults: non-root user, read-only root filesystem, dropped capabilities, <code>RuntimeDefault</code> seccomp).</p>
+            <p>Apply with namespace labels — <code>pod-security.kubernetes.io/enforce: restricted</code> on production namespaces; <code>baseline</code> on namespaces that need slightly more flexibility; never <code>privileged</code> in prod. PSS replaced the deprecated PodSecurityPolicy and is built into modern Kubernetes (1.25+).</p>
+            <h3>Per-pod hardening</h3>
+            <p>The minimum hardened pod spec for production:</p>
+            <ul>
+                <li><code>runAsNonRoot: true</code>, <code>runAsUser: &lt;non-zero UID&gt;</code></li>
+                <li><code>readOnlyRootFilesystem: true</code> (with explicit <code>emptyDir</code> mounts where writes are needed)</li>
+                <li><code>allowPrivilegeEscalation: false</code></li>
+                <li><code>capabilities: drop: ["ALL"]</code> with explicit adds only where needed</li>
+                <li><code>seccompProfile: type: RuntimeDefault</code></li>
+                <li><code>automountServiceAccountToken: false</code> unless the workload calls the API</li>
+                <li>Resource requests and limits set (otherwise a noisy neighbor or runaway loop affects everything else)</li>
+            </ul>
+            <h3>Sandbox runtimes for high-risk workloads</h3>
+            <p>For workloads that run customer-supplied or otherwise untrusted code, the host kernel is not enough isolation. Options:</p>
+            <ul>
+                <li><strong>GKE Sandbox</strong> (gVisor) — per-pod user-space syscall sandbox.</li>
+                <li><strong>AKS Confidential Containers / Kata Containers</strong> — per-pod micro-VM.</li>
+                <li><strong>EKS on Fargate</strong> — per-pod Firecracker micro-VM; the user can't even put two of their own pods on the same kernel.</li>
+            </ul>
+            <p>The performance cost is modest; the escape-resistance gain is significant.</p>
+        </section>
+
+        <section id="networking">
+            <h2>Networking — flat by default</h2>
+            <p>Out of the box, every pod can talk to every other pod. The cluster's pod CIDR is flat — no segmentation between namespaces, no segmentation between trust levels, no segmentation at all. This is a Kubernetes design choice (it makes service discovery simple) and a security problem (a compromised pod scans the cluster).</p>
+            <h3>NetworkPolicy</h3>
+            <p>Kubernetes <a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener noreferrer">NetworkPolicy</a> resources define allowed ingress and egress at the pod label level. The standard pattern:</p>
+            <ol>
+                <li>Default-deny for all pods in production namespaces (no ingress, no egress).</li>
+                <li>Explicitly allow what's needed — "frontend can ingress from ingress-controller, egress to backend"; "backend can ingress from frontend, egress to database."</li>
+                <li>Always allow egress to <code>kube-dns</code> in the kube-system namespace, otherwise DNS breaks.</li>
+                <li>Always deny egress to the link-local range (169.254.0.0/16) — that's IMDS.</li>
+            </ol>
+            <p>NetworkPolicy requires a CNI plugin that supports it. All three managed clouds support this (Cilium, Calico, AWS VPC CNI with restrictions, Azure CNI Overlay, GKE Dataplane V2). Verify before assuming.</p>
+            <h3>Service mesh</h3>
+            <p>NetworkPolicy is L3/L4 — IP and port. For L7 controls (HTTP method, path, header), and for mutual TLS between every workload, a service mesh adds an identity-aware proxy alongside every pod. Options:</p>
+            <ul>
+                <li><a href="https://istio.io/" target="_blank" rel="noopener noreferrer">Istio</a> — comprehensive, opinionated, large operational footprint.</li>
+                <li><a href="https://linkerd.io/" target="_blank" rel="noopener noreferrer">Linkerd</a> — minimal, fast, Rust-based data plane, lower operational cost.</li>
+                <li><a href="https://cilium.io/" target="_blank" rel="noopener noreferrer">Cilium</a> — eBPF-based, can do mesh and CNI in one project.</li>
+                <li>Cloud-native equivalents: AWS App Mesh, GKE Anthos Service Mesh, AKS Service Mesh add-on.</li>
+            </ul>
+            <p>For a small cluster, NetworkPolicy is usually enough. For multi-team production with workloads at different trust levels, the mesh's mTLS and identity-based authorization are the right primitives.</p>
+            <h3>Ingress / egress controls</h3>
+            <ul>
+                <li><strong>Ingress.</strong> Public traffic enters via an ingress controller (NGINX, Traefik, Cilium, cloud-native ALB/AppGW/GCLB). The controller terminates TLS, enforces rate limits, and is the only thing on the public network.</li>
+                <li><strong>Egress.</strong> Restrict outbound to an allow-list — your registry, your package managers, your APIs. NAT gateways with allowed-destination rules, mesh egress gateways, or Cilium's L7 egress policies all work.</li>
+            </ul>
+        </section>
+
+        <section id="admission">
+            <h2>Admission control — the policy chokepoint</h2>
+            <p>Every change to the cluster flows through the API server. <strong>Admission controllers</strong> intercept those requests and can mutate or reject them. This is the chokepoint where you enforce "no privileged pods," "no images without signatures," "every namespace must have a NetworkPolicy" — at the place the cluster cannot bypass.</p>
+            <h3>Built-in admission</h3>
+            <p>Kubernetes ships several admission controllers; on managed clouds, the relevant ones are typically enabled by default. <strong>Pod Security Standards</strong> (covered above) is the most important built-in admission control.</p>
+            <h3>Policy engines</h3>
+            <p>For richer rules — beyond what PSS covers — install a policy engine:</p>
+            <ul>
+                <li><a href="https://kyverno.io/" target="_blank" rel="noopener noreferrer">Kyverno</a> — Kubernetes-native (policies are Kubernetes resources, no separate language). Easier to adopt; the dominant choice in 2026.</li>
+                <li><a href="https://www.openpolicyagent.org/docs/latest/kubernetes-introduction/" target="_blank" rel="noopener noreferrer">OPA Gatekeeper</a> — OPA + Rego. More expressive, steeper learning curve.</li>
+            </ul>
+            <h3>Policies worth running on day one</h3>
+            <ul>
+                <li>Reject pods with <code>privileged: true</code>, <code>hostPID</code>, <code>hostNetwork</code>, <code>hostIPC</code>, or <code>hostPath</code> mounts.</li>
+                <li>Reject pods that pull images from unapproved registries.</li>
+                <li>Require <code>runAsNonRoot</code> and <code>readOnlyRootFilesystem</code>.</li>
+                <li>Require resource requests and limits.</li>
+                <li>Require every namespace to have a default-deny NetworkPolicy.</li>
+                <li>Reject ClusterRoleBindings that grant cluster-admin to service accounts.</li>
+                <li>Require signed images (Binary Authorization on GKE; Kyverno + Cosign elsewhere).</li>
+            </ul>
+            <h3>Audit before enforce</h3>
+            <p>Roll new policies out in <em>audit</em> mode first — log violations without blocking. Once the log is clean (or fixes have shipped), flip to <em>enforce</em>. This pattern avoids the "we deployed a policy and now half the cluster won't start" outage.</p>
+        </section>
+
+        <section id="supply-chain">
+            <h2>Supply chain — what runs in your cluster</h2>
+            <p>The cluster runs more than your code. Every Helm chart you install, every operator, every CRD, every add-on (logging, metrics, ingress, secrets, GitOps) is third-party code with cluster permissions. The supply chain extends beyond your own image build.</p>
+            <ul>
+                <li><strong>Audit operators.</strong> Each operator installs CRDs, RBAC, and pods. Read the RBAC manifests before <code>helm install</code>. If the chart grants cluster-admin to a service account, ask why before agreeing.</li>
+                <li><strong>Sign and verify images.</strong> Covered on the <a href="containers.html#supply-chain">Containers page</a>. In Kubernetes, the verification happens at admission: Binary Authorization on GKE, Kyverno + Cosign on EKS/AKS.</li>
+                <li><strong>Pin to digests, not tags.</strong> Helm charts that use floating tags re-pull a different image silently. Pin <code>image: registry/repo@sha256:abc...</code> in your overrides.</li>
+                <li><strong>Maintain an SBOM database.</strong> For both your images and the third-party ones running in your cluster. When CVE-2024-X drops, the question "is anything vulnerable" is one query.</li>
+                <li><strong>Scan workloads continuously.</strong> Not just at build — periodically rescan everything running in the cluster against the latest CVE feed.</li>
+            </ul>
+        </section>
+
+        <figure class="page-photo">
+          <picture>
+            <source srcset="/img/photos/dashboard-graphs.webp" type="image/webp">
+            <img src="/img/photos/dashboard-graphs.jpg" alt="Man analyzing business data and financial graphs on a laptop" width="1880" height="1253" loading="lazy" decoding="async">
+          </picture>
+          <figcaption>Photo by Kaboompics on Pexels</figcaption>
+        </figure>
+
+        <section id="comparison">
+            <h2>EKS, AKS, and GKE side-by-side</h2>
+            <p>All three managed Kubernetes services run upstream Kubernetes — same API, same primitives, same kubectl. The differences are in the managed scope, the cloud integrations, and the operational defaults.</p>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="ct-row-head">Building block</th>
+                            <th scope="col" class="ct-aws"><span class="ct-dot ct-dot-aws" aria-hidden="true"></span> EKS</th>
+                            <th scope="col" class="ct-azure"><span class="ct-dot ct-dot-azure" aria-hidden="true"></span> AKS</th>
+                            <th scope="col" class="ct-gcp"><span class="ct-dot ct-dot-gcp" aria-hidden="true"></span> GKE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">Control plane management</th>
+                            <td>Cloud (HA across 3 AZ)</td>
+                            <td>Cloud (free tier; paid for SLA)</td>
+                            <td>Cloud (regional or zonal)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Fully-managed mode</th>
+                            <td>EKS Auto Mode, Fargate profiles</td>
+                            <td>Container Apps (separate product)</td>
+                            <td>GKE Autopilot</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Workload identity</th>
+                            <td>IRSA, EKS Pod Identity</td>
+                            <td>AKS Workload Identity (Entra federated)</td>
+                            <td>GKE Workload Identity</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Default CNI</th>
+                            <td>AWS VPC CNI (pod = VPC IP)</td>
+                            <td>Azure CNI Overlay or kubenet</td>
+                            <td>GKE Dataplane V2 (Cilium-based) or routes</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">NetworkPolicy support</th>
+                            <td>VPC CNI w/ policy or Cilium</td>
+                            <td>Calico, Cilium, Azure NPM</td>
+                            <td>Built-in via Dataplane V2</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Image admission</th>
+                            <td>Kyverno / Gatekeeper + AWS Signer</td>
+                            <td>Image integrity policies, Defender for Containers</td>
+                            <td>Binary Authorization (native)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Runtime threat detection</th>
+                            <td>GuardDuty EKS Protection &amp; Runtime Monitoring</td>
+                            <td>Defender for Containers</td>
+                            <td>SCC Container Threat Detection</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Audit log destination</th>
+                            <td>CloudWatch Logs</td>
+                            <td>Azure Monitor / Log Analytics</td>
+                            <td>Cloud Audit Logs</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Private control plane</th>
+                            <td>Private endpoint option</td>
+                            <td>Private cluster option</td>
+                            <td>Private cluster option</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Auto-upgrade</th>
+                            <td>Managed node groups with maintenance windows</td>
+                            <td>Auto-upgrade channel</td>
+                            <td>Release channels (rapid / regular / stable)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>For teams new to Kubernetes, fully-managed modes (GKE Autopilot, EKS Auto Mode + Fargate, AKS + Container Apps for workloads that fit) remove enormous classes of operational and security work — no node patching, no privileged-pod admission decisions to make, no CNI choice to second-guess. The trade-off is reduced flexibility; for most application workloads, that's a feature.</p>
+        </section>
+
+        <section id="hardening">
+            <h2>Hardening checklist</h2>
+            <p>The non-negotiable Kubernetes-in-cloud hardening list:</p>
+            <div class="pillar-grid">
+                <div class="pillar-card pillar-card-stage1">
+                    <h3>Identity</h3>
+                    <p>Workload identity (IRSA / WIF) for every pod that talks to the cloud. IMDS blocked from pods. Default SA token mounting disabled. Cloud SSO for human cluster access.</p>
+                </div>
+                <div class="pillar-card pillar-card-stage2">
+                    <h3>RBAC</h3>
+                    <p>One service account per workload. Narrowest possible Role; no wildcards. ClusterRoleBindings audited. API server audit logs flowing to SIEM.</p>
+                </div>
+                <div class="pillar-card pillar-card-stage3">
+                    <h3>Pod &amp; node</h3>
+                    <p>Pod Security Standards <code>restricted</code> on prod namespaces. Sandbox runtime (gVisor / Kata / Fargate) for untrusted workloads. Nodes auto-patched on a defined cadence.</p>
+                </div>
+                <div class="pillar-card pillar-card-stage4">
+                    <h3>Network &amp; admission</h3>
+                    <p>Default-deny NetworkPolicy. Egress allow-list. Admission control (Kyverno) rejecting risky configs. Signed-image enforcement at admission.</p>
+                </div>
+            </div>
+            <p>Add: runtime detection (Falco, Tetragon, your CNAPP runtime module); centralized container and audit logs; image scanning at build and registry; an SBOM database for fast CVE response; cluster autoscaler limits to cap blast radius from runaway pods.</p>
+        </section>
+
+        <section id="pitfalls">
+            <h2>Common pitfalls</h2>
+            <ul>
+                <li><strong>One giant cluster for everything.</strong> Prod, staging, sandbox, untrusted dev workloads all on one cluster. A compromise crosses every trust boundary. Multi-cluster (or at least one cluster per environment) is the standard pattern.</li>
+                <li><strong>cluster-admin granted to operators.</strong> The fastest path to an over-permissioned cluster. Audit every chart's RBAC before installing.</li>
+                <li><strong>No workload identity.</strong> Pods inherit the node's broad cloud role. Capital-One-style identity chaining is one app exploit away.</li>
+                <li><strong>Pod Security Standards not enforced.</strong> "We mean to" doesn't count. PSS is two namespace labels; apply them.</li>
+                <li><strong>No NetworkPolicy.</strong> Flat networking = lateral movement on day one.</li>
+                <li><strong>Admission control in audit-only forever.</strong> If violations are never blocked, the policy is documentation, not control.</li>
+                <li><strong>Treating namespaces as security boundaries.</strong> They're not. Use clusters for hard boundaries; namespaces for organization.</li>
+                <li><strong>Skipping audit log analysis.</strong> The Kubernetes audit log answers most "what happened" questions if it's flowing somewhere. Wire it to your SIEM on day one.</li>
+                <li><strong>Letting the cluster diverge from IaC.</strong> Hot-fixes made with <code>kubectl edit</code> are silent drift. Run all changes through GitOps (Argo CD, Flux) so the cluster's state is auditable.</li>
+                <li><strong>Ignoring node-level concerns on "fully managed."</strong> Even on Autopilot, you own the workload security context. The cloud cannot stop you from running <code>privileged: true</code> if your namespace allows it.</li>
+            </ul>
+        </section>
+
+        <section id="further">
+            <h2>Further reading</h2>
+            <h3>Official documentation</h3>
+            <ul>
+                <li><a href="https://kubernetes.io/docs/concepts/security/" target="_blank" rel="noopener noreferrer">Kubernetes documentation — Security</a></li>
+                <li><a href="https://docs.aws.amazon.com/eks/latest/best-practices/security.html" target="_blank" rel="noopener noreferrer">EKS Best Practices — Security</a></li>
+                <li><a href="https://learn.microsoft.com/en-us/azure/aks/concepts-security" target="_blank" rel="noopener noreferrer">AKS — security concepts</a></li>
+                <li><a href="https://cloud.google.com/kubernetes-engine/docs/concepts/security-overview" target="_blank" rel="noopener noreferrer">GKE — security overview</a></li>
+            </ul>
+            <h3>Benchmarks &amp; guidance</h3>
+            <ul>
+                <li><a href="https://www.cisecurity.org/benchmark/kubernetes" target="_blank" rel="noopener noreferrer">CIS Kubernetes Benchmark</a></li>
+                <li><a href="https://kubernetes.io/docs/concepts/security/pod-security-standards/" target="_blank" rel="noopener noreferrer">Pod Security Standards</a></li>
+                <li><a href="https://media.defense.gov/2022/Aug/29/2003066362/-1/-1/0/CTR_KUBERNETES_HARDENING_GUIDANCE_1.2_20220829.PDF" target="_blank" rel="noopener noreferrer">NSA/CISA — Kubernetes Hardening Guidance</a> (PDF)</li>
+                <li><a href="https://github.com/aquasecurity/kube-bench" target="_blank" rel="noopener noreferrer">kube-bench</a> — CIS benchmark scanner</li>
+            </ul>
+            <h3>Tooling</h3>
+            <ul>
+                <li><a href="https://kyverno.io/" target="_blank" rel="noopener noreferrer">Kyverno</a> — Kubernetes-native policy</li>
+                <li><a href="https://www.openpolicyagent.org/docs/latest/kubernetes-introduction/" target="_blank" rel="noopener noreferrer">OPA Gatekeeper</a></li>
+                <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a> — runtime security</li>
+                <li><a href="https://cilium.io/" target="_blank" rel="noopener noreferrer">Cilium</a> &amp; <a href="https://tetragon.io/" target="_blank" rel="noopener noreferrer">Tetragon</a> — eBPF networking and observability</li>
+                <li><a href="https://argo-cd.readthedocs.io" target="_blank" rel="noopener noreferrer">Argo CD</a> / <a href="https://fluxcd.io" target="_blank" rel="noopener noreferrer">Flux</a> — GitOps</li>
+            </ul>
+            <h3>Related CSOH pages</h3>
+            <ul>
+                <li><a href="containers.html">Containers &amp; cloud security</a> — what runs inside Kubernetes pods.</li>
+                <li><a href="ci-cd.html">CI/CD for cloud deployments</a> — the pipeline that ships into the cluster.</li>
+                <li><a href="landing-zones.html">Landing zones</a> — the cloud foundation the cluster lives in.</li>
+                <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a> — runtime + posture tools for clusters.</li>
+                <li><a href="glossary.html">Glossary</a> — every term on this page, defined.</li>
+            </ul>
+        </section>
+
+        <section id="faq">
+            <h2>FAQ</h2>
+
+            <h3>Do I need Kubernetes at all?</h3>
+            <p>Often, no. If you have one or two workloads, a serverless container service (Cloud Run, Fargate, Container Apps) gives you containerized deployment without operating a cluster. The decision point is around 5–10 distinct workloads with shared infrastructure needs (service-to-service identity, scheduled jobs, multi-region rollout). Below that, Kubernetes is overhead; above it, the operational model pays back.</p>
+
+            <h3>EKS vs AKS vs GKE — which is "most secure"?</h3>
+            <p>The Kubernetes API surface is the same on all three. GKE has historically led on built-in defaults — Workload Identity, Binary Authorization, GKE Sandbox, Autopilot — but EKS and AKS have closed the gap and offer equivalents. The bigger driver is "which cloud do you already live in?" — running EKS from an Azure organization or GKE from AWS adds federation complexity you don't need.</p>
+
+            <h3>Should I use Helm?</h3>
+            <p>For deploying off-the-shelf software (a database operator, an ingress controller), Helm is the lingua franca and you'll use it whether you like it or not. For your own workloads, Helm <em>or</em> Kustomize <em>or</em> raw YAML are all defensible. The security-relevant choice is "are these manifests in git, reviewed, and deployed by a pipeline" — not which tool generated them.</p>
+
+            <h3>What about GitOps?</h3>
+            <p>GitOps controllers (Argo CD, Flux) pull desired state from a Git repo and reconcile it into the cluster. Two big security wins: the cluster never trusts the CI runner (only itself and the Git repo), and every cluster change is in git history. For production workloads, GitOps is the right deploy model in 2026. See the <a href="ci-cd.html">CI/CD page</a> for how it sits next to the build pipeline.</p>
+
+            <h3>Are CRDs (custom resources) a security risk?</h3>
+            <p>The CRD itself is data — it doesn't run code. But CRDs are usually paired with operators (controllers) that <em>do</em> run code, often with broad cluster permissions. Auditing CRD-bearing operators for RBAC scope and image provenance is the same exercise as auditing any third-party software with cluster-level access.</p>
+
+            <h3>How does this relate to <a class="glossary-link" href="glossary.html#term-zero-trust">zero trust</a>?</h3>
+            <p>Kubernetes plus a service mesh is one of the cleanest places to put zero-trust principles into production. mTLS between every workload (verify explicitly), per-pod workload identity (least privilege), default-deny network policy (assume breach), continuous runtime visibility (verify continuously). The cluster gives you the primitives; the configuration is the work.</p>
+        </section>
+
+        <section class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="containers.html">Containers &amp; cloud security</a> — what runs inside the pods.</li>
+                <li><a href="ci-cd.html">CI/CD for cloud deployments</a> — the pipeline that ships into the cluster.</li>
+                <li><a href="landing-zones.html">Landing zones</a> — the foundation the cluster lives in.</li>
+                <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a> — the tools that watch clusters in production.</li>
+                <li><a href="sessions.html">Friday Zoom</a> — Kubernetes war stories are a regular topic. Drop in.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Explore</h3>
+        <ul>
+          <li><a href="/learning-path.html">Learning Path</a></li>
+          <li><a href="/resources.html">Resources</a></li>
+          <li><a href="/news.html">News</a></li>
+          <li><a href="/sessions.html">Zoom Sessions</a></li>
+          <li><a href="/meetings.html">Meeting Recaps</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Connect</h3>
+        <ul>
+          <li><a href="mailto:admin@csoh.org">Contact</a></li>
+          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="/rss.html">RSS Feed</a></li>
+          <li><a href="/contribute.html">Contribute</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="/privacy.html">Privacy</a></li>
+        <li><a href="/code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="/security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=b517f39d" integrity="sha384-8/1Y6zmSmGcKtdeoSJDd4JadBZUwI1F4M7uqeUVQt8uwrLkszhyRCqoPGfhKfKA7"
+        defer></script>
+</body>
+
+</html>

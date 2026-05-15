@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description"
+        content="Containers and cloud security — what containers are, why cloud workloads run in them, and the real risks: escapes, identity chaining via instance metadata, flat networking, and supply-chain attacks. Vendor-neutral.">
+    <meta name="keywords"
+        content="containers, container security, Docker, OCI, container escape, IMDS, workload identity, image scanning, runtime security, Falco, gVisor, Kata Containers, distroless">
+    <title>Containers &amp; Cloud Security - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/containers.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#2c3e50">
+
+    <meta property="og:title" content="Containers &amp; Cloud Security - CSOH">
+    <meta property="og:description"
+        content="A practitioner's guide to containers in the cloud — the security boundary, the real escape paths, and how identity, networking, and supply chain risks compound when containers meet the cloud control plane.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://csoh.org/containers.html">
+    <meta property="og:image" content="https://csoh.org/banner.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Containers &amp; Cloud Security">
+    <meta name="twitter:description"
+        content="Vendor-neutral guide to container security in the cloud — escapes, identity chaining, networking, supply chain.">
+    <meta name="twitter:image" content="https://csoh.org/banner.png">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+
+    <link rel="preload" href="/style.css?v=0d8fc81d" as="style"
+        integrity="sha384-T2RglkzlwLN3tjrobi8W8V4aTwvuaVZzMON0R16FuXpbTuQimufZPvR4j4UupkNE">
+    <link rel="stylesheet" href="/style.css?v=0d8fc81d"
+        integrity="sha384-T2RglkzlwLN3tjrobi8W8V4aTwvuaVZzMON0R16FuXpbTuQimufZPvR4j4UupkNE">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Containers & Cloud Security",
+      "description": "A vendor-neutral practitioner's guide to container security in the cloud — the trust boundary, escape paths, identity chaining via IMDS, flat networking, and supply chain risks.",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "datePublished": "2026-05-15",
+      "dateModified": "2026-05-15",
+      "mainEntityOfPage": "https://csoh.org/containers.html",
+      "image": "https://csoh.org/banner.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://csoh.org/"},
+        {"@type": "ListItem", "position": 2, "name": "Containers", "item": "https://csoh.org/containers.html"}
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is a container a security boundary?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A container is a process-isolation boundary, not a strong security boundary. Containers on the same host share a kernel — a kernel vulnerability, a misconfigured capability, or a privileged container can let a process inside one container affect another or the host. Treat the host (the VM the container runs on) as the real boundary; treat the container as a lightweight isolation layer that needs hardening on top. If you need a hard tenant boundary, use sandboxed runtimes (gVisor, Kata Containers, Firecracker) or separate VMs."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is a container escape?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A container escape is any technique that lets code running inside a container affect the host or other containers on it. The most common paths: a process running as root in a container with a host filesystem mount, a container with --privileged or CAP_SYS_ADMIN, a kernel vulnerability the container kernel shares with the host (e.g. CVE-2022-0492 cgroups, dirty pipe, leaky vessels), or a container with hostPID/hostNetwork that can see and signal host processes. The fix is layered: drop capabilities, run as non-root, enforce seccomp/AppArmor profiles, and patch the host kernel."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why is the instance metadata service (IMDS) dangerous for containers?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Containers running on a cloud VM share the host's network namespace by default, which means they can reach the instance metadata service at 169.254.169.254 and request the VM's IAM credentials. A compromised container can pivot from 'I can run code in one container' to 'I have the entire VM's cloud permissions.' This is identity chaining, and it's how the Capital One breach worked. The fix on AWS is IMDSv2 with hop-limit 1 (so containers can't reach it through the host), or — better — give each workload its own scoped identity via IRSA / Workload Identity / managed-identity-per-pod, and block IMDS access from workloads entirely."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Are managed container services more secure than self-hosted?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Generally yes — Cloud Run, Fargate, Container Apps, and similar managed services run each workload in a per-customer micro-VM (Firecracker on AWS, similar on the others). The kernel boundary is hardened, the host is patched by the cloud, and the user can't misconfigure --privileged. The tradeoff is reduced control: no DaemonSets, no privileged sidecars, no kernel modules. For most application workloads that's a feature, not a limitation."
+          }
+        }
+      ]
+    }
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="index.html" class="logo-link">
+                <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="news.html">News</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="what-is-cloud-security.html">What is Cloud Security?</a></li>
+                        <li><a href="learning-path.html">Learning Path</a></li>
+                        <li><a href="ai-learning.html">AI Learning</a></li>
+                        <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>
+                        <li><a href="cloud-security-careers.html">Careers</a></li>
+                        <li><a href="cloud-security-home-lab.html">Home Lab</a></li>
+                        <li><a href="cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                        <li><a href="cloud-security-certifications.html">Certifications</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Reference <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="cloud-security-best-practices.html">Best Practices</a></li>
+                        <li><a href="shared-responsibility-model.html">Shared Responsibility</a></li>
+                        <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                        <li><a href="landing-zones.html">Landing Zones</a></li>
+                        <li><a href="containers.html" aria-current="page">Containers</a></li>
+                        <li><a href="kubernetes.html">Kubernetes</a></li>
+                        <li><a href="ci-cd.html">CI/CD</a></li>
+                        <li><a href="cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="ctfs.html">CTFs</a></li>
+                        <li><a href="github-actions.html">GitHub Actions</a></li>
+                        <li><a href="cloud-deployment.html">Cloud Deployment</a></li>
+                        <li><a href="resources.html">Resources</a></li>
+                        <li><a href="glossary.html">Glossary</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Defend <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="threat-research.html">Threat Research</a></li>
+                        <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Attend <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="sessions.html">Zoom Sessions</a></li>
+                        <li><a href="community.html">Community &amp; Signal</a></li>
+                        <li><a href="conferences.html">Conferences</a></li>
+                        <li><a href="meetings.html">Meeting Recaps</a></li>
+                        <li><a href="presentations.html">Presentations</a></li>
+                        <li><a href="chat-resources.html">Chat Resources</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Contribute <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="contribute.html">Contribute Overview</a></li>
+                        <li><a href="contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li><a href="faq.html">FAQ</a></li>
+                    <li><a href="index.html#about">About</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="index.html">Home</a></li>
+            <li><span aria-current="page">Containers</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--illustrated">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>Containers &amp; Cloud Security</h1>
+          <p>Containers are the unit of deployment for most cloud workloads — and the unit of compromise for many cloud breaches. Vendor-neutral guide to what containers actually are, why they matter for cloud, and the real risks: escapes, identity chaining via the metadata service, flat networking, and supply chain attacks.</p>
+          <div class="cta-buttons">
+            <a href="#risks" class="btn btn-primary">Container risks →</a>
+            <a href="#comparison" class="btn btn-secondary">AWS / Azure / GCP comparison</a>
+          </div>
+        </div>
+        <div class="hero-illustration" aria-hidden="true">
+          <svg viewBox="0 0 600 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration of containers on a shared kernel inside a cloud VM, with a separate metadata service connection">
+            <defs>
+              <linearGradient id="c-cloud" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#bae6fd"/><stop offset="60%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+              <linearGradient id="c-host" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>
+              <linearGradient id="c-kernel" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7e22ce"/><stop offset="100%" stop-color="#4c1d95"/></linearGradient>
+              <radialGradient id="c-halo" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.35"/><stop offset="100%" stop-color="#7dd3fc" stop-opacity="0"/></radialGradient>
+            </defs>
+            <circle cx="300" cy="240" r="200" fill="url(#c-halo)"/>
+            <!-- Cloud at top -->
+            <path d="M 200,80 a 50,50 0 0,1 60,-50 a 70,70 0 0,1 130,0 a 50,50 0 0,1 50,30 a 45,45 0 0,1 -25,80 H 220 a 45,45 0 0,1 -20,-60 z" fill="url(#c-cloud)" stroke="#fff" stroke-width="1.5" stroke-opacity="0.4"/>
+            <text x="300" y="95" text-anchor="middle" fill="#0c4a6e" font-size="14" font-weight="700">Cloud VM (host)</text>
+            <!-- Host VM -->
+            <rect x="80" y="170" width="440" height="220" rx="10" fill="url(#c-host)" stroke="#475569" stroke-width="1.5"/>
+            <!-- Kernel band -->
+            <rect x="80" y="340" width="440" height="50" rx="0" fill="url(#c-kernel)" opacity="0.85"/>
+            <text x="300" y="370" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Shared Linux kernel</text>
+            <!-- Containers as boxes on host -->
+            <g>
+              <rect x="105" y="195" width="120" height="120" rx="8" fill="#0d1424" stroke="#34d399" stroke-width="2"/>
+              <text x="165" y="220" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700">Container A</text>
+              <text x="165" y="240" text-anchor="middle" fill="#cbd5e1" font-size="10">app process</text>
+              <text x="165" y="258" text-anchor="middle" fill="#cbd5e1" font-size="10">+ libs</text>
+              <text x="165" y="276" text-anchor="middle" fill="#94a3b8" font-size="9">namespaces +</text>
+              <text x="165" y="290" text-anchor="middle" fill="#94a3b8" font-size="9">cgroups</text>
+
+              <rect x="240" y="195" width="120" height="120" rx="8" fill="#0d1424" stroke="#38bdf8" stroke-width="2"/>
+              <text x="300" y="220" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">Container B</text>
+              <text x="300" y="240" text-anchor="middle" fill="#cbd5e1" font-size="10">app process</text>
+              <text x="300" y="258" text-anchor="middle" fill="#cbd5e1" font-size="10">+ libs</text>
+
+              <rect x="375" y="195" width="120" height="120" rx="8" fill="#0d1424" stroke="#fbbf24" stroke-width="2"/>
+              <text x="435" y="220" text-anchor="middle" fill="#fbbf24" font-size="12" font-weight="700">Container C</text>
+              <text x="435" y="240" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="700">--privileged</text>
+              <text x="435" y="258" text-anchor="middle" fill="#cbd5e1" font-size="10">⚠ host access</text>
+            </g>
+            <!-- IMDS callout -->
+            <g>
+              <rect x="130" y="410" width="160" height="50" rx="8" fill="#0f172a" stroke="#fb7185" stroke-width="1.5"/>
+              <text x="210" y="430" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="700">169.254.169.254</text>
+              <text x="210" y="448" text-anchor="middle" fill="#e2e8f0" font-size="10">IMDS — host credentials</text>
+              <rect x="320" y="410" width="160" height="50" rx="8" fill="#0f172a" stroke="#a78bfa" stroke-width="1.5"/>
+              <text x="400" y="430" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="700">Workload identity</text>
+              <text x="400" y="448" text-anchor="middle" fill="#e2e8f0" font-size="10">per-pod credentials</text>
+            </g>
+            <path d="M 165,320 L 200,408" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="3 3" fill="none" opacity="0.6"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <main class="container contribute-article" id="main-content">
+
+        <figure class="page-photo">
+          <picture>
+            <source srcset="/img/photos/data-cables.webp" type="image/webp">
+            <img src="/img/photos/data-cables.jpg" alt="From above contemporary server cable trays in a modern data center" width="1880" height="1253" loading="lazy" decoding="async">
+          </picture>
+          <figcaption>Photo by Brett Sayles on Pexels</figcaption>
+        </figure>
+
+        <p class="page-meta"><time datetime="2026-05-15">Last updated <strong>2026-05-15</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/containers.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+
+        <div class="info-box--blue">
+            <p><strong>The 30-second version:</strong> A <strong>container</strong> is a Linux process (or set of processes) isolated by <em>namespaces</em> and <em>cgroups</em>, packaged with its dependencies into an immutable image. Multiple containers share <em>one host kernel</em> — so the boundary is real but thin. In the cloud, containers run on a VM whose <a class="glossary-link" href="glossary.html#term-imds">instance metadata service</a> hands out the VM's IAM credentials. A compromised container that can reach IMDS gets the whole VM's cloud permissions.</p>
+            <p style="margin-top:0.75rem;">That's the dominant cloud-container risk: <strong>identity chaining</strong> — pivoting from "code execution in one container" to "the cloud role attached to the VM." Add container escapes via privileged flags or kernel CVEs, flat pod-to-pod networking, and pulled-from-public-internet base images, and you have the full container-security surface in the cloud.</p>
+        </div>
+
+        <div class="toc">
+            <h2>📖 On this page</h2>
+            <ol>
+                <li><a href="#what-is">What a container actually is</a></li>
+                <li><a href="#why-cloud">Why containers and cloud are inseparable</a></li>
+                <li><a href="#boundary">The boundary — is a container a security boundary?</a></li>
+                <li><a href="#risks">The six risk categories that matter</a></li>
+                <li><a href="#escapes">Container escapes — the real paths</a></li>
+                <li><a href="#identity">Identity chaining — IMDS and stolen cloud roles</a></li>
+                <li><a href="#networking">Networking — flat by default</a></li>
+                <li><a href="#supply-chain">Supply chain — images, registries, signing</a></li>
+                <li><a href="#runtime">Runtime detection</a></li>
+                <li><a href="#comparison">AWS, Azure, and GCP container services</a></li>
+                <li><a href="#hardening">Hardening checklist</a></li>
+                <li><a href="#pitfalls">Common pitfalls</a></li>
+                <li><a href="#further">Further reading</a></li>
+                <li><a href="#faq">FAQ</a></li>
+            </ol>
+        </div>
+
+        <section id="what-is">
+            <h2>What a container actually is</h2>
+            <p>A container is a Linux process (or group of processes) with three things wrapped around it:</p>
+            <ol>
+                <li><strong>Namespaces</strong> — kernel features that give the process its own view of system resources. PID namespace makes the process think it's the only one on the system. Mount namespace gives it its own filesystem root. Network namespace gives it its own interfaces. UTS, IPC, user, cgroup namespaces round it out. Different containers see different namespaces; the kernel keeps the views separate.</li>
+                <li><strong>Cgroups (control groups)</strong> — kernel mechanism for capping CPU, memory, I/O, and PID counts per group of processes. The container can't starve the host, can't fork-bomb the system, can't allocate more memory than its limit.</li>
+                <li><strong>An image</strong> — a tarball containing the filesystem the process sees, plus a manifest describing how to run it. Built once, shipped to a registry, pulled to any host, run identically.</li>
+            </ol>
+            <p>That's the entire abstraction. There is no "container kernel" — the host's kernel runs every container's code. There is no hypervisor — containers are not VMs. They start in milliseconds because they're just processes; the only thing being created is the namespace and cgroup wiring around an exec.</p>
+            <p>Container runtimes (containerd, CRI-O, Docker Engine, runc underneath) automate the namespace setup and image management. The Open Container Initiative (<a href="https://opencontainers.org/" target="_blank" rel="noopener noreferrer">OCI</a>) standardizes the image format and runtime API so the same image runs on any conformant runtime.</p>
+        </section>
+
+        <section id="why-cloud">
+            <h2>Why containers and cloud are inseparable</h2>
+            <p>The cloud's value proposition is "elastic capacity priced by the second." Containers are the most efficient unit to fill that capacity:</p>
+            <ul>
+                <li><strong>Sub-second startup.</strong> A VM takes 30–90 seconds to boot. A container takes 50ms. When traffic spikes 10x, only containers scale in time.</li>
+                <li><strong>Density.</strong> Hundreds of containers fit on a VM that would host one or two VMs. Cloud compute is billed by the VM; density translates directly to cost.</li>
+                <li><strong>Immutable artifacts.</strong> The image is content-addressed. The same image hash that ran in staging runs in prod — no "works on my machine," no config drift.</li>
+                <li><strong>One artifact across clouds.</strong> An OCI image runs on EKS, AKS, GKE, ECS, Cloud Run, Container Apps, App Runner, Lambda (with caveats). The portability argument matters when you have to leave one cloud.</li>
+                <li><strong>Operability.</strong> Health checks, log shipping, metrics, auto-restart on crash — the container runtime gives you these for free, regardless of language.</li>
+            </ul>
+            <p>The cost of that efficiency, from a security standpoint, is a shared kernel and a shared network namespace on the host. Both become attack surface when the threat model is "untrusted code in a container" instead of "trusted code on a VM."</p>
+        </section>
+
+        <section id="boundary">
+            <h2>The boundary — is a container a security boundary?</h2>
+            <p>It is not. Or more precisely: a container is a <em>process-isolation</em> boundary, not a <em>tenant-isolation</em> boundary. The difference matters.</p>
+            <p>If you run two of <em>your own</em> microservices in two containers on the same VM, the isolation is fine for most purposes — the kernel keeps their namespaces separate, cgroups keep one from starving the other. That's process isolation. It works.</p>
+            <p>If you run two <em>different customers'</em> code in two containers on the same VM, the isolation is not fine. A kernel CVE affects both. A misconfigured capability on one container can let it inspect or modify the other. A noisy-neighbor exploit (Spectre, Foreshadow) can leak data across the shared CPU cache. That's a tenant boundary, and the container abstraction was not designed for it.</p>
+            <p>The cloud providers know this. That's why <a href="https://aws.amazon.com/fargate/" target="_blank" rel="noopener noreferrer">AWS Fargate</a>, <a href="https://learn.microsoft.com/en-us/azure/container-apps/" target="_blank" rel="noopener noreferrer">Azure Container Apps</a>, <a href="https://cloud.google.com/run" target="_blank" rel="noopener noreferrer">Cloud Run</a>, and similar managed services run each workload in its own micro-VM (<a href="https://firecracker-microvm.github.io/" target="_blank" rel="noopener noreferrer">Firecracker</a> or equivalent). The container API is preserved; the actual isolation is at the VM level, where the hypervisor is the boundary.</p>
+            <p>If you self-host on EKS / AKS / GKE / vanilla VMs, you control where containers land. If two workloads should not share a kernel — different trust levels, customer multi-tenancy, regulated data — use sandbox runtimes (<a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gVisor</a>, <a href="https://katacontainers.io/" target="_blank" rel="noopener noreferrer">Kata Containers</a>) or pin them to different node pools. The platform won't do this for you.</p>
+        </section>
+
+        <section id="risks">
+            <h2>The six risk categories that matter</h2>
+            <p>Container security in the cloud collapses into six recurring categories. The names differ across vendors; the threats don't.</p>
+            <div class="pillar-grid">
+                <div class="pillar-card pillar-card-iam">
+                    <h3>1. Container escape</h3>
+                    <p>Process inside a container affects the host or other containers. Privileged flags, kernel CVEs, hostPath mounts, raw capabilities. The classic "get root on the node."</p>
+                </div>
+                <div class="pillar-card pillar-card-posture">
+                    <h3>2. Identity chaining</h3>
+                    <p>Compromised container reaches the instance metadata service and steals the VM's IAM credentials — pivoting from one workload's permissions to the host's entire cloud role.</p>
+                </div>
+                <div class="pillar-card pillar-card-network">
+                    <h3>3. Lateral network movement</h3>
+                    <p>Default container networking is flat. Any pod can reach any other pod, and often the cloud control plane. One compromised container scans the internal network for soft targets.</p>
+                </div>
+                <div class="pillar-card pillar-card-supply">
+                    <h3>4. Supply chain</h3>
+                    <p>Base images pulled from public registries, dependencies pulled from public package managers, build-time injection. Compromise the image; compromise every deploy.</p>
+                </div>
+                <div class="pillar-card pillar-card-data">
+                    <h3>5. Secrets exposure</h3>
+                    <p>Secrets baked into images, passed as env vars (visible in logs and on disk), or readable through the API server. The container becomes a secrets-extraction target.</p>
+                </div>
+                <div class="pillar-card pillar-card-detect">
+                    <h3>6. Runtime visibility gap</h3>
+                    <p>Without runtime instrumentation, "the container is running" is all you know. Process trees, network connections, syscalls — none of it is captured by default.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="escapes">
+            <h2>Container escapes — the real paths</h2>
+            <p>"Container escape" sounds exotic. In practice it's a small number of well-known paths, almost always opened by configuration choices the user made.</p>
+            <h3>The privileged container</h3>
+            <p>Running with <code>--privileged</code> (or <code>securityContext.privileged: true</code> in Kubernetes) disables almost every isolation feature the runtime adds. The container has all Linux capabilities, including <code>CAP_SYS_ADMIN</code>; sees all devices; can mount filesystems; can load kernel modules. From a privileged container, getting host root is a single <code>chroot</code> away. <a href="https://blog.trailofbits.com/2019/07/19/understanding-docker-container-escapes/" target="_blank" rel="noopener noreferrer">Trail of Bits has the canonical write-up</a>.</p>
+            <h3>Sensitive capabilities without --privileged</h3>
+            <p>Even without the privileged flag, specific capabilities are dangerous: <code>CAP_SYS_ADMIN</code>, <code>CAP_SYS_PTRACE</code>, <code>CAP_SYS_MODULE</code>, <code>CAP_NET_ADMIN</code>, <code>CAP_DAC_READ_SEARCH</code>. Drop all capabilities by default and add back only what the workload needs.</p>
+            <h3>HostPath / hostPID / hostNetwork / hostIPC</h3>
+            <p>Mounting <code>/</code> (or <code>/var/run/docker.sock</code>) from the host into the container is direct escape. So is <code>hostPID: true</code> (you can signal host processes) and <code>hostNetwork: true</code> (you see and bind host interfaces, including the IMDS interface). Admission controllers should reject these by default in production.</p>
+            <h3>Kernel CVEs</h3>
+            <p>Because the host kernel is shared, a kernel vulnerability is a container-escape vulnerability. Notable examples: <a href="https://nvd.nist.gov/vuln/detail/CVE-2022-0492" target="_blank" rel="noopener noreferrer">CVE-2022-0492</a> (cgroups v1 release_agent), <a href="https://nvd.nist.gov/vuln/detail/CVE-2022-0185" target="_blank" rel="noopener noreferrer">CVE-2022-0185</a> (filesystem context heap overflow), <a href="https://www.snyk.io/research/leaky-vessels-docker-runc-container-breakout-vulnerabilities" target="_blank" rel="noopener noreferrer">Leaky Vessels</a> (runc / Docker, 2024), Dirty Pipe. The defense is keeping host kernels patched — which on managed services is the cloud's job, on self-managed nodes is yours.</p>
+            <h3>Misconfigured docker.sock</h3>
+            <p>A container that can talk to <code>/var/run/docker.sock</code> can ask the daemon to start a new container — privileged, with the host root mounted. Used in numerous public breaches (Tesla 2018, various crypto-jacking incidents). Never mount the docker socket into anything other than CI/admin tooling, and even then, isolate.</p>
+            <h3>Defense in layers</h3>
+            <ul>
+                <li><strong>Run as non-root.</strong> <code>USER 1000</code> in the Dockerfile; <code>runAsNonRoot: true</code> in the pod spec. Root inside a container is one CVE away from root on the host.</li>
+                <li><strong>Read-only root filesystem.</strong> <code>readOnlyRootFilesystem: true</code>. Mount writable paths explicitly with <code>tmpfs</code> or volumes.</li>
+                <li><strong>Drop all capabilities; add back the minimum.</strong> <code>capabilities: drop: ["ALL"]</code> in the security context.</li>
+                <li><strong>Seccomp profile.</strong> <code>RuntimeDefault</code> blocks ~50 risky syscalls (<code>ptrace</code>, <code>keyctl</code>, raw socket creation). Use a tighter custom profile for sensitive workloads.</li>
+                <li><strong>AppArmor / SELinux.</strong> Mandatory access control layered on top of capabilities. Distros vary; both managed and self-managed clusters can run with profiles enabled.</li>
+                <li><strong>Sandboxed runtimes for untrusted code.</strong> gVisor (user-space syscall interception) or Kata (per-container micro-VM). Slight perf cost; significant escape-prevention benefit.</li>
+            </ul>
+        </section>
+
+        <section id="identity">
+            <h2>Identity chaining — IMDS and stolen cloud roles</h2>
+            <p>This is the cloud-specific container risk. Every cloud VM has an Instance Metadata Service at the link-local address 169.254.169.254 (or fd00:ec2::254 on AWS IPv6, similar paths on Azure and GCP). The metadata service hands out, among other things, the IAM credentials of the role attached to the VM.</p>
+            <p>By default, containers running on the VM share its network namespace — they can reach 169.254.169.254. A compromised container with code execution can run <code>curl http://169.254.169.254/...</code> and walk away with the VM's full cloud permissions. That's identity chaining: <em>workload compromise → host compromise → cloud compromise</em>, in one hop.</p>
+            <p>This is exactly the Capital One breach pattern (see the <a href="breaches/capital-one.html">Capital One kill chain</a>) — except instead of an SSRF in a WAF, the entry point is whatever runs in your container.</p>
+            <h3>The fix has two parts</h3>
+            <p><strong>1. Per-workload identity, not per-host.</strong> Every cloud now offers a way to give an individual workload (pod, container, function) its own short-lived cloud credentials, scoped to that workload only:</p>
+            <ul>
+                <li>AWS — <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a> on EKS, <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a>, task roles on ECS, function roles on Lambda.</li>
+                <li>Azure — <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">Workload Identity</a> on AKS (federated to Entra), managed identity per Container Apps revision.</li>
+                <li>GCP — <a href="https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">Workload Identity Federation</a> on GKE, per-revision service account on Cloud Run.</li>
+            </ul>
+            <p>With per-workload identity, the container has only the permissions it needs. A compromise gets you that workload's credentials — not the VM's.</p>
+            <p><strong>2. Block IMDS from containers entirely.</strong> Belt-and-suspenders: even with workload identity in place, the host's IMDS shouldn't be reachable from containers.</p>
+            <ul>
+                <li>AWS — enforce IMDSv2 with hop-limit 1 (<code>HttpPutResponseHopLimit: 1</code>). Containers, which have at least one network hop, can't reach the metadata service through the host's interface.</li>
+                <li>Azure — block 169.254.169.254 at the iptables / network policy layer on the host.</li>
+                <li>GCP — workload identity already breaks this path; metadata server endpoints have additional <code>Metadata-Flavor: Google</code> header enforcement.</li>
+            </ul>
+            <p>If your container framework is "the VM has a god role and every container uses it" — that's the legacy pattern. Move every workload to per-pod / per-task / per-function identity. Block IMDS from containers as a hard rule.</p>
+        </section>
+
+        <section id="networking">
+            <h2>Networking — flat by default</h2>
+            <p>Container networking starts permissive and gets restricted. By default in most environments:</p>
+            <ul>
+                <li>Any container can open a TCP connection to any other container in the same network.</li>
+                <li>Any container can reach the host's IP and any port the host exposes.</li>
+                <li>Egress to the public internet is unrestricted.</li>
+                <li>DNS resolution can be used to enumerate internal services and other tenants.</li>
+            </ul>
+            <p>That means a single compromised container is a scanner. It probes for accessible internal services, vulnerable management endpoints (Redis with no auth, Elasticsearch open to <code>0.0.0.0</code>, a CI agent listening on the cluster network), and the cloud control plane (IMDS being the prime target).</p>
+            <h3>What containment looks like</h3>
+            <ul>
+                <li><strong>Network policies.</strong> On Kubernetes, <a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener noreferrer">NetworkPolicy</a> resources define allowed ingress/egress per pod. Default-deny in production namespaces, then explicitly allow what's needed.</li>
+                <li><strong>Service mesh.</strong> Istio, Linkerd, Cilium, Consul — mTLS between services, identity-based authorization, traffic-flow telemetry. Brings the "every connection is authenticated" zero-trust model down to the pod level.</li>
+                <li><strong>Egress controls.</strong> Restrict outbound to a curated allow-list (your package registries, your dependencies, your APIs). Egress proxies (Cilium's L7 policies, NAT gateways with allow-list rules, service mesh egress gateways) make this practical.</li>
+                <li><strong>No direct external exposure.</strong> Containers behind a load balancer, ingress, or API gateway — never with a public IP directly on the pod.</li>
+                <li><strong>Block link-local addresses.</strong> Drop traffic to 169.254.0.0/16 from containers unless explicitly required.</li>
+            </ul>
+            <p>Flat network is fine for a single-team sandbox. It is not fine for production. Treat the assumption "this container only needs to talk to these specific places" as the design baseline.</p>
+        </section>
+
+        <section id="supply-chain">
+            <h2>Supply chain — images, registries, signing</h2>
+            <p>The container image is the artifact that ships to every environment. Compromising it compromises every deploy. The supply chain risks layer up:</p>
+            <ul>
+                <li><strong>Public base images.</strong> Pulling <code>FROM ubuntu:latest</code> means inheriting whatever's in that image — including unpatched CVEs, packages you don't need, and a writable root. Pinning to a digest (<code>FROM ubuntu@sha256:...</code>) at least makes the input deterministic; switching to a <strong>distroless</strong> or minimal base (Distroless, Wolfi, Chainguard, Alpine when libc-compatible) shrinks attack surface dramatically.</li>
+                <li><strong>Public dependency repositories.</strong> npm, PyPI, RubyGems, Maven Central, NuGet, Go modules. All have been the source of typosquats, dependency confusion attacks, and account takeovers that injected malicious code. Lockfiles + vulnerability scanning + private mirrors are the standard mitigations.</li>
+                <li><strong>Layer cache poisoning.</strong> Build caches in CI/CD shared across jobs can leak credentials and let one job's layer poison another's image.</li>
+                <li><strong>Registry compromise.</strong> If anyone can push to your image registry, anyone can replace prod images. Lock down registry write access to your CI pipeline; require signed images.</li>
+                <li><strong>Long-running images.</strong> The image you built six months ago still has six-month-old CVEs. Rebuild on a schedule even when the source hasn't changed, so base-image patches flow through.</li>
+            </ul>
+            <h3>What good looks like</h3>
+            <ul>
+                <li><strong>Scan every image at build and push time</strong> — Trivy, Grype, Snyk, Wiz, the cloud's native scanner (ECR scanning, Defender for Cloud, Artifact Registry vulnerability scanning). Fail the build on HIGH/CRITICAL.</li>
+                <li><strong>Sign every image</strong> — Cosign / Sigstore. Push signature attestations to the registry.</li>
+                <li><strong>Verify at deploy time</strong> — admission controllers reject unsigned images. AWS Signer + Kyverno on EKS; Binary Authorization on GKE; Defender admission control on AKS.</li>
+                <li><strong>Generate and store SBOMs</strong> — Syft, the cloud's SBOM tools. When the next big CVE drops, you query the SBOM database instead of running through your fleet image-by-image.</li>
+                <li><strong>SLSA provenance</strong> — emit attestations describing which builder built the image from which source. Reject images without provenance in prod.</li>
+            </ul>
+            <p>The pipeline that builds the image is part of the supply chain. See the <a href="ci-cd.html">CI/CD page</a> for how to lock that down.</p>
+        </section>
+
+        <section id="runtime">
+            <h2>Runtime detection</h2>
+            <p>Scanning catches what's in the image. Network policy controls what can talk. Neither tells you when a process inside a running container does something unusual — a shell spawning from a web server, an unexpected outbound connection, a credential-file read, a privilege escalation attempt.</p>
+            <p>Runtime detection closes that gap. The dominant approach is <strong>eBPF</strong>-based syscall instrumentation:</p>
+            <ul>
+                <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a> — CNCF project, the de facto open-source runtime-security engine. Rule-based detection on syscalls, container metadata, and Kubernetes audit logs.</li>
+                <li><a href="https://tetragon.io/" target="_blank" rel="noopener noreferrer">Tetragon</a> — from Isovalent/Cilium, eBPF runtime enforcement (can <em>block</em>, not just alert).</li>
+                <li><strong>CNAPP runtime modules</strong> — Wiz, Aqua, Sysdig, CrowdStrike, Defender for Containers. Same idea, packaged as managed agents with SaaS analytics.</li>
+            </ul>
+            <p>What runtime detection catches: shell spawns inside production containers, processes writing to <code>/etc/shadow</code>, network connections to known C2 infrastructure, capability escalation, attempts to access <code>/proc/1/root</code>, anomalous outbound DNS. The signal is high; tuning the rules to fit your normal workload behavior is the work.</p>
+            <p>If you don't have runtime visibility, the answer to "did anything weird run in our containers last month?" is "we don't know."</p>
+        </section>
+
+        <figure class="page-photo">
+          <picture>
+            <source srcset="/img/photos/dashboard-graphs.webp" type="image/webp">
+            <img src="/img/photos/dashboard-graphs.jpg" alt="Man analyzing business data and financial graphs on a laptop" width="1880" height="1253" loading="lazy" decoding="async">
+          </picture>
+          <figcaption>Photo by Kaboompics on Pexels</figcaption>
+        </figure>
+
+        <section id="comparison">
+            <h2>AWS, Azure, and GCP container services</h2>
+            <p>Every cloud ships an orchestrator (managed Kubernetes), a serverless container runtime, and a registry. The capabilities map closely:</p>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="ct-row-head">Building block</th>
+                            <th scope="col" class="ct-aws"><span class="ct-dot ct-dot-aws" aria-hidden="true"></span> AWS</th>
+                            <th scope="col" class="ct-azure"><span class="ct-dot ct-dot-azure" aria-hidden="true"></span> Azure</th>
+                            <th scope="col" class="ct-gcp"><span class="ct-dot ct-dot-gcp" aria-hidden="true"></span> GCP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">Managed Kubernetes</th>
+                            <td>EKS</td>
+                            <td>AKS</td>
+                            <td>GKE (Standard &amp; Autopilot)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Serverless containers</th>
+                            <td>Fargate (with ECS or EKS), App Runner</td>
+                            <td>Container Apps, Container Instances</td>
+                            <td>Cloud Run</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Simple container service</th>
+                            <td>ECS (Elastic Container Service)</td>
+                            <td>Container Apps</td>
+                            <td>Cloud Run / Cloud Run Jobs</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Image registry</th>
+                            <td>ECR (Elastic Container Registry)</td>
+                            <td>Azure Container Registry</td>
+                            <td>Artifact Registry</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Image scanning</th>
+                            <td>ECR scanning (basic + enhanced via Inspector)</td>
+                            <td>Defender for Containers (registry + runtime)</td>
+                            <td>Artifact Registry vulnerability scanning</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Per-workload identity</th>
+                            <td>IRSA, EKS Pod Identity, ECS task roles</td>
+                            <td>AKS workload identity (federated to Entra)</td>
+                            <td>GKE workload identity, Cloud Run service accounts</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sandboxed runtime</th>
+                            <td>Fargate (Firecracker micro-VM)</td>
+                            <td>Container Apps (managed isolation), AKS Confidential Containers</td>
+                            <td>Cloud Run (gVisor), GKE Sandbox (gVisor)</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Admission/signing enforcement</th>
+                            <td>AWS Signer + Kyverno on EKS</td>
+                            <td>Image integrity policies on AKS</td>
+                            <td>Binary Authorization on GKE &amp; Cloud Run</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Runtime threat detection</th>
+                            <td>GuardDuty for EKS &amp; ECS Runtime Monitoring</td>
+                            <td>Defender for Containers</td>
+                            <td>Security Command Center Container Threat Detection</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>For a workload that doesn't need cluster primitives, the serverless options (Fargate, Container Apps, Cloud Run) are dramatically simpler to secure: no nodes to patch, no kernel to share, no <code>--privileged</code> footgun. For workloads that do need Kubernetes, see the <a href="kubernetes.html">Kubernetes page</a> for the cluster-specific considerations.</p>
+        </section>
+
+        <section id="hardening">
+            <h2>Hardening checklist</h2>
+            <p>The non-negotiable container hardening list for cloud workloads:</p>
+            <div class="pillar-grid">
+                <div class="pillar-card pillar-card-stage1">
+                    <h3>Image</h3>
+                    <p>Minimal/distroless base. Pinned to digest. No secrets baked in. Scanned at build, push, and on a schedule. Signed; signature verified at deploy.</p>
+                </div>
+                <div class="pillar-card pillar-card-stage2">
+                    <h3>Runtime config</h3>
+                    <p>Non-root user. Read-only root filesystem. All capabilities dropped. <code>RuntimeDefault</code> seccomp profile. No <code>--privileged</code>, no hostPath, no hostNetwork.</p>
+                </div>
+                <div class="pillar-card pillar-card-stage3">
+                    <h3>Identity</h3>
+                    <p>Per-workload cloud identity (IRSA / Workload Identity). IMDS unreachable from containers. No long-lived cloud credentials in env vars or images.</p>
+                </div>
+                <div class="pillar-card pillar-card-stage4">
+                    <h3>Network</h3>
+                    <p>Default-deny network policy. Explicit egress allow-list. mTLS for service-to-service. No direct public IPs on workload containers.</p>
+                </div>
+            </div>
+            <p>Layer on top: admission controllers that enforce these defaults (Pod Security Standards, Kyverno, OPA Gatekeeper); runtime detection (Falco, Tetragon, or your CNAPP's runtime module); centralized logs from every container; and an SBOM database for fast CVE response.</p>
+        </section>
+
+        <section id="pitfalls">
+            <h2>Common pitfalls</h2>
+            <ul>
+                <li><strong>Treating containers as the security boundary.</strong> They're not. A kernel CVE makes them not. Plan for what happens when a container is compromised, not just how to prevent it.</li>
+                <li><strong>The VM god-role.</strong> All containers inherit the host's broad IAM role. One compromise = everything. Move to per-workload identity.</li>
+                <li><strong>Secrets in env vars.</strong> They land in container metadata, in logs, in <code>/proc/1/environ</code>, in <code>kubectl describe</code> output. Use a secrets store mounted as files with strict permissions, or fetched at runtime.</li>
+                <li><strong>"It's just an internal service, no need for auth."</strong> Internal containers get compromised. Authenticate every connection, even between your own services.</li>
+                <li><strong>Pulling latest tag in production.</strong> Today's <code>latest</code> isn't tomorrow's. Pin to immutable digests; let the pipeline manage upgrades.</li>
+                <li><strong>Running as root inside containers because "it's only inside the container."</strong> Until a kernel CVE makes it not. Run as non-root by default.</li>
+                <li><strong>No runtime visibility.</strong> If a container is compromised and you have no runtime detection, you find out from the breach report.</li>
+                <li><strong>Building once, never rebuilding.</strong> Base images get patched; your image doesn't, until you rebuild. Schedule rebuilds even when source code hasn't changed.</li>
+                <li><strong>Sidecar privilege bleed.</strong> A privileged sidecar (logging agent, mesh proxy) inherits its privileges into the same pod's namespace. Audit your sidecars; some popular ones run with more than they need.</li>
+            </ul>
+        </section>
+
+        <section id="further">
+            <h2>Further reading</h2>
+            <h3>Standards &amp; baselines</h3>
+            <ul>
+                <li><a href="https://opencontainers.org/" target="_blank" rel="noopener noreferrer">Open Container Initiative (OCI)</a></li>
+                <li><a href="https://www.cisecurity.org/benchmark/docker" target="_blank" rel="noopener noreferrer">CIS Docker Benchmark</a></li>
+                <li><a href="https://csrc.nist.gov/pubs/sp/800/190/final" target="_blank" rel="noopener noreferrer">NIST SP 800-190 — Application Container Security Guide</a></li>
+                <li><a href="https://www.cncf.io/projects/" target="_blank" rel="noopener noreferrer">CNCF Landscape</a></li>
+            </ul>
+            <h3>Tooling</h3>
+            <ul>
+                <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a> — runtime security</li>
+                <li><a href="https://aquasecurity.github.io/trivy/" target="_blank" rel="noopener noreferrer">Trivy</a> — vulnerability and IaC scanning</li>
+                <li><a href="https://www.sigstore.dev/" target="_blank" rel="noopener noreferrer">Sigstore</a> &amp; Cosign — signing &amp; provenance</li>
+                <li><a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gVisor</a> — user-space kernel sandbox</li>
+                <li><a href="https://katacontainers.io/" target="_blank" rel="noopener noreferrer">Kata Containers</a> — VM-isolated containers</li>
+                <li><a href="https://github.com/GoogleContainerTools/distroless" target="_blank" rel="noopener noreferrer">Distroless</a> &amp; <a href="https://chainguard.dev/" target="_blank" rel="noopener noreferrer">Chainguard Images</a></li>
+            </ul>
+            <h3>Vendor docs</h3>
+            <ul>
+                <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/security.html" target="_blank" rel="noopener noreferrer">AWS ECS security best practices</a></li>
+                <li><a href="https://docs.aws.amazon.com/eks/latest/best-practices/security.html" target="_blank" rel="noopener noreferrer">EKS Best Practices — Security</a></li>
+                <li><a href="https://learn.microsoft.com/en-us/azure/container-instances/container-instances-image-security" target="_blank" rel="noopener noreferrer">Azure — container security</a></li>
+                <li><a href="https://cloud.google.com/architecture/best-practices-for-operating-containers" target="_blank" rel="noopener noreferrer">GCP — best practices for operating containers</a></li>
+            </ul>
+            <h3>Related CSOH pages</h3>
+            <ul>
+                <li><a href="kubernetes.html">Kubernetes &amp; managed Kubernetes</a> — what changes when containers run in a cluster.</li>
+                <li><a href="ci-cd.html">CI/CD for cloud deployments</a> — the pipeline that builds and ships these images.</li>
+                <li><a href="breaches/capital-one.html">Capital One kill chain</a> — IMDS / identity chaining in a real breach.</li>
+                <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a> — the tools that watch container fleets in production.</li>
+                <li><a href="glossary.html">Glossary</a> — every term on this page, defined.</li>
+            </ul>
+        </section>
+
+        <section id="faq">
+            <h2>FAQ</h2>
+
+            <h3>Are Docker, containerd, and Kubernetes the same thing?</h3>
+            <p>No. <strong>Docker</strong> is a developer-facing tool (CLI + daemon) that builds and runs containers. <strong>containerd</strong> is the lower-level runtime that actually starts processes; Docker uses it under the hood, and so does Kubernetes. <strong>Kubernetes</strong> is an orchestrator — it decides which containers run where, across many hosts. You can run containers without Kubernetes (ECS, Cloud Run, plain Docker); you can't run Kubernetes without a container runtime.</p>
+
+            <h3>What's the difference between containers and VMs?</h3>
+            <p>A VM has its own kernel; a container shares the host's. VMs boot in seconds with hundreds of MB of memory overhead; containers start in milliseconds with no kernel overhead. VMs are a strong isolation boundary (hypervisor); containers are a weaker one (kernel namespaces). The cloud's "best of both" answer is the micro-VM — Firecracker, Kata — which gives the container API on top of a fast hypervisor.</p>
+
+            <h3>Is rootless Docker enough?</h3>
+            <p>It helps a lot — the daemon no longer runs as root, and a container compromise is no longer "the daemon's root." But it's not a silver bullet: the kernel is still shared, kernel CVEs still escape, the workload still needs to drop capabilities and run as a non-root user inside the container. Rootless removes one big foot-gun; the rest of the hardening still applies.</p>
+
+            <h3>How is "containerless" / serverless different?</h3>
+            <p>Cloud Run, Container Apps, Fargate, App Runner — these run your container image, but the platform manages the host, the kernel, the runtime sandboxing, and the scaling. You don't have a node to log into. The trade-off is reduced control (no DaemonSets, no privileged sidecars) for significantly less security surface to manage. For most application workloads, this is the right default in 2026.</p>
+
+            <h3>How does this relate to <a class="glossary-link" href="glossary.html#term-zero-trust">zero trust</a>?</h3>
+            <p>Containers operationalize zero trust at the workload layer when you do this right: per-workload identity (verify explicitly), default-deny networking (least privilege), mTLS between services (verify continuously), runtime detection (assume breach). The container is a unit of identity, not just a unit of deployment.</p>
+        </section>
+
+        <section class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="kubernetes.html">Kubernetes &amp; managed Kubernetes</a> — the cluster layer on top of containers.</li>
+                <li><a href="ci-cd.html">CI/CD for cloud deployments</a> — the pipeline that builds and signs your images.</li>
+                <li><a href="breaches/capital-one.html">Capital One kill chain</a> — identity chaining via the metadata service, end to end.</li>
+                <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a> — runtime visibility and posture tools.</li>
+                <li><a href="sessions.html">Friday Zoom</a> — container escape stories show up monthly. Drop in.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Explore</h3>
+        <ul>
+          <li><a href="/learning-path.html">Learning Path</a></li>
+          <li><a href="/resources.html">Resources</a></li>
+          <li><a href="/news.html">News</a></li>
+          <li><a href="/sessions.html">Zoom Sessions</a></li>
+          <li><a href="/meetings.html">Meeting Recaps</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Connect</h3>
+        <ul>
+          <li><a href="mailto:admin@csoh.org">Contact</a></li>
+          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="/rss.html">RSS Feed</a></li>
+          <li><a href="/contribute.html">Contribute</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="/privacy.html">Privacy</a></li>
+        <li><a href="/code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="/security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=b517f39d" integrity="sha384-8/1Y6zmSmGcKtdeoSJDd4JadBZUwI1F4M7uqeUVQt8uwrLkszhyRCqoPGfhKfKA7"
+        defer></script>
+</body>
+
+</html>
