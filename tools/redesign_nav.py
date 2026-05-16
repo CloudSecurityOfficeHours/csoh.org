@@ -60,7 +60,6 @@ ACTIVE_MAP: dict[str, tuple[str, str]] = {
     "presentations.html": ("Community", "Presentations"),
     "chat-resources.html": ("Community", "Chat Resources"),
     # About
-    "about-shawn-nunley.html": ("About", "About Shawn"),
     "contribute.html": ("About", "Contribute"),
     "contribute-resources.html": ("About", "Add a Resource"),
 }
@@ -177,7 +176,6 @@ def nav_html(prefix: str, active_top: str | None, active_link: str | None) -> st
                     <li class="has-dropdown">
                       <button {toggle_attrs("About")}>About <span class="caret" aria-hidden="true">▾</span></button>
                       <ul class="dropdown-menu">
-                        <li><a href="{P}about-shawn-nunley.html"{cur("About Shawn")}>About Shawn</a></li>
                         <li><a href="{P}contribute.html"{cur("Contribute")}>Contribute</a></li>
                         <li><a href="{P}contribute-resources.html"{cur("Add a Resource")}>Add a Resource</a></li>
                       </ul>
