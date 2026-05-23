@@ -92,6 +92,22 @@ def extract_summary(payload: dict) -> dict:
                 out.append(aid)
         return out
 
+    def audit_details(audit_id: str, max_items: int = 8) -> list[str]:
+        """Return short human-readable strings for each failing node/item
+        in `audit_id`'s details.items[] list. Lighthouse populates this
+        for node-based audits like color-contrast, image-alt, link-name."""
+        audit = audits.get(audit_id, {})
+        items = (audit.get("details") or {}).get("items") or []
+        out = []
+        for item in items[:max_items]:
+            node = item.get("node") or {}
+            selector = node.get("selector") or node.get("path") or "?"
+            snippet = (node.get("snippet") or "").strip().replace("\n", " ")
+            if len(snippet) > 80:
+                snippet = snippet[:77] + "…"
+            out.append(f"{selector}  {snippet}".strip())
+        return out
+
     return {
         "perf": score("performance"),
         "a11y": score("accessibility"),
@@ -213,7 +229,8 @@ def main() -> int:
         print(f"  Desktop : {fmt_cell(desktop)}  ({fmt_metrics(desktop)})")
         # When a category scored < 100, list which audits dragged it down.
         # Lets you pinpoint regressions without re-running PSI in a browser.
-        for label, summary in [("Mobile", mobile), ("Desktop", desktop)]:
+        for label, summary, raw in [("Mobile", mobile, mobile_raw),
+                                     ("Desktop", desktop, desktop_raw)]:
             for cat_key, cat_label, cat_score in [
                 ("a11y_fails", "Accessibility", summary["a11y"]),
                 ("bp_fails", "Best Practices", summary["bp"]),
@@ -222,6 +239,20 @@ def main() -> int:
                 if cat_score < 100 and summary.get(cat_key):
                     fails = ", ".join(summary[cat_key])
                     print(f"  ⚠ {label} {cat_label} ({cat_score}): {fails}")
+                    # For each failing audit, list the specific DOM nodes
+                    # Lighthouse flagged. Indented under the audit summary.
+                    raw_audits = raw["lighthouseResult"]["audits"]
+                    for aid in summary[cat_key]:
+                        a = raw_audits.get(aid, {})
+                        items = (a.get("details") or {}).get("items") or []
+                        for item in items[:5]:
+                            node = item.get("node") or {}
+                            sel = node.get("selector") or "—"
+                            snip = (node.get("snippet") or "").strip().replace("\n", " ")
+                            if len(snip) > 70: snip = snip[:67] + "…"
+                            print(f"      ↳ {aid}: {sel}  {snip}".rstrip())
+                        if len(items) > 5:
+                            print(f"      ↳ {aid}: …+{len(items)-5} more")
         print(f"\nScorecard row:\n  {row}")
 
     if not args.dry_run:
