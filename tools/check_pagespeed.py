@@ -74,6 +74,24 @@ def extract_summary(payload: dict) -> dict:
             return f"{int(v)}"
         return f"{v:.{places}f}"
 
+    def failing_audits(cat: str) -> list[str]:
+        """Return the audit IDs in `cat` that scored < 1.0 (i.e. weren't
+        perfect). For categories scored at 100, returns []. Useful for
+        pinpointing exactly which Lighthouse audit dragged the category
+        score down."""
+        cat_data = cats.get(cat, {})
+        refs = cat_data.get("auditRefs", [])
+        out = []
+        for ref in refs:
+            aid = ref.get("id")
+            audit = audits.get(aid, {})
+            s = audit.get("score")
+            # Score is None for informational audits — skip those.
+            # 1.0 = perfect; anything less is a fail or near-fail.
+            if s is not None and s < 1.0:
+                out.append(aid)
+        return out
+
     return {
         "perf": score("performance"),
         "a11y": score("accessibility"),
@@ -84,6 +102,9 @@ def extract_summary(payload: dict) -> dict:
         "tbt": num("total-blocking-time", "ms"),
         "fcp": num("first-contentful-paint", "s"),
         "si": num("speed-index", "s"),
+        "a11y_fails": failing_audits("accessibility"),
+        "bp_fails": failing_audits("best-practices"),
+        "seo_fails": failing_audits("seo"),
     }
 
 
@@ -169,7 +190,18 @@ def main() -> int:
     desktop = extract_summary(desktop_raw)
 
     today = dt.date.today().isoformat()
-    notes = f"Mobile: {fmt_metrics(mobile)}"
+    notes_parts = [f"Mobile: {fmt_metrics(mobile)}"]
+    # Surface failing-audit IDs in the SCORECARD notes column when any of the
+    # 0-100 categories isn't 100. Lets you see at a glance which audit dragged
+    # the score down without re-running PSI.
+    for label, summary in [("M", mobile), ("D", desktop)]:
+        if summary["a11y"] < 100 and summary.get("a11y_fails"):
+            notes_parts.append(f"{label}-a11y: {','.join(summary['a11y_fails'])}")
+        if summary["bp"] < 100 and summary.get("bp_fails"):
+            notes_parts.append(f"{label}-bp: {','.join(summary['bp_fails'])}")
+        if summary["seo"] < 100 and summary.get("seo_fails"):
+            notes_parts.append(f"{label}-seo: {','.join(summary['seo_fails'])}")
+    notes = " · ".join(notes_parts)
 
     row = f"| {today} | {fmt_cell(mobile)} | {fmt_cell(desktop)} | {notes} |"
 
@@ -179,6 +211,17 @@ def main() -> int:
         print("\nResults — `Perf / A11y / Best Practices / SEO` (out of 100)\n")
         print(f"  Mobile  : {fmt_cell(mobile)}  ({fmt_metrics(mobile)})")
         print(f"  Desktop : {fmt_cell(desktop)}  ({fmt_metrics(desktop)})")
+        # When a category scored < 100, list which audits dragged it down.
+        # Lets you pinpoint regressions without re-running PSI in a browser.
+        for label, summary in [("Mobile", mobile), ("Desktop", desktop)]:
+            for cat_key, cat_label, cat_score in [
+                ("a11y_fails", "Accessibility", summary["a11y"]),
+                ("bp_fails", "Best Practices", summary["bp"]),
+                ("seo_fails", "SEO", summary["seo"]),
+            ]:
+                if cat_score < 100 and summary.get(cat_key):
+                    fails = ", ".join(summary[cat_key])
+                    print(f"  ⚠ {label} {cat_label} ({cat_score}): {fails}")
         print(f"\nScorecard row:\n  {row}")
 
     if not args.dry_run:

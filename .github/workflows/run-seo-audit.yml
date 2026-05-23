@@ -182,13 +182,16 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
+      # Body via stdin (`--body-file -`) so markdown `|` chars in table
+      # rows can't get shell-expanded into the command line.
       - name: Open regression issue
         if: steps.audit.outputs.regressed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE_BODY: ${{ steps.regression.outputs.body }}
         run: |
-          gh issue create \
+          printf '%s' "$ISSUE_BODY" | gh issue create \
             --repo "${{ github.repository }}" \
             --title "SEO audit regression on $(date -u +%Y-%m-%d)" \
             --label "seo,regression,automated" \
-            --body "${{ steps.regression.outputs.body }}"
+            --body-file -

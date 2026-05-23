@@ -220,13 +220,19 @@ jobs:
       # If any score regressed, open a tracking issue so it doesn't slip
       # past in the PR firehose. Pin to the App token so the issue is
       # tagged to csoh-ci, not to a person.
+      #
+      # Body is piped via stdin (`--body-file -`) rather than inlined via
+      # `--body "${{ ... }}"`, because the body contains markdown table
+      # rows with `|` characters that the shell would interpret as pipes
+      # if expanded into the command line.
       - name: Open regression issue
         if: steps.regression.outputs.regressed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE_BODY: ${{ steps.regression.outputs.body }}
         run: |
-          gh issue create \
+          printf '%s' "$ISSUE_BODY" | gh issue create \
             --repo "${{ github.repository }}" \
             --title "PageSpeed regression detected on $(date -u +%Y-%m-%d)" \
             --label "seo,regression,automated" \
-            --body "${{ steps.regression.outputs.body }}"
+            --body-file -
