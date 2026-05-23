@@ -23,9 +23,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import re
-import subprocess
 import sys
-from collections import Counter
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -187,10 +185,14 @@ def build_report(results: list[dict], today: str) -> tuple[str, dict]:
     technical = score_category(all_issues, "technical")
     on_page = score_category(all_issues, "on-page")
     content = score_category(all_issues, "content")
-    a11y = score_category(all_issues, "a11y")
-    # Performance + Mobile capped from inside the codebase — track but don't gate.
+    # The a11y issues collected per page (html-lang, image-alt coverage) feed
+    # into the deterministic mobile/a11y floor. We cap the upper bound at 96
+    # because the real ceiling for this category requires CrUX + real-device
+    # screen-reader testing that the codebase can't see.
+    a11y_floor = score_category(all_issues, "a11y")
+    mobile = min(96, a11y_floor)
+    # Performance is similarly capped — measure real movement via PSI.
     performance = 95
-    mobile = 96
     overall = round((technical + on_page + content + performance + mobile) / 5)
 
     scores = {

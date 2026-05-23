@@ -250,7 +250,8 @@ def main() -> int:
                         # details.items[].
                         expl = (a.get("explanation") or a.get("displayValue") or "").strip().replace("\n", " ")
                         if expl:
-                            if len(expl) > 110: expl = expl[:107] + "…"
+                            if len(expl) > 110:
+                                expl = expl[:107] + "…"
                             print(f"      ↳ {aid}: {expl}")
                         if not items:
                             continue
@@ -270,7 +271,8 @@ def main() -> int:
                             parts = [p for p in [sel, snip, source, url, loc_url, desc] if p]
                             line_str = f":{line}" if line is not None else ""
                             text = "  ".join(parts) + line_str
-                            if len(text) > 140: text = text[:137] + "…"
+                            if len(text) > 140:
+                                text = text[:137] + "…"
                             print(f"      ↳ {aid}: {text}".rstrip() if text else f"      ↳ {aid}: (no detail)")
                         if len(items) > 5:
                             print(f"      ↳ {aid}: …+{len(items)-5} more")
