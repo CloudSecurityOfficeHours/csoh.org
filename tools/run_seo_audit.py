@@ -186,13 +186,26 @@ def build_report(results: list[dict], today: str) -> tuple[str, dict]:
     on_page = score_category(all_issues, "on-page")
     content = score_category(all_issues, "content")
     # The a11y issues collected per page (html-lang, image-alt coverage) feed
-    # into the deterministic mobile/a11y floor. We cap the upper bound at 96
-    # because the real ceiling for this category requires CrUX + real-device
-    # screen-reader testing that the codebase can't see.
+    # into the deterministic mobile/a11y floor — a structural ceiling that
+    # PSI-derived lab a11y is intersected with below.
     a11y_floor = score_category(all_issues, "a11y")
-    mobile = min(96, a11y_floor)
-    # Performance is similarly capped — measure real movement via PSI.
-    performance = 95
+
+    # Use the latest mobile PSI row from SCORECARD.md as the source of truth
+    # for Performance and Mobile/A11y. Mobile (not desktop) because Google
+    # indexes mobile-first. Median across same-day runs guards against PSI
+    # lab glitches like the 2026-05-23 desktop 38 → 100 bounce (see commit
+    # 63317d48). Falls back to the 95/96 placeholder caps if SCORECARD has
+    # no PSI data yet — keeps the script usable in a fresh repo.
+    psi = latest_psi_mobile_scores()
+    if psi:
+        psi_perf, psi_a11y = psi
+        performance = psi_perf
+        mobile = min(psi_a11y, a11y_floor)
+        psi_source = "PSI mobile (latest, median of same-day runs)"
+    else:
+        performance = 95
+        mobile = min(96, a11y_floor)
+        psi_source = "placeholder caps (no PSI rows found in SCORECARD)"
     overall = round((technical + on_page + content + performance + mobile) / 5)
 
     scores = {
@@ -255,12 +268,46 @@ robots meta, JSON-LD presence, image alt coverage. For deeper qualitative
 review (internal-linking strategy, content depth, AI visibility) run the
 `/seo-audit` skill manually.
 
-The 95/96 caps on Performance + Mobile/A11y are placeholders — track real
-movement via [`tools/check_pagespeed.py`](../tools/check_pagespeed.py)
-(lab-measured Core Web Vitals via Google PageSpeed Insights) and Google
-Search Console (real-user CrUX).
+Performance and Mobile/A11y are sourced from {psi_source} — the cells
+labeled `Perf / A11y / BP / SEO` in the PageSpeed Insights table below.
+Mobile/A11y is then intersected with a codebase-derived a11y floor
+({a11y_floor}/100) so structural regressions (missing alt text, html-lang,
+etc.) can still drop the score even when PSI says 100. Generate fresh PSI
+data with [`tools/check_pagespeed.py`](../tools/check_pagespeed.py); the
+weekly workflow runs Mondays.
 """
     return body, scores
+
+
+def latest_psi_mobile_scores() -> tuple[int, int] | None:
+    """Return (perf, a11y) from the most recent mobile PSI row(s) in
+    SCORECARD.md, taking the median across same-day runs.
+
+    PSI lab tests bounce on noisy infra (the 2026-05-23 desktop run dipped
+    to 38 before snapping back to 100). Median across same-day runs is
+    more robust than `latest` while still reflecting recent state. Returns
+    None when no PSI rows exist — caller falls back to placeholder caps.
+    """
+    if not SCORECARD.exists():
+        return None
+    rows: list[tuple[str, int, int]] = []
+    for line in SCORECARD.read_text(encoding="utf-8").splitlines():
+        # PSI rows look like `| YYYY-MM-DD | P / A / BP / SEO | ... | ... |`
+        # so the second cell starts with two slash-separated ints.
+        m = re.match(
+            r"^\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*(\d+)\s*/\s*(\d+)\s*/\s*\d+\s*/\s*\d+\s*\|",
+            line,
+        )
+        if m:
+            rows.append((m.group(1), int(m.group(2)), int(m.group(3))))
+    if not rows:
+        return None
+    latest_date = rows[-1][0]
+    same_day = [r for r in rows if r[0] == latest_date]
+    perfs = sorted(r[1] for r in same_day)
+    a11ys = sorted(r[2] for r in same_day)
+    median = lambda xs: xs[len(xs) // 2]
+    return median(perfs), median(a11ys)
 
 
 def previous_scorecard_row() -> tuple[int, str] | None:

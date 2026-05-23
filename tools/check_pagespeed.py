@@ -124,6 +124,52 @@ def extract_summary(payload: dict) -> dict:
     }
 
 
+def extract_crux(payload: dict) -> dict | None:
+    """Pull CrUX field data (real-user p75) from a PSI payload.
+
+    PSI exposes CrUX in two slots: `loadingExperience` (this URL) and
+    `originLoadingExperience` (whole origin). Prefer URL-specific data
+    when present and not flagged `origin_fallback`; otherwise fall back
+    to origin. Returns None when neither has data — Google requires a
+    minimum traffic threshold before CrUX exposes anything.
+
+    Metric units in CrUX:
+      LARGEST_CONTENTFUL_PAINT_MS, FIRST_CONTENTFUL_PAINT_MS — ms p75
+      INTERACTION_TO_NEXT_PAINT                              — ms p75
+      CUMULATIVE_LAYOUT_SHIFT_SCORE                          — score × 100
+        (so a `percentile` of 5 means a real CLS of 0.05)
+    """
+    page = payload.get("loadingExperience") or {}
+    origin = payload.get("originLoadingExperience") or {}
+    use_page = bool(page.get("metrics")) and not page.get("origin_fallback")
+    src = page if use_page else origin
+    metrics = src.get("metrics") or {}
+    if not metrics:
+        return None
+
+    def fmt(key: str, unit: str) -> str | None:
+        m = metrics.get(key) or {}
+        v = m.get("percentile")
+        if v is None:
+            return None
+        cat = m.get("category", "NONE")
+        if unit == "s":
+            return f"{v/1000:.2f}s ({cat})"
+        if unit == "ms":
+            return f"{int(v)}ms ({cat})"
+        # CLS percentile is the actual CLS score × 100.
+        return f"{v/100:.3f} ({cat})"
+
+    return {
+        "scope": "page" if use_page else "origin",
+        "lcp": fmt("LARGEST_CONTENTFUL_PAINT_MS", "s"),
+        "inp": fmt("INTERACTION_TO_NEXT_PAINT", "ms"),
+        "cls": fmt("CUMULATIVE_LAYOUT_SHIFT_SCORE", "cls"),
+        "fcp": fmt("FIRST_CONTENTFUL_PAINT_MS", "s"),
+        "overall": src.get("overall_category"),
+    }
+
+
 def fmt_cell(s: dict) -> str:
     """A scorecard cell: `Perf / A11y / BP / SEO`."""
     return f"{s['perf']} / {s['a11y']} / {s['bp']} / {s['seo']}"
@@ -140,6 +186,16 @@ def fmt_metrics(s: dict) -> str:
         parts.append(f"TBT {s['tbt']}ms")
     if s["fcp"]:
         parts.append(f"FCP {s['fcp']}s")
+    return " · ".join(parts)
+
+
+def fmt_crux(c: dict) -> str:
+    """One-line CrUX field summary."""
+    parts = []
+    for key in ("lcp", "inp", "cls"):
+        v = c.get(key)
+        if v:
+            parts.append(f"{key.upper()} {v}")
     return " · ".join(parts)
 
 
@@ -204,9 +260,22 @@ def main() -> int:
 
     mobile = extract_summary(mobile_raw)
     desktop = extract_summary(desktop_raw)
+    mobile_crux = extract_crux(mobile_raw)
+    desktop_crux = extract_crux(desktop_raw)
 
     today = dt.date.today().isoformat()
     notes_parts = [f"Mobile: {fmt_metrics(mobile)}"]
+    # Real-user CrUX data sits alongside the lab metrics. Surfaced separately
+    # so it's clear which numbers are field (CrUX) vs lab (Lighthouse).
+    # CrUX is absent for low-traffic pages — silently skipped when missing.
+    if mobile_crux:
+        crux_line = fmt_crux(mobile_crux)
+        if crux_line:
+            notes_parts.append(f"CrUX-M ({mobile_crux['scope']}): {crux_line}")
+    if desktop_crux:
+        crux_line = fmt_crux(desktop_crux)
+        if crux_line:
+            notes_parts.append(f"CrUX-D ({desktop_crux['scope']}): {crux_line}")
     # Surface failing-audit IDs in the SCORECARD notes column when any of the
     # 0-100 categories isn't 100. Lets you see at a glance which audit dragged
     # the score down without re-running PSI.
@@ -227,6 +296,9 @@ def main() -> int:
         print("\nResults — `Perf / A11y / Best Practices / SEO` (out of 100)\n")
         print(f"  Mobile  : {fmt_cell(mobile)}  ({fmt_metrics(mobile)})")
         print(f"  Desktop : {fmt_cell(desktop)}  ({fmt_metrics(desktop)})")
+        for label, crux in [("Mobile", mobile_crux), ("Desktop", desktop_crux)]:
+            if crux and fmt_crux(crux):
+                print(f"  CrUX {label[:1]} ({crux['scope']}, real-user p75): {fmt_crux(crux)}")
         # When a category scored < 100, list which audits dragged it down.
         # Lets you pinpoint regressions without re-running PSI in a browser.
         for label, summary, raw in [("Mobile", mobile, mobile_raw),
