@@ -470,7 +470,7 @@ Lives in `seo-audits/SCORECARD.md` (top table). Updated automatically by `.githu
 Each weekly run:
 - Writes a per-day report to `seo-audits/YYYY-MM-DD.md`
 - Appends a row to SCORECARD's Internal SEO audit table
-- Opens a PR with `[skip ci]` (auto-merged — SCORECARD is a tracking artifact, not site content)
+- Opens a PR (auto-merged) — the deploy workflows' path filters exclude `seo-audits/`, so SCORECARD-only changes don't trigger a build
 - Files a tracking issue if the overall score dropped vs the previous run
 
 Run off-cycle locally with `python3 tools/run_seo_audit.py` (stdlib-only, no deps). See [tools/RUN_SEO_AUDIT_README.md](tools/RUN_SEO_AUDIT_README.md). For qualitative depth (internal-linking strategy, content depth, AI visibility) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually.

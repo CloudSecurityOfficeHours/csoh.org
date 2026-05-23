@@ -176,19 +176,18 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Open a PR with the SCORECARD update. [skip ci] in the commit body
-      # tells the site-update-deploy workflow not to push a fresh build —
-      # SCORECARD is a tracking artifact, not site content.
+      # Open a PR with the SCORECARD update. Deploy + site-housekeeping
+      # workflows have path filters that exclude seo-audits/, so a
+      # SCORECARD-only change won't trigger them — no need for the [skip ci]
+      # marker (which would also suppress the required lint checks and
+      # leave the PR blocked indefinitely).
       - name: Create Pull Request
         id: cpr
         if: steps.changes.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
-          commit-message: |
-            chore: weekly PageSpeed Insights check
-
-            [skip ci]
+          commit-message: 'chore: weekly PageSpeed Insights check'
           title: 'chore: weekly PageSpeed Insights check'
           body: |
             Automated weekly run of `tools/check_pagespeed.py` against

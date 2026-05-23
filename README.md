@@ -741,7 +741,7 @@ Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints sho
 
 ### Weekly SEO Monitoring Workflows
 
-Two complementary workflows run every Monday around 14:00 UTC to keep `seo-audits/SCORECARD.md` current without manual cadence. Both follow the same csoh-ci App + `CSOH_PAT` pattern as `update-news.yml`: PR-based update with `[skip ci]` in the commit message so the deploy pipeline doesn't fire (SCORECARD is a tracking artifact, not site content), auto-approved + auto-merged. Both file a tracking issue (label `regression`) if the overall score dropped vs the previous row.
+Two complementary workflows run every Monday around 14:00 UTC to keep `seo-audits/SCORECARD.md` current without manual cadence. Both follow the same csoh-ci App + `CSOH_PAT` pattern as `update-news.yml`: PR-based update, auto-approved, auto-merged. The deploy and site-housekeeping workflows have path filters that exclude `seo-audits/`, so SCORECARD-only changes naturally don't trigger a redeploy. Both file a tracking issue (label `regression`) if the overall score dropped vs the previous row.
 
 **`check-pagespeed.yml` — Mondays 14:00 UTC**
 
