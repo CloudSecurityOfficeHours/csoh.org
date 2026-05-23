@@ -1,0 +1,194 @@
+# =============================================================================
+# Weekly SEO Audit
+# -----------------------------------------------------------------------------
+# Every Monday at 14:15 UTC (07:15 PT — 15 min after the PageSpeed check), runs
+# tools/run_seo_audit.py against the current repo. Writes a per-day audit
+# report under seo-audits/ and appends a row to seo-audits/SCORECARD.md's
+# Internal SEO audit table. If the overall score dropped vs the previous run,
+# opens a tracking issue.
+#
+# Pairs with check-pagespeed.yml (synthetic-lab side). Together they keep both
+# halves of SCORECARD.md current without manual cadence.
+# =============================================================================
+
+name: Run SEO Audit
+
+on:
+  # Mondays 14:15 UTC. Offset 15 min from check-pagespeed so the two SCORECARD
+  # updates land as separate PRs (easier to diff and revert independently).
+  schedule:
+    - cron: '15 14 * * 1'
+  workflow_dispatch:
+  # Re-run on changes to the audit script itself, so threshold/logic tweaks
+  # take effect on next push.
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/run_seo_audit.py'
+      - '.github/workflows/run-seo-audit.yml'
+
+# Read-only on GITHUB_TOKEN. Writes (push, PR, approve, merge, issue) use the
+# csoh-ci App token + CSOH_PAT for self-approval — same pattern as
+# update-news.yml and check-pagespeed.yml.
+permissions:
+  contents: read
+
+concurrency:
+  group: run-seo-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mint installation token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        with:
+          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
+          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.x'
+
+      # Snapshot the most recent Internal SEO audit row (filter to non-PSI
+      # rows — PSI rows have " / " in cells). Used by the regression step.
+      - name: Snapshot previous score
+        id: prev
+        run: |
+          set -euo pipefail
+          prev_row=$(awk '
+            /\| Overall / {in_t=1; next}
+            in_t && /^## / {in_t=0}
+            in_t && /^\| [0-9]{4}-/ && !/ \/ / {last=$0}
+            END {print last}
+          ' seo-audits/SCORECARD.md)
+          echo "previous row: $prev_row"
+          {
+            echo "row<<EOF"
+            echo "$prev_row"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Run the audit. Exit code 1 means score regressed vs prior row —
+      # we capture that into a step output but DON'T fail the job, so the
+      # PR still opens and the issue still files.
+      - name: Run SEO audit
+        id: audit
+        run: |
+          set +e
+          python3 tools/run_seo_audit.py
+          code=$?
+          set -e
+          if [ "$code" = "1" ]; then
+            echo "regressed=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" = "0" ]; then
+            echo "regressed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Audit script errored with code $code" >&2
+            exit "$code"
+          fi
+
+      # Build a human-readable issue body from the previous vs new rows.
+      - name: Prepare regression body
+        id: regression
+        if: steps.audit.outputs.regressed == 'true'
+        run: |
+          python3 <<'PYEOF'
+          import os, re
+          text = open('seo-audits/SCORECARD.md').read()
+          rows = [line for line in text.splitlines()
+                  if re.match(r'^\| \d{4}-\d{2}-\d{2}\s*\|', line) and ' / ' not in line]
+          if len(rows) < 2:
+              print('only one audit row — no regression body to write'); exit(0)
+          prev, new = rows[-2], rows[-1]
+          def parse(r):
+              cells = [c.strip() for c in r.strip('|').split('|')]
+              date = cells[0]
+              overall_m = re.search(r'(\d+)', cells[1])
+              overall = int(overall_m.group(1)) if overall_m else 0
+              return date, overall
+          pd, ps = parse(prev)
+          nd, ns = parse(new)
+          body = (
+              f"SEO audit overall score dropped vs the previous run.\n\n"
+              f"**Previous** ({pd}): **{ps}/100**\n"
+              f"**Current**  ({nd}): **{ns}/100**\n"
+              f"**Delta**: {ns - ps:+d}\n\n"
+              f"See the new report at "
+              f"`seo-audits/{nd}.md` (or `seo-audits/{nd}-auto-N.md` if multiple runs today).\n\n"
+              f"Full scorecard: "
+              f"[seo-audits/SCORECARD.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/seo-audits/SCORECARD.md)\n"
+          )
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('body<<BODYEOF\n')
+              f.write(body)
+              f.write('\nBODYEOF\n')
+          PYEOF
+
+      - name: Detect changed files
+        id: changes
+        run: |
+          if [ -z "$(git diff --name-only) $(git ls-files --others --exclude-standard)" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The audit writes a new file (seo-audits/YYYY-MM-DD.md) and modifies
+      # SCORECARD.md. Both are tracking artifacts — safe to auto-merge,
+      # [skip ci] keeps the deploy pipeline quiet.
+      - name: Create Pull Request
+        id: cpr
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: |
+            chore: weekly SEO audit
+
+            [skip ci]
+          title: 'chore: weekly SEO audit'
+          body: |
+            Automated weekly run of `tools/run_seo_audit.py`.
+
+            - New audit report under `seo-audits/YYYY-MM-DD.md`
+            - New row appended to `seo-audits/SCORECARD.md`
+
+            Safe to auto-merge — both files are tracking artifacts, not site content.
+          branch: seo-audit-weekly
+          delete-branch: true
+          labels: automated, seo
+
+      - name: Auto approve
+        if: steps.cpr.outputs.pull-request-number != ''
+        run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ secrets.CSOH_PAT }}
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number != ''
+        run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Open regression issue
+        if: steps.audit.outputs.regressed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "SEO audit regression on $(date -u +%Y-%m-%d)" \
+            --label "seo,regression,automated" \
+            --body "${{ steps.regression.outputs.body }}"
