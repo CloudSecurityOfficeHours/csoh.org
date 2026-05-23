@@ -83,7 +83,16 @@ jobs:
       - name: Reject inline scripts (CSP gate)
         run: python3 tools/check_no_inline_scripts.py
 
-      # Step 3 — Run the actual W3C validator. This action wraps the Nu
+      # Step 3 — Require width/height on every <svg viewBox>. Without the
+      # attributes the browser can't derive an aspect ratio at parse time,
+      # so the element is laid out at a default size and then jumps to its
+      # CSS-driven size — Cumulative Layout Shift (CLS) that hurts Core
+      # Web Vitals. The attributes only set the aspect ratio; final
+      # rendered size still comes from CSS.
+      - name: Require SVG dimensions (CLS gate)
+        run: python3 tools/check_svg_dimensions.py
+
+      # Step 4 — Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
         uses: Cyb3r-Jak3/html5validator-action@443b108eb8e134b63a1f8a8ba0c942d552608ed7  # master 2025-09-19
@@ -93,7 +102,7 @@ jobs:
           # is intentionally non-standard HTML — Google requires it as-is.
           blacklist: google66d489593949bd4c.html
 
-      # Step 4 — Stash the validation log as an artifact you can download
+      # Step 5 — Stash the validation log as an artifact you can download
       # from the GitHub run page. `if: always()` = run even if the previous
       # step failed, so we still get the log when it's most useful.
       - name: Upload validation log
@@ -105,7 +114,7 @@ jobs:
           retention-days: 30                            # auto-delete after 30 days
           if-no-files-found: warn
 
-      # Step 5 — If validation failed AND this is a PR, post the errors as
+      # Step 6 — If validation failed AND this is a PR, post the errors as
       # a comment so the contributor sees them without digging through logs.
       - name: Comment on PR with validation results
         if: failure() && github.event_name == 'pull_request'
