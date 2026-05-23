@@ -897,7 +897,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
 
     indent = " " * 16
-    cards_html = "\n".join(render_card(entry, indent) for entry in entries)
+    # Group cards by formatted date and emit a visible H2 heading before each
+    # date's first card. The headings span the full grid width via CSS.
+    parts: List[str] = []
+    last_date: str = ""
+    pending_group: List[Dict[str, str]] = []
+    grouped: List[tuple[str, List[Dict[str, str]]]] = []
+    for entry in entries:
+        published_dt = parse_date(entry.get("published", "")) or dt.datetime.now(dt.timezone.utc)
+        date_text, _ = format_date(published_dt)
+        if date_text != last_date and pending_group:
+            grouped.append((last_date, pending_group))
+            pending_group = []
+        last_date = date_text
+        pending_group.append(entry)
+    if pending_group:
+        grouped.append((last_date, pending_group))
+
+    for date_text, group_entries in grouped:
+        count_label = f"{len(group_entries)} article{'s' if len(group_entries) != 1 else ''}"
+        parts.append(
+            f'{indent}<h2 class="news-date-heading">'
+            f'<span class="news-date-label">{html.escape(date_text)}</span>'
+            f' <span class="news-date-count">· {count_label}</span>'
+            f'</h2>'
+        )
+        for entry in group_entries:
+            parts.append(render_card(entry, indent))
+    cards_html = "\n".join(parts)
 
     try:
         with open(args.news_file, "r", encoding="utf-8") as f:
