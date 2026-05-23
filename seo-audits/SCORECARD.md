@@ -25,6 +25,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | Date | Mobile | Desktop | Notes |
 |---|---|---|---|
 | 2026-05-06 | 96 / 100 / 92 / 92 | 100 / 100 / 92 / 92 | Post fixes: contrast, CLS (mobile-nav shift), LCP image, tooltip a11y |
+| 2026-05-23 | 99 / 100 / 92 / 92 | 99 / 100 / 92 / 92 | Mobile: LCP 1.53s · CLS 0.000 · TBT 0ms · FCP 1.13s · M-bp: errors-in-console,inspector-issues · M-seo: robots-txt · D-bp: errors-in-console,inspector-issues · D-seo: robots-txt |
 
 ## How to use
 
