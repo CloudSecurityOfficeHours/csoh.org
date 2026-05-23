@@ -28,11 +28,17 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 
 ## How to use
 
-1. Run `/seo-audit csoh.org` (uses the SearchFit SEO skill) or invoke the seo-auditor agent.
-2. Save the full report as `seo-audits/YYYY-MM-DD.md`.
-3. Append a row to the **Internal SEO audit** table with the new scores.
-4. Run [PageSpeed Insights](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fcsoh.org%2F) for both Mobile and Desktop tabs and append a row to the **PageSpeed Insights** table.
-5. Diff against the previous row - celebrate gains, investigate drops.
+**This file is auto-updated weekly by two GitHub Actions workflows** — no manual scorecard maintenance needed for the routine case. Both fire Mondays around 14:00 UTC, open auto-merged PRs labeled `automated, seo`, and file a tracking issue (label `regression`) if the overall score dropped.
+
+| Table | Updated by | Cron | Local equivalent |
+|---|---|---|---|
+| Internal SEO audit | [`.github/workflows/run-seo-audit.yml`](../.github/workflows/run-seo-audit.yml) → [`tools/run_seo_audit.py`](../tools/run_seo_audit.py) | Mondays 14:15 UTC | `python3 tools/run_seo_audit.py` |
+| PageSpeed Insights | [`.github/workflows/check-pagespeed.yml`](../.github/workflows/check-pagespeed.yml) → [`tools/check_pagespeed.py`](../tools/check_pagespeed.py) | Mondays 14:00 UTC | `PSI_API_KEY=… python3 tools/check_pagespeed.py` |
+
+**Off-cycle / qualitative runs**:
+
+- Run `/seo-audit csoh.org` (the SearchFit skill) when you want qualitative depth beyond what the deterministic script checks — internal-linking strategy, content depth, AI visibility, topical clustering. Save the report as `seo-audits/YYYY-MM-DD.md` and append a row to the Internal table manually.
+- Both workflows expose `workflow_dispatch` — trigger a fresh run any time from the Actions tab without waiting for Monday.
 
 ## External signals to track alongside this
 

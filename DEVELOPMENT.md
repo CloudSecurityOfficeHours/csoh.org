@@ -176,7 +176,7 @@ csoh.org/
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
-├── .github/workflows/      # CI/CD pipelines (10 workflows incl. update-news, update-resources, gcp-deploy, normalize-urls, check-broken-links, check-url-safety, validate-html, lint, site-update-deploy)
+├── .github/workflows/      # CI/CD pipelines (11 workflows: update-news, update-resources, gcp-deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, run-seo-audit, validate-html, lint, site-update-deploy)
 └── update_news.py          # News aggregation from 39 RSS feeds
 ```
 
@@ -439,6 +439,7 @@ When you add a new HTML page, do all of the following - none are automated:
 11. **Add the page to the `PAGES` list in `tools/generate_og_images.py`** with a short title, subtitle, and badge, then run `python3 tools/generate_og_images.py --pages yourpage.html`. This produces a 1200×630 social-card JPG at `img/og/yourpage.jpg` and rewrites the page's `og:image`/`twitter:image` meta tags. Without this step the page falls back to `banner.png` (1200×400, wrong aspect ratio).
 12. Update the file structure trees in `README.md` and `DEVELOPMENT.md`, and (if it's an educational/feature page) add a per-page section to `README.md` describing it.
 13. Let CI regenerate SRI hashes (`update_sri.py` runs on deploy) or run it locally.
+14. **Verify structural SEO**: run `python3 tools/run_seo_audit.py --dry-run` and check the new page doesn't introduce critical issues or warnings. The weekly cron will catch any regression on Monday and open a tracking issue, but local verification on your PR is faster.
 
 ### Cross-linking
 
@@ -460,13 +461,29 @@ If your script needs to be sure it overwrote even an identical file (e.g., to re
 
 ### Tracking SEO performance
 
-Two complementary signals - both matter, neither alone is enough.
+Three complementary signals — codebase health, synthetic lab data, real-user truth. All three feed into `seo-audits/SCORECARD.md` (the first two automatically).
 
-#### 1. The codebase scorecard (this repo)
+#### 1. The codebase scorecard — Internal SEO audit (this repo, auto-cron)
 
-Lives in `seo-audits/SCORECARD.md`. Updated weekly by a remote agent (Mondays 1am PT, configured at <https://claude.ai/code/routines>). Each row records on-site/codebase health: meta tags, headings, structured data, image hygiene, etc. Run `/seo-audit` locally or invoke the seo-auditor agent to add a row off-cycle.
+Lives in `seo-audits/SCORECARD.md` (top table). Updated automatically by `.github/workflows/run-seo-audit.yml` every **Monday at 14:15 UTC** (07:15 PT). The workflow runs `tools/run_seo_audit.py` — a deterministic structural checker that mirrors what the `/seo-audit` skill mechanically tests across every indexable HTML page in the repo: canonical, title 30–65 chars, meta description 100–165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`.
 
-What this catches: missing meta tags, broken JSON-LD, generic alt text, heading-hierarchy skips, OG-image regressions, stale `<meta>` content, etc. What it can't see: actual rankings or real-user performance.
+Each weekly run:
+- Writes a per-day report to `seo-audits/YYYY-MM-DD.md`
+- Appends a row to SCORECARD's Internal SEO audit table
+- Opens a PR with `[skip ci]` (auto-merged — SCORECARD is a tracking artifact, not site content)
+- Files a tracking issue if the overall score dropped vs the previous run
+
+Run off-cycle locally with `python3 tools/run_seo_audit.py` (stdlib-only, no deps). See [tools/RUN_SEO_AUDIT_README.md](tools/RUN_SEO_AUDIT_README.md). For qualitative depth (internal-linking strategy, content depth, AI visibility) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually.
+
+What this catches: missing meta tags, broken JSON-LD, generic alt text, heading-hierarchy skips, OG-image regressions, stale `<meta>` content. What it can't see: actual rankings or real-user performance — that's signals #2 and #3 below.
+
+#### 1b. PageSpeed Insights — Synthetic lab scores (this repo, auto-cron)
+
+Lives in the same `seo-audits/SCORECARD.md` (second table). Updated automatically by `.github/workflows/check-pagespeed.yml` every **Monday at 14:00 UTC** (15 min before the Internal audit, so the two SCORECARD updates land as separate PRs). The workflow runs `tools/check_pagespeed.py` which hits Google's PageSpeed Insights v5 API — mobile + desktop in parallel — pulls the 4 category scores (Performance / Accessibility / Best Practices / SEO), lab Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index), and a list of any audit IDs that scored < 100 with their failing DOM nodes.
+
+Requires `PSI_API_KEY` in repo secrets (free key from <https://console.cloud.google.com/apis/credentials> with restriction "PageSpeed Insights API"). Run locally with `export PSI_API_KEY=… && python3 tools/check_pagespeed.py`. See [tools/CHECK_PAGESPEED_README.md](tools/CHECK_PAGESPEED_README.md).
+
+What this catches: synthetic Lighthouse regressions — color-contrast failures, image-alt gaps, render-blocking resources, third-party script issues (CSP violations get surfaced as console errors and dock Best Practices). What it can't see: real-user variance — that's signal #2.
 
 #### 2. Google Search Console (external truth)
 
@@ -485,9 +502,13 @@ Four reports to check on a recurring cadence:
 
 After every deploy that touches HTML structure or `.htaccess`, spot-check live URLs in the **URL Inspection** tool (top search bar in GSC) - paste a URL, click "Request Indexing" if you want Google to re-crawl sooner than its default cadence (~days).
 
-#### When the two disagree
+#### When the signals disagree
 
-Codebase scorecard says 100, GSC says traffic dropped → something at the server/CDN/redirect layer is undoing what the HTML claims. That's how we caught the `.htaccess` `meetings.html → sessions.html` stale redirect: HTML had the right canonical, but the live site was 301'ing away from it. Always trust GSC's view of the live site over the codebase scorecard.
+- **Codebase scorecard says 100, PSI says a category dropped** → something at the live-site layer is being injected or rewritten that the source HTML doesn't reflect. Common culprits: Cloudflare Browser Insights injecting a beacon script (caught and disabled 2026-05-23 — Accessibility 100 → 96 was a `color-contrast` regression on `.card-action` links, surfaced because PSI tests the rendered page); Cloudflare's "Managed robots.txt" appending `Content-Signal:` directives Lighthouse's parser doesn't recognize.
+
+- **Codebase scorecard says 100, GSC says traffic dropped** → something at the server/CDN/redirect layer is undoing what the HTML claims. That's how we caught the `.htaccess` `meetings.html → sessions.html` stale redirect: HTML had the right canonical, but the live site was 301'ing away from it.
+
+Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The codebase scorecard tells you what *should* be true; PSI and GSC tell you what *is* true.
 
 ---
 

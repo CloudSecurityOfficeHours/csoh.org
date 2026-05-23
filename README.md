@@ -539,12 +539,15 @@ csoh.org/
 │
 ├── .github/workflows/
 │   ├── update-news.yml              # Automated news + RSS feed updates (every 3 hours)
+│   ├── update-resources.yml         # Weekly auto-generation of resource previews
 │   ├── site-update-deploy.yml       # Unified workflow: SRI, URL normalization, previews, presentations schema, sitemap, deploy
 │   ├── check-url-safety.yml         # URL safety validation on PRs + weekly
 │   ├── normalize-urls.yml           # Monthly URL normalization (tracking params, redirects)
 │   ├── validate-html.yml            # HTML5 validation on PRs + weekly
 │   ├── lint.yml                     # actionlint + ruff + yamllint on every push/PR
 │   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
+│   ├── check-pagespeed.yml          # Weekly Google PageSpeed Insights run → SCORECARD row + regression issue (Mon 14:00 UTC)
+│   ├── run-seo-audit.yml            # Weekly deterministic structural SEO audit → SCORECARD row + regression issue (Mon 14:15 UTC)
 │   ├── gcp-deploy.yml               # Build, scan, deploy to Cloud Run via WIF
 │   └── CHECK_URL_SAFETY_WORKFLOW.md # Workflow configuration notes
 │
@@ -735,6 +738,22 @@ Builds a container image, scans it for HIGH/CRITICAL CVEs, pushes to Artifact Re
 Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints short-lived (~1h) installation tokens at job start, plus a small fine-grained PAT (`CSOH_PAT`) used only to approve App-opened PRs (GitHub blocks self-approval). The full model - App config, ruleset bypass, why one PAT remains - is documented in [SECURITY.md → CI/CD Authentication](SECURITY.md#cicd-authentication). Setup / rotation steps for the PAT are in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md#setup-requirements).
 
 `gcp-deploy.yml` does *not* use the GitHub App - it authenticates to GCP via Workload Identity Federation and only needs the auto-injected `GITHUB_TOKEN` (with `id-token: write` for the OIDC exchange). There is no GCP-side credential to set up or rotate.
+
+### Weekly SEO Monitoring Workflows
+
+Two complementary workflows run every Monday around 14:00 UTC to keep `seo-audits/SCORECARD.md` current without manual cadence. Both follow the same csoh-ci App + `CSOH_PAT` pattern as `update-news.yml`: PR-based update with `[skip ci]` in the commit message so the deploy pipeline doesn't fire (SCORECARD is a tracking artifact, not site content), auto-approved + auto-merged. Both file a tracking issue (label `regression`) if the overall score dropped vs the previous row.
+
+**`check-pagespeed.yml` — Mondays 14:00 UTC**
+
+Runs `tools/check_pagespeed.py` against `https://csoh.org/` — mobile + desktop in parallel — using Google's PageSpeed Insights v5 API. Captures the four Lighthouse category scores (Performance / Accessibility / Best Practices / SEO), lab Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index), and for any category < 100 the specific failing audit IDs plus the failing DOM nodes' CSS selectors. Appends a row to the PageSpeed Insights table in SCORECARD.md. Requires `PSI_API_KEY` repo secret (free key from [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials), restricted to "PageSpeed Insights API").
+
+**`run-seo-audit.yml` — Mondays 14:15 UTC**
+
+Runs `tools/run_seo_audit.py` — a deterministic structural SEO audit across all 178 indexable HTML pages (top-level + breaches + portfolio + meetings). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30–65 chars, meta description 100–165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
+
+For qualitative depth (internal-linking strategy, content depth, AI visibility, topical authority) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually and add a row off-cycle.
+
+**Full docs:** [tools/CHECK_PAGESPEED_README.md](tools/CHECK_PAGESPEED_README.md), [tools/RUN_SEO_AUDIT_README.md](tools/RUN_SEO_AUDIT_README.md).
 
 ---
 
