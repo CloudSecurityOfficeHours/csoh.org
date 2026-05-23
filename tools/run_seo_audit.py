@@ -265,13 +265,21 @@ Search Console (real-user CrUX).
 
 def previous_scorecard_row() -> tuple[int, str] | None:
     """Return (previous_overall_score, previous_row_markdown) from the
-    Internal SEO audit table, or None if no rows."""
+    Internal SEO audit table — but only rows produced by THIS script
+    (report filename ends with `-auto-N.md`). The qualitative `/seo-audit`
+    skill uses different scoring weights and comparing the two yields
+    spurious "regression" alerts (e.g. a `/seo-audit` 99 followed by a
+    script 98 isn't a real -1 regression, it's a methodology delta).
+
+    Returns None if no prior auto-row exists yet."""
     text = SCORECARD.read_text(encoding="utf-8")
     rows = [line for line in text.splitlines()
             if re.match(r"^\| \d{4}-\d{2}-\d{2}\s*\|", line) and " / " not in line]
-    if not rows:
+    # Same-methodology rows only — report file matches `-auto-N.md`.
+    auto_rows = [r for r in rows if re.search(r"-auto-\d+\.md\)", r)]
+    if not auto_rows:
         return None
-    last = rows[-1]
+    last = auto_rows[-1]
     # cells: | date | **score** | technical | on-page | content | perf | a11y | crit | warn | report |
     cells = [c.strip() for c in last.strip("|").split("|")]
     m = re.search(r"(\d+)", cells[1])
@@ -340,7 +348,12 @@ def main() -> int:
     )
 
     prev = previous_scorecard_row()
-    regressed = bool(prev and scores["overall"] < prev[0])
+    # Require a ≥2-point drop to count as a regression. A 1-point drop
+    # typically means a single new warning landed (e.g. a new page added with
+    # a slightly-long title), which the next routine cleanup pass clears.
+    # We don't want to issue-spam for those.
+    REGRESSION_THRESHOLD = 2
+    regressed = bool(prev and (prev[0] - scores["overall"]) >= REGRESSION_THRESHOLD)
 
     if args.quiet:
         print(new_row)

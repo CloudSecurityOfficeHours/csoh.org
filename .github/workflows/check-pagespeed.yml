@@ -134,15 +134,18 @@ jobs:
           prev_date, prev_m, prev_d = parse(prev_row)
           new_date, new_m, new_d = parse(new_row)
 
-          # Lab Performance varies ±2-5 points between runs based on network
-          # / CPU emulation timing — that's noise, not a regression. The other
-          # three categories are deterministic Lighthouse audits and any drop
-          # is a real signal worth flagging.
-          NOISE_THRESHOLD = {
-              "Performance": 5,        # ≥5 points drop = real
-              "Accessibility": 1,      # any drop = real (deterministic audits)
-              "Best Practices": 1,
-              "SEO": 1,
+          # Lab Performance varies wildly run-to-run based on emulated
+          # CPU/network timing. Real regressions show up as both a large
+          # drop AND the new score landing below a real-pass floor; lab
+          # glitches (e.g. 88 → 38 with LCP still at 1s) drop a lot but
+          # stay above 75. The other three categories are deterministic
+          # Lighthouse audits and any drop is a real signal.
+          THRESHOLDS = {
+              # label: (min_drop, max_new_score) — both conditions must hold
+              "Performance":    (10, 75),   # ≥10 drop AND new < 75
+              "Accessibility":  (1,  100),  # any drop, regardless of new score
+              "Best Practices": (1,  100),
+              "SEO":            (1,  100),
           }
           labels = ["Performance", "Accessibility", "Best Practices", "SEO"]
           regressions = []
@@ -150,7 +153,8 @@ jobs:
                                           ("desktop", prev_d, new_d)]:
               for label, p, n in zip(labels, prev_s, new_s):
                   drop = p - n
-                  if drop >= NOISE_THRESHOLD[label]:
+                  min_drop, max_new = THRESHOLDS[label]
+                  if drop >= min_drop and n < max_new:
                       regressions.append(f"{strategy} {label}: {p} → {n} (-{drop})")
 
           out = os.environ["GITHUB_OUTPUT"]
