@@ -306,8 +306,7 @@ def latest_psi_mobile_scores() -> tuple[int, int] | None:
     same_day = [r for r in rows if r[0] == latest_date]
     perfs = sorted(r[1] for r in same_day)
     a11ys = sorted(r[2] for r in same_day)
-    median = lambda xs: xs[len(xs) // 2]
-    return median(perfs), median(a11ys)
+    return perfs[len(perfs) // 2], a11ys[len(a11ys) // 2]
 
 
 def previous_scorecard_row() -> tuple[int, str] | None:
