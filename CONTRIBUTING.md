@@ -2,7 +2,7 @@
 
 Welcome! This guide covers **any change you want to suggest** to the CSOH website - whether it's adding news sources, improving descriptions, fixing typos, or redesigning the homepage. You don't need to be a developer.
 
-> **Before you contribute**, please read the [Code of Conduct](code-of-conduct.html). It applies to every CSOH-organized space - Friday Zoom, the mailing list, GitHub issues, and pull-request review. Our [Privacy Policy](privacy.html) covers how the site handles your data (short version: no cookies, no marketing).
+> **Before you contribute**, please read the [Code of Conduct](code-of-conduct.html). It applies to every CSOH-organized space - Friday Zoom, the mailing list, GitHub issues, and pull-request review. Our [Privacy Policy](privacy.html) covers how the site handles your data (short version: no cookies, no trackers, no on-site ads).
 
 > **🎉 First time contributing?** Start here - pick whichever feels easiest:
 >

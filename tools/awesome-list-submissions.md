@@ -67,7 +67,7 @@ This adds Cloud Security Office Hours (https://csoh.org) under
 Reading Materials → Others. It's a vendor-neutral community resource
 hub with weekly Zoom sessions, pillar guides, a 230+ term glossary,
 breach kill chains mapped to MITRE ATT&CK Cloud, and a curated
-CTF directory. Free, open, no marketing, no trackers.
+CTF directory. Free, open, no trackers, no on-site ads.
 
 Slotted at position 5 in Others, alphabetically after the existing
 Cloud Risk Encyclopedia entry.
@@ -124,7 +124,7 @@ most likely targets. Read the README for current structure.
 **Entry text:**
 
 ```markdown
-- [Cloud Security Office Hours (CSOH)](https://csoh.org/) - Vendor-neutral community resource hub for cloud security: weekly Friday Zoom sessions, [pillar guides](https://csoh.org/) (What is Cloud Security?, Best Practices, Shared Responsibility, CSPM vs CNAPP), a [230+ term glossary](https://csoh.org/glossary.html), [breach kill chains](https://csoh.org/breach-timeline.html), and a [37+ CTF directory](https://csoh.org/ctfs.html). Free and open, no marketing.
+- [Cloud Security Office Hours (CSOH)](https://csoh.org/) - Vendor-neutral community resource hub for cloud security: weekly Friday Zoom sessions, [pillar guides](https://csoh.org/) (What is Cloud Security?, Best Practices, Shared Responsibility, CSPM vs CNAPP), a [230+ term glossary](https://csoh.org/glossary.html), [breach kill chains](https://csoh.org/breach-timeline.html), and a [37+ CTF directory](https://csoh.org/ctfs.html). Free and open, vendor-neutral, no trackers, no on-site ads.
 ```
 
 **PR title:** `Add Cloud Security Office Hours to Cloud Security resources`
@@ -133,7 +133,7 @@ most likely targets. Read the README for current structure.
 
 ```
 Adds Cloud Security Office Hours (https://csoh.org) as a cloud security
-community + reference resource. Vendor-neutral, free, no marketing.
+community + reference resource. Vendor-neutral, free, no trackers, no on-site ads.
 Includes pillar guides, glossary, breach kill chains, CTF directory,
 and weekly Zoom sessions.
 

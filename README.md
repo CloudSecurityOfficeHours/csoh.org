@@ -87,7 +87,7 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 
 ## 🌐 About
 
-Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything is free, nothing is sponsored, no trackers, no marketing.
+Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no trackers, no analytics, no on-site advertising. (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner — never a separate promotional email.)
 
 Sign up for the weekly Zoom link at **[csoh.kit.com](https://csoh.kit.com/39feb4f397)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
 
@@ -460,7 +460,7 @@ csoh.org/
 ├── glossary.html               # 300+ cloud security terms with live search & cross-links
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 ├── code-of-conduct.html        # Community Code of Conduct
-├── privacy.html                # Privacy Policy (no cookies, no marketing)
+├── privacy.html                # Privacy Policy (no cookies, no trackers, no on-site ads)
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages live in /breaches/)
 ├── breaches/                   # 10 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 94 per-meeting recap pages (split from meetings.html)
@@ -895,7 +895,7 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 
 ### Policies
 - 🤝 **[Code of Conduct](code-of-conduct.html)** - community standards across Friday Zoom, mailing list, and GitHub
-- 🔐 **[Privacy Policy](privacy.html)** - no cookies, no trackers, no marketing
+- 🔐 **[Privacy Policy](privacy.html)** - no cookies, no trackers, no on-site ads
 - 🔒 **[Security Policy](security-policy.html)** / [SECURITY.md](SECURITY.md) - coordinated disclosure
 
 ---

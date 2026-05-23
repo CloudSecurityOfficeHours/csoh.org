@@ -39,7 +39,7 @@ OG_VIEWPORT = {"width": 1200, "height": 630}
 PAGES = [
     ("index.html",
      "Cloud Security, Vendor-Neutral",
-     "2,000+ practitioners. 240+ resources. Free weekly Zoom. No marketing.",
+     "2,000+ practitioners. 240+ resources. Free weekly Zoom. No trackers.",
      "Community"),
     ("what-is-cloud-security.html",
      "What is Cloud Security?",
@@ -107,7 +107,7 @@ PAGES = [
      "Daily News"),
     ("sessions.html",
      "Free Weekly Cloud Security Zoom",
-     "Friday 7am PT. Expert talks, open discussion, Q&A. 2,000+ members. No marketing.",
+     "Friday 7am PT. Expert talks, open discussion, Q&A. 2,000+ members. No vendor pitches.",
      "Community"),
     ("presentations.html",
      "Cloud Security Talks Archive",
