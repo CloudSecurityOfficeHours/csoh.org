@@ -245,12 +245,33 @@ def main() -> int:
                     for aid in summary[cat_key]:
                         a = raw_audits.get(aid, {})
                         items = (a.get("details") or {}).get("items") or []
+                        # Some audits (errors-in-console, robots-txt) expose
+                        # an explanation field on the audit itself, not in
+                        # details.items[].
+                        expl = (a.get("explanation") or a.get("displayValue") or "").strip().replace("\n", " ")
+                        if expl:
+                            if len(expl) > 110: expl = expl[:107] + "…"
+                            print(f"      ↳ {aid}: {expl}")
+                        if not items:
+                            continue
                         for item in items[:5]:
+                            # Different audits expose details differently —
+                            # node.selector for DOM audits, source/url/
+                            # description for console / network / robots-txt.
                             node = item.get("node") or {}
-                            sel = node.get("selector") or "—"
+                            sel = node.get("selector") or ""
                             snip = (node.get("snippet") or "").strip().replace("\n", " ")
-                            if len(snip) > 70: snip = snip[:67] + "…"
-                            print(f"      ↳ {aid}: {sel}  {snip}".rstrip())
+                            source = item.get("source") or ""
+                            desc = (item.get("description") or "").strip().replace("\n", " ")
+                            url = item.get("url") or ""
+                            line = item.get("line")
+                            loc = item.get("sourceLocation") or {}
+                            loc_url = loc.get("url", "") if isinstance(loc, dict) else ""
+                            parts = [p for p in [sel, snip, source, url, loc_url, desc] if p]
+                            line_str = f":{line}" if line is not None else ""
+                            text = "  ".join(parts) + line_str
+                            if len(text) > 140: text = text[:137] + "…"
+                            print(f"      ↳ {aid}: {text}".rstrip() if text else f"      ↳ {aid}: (no detail)")
                         if len(items) > 5:
                             print(f"      ↳ {aid}: …+{len(items)-5} more")
         print(f"\nScorecard row:\n  {row}")
