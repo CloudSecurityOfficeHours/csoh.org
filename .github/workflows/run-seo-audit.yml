@@ -182,16 +182,33 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      # Body via stdin (`--body-file -`) so markdown `|` chars in table
-      # rows can't get shell-expanded into the command line.
-      - name: Open regression issue
+      # Idempotent: if today already has an open "SEO audit regression"
+      # issue, append a comment instead of opening a duplicate. Body via
+      # stdin so markdown `|` chars in table rows can't get shell-expanded.
+      - name: Open or update regression issue
         if: steps.audit.outputs.regressed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ISSUE_BODY: ${{ steps.regression.outputs.body }}
         run: |
-          printf '%s' "$ISSUE_BODY" | gh issue create \
+          set -euo pipefail
+          TITLE="SEO audit regression on $(date -u +%Y-%m-%d)"
+          existing=$(gh issue list \
             --repo "${{ github.repository }}" \
-            --title "SEO audit regression on $(date -u +%Y-%m-%d)" \
-            --label "seo,regression,automated" \
-            --body-file -
+            --state open \
+            --label regression \
+            --search "in:title \"$TITLE\"" \
+            --json number \
+            --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Found existing open issue #$existing — appending comment."
+            printf '%s' "$ISSUE_BODY" | gh issue comment "$existing" \
+              --repo "${{ github.repository }}" \
+              --body-file -
+          else
+            printf '%s' "$ISSUE_BODY" | gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "$TITLE" \
+              --label "seo,regression,automated" \
+              --body-file -
+          fi

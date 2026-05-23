@@ -134,13 +134,24 @@ jobs:
           prev_date, prev_m, prev_d = parse(prev_row)
           new_date, new_m, new_d = parse(new_row)
 
+          # Lab Performance varies ±2-5 points between runs based on network
+          # / CPU emulation timing — that's noise, not a regression. The other
+          # three categories are deterministic Lighthouse audits and any drop
+          # is a real signal worth flagging.
+          NOISE_THRESHOLD = {
+              "Performance": 5,        # ≥5 points drop = real
+              "Accessibility": 1,      # any drop = real (deterministic audits)
+              "Best Practices": 1,
+              "SEO": 1,
+          }
           labels = ["Performance", "Accessibility", "Best Practices", "SEO"]
           regressions = []
           for strategy, prev_s, new_s in [("mobile", prev_m, new_m),
                                           ("desktop", prev_d, new_d)]:
               for label, p, n in zip(labels, prev_s, new_s):
-                  if n < p:
-                      regressions.append(f"{strategy} {label}: {p} → {n} (-{p - n})")
+                  drop = p - n
+                  if drop >= NOISE_THRESHOLD[label]:
+                      regressions.append(f"{strategy} {label}: {p} → {n} (-{drop})")
 
           out = os.environ["GITHUB_OUTPUT"]
           with open(out, "a") as f:
@@ -216,22 +227,35 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      # If any score regressed, open a tracking issue so it doesn't slip
-      # past in the PR firehose. Pin to the App token so the issue is
-      # tagged to csoh-ci, not to a person.
-      #
-      # Body is piped via stdin (`--body-file -`) rather than inlined via
-      # `--body "${{ ... }}"`, because the body contains markdown table
-      # rows with `|` characters that the shell would interpret as pipes
-      # if expanded into the command line.
-      - name: Open regression issue
+      # If any score regressed, open OR comment on a tracking issue.
+      # Idempotent: if today already has an open "PageSpeed regression"
+      # issue (from an earlier manual trigger or rerun), append a comment
+      # instead of opening a duplicate. Body is piped via stdin so the `|`
+      # chars in the markdown table rows don't get shell-expanded.
+      - name: Open or update regression issue
         if: steps.regression.outputs.regressed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ISSUE_BODY: ${{ steps.regression.outputs.body }}
         run: |
-          printf '%s' "$ISSUE_BODY" | gh issue create \
+          set -euo pipefail
+          TITLE="PageSpeed regression detected on $(date -u +%Y-%m-%d)"
+          existing=$(gh issue list \
             --repo "${{ github.repository }}" \
-            --title "PageSpeed regression detected on $(date -u +%Y-%m-%d)" \
-            --label "seo,regression,automated" \
-            --body-file -
+            --state open \
+            --label regression \
+            --search "in:title \"$TITLE\"" \
+            --json number \
+            --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Found existing open issue #$existing — appending comment."
+            printf '%s' "$ISSUE_BODY" | gh issue comment "$existing" \
+              --repo "${{ github.repository }}" \
+              --body-file -
+          else
+            printf '%s' "$ISSUE_BODY" | gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "$TITLE" \
+              --label "seo,regression,automated" \
+              --body-file -
+          fi
