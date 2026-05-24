@@ -176,7 +176,7 @@ csoh.org/
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
-├── .github/workflows/      # CI/CD pipelines (11 workflows: update-news, update-resources, gcp-deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, run-seo-audit, validate-html, lint, site-update-deploy)
+├── .github/workflows/      # CI/CD pipelines (12 workflows: update-news, update-resources, gcp-deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
 └── update_news.py          # News aggregation from 39 RSS feeds
 ```
 
@@ -214,6 +214,12 @@ csoh.org/
 - Generates `news.html` and `feed.xml`, regenerates the `NewsArticle` JSON-LD block on `news.html`, and refreshes `sitemap.xml` lastmod dates
 - Preserves cards already on `news.html` across runs so today-dated items don't disappear when RSS feeds rotate
 - PRs are auto-created and auto-merged if only `news.html`, `feed.xml`, and `sitemap.xml` changed
+
+**Reading List Staleness Check** (`.github/workflows/check-reading-list-staleness.yml`)
+- 1st of each month at 07:00 UTC, `tools/check_reading_list_staleness.py` walks every newsletter / blog / podcast / YouTube channel on `cloud-security-reading-list.html`, discovers each site's RSS or Atom feed (via `<link rel="alternate">` first, then probing common paths), and flags any whose newest entry is older than 180 days
+- The reading list is hand-curated; the workflow **never edits the page**. It uploads a markdown report as an artifact and opens-or-updates a sticky GitHub issue (labeled `reading-list-staleness`) so a human can decide what to drop, replace, or keep
+- Broken-link detection on the same page is already covered by `check-broken-links.yml`; this workflow exists to surface sources that are still reachable but no longer publishing — which lychee can't see
+- See [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md) for the discovery rules and known limitations
 
 **Resources Auto-Refresh** (`.github/workflows/update-resources.yml`)
 - Mondays at 14:00 UTC, `anthropics/claude-code-action@v1` invokes Claude with a structured prompt to research and add 2-3 new resources to each of the six `resources.html` sections (CTF, Labs, Tools, Certs, AI Security, Job Search)

@@ -1,0 +1,134 @@
+# =============================================================================
+# Check Reading List Staleness
+# -----------------------------------------------------------------------------
+# Once a month, walks every podcast / blog / newsletter / YouTube channel on
+# cloud-security-reading-list.html, discovers its RSS or Atom feed, and flags
+# anything whose newest post is older than the threshold. The reading list is
+# hand-curated and opinionated, so this workflow NEVER edits the page — it
+# only opens (or updates) a tracking issue with the report. A human decides
+# whether to drop, replace, or keep each entry.
+#
+# Broken-link detection for the same page is already covered by the weekly
+# check-broken-links.yml workflow; this one only looks at "is the source
+# still publishing?" — which dead-link checks can't see.
+# =============================================================================
+
+name: Check Reading List Staleness
+
+on:
+  # First of the month, 07:00 UTC. Monthly is plenty — most blogs go quiet
+  # over weeks, not days, and we don't want a noisy report nagging us.
+  schedule:
+    - cron: '0 7 1 * *'    # min hour day-of-month month day-of-week
+  # Manual trigger from the GitHub Actions tab.
+  workflow_dispatch:
+  # Re-run if someone edits the checker or the page itself, so the issue
+  # stays current with whatever URLs were just added or removed.
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/check_reading_list_staleness.py'
+      - '.github/workflows/check-reading-list-staleness.yml'
+
+# Read-only on the repo, write on issues so we can post / update the report.
+# We never modify source files here.
+permissions:
+  contents: read
+  issues: write
+
+# Per-workflow concurrency: a freshly-queued run cancels any in-flight one.
+# Read-only — safe to interrupt mid-crawl.
+concurrency:
+  group: check-reading-list-staleness
+  cancel-in-progress: true
+
+jobs:
+  check-staleness:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Pull the repo onto the runner.
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      # The checker is a Python script using stdlib only — no pip install.
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.x'
+
+      # Run the staleness check. Writes a markdown report to staleness.md.
+      # Never exits non-zero on stale entries (intentional — this is a report,
+      # not a gate). If the script itself crashes, the step fails and we
+      # notice via the normal workflow-failure path.
+      - name: Run staleness check
+        run: python3 tools/check_reading_list_staleness.py --output staleness.md
+
+      # Upload the report as an artifact so reviewers can grab it from the
+      # run page even if the issue-update step fails for any reason.
+      - name: Upload staleness report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: reading-list-staleness-report
+          path: staleness.md
+          retention-days: 90
+          if-no-files-found: warn
+
+      # Sticky issue: if an open issue with this exact title exists, replace
+      # its body. Otherwise create one. The label gives a stable handle for
+      # filtering and for future automation. We use the auto-injected
+      # GITHUB_TOKEN — issues:write was granted above and that's all we need.
+      - name: Open or update tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          title="Reading list: monthly staleness report"
+          label="reading-list-staleness"
+
+          # Ensure the label exists. `gh label create` 409s on duplicate, so
+          # we swallow the error — there's no idempotent flag for this.
+          gh label create "$label" \
+            --color "fbca04" \
+            --description "Auto-generated reports from check-reading-list-staleness.yml" \
+            --repo "$REPO" 2>/dev/null || true
+
+          # Wrap the markdown report with run metadata so a reader landing on
+          # the issue can jump back to the workflow run that produced it.
+          {
+            echo "_Auto-updated by [check-reading-list-staleness]($RUN_URL)._"
+            echo ""
+            cat staleness.md
+            echo ""
+            echo "---"
+            echo "_The reading list is hand-curated. This issue is a checklist, not a queue —"
+            echo "close it when you've decided which (if any) entries to act on; the next"
+            echo "monthly run will reopen / refresh it as needed._"
+          } > issue-body.md
+
+          # Look up an existing open issue by exact title + label.
+          existing="$(gh issue list \
+            --repo "$REPO" \
+            --state open \
+            --label "$label" \
+            --search "in:title \"$title\"" \
+            --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" \
+            | head -n1)"
+
+          if [ -n "$existing" ]; then
+            echo "updating issue #$existing"
+            gh issue edit "$existing" --repo "$REPO" --body-file issue-body.md
+          else
+            echo "creating new issue"
+            gh issue create \
+              --repo "$REPO" \
+              --title "$title" \
+              --label "$label" \
+              --body-file issue-body.md
+          fi
