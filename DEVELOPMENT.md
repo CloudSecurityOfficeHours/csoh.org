@@ -180,6 +180,48 @@ csoh.org/
 └── update_news.py          # News aggregation from 39 RSS feeds
 ```
 
+### Workflows at a Glance
+
+Every workflow has its own header banner — but if you just want to know "what runs when, and what does it touch," this is the one-screen version. Group by purpose, not alphabetical. Times are UTC; the auto-merge column shows whether the workflow can push to `main` without human review.
+
+**Content automation (writes to site)**
+
+| Workflow | When | What it does | Auto-merges? |
+| --- | --- | --- | --- |
+| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 39 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
+| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2–3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
+| [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No — auto-approved, human merges |
+| [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A — commits directly |
+
+**Deploy**
+
+| Workflow | When | What it does | Auto-merges? |
+| --- | --- | --- | --- |
+| [`gcp-deploy.yml`](.github/workflows/gcp-deploy.yml) | push to `main` on site files | Builds container, Trivy scan, pushes to Artifact Registry with SLSA provenance, deploys Cloud Run revision | N/A — direct deploy |
+
+**PR quality gates (block or warn)**
+
+| Workflow | When | What it does | Blocks PR? |
+| --- | --- | --- | --- |
+| [`lint.yml`](.github/workflows/lint.yml) | every push + PR | `actionlint` + `ruff` + `yamllint` in parallel | Yes |
+| [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | W3C HTML5 validator on every `.html` file | Yes, with PR comment |
+| [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Flags phishing patterns, suspicious TLDs, shortener domains | Yes |
+| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | Lychee crawl of every link; PR comment on failures | No — link rot is everywhere |
+
+**Periodic audits (report-only, never edits the site)**
+
+| Workflow | When | What it does | Where the report lands |
+| --- | --- | --- | --- |
+| [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Google PageSpeed Insights (mobile + desktop) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
+| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across 178 indexable pages | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
+| [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | RSS-feed staleness check on `cloud-security-reading-list.html` | Opens or refreshes a sticky issue labeled `reading-list-staleness` |
+
+A few patterns worth knowing before you touch any of these:
+
+- **App token vs PAT.** Writes (push, PR, approve, merge) use a `csoh-ci` GitHub App installation token, not the auto-injected `GITHUB_TOKEN` — App tokens can trigger downstream workflows on the PRs they create. `CSOH_PAT` is a separate fine-grained PAT used *only* to approve the bot's own PRs, since GitHub blocks self-approval and auto-merge doesn't honor the ruleset bypass list for the approval requirement. See the comments in `update-news.yml` for the full story.
+- **Auto-merge safety valve.** Workflows that auto-merge always check that the diff is restricted to a known set of files. If the bot touches anything outside that set, the PR stays open for a human.
+- **Pinned action SHAs.** All `uses:` references pin to a full commit SHA with the version as a trailing comment (`@de0fac…  # v6.0.2`). Don't replace these with tag refs.
+
 ### How Key Features Work
 
 **Dark Mode**
