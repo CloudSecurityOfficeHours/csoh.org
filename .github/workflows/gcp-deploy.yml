@@ -26,9 +26,12 @@ on:
       - 'Dockerfile'
       - 'nginx.conf'
       - 'nginx-security-headers.conf'
-      - 'pagefind-init.js'
       - 'search.html'
       - 'search.css'
+      - 'search-init.js'
+      - 'search-synonyms.json'
+      - 'tools/build_search_index.py'
+      - 'vendor/**'
       - '.github/workflows/gcp-deploy.yml'
   workflow_dispatch:
 
@@ -86,39 +89,34 @@ jobs:
           REF="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}"
           echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
 
-      # Build the Pagefind search index from the static HTML before Docker
-      # picks up the build context. Pagefind crawls every .html file in the
-      # site root, extracts the body text (scoped to <main> via
-      # --root-selector), and writes a binary index + UI assets to
-      # ./_pagefind/. The Dockerfile's `COPY . /usr/share/nginx/html/`
-      # then carries the index into the image.
+      # Build the site-wide search index before Docker picks up the
+      # build context. tools/build_search_index.py walks every .html
+      # file at repo root, emits one doc per <section id="..."> plus
+      # one doc per glossary <dt id="term-...">, applies the synonym
+      # map from search-synonyms.json, and writes /search-index.json.
+      # The Dockerfile's `COPY . /usr/share/nginx/html/` then carries
+      # the JSON into the image, where it's lazy-loaded by /search.html
+      # on first keystroke via /search-init.js (which drives MiniSearch
+      # from /vendor/minisearch-7.1.2.min.js).
       #
-      # GitHub-hosted ubuntu-latest ships Node 20+, so `npx` works without
-      # an explicit setup-node step. We pin the Pagefind version so a
-      # surprise major release can't break the deploy mid-stream.
-      - name: Build Pagefind search index
+      # Python is already present on GitHub-hosted ubuntu-latest images;
+      # the indexer uses only the standard library, so no install step.
+      - name: Build search index
         run: |
           set -euo pipefail
-          # Why no --root-selector here: this site's <h1> usually lives
-          # inside <section class="hero">, which sits BEFORE the <main>
-          # element. Scoping the index to <main> would drop the page's
-          # title, leaving Pagefind to render every result as
-          # "undefined". Letting Pagefind index the whole <body> and
-          # then aggressively excluding chrome (nav, footer, breadcrumb,
-          # skip-link, dropdown menus) keeps the index focused on real
-          # content without losing titles.
-          npx -y pagefind@1.4.0 \
-            --site . \
-            --output-path ./_pagefind \
-            --exclude-selectors "header, footer, nav.breadcrumb-nav, .skip-link, .dropdown-menu, .breadcrumb-nav, .footer-content, .footer-bottom, script, style, noscript"
-          # Sanity-check that the index actually produced files. If
-          # Pagefind silently no-op'd, we'd rather fail the deploy here
-          # than ship a broken /search.html.
-          test -f ./_pagefind/pagefind.js
-          test -f ./_pagefind/pagefind-ui.js
-          test -f ./_pagefind/pagefind-ui.css
-          echo "Pagefind index built. Top-level files:"
-          find ./_pagefind -maxdepth 1 -type f -printf "%p\n" | head -20
+          python3 tools/build_search_index.py
+          # Sanity-check the JSON exists and has plausible size. A
+          # malformed run produces no file or a near-empty one; fail
+          # the deploy now rather than ship a broken /search.html.
+          test -f search-index.json
+          # Expect >100KB - the index is currently ~1.6MB; 100KB is a
+          # generous lower bound that still catches empty/skeleton output.
+          size=$(stat -c%s search-index.json)
+          if [ "$size" -lt 100000 ]; then
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            exit 1
+          fi
+          echo "search-index.json built: $((size / 1024)) KB"
 
       - name: Build container image
         run: |

@@ -230,7 +230,7 @@ The definitive vendor-neutral comparison. Ten side-by-side `.comparison-table` b
 A directory of **350+ cloud-security vendors** across 30 categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. Vendor-neutral one-liners, no rankings. Wiz affiliation disclosed.
 
 ### 🔍 Site Search (`search.html`)
-Pagefind-powered full-text search across every page. Static index generated at deploy time and served from `/pagefind/`. CSS lives in `/search.css` (extracted from inline so CSP doesn't drop it); init lives in `/pagefind-init.js`.
+[MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict — `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
 
 ### ⚙️ How We Use GitHub Actions (`github-actions.html`)
 Learn-by-example explainer for GitHub Actions, using CSOH's workflow files as the teaching material. Covers triggers, concurrency, secrets, the GITHUB_TOKEN vs PAT distinction, the `workflow` scope gotcha, OIDC trust to GCP, and a recommended reading order through our heavily-commented YAML.

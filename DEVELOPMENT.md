@@ -151,10 +151,13 @@ csoh.org/
 ├── contribute-resources.html        # Resource submission form
 │
 │  ── Search ──
-├── search.html                      # Pagefind-powered full-text search
+├── search.html                      # MiniSearch-powered full-text search
 ├── search.css                       # Search page styles (extracted from inline for CSP)
-├── pagefind-init.js                 # Pagefind UI bootstrap (extracted from inline for CSP)
-├── pagefind/                        # Pagefind static search index (generated at deploy time)
+├── search-init.js                   # Search frontend: index load, MiniSearch wiring, render
+├── search-synonyms.json             # Acronym → expansion map (NHI, CIEM, IRSA, …)
+├── search-index.json                # Static JSON index (generated at deploy time)
+├── vendor/minisearch-7.1.2.min.js   # Self-hosted MiniSearch library (SRI-pinned)
+├── tools/build_search_index.py      # Builds search-index.json from all .html files
 │
 │  ── Policy / about ──
 ├── about-shawn-nunley.html          # Author/E-E-A-T page
@@ -270,11 +273,14 @@ A few patterns worth knowing before you touch any of these:
 - **Auto-merge only fires when the diff is purely `resources.html`.** If Claude touches anything else, the PR stays open with a banner asking for human review - important safety valve
 - Preview images for newly-added cards are generated post-merge by `site-update-deploy.yml`
 
-**Site-wide Search** (`search.html`, Pagefind)
-- [Pagefind](https://pagefind.app) builds a static, client-side search index from the deployed HTML - no server, no JS framework
-- The index is generated at deploy time and served from `/pagefind/`
-- `search.css` and `pagefind-init.js` are external files (not inline) because the site's strict Content-Security-Policy blocks inline styles and scripts
+**Site-wide Search** (`search.html`, MiniSearch)
+- `tools/build_search_index.py` walks every `.html` file at repo root at deploy time and emits one entry per `<section id="…">` plus one per glossary `<dt id="term-…">` to `search-index.json` (~1.6MB raw, ~530KB gzipped)
+- The index ships with the static site; `search-init.js` lazy-loads it on first keystroke and feeds it into [MiniSearch](https://lucaong.github.io/minisearch/) (self-hosted at `vendor/minisearch-*.min.js` with SRI)
+- `search-synonyms.json` provides acronym ↔ expansion mappings (`NHI ↔ non-human identity`, `CIEM ↔ cloud infrastructure entitlement management`, etc.) — expanded at both index-time and query-time so `NHI` matches docs that only spell out "non-human identity" and vice versa
+- Results return with section anchors (`iam.html#nhi`), grouped by URL, with a "+ N more sections on this page" sublist when multiple sections of one page match
+- `search.css`, `search-init.js`, and the vendored MiniSearch are external files (not inline) because the site's strict Content-Security-Policy blocks inline styles and scripts; CSP is `script-src 'self'` with no `unsafe-eval`, no `unsafe-inline`, no `wasm-unsafe-eval`
 - The search page has a 60-second `Cache-Control` cap so CSS tweaks propagate fast during iteration
+- To add a new acronym/alias: edit `search-synonyms.json`, run `python3 tools/build_search_index.py`, ship
 
 ---
 
