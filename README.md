@@ -902,12 +902,16 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 
 ## 📜 License
 
-- **Website Code**: MIT License - Feel free to fork and customize
-- **Resource Descriptions**: Creative Commons Attribution
-- **Linked Resources**: Property of their respective creators/owners
-- **News Articles**: Linked to original sources with proper attribution
+This project is dual-licensed:
 
-Copyright © 2023-2026 Cloud Security Office Hours
+- **Website Code** (HTML markup, CSS, JS, Python, config): [MIT License](LICENSE) — fork, modify, and reuse freely with attribution.
+- **Editorial Content** (articles, guides, glossary entries, breach reconstructions, resource descriptions): [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) — you may share with attribution, but no commercial use and no derivative works without permission.
+- **Linked Resources**: Property of their respective creators/owners.
+- **News Articles**: Linked to original sources with proper attribution.
+
+For commercial licensing, republication, or permission to create derivatives, contact the site owner via [about-shawn-nunley.html](https://csoh.org/about-shawn-nunley.html).
+
+Copyright © 2023-2026 Cloud Security Office Hours / Shawn Nunley
 
 ---
 

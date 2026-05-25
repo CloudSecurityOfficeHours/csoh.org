@@ -681,3 +681,20 @@ A: If it would help a cloud security professional learn or advance, it's worth s
 - **Want to add a glossary term?** → Check [tools/CROSSLINK_GLOSSARY_README.md](tools/CROSSLINK_GLOSSARY_README.md)
 - **Want to set up local development?** → Check [DEVELOPMENT.md](DEVELOPMENT.md)
 
+---
+
+## 📜 Licensing of Contributions
+
+By submitting a contribution (a pull request, issue with proposed content, resource submission, or any other material) to this project, you agree that your contribution will be licensed under the project's dual license as described in [LICENSE](LICENSE):
+
+- **Code contributions** (HTML markup, CSS, JavaScript, Python, configuration) are licensed under the **MIT License**.
+- **Editorial content contributions** (resource descriptions, articles, glossary entries, breach reconstructions, and other prose) are licensed under **Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0)**.
+
+You confirm that:
+
+1. You have the right to submit the contribution under these terms (i.e., it is your original work, or you have permission from the rights holder).
+2. You understand that your contribution may be edited for clarity, formatting, or consistency before publication. Substantive edits will be discussed with you when practical.
+3. Linked third-party resources and quoted material remain the property of their respective owners and are referenced under fair use or with attribution.
+
+If you are contributing on behalf of an employer or a third party, please ensure you have authorization to do so under these license terms. If your contribution cannot be released under these terms, please contact the maintainers before submitting.
+
