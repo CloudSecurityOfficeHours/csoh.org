@@ -415,6 +415,7 @@
                 <li><a href="#pod-security">Pod security &amp; escapes</a></li>
                 <li><a href="#networking">Networking - flat by default</a></li>
                 <li><a href="#admission">Admission control - the policy chokepoint</a></li>
+                <li><a href="#cluster-secrets">Cluster secrets &amp; vault integration</a></li>
                 <li><a href="#supply-chain">Supply chain - what runs in your cluster</a></li>
                 <li><a href="#comparison">EKS, AKS, and GKE side-by-side</a></li>
                 <li><a href="#hardening">Hardening checklist</a></li>
@@ -664,6 +665,61 @@
             </ul>
             <h3>Audit before enforce</h3>
             <p>Roll new policies out in <em>audit</em> mode first - log violations without blocking. Once the log is clean (or fixes have shipped), flip to <em>enforce</em>. This pattern avoids the "we deployed a policy and now half the cluster won't start" outage.</p>
+        </section>
+
+        <section id="cluster-secrets">
+            <h2>Cluster secrets &amp; vault integration</h2>
+            <p>A <code>kind: Secret</code> in Kubernetes is base64-encoded YAML, not encrypted. <code>kubectl get secret foo -o yaml | base64 -d</code> recovers the plaintext, and the same applies to anyone reading etcd directly. Production clusters need (1) etcd-level encryption-at-rest, and (2) an external source of truth for the secret values so rotation, audit, and lifecycle live in a real secrets manager - not in <code>git</code> and not in <code>kubectl</code>. The patterns below are typically combined, not picked individually. For the crypto and capability details behind the secrets managers themselves, see <a href="data-security.html#secrets">Data Security &amp; KMS - Secrets management</a>; for the broader workflow story, see <a href="iam.html#secrets-workflows">IAM - Secrets in developer workflows</a>.</p>
+
+            <h3>1. Encrypt etcd at rest with a KMS provider</h3>
+            <p>The minimum bar. Configure the API server's <a href="https://kubernetes.io/docs/tasks/administer-cluster/kms-provider/" target="_blank" rel="noopener noreferrer">KMS encryption provider</a> so Secret resources are encrypted with a customer-managed key before being written to etcd. Managed offerings make this one toggle:</p>
+            <ul>
+                <li><strong>EKS</strong> - <a href="https://docs.aws.amazon.com/eks/latest/userguide/enable-kms.html" target="_blank" rel="noopener noreferrer">Envelope encryption with AWS KMS</a>, enabled at cluster creation (or via update). Pin the KMS key in IAM so only the cluster's control-plane role can use it.</li>
+                <li><strong>AKS</strong> - <a href="https://learn.microsoft.com/en-us/azure/aks/use-kms-etcd-encryption" target="_blank" rel="noopener noreferrer">KMS etcd encryption with Azure Key Vault</a>; the cluster authenticates to Key Vault via managed identity.</li>
+                <li><strong>GKE</strong> - <a href="https://cloud.google.com/kubernetes-engine/docs/how-to/encrypting-secrets" target="_blank" rel="noopener noreferrer">Application-layer Secrets Encryption</a> with a Cloud KMS key in the same project.</li>
+            </ul>
+            <p>This protects against etcd-snapshot exfiltration, backup theft, and direct etcd reads. It does <em>not</em> protect against an attacker with API access - the API server will decrypt and serve. KMS encryption is necessary but not sufficient.</p>
+
+            <h3>2. External Secrets Operator (ESO)</h3>
+            <p><a href="https://external-secrets.io/" target="_blank" rel="noopener noreferrer">External Secrets Operator</a> is the de-facto standard. You define an <code>ExternalSecret</code> CRD that references a value in an external store (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, HashiCorp Vault, 1Password, Doppler, Infisical, Akeyless, GitHub, and many more), and ESO materializes it as a Kubernetes Secret, refreshing on a schedule. The cluster doesn't <em>own</em> the secret - the secrets manager does, and ESO is the synchronizer.</p>
+            <ul>
+                <li><strong>Strengths</strong> - works with the existing app/Helm chart pattern (consume a Kubernetes Secret as env/volume), broad provider support, no app-code changes, refreshes give rotation for free.</li>
+                <li><strong>Tradeoff</strong> - the secret <em>does</em> land in etcd (encrypted via the KMS provider, ideally) and is reachable via the K8s API for anyone with RBAC.</li>
+                <li><strong>Auth pattern</strong> - the ESO controller's service account uses IRSA / Workload Identity / Azure Workload Identity to authenticate to the external store. No static secret to start the chain.</li>
+            </ul>
+
+            <h3>3. Secrets Store CSI Driver</h3>
+            <p><a href="https://secrets-store-csi-driver.sigs.k8s.io/" target="_blank" rel="noopener noreferrer">Secrets Store CSI Driver</a> mounts secrets directly from the external store as a tmpfs volume in the pod - they never become K8s Secret objects, never hit etcd. Provider plugins exist for <a href="https://github.com/aws/secrets-store-csi-driver-provider-aws" target="_blank" rel="noopener noreferrer">AWS</a>, <a href="https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver" target="_blank" rel="noopener noreferrer">Azure</a>, <a href="https://github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp" target="_blank" rel="noopener noreferrer">GCP</a>, and <a href="https://developer.hashicorp.com/vault/docs/platform/k8s/csi" target="_blank" rel="noopener noreferrer">Vault</a>.</p>
+            <ul>
+                <li><strong>Strengths</strong> - lowest attack surface (no etcd footprint, no K8s API path), pod-scoped access enforced at mount time.</li>
+                <li><strong>Tradeoff</strong> - apps consume secrets as files instead of env vars (some retrofit needed); rotation requires the optional <code>syncSecret</code> sub-feature or pod restart.</li>
+            </ul>
+
+            <h3>4. Vault Agent Injector</h3>
+            <p><a href="https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector" target="_blank" rel="noopener noreferrer">Vault Agent Injector</a> is a mutating webhook that adds a Vault Agent sidecar (or init container) to annotated pods. The agent authenticates to Vault using the pod's service-account JWT, fetches secrets, and writes them to a shared volume (or templated config file). Right answer when the team already runs Vault and wants dynamic secrets (DB credentials minted per-pod, expiring with the pod).</p>
+
+            <h3>5. SOPS for GitOps</h3>
+            <p><a href="https://github.com/getsops/sops" target="_blank" rel="noopener noreferrer">SOPS</a> encrypts the <em>values</em> inside YAML / JSON / env / ini files using a cloud KMS key (or age / PGP), leaving the keys readable so diffs make sense. The encrypted file is safe to commit to git. <a href="https://fluxcd.io/flux/guides/mozilla-sops/" target="_blank" rel="noopener noreferrer">Flux</a> and <a href="https://argo-cd.readthedocs.io/en/stable/operator-manual/secret-management/" target="_blank" rel="noopener noreferrer">Argo CD</a> both have first-class SOPS integration: the reconciler decrypts at apply-time using its workload identity. Right answer for GitOps-first teams that want declarative cluster state including secrets, with the source of truth in git.</p>
+
+            <h3>6. Sealed Secrets</h3>
+            <p><a href="https://github.com/bitnami-labs/sealed-secrets" target="_blank" rel="noopener noreferrer">Bitnami Sealed Secrets</a> is the older "encrypt-to-the-cluster" pattern - a controller in-cluster holds a private key, anyone can encrypt against the matching public key, only that controller can decrypt. Simple to operate, but the keypair is cluster-bound (multi-cluster requires re-sealing) and the controller is a single point of failure for decryption.</p>
+
+            <h3>7. SPIFFE / SPIRE for cross-environment workload identity</h3>
+            <p><a href="https://spiffe.io/" target="_blank" rel="noopener noreferrer">SPIFFE / SPIRE</a> issues short-lived X.509 or JWT identities (SVIDs) to workloads based on attestation (which node, which pod, which service account). The cross-environment story is the point: a workload in Kubernetes, a workload on a VM, a workload on-prem can all hold a SPIFFE identity that downstream services trust uniformly. Right answer for multi-cluster, multi-cloud, or hybrid-on-prem deployments where you want one identity fabric instead of one per platform.</p>
+
+            <h3>Picking among them</h3>
+            <ul>
+                <li><strong>Production cluster, secrets in a cloud secrets manager:</strong> KMS etcd encryption <em>plus</em> External Secrets Operator <em>or</em> Secrets Store CSI Driver. Pick CSI if you can refactor apps to read from files; ESO otherwise.</li>
+                <li><strong>GitOps with secrets in repo:</strong> SOPS with Flux/Argo (multi-cluster friendly) or Sealed Secrets (single-cluster simpler).</li>
+                <li><strong>Vault shop wanting dynamic secrets:</strong> Vault Agent Injector or CSI driver with the Vault provider.</li>
+                <li><strong>Multi-cluster / hybrid identity:</strong> SPIRE underneath any of the above.</li>
+                <li><strong>Any of the above without etcd encryption enabled:</strong> incomplete. Turn on KMS encryption first.</li>
+            </ul>
+
+            <h3>What about <code>kubectl create secret</code>?</h3>
+            <p>Fine for ephemeral demos and bootstrap. Not fine as the source of truth for anything in production. The path to "we don't know what's deployed" starts with a human running <code>kubectl create secret</code> at 2am to fix an outage; the secret is now nowhere except etcd, and nobody knows it exists six months later when the rotation is overdue. Every production secret should originate in a secrets manager and arrive in the cluster via ESO / CSI / Vault Agent.</p>
+
+            <p>For pipeline-side patterns (how the secret gets into the manager in the first place from CI), see <a href="ci-cd.html#pipeline-secrets">CI/CD - Secrets in pipelines</a>.</p>
         </section>
 
         <section id="supply-chain">

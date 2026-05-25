@@ -671,6 +671,16 @@
                 <li><strong>Reasonable caching with bounded TTL.</strong> Hitting the secrets manager on every request is slow and expensive. Cache for a defined TTL (5–15 minutes is typical) and refresh on cache miss or rotation event.</li>
                 <li><strong>Local-dev parity.</strong> If the secrets manager doesn't have a sane local-dev story (LocalStack, a dev tenant, a stub), developers will hardcode a value "just for testing" and forget. Provide the dev path explicitly.</li>
             </ul>
+
+            <h3>How developers actually consume secrets - the four surfaces</h3>
+            <p>The capabilities above are necessary but the breach reality is that secrets leak from the <em>workflows that consume them</em>, not from the vaults that store them. Four surfaces matter, each with its own integration pattern. The deep treatment for each lives on the corresponding topic page; the summary here is the bridge.</p>
+            <ul>
+                <li><strong>Local development &amp; IDEs.</strong> <code>aws sso login</code>, <code>az login</code>, <code>gcloud auth</code>, plus wrappers like <code>aws-vault</code>, <code>op run</code> (1Password), <code>doppler run</code>, <code>infisical run</code>, and Vault Agent on workstations. The goal: kill the <code>.env</code> file. See <a href="iam.html#secrets-workflows">IAM - Secrets in developer workflows</a>.</li>
+                <li><strong>CI/CD pipelines.</strong> OIDC federation to the cloud (no static keys in CI), vault retrieval at job-start using the OIDC identity, environment-scoped CI secret stores as a last resort, and secret-scanning gates (TruffleHog, Gitleaks, GitHub push protection) as the safety net. See <a href="ci-cd.html#pipeline-secrets">CI/CD - Secrets in pipelines</a>.</li>
+                <li><strong>Terraform / OpenTofu.</strong> Dynamic provider credentials (HCP Terraform, GitHub Actions, GitLab) for the cloud auth, and Vault / cloud-native data sources (<code>aws_secretsmanager_secret_version</code>, <code>azurerm_key_vault_secret</code>, <code>google_secret_manager_secret_version</code>) for secret <em>values</em>. State files must be treated as secrets - encrypted backends are mandatory; OpenTofu's native state encryption raises the floor.</li>
+                <li><strong>Kubernetes clusters.</strong> KMS-backed etcd encryption as the baseline, then External Secrets Operator, Secrets Store CSI Driver, Vault Agent Injector, SOPS, or Sealed Secrets depending on the operating model. See <a href="#k8s-secrets">Kubernetes secrets (below)</a> for the cryptography angle and <a href="kubernetes.html#cluster-secrets">Kubernetes - Cluster secrets &amp; vault integration</a> for the cluster-operator view.</li>
+            </ul>
+            <p>The connective tissue across all four: <strong>workload identity is how the consumer authenticates to the vault</strong>. If your application needs a static credential to fetch its other static credentials, you've recursed the problem. Federated identity at every retrieval is the only pattern that scales.</p>
         </section>
 
         <section id="k8s-secrets">
