@@ -54,7 +54,7 @@ A CTF card on ctfs.html looks like this:
 <a href="https://example.com/your-ctf" class="card-link" target="_blank" rel="noopener noreferrer">
     <div class="resource-card"
         data-tooltip="Extended 2–3 sentence description that appears on hover. Cover what makes it unique, who benefits, and any prerequisites.">
-        <img src="img/previews/example-com-your-ctf.jpg" alt="Preview" class="resource-preview" onerror="this.style.display='none'">
+        <img src="img/previews/example-com-your-ctf.jpg" alt="Your CTF Name preview" class="resource-preview" onerror="this.style.display='none'">
         <h3>Your CTF Name</h3>
         <p>Short 1-sentence description.</p>
         <div class="resource-tags">
