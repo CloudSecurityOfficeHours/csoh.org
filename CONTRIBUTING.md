@@ -628,7 +628,7 @@ Two workflows fire on every merge to `main`: `site-update-deploy.yml` does the h
 - **Common HTML tags** → [MDN HTML Reference](https://developer.mozilla.org/en-US/docs/Web/HTML/Element)
 
 ### Markdown (For PR Descriptions)
-- **Writing good PR descriptions** → [GitHub Markdown Guide](https://guides.github.com/features/mastering-markdown/)
+- **Writing good PR descriptions** → [GitHub Markdown Guide](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
 - **Markdown syntax** → [Markdown Cheatsheet](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet)
 
 ---

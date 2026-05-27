@@ -140,7 +140,7 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 240+ curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # 280+ curated resources (largest page; auto-refreshed weekly)
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page
 │
@@ -484,7 +484,7 @@ When you add a new HTML page, do all of the following - none are automated:
    - **Community** (mega-menu) - sessions, conferences, recaps, presentations, chat resources
    - **Behind the Scenes** (dropdown) - the dogfooded ops pages (Deploy to GCP, GitHub Actions) plus Contribute / Add a Resource
 
-   The fastest way to apply changes site-wide is a small Python script - see `/tmp/update_nav_v3.py` from the May 2026 batch as a template. It uses regex to replace the mega-menu columns and dropdown `<ul>`s and re-applies `aria-current="page"` per file. Doing it by hand across 60+ pages is bug-prone (you'll inevitably drift on indent or aria attributes).
+   The fastest way to apply changes site-wide is a small Python script — see `tools/sync_navs.py` as a reference. It uses regex to replace the mega-menu columns and dropdown `<ul>`s and re-applies `aria-current="page"` per file. Doing it by hand across 70+ pages is bug-prone (you'll inevitably drift on indent or aria attributes).
 9. **Add the page to `TARGET_PAGES` in `tools/crosslink_pages.py`** so glossary terms get auto-linked across the new page. Then run:
    ```bash
    python3 tools/crosslink_pages.py
