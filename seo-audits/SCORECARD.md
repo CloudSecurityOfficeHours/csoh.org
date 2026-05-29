@@ -37,6 +37,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-05-23 | 100 / 100 / 100 / 92 | 38 / 100 / 100 / 92 | Mobile: LCP 1.05s · CLS 0.000 · TBT 0ms · FCP 1.05s · M-seo: robots-txt · D-seo: robots-txt |
 | 2026-05-23 | 100 / 100 / 100 / 92 | 100 / 100 / 100 / 92 | Mobile: LCP 1.07s · CLS 0.000 · TBT 0ms · FCP 1.05s · M-seo: robots-txt · D-seo: robots-txt |
 | 2026-05-25 | 100 / 100 / 100 / 92 | 100 / 100 / 100 / 92 | Mobile: LCP 1.07s · CLS 0.000 · TBT 0ms · FCP 0.92s · M-seo: robots-txt · D-seo: robots-txt |
+| 2026-05-29 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.07s · CLS 0.000 · TBT 0ms · FCP 1.05s |
 
 ## How to use
 
