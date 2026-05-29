@@ -389,7 +389,7 @@ Don't understand something? Here are links to helpful guides:
 ### Cloud Security Learning
 - **New to cloud security?** → [Cloud Security Alliance Certification](https://cloudsecurityalliance.org/education/ccsk/)
 - **AWS Security Fundamentals:** → [AWS Security Training](https://aws.amazon.com/training/security-training/)
-- **Azure Security Learning Path:** → [Microsoft Azure Security Engineer](https://docs.microsoft.com/en-us/learn/certifications/azure-security-engineer)
+- **Azure Security Learning Path:** → [Microsoft Azure Security Engineer](https://learn.microsoft.com/en-us/learn/certifications/azure-security-engineer)
 
 ---
 

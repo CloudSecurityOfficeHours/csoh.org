@@ -28,7 +28,7 @@ Before you start, check these boxes:
 
 ---
 
-## Good candidate breaches (as of early 2026)
+## Good candidate breaches (as of mid-2026)
 
 These incidents have solid post-mortems and haven't been added yet. Pick one up!
 
@@ -85,7 +85,7 @@ Common cloud techniques:
 | Exfiltration from cloud storage | T1530 – Data from Cloud Storage |
 | Email collection (Exchange/M365) | T1114.002 – Remote Email Collection |
 | DNS-based C2 | T1071.004 – DNS |
-| Adding persistent OAuth app | T1098.001 – Additional Cloud Credentials |
+| Adding persistent OAuth app | T1098.001 – Additional Account Credentials |
 
 ---
 
