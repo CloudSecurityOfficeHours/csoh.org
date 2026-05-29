@@ -14,16 +14,18 @@ resource "azuread_service_principal" "github" {
   owners    = [data.azuread_client_config.current.object_id]
 }
 
-# The federated credential locks the trust to this repo's authorized branch.
-# `subject` mirrors the GitHub OIDC sub claim, exactly like the AWS trust
-# policy condition and the GCP WIF attribute condition.
+# The federated credential locks the trust to this repo's `production` GitHub
+# Environment. The deploy jobs declare `environment: production`, so the OIDC
+# sub claim is `repo:OWNER/REPO:environment:production` (not the
+# `ref:refs/heads/...` form) — `subject` must match that. The branch
+# restriction is enforced by the GitHub Environment itself (main-only).
 resource "azuread_application_federated_identity_credential" "github" {
   application_id = azuread_application.github.id
-  display_name   = "github-${var.github_branch}"
-  description    = "GitHub Actions OIDC for ${var.github_owner}/${var.github_repo}@${var.github_branch}"
+  display_name   = "github-production"
+  description    = "GitHub Actions OIDC (production environment) for ${var.github_owner}/${var.github_repo}"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
+  subject        = "repo:${var.github_owner}/${var.github_repo}:environment:production"
 }
 
 # Least privilege: the publisher can read/write blob data in THIS storage

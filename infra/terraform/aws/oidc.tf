@@ -15,9 +15,11 @@ resource "aws_iam_openid_connect_provider" "github" {
   ]
 }
 
-# Trust policy: only this repo's authorized branch may assume the role.
-# The sub claim is locked to `repo:OWNER/REPO:ref:refs/heads/BRANCH`, the
-# direct analogue of the GCP WIF attribute condition.
+# Trust policy: only this repo's `production` GitHub Environment may assume the
+# role. Because the deploy jobs declare `environment: production`, GitHub mints
+# the OIDC token with sub `repo:OWNER/REPO:environment:production` (NOT the
+# `ref:refs/heads/...` form), so the condition must match that. The branch
+# restriction is enforced by the GitHub Environment itself (main-only).
 data "aws_iam_policy_document" "github_assume" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -37,7 +39,7 @@ data "aws_iam_policy_document" "github_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.github_branch}"]
+      values   = ["repo:${var.github_owner}/${var.github_repo}:environment:production"]
     }
   }
 }
