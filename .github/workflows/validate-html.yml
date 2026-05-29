@@ -13,21 +13,34 @@ name: Validate HTML
 # §1 — Triggers (matches "Anatomy / §1" on github-actions.html)
 # When does this workflow run?
 # -----------------------------------------------------------------------------
+# A "workflow" is one automation file. GitHub watches for the events listed
+# under `on:` and, when one fires, runs the jobs defined further down. A
+# workflow contains jobs; a job contains steps. Each event below is a
+# separate trigger — any one of them can start this workflow.
 on:
-  # On every pull request that touches an HTML file (skip PRs that only edit
-  # CSS, scripts, or docs — no point re-validating then).
+  # `pull_request` fires when someone opens or updates a PR. `paths:` filters
+  # it down: the workflow only runs if a changed file matches a pattern here.
+  # `'**.html'` means "any .html file in any folder" (** = any directory depth),
+  # so PRs that only edit CSS, scripts, or docs are skipped — no point
+  # re-validating then.
   pull_request:
     paths:
       - '**.html'
-  # On every push to main that touches an HTML file — catches direct commits
-  # that bypass the PR flow so we don't have to wait for the weekly cron.
+  # `push` fires when commits land on a branch. `branches:` limits it to
+  # `main`, and `paths:` again limits it to HTML changes — so both conditions
+  # must hold for this trigger to fire. This catches direct commits to main
+  # that bypass the PR flow, so we don't have to wait for the weekly cron.
   push:
     branches:
       - main
     paths:
       - '**.html'
-  # Weekly safety net at 07:00 UTC every Monday — last line of defense for
-  # anything that somehow slipped past both PR and push triggers.
+  # `schedule` runs the workflow on a timer using cron syntax (five fields:
+  # minute, hour, day-of-month, month, day-of-week; `*` means "every").
+  # `0 7 * * 1` reads: minute 0, hour 7, every day-of-month, every month,
+  # weekday 1 (Monday) — i.e. 07:00 UTC every Monday. GitHub cron is always
+  # UTC, not your local time. This weekly run is a safety net — the last line
+  # of defense for anything that somehow slipped past both PR and push triggers.
   schedule:
     - cron: '0 7 * * 1'   # cron format: min hour day-of-month month day-of-week
   # Lets you run the workflow manually from the Actions tab in GitHub.
@@ -55,6 +68,9 @@ permissions:
 # are safe to interrupt.
 # -----------------------------------------------------------------------------
 concurrency:
+  # `${{ ... }}` is GitHub Actions' expression syntax: at run time it
+  # substitutes a value in. `github.ref` is the branch/PR being built (e.g.
+  # `refs/heads/main`), so each branch or PR gets its own lock group.
   group: validate-html-${{ github.ref }}
   cancel-in-progress: true
 
@@ -71,11 +87,18 @@ jobs:
 
     steps:
       # Step 1 — Pull the repo onto the runner so we can read the files.
-      # The pinned SHA (instead of @v6) is a security best practice — it
-      # prevents a compromised tag from running malicious code on our runner.
+      # A step either calls a prebuilt, reusable action with `uses:` (like
+      # this one) or runs shell commands with `run:` (see the next step).
+      # `actions/checkout@<sha>` is GitHub's official action that clones the
+      # repo onto the runner; without it the runner starts empty. The pinned
+      # SHA (instead of @v6) is a security best practice — it prevents a
+      # compromised tag from running malicious code on our runner.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      # This step uses `run:` instead of `uses:` — it executes a shell command
+      # on the runner. Here it launches a small Python script that lives in the
+      # repo (checked out in Step 1) under tools/.
       # Step 2 — Refuse inline <script> blocks. Production CSP is
       # `script-src 'self'`, so inline scripts are silently blocked in the
       # browser — they "pass" HTML validation but break behavior. JSON-LD
@@ -96,26 +119,41 @@ jobs:
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
         uses: Cyb3r-Jak3/html5validator-action@443b108eb8e134b63a1f8a8ba0c942d552608ed7  # master 2025-09-19
+        # `with:` passes input parameters into a `uses:` action — like
+        # arguments to a function. The keys an action accepts are defined by
+        # that action; here we set its `root` and `blacklist` inputs.
         with:
           root: .                                       # scan the whole repo
           # Skip files we don't want validated. The Google verification stub
           # is intentionally non-standard HTML — Google requires it as-is.
           blacklist: google66d489593949bd4c.html
 
-      # Step 5 — Stash the validation log as an artifact you can download
-      # from the GitHub run page. `if: always()` = run even if the previous
-      # step failed, so we still get the log when it's most useful.
+      # Step 5 — Stash the validation log as an "artifact": a file the runner
+      # saves and attaches to the run so a human can download it from the
+      # GitHub run page. The runner's disk is wiped when the job ends, so
+      # uploading is the only way to keep the log around. `if: always()` = run
+      # even if the previous step failed, so we still get the log when it's
+      # most useful.
       - name: Upload validation log
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
+          # `name` is the label the download shows under; `path` is which file
+          # to capture (the validator wrote its findings to log.log).
           name: html-validation-log
           path: log.log
+          # `retention-days` is how long GitHub keeps the artifact before
+          # auto-deleting it. `if-no-files-found: warn` means: if log.log is
+          # missing, just print a warning rather than failing the step.
           retention-days: 30                            # auto-delete after 30 days
           if-no-files-found: warn
 
-      # Step 6 — If validation failed AND this is a PR, post the errors as
-      # a comment so the contributor sees them without digging through logs.
+      # Step 6 — If validation failed AND this is a PR, post the errors as a
+      # comment so the contributor sees them without digging through logs.
+      # The `if:` here is a guard: the step only runs when BOTH are true —
+      # `failure()` (an earlier step in this job failed) AND `github.event_name`
+      # is `pull_request` (this run came from a PR, not a push or the cron).
+      # So contributors get feedback on their PR, but pushes/cron stay quiet.
       - name: Comment on PR with validation results
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8.0.0

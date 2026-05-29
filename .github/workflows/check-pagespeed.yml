@@ -9,64 +9,128 @@
 # The SCORECARD diff is one line in one file — safe to auto-merge.
 # =============================================================================
 
+# This whole file is a "workflow": a set of automated steps GitHub Actions
+# runs for us on GitHub's servers when a trigger fires. `name:` is just the
+# label shown in the repo's "Actions" tab so we can spot this run among others.
 name: Check PageSpeed
 
+# `on:` lists the events ("triggers") that start this workflow. Any one of
+# the entries below is enough to kick off a run.
 on:
+  # `schedule:` runs the workflow on a timer, with no human involved.
   # Mondays at 14:00 UTC (07:00 Pacific, 10:00 Eastern). Cron is always UTC.
   schedule:
+    # A cron expression has five space-separated fields:
+    #   minute hour day-of-month month day-of-week
+    # Here: minute 0, hour 14, any day-of-month (*), any month (*),
+    # day-of-week 1 (Monday) — i.e. "every Monday at 14:00".
     - cron: '0 14 * * 1'
-  # Manual trigger from the Actions tab.
+  # `workflow_dispatch:` adds a "Run workflow" button in the Actions tab so a
+  # human can trigger this on demand (e.g. to test it without waiting a week).
   workflow_dispatch:
+  # `push:` fires when commits land on a branch. The `branches` and `paths`
+  # filters below narrow it down so we only run when it's actually relevant.
   # Re-run when the checker script changes — exercise the new logic
   # immediately on next push.
   push:
+    # Only pushes to the `main` branch count — ignore feature branches.
     branches:
       - main
+    # ...and only if one of these files changed. A push that touches nothing
+    # but unrelated HTML/CSS won't waste a run here.
     paths:
       - 'tools/check_pagespeed.py'
       - '.github/workflows/check-pagespeed.yml'
 
+# `permissions:` controls what the automatic, built-in credential — the
+# `GITHUB_TOKEN` that GitHub injects into every run — is allowed to do.
+# Granting the least access needed is a security best practice. The detailed
+# comment below explains why this token stays read-only and which other
+# identities do the actual writing.
 # Read-only on the auto-injected GITHUB_TOKEN. Every write (push commits,
 # open PR, enable auto-merge, file issue) uses an installation token from
 # the csoh-ci GitHub App. CSOH_PAT (separate identity) approves the PR
 # because GitHub blocks self-approval and the auto-merge feature does NOT
 # honor the App's ruleset bypass for the approval requirement.
 permissions:
+  # `contents: read` = may clone/read repo files, but may NOT push commits,
+  # open PRs, or touch issues. Those happen via the App/PAT tokens instead.
   contents: read
 
+# `concurrency:` stops two runs that share a "group" name from executing at
+# the same time, which prevents them from clobbering each other's changes.
 # This workflow only updates SCORECARD.md, so it doesn't race with the
 # deploy pipeline. Keep it in its own concurrency group; multiple runs
 # of itself still queue serially.
 concurrency:
+  # The group name. Other workflows use different names, so this one only
+  # ever competes with other copies of itself, never with deploys.
   group: check-pagespeed
+  # `false` = a new run WAITS for the in-flight one to finish rather than
+  # killing it. We don't want to abort a half-written SCORECARD commit.
   cancel-in-progress: false
 
+# `jobs:` holds one or more jobs. A "job" is a unit of work that runs on its
+# own fresh virtual machine; its steps run top-to-bottom and share that VM's
+# disk. This workflow has exactly one job (named `check-pagespeed`).
 jobs:
+  # The job's name. (Defining it here also lets other jobs depend on it via
+  # `needs:`, though there are no other jobs in this file.)
   check-pagespeed:
+    # `runs-on:` picks the type of VM ("runner") GitHub spins up for the job.
+    # `ubuntu-latest` is GitHub's standard, free Linux runner.
     runs-on: ubuntu-latest
 
+    # `steps:` is the ordered list of actions this job performs. Each step is
+    # EITHER `uses:` (run a prebuilt, shareable action) OR `run:` (run shell
+    # commands we write ourselves). Steps execute in order on the same VM.
     steps:
       # Mint a short-lived (~1h) installation token from the csoh-ci GitHub
       # App. Same pattern as update-news.yml — App token can trigger
       # downstream CI on the PR it opens; the default GITHUB_TOKEN can't.
+      # `name:` is the human-readable label for this step in the run log.
       - name: Mint installation token
+        # `id:` gives the step a handle so later steps can read its results,
+        # e.g. `steps.app-token.outputs.token` further down.
         id: app-token
+        # `uses:` runs a prebuilt action published on GitHub. The text after
+        # `@` pins the EXACT commit (a 40-char SHA) of that action — far safer
+        # than a movable tag like `v3`, because a SHA can't be changed under us
+        # to inject malicious code. The trailing `# v3.1.1` is just a
+        # human-friendly note of which release that SHA corresponds to.
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        # `with:` passes inputs (named parameters) into the action.
         with:
+          # `${{ ... }}` is a GitHub Actions expression — it's evaluated and
+          # substituted before the step runs. `secrets.NAME` pulls an encrypted
+          # value stored in repo/org settings; secrets are never printed in
+          # logs. These two identify and prove ownership of the csoh-ci App.
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
+      # The runner starts empty, so this standard action clones our repo onto
+      # the VM so later steps can read and edit the files.
       # Full clone — we need the file write access for SCORECARD updates
       # and the history depth for the diff/issue body.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          # Clone using the App token from the previous step (referenced by its
+          # `id`), so any commits/pushes are attributed to the App, not the
+          # default GITHUB_TOKEN — that's what lets the PR trigger downstream CI.
           token: ${{ steps.app-token.outputs.token }}
+          # `fetch-depth: 0` clones the FULL git history (the default is a
+          # shallow 1-commit clone). We need history for the diff/issue body.
           fetch-depth: 0
 
+      # Install a Python interpreter on the runner so the checker script can
+      # run. (Ubuntu ships one, but this pins a known version and adds it to
+      # PATH cleanly.)
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
+          # `3.x` = the latest available Python 3 release. The script doesn't
+          # need a specific minor version.
           python-version: '3.x'
 
       # Capture the most recent PageSpeed row BEFORE running, so we can
@@ -74,7 +138,12 @@ jobs:
       # step further down.
       - name: Snapshot previous scores
         id: prev
+        # `run:` executes shell commands on the runner. The `|` means
+        # "everything indented below is one multi-line script" (a YAML block).
         run: |
+          # Bash safety flags: -e exit on any error, -u error on undefined
+          # variables, -o pipefail fail if any command in a pipe fails. This
+          # makes the script stop loudly instead of silently doing the wrong thing.
           set -euo pipefail
           # Find the last existing data row in the PageSpeed Insights table.
           # The table starts after "## PageSpeed Insights" and ends at the
@@ -86,7 +155,11 @@ jobs:
             END {print last}
           ' seo-audits/SCORECARD.md)
           echo "previous row: $prev_row"
-          # Multiline-safe output via heredoc syntax.
+          # To hand a value to later steps, a `run:` step appends `key=value`
+          # lines to the file named in `$GITHUB_OUTPUT` (a path GitHub provides).
+          # That becomes `steps.prev.outputs.row`. For values that may span
+          # multiple lines you must use this `key<<EOF ... EOF` heredoc form
+          # instead of plain `key=value`.
           {
             echo "row<<EOF"
             echo "$prev_row"
@@ -96,6 +169,10 @@ jobs:
       # Run the actual PSI check. It hits mobile + desktop in parallel and
       # appends a row to seo-audits/SCORECARD.md.
       - name: Run PageSpeed Insights
+        # `env:` defines environment variables visible to this step's command.
+        # Here we hand the Google PageSpeed API key (kept as a secret) to the
+        # Python script, which reads it from the environment rather than having
+        # the key hardcoded in the repo.
         env:
           PSI_API_KEY: ${{ secrets.PSI_API_KEY }}
         run: python3 tools/check_pagespeed.py
@@ -106,6 +183,10 @@ jobs:
       - name: Detect regression
         id: regression
         run: |
+          # `python3 <<'PYEOF' ... PYEOF` feeds everything between the markers
+          # to Python as a script (an inline heredoc) — handy for logic too
+          # fiddly for shell. Quoting the marker ('PYEOF') stops the shell from
+          # touching `$` inside, so Python sees the code verbatim.
           python3 <<'PYEOF'
           import os, re, sys
           path = "seo-audits/SCORECARD.md"
@@ -181,10 +262,14 @@ jobs:
 
       # Did the script change anything? (It always should — appending a
       # row — but guard against the no-op case.)
+      # This records a `has_changes` true/false output that the next step's
+      # `if:` reads, so we only open a PR when there's actually a diff to ship.
       - name: Detect changed files
         id: changes
         run: |
           set -euo pipefail
+          # `git diff --name-only` lists files modified but not yet committed.
+          # `[ -z ... ]` is true when that list is empty (nothing changed).
           if [ -z "$(git diff --name-only)" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
@@ -196,30 +281,50 @@ jobs:
       # SCORECARD-only change won't trigger them — no need for the [skip ci]
       # marker (which would also suppress the required lint checks and
       # leave the PR blocked indefinitely).
+      # ([skip ci] is a magic phrase in a commit message that tells GitHub
+      # Actions to skip running workflows for that commit.)
       - name: Create Pull Request
         id: cpr
+        # `if:` makes a step conditional: it runs ONLY when this expression is
+        # true. Skip opening a PR if the previous step found no changes.
         if: steps.changes.outputs.has_changes == 'true'
+        # A community action that commits the working-tree changes to a branch
+        # and opens (or updates) a pull request for them.
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
         with:
+          # Use the App token so the PR is created by the App identity (which
+          # can trigger the PR's status checks).
           token: ${{ steps.app-token.outputs.token }}
+          # The commit message and PR title (kept identical here).
           commit-message: 'chore: weekly PageSpeed Insights check'
           title: 'chore: weekly PageSpeed Insights check'
+          # The PR description. `|` again starts a multi-line text block.
           body: |
             Automated weekly run of `tools/check_pagespeed.py` against
             https://csoh.org/ (mobile + desktop).
 
             One-line append to `seo-audits/SCORECARD.md`. Safe to auto-merge.
+          # Always reuse this fixed branch name for the PR.
           branch: pagespeed-weekly-check
+          # Delete that branch automatically once the PR is merged/closed.
           delete-branch: true
+          # Tags applied to the PR for easy filtering in the GitHub UI.
           labels: automated, seo
 
       # Approve our own PR with the second identity (CSOH_PAT). Required
       # because GitHub blocks self-approval AND the auto-merge feature
       # doesn't honor the App's ruleset bypass for the approval rule.
       - name: Auto approve
+        # Only if a PR was actually opened: the create-PR step exposes the new
+        # PR's number, and it's empty when no PR was made.
         if: steps.cpr.outputs.pull-request-number != ''
+        # `gh` is GitHub's official command-line tool, preinstalled on runners.
+        # `gh pr review --approve <number>` posts an approving review on the PR.
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
         env:
+          # `gh` authenticates using whatever is in `GH_TOKEN`. Using the PAT
+          # (a different identity than the App that opened the PR) sidesteps
+          # GitHub's "you can't approve your own PR" rule.
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
 
       # Enable auto-merge. The diff is a single-line SCORECARD append; safe
@@ -227,8 +332,13 @@ jobs:
       # check_pagespeed.py only touches SCORECARD.md.
       - name: Enable auto-merge
         if: steps.cpr.outputs.pull-request-number != ''
+        # `--auto` tells GitHub to merge the PR by itself as soon as all
+        # required checks pass and it's approved; `--squash` combines the PR's
+        # commits into one. So this step just arms the merge, it doesn't block.
         run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
         env:
+          # Arming auto-merge runs as the App identity here (it has the rights
+          # to do so); the separate approval above came from the PAT.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       # If any score regressed, open OR comment on a tracking issue.
@@ -237,13 +347,22 @@ jobs:
       # instead of opening a duplicate. Body is piped via stdin so the `|`
       # chars in the markdown table rows don't get shell-expanded.
       - name: Open or update regression issue
+        # Only runs when the Detect-regression step flagged a real drop.
         if: steps.regression.outputs.regressed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Pull the multi-line issue text the regression step produced into an
+          # env var, so the shell below can pipe it in without quoting headaches.
           ISSUE_BODY: ${{ steps.regression.outputs.body }}
         run: |
           set -euo pipefail
+          # `date -u +%Y-%m-%d` prints today's date in UTC, e.g. 2026-05-29.
           TITLE="PageSpeed regression detected on $(date -u +%Y-%m-%d)"
+          # Look for an already-open issue with today's exact title.
+          # `${{ github.repository }}` is a built-in context value that GitHub
+          # fills in as "owner/repo" (here CloudSecurityOfficeHours/csoh.org).
+          # `--json number --jq ...` returns just the first match's number, or
+          # empty if none — so `existing` is set only when a duplicate exists.
           existing=$(gh issue list \
             --repo "${{ github.repository }}" \
             --state open \
@@ -251,12 +370,16 @@ jobs:
             --search "in:title \"$TITLE\"" \
             --json number \
             --jq '.[0].number // empty')
+          # `[ -n ... ]` is true when the string is NON-empty (we found one).
           if [ -n "$existing" ]; then
             echo "Found existing open issue #$existing — appending comment."
+            # Pipe the body in on stdin; `--body-file -` means "read the body
+            # from stdin" — keeps the markdown's `|` chars away from the shell.
             printf '%s' "$ISSUE_BODY" | gh issue comment "$existing" \
               --repo "${{ github.repository }}" \
               --body-file -
           else
+            # No existing issue: open a fresh one with these labels.
             printf '%s' "$ISSUE_BODY" | gh issue create \
               --repo "${{ github.repository }}" \
               --title "$TITLE" \

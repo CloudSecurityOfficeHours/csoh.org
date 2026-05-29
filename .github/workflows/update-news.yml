@@ -7,46 +7,83 @@
 # The merge then triggers site-update-deploy to push the new content live.
 # =============================================================================
 
+# This whole file is one "workflow": a set of automated steps GitHub runs for
+# us on its servers. `name` is just the human label shown in the repo's
+# Actions tab and in status checks.
 name: Update News
 
+# `on:` lists the events that START this workflow. Any one of them is enough;
+# they are independent triggers.
 on:
-  # Run every 3 hours, on the hour. cron timezone is always UTC.
+  # `schedule` runs the workflow on a timer. `cron` is the classic 5-field
+  # timetable syntax (see the field legend on the cron line below). This one
+  # runs every 3 hours, on the hour. cron's timezone is always UTC.
   schedule:
+    # The 5 fields are minute / hour / day-of-month / month / day-of-week.
+    # `0 */3 * * *` = minute 0, every 3rd hour (00:00, 03:00, 06:00 … UTC),
+    # any day, any month, any weekday.
     - cron: '0 */3 * * *'   # min hour day-of-month month day-of-week
-  # Manual trigger from the Actions tab.
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
+  # human can launch it by hand — handy for testing or a one-off refresh.
   workflow_dispatch:
+  # `push` fires when commits land in the repo. The `branches` + `paths`
+  # filters below narrow it down: only a push to `main` that touches the
+  # listed file(s) will trigger a run. A push that changes anything else is
+  # ignored by this workflow.
   # Re-run if someone edits the news script itself, so changes to feed
   # config / parsing rules take effect immediately on next push.
   push:
+    # Only the main branch counts.
     branches:
       - main
+    # …and only when this specific file changed.
     paths:
       - 'update_news.py'
 
+# `permissions:` sets what the automatic, built-in credential — called the
+# GITHUB_TOKEN, which GitHub creates fresh for every run and throws away when
+# the run ends — is allowed to do. Granting the least access needed is a
+# security best practice: if this token leaked, it could do nothing but read.
 # Read-only on the auto-injected GITHUB_TOKEN. Every step that needs write
 # access (push commits, open PRs, enable auto-merge) uses an installation
 # token from the csoh-ci GitHub App. CSOH_PAT (a fine-grained org-scoped
 # PAT) drives the auto-approve step because GitHub's auto-merge feature
 # does NOT honor the App's ruleset bypass when evaluating the "1 required
 # approval" rule (empirically verified, see "Auto approve" step comments).
-# The default token never needs more than "clone the repo."
 permissions:
+  # `contents: read` = may clone/read the repo, but may not push.
   contents: read
 
 
+# `concurrency:` stops two runs from stepping on each other. Runs that share
+# the same `group` name are not allowed to execute at the same time — a new
+# one waits for the current one to finish (or, if cancel-in-progress were
+# true, it would kill the running one and take over).
 # Update News opens a PR on its own branch — it does not push to main, so it
 # doesn't need to share the deploy-pipeline group with site-update-deploy.
 # Keeping its own group means a freshly-queued site update (which uses
 # cancel-in-progress: true to avoid stale state) won't cancel a news refresh
 # mid-run. Multiple Update News runs still queue serially against each other.
 concurrency:
+  # The lock name. Anything else using this exact name would share the lock;
+  # this name is unique to Update News, so it only blocks its own re-runs.
   group: update-news
+  # false = let the in-flight run finish; queue the new one behind it.
   cancel-in-progress: false
 
+# A workflow is made of one or more "jobs". Each job runs on its own fresh
+# virtual machine and (unless told otherwise) in parallel with other jobs.
+# This workflow has just one job.
 jobs:
+  # `update-news` is this job's internal id (used to reference it elsewhere).
   update-news:
+    # `runs-on` picks the type of throwaway machine GitHub spins up for the
+    # job. `ubuntu-latest` = a fresh, current Ubuntu Linux VM, wiped after.
     runs-on: ubuntu-latest
 
+    # `steps` are the ordered list of actions the job performs, top to bottom,
+    # on that same machine. Each step is either a `run:` (a shell command we
+    # write) or a `uses:` (a prebuilt action we borrow) — explained inline.
     steps:
       # Mint a short-lived (~1h) installation token from the csoh-ci GitHub
       # App. The App's permissions (contents:write, pull-requests:write) are
@@ -57,15 +94,32 @@ jobs:
       # in PR #650, 2026-05-08 — checks all green, App on bypass, auto-merge
       # stayed BLOCKED on REVIEW_REQUIRED). So a second identity approving
       # the PR is the only way to drive auto-merge to completion.
+      # `name` is just the step's label in the run log.
       - name: Mint installation token
+        # `id` gives this step a handle so later steps can read its outputs —
+        # here, the minted token is reachable as steps.app-token.outputs.token.
         id: app-token
+        # `uses` runs a prebuilt, shareable action instead of our own shell.
+        # The part after `@` pins it to one exact commit (a 40-char SHA), not
+        # a moving tag like `v3` — so a compromised or retagged release can't
+        # silently change what runs here. The `# v3.1.1` is just a human note
+        # of which release that SHA corresponds to.
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        # `with:` passes named inputs to the action — like arguments to a
+        # function. Each action documents which inputs it accepts.
         with:
+          # `${{ ... }}` is GitHub Actions' expression syntax: it gets
+          # evaluated and substituted before the step runs. `secrets.NAME`
+          # pulls an encrypted value stored in the repo/org settings — never
+          # printed in logs. These two feed the App its identity + key.
           # `client-id` (the Iv23.* string from the App's settings page) —
           # the older `app-id` (numeric App ID) was deprecated in v3.x.
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
+      # The fresh VM starts empty — it does NOT have our code. `actions/
+      # checkout` is the standard action that git-clones the repo onto the
+      # machine so later steps can see and edit the files.
       # Full clone using the App's installation token so the create-PR action
       # below has push access. Unlike the auto-injected GITHUB_TOKEN, an App
       # token CAN trigger downstream workflows on PRs it creates — which is
@@ -73,15 +127,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          # Clone using the App token (from the previous step's output) rather
+          # than the default credential, so the later push has the right
+          # identity and access.
           token: ${{ steps.app-token.outputs.token }}
+          # `fetch-depth: 0` clones the FULL history. The default is a shallow
+          # 1-commit clone; the create-PR action needs full history to build a
+          # clean branch and diff.
           fetch-depth: 0
 
-      # Install Python — update_news.py is a Python script.
+      # The runner doesn't have a guaranteed Python ready to use, so this
+      # action installs one and puts it on the PATH — update_news.py needs it.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
+          # `'3.x'` = the latest available Python 3. (Quoted so YAML reads it
+          # as text, not the number 3.)
           python-version: '3.x'
 
+      # `run:` executes a shell command on the runner (bash by default) — this
+      # is the "do our own thing" counterpart to `uses:`.
       # Run the actual script. It rewrites news.html and feed.xml in place.
       - name: Update news.html from feeds
         run: python3 update_news.py
@@ -90,7 +155,12 @@ jobs:
       # safe-to-auto-merge files? We use this to decide whether to enable
       # auto-merge or require human review.
       - name: Detect changed files
+        # This step publishes two named "outputs" (has_changes, only_news_
+        # files). Later steps read them as steps.changes.outputs.<name> — the
+        # `changes` part is exactly this `id`.
         id: changes
+        # A `|` after `run:` starts a multi-line block: every indented line
+        # below is one shell script, run top to bottom.
         run: |
           # `set -euo pipefail` — fail fast on errors, undefined vars, or
           # broken pipes. Standard "strict mode" for shell scripts.
@@ -98,9 +168,15 @@ jobs:
           # `git diff --name-only` lists files modified vs the last commit.
           files="$(git diff --name-only)"
 
+          # `[ -z "$files" ]` is true when the list is empty, i.e. the script
+          # changed nothing. In that case record "no changes" and stop early.
           if [ -z "$files" ]; then
+            # `$GITHUB_OUTPUT` is a temp file the runner gives each step.
+            # Appending `name=value` lines to it sets this step's outputs,
+            # which later steps read via steps.changes.outputs.<name>.
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "only_news_files=false" >> "$GITHUB_OUTPUT"
+            # `exit 0` ends the script successfully — nothing more to do.
             exit 0
           fi
 
@@ -126,7 +202,12 @@ jobs:
       # Open a PR with whatever the news script changed. The action handles
       # branch creation, commit, push, and PR creation — all in one shot.
       - name: Create Pull Request
+        # This step also exposes outputs (notably pull-request-number), which
+        # the next two steps reference as steps.cpr.outputs.<name>.
         id: cpr
+        # `if:` is a condition — the step runs only when it evaluates true,
+        # otherwise it's skipped. Here: only open a PR when the previous step
+        # reported actual changes. (Output values are strings, hence 'true'.)
         if: steps.changes.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
         with:
@@ -158,8 +239,15 @@ jobs:
       # direct API merges do. So this approval step is still needed to
       # drive auto-merge below to completion.
       - name: Auto approve
+        # Skip unless the create-PR step actually produced a PR number. (An
+        # empty string `''` means no PR was opened — e.g. nothing changed.)
         if: steps.cpr.outputs.pull-request-number != ''
+        # `gh` is GitHub's official command-line tool, preinstalled on the
+        # runner. `gh pr review --approve <number>` submits an approval review.
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
+        # `env:` defines environment variables visible only to this step's
+        # command. `gh` automatically authenticates using `GH_TOKEN`, so this
+        # supplies the separate-identity PAT that's allowed to approve the PR.
         env:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
 
@@ -167,9 +255,13 @@ jobs:
       # script accidentally touches anything else, the PR stays open until a
       # human reviews — important safety valve.
       - name: Enable PR auto-merge when only news content files changed
+        # `&&` = both conditions must be true: the diff is news-only AND a PR
+        # exists. Auto-merge tells GitHub to merge the PR by itself once all
+        # required checks pass and the approval (from the step above) is in.
         if: steps.changes.outputs.only_news_files == 'true' && steps.cpr.outputs.pull-request-number != ''
         uses: peter-evans/enable-pull-request-automerge@a660677d5469627102a1c1e11409dd063606628d  # v3.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
+          # Tell the action which PR to enable auto-merge on.
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
           merge-method: squash                          # one tidy commit on main

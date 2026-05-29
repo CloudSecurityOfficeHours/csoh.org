@@ -7,49 +7,102 @@
 # found, but never fails — link rot is everywhere and shouldn't block merges.
 # =============================================================================
 
+# This whole file is a "workflow": a set of automated steps that GitHub runs
+# for us on its own computers (called "runners") whenever a trigger fires.
+# It lives under .github/workflows/, which is the only place GitHub looks for
+# these files. The structure is always: a name, the triggers ("on:"), some
+# settings, then one or more "jobs", each made of ordered "steps".
+
+# `name:` is just the human-friendly label shown in the repo's "Actions" tab.
 name: Check Broken Links
 
+# `on:` lists the events that start this workflow. Any one of them triggers it.
 on:
   # Validate links on any PR that touches an HTML file.
+  # A "PR" (pull request) is a proposed code change someone wants to merge.
+  # `paths:` narrows the trigger so this only runs when the change touches a
+  # matching file — no point re-crawling links if only CSS changed.
   pull_request:
+    # `**.html` is a glob: `**` matches any folders/subfolders, so this means
+    # "any file ending in .html, anywhere in the repo."
     paths:
       - '**.html'
   # Weekly external-link recheck — Mondays at 06:00 UTC. External sites die
   # on their own schedule; this catches it without us having to think about it.
+  # `schedule:` runs the workflow on a timer instead of in response to a push.
   schedule:
+    # A "cron" expression is five fields — minute, hour, day-of-month, month,
+    # day-of-week — that define a repeating schedule. A `*` means "every".
+    # `0 6 * * 1` = minute 0, hour 6, any day, any month, weekday 1 (Monday),
+    # i.e. 06:00 UTC every Monday. (GitHub cron is always in UTC.)
     - cron: '0 6 * * 1'    # min hour day-of-month month day-of-week
-  # Manual trigger from the GitHub Actions tab.
+  # `workflow_dispatch:` adds a "Run workflow" button in the Actions tab so a
+  # human can kick it off on demand, without waiting for a PR or the weekly timer.
   workflow_dispatch:
 
-# Read-only on the repo, can post PR comments. We never modify code here.
+# `permissions:` controls what the automatic per-run credential (the
+# GITHUB_TOKEN) is allowed to do against THIS repo. Best practice is to grant
+# the least access needed: read the files, write PR comments, nothing more.
+# This workflow never modifies code.
 permissions:
+  # Allow reading repository contents (needed to fetch the HTML to scan).
   contents: read
+  # Allow writing to pull requests (needed to post the broken-links comment).
   pull-requests: write
 
 
-# Per-ref concurrency: a new push to the same PR cancels the old run.
-# Read-only — safe to interrupt mid-crawl.
+# `concurrency:` lets at most one run exist per named "group" at a time. This
+# crawl is read-only, so cancelling an in-flight run mid-crawl is safe.
 concurrency:
+  # The group name. `${{ ... }}` is GitHub's expression syntax — it gets
+  # replaced at runtime with a real value. `github.ref` is the branch/PR
+  # being built, so each PR gets its own group and they don't cancel each
+  # other; only repeated pushes to the SAME PR collide.
   group: check-broken-links-${{ github.ref }}
+  # When a new run joins a group that's already running, cancel the old one.
   cancel-in-progress: true
 
+# `jobs:` holds the actual work. Each job runs on its own fresh machine and,
+# unless you say otherwise, jobs run in parallel. This workflow has one job.
 jobs:
+  # `check-links` is our chosen ID for this job (any unique name works).
   check-links:
+    # `runs-on:` picks the runner OS. `ubuntu-latest` is a clean, throwaway
+    # Linux virtual machine GitHub spins up just for this run, then discards.
     runs-on: ubuntu-latest
 
+    # `steps:` are the ordered actions inside the job. Each runs top to bottom
+    # on the same machine. A step either reuses a packaged action (`uses:`) or
+    # runs shell commands (`run:`).
     steps:
-      # Pull the repo onto the runner.
+      # The runner starts empty, so the first step copies our code onto it.
+      # `uses:` runs a prebuilt, shareable action — here the official
+      # `actions/checkout`. The part after `@` pins the EXACT version by its
+      # commit hash (SHA) rather than a moving tag like `v6`; the `# v6.0.2`
+      # comment just notes which release that hash is. Pinning to a SHA is a
+      # security practice: a tag can be re-pointed at malicious code later,
+      # but a specific commit can't change underneath you.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      # Restore lychee's HTTP cache from a previous run. Massively speeds up
-      # the crawl — lychee skips URLs it already validated within the cache TTL.
-      # Cache key includes the SHA so each commit can build on the prior cache.
+      # "Caching" means saving files from one run so a later run can reuse them
+      # instead of redoing slow work. Each fresh runner is empty, so without a
+      # cache lychee would re-check every URL from scratch every time. Restoring
+      # lychee's HTTP cache massively speeds up the crawl — lychee skips URLs it
+      # already validated within the cache TTL (the max-cache-age set below).
       - name: Restore lychee cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        # `with:` passes named inputs to the action — its settings/parameters.
         with:
+          # Which folder on the runner to save and later restore.
           path: .lycheecache
+          # The cache's lookup name. `github.sha` is this commit's unique ID,
+          # so a fresh entry is saved per commit. On a later run, an exact
+          # match for this key is loaded first if it exists.
           key: cache-lychee-${{ github.sha }}
+          # If no exact key match (e.g. brand-new commit), fall back to the
+          # newest cache whose name STARTS WITH this prefix — so we still reuse
+          # a recent crawl instead of starting cold.
           restore-keys: cache-lychee-                   # fall back to any cache
 
       # Run the actual link checker. Lychee is a fast, parallel link crawler.
@@ -72,37 +125,73 @@ jobs:
             --max-concurrency 20
             --glob-ignore-case
             './*.html'
+          # Write the crawl results to this file (path relative to the repo).
           output: ./lychee-report.md
+          # Produce that report as Markdown so it renders nicely in a PR comment.
           format: markdown
+          # By default this action would "fail" (turn the job red) on a broken
+          # link. We force false so a dead link never blocks a merge.
           fail: false                                   # never fail the job — see header
 
-      # Save the report so reviewers can download the full crawl.
+      # An "artifact" is a file the workflow saves and attaches to the run so
+      # reviewers can download the full crawl afterward from the Actions page.
+      # The runner itself is destroyed when the job ends, so this is how files
+      # outlive the run.
       - name: Upload link check report
+        # `if:` decides whether a step runs. By default a step is skipped once
+        # an earlier step failed; `always()` forces this one to run regardless,
+        # so we still keep the report even if something upstream broke.
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
+          # Label the downloadable artifact will show under on the run page.
           name: broken-links-report
+          # The file (or folder) to upload.
           path: ./lychee-report.md
+          # GitHub auto-deletes the artifact after this many days to save space.
           retention-days: 30
+          # If the file is missing, just warn instead of failing the step.
           if-no-files-found: warn
 
       # Quick scan: did lychee find errors? Sets a step output we use below.
       # `[Errors]` is the section header lychee prints when something is broken.
       - name: Check for broken links in report
+        # `id:` gives this step a handle so later steps can read its outputs
+        # via `steps.report.outputs.<name>`.
         id: report
+        # `github.event_name` is the trigger that started this run. Only do the
+        # comment dance on pull requests — there's no PR to comment on when this
+        # runs from the weekly schedule or a manual click.
         if: github.event_name == 'pull_request'
+        # `run:` executes shell commands on the runner (default shell: bash).
+        # The `|` keeps this as a multi-line block, run line by line.
         run: |
+          # If the report file exists AND contains an `[Errors]` section
+          # (`grep -q` = quiet, just succeed/fail; `-E` = extended regex;
+          # the `\[ \]` escape the literal square brackets)...
           if [ -f ./lychee-report.md ] && grep -qE '\[Errors\]' ./lychee-report.md; then
+            # ...record that we found errors. Appending `name=value` to the
+            # special file named by $GITHUB_OUTPUT is how a step publishes an
+            # output that other steps can read.
             echo "has_errors=true" >> "$GITHUB_OUTPUT"
           else
+            # Otherwise record that the report was clean.
             echo "has_errors=false" >> "$GITHUB_OUTPUT"
           fi
 
       # If we found errors AND we're on a PR, post a summary comment.
+      # This reads the `has_errors` output set just above; the step is skipped
+      # entirely when the report was clean or we're not on a PR.
       - name: Comment on PR with broken links
         if: steps.report.outputs.has_errors == 'true' && github.event_name == 'pull_request'
+        # `github-script` lets us run JavaScript with a ready-to-use, already
+        # authenticated GitHub API client (`github`) and run context info
+        # (`context`) — handy for small API calls without writing a full action.
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8.0.0
         with:
+          # The JS to run is passed as the `script:` input below. NOTE: lines
+          # inside this block are literal JavaScript, so any comments here use
+          # `//` (JS style), not `#` — a `#` would be a JS syntax error.
           script: |
             const fs = require('fs');
             let report = '';

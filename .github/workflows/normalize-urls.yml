@@ -7,15 +7,36 @@
 # auto-merged, so a human can eyeball cross-domain redirects before they land.
 # =============================================================================
 
+# This file is a GitHub Actions "workflow": an automated procedure that
+# GitHub runs for us on its own servers. A workflow is made of one or more
+# "jobs," and each job is a list of "steps" that run in order. GitHub reads
+# this YAML to know what to do, when to do it, and what permissions to grant.
+
+# `name` is the human-friendly label shown in the repo's Actions tab and in
+# the list of workflow runs. It has no effect on behavior — just identification.
 name: Normalize URLs
 
+# `on` declares the EVENTS that trigger this workflow to run. A workflow with
+# no triggers never runs. We list two triggers below.
 on:
   # Monthly cleanup, 1st of the month at 08:00 UTC.
+  # `schedule` runs the workflow automatically on a timer, written as a "cron"
+  # expression. Cron has five space-separated fields:
+  #   minute  hour  day-of-month  month  day-of-week
+  # Here `0 8 1 * *` means: minute 0, hour 08, the 1st day of the month, every
+  # month (*), any day of the week (*) — i.e. 08:00 UTC on the 1st each month.
+  # A `*` means "every value." Cron times are ALWAYS in UTC, never local time.
   schedule:
     - cron: '0 8 1 * *'   # min hour day-of-month month day-of-week
   # Manual trigger from the Actions tab.
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions UI so a
+  # human can launch this on demand without waiting for the monthly schedule.
   workflow_dispatch:
 
+# `permissions` controls what the auto-generated GITHUB_TOKEN (a temporary
+# credential GitHub injects into every run) is allowed to do against THIS
+# repo. Locking it to the minimum needed is a security best practice — a
+# leaked token can only do what we granted here.
 # Needs `contents: write` because the create-PR action commits & pushes a new
 # branch. `pull-requests: write` lets it open and label the PR.
 permissions:
@@ -23,85 +44,177 @@ permissions:
   pull-requests: write
 
 
+# `concurrency` prevents runs from stepping on each other. GitHub allows only
+# ONE active run per named `group` at a time; others wait in a queue. Any
+# workflow that sets the SAME group name shares that single lane.
 # Shared with site-update-deploy so commits to main never race each other.
 # Queue serially.
 concurrency:
+  # The shared lane name. site-update-deploy uses this same string, so a URL
+  # normalization and a site deploy can never run simultaneously.
   group: deploy-pipeline
+  # `false` = let an in-progress run finish instead of canceling it when a new
+  # one is queued. We never want to abort a deploy partway through.
   cancel-in-progress: false
 
+# `jobs` holds the workflow's jobs. We have just one. Each key under `jobs`
+# (here `normalize-urls`) is that job's internal ID.
 jobs:
   normalize-urls:
+    # `runs-on` picks the virtual machine ("runner") GitHub spins up fresh for
+    # this job. `ubuntu-latest` is a clean, throwaway Linux box — nothing
+    # persists between runs, so every step starts from a blank slate.
     runs-on: ubuntu-latest
-    # Hard cap: each redirect resolution is a real HTTP call, so this can
-    # drag if a site is slow.
+    # `timeout-minutes` auto-cancels the job if it exceeds this many minutes,
+    # so a stuck network call can't keep a runner (and the concurrency lane)
+    # tied up indefinitely. This is a real risk here: each redirect resolution
+    # is a live HTTP call, so the job can drag if a linked site is slow.
     timeout-minutes: 15
 
+    # `steps` is the ordered list of actions this job performs. Each step is
+    # either a `uses:` (run a prebuilt, shareable action) or a `run:` (execute
+    # shell commands). Steps run top-to-bottom on the same runner, sharing its
+    # filesystem, so files written by one step are visible to later steps.
     steps:
       # Mint a short-lived installation token from the csoh-ci GitHub App.
       # Used to push the normalize-urls branch and open the PR. We do NOT
       # auto-approve the PR — a human reads the diff before merging because
       # cross-domain redirects need attention.
+      # `name` is the step's display label in the run log.
       - name: Mint installation token
+        # `id` gives this step a handle so later steps can read its outputs
+        # via `steps.app-token.outputs.<name>` (see the checkout step below).
         id: app-token
+        # `uses` runs a prebuilt action published by someone else, instead of
+        # our own shell. The part after `@` pins the EXACT version: here it's a
+        # full 40-character commit SHA, which is the most secure way to pin —
+        # unlike a tag (v3.1.1) a SHA can't be silently re-pointed at malicious
+        # code later. The trailing comment just notes the human-readable tag
+        # that SHA corresponds to.
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        # `with` passes input parameters to the action — like arguments to a
+        # function. Which inputs exist is defined by the action's own docs.
         with:
           # `client-id` is the modern input name; the older `app-id` (numeric
           # App ID) was deprecated in v3.x of the action.
+          # `${{ ... }}` is GitHub Actions expression syntax — it gets
+          # evaluated and substituted before the step runs. `secrets.*` reads
+          # an encrypted repo/org secret; its value never appears in logs.
+          # These two credentials identify and authenticate the csoh-ci App so
+          # the action can mint an installation token scoped to this repo.
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
+      # The runner starts empty, so we must copy ("check out") the repo's code
+      # onto it before any script can touch the files. `actions/checkout` is
+      # GitHub's official action for that.
       # App-authenticated checkout so the create-PR step has push access and
       # triggers downstream CI on the PR (the default GITHUB_TOKEN does not).
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          # Read the token minted by the `app-token` step above. By default
+          # checkout would save the auto-injected GITHUB_TOKEN for later git
+          # pushes; we override it with the App token so the create-PR step
+          # can push and so its PR triggers other CI workflows.
           token: ${{ steps.app-token.outputs.token }}
 
-      # Install Python — both safety check and normalizer are Python scripts.
+      # The Ubuntu runner already has Python, but this action guarantees a
+      # specific, consistent version on PATH (and caches it for speed). We
+      # need it because both the safety check and the normalizer are Python
+      # scripts.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
+          # `'3.x'` = the latest available Python 3 release. Quoted so YAML
+          # reads it as text, not a number.
           python-version: '3.x'
 
+      # This step uses `run:` instead of `uses:` — it executes shell commands
+      # directly on the runner (default shell is bash on Linux). The `|`
+      # introduces a multi-line block, so every indented line below is one
+      # script run in sequence.
       # Run safety check FIRST. We don't want to follow redirects that lead
       # to malicious destinations — the redirect resolver could otherwise
       # silently rewrite a benign-looking URL to something bad.
       - name: Check URL safety (must pass before normalization)
         run: |
+          # `> file` redirects the script's normal output into a file;
+          # `2>&1` folds error output into that same file. `|| true` swallows
+          # a non-zero exit so the workflow doesn't stop here — we decide
+          # pass/fail ourselves a few lines down by inspecting the report.
           python3 tools/check_all_site_urls.py > url-safety-report.txt 2>&1 || true
+          # Echo the report into the run log so it's visible without opening
+          # the downloadable artifact.
           cat url-safety-report.txt
           # Halt the workflow if the report flags any unsafe URLs.
+          # `grep -q` searches silently and succeeds if the pattern is found.
           if grep -q "❌ UNSAFE" url-safety-report.txt; then
+            # `::error::` is a GitHub Actions log command — this line shows up
+            # as a red error annotation on the run, not just plain text.
             echo "::error::Unsafe URLs detected — blocking normalization"
+            # A non-zero exit code fails the step, which stops the whole job
+            # before any URL rewriting happens.
             exit 1
           fi
 
-      # Save the safety report for download from the run page.
+      # An "artifact" is a file the workflow saves and attaches to the run so
+      # you can download it afterward from the run's summary page. The runner
+      # itself is wiped after the job, so this is how the safety report
+      # survives for download.
       - name: Upload safety report
+        # `if:` decides whether a step runs. `always()` forces this step to
+        # run even when an earlier step failed — so we still get the safety
+        # report when the safety check itself blocked the job above.
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
+          # `name` is the label of the downloadable zip on the run page.
           name: normalize-url-safety-report
+          # `path` is the file (or folder/glob) on the runner to upload.
           path: url-safety-report.txt
+          # Auto-delete the artifact after 30 days to save storage.
           retention-days: 30
+          # If the file is missing, just `warn` (don't fail the step).
           if-no-files-found: warn
 
       # The actual normalizer. `--apply` means "rewrite the files," not just
       # report. `tee` saves output to a report file AND prints to the run log.
       - name: Run URL normalizer
         run: |
+          # `cd tools` runs the script from its own directory (it expects
+          # that). `2>&1` merges errors into normal output; `| tee FILE` then
+          # writes that combined stream to a file AND echoes it to the log.
+          # The report is written one level up (../) so it lands in the repo
+          # root alongside the safety report.
           cd tools && python3 normalize_urls.py --apply 2>&1 | tee ../normalize-report.txt
+          # Return to the repo root for any later steps.
           cd ..
 
-      # Open a PR with the URL changes. Reuses the same `normalize-urls`
-      # branch each month — old branch is auto-deleted after merge.
+      # This third-party action does everything in one shot: creates a branch,
+      # commits the files the normalizer changed, pushes it, and opens a PR.
+      # We open a PR (rather than committing straight to main) so a human can
+      # review the URL rewrites before they go live. It reuses the same
+      # `normalize-urls` branch each month — the old branch is auto-deleted
+      # after merge.
       - name: Create Pull Request
+        # Gives the step an id so a later step could read outputs like
+        # `steps.cpr.outputs.pull-request-number`.
         id: cpr
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
         with:
+          # Push/PR using the App token so this PR can trigger downstream CI.
           token: ${{ steps.app-token.outputs.token }}
+          # The message for the commit the action makes. Note there is NO
+          # `[skip ci]` marker here: putting `[skip ci]` in a commit message
+          # tells GitHub to skip workflow runs for that commit. We deliberately
+          # WANT CI to run on this PR (lint, link checks, etc.) before merge.
           commit-message: 'chore: normalize redirecting URLs'
+          # The PR's title as shown in the pull-requests list.
           title: 'chore: Normalize redirecting URLs'
+          # The PR description. `|` is a YAML "literal block": every indented
+          # line below is kept verbatim, including line breaks, so the
+          # Markdown renders as written.
           body: |
             This PR was automatically created by the **Normalize URLs** workflow.
 
@@ -113,8 +226,15 @@ jobs:
             **Review the changes carefully** — especially any cross-domain redirects.
 
             Full report is available in the workflow artifacts.
+          # Name of the branch the action creates/updates for this PR. Reusing
+          # one fixed name means each monthly run refreshes the same PR/branch
+          # rather than piling up new ones.
           branch: normalize-urls
+          # After the PR merges, delete its branch automatically to keep the
+          # repo tidy.
           delete-branch: true
+          # Apply these GitHub issue labels to the PR (comma-separated) so it's
+          # easy to spot bot-generated content PRs.
           labels: automated, content
 
       # No auto-approve step. We deliberately leave the PR un-approved so
@@ -124,8 +244,10 @@ jobs:
       # via APPROVAL_PAT_TOKEN was just a one-click convenience and added
       # no real safety; removing it is a strict improvement.)
 
-      # Save the normalization log too — useful when reviewing the PR to see
-      # exactly what the script did and why.
+      # Same upload-artifact action as before, this time saving the
+      # normalizer's own log. `if: always()` ensures we keep it even if an
+      # earlier step failed. It's useful when reviewing the PR to see exactly
+      # what the script did and why.
       - name: Upload normalization report
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
