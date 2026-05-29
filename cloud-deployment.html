@@ -308,7 +308,7 @@
             <figure style="margin:2rem auto;max-width:560px;">
               <svg viewBox="0 0 560 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="dind-title dind-desc" width="560" height="560">
                 <title id="dind-title">Defense-in-depth onion: eight concentric layers around the application</title>
-                <desc id="dind-desc">A diagram showing the application at the center surrounded by eight concentric rings. From outermost to innermost: Cloudflare, GCP load balancer + <a class="glossary-link" href="glossary.html#term-waf">WAF</a>, <a class="glossary-link" href="glossary.html#term-tls">TLS</a>, <a class="glossary-link" href="glossary.html#term-lambda">Cloud Run</a> sandbox, hardened container, deploy identity (<a class="glossary-link" href="glossary.html#term-wif">WIF</a>), pipeline guards, logging.</desc>
+                <desc id="dind-desc">A diagram showing the site at the center surrounded by eight concentric rings. From outermost to innermost: the Cloudflare edge (<a class="glossary-link" href="glossary.html#term-cdn">CDN</a>, <a class="glossary-link" href="glossary.html#term-ddos">DDoS</a> absorption, <a class="glossary-link" href="glossary.html#term-waf">WAF</a>, load balancer); three cloud origins active/active with health checks; <a class="glossary-link" href="glossary.html#term-tls">TLS</a> at Full strict plus security headers; locked-down origins (private S3, zero-IAM Cloud Run, $web-only Azure); hardened bytes (digest pin, vulnerability scan, no leaked files); keyless deploy to three clouds (<a class="glossary-link" href="glossary.html#term-oidc">OIDC</a> federation); pipeline guards; and 400-day audit logs.</desc>
                 <defs>
                   <radialGradient id="dd-core" cx="50%" cy="50%" r="50%">
                     <stop offset="0%" stop-color="#fde68a"/>
@@ -373,7 +373,7 @@
                 <li><strong>Someone messes with our DNS or TLS.</strong> Misissued certificate, an on-path attacker downgrading HTTPS to HTTP, DNS hijack. <em>Mitigated by:</em> two-factor on Cloudflare, registrar lock on the domain, HSTS preload (browsers refuse plain HTTP for our domain, period), modern TLS only.</li>
                 <li><strong>Someone defaces the site.</strong> Got into the build pipeline somehow and pushed an embarrassing change. <em>Mitigated by:</em> everything in (1) and (2), plus a one-command rollback (every Cloud Run revision is pinned to a specific image hash; "go back to yesterday's deploy" is a single CLI call).</li>
                 <li><strong>Volumetric attack (DDoS) or an origin/region outage.</strong> Someone tries to take the site offline by sending an enormous amount of traffic - or one cloud simply has a bad day. <em>Mitigated by:</em> Cloudflare absorbing the bulk of traffic at its edge, edge rate limiting, the CDN serving cached content even if an origin goes down, and - new in the multi-cloud design - <strong>three independent origins behind a health-checked load balancer</strong>, so an entire cloud can fail and the site keeps serving from the other two.</li>
-                <li><strong>Bot scraping and probing.</strong> Bots constantly throw classic attack patterns (<code>?id=1' OR 1=1--</code>) at every endpoint on the public internet. <em>Mitigated by:</em> Cloud Armor's WAF rules silently dropping those requests so they never reach our application.</li>
+                <li><strong>Bot scraping and probing.</strong> Bots constantly throw classic attack patterns (<code>?id=1' OR 1=1--</code>) at every endpoint on the public internet. <em>Mitigated by:</em> Cloudflare's WAF (the free Managed Ruleset) plus a rate-limit rule, silently dropping those requests at the edge so they never reach any of our three origins.</li>
             </ol>
             <p><strong>What we explicitly do <em>not</em> defend against</strong>, because none of it applies to a static site: authenticated session theft, broken access control, business-logic abuse, <a class="glossary-link" href="glossary.html#term-privilege-escalation">privilege escalation</a> from an application server. If you're reading this page to copy the design for a site that <em>does</em> have logged-in users - you need more than what's here.</p>
         </section>
@@ -545,6 +545,70 @@
                 <li><strong>Azure - Storage Account "static website" ($web).</strong> Azure serves the special <code>$web</code> container over a built-in <code>*.web.core.windows.net</code> HTTPS endpoint with a managed cert - no load balancer, no CDN, just static hosting. The simplest of the three.</li>
             </ul>
             <p>Notice the pattern: none of the three needs a cloud load balancer, a managed-cert dance, or a WAF product, because Cloudflare does all of that once at the edge. Each origin is reduced to "the cheapest way this vendor will hand me an HTTPS URL for a folder of files."</p>
+
+            <h3>The three stacks, side by side</h3>
+            <p>Each cloud ends up with a deliberately different shape, because each vendor's <em>cheapest path to a valid-HTTPS origin</em> is different. Here is the full stack on each, end to end - what serves the bytes, what's exposed, how it gets a cert, how CI publishes to it, and what (if anything) runs code:</p>
+            <table style="border-collapse:collapse;width:100%;font-size:0.9rem;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">&nbsp;</th>
+                        <th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">AWS</th>
+                        <th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">GCP</th>
+                        <th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-color, #e0e0e0);">Azure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Serves the bytes</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Private <strong>S3</strong> bucket behind a <strong>CloudFront</strong> distribution</td>
+                        <td style="padding:0.5rem;vertical-align:top;"><strong>Cloud Run</strong> running our nginx container (scale-to-zero)</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Storage Account <strong>static website</strong> (<code>$web</code> container)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Public surface</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Only the CloudFront URL; bucket blocks all public access (<a class="glossary-link" href="glossary.html#term-oac">OAC</a>-keyed to the distribution)</td>
+                        <td style="padding:0.5rem;vertical-align:top;">The <code>*.run.app</code> URL (ingress = all; the GCP load balancer was removed)</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Only the <code>$web</code> endpoint; every other blob stays private</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Origin TLS cert</td>
+                        <td style="padding:0.5rem;vertical-align:top;"><code>*.cloudfront.net</code> (AWS-managed)</td>
+                        <td style="padding:0.5rem;vertical-align:top;"><code>*.run.app</code> (Google-managed)</td>
+                        <td style="padding:0.5rem;vertical-align:top;"><code>*.web.core.windows.net</code> (Azure-managed)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Keyless deploy auth</td>
+                        <td style="padding:0.5rem;vertical-align:top;">OIDC → <code>sts:AssumeRoleWithWebIdentity</code> → IAM role <code>csoh-site-publisher</code></td>
+                        <td style="padding:0.5rem;vertical-align:top;">OIDC → <a class="glossary-link" href="glossary.html#term-wif">WIF</a> → impersonate <code>csoh-deployer</code> service account</td>
+                        <td style="padding:0.5rem;vertical-align:top;">OIDC → Entra federated credential on an app registration (no client secret)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Deploy permission scope</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Write the one bucket + invalidate the one distribution</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Push to Artifact Registry + deploy Cloud Run revisions</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Storage Blob Data Contributor on the one account</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">How CI publishes</td>
+                        <td style="padding:0.5rem;vertical-align:top;"><code>aws s3 sync --delete</code> + CloudFront invalidate</td>
+                        <td style="padding:0.5rem;vertical-align:top;"><code>docker build</code> → Trivy scan → push immutable tag → <code>gcloud run deploy</code></td>
+                        <td style="padding:0.5rem;vertical-align:top;"><code>az storage blob sync</code> into <code>$web</code></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Runs code?</td>
+                        <td style="padding:0.5rem;vertical-align:top;">No - static objects, no runtime identity to abuse</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Yes (nginx) - runs as a <strong>zero-IAM</strong> service account</td>
+                        <td style="padding:0.5rem;vertical-align:top;">No - static objects, no runtime identity to abuse</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0.5rem;font-weight:600;vertical-align:top;">Why this shape</td>
+                        <td style="padding:0.5rem;vertical-align:top;">S3's own website endpoint is HTTP-only, so CloudFront is the cheapest way to get a valid-HTTPS, private origin</td>
+                        <td style="padding:0.5rem;vertical-align:top;">Cloud Run already gives HTTPS + a cert for free and idles to ~$0, so we kept it and dropped the LB in front</td>
+                        <td style="padding:0.5rem;vertical-align:top;">The <code>$web</code> endpoint is HTTPS out of the box - the simplest valid origin of the three, no compute at all</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="margin-top:1rem;">The throughline: <strong>we let each cloud do the one thing it does cheapest, and pushed everything else (TLS to the browser, caching, WAF, redirects, headers, failover) up to the single Cloudflare edge.</strong> That's why two origins run zero code and the third runs a zero-permission container - the less each origin is trusted to do, the smaller the blast radius if any one of them is ever compromised.</p>
 
             <h3>One subtlety: the Host header</h3>
             <p>Each origin answers on its own hostname (<code>…cloudfront.net</code>, <code>…run.app</code>, <code>…web.core.windows.net</code>). If Cloudflare forwarded the public <code>Host: csoh.org</code> to them, each would reject the request - it doesn't recognize that name. So every origin in the Cloudflare pool sets a <strong>Host-header override</strong> to its own hostname. Small detail, but it's the thing that most often trips people up the first time they put object storage behind a proxy.</p>
@@ -896,7 +960,7 @@ OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"</pre>
                     <ul>
                         <li><a href="https://docs.cloud.google.com/iam/docs/workload-identity-federation" target="_blank" rel="noopener noreferrer">GCP - Workload Identity Federation overview</a></li>
                         <li><a href="https://github.com/google-github-actions/auth" target="_blank" rel="noopener noreferrer">google-github-actions/auth</a> - the action that does the OIDC exchange</li>
-                        <li><a href="https://docs.cloud.google.com/armor/docs/cloud-armor-overview" target="_blank" rel="noopener noreferrer">GCP - Cloud Armor overview</a></li>
+                        <li><a href="https://developers.cloudflare.com/load-balancing/" target="_blank" rel="noopener noreferrer">Cloudflare - Load Balancing</a> - the active/active pool, health monitors, and origin steering this site's edge runs on</li>
                         <li><a href="https://docs.cloud.google.com/run/docs/securing/ingress" target="_blank" rel="noopener noreferrer">GCP - Cloud Run ingress controls</a></li>
                         <li><a href="https://docs.cloud.google.com/architecture/blueprints/security-foundations" target="_blank" rel="noopener noreferrer">GCP - Enterprise foundations blueprint</a> - what this same defense-in-depth model looks like at organization scale: folder hierarchy, Shared VPC, aggregated log sinks, Cloud <a class="glossary-link" href="glossary.html#term-kms">KMS</a>, <a class="glossary-link" href="glossary.html#term-guardduty">Security Command Center</a>, and the org-policy constraints we don't need for a single static site</li>
                         <li><a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">OWASP Top 10</a> - the canonical list of common web app vulnerabilities</li>
