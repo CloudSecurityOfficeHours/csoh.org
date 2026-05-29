@@ -6,7 +6,11 @@ resource "google_cloud_run_v2_service" "site" {
   name     = "csoh-site"
   location = var.region
 
-  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  # Cloudflare reaches this service directly at its *.run.app URL (there is
+  # no GCP load balancer anymore), so ingress must allow public traffic.
+  # Public exposure is now gated at the Cloudflare edge (TLS, WAF, rate
+  # limiting, Load Balancing) rather than by Cloud Armor on a GCLB.
+  ingress = "INGRESS_TRAFFIC_ALL"
 
   # Service-level scaling. This is separate from `template.scaling` (which
   # configures per-revision auto-scaling). The Cloud Run v2 API populates
@@ -73,10 +77,10 @@ resource "google_cloud_run_v2_service" "site" {
   ]
 }
 
-# The Cloud Run service is reachable only via the load balancer
-# (INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER above) — but we still need to
-# allow allUsers invoker on the service so the LB can pass traffic through.
-# The actual public-internet exposure is controlled by the LB + Cloud Armor.
+# Allow unauthenticated invocations so Cloudflare (and its health-check
+# monitors) can reach the service at its *.run.app URL. The service is one
+# of three interchangeable origins behind the Cloudflare Load Balancer;
+# edge controls, not Cloud Run IAM, gate public exposure.
 resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   project  = google_cloud_run_v2_service.site.project
   location = google_cloud_run_v2_service.site.location

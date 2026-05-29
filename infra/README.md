@@ -1,151 +1,204 @@
-# csoh.org GCP Infrastructure
+# csoh.org Infrastructure — multi-cloud static hosting
 
-Terraform + GitHub Actions deployment of csoh.org to Google Cloud Run, with the
-load balancer / WAF / CDN / TLS / logging stack wrapped around it as a security
-showcase.
-
-## Architecture
+csoh.org is a static site served **active/active from three cloud origins**
+behind Cloudflare. Cloudflare is the single edge (TLS, caching, security
+headers, legacy redirects, WAF, and a Load Balancer with health-check
+failover); each cloud hosts an interchangeable copy of the site:
 
 ```
-Cloudflare (DNS only, gray cloud)
-        │
-        ▼
-Global External HTTPS Load Balancer  (anycast IP)
-   ├─ Cloud Armor (OWASP CRS WAF + per-IP rate limit + adaptive DDoS)
-   ├─ Cloud CDN  (edge cache for static assets)
-   └─ Modern TLS policy (TLS 1.2+ only)
-        │
-        ▼
-Serverless NEG → Cloud Run (csoh-site)
-   - nginx:1.27-alpine, digest-pinned (Dockerfile)
-   - Custom CSP / HSTS / COOP / CORP headers (nginx.conf)
-   - Runs as csoh-run-runtime SA (zero IAM roles)
-   - Ingress restricted: only LB + internal traffic
-        │
-        ▼
-Container image stored in Artifact Registry (immutable tags)
-   - Built by GitHub Actions
-   - Trivy-scanned (fails build on HIGH/CRITICAL)
-   - Pushed via WIF - no service account keys
-
-Logging:
-   - Cloud Armor decisions, LB 4xx/5xx, IAM changes, audit logs
-     → 400-day retention bucket
+                 ┌─────────────────────────────────────────────┐
+  csoh.org  ───► │  Cloudflare (Free) — proxied                 │
+  www.csoh.org   │   • Universal SSL (edge TLS, Full strict)    │
+                 │   • Load Balancer (active/active + health)   │
+                 │   • Transform Rules  → security headers      │
+                 │   • Redirect Rules   → legacy /conc8, /csoh  │
+                 │   • Cache Rules      → edge + browser TTLs    │
+                 │   • Free Managed Ruleset (WAF)               │
+                 └──────┬───────────┬───────────┬──────────────┘
+        Full (strict)   │           │           │   (each origin valid HTTPS)
+                 ┌───────▼──┐   ┌────▼─────┐   ┌─▼───────────────┐
+                 │ AWS      │   │ GCP      │   │ Azure           │
+                 │ S3(priv) │   │ Cloud Run│   │ Blob static     │
+                 │ +CloudFr.│   │ (min=0,  │   │ website ($web)  │
+                 │ (OAC)    │   │  no LB)  │   │                 │
+                 └──────────┘   └──────────┘   └─────────────────┘
 ```
+
+**Why this shape.** The site is 100% static, so it doesn't need a server or a
+cloud load balancer — object/static hosting on each provider costs pennies.
+The previous single-cloud design (GCP Cloud Run behind a Global HTTPS Load
+Balancer + Cloud Armor + Cloud CDN) duplicated the edge that Cloudflare
+already provides, for ~$100/mo. Spreading across three origins is *cheaper*
+and turns the deploy into a working multi-cloud + keyless-OIDC lesson — see
+[cloud-deployment.html](https://csoh.org/cloud-deployment.html).
+
+Each origin must expose **HTTPS with a valid cert** so the Cloudflare→origin
+leg runs at **Full (strict)**:
+- **AWS** — private S3 bucket reached only via **CloudFront + OAC** (the S3
+  website endpoint is HTTP-only, so we don't use it).
+- **GCP** — **Cloud Run** (scale-to-zero); its `*.run.app` URL is HTTPS and
+  free at idle. The GCLB / Cloud Armor / Cloud CDN were retired.
+- **Azure** — Storage Account **static website** (`$web`), served on its
+  built-in `*.web.core.windows.net` HTTPS endpoint.
 
 ## File layout
 
 ```
 infra/terraform/
-  versions.tf            providers + GCS backend
-  variables.tf           project, region, domain, GitHub repo
-  apis.tf                google_project_service for required APIs
-  service_accounts.tf    csoh-run-runtime (zero roles), csoh-deployer
-  artifact_registry.tf   csoh-containers repo, immutable tags, cleanup policy
-  wif.tf                 GitHub Actions WIF pool + provider, repo-scoped
-  cloud_run.tf           Cloud Run v2 service, ingress=LB-only
-  cloud_armor.tf         WAF rules + rate limit + adaptive protection
-  load_balancer.tf       LB, NEG, backend, URL maps, TLS policy, managed cert
-  logging.tf             400-day retention bucket + security log sink
-  outputs.tf             LB IP, WIF provider, etc.
+  aws/          S3 (private) + CloudFront/OAC + GitHub OIDC role
+  azure/        Storage account + $web static website + Entra federated cred
+  gcp/          Cloud Run + Artifact Registry + WIF (LB/Armor/CDN removed)
+  cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules
 ```
+
+All four states live in the same GCS bucket (`csoh-org-495800-tfstate`) under
+separate prefixes (`csoh/aws`, `csoh/azure`, `csoh/prod`, `csoh/cloudflare`).
+One secured state store; storage cost is pennies. The trade-off is that
+Terraform needs GCS application-default credentials present when running any
+of the dirs.
+
+## Build & publish
+
+`tools/stage_site.sh` produces `dist/` — the exact public file set (its rsync
+filter, `tools/site-publish.filter`, mirrors nginx.conf's block rules and the
+Dockerfile strip list, so all three origins serve byte-identical content).
+`.github/workflows/deploy.yml` builds once, then fans out:
+
+```
+build (search index + stage dist/) ──► publish-aws    (s3 sync + CF invalidate)
+                                    ├─► publish-azure  (blob sync to $web)
+                                    └─► publish-gcp    (container + Trivy + Cloud Run)
+```
+
+Every cloud authenticates with **keyless OIDC** — no long-lived cloud secrets
+in the repo. Non-secret resource IDs are read from **repo Variables**
+(Settings → Secrets and variables → Actions → Variables), populated from the
+Terraform outputs below:
+
+| Repo Variable | Source (`terraform -chdir=infra/terraform/<dir> output -raw …`) |
+|---|---|
+| `AWS_PUBLISHER_ROLE_ARN` | `aws  publisher_role_arn` |
+| `AWS_BUCKET_NAME` | `aws  bucket_name` |
+| `AWS_CLOUDFRONT_DISTRIBUTION_ID` | `aws  cloudfront_distribution_id` |
+| `AZURE_CLIENT_ID` | `azure github_client_id` |
+| `AZURE_STORAGE_ACCOUNT` | `azure storage_account_name` |
+
+The AWS account ID, Azure subscription ID, and Azure tenant ID are fixed
+accounts hardcoded in the Terraform (`infra/terraform/aws`, `.../azure`) and
+the deploy workflow — they're identifiers, not secrets, so they're committed
+rather than configured as Variables.
 
 ## One-time bootstrap
 
-Run on a workstation authenticated as a project Owner.
+Each cloud needs an authenticated admin session for the first `apply`; after
+that, deploys are keyless via the workflow.
 
 ```bash
-# 1. Set the active project
-gcloud config set project csoh-org-495800
-
-# 2. Application-default credentials for Terraform
-gcloud auth application-default login
-
-# 3. Enable APIs needed before Terraform runs (rest are managed by Terraform)
-gcloud services enable cloudresourcemanager.googleapis.com \
-                       iam.googleapis.com \
-                       serviceusage.googleapis.com
-
-# 4. Create the GCS bucket that holds Terraform state.
-#    Versioning + uniform IAM are non-negotiable for state buckets.
+# GCS state bucket (already exists; create only if rebuilding from scratch)
 gcloud storage buckets create gs://csoh-org-495800-tfstate \
-    --location=us-central1 \
-    --uniform-bucket-level-access \
-    --public-access-prevention
-
+    --location=us-central1 --uniform-bucket-level-access --public-access-prevention
 gcloud storage buckets update gs://csoh-org-495800-tfstate --versioning
+gcloud auth application-default login   # Terraform reads these for the GCS backend
 
-# 5. Initialize and apply
-cd infra/terraform
-terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
+# AWS  (admin creds in the environment, e.g. `aws sso login`)
+terraform -chdir=infra/terraform/aws init
+terraform -chdir=infra/terraform/aws apply
+
+# Azure  (`az login`)
+terraform -chdir=infra/terraform/azure init
+terraform -chdir=infra/terraform/azure apply
+
+# GCP
+terraform -chdir=infra/terraform/gcp init
+terraform -chdir=infra/terraform/gcp apply
+
+# Cloudflare  (export CLOUDFLARE_API_TOKEN; pass the three origin hostnames)
+terraform -chdir=infra/terraform/cloudflare init
+terraform -chdir=infra/terraform/cloudflare apply \
+  -var account_id=<CF_ACCOUNT_ID> \
+  -var zone_id=<CF_ZONE_ID> \
+  -var aws_origin_host="$(terraform -chdir=infra/terraform/aws   output -raw cloudfront_domain)" \
+  -var gcp_origin_host="$(terraform  -chdir=infra/terraform/gcp   output -raw cloud_run_service_url | sed 's#https://##')" \
+  -var azure_origin_host="$(terraform -chdir=infra/terraform/azure output -raw static_website_host)"
 ```
 
-Expect ~15–20 minutes for the managed SSL cert to provision once you've
-pointed DNS at the LB IP. Until the cert is `ACTIVE`, HTTPS will fail - `gcloud
-compute ssl-certificates describe csoh-cert --global` to watch status.
+Then run the deploy workflow once (`gh workflow run "Deploy — build once, publish to AWS + GCP + Azure"`)
+so all three origins have content before any DNS points at them.
 
-## DNS (Cloudflare)
+## Cutover (safety-gated) & rollback
 
-After `terraform apply`, grab the LB IP:
+This is production. Cut over in stages and keep the old GCP LB IP as a rollback
+target until you're confident.
 
-```bash
-terraform output -raw load_balancer_ip
-```
+1. **Verify each origin directly** (bypass Cloudflare) — confirm 200s, headers,
+   and that no sensitive files are reachable:
+   ```bash
+   curl -I "https://$(terraform -chdir=infra/terraform/aws   output -raw cloudfront_domain)/"
+   curl -I "$(terraform   -chdir=infra/terraform/gcp   output -raw cloud_run_service_url)/"
+   curl -I "$(terraform   -chdir=infra/terraform/azure output -raw static_website_endpoint)"
+   # missing path -> custom 404; sensitive path -> not 200
+   curl -sI ".../does-not-exist" | head -1
+   curl -sI ".../.git/config"   | head -1
+   ```
+2. **Apply the Cloudflare LB** (origins added with health checks). Temporarily
+   add the **old GCP LB IP as a 4th origin** in `cloudflare_load_balancer_pool`
+   as a fallback while the new origins bake in.
+3. **Flip DNS**: point `csoh.org` / `www` at the Load Balancer (the Terraform
+   `cloudflare_load_balancer` + `cloudflare_record.www` do this). Keep TTLs
+   low. Watch LB health and Cloudflare analytics.
+4. **Verify through the edge**:
+   ```bash
+   curl -sI https://csoh.org/ | grep -i -E 'strict-transport|content-security|cf-cache'
+   curl -sI "https://csoh.org/conc8/index.php/blog/" | grep -i -E 'location|HTTP/'   # -> 301 /news.html
+   ```
+5. **Retire**: once stable, remove the GCP-LB fallback origin, then
+   `terraform -chdir=infra/terraform/gcp apply` (the LB/Armor/CDN resources are
+   already gone from the config, so apply destroys the live ones). Remove the
+   old `gcp.csoh.org` staging DNS record.
 
-In Cloudflare, with **gray cloud (DNS only)** so Cloud Armor sees real client IPs:
-
-| Type | Name             | Value                   |
-|------|------------------|-------------------------|
-| A    | gcp              | `<LB IP>`               |  ← staging, verify here first
-| A    | csoh.org         | `<LB IP>`               |  ← cut over after staging looks good
-| A    | www              | `<LB IP>`               |
-
-Keep TTLs short (300s) during cutover so you can roll back fast.
-
-## GitHub Actions
-
-The `.github/workflows/gcp-deploy.yml` workflow is wired to the WIF pool created
-by Terraform. Required inputs are baked in (project, region, deployer SA, WIF
-provider) - no GitHub Secrets needed.
-
-It runs on every push to `main` that touches site files (mirroring the existing
-FTP deploy's path filter) plus manual `workflow_dispatch`. The two pipelines run
-in parallel until you cut DNS over.
+**Rollback at any step:** repoint the `csoh.org` Cloudflare records back to the
+original GCP LB IP (kept until step 5). Because the GCP teardown is the *last*
+step, the old path stays intact and reversible throughout.
 
 ## Common operations
 
 ```bash
-# Force a redeploy (rebuilds latest image)
-gh workflow run "GCP - Build, Scan, and Deploy"
+# Force a full redeploy to all three clouds
+gh workflow run "Deploy — build once, publish to AWS + GCP + Azure"
 
-# Roll back to a previous Cloud Run revision
-gcloud run services update-traffic csoh-site \
-    --region us-central1 \
+# Watch Cloudflare LB origin health (dashboard): Traffic → Load Balancing
+# Pull one origin for testing: set enabled=false on it in the pool + apply
+
+# Roll back a GCP Cloud Run revision
+gcloud run services update-traffic csoh-site --region us-central1 \
     --to-revisions <REVISION_NAME>=100
 
-# Watch Cloud Armor block events
-gcloud logging read \
-    'resource.type="http_load_balancer"
-     AND jsonPayload.enforcedSecurityPolicy.outcome="DENY"' \
-    --limit 20 --format json
-
-# Watch managed cert status
-gcloud compute ssl-certificates describe csoh-cert --global \
-    --format='value(managed.status,managed.domainStatus)'
+# Purge Cloudflare cache after an out-of-band change
+#   Dashboard → Caching → Purge Everything (or scoped purge)
 ```
 
-## Cost on $300 free credit
+## Cost
 
-| Component                  | Approx. monthly |
-|---------------------------|-----------------|
-| LB forwarding rule (×2)    | ~$18            |
-| Cloud Armor policy         | ~$5 + $0.75/rule|
-| Cloud Run (scale to zero)  | ~$0–2           |
-| Artifact Registry storage  | <$1             |
-| Cloud Logging (low volume) | <$2             |
-| Egress + CDN               | varies, ~$1–3   |
-| **Total**                  | **~$30/mo**     |
+| Component | Approx. monthly |
+|---|---|
+| Cloudflare Load Balancing add-on (Free plan + LB) | ~$5–7 |
+| AWS S3 + CloudFront (free-tier egress) | ~$0–1 |
+| GCP Cloud Run (scale-to-zero) + Artifact Registry | ~$0–1 |
+| Azure Blob static website | ~$0–1 |
+| GCS Terraform state | <$1 |
+| **Total** | **~$8–12/mo** (down from ~$100) |
 
-Credit lasts ~10 months at this footprint.
+The bulk of the old cost was the GCP Global HTTPS Load Balancer (two
+forwarding rules) + Cloud Armor — redundant with Cloudflare's edge.
+
+## Trade-offs vs. the old GCP stack
+
+- **WAF**: Cloud Armor's tunable OWASP CRS is replaced by Cloudflare's **Free
+  Managed Ruleset** (lighter coverage) + one free rate-limit rule. To restore
+  parity: Cloudflare paid WAF, or per-origin AWS WAF on CloudFront.
+- **WebP content negotiation**: the `.htaccess`/nginx `Accept`-based `.jpg→.webp`
+  rewrite has no static-hosting equivalent. Prefer `<picture>` / direct `.webp`
+  references in HTML, or Cloudflare Polish (paid).
+- **Origin-side request blocking** (deny dotfiles/`.json`/scripts) is replaced
+  by **not uploading** those files — `tools/site-publish.filter` is the single
+  source of truth for what's public.

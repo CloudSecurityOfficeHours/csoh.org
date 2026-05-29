@@ -8,7 +8,7 @@ This document describes the security measures in place for [csoh.org](https://cs
 
 csoh.org is a **pure static site** - no server-side code, no database, no user accounts, no cookies, no sessions. This eliminates entire classes of vulnerabilities (SQL injection, RCE, auth bypass, session hijacking, CSRF).
 
-**Hosting is on Google Cloud Run**, fronted by Cloudflare (proxy mode) and a Google Cloud HTTPS load balancer with Cloud Armor (WAF), Cloud CDN, and modern TLS. Container images are built, scanned, and deployed by GitHub Actions via Workload Identity Federation - there is no long-lived service-account key. The full architecture (Cloud Run, LB + WAF, Workload Identity Federation, Artifact Registry with immutable tags, 400-day log retention) is documented in [infra/README.md](infra/README.md).
+**Hosting is multi-cloud: the same static site is served active/active from three origins** - AWS (private S3 + CloudFront), GCP (Cloud Run), and Azure (Blob static website) - behind a single **Cloudflare** edge that terminates TLS (Full strict to every origin), caches, runs the WAF and security headers, applies legacy redirects, and load-balances across the origins with health-check failover. GitHub Actions builds the site once and publishes to all three via **keyless OIDC** (GCP Workload Identity Federation, an AWS IAM role, an Azure Entra federated credential) - there is no long-lived cloud credential anywhere. The full architecture, cost, and cutover runbook are in [infra/README.md](infra/README.md); the layer-by-layer security walkthrough is the public [cloud-deployment.html](cloud-deployment.html).
 
 The site previously deployed via FTPS to a LiteSpeed shared host. That path was retired after the cutover to GCP - the FTPS step is removed from `site-update-deploy.yml`, the standalone `manual-deploy.yml` workflow is deleted, and the `FTP_*` secrets are gone.
 
@@ -197,11 +197,11 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 |----------|---------|----------------------|------|
 | `update-news.yml` | `csoh-ci` App + `CSOH_PAT` (for auto-approve) | n/a | via PR + auto-merge |
 | `normalize-urls.yml` | `csoh-ci` App | n/a | via PR (human reviews + merges) |
-| `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only - deploy is `gcp-deploy.yml`) | direct (App is on ruleset bypass) |
-| `gcp-deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **WIF - no key** (impersonates `csoh-deployer` SA via OIDC) | no |
+| `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only - deploy is `deploy.yml`) | direct (App is on ruleset bypass) |
+| `deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **keyless OIDC - no key** (GCP WIF, AWS IAM role, Azure federated cred) | no |
 | `lint.yml`, `validate-html.yml`, `check-broken-links.yml`, `check-url-safety.yml` | auto-injected `GITHUB_TOKEN` | n/a | no |
 
-Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead - keeping the default token strictly minimal. `gcp-deploy.yml` adds `id-token: write` for the OIDC token GitHub mints for WIF.
+Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead - keeping the default token strictly minimal. `deploy.yml` adds `id-token: write` for the OIDC tokens GitHub mints for the three clouds' federation exchanges.
 
 ### Why we migrated from PATs to a GitHub App
 
@@ -275,16 +275,13 @@ GitHub's auto-merge feature evaluates `reviewDecision` independently and does no
 | `CSOH_PAT` | Approve App-opened PRs (auto-merge driver) | medium-sensitivity (narrow scope) |
 | `SSH_PRIVATE_KEY` | Reserved for future use | high-sensitivity |
 
-**No GCP secret in this list - that's deliberate.** The `gcp-deploy.yml` workflow needs no service-account key, no project-scoped PAT, and no GCP-side stored secret. It authenticates by:
+**No cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access, gated by a policy that requires the token's repo claim to equal `CloudSecurityOfficeHours/csoh.org` on `main`:
 
-1. GitHub Actions mints an OIDC token for the run, signed by GitHub's identity provider.
-2. Google Cloud's STS exchanges that token for a short-lived (1-hour) access token, gated by a Workload Identity Federation policy that requires:
-   - `assertion.repository == 'CloudSecurityOfficeHours/csoh.org'` (other repos cannot mint tokens for this pool)
-   - `aud` matching the configured pool/provider
-3. The access token is scoped to impersonating one specific service account (`csoh-deployer`) which has narrowly-scoped roles: `roles/run.admin`, `roles/artifactregistry.writer`, plus `iam.serviceAccountUser` on the runtime SA.
-4. The runtime SA (`csoh-run-runtime`, what the actual container runs as) has **zero IAM roles** - the static container makes no GCP API calls, so it gets nothing.
+1. **GCP** - Workload Identity Federation exchanges the OIDC token for a token scoped to impersonate `csoh-deployer` (`roles/run.admin`, `roles/artifactregistry.writer`, `iam.serviceAccountUser` on the runtime SA). The runtime SA `csoh-run-runtime` has **zero IAM roles**.
+2. **AWS** - `sts:AssumeRoleWithWebIdentity` returns credentials for the `csoh-site-publisher` role, scoped to write the one S3 bucket and invalidate the one CloudFront distribution.
+3. **Azure** - an Entra app federated credential yields a token whose service principal holds only "Storage Blob Data Contributor" on the one storage account.
 
-Net effect: a leaked workflow log compromises one ~1-hour token scoped to one repo's deploy permissions on one project. There is no long-lived credential to rotate or revoke.
+Net effect: a leaked workflow log compromises at most three ~1-hour tokens, each scoped to one repo's publish permissions on one resource per cloud. There is no long-lived credential to rotate or revoke for any of them.
 
 `PAT_TOKEN` (the original CI PAT), `CSOH_CI_APP_ID` (deprecated numeric input, replaced by `CSOH_CI_CLIENT_ID`), and `APPROVAL_PAT_TOKEN` (replaced by `CSOH_PAT`) have all been removed.
 
@@ -297,42 +294,46 @@ Net effect: a leaked workflow log compromises one ~1-hour token scoped to one re
 | App installation token | Automatic, every ~1 hour | None - handled by GitHub |
 | App private key | Annually or on suspected compromise | Generate new key in App settings; replace `CSOH_CI_PRIVATE_KEY` secret; revoke old key |
 | `CSOH_PAT` | Every 6–12 months (or before its set expiry) | Generate new fine-grained PAT (resource owner: `CloudSecurityOfficeHours`, repo: `csoh.org`, permission: pull-requests: write only); replace org-level Actions secret |
-| GCP WIF access token | Automatic, every ~1 hour | None - minted per workflow run, no stored credential |
-| GCP runtime SA roles | On every Terraform apply | The runtime SA's IAM bindings live in [`infra/terraform/service_accounts.tf`](infra/terraform/service_accounts.tf) - review on every change |
+| Cloud access tokens (GCP/AWS/Azure) | Automatic, every ~1 hour | None - minted per workflow run via OIDC, no stored credential on any cloud |
+| GCP runtime SA roles | On every Terraform apply | The runtime SA's IAM bindings live in [`infra/terraform/gcp/service_accounts.tf`](infra/terraform/gcp/service_accounts.tf) - review on every change |
 
 ---
 
 ## Deployment Security
 
-### Cloud Run Deployment
+### Multi-cloud deploy
 
-`gcp-deploy.yml` builds a container image, scans it, and deploys to Cloud Run on every push to `main` that touches site files.
+`deploy.yml` builds the site once and publishes it active/active to three cloud origins on every push to `main` that touches site files.
 
-**Authentication - Workload Identity Federation, no stored credential:**
-- GitHub Actions mints an OIDC token for the run.
-- A WIF policy in the GCP project gates the exchange: only OIDC tokens whose `repository` claim equals `CloudSecurityOfficeHours/csoh.org` are accepted ([`infra/terraform/wif.tf`](infra/terraform/wif.tf)).
-- The exchanged GCP access token is short-lived (~1 hour), scoped to impersonating the `csoh-deployer` service account.
-- The deploy SA has only the roles needed to push images and deploy revisions - no broader project access.
-- The runtime SA the container runs as (`csoh-run-runtime`) has **zero IAM roles**.
+**Authentication - keyless OIDC to every cloud, no stored credential:**
+- GitHub Actions mints an OIDC token for the run; each cloud exchanges it for short-lived (~1 hour) access, gated by a policy that requires the token's repo claim to equal `CloudSecurityOfficeHours/csoh.org` on branch `main`:
+  - **GCP** - Workload Identity Federation impersonates the `csoh-deployer` SA, scoped to push images + deploy Cloud Run revisions ([`infra/terraform/gcp/wif.tf`](infra/terraform/gcp/wif.tf)).
+  - **AWS** - `sts:AssumeRoleWithWebIdentity` into the `csoh-site-publisher` IAM role, scoped to write the one bucket + invalidate the one CloudFront distribution ([`infra/terraform/aws/oidc.tf`](infra/terraform/aws/oidc.tf)).
+  - **Azure** - an Entra app federated credential, scoped to "Storage Blob Data Contributor" on the one storage account ([`infra/terraform/azure/identity.tf`](infra/terraform/azure/identity.tf)).
+- The GCP runtime SA the container runs as (`csoh-run-runtime`) has **zero IAM roles**. The AWS and Azure origins run no code, so they have no runtime identity to abuse.
 
-**Image supply chain:**
+**What gets published, and the publish allowlist:**
+- The object-storage origins (S3, Azure Blob) have no request-time access rules, so the build never uploads sensitive files. `tools/stage_site.sh` produces a `dist/` containing only the public file set; its allowlist [`tools/site-publish.filter`](tools/site-publish.filter) mirrors the nginx block rules + Dockerfile strip list, and the build fails if a secret-shaped file appears in `dist/`.
+
+**GCP image supply chain (the one origin that ships a container):**
 - Base image (`nginx:1.27-alpine`) is **digest-pinned** in the [`Dockerfile`](Dockerfile). A compromised registry tag cannot ship malicious bytes into our build.
-- `RUN apk upgrade --no-cache` after `FROM` refreshes Alpine packages on top of the pinned base - supply-chain integrity for the base layer plus current security patches for libraries.
-- Every PR's container is **Trivy-scanned** for HIGH and CRITICAL CVEs (with fixes available); the build fails if any are found.
-- Artifact Registry has `immutable_tags=true` - once an image tag is pushed, it cannot be overwritten or moved. Cloud Run revisions pin a specific SHA tag, so rollback is `gcloud run services update-traffic --to-revisions <name>=100` and there is no ambiguity about what bytes ran.
+- `RUN apk upgrade --no-cache` after `FROM` refreshes Alpine packages on top of the pinned base.
+- The container is **Trivy-scanned** for HIGH and CRITICAL CVEs (with fixes available); the build fails if any are found.
+- Artifact Registry has `immutable_tags=true` - a pushed tag cannot be overwritten or moved. Cloud Run revisions pin a specific SHA tag, so rollback is `gcloud run services update-traffic --to-revisions <name>=100`.
 - Cleanup policy keeps the most recent 30 versions and deletes untagged versions older than 7 days.
 
 **Workflow hardening:**
-- `permissions:` block scopes the auto-injected `GITHUB_TOKEN` to `contents: read` + `id-token: write` (id-token is required by WIF; nothing else is granted).
-- The deploy job is gated by the `production` GitHub Environment, which is configured in repo settings to allow deployments only from `main` and to enforce Code Owners review on the workflow file via [`.github/CODEOWNERS`](.github/CODEOWNERS). A PR from a fork cannot reach this code path even if it could otherwise mint an OIDC token, because protected-environment policies only apply on `main`.
+- `permissions:` block scopes the auto-injected `GITHUB_TOKEN` to `contents: read` + `id-token: write` (id-token is required for the OIDC exchanges; nothing else is granted).
+- Every publish job is gated by the `production` GitHub Environment, configured to allow deployments only from `main` and to enforce Code Owners review on the workflow file via [`.github/CODEOWNERS`](.github/CODEOWNERS). A PR from a fork cannot reach this code path even if it could otherwise mint an OIDC token, because protected-environment policies only apply on `main`.
 
-**Edge defenses (load balancer in front of Cloud Run):**
-- **Cloud Armor** policy with OWASP Core Rule Set (SQLi, XSS, LFI, RFI, RCE), per-IP rate limit (600 req/min, 10-min ban on exceed), and adaptive L7 DDoS defense ([`infra/terraform/cloud_armor.tf`](infra/terraform/cloud_armor.tf)).
-- **Modern TLS policy** - TLS 1.2+ only, restricted cipher suite.
-- **HTTP→HTTPS redirect** at the LB; the Cloud Run service's ingress is `internal-and-cloud-load-balancing` so direct hits to the Run URL get blocked at the edge.
+**Edge defenses (Cloudflare, in front of all three origins):**
+- **WAF** - Cloudflare's free Managed Ruleset plus a rate-limit rule (lighter than the previous Cloud Armor OWASP CRS; a static site has no SQL/login to attack).
+- **TLS** - Full (strict) to every origin; TLS 1.2+ floor; HSTS preload.
+- **Security headers + legacy redirects** set once at the edge (mirroring `nginx-security-headers.conf` and the old `.htaccess` rules), applied regardless of which origin serves.
+- **Always Use HTTPS** handles HTTP→HTTPS; no origin has a plain-HTTP path.
 
 **Logging:**
-- LB request logs, Cloud Armor decisions, IAM admin activity, and audit logs are routed to a 400-day retention bucket via the security log sink in [`infra/terraform/logging.tf`](infra/terraform/logging.tf) (the default `_Default` sink only retains 30 days).
+- Cloudflare zone analytics + Load Balancer health cover edge/total-traffic visibility and WAF blocks. On GCP, Cloud Run non-2xx, IAM admin activity, and audit logs route to a 400-day retention bucket via the security log sink in [`infra/terraform/gcp/logging.tf`](infra/terraform/gcp/logging.tf) (the default `_Default` sink only retains 30 days).
 
 ### Deployment Exclusions
 

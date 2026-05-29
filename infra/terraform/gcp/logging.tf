@@ -13,11 +13,11 @@ resource "google_logging_project_sink" "security" {
   name        = "csoh-security-sink"
   destination = "logging.googleapis.com/projects/${var.project_id}/locations/global/buckets/${google_logging_project_bucket_config.long_retention.bucket_id}"
 
-  # Capture: Cloud Armor blocks + denies, LB requests with non-2xx,
-  # IAM policy changes, admin activity.
+  # Capture: Cloud Run requests with non-2xx, IAM policy changes, admin
+  # activity. (The Cloud Armor / LB clauses were dropped with the GCLB —
+  # edge WAF + error logging now live in Cloudflare's zone analytics/logs.)
   filter = <<-EOT
-    (resource.type="http_load_balancer" AND jsonPayload.enforcedSecurityPolicy.outcome="DENY")
-    OR (resource.type="http_load_balancer" AND httpRequest.status>=400)
+    (resource.type="cloud_run_revision" AND httpRequest.status>=400)
     OR protoPayload.serviceName="iam.googleapis.com"
     OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"
   EOT

@@ -146,7 +146,7 @@ csoh.org/
 │
 │  ── Behind the scenes ──
 ├── github-actions.html              # Learn-by-example GitHub Actions explainer
-├── cloud-deployment.html            # How CSOH deploys to GCP (Cloud Run + WIF + CDN + Armor)
+├── cloud-deployment.html            # How CSOH deploys across AWS + GCP + Azure (3 origins, Cloudflare edge, keyless OIDC)
 ├── contribute.html                  # How to contribute
 ├── contribute-resources.html        # Resource submission form
 │
@@ -179,7 +179,7 @@ csoh.org/
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
-├── .github/workflows/      # CI/CD pipelines (12 workflows: update-news, update-resources, gcp-deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
+├── .github/workflows/      # CI/CD pipelines (12 workflows: update-news, update-resources, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
 └── update_news.py          # News aggregation from 39 RSS feeds
 ```
 
@@ -200,7 +200,7 @@ Every workflow has its own header banner — but if you just want to know "what 
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`gcp-deploy.yml`](.github/workflows/gcp-deploy.yml) | push to `main` on site files | Builds container, Trivy scan, pushes to Artifact Registry with SLSA provenance, deploys Cloud Run revision | N/A — direct deploy |
+| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud | N/A — direct deploy |
 
 **PR quality gates (block or warn)**
 
@@ -482,7 +482,7 @@ When you add a new HTML page, do all of the following - none are automated:
    - **By Cloud** (dropdown) - AWS / Azure / GCP / comparison hubs
    - **Threat Intel** (dropdown) - news, threat research, kill chains, SOC, detection engineering, IR, pentesting, CTFs
    - **Community** (mega-menu) - sessions, conferences, recaps, presentations, chat resources
-   - **Behind the Scenes** (dropdown) - the dogfooded ops pages (Deploy to GCP, GitHub Actions) plus Contribute / Add a Resource
+   - **Behind the Scenes** (dropdown) - the dogfooded ops pages (Multi-Cloud Deploy, GitHub Actions) plus Contribute / Add a Resource
 
    The fastest way to apply changes site-wide is a small Python script — see `tools/sync_navs.py` as a reference. It uses regex to replace the mega-menu columns and dropdown `<ul>`s and re-applies `aria-current="page"` per file. Doing it by hand across 70+ pages is bug-prone (you'll inevitably drift on indent or aria attributes).
 9. **Add the page to `TARGET_PAGES` in `tools/crosslink_pages.py`** so glossary terms get auto-linked across the new page. Then run:
@@ -509,7 +509,7 @@ When you add a new HTML page, do all of the following - none are automated:
 Every script in `tools/` (and `update_sri.py`, `update_news.py` at the repo root) wraps its file writes in a `if content != original_content` check. Two reasons:
 
 1. **Clean git history.** A no-op run produces no diff and no commits.
-2. **Cheap downstream deploys.** `gcp-deploy.yml` triggers off the housekeeping commits this workflow produces. If your script `open(..., 'w')`s a file unconditionally, every run produces a no-op commit that pointlessly triggers a full container rebuild and Cloud Run revision deploy. Don't.
+2. **Cheap downstream deploys.** `deploy.yml` triggers off the housekeeping commits this workflow produces. If your script `open(..., 'w')`s a file unconditionally, every run produces a no-op commit that pointlessly triggers a full three-cloud rebuild and publish. Don't.
 
 If your script needs to be sure it overwrote even an identical file (e.g., to re-run a destructive transformation), do that work explicitly - don't make it the default.
 

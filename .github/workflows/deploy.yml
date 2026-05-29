@@ -1,0 +1,268 @@
+# =============================================================================
+# Build once, publish to three clouds (AWS + GCP + Azure)
+# -----------------------------------------------------------------------------
+# The site is served active/active from three origins behind Cloudflare's Load
+# Balancer. This workflow builds the site a single time, then fans out to
+# publish the identical content to each origin in parallel:
+#
+#   build ──► publish-aws    (S3 sync + CloudFront invalidation)
+#         ├─► publish-azure  (Blob $web sync)
+#         └─► publish-gcp    (container build + Trivy scan + Cloud Run deploy)
+#
+# Every cloud uses keyless OIDC auth — no long-lived cloud secrets in the repo.
+# Non-secret resource IDs come from repo Variables (Settings → Variables),
+# populated from the matching `terraform output` (see infra/README.md).
+#
+# NOTE: third-party actions below are pinned to version tags for readability;
+# pin to commit SHAs (as the GCP auth steps already are) before relying on
+# this in anger.
+# =============================================================================
+
+name: Deploy — build once, publish to AWS + GCP + Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.html'
+      - 'chat-screenshots/**'
+      - 'img/**'
+      - 'style.css'
+      - 'main.js'
+      - 'chat-resources.js'
+      - 'breach-timeline.css'
+      - 'breach-timeline.js'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - 'nginx-security-headers.conf'
+      - 'search.html'
+      - 'search.css'
+      - 'search-init.js'
+      - 'search-synonyms.json'
+      - 'tools/build_search_index.py'
+      - 'tools/site-publish.filter'
+      - 'tools/stage_site.sh'
+      - 'vendor/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC token exchange (all three clouds)
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build the public file set once. tools/build_search_index.py regenerates
+  # /search-index.json, then tools/stage_site.sh produces dist/ — the exact
+  # set of files that should be public (mirrors nginx.conf blocks + Dockerfile
+  # strip list). dist/ is uploaded as an artifact for the object-storage jobs.
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Build search index
+        run: |
+          set -euo pipefail
+          python3 tools/build_search_index.py
+          test -f search-index.json
+          size=$(stat -c%s search-index.json)
+          if [ "$size" -lt 100000 ]; then
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            exit 1
+          fi
+          echo "search-index.json built: $((size / 1024)) KB"
+
+      - name: Stage public site into dist/
+        run: ./tools/stage_site.sh dist
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: site-dist
+          path: dist/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # AWS: sync dist/ to the private S3 origin, then invalidate CloudFront.
+  # ---------------------------------------------------------------------------
+  publish-aws:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        with:
+          name: site-dist
+          path: dist
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PUBLISHER_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist "s3://${{ vars.AWS_BUCKET_NAME }}" \
+            --delete --no-progress
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*"
+
+  # ---------------------------------------------------------------------------
+  # Azure: sync dist/ to the Blob static-website $web container. `blob sync`
+  # mirrors the directory, including deletions of removed files.
+  # ---------------------------------------------------------------------------
+  publish-azure:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        with:
+          name: site-dist
+          path: dist
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          # Tenant + subscription are fixed accounts (identifiers, not secrets),
+          # pinned here and in infra/terraform/azure to match. AZURE_CLIENT_ID
+          # stays a repo Variable because it's an output of `terraform apply`.
+          tenant-id: 10e6d2fb-a320-46fa-8df1-9aa7a8f6b2dc
+          subscription-id: f973ebad-a06c-4d5c-8161-0faf2a13076c
+
+      - name: Sync to Blob $web
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az storage blob sync \
+              --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" \
+              --auth-mode login \
+              -c '$web' \
+              -s dist
+
+  # ---------------------------------------------------------------------------
+  # GCP: build the nginx container, Trivy-scan it, push to Artifact Registry,
+  # and deploy a Cloud Run revision. Cloud Run is now a direct Cloudflare
+  # origin (ingress=all, no GCLB / Cloud CDN — so no cache invalidation step).
+  # ---------------------------------------------------------------------------
+  publish-gcp:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PROJECT_ID: csoh-org-495800
+      REGION: us-central1
+      SERVICE: csoh-site
+      REPO: csoh-containers
+      IMAGE_NAME: csoh-site
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: csoh-deployer@csoh-org-495800.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db  # v3.0.1
+
+      - name: Configure docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          SHA="${GITHUB_SHA::12}"
+          REF="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}"
+          echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      # Same index the object-storage origins serve, baked into the image via
+      # the Dockerfile's `COPY . /usr/share/nginx/html/`.
+      - name: Build search index
+        run: |
+          set -euo pipefail
+          python3 tools/build_search_index.py
+          test -f search-index.json
+          size=$(stat -c%s search-index.json)
+          if [ "$size" -lt 100000 ]; then
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            exit 1
+          fi
+
+      - name: Build container image
+        run: |
+          docker build \
+            --tag "${{ steps.tag.outputs.image }}" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            .
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          TRIVY_VERSION="0.70.0"
+          TRIVY_SHA256="8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9"
+          curl -fsSL -o /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          rm /tmp/trivy.tar.gz
+          trivy --version
+
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --no-progress \
+            "${{ steps.tag.outputs.image }}"
+
+      # Artifact Registry has immutable_tags=true, so re-pushing a tag fails.
+      # Make push idempotent for workflow reruns by checking AR first.
+      - name: Push container image (skip if already in registry)
+        run: |
+          set -euo pipefail
+          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
+            echo "Image already exists in Artifact Registry — skipping push (idempotent rerun)."
+          else
+            docker push "${{ steps.tag.outputs.image }}"
+          fi
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ steps.tag.outputs.image }}" \
+            --platform managed \
+            --ingress all \
+            --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --quiet
+
+      - name: Show deployed revision
+        run: |
+          gcloud run services describe "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --format='value(status.latestReadyRevisionName,status.url)'

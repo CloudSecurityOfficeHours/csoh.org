@@ -22,11 +22,10 @@ variable "domain" {
   default     = "csoh.org"
 }
 
-variable "staging_domain" {
-  description = "Staging hostname (separate Cloudflare record) for verifying GCP path before cutover"
-  type        = string
-  default     = "gcp.csoh.org"
-}
+# (Removed: staging_domain. It only fed the GCP managed SSL cert on the
+# now-retired load balancer. Cloudflare terminates TLS at the edge and
+# reaches Cloud Run at its *.run.app hostname, which already has a valid
+# Google cert — no GCP-managed cert, and no staging hostname, required.)
 
 variable "github_owner" {
   description = "GitHub org/user that owns the repo"

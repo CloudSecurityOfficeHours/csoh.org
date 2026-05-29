@@ -599,7 +599,7 @@ Before you submit, make sure:
 
 ### What happens after your PR merges
 
-Two workflows fire on every merge to `main`: `site-update-deploy.yml` does the housekeeping (SRI hashing, URL safety checks, URL normalization, preview-image generation, sitemap refresh) and commits the results back to `main`; `gcp-deploy.yml` then builds the container, runs Trivy, and deploys to Cloud Run via Workload Identity Federation. You don't need to run any of this locally - see [README.md#how-automation-works](README.md#-how-automation-works) for the full pipeline.
+Two workflows fire on every merge to `main`: `site-update-deploy.yml` does the housekeeping (SRI hashing, URL safety checks, URL normalization, preview-image generation, sitemap refresh) and commits the results back to `main`; `deploy.yml` then builds the site once and publishes it active/active to three cloud origins (AWS, GCP, Azure) behind Cloudflare, authenticating to each with keyless OIDC. You don't need to run any of this locally - see [README.md#how-automation-works](README.md#-how-automation-works) for the full pipeline.
 
 **Quick tips for URLs you add:**
 - Use HTTPS when available.

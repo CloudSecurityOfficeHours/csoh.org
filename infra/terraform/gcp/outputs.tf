@@ -1,10 +1,5 @@
-output "load_balancer_ip" {
-  description = "Anycast IP for Cloudflare A record(s)"
-  value       = google_compute_global_address.site.address
-}
-
 output "cloud_run_service_url" {
-  description = "Direct Cloud Run URL (bypasses LB; for debugging only)"
+  description = "Cloud Run *.run.app URL — this is the Cloudflare LB origin for GCP (strip the https:// scheme)."
   value       = google_cloud_run_v2_service.site.uri
 }
 
