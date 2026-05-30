@@ -1,87 +1,41 @@
-<!DOCTYPE html>
-<html lang="en">
+#!/usr/bin/env python3
+"""Stamp ONE canonical nav + footer onto every HTML page in the site.
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex, follow">
-    <meta name="description" content="Search across every page on Cloud Security Office Hours - guides, resources, news, CTFs, sessions, and more.">
-    <title>Search - Cloud Security Office Hours</title>
+Why this exists
+---------------
+The nav and footer are hand-copied into each of ~175 static pages (no
+templating). Over time they drifted: the breaches/ and meetings/ pages still
+carried an older, smaller nav; a couple of root pages had stray extra items;
+the footer's "About CSOH" link was present on some pages and missing on
+others. This script makes the menu nav and the footer *byte-identical*
+everywhere, with only two legitimate per-page differences preserved:
 
-    <link rel="canonical" href="https://csoh.org/search.html">
-    <link rel="alternate" hreflang="en-US" href="https://csoh.org/search.html">
-    <link rel="alternate" hreflang="x-default" href="https://csoh.org/search.html">
-    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
-    <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="author" type="text/plain" href="/humans.txt">
-    <meta name="theme-color" content="#0f172a">
-    <meta name="apple-mobile-web-app-title" content="CSOH">
+  1. `../` path prefixes on pages inside breaches/ and meetings/.
+  2. The current-page markers (`aria-current="page"` on the active link and
+     `active` / `aria-expanded="true"` on its dropdown toggle).
 
-    <!-- Opt out of browser-level "force dark mode" (Brave/Chrome's
-         force-dark flag, Edge's auto-dark, etc.). These features apply
-         an algorithmic color filter on top of our CSS, which turns
-         our intentional #f0f6fc title text into mid-grey and our
-         amber <mark> highlight into a muddy yellow. Declaring
-         `color-scheme: dark light` tells the browser this page
-         handles both themes natively, so it should leave the
-         rendered colors alone. -->
-    <meta name="color-scheme" content="dark light">
+It replaces three older scripts (sync_navs.py, redesign_nav.py, unify_footer.py)
+that encoded an earlier nav design and were removed in favor of this one. Run
+from the repo root:
 
-    <meta property="og:title" content="Search CSOH">
-    <meta property="og:description" content="Full-text search across every page on Cloud Security Office Hours.">
-    <meta property="og:site_name" content="Cloud Security Office Hours">
-    <meta property="og:locale" content="en_US">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://csoh.org/search.html">
-    <meta property="og:image" content="https://csoh.org/img/og/index.jpg">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Search CSOH">
-    <meta name="twitter:description" content="Full-text search across every page on Cloud Security Office Hours.">
-    <meta name="twitter:image" content="https://csoh.org/img/og/index.jpg">
+    python3 tools/sync_chrome.py
 
-    <link rel="preload" href="/style.css?v=71499803" as="style"
-        integrity="sha384-nVDqe2NnLizJXqTciHpEc8IB7YdKig+48LhG6tdcwJyxGISh53nsDT4ruAO5XTej">
-    <link rel="stylesheet" href="/style.css?v=71499803"
-        integrity="sha384-nVDqe2NnLizJXqTciHpEc8IB7YdKig+48LhG6tdcwJyxGISh53nsDT4ruAO5XTej">
+It is idempotent: running it twice changes nothing the second time.
+"""
 
-    <!-- Page-specific styles for /search.html. Lives as an external
-         file because the site's CSP (`style-src 'self'`) silently
-         drops inline <style> blocks - same constraint that puts the
-         search initializer into /search-init.js. -->
-    <link rel="stylesheet" href="/search.css">
+from __future__ import annotations
 
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebPage",
-      "name": "Search CSOH",
-      "description": "Full-text search across every page on Cloud Security Office Hours.",
-      "url": "https://csoh.org/search.html",
-      "isPartOf": {
-        "@type": "WebSite",
-        "name": "Cloud Security Office Hours",
-        "url": "https://csoh.org/"
-      }
-    }
-    </script>
-    <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
-</head>
+import re
+from pathlib import Path
 
-<body class="js-enabled">
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+REPO = Path(__file__).resolve().parent.parent
 
-    <header>
-        <div class="header-content">
-            <a href="index.html" class="logo-link">
-          <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <div class="logo">
-                    <div class="logo-title">CSOH</div>
-                    <p>Cloud Security Office Hours</p>
-                </div>
-            </a>
-            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
-            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+# --- Canonical menu nav (root-relative, no active markers) -------------------
+# This is the current site nav (Learn / Resources / By Cloud / Threat Intel /
+# Community / Behind the Scenes / Join Friday Zoom CTA) with the two new
+# developer-docs pages added to "Behind the Scenes". Keep the 12-space indent;
+# NAV_PATTERN below consumes the existing indentation so this controls it fully.
+CANON_NAV = """\
             <nav>
                 <ul>
                     <li class="has-dropdown has-mega">
@@ -197,34 +151,13 @@
                     </li>
                     <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
                 </ul>
-            </nav>
-        </div>
-    </header>
+            </nav>"""
 
-    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
-        <ol>
-            <li><a href="index.html">Home</a></li>
-            <li><span aria-current="page">Search</span></li>
-        </ol>
-    </nav>
-
-    <main class="container" id="main-content">
-        <div class="search-page-wrap">
-            <h1>Search the site</h1>
-            <p class="search-intro">Full-text search across every page on csoh.org.</p>
-
-            <!-- /search-init.js injects the search input, filter chips,
-                 status line, and results list into this container.
-                 Empty by default so users with JS off get the noscript
-                 fallback below instead of an unwired form. -->
-            <div id="csoh-search"></div>
-
-            <noscript>
-                <p style="text-align:center;margin-top:2rem;">Search requires JavaScript. With JS off, browse the site via the navigation at the top of the page.</p>
-            </noscript>
-        </div>
-    </main>
-
+# --- Canonical footer (root-relative) ----------------------------------------
+# Includes "About CSOH" (-> index.html#about) in Explore and the two new pages
+# in Developer Docs. Keep the 2-space indent; FOOTER_PATTERN consumes the
+# existing indentation.
+CANON_FOOTER = """\
   <footer>
     <div class="footer-content">
       <div class="footer-section footer-about">
@@ -271,19 +204,117 @@
         <li><a href="security-policy.html">Security</a></li>
       </ul>
     </div>
-  </footer>
+  </footer>"""
 
-    <!-- Self-hosted MiniSearch (pinned 7.1.2). SRI hash is over the
-         exact bytes of /vendor/minisearch-7.1.2.min.js as committed -
-         the file is static, not regenerated, so the hash is stable
-         across deploys. `defer` preserves source order so search-init.js
-         can rely on the MiniSearch global being defined first. -->
-    <script src="/vendor/minisearch-7.1.2.min.js"
-        integrity="sha384-IniM+QBDckT3t/xRvZUiUyns2i4VQ1OFdqa5l/YN7RBCzb/BtLOoN6PDsAuACzRP"
-        crossorigin="anonymous" defer></script>
-    <script src="/search-init.js" defer></script>
+# Match the menu nav: an open `<nav>` (no class attr) wrapping a <ul>. The
+# breadcrumb uses `<nav class="breadcrumb-nav">` and won't match. Leading
+# indentation is consumed so the replacement controls indent fully.
+NAV_PATTERN = re.compile(r'(?m)^[ \t]*<nav>\s*<ul>[\s\S]*?</ul>\s*</nav>')
+FOOTER_PATTERN = re.compile(r'(?m)^[ \t]*<footer>[\s\S]*?</footer>')
 
-    <script src="/main.js?v=d8882831" integrity="sha384-lKd4MzrpmXU23ws/ZryGObudmLTuV3KfyBCfj+TUIUd8a2ZUgX3P7liFMYd8bUBn" defer></script>
-</body>
+# Build href -> enclosing top-level dropdown label, by scanning CANON_NAV.
+# Each dropdown <button> starts a new section; every page href that follows
+# belongs to it until the next button. resources.html is the lone top-level
+# link (no dropdown) and is fixed up afterwards.
+def _build_dropdown_map() -> dict[str, str | None]:
+    out: dict[str, str | None] = {}
+    current: str | None = None
+    btn = re.compile(r'<button class="dropdown-toggle"[^>]*>([^<]+?)\s*<span')
+    href = re.compile(r'<a href="([a-z0-9][a-z0-9\-]*\.html)"')
+    for line in CANON_NAV.splitlines():
+        m = btn.search(line)
+        if m:
+            current = m.group(1).strip()
+            continue
+        h = href.search(line)
+        if h:
+            out.setdefault(h.group(1), current)
+    out['resources.html'] = None  # top-level link, not inside a dropdown
+    return out
 
-</html>
+NAV_DROPDOWN = _build_dropdown_map()
+
+
+def add_prefix(block: str) -> str:
+    """Rewrite root-relative internal links to ../ for subdirectory pages."""
+    return re.sub(r'href="(?!https?:|mailto:|#|/|\.\./)', 'href="../', block)
+
+
+def mark_active(nav: str, active_href: str | None) -> str:
+    """Set aria-current on the active link and `active` on its dropdown toggle.
+
+    Operates on the unprefixed nav (active_href is a bare 'name.html').
+    """
+    if not active_href or active_href not in NAV_DROPDOWN:
+        return nav
+    link = f'<a href="{active_href}">'
+    if link not in nav:
+        return nav
+    nav = nav.replace(link, f'<a href="{active_href}" aria-current="page">', 1)
+    label = NAV_DROPDOWN.get(active_href)
+    if label:
+        old = (f'<button class="dropdown-toggle" aria-expanded="false" '
+               f'aria-haspopup="true">{label} ')
+        new = (f'<button class="dropdown-toggle active" aria-expanded="true" '
+               f'aria-haspopup="true">{label} ')
+        nav = nav.replace(old, new, 1)
+    return nav
+
+
+def active_href_for(path: Path) -> str | None:
+    parent = path.parent.name
+    if parent == 'breaches':
+        return 'breach-timeline.html'
+    if parent == 'meetings':
+        return 'meetings.html'
+    return path.name
+
+
+def build_nav(path: Path) -> str:
+    is_sub = path.parent.name in ('breaches', 'meetings')
+    nav = mark_active(CANON_NAV, active_href_for(path))
+    return add_prefix(nav) if is_sub else nav
+
+
+def build_footer(path: Path) -> str:
+    is_sub = path.parent.name in ('breaches', 'meetings')
+    return add_prefix(CANON_FOOTER) if is_sub else CANON_FOOTER
+
+
+def process(path: Path) -> str:
+    """Return 'updated', 'unchanged', or 'skipped' for one file."""
+    text = path.read_text(encoding='utf-8')
+    if '<nav>' not in text or '<footer>' not in text:
+        return 'skipped'
+    new = text
+    new, n_nav = NAV_PATTERN.subn(lambda _: build_nav(path), new, count=1)
+    new, n_foot = FOOTER_PATTERN.subn(lambda _: build_footer(path), new, count=1)
+    if n_nav == 0 or n_foot == 0:
+        return 'skipped'
+    if new == text:
+        return 'unchanged'
+    path.write_text(new, encoding='utf-8')
+    return 'updated'
+
+
+def main() -> None:
+    paths: list[Path] = []
+    paths.extend(REPO.glob('*.html'))
+    paths.extend((REPO / 'breaches').glob('*.html'))
+    paths.extend((REPO / 'meetings').glob('*.html'))
+
+    tally = {'updated': 0, 'unchanged': 0, 'skipped': 0}
+    skipped: list[str] = []
+    for p in sorted(paths):
+        result = process(p)
+        tally[result] += 1
+        if result == 'skipped':
+            skipped.append(p.relative_to(REPO).as_posix())
+    print(f"updated={tally['updated']} unchanged={tally['unchanged']} "
+          f"skipped={tally['skipped']}")
+    if skipped:
+        print('skipped files:', ', '.join(skipped))
+
+
+if __name__ == '__main__':
+    main()
