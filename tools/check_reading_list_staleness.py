@@ -49,6 +49,24 @@ FALLBACK_FEED_PATHS = (
     "/atom.xml", "/index.xml",
 )
 
+# Per-URL feed overrides. Keyed by the EXACT href as it appears in the reading
+# list, valued by the feed to read instead. Two cases this solves, both of which
+# auto-discovery gets wrong and re-flags every month:
+#   1. Feed lives at a non-standard path the fallback probe doesn't guess
+#      (wiz.io serves /feed/rss.xml, not /feed/).
+#   2. The page itself is bot-protected (Cloudflare/CDN 403s our User-Agent) so
+#      we never even reach feed discovery — but the feed endpoint is open.
+# When a URL is overridden we skip the page fetch entirely and read the feed
+# directly. Worst case (the feed 403s too) it shows as "feed unreachable" with
+# this exact URL — strictly more useful than a bare "no feed discovered".
+# Verify a candidate returns parseable, dated entries before adding it here.
+FEED_OVERRIDES = {
+    "https://www.wiz.io/blog": "https://www.wiz.io/feed/rss.xml",
+    "https://awsteele.com/": "https://awsteele.com/feed.xml",
+    "https://securitylabs.datadoghq.com/": "https://securitylabs.datadoghq.com/rss/feed.xml",
+    "https://resilientcyber.substack.com/": "https://resilientcyber.substack.com/feed",
+}
+
 REQUEST_TIMEOUT = 20
 
 
@@ -209,6 +227,23 @@ def _to_utc(d: dt.datetime) -> dt.datetime:
 def check_url(section: str, url: str) -> Dict[str, object]:
     """Return a dict describing the staleness status of one URL."""
     result: Dict[str, object] = {"section": section, "url": url}
+
+    # A known feed for this URL? Skip the page fetch (which may be bot-blocked)
+    # and the discovery guesswork — read the feed directly.
+    override = FEED_OVERRIDES.get(url)
+    if override:
+        result["feed_url"] = override
+        feed_body, err = fetch(override, accept="application/rss+xml, application/atom+xml")
+        if err or not feed_body:
+            result["status"] = "feed_unreachable"
+            result["detail"] = err or "empty response"
+            return result
+        latest = parse_feed_latest(feed_body)
+        if latest is None:
+            result["status"] = "feed_unparseable"
+            return result
+        result["latest"] = latest
+        return result
 
     body, err = fetch(url, accept="text/html,application/xhtml+xml")
     if err or not body:
