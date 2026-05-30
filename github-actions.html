@@ -9,7 +9,7 @@
         content="GitHub Actions explained through CSOH's real workflows: triggers, concurrency, secrets, PAT vs GITHUB_TOKEN, common gotchas. Learn by reading our YAML.">
     <meta name="author" content="Shawn Nunley">
     <meta name="keywords"
-        content="GitHub Actions, CI/CD, workflows, YAML, automation, GitHub workflow, github actions tutorial, devsecops, deploy automation, lftp deploy">
+        content="GitHub Actions, CI/CD, workflows, YAML, automation, GitHub workflow, github actions tutorial, devsecops, deploy automation, multi-cloud deploy, keyless OIDC">
     <title>How We Use GitHub Actions - Cloud Security Office Hours</title>
 
     <link rel="canonical" href="https://csoh.org/github-actions.html">
@@ -536,7 +536,7 @@ jobs:
         <figure class="workflow-figure">
           <svg viewBox="0 0 820 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="orch-title orch-desc" width="820" height="760">
             <title id="orch-title">CSOH&rsquo;s GitHub Actions deploy pipeline</title>
-            <desc id="orch-desc">End-to-end flow from a developer&rsquo;s git push through path filtering, concurrency locking, sequential build steps, validation, FTP mirror, and final deploy to production.</desc>
+            <desc id="orch-desc">End-to-end flow from a developer&rsquo;s git push through path filtering, concurrency locking, sequential build steps, validation, and a build-once publish to three clouds (AWS, GCP, Azure) over keyless OIDC.</desc>
             <defs><marker id="orch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
             <text x="410" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">From <tspan font-family="monospace">git push</tspan> to live on csoh.org - what actually happens</text>
 
@@ -600,9 +600,9 @@ jobs:
             <path d="M 410 606 L 410 626" stroke="#475569" stroke-width="2" marker-end="url(#orch-arrow)"/>
 
             <rect x="280" y="628" width="260" height="58" rx="6" fill="#fff" stroke="#f43f5e" stroke-width="2"/>
-            <text x="410" y="645" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">lftp mirror &#8594; /public_html/</text>
-            <text x="410" y="660" text-anchor="middle" font-size="9" fill="#475569">5 passes: site files · previews · news-banners · OG images · author photos · icons · photos</text>
-            <text x="410" y="676" text-anchor="middle" font-size="9" fill="#475569" font-style="italic">+ chat-screenshots if any new ones</text>
+            <text x="410" y="645" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">deploy.yml &#8594; build once, publish 3 clouds</text>
+            <text x="410" y="660" text-anchor="middle" font-size="9" fill="#475569">parallel: AWS S3 + CloudFront · GCP Cloud Run · Azure Blob $web</text>
+            <text x="410" y="676" text-anchor="middle" font-size="9" fill="#475569" font-style="italic">keyless OIDC to each · all fronted by Cloudflare</text>
 
             <path d="M 410 686 L 410 706" stroke="#475569" stroke-width="2" marker-end="url(#orch-arrow)"/>
 
@@ -718,7 +718,7 @@ jobs:
 - name: Deploy
   if: steps.detect.outputs.changed == 'true'
   run: ./deploy.sh</pre></div>
-            <p>This is how our deploy job decides whether to actually run the FTP step at all - if no SRI hashes, no sitemap, no previews, no HTML changed, the whole deploy is skipped.</p>
+            <p>This is how our deploy job decides whether to actually run the publish step at all - if no SRI hashes, no sitemap, no previews, no HTML changed, the whole deploy is skipped.</p>
 
             <h3>6. <code>if: always()</code> vs <code>if: failure()</code></h3>
             <p>By default, a step skips if any earlier step failed. <code>if: always()</code> forces it to run anyway - handy for uploading a debug log. <code>if: failure()</code> only runs the step <em>because</em> something earlier failed - handy for posting "your build broke" comments. We use both extensively in our PR-check workflows.</p>
@@ -730,7 +730,7 @@ jobs:
             <p>Anything in <code>secrets.X</code> is automatically masked in run logs (printed as <code>***</code>). Never <code>echo</code> a secret to debug it - even if you wrote the workflow yourself, the masking still applies. To <em>see</em> a secret, you have to use it. Never put secrets in the YAML directly; always reference them by name.</p>
 
             <h3>9. <code>actions/checkout</code> resets every file's mtime - incremental deploys break</h3>
-            <p>A fresh checkout gives every file the SAME mtime: the moment it was checked out. If you're using <code>rsync</code>, <code>lftp mirror</code>, or any other tool that decides what to upload by comparing mtimes, every run will re-upload the entire tree. Took us months to notice - the deploy was just slow.</p>
+            <p>A fresh checkout gives every file the SAME mtime: the moment it was checked out. If you're using <code>rsync</code>, <code>aws s3 sync</code>, or any other tool that decides what to upload by comparing mtimes, every run will re-upload the entire tree. Took us months to notice - the deploy was just slow.</p>
             <p>The fix is a one-liner before the deploy step: walk every tracked file and rewind its mtime to the date of its last git commit. Then your housekeeping scripts (which only write files that actually change) generate a fresh "now" mtime on exactly the files that need it, and the deploy uploads only those:</p>
             <div class="code-block"><pre>git ls-files -z | while IFS= read -r -d '' file; do
   ts=$(git log -1 --format=%ct -- "$file" 2&gt;/dev/null)
@@ -752,7 +752,7 @@ done</pre></div>
                 <li><strong>Set explicit <code>permissions:</code> on every workflow.</strong> Default to <code>contents: read</code>. Add only what you need.</li>
                 <li><strong>Avoid <code>pull_request_target</code> unless you fully understand it.</strong> It runs in the context of the base branch with full secrets, on code from a fork. Footgun. The <a href="breach-timeline.html">breach kill chains</a> page covers an attack pattern that exploited this on a major OSS project.</li>
                 <li><strong>Don't echo secrets, don't log them, don't write them to artifacts.</strong> Even if it's "just a debug step you'll remove later."</li>
-                <li><strong>Use OIDC for cloud credentials when you can.</strong> AWS, GCP, and Azure all support short-lived federated tokens via OIDC - no long-lived access keys to leak. We don't use this on CSOH (FTP-based deploy), but for any cloud deploy this is the modern default.</li>
+                <li><strong>Use OIDC for cloud credentials when you can.</strong> AWS, GCP, and Azure all support short-lived federated tokens via OIDC - no long-lived access keys to leak. This is exactly how CSOH deploys: every publish job federates a short-lived token to its cloud, so there's not a single static cloud key in the repo. See <a href="terraform.html">how we wire it in Terraform</a> and <a href="cloud-deployment.html">our deploy architecture</a>.</li>
                 <li><strong>Treat <code>${{ github.event.* }}</code> as untrusted input</strong> when interpolating into shell. PR titles, branch names, and commit messages can contain attacker-controlled strings. Use <code>${VAR}</code> from <code>env:</code> instead of inline <code>${{ }}</code> in run blocks.</li>
             </ol>
         </section>
