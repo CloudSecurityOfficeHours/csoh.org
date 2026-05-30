@@ -380,8 +380,13 @@ jobs:
         run: |
           python3 tools/generate_preview.py --batch-auto
 
-      # Squeeze the new JPGs (strip metadata, recompress at quality 85).
-      # Saves a noticeable amount of bandwidth on the live site.
+      # Squeeze ONLY the JPGs the generate step just produced (strip metadata,
+      # recompress at quality 85). jpegoptim is idempotent, so re-running it on
+      # the other ~540 already-optimized previews is pure wasted CI time — that
+      # was the bulk of this step's runtime. New previews show up as untracked
+      # files; a regenerated one shows as modified. Nothing else writes to
+      # img/previews before this step, so git status is an exact list of what
+      # the generate step touched.
       - name: Optimize images
         if: steps.check_previews.outputs.missing == 'true'
         run: |
@@ -390,9 +395,21 @@ jobs:
           # installs jpegoptim, answering "yes" to any prompt automatically.
           sudo apt-get update
           sudo apt-get install -y jpegoptim
-          # `find ... -exec`: run jpegoptim once per file. `\;` ends the
-          # -exec command (not `\+` because we want one-at-a-time output).
-          find img/previews -name "*.jpg" -exec jpegoptim --strip-all --max=85 {} \;
+          # Collect new (untracked) + modified preview JPGs. `git diff` never
+          # lists untracked files, so `ls-files --others` is the other half.
+          { git ls-files --others --exclude-standard -- 'img/previews/*.jpg'
+            git diff --name-only -- 'img/previews/*.jpg'
+          } | sort -u > new-previews.txt
+          if [ -s new-previews.txt ]; then
+            echo "Optimizing $(wc -l < new-previews.txt) new/changed preview(s):"
+            cat new-previews.txt
+            # `-r` skips running jpegoptim at all if the list is empty;
+            # `-d '\n'` splits on newlines so paths with spaces stay intact.
+            xargs -r -d '\n' jpegoptim --strip-all --max=85 < new-previews.txt
+          else
+            echo "No new or changed previews to optimize."
+          fi
+          rm -f new-previews.txt
 
       # Always sync HTML <img src> paths to preview-mapping.json, even
       # when no new previews were generated this run — past contributors
