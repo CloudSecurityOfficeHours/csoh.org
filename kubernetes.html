@@ -320,7 +320,7 @@
       <div class="hero-inner">
         <div class="hero-text">
           <h1>Kubernetes &amp; Managed Kubernetes</h1>
-          <p>The orchestrator that runs most <a class="glossary-link" href="glossary.html#term-cloud-native">cloud-native</a> production workloads - and the single largest source of cloud-security misconfiguration. Vendor-neutral guide to what <a class="glossary-link" href="glossary.html#term-eks">EKS</a>, AKS, and GKE actually manage, what you still own, and the cluster-specific risks: <a class="glossary-link" href="glossary.html#term-pod">pod</a> escapes, identity chaining, <a class="glossary-link" href="glossary.html#term-rbac">RBAC</a> sprawl, flat pod networking, and admission control.</p>
+          <p>The orchestrator that runs most <a class="glossary-link" href="glossary.html#term-cloud-native">cloud-native</a> production workloads - and the single largest source of cloud-security misconfiguration. Vendor-neutral guide to what <a class="glossary-link" href="glossary.html#term-eks">EKS</a>, AKS, and GKE actually manage, what you still own, and the cluster-specific risks: <a class="glossary-link" href="glossary.html#term-pod">pod</a> escapes, identity chaining, RBAC sprawl, flat pod networking, and admission control.</p>
           <div class="cta-buttons">
             <a href="#shared-resp" class="btn btn-primary">Shared responsibility →</a>
             <a href="#comparison" class="btn btn-secondary">EKS / AKS / GKE comparison</a>
@@ -380,8 +380,8 @@
             <!-- Identity callout -->
             <g>
               <rect x="155" y="395" width="290" height="50" rx="8" fill="#0f172a" stroke="#a78bfa" stroke-width="1.5"/>
-              <text x="300" y="416" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700"><a class="glossary-link" href="glossary.html#term-service-account">Workload identity</a> (<a class="glossary-link" href="glossary.html#term-irsa">IRSA</a> / <a class="glossary-link" href="glossary.html#term-wif">WIF</a>)</text>
-              <text x="300" y="434" text-anchor="middle" fill="#e2e8f0" font-size="10">per-pod cloud credentials, <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a>-federated</text>
+              <text x="300" y="416" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700"><a class="glossary-link" href="glossary.html#term-service-account">Workload identity</a> (IRSA / WIF)</text>
+              <text x="300" y="434" text-anchor="middle" fill="#e2e8f0" font-size="10">per-pod cloud credentials, OIDC-federated</text>
             </g>
           </svg>
         </div>
@@ -474,7 +474,7 @@
                         <tr>
                             <th scope="row">etcd encryption &amp; backup</th>
                             <td>You</td>
-                            <td>Cloud (with user-managed <a class="glossary-link" href="glossary.html#term-kms">KMS</a> option)</td>
+                            <td>Cloud (with user-managed KMS option)</td>
                             <td>Cloud</td>
                         </tr>
                         <tr>
@@ -543,7 +543,7 @@
             <ol>
                 <li><strong>Initial foothold in a pod.</strong> Vulnerable web app, leaked credentials, supply chain attack in a base image. Any code-execution primitive will do.</li>
                 <li><strong>Use the pod's service-account token</strong> to talk to the API server. Default token is auto-mounted into every pod. RBAC determines how far this gets - too often, to <code>cluster-admin</code> via some operator that was installed unaudited.</li>
-                <li><strong>Reach the worker node's IMDS</strong> if workload identity isn't configured. Steal the node <a class="glossary-link" href="glossary.html#term-iam">IAM</a> role. Now you have the node's full cloud permissions - usually broad, because the node needs to pull images, mount volumes, write logs, manage load balancers.</li>
+                <li><strong>Reach the worker node's IMDS</strong> if workload identity isn't configured. Steal the node IAM role. Now you have the node's full cloud permissions - usually broad, because the node needs to pull images, mount volumes, write logs, manage load balancers.</li>
                 <li><strong>Move laterally to other pods</strong> on the same node (shared kernel) or to other pods over the flat pod network. Default-allow networking makes this trivial.</li>
                 <li><strong>Persist via a workload</strong> - deploy a new DaemonSet, create a backdoor service account, modify a ConfigMap. With cluster-admin, <a class="glossary-link" href="glossary.html#term-persistence">persistence</a> is trivial.</li>
                 <li><strong>Exfiltrate</strong> via the cluster's outbound network - typically unrestricted to the public internet.</li>
@@ -555,7 +555,7 @@
             <h2>Identity chaining - pod to node to cloud</h2>
             <p>This is the cloud-Kubernetes security failure that produces the worst outcomes. Same shape as the container version (see <a href="containers.html#identity">Containers</a>), with two added wrinkles:</p>
             <ul>
-                <li><strong>The default service-account token.</strong> Every pod gets a Kubernetes service-account <a class="glossary-link" href="glossary.html#term-jwt">JWT</a> auto-mounted at <code>/var/run/secrets/kubernetes.io/serviceaccount/token</code>. It's the pod's identity <em>to the API server</em>. With default RBAC, that token can list pods in its own namespace - but if any RoleBinding or ClusterRoleBinding has elevated the default service account, that's the attacker's stepping stone.</li>
+                <li><strong>The default service-account token.</strong> Every pod gets a Kubernetes service-account JWT auto-mounted at <code>/var/run/secrets/kubernetes.io/serviceaccount/token</code>. It's the pod's identity <em>to the API server</em>. With default RBAC, that token can list pods in its own namespace - but if any RoleBinding or ClusterRoleBinding has elevated the default service account, that's the attacker's stepping stone.</li>
                 <li><strong>The node IAM role.</strong> Worker nodes need an IAM role with permissions to pull images, attach volumes, write logs, register with the cluster's load balancer. That role is reachable via the node's IMDS - and from any pod with <code>hostNetwork: true</code> or no IMDS hop-limit enforcement.</li>
             </ul>
             <h3>The fix is workload identity</h3>
@@ -563,7 +563,7 @@
             <ul>
                 <li><strong>AWS - <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a></strong> - EKS cluster runs an OIDC issuer; you annotate a Kubernetes service account with an IAM role; pods using that SA exchange the SA token for a scoped role session. <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a> is the newer, simpler alternative.</li>
                 <li><strong>Azure - <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">AKS Workload Identity</a></strong> - federated to <a class="glossary-link" href="glossary.html#term-entra-id">Entra ID</a>, same OIDC pattern.</li>
-                <li><strong>GCP - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">GKE Workload Identity</a></strong> - Kubernetes SAs map to Google service accounts via Workload Identity <a class="glossary-link" href="glossary.html#term-federation">Federation</a>.</li>
+                <li><strong>GCP - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">GKE Workload Identity</a></strong> - Kubernetes SAs map to Google service accounts via <a class="glossary-link" href="glossary.html#term-oidc-federation">Workload Identity Federation</a>.</li>
             </ul>
             <p>Once workload identity is configured, also <strong>block IMDS from pods</strong>. On EKS, enforce IMDSv2 with hop-limit 1 (so containers can't reach the metadata interface through the host). On AKS and GKE, the network plugin / hostNetwork enforcement does the equivalent.</p>
             <p>Finally - <strong>disable automatic service-account token mounting</strong> for pods that don't need to talk to the API server. <code>automountServiceAccountToken: false</code> on every workload that isn't an operator. This removes one of the attacker's default tools.</p>
@@ -583,9 +583,9 @@
             <h3>What good looks like</h3>
             <ul>
                 <li>One service account per workload. Workload-specific Role with the narrowest permission set that works. RoleBinding scoped to a single namespace.</li>
-                <li>Humans access via cloud <a class="glossary-link" href="glossary.html#term-sso">SSO</a> mapped to ClusterRoles, not via long-lived kubeconfig tokens.</li>
+                <li>Humans access via cloud SSO mapped to ClusterRoles, not via long-lived kubeconfig tokens.</li>
                 <li>Use <a href="https://github.com/aquasecurity/kube-bench" target="_blank" rel="noopener noreferrer">kube-bench</a> and <a href="https://github.com/cyberark/KubiScan" target="_blank" rel="noopener noreferrer">KubiScan</a> to audit RBAC for over-permissioned bindings.</li>
-                <li>API server audit logs flowing to your <a class="glossary-link" href="glossary.html#term-siem">SIEM</a>. The <a class="glossary-link" href="glossary.html#term-cloudtrail">audit log</a> catches "service account X created a pod with privileged: true" in a way that nothing else does.</li>
+                <li>API server audit logs flowing to your SIEM. The <a class="glossary-link" href="glossary.html#term-cloudtrail">audit log</a> catches "service account X created a pod with privileged: true" in a way that nothing else does.</li>
             </ul>
         </section>
 
@@ -594,7 +594,7 @@
             <p>The escape paths covered on the <a href="containers.html#escapes">Containers page</a> all apply inside Kubernetes - privileged pods, sensitive capabilities, hostPath / hostPID / hostNetwork, kernel CVEs. Kubernetes adds tooling to enforce <a class="glossary-link" href="glossary.html#term-hardening">hardening</a> cluster-wide:</p>
             <h3>Pod Security Standards (PSS)</h3>
             <p>Kubernetes ships three baseline standards: <strong>Privileged</strong> (no restrictions), <strong>Baseline</strong> (blocks the worst known escape paths - privileged, hostPath, hostPID, hostNetwork, hostIPC, certain capabilities), and <strong>Restricted</strong> (enforces hardened defaults: non-root user, read-only root filesystem, dropped capabilities, <code>RuntimeDefault</code> seccomp).</p>
-            <p>Apply with namespace labels - <code>pod-security.kubernetes.io/enforce: restricted</code> on production namespaces; <code>baseline</code> on namespaces that need slightly more flexibility; never <code>privileged</code> in prod. <a class="glossary-link" href="glossary.html#term-pss">PSS</a> replaced the deprecated PodSecurityPolicy and is built into modern Kubernetes (1.25+).</p>
+            <p>Apply with namespace labels - <code>pod-security.kubernetes.io/enforce: restricted</code> on production namespaces; <code>baseline</code> on namespaces that need slightly more flexibility; never <code>privileged</code> in prod. PSS replaced the deprecated PodSecurityPolicy and is built into modern Kubernetes (1.25+).</p>
             <h3>Per-pod hardening</h3>
             <p>The minimum hardened pod spec for production:</p>
             <ul>
@@ -629,7 +629,7 @@
             </ol>
             <p>NetworkPolicy requires a CNI plugin that supports it. All three managed clouds support this (Cilium, Calico, AWS <a class="glossary-link" href="glossary.html#term-vpc">VPC</a> CNI with restrictions, Azure CNI Overlay, GKE Dataplane V2). Verify before assuming.</p>
             <h3>Service mesh</h3>
-            <p>NetworkPolicy is L3/L4 - IP and port. For L7 controls (HTTP method, path, header), and for <a class="glossary-link" href="glossary.html#term-mtls">mutual TLS</a> between every workload, a <a class="glossary-link" href="glossary.html#term-service-mesh">service mesh</a> adds an <a class="glossary-link" href="glossary.html#term-iap">identity-aware proxy</a> alongside every pod. Options:</p>
+            <p>NetworkPolicy is L3/L4 - IP and port. For L7 controls (HTTP method, path, header), and for mutual TLS between every workload, a <a class="glossary-link" href="glossary.html#term-service-mesh">service mesh</a> adds an identity-aware proxy alongside every pod. Options:</p>
             <ul>
                 <li><a href="https://istio.io/" target="_blank" rel="noopener noreferrer">Istio</a> - comprehensive, opinionated, large operational footprint.</li>
                 <li><a href="https://linkerd.io/" target="_blank" rel="noopener noreferrer">Linkerd</a> - minimal, fast, Rust-based data plane, lower operational cost.</li>
@@ -639,8 +639,8 @@
             <p>For a small cluster, NetworkPolicy is usually enough. For multi-team production with workloads at different trust levels, the mesh's mTLS and identity-based authorization are the right primitives.</p>
             <h3>Ingress / egress controls</h3>
             <ul>
-                <li><strong>Ingress.</strong> Public traffic enters via an ingress controller (NGINX, Traefik, Cilium, cloud-native ALB/AppGW/GCLB). The controller terminates <a class="glossary-link" href="glossary.html#term-tls">TLS</a>, enforces rate limits, and is the only thing on the public network.</li>
-                <li><strong>Egress.</strong> Restrict outbound to an allow-list - your registry, your package managers, your APIs. <a class="glossary-link" href="glossary.html#term-nat">NAT</a> gateways with allowed-destination rules, mesh egress gateways, or Cilium's L7 egress policies all work.</li>
+                <li><strong>Ingress.</strong> Public traffic enters via an ingress controller (NGINX, Traefik, Cilium, cloud-native ALB/AppGW/GCLB). The controller terminates TLS, enforces rate limits, and is the only thing on the public network.</li>
+                <li><strong>Egress.</strong> Restrict outbound to an allow-list - your registry, your package managers, your APIs. NAT gateways with allowed-destination rules, mesh egress gateways, or Cilium's L7 egress policies all work.</li>
             </ul>
         </section>
 
@@ -653,7 +653,7 @@
             <p>For richer rules - beyond what PSS covers - install a policy engine:</p>
             <ul>
                 <li><a href="https://kyverno.io/" target="_blank" rel="noopener noreferrer">Kyverno</a> - Kubernetes-native (policies are Kubernetes resources, no separate language). Easier to adopt; the dominant choice in 2026.</li>
-                <li><a href="https://www.openpolicyagent.org/docs/kubernetes" target="_blank" rel="noopener noreferrer">OPA Gatekeeper</a> - <a class="glossary-link" href="glossary.html#term-opa">OPA</a> + <a class="glossary-link" href="glossary.html#term-rego">Rego</a>. More expressive, steeper learning curve.</li>
+                <li><a href="https://www.openpolicyagent.org/docs/kubernetes" target="_blank" rel="noopener noreferrer">OPA Gatekeeper</a> - OPA + <a class="glossary-link" href="glossary.html#term-rego">Rego</a>. More expressive, steeper learning curve.</li>
             </ul>
             <h3>Policies worth running on day one</h3>
             <ul>
@@ -671,16 +671,16 @@
 
         <section id="cluster-secrets">
             <h2>Cluster secrets &amp; vault integration</h2>
-            <p>A <code>kind: Secret</code> in Kubernetes is base64-encoded YAML, not encrypted. <code>kubectl get secret foo -o yaml | base64 -d</code> recovers the plaintext, and the same applies to anyone reading etcd directly. Production clusters need (1) etcd-level encryption-at-rest, and (2) an external source of truth for the secret values so rotation, audit, and lifecycle live in a real secrets manager - not in <code>git</code> and not in <code>kubectl</code>. The patterns below are typically combined, not picked individually. For the crypto and capability details behind the secrets managers themselves, see <a href="data-security.html#secrets">Data Security &amp; KMS - Secrets management</a>; for the broader workflow story, see <a href="iam.html#secrets-workflows">IAM - Secrets in developer workflows</a>.</p>
+            <p>A <code>kind: Secret</code> in Kubernetes is base64-encoded YAML, not encrypted. <code>kubectl get secret foo -o yaml | base64 -d</code> recovers the plaintext, and the same applies to anyone reading etcd directly. Production clusters need (1) etcd-level encryption-at-rest, and (2) an external source of truth for the secret values so rotation, audit, and lifecycle live in a real <a class="glossary-link" href="glossary.html#term-secrets-manager">secrets manager</a> - not in <code>git</code> and not in <code>kubectl</code>. The patterns below are typically combined, not picked individually. For the crypto and capability details behind the secrets managers themselves, see <a href="data-security.html#secrets">Data Security &amp; KMS - Secrets management</a>; for the broader workflow story, see <a href="iam.html#secrets-workflows">IAM - Secrets in developer workflows</a>.</p>
 
             <h3>1. Encrypt etcd at rest with a KMS provider</h3>
             <p>The minimum bar. Configure the API server's <a href="https://kubernetes.io/docs/tasks/administer-cluster/kms-provider/" target="_blank" rel="noopener noreferrer">KMS encryption provider</a> so Secret resources are encrypted with a customer-managed key before being written to etcd. Managed offerings make this one toggle:</p>
             <ul>
                 <li><strong>EKS</strong> - <a href="https://docs.aws.amazon.com/eks/latest/userguide/enable-kms.html" target="_blank" rel="noopener noreferrer">Envelope encryption with AWS KMS</a>, enabled at cluster creation (or via update). Pin the KMS key in IAM so only the cluster's control-plane role can use it.</li>
-                <li><strong>AKS</strong> - <a href="https://learn.microsoft.com/en-us/azure/aks/use-kms-etcd-encryption" target="_blank" rel="noopener noreferrer">KMS etcd encryption with Azure Key Vault</a>; the cluster authenticates to Key Vault via managed identity.</li>
-                <li><strong>GKE</strong> - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/encrypting-secrets" target="_blank" rel="noopener noreferrer">Application-layer Secrets Encryption</a> with a Cloud KMS key in the same project.</li>
+                <li><strong>AKS</strong> - <a href="https://learn.microsoft.com/en-us/azure/aks/use-kms-etcd-encryption" target="_blank" rel="noopener noreferrer">KMS etcd encryption with Azure Key Vault</a>; the cluster authenticates to <a class="glossary-link" href="glossary.html#term-key-vault">Key Vault</a> via managed identity.</li>
+                <li><strong>GKE</strong> - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/encrypting-secrets" target="_blank" rel="noopener noreferrer">Application-layer Secrets Encryption</a> with a <a class="glossary-link" href="glossary.html#term-cloud-kms">Cloud KMS</a> key in the same project.</li>
             </ul>
-            <p>This protects against etcd-snapshot exfiltration, backup theft, and direct etcd reads. It does <em>not</em> protect against an attacker with API access - the API server will decrypt and serve. KMS encryption is necessary but not sufficient.</p>
+            <p>This protects against etcd-snapshot <a class="glossary-link" href="glossary.html#term-exfiltration">exfiltration</a>, backup theft, and direct etcd reads. It does <em>not</em> protect against an attacker with API access - the API server will decrypt and serve. KMS encryption is necessary but not sufficient.</p>
 
             <h3>2. External Secrets Operator (ESO)</h3>
             <p><a href="https://external-secrets.io/" target="_blank" rel="noopener noreferrer">External Secrets Operator</a> is the de-facto standard. You define an <code>ExternalSecret</code> CRD that references a value in an external store (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, HashiCorp Vault, 1Password, Doppler, Infisical, Akeyless, GitHub, and many more), and ESO materializes it as a Kubernetes Secret, refreshing on a schedule. The cluster doesn't <em>own</em> the secret - the secrets manager does, and ESO is the synchronizer.</p>
@@ -707,7 +707,7 @@
             <p><a href="https://github.com/bitnami-labs/sealed-secrets" target="_blank" rel="noopener noreferrer">Bitnami Sealed Secrets</a> is the older "encrypt-to-the-cluster" pattern - a controller in-cluster holds a private key, anyone can encrypt against the matching public key, only that controller can decrypt. Simple to operate, but the keypair is cluster-bound (multi-cluster requires re-sealing) and the controller is a single point of failure for decryption.</p>
 
             <h3>7. SPIFFE / SPIRE for cross-environment workload identity</h3>
-            <p><a href="https://spiffe.io/" target="_blank" rel="noopener noreferrer">SPIFFE / SPIRE</a> issues short-lived X.509 or JWT identities (SVIDs) to workloads based on attestation (which node, which pod, which service account). The cross-environment story is the point: a workload in Kubernetes, a workload on a VM, a workload on-prem can all hold a SPIFFE identity that downstream services trust uniformly. Right answer for multi-cluster, multi-cloud, or hybrid-on-prem deployments where you want one identity fabric instead of one per platform.</p>
+            <p><a href="https://spiffe.io/" target="_blank" rel="noopener noreferrer">SPIFFE / SPIRE</a> issues short-lived X.509 or JWT identities (SVIDs) to workloads based on attestation (which node, which pod, which service account). The cross-environment story is the point: a workload in Kubernetes, a workload on a VM, a workload on-prem can all hold a SPIFFE identity that downstream services trust uniformly. Right answer for multi-cluster, <a class="glossary-link" href="glossary.html#term-public">multi-cloud</a>, or hybrid-on-prem deployments where you want one identity fabric instead of one per platform.</p>
 
             <h3>Picking among them</h3>
             <ul>
@@ -721,7 +721,7 @@
             <h3>What about <code>kubectl create secret</code>?</h3>
             <p>Fine for ephemeral demos and bootstrap. Not fine as the source of truth for anything in production. The path to "we don't know what's deployed" starts with a human running <code>kubectl create secret</code> at 2am to fix an outage; the secret is now nowhere except etcd, and nobody knows it exists six months later when the rotation is overdue. Every production secret should originate in a secrets manager and arrive in the cluster via ESO / CSI / Vault Agent.</p>
 
-            <p>For pipeline-side patterns (how the secret gets into the manager in the first place from CI), see <a href="ci-cd.html#pipeline-secrets">CI/CD - Secrets in pipelines</a>.</p>
+            <p>For pipeline-side patterns (how the secret gets into the manager in the first place from <a class="glossary-link" href="glossary.html#term-ci-cd">CI</a>), see <a href="ci-cd.html#pipeline-secrets">CI/CD - Secrets in pipelines</a>.</p>
         </section>
 
         <section id="supply-chain">
@@ -731,7 +731,7 @@
                 <li><strong>Audit operators.</strong> Each operator installs CRDs, RBAC, and pods. Read the RBAC manifests before <code>helm install</code>. If the chart grants cluster-admin to a service account, ask why before agreeing.</li>
                 <li><strong>Sign and verify images.</strong> Covered on the <a href="containers.html#supply-chain">Containers page</a>. In Kubernetes, the verification happens at admission: Binary Authorization on GKE, Kyverno + Cosign on EKS/AKS.</li>
                 <li><strong>Pin to digests, not tags.</strong> Helm charts that use floating tags re-pull a different image silently. Pin <code>image: registry/repo@sha256:abc...</code> in your overrides.</li>
-                <li><strong>Maintain an <a class="glossary-link" href="glossary.html#term-sbom">SBOM</a> database.</strong> For both your images and the third-party ones running in your cluster. When <a class="glossary-link" href="glossary.html#term-cve">CVE</a>-2024-X drops, the question "is anything vulnerable" is one query.</li>
+                <li><strong>Maintain an SBOM database.</strong> For both your images and the third-party ones running in your cluster. When CVE-2024-X drops, the question "is anything vulnerable" is one query.</li>
                 <li><strong>Scan workloads continuously.</strong> Not just at build - periodically rescan everything running in the cluster against the latest CVE feed.</li>
             </ul>
         </section>
@@ -845,7 +845,7 @@
                     <p>Default-deny NetworkPolicy. Egress allow-list. Admission control (Kyverno) rejecting risky configs. Signed-image enforcement at admission.</p>
                 </div>
             </div>
-            <p>Add: runtime detection (<a class="glossary-link" href="glossary.html#term-falco">Falco</a>, <a class="glossary-link" href="glossary.html#term-tetragon">Tetragon</a>, your <a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a> runtime module); centralized container and audit logs; image scanning at build and registry; an SBOM database for fast CVE response; cluster autoscaler limits to cap <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a> from runaway pods.</p>
+            <p>Add: runtime detection (<a class="glossary-link" href="glossary.html#term-falco">Falco</a>, <a class="glossary-link" href="glossary.html#term-tetragon">Tetragon</a>, your CNAPP runtime module); centralized container and audit logs; image scanning at build and registry; an SBOM database for fast CVE response; cluster autoscaler limits to cap <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a> from runaway pods.</p>
         </section>
 
         <section id="pitfalls">
@@ -859,7 +859,7 @@
                 <li><strong>Admission control in audit-only forever.</strong> If violations are never blocked, the policy is documentation, not control.</li>
                 <li><strong>Treating namespaces as security boundaries.</strong> They're not. Use clusters for hard boundaries; namespaces for organization.</li>
                 <li><strong>Skipping audit log analysis.</strong> The Kubernetes audit log answers most "what happened" questions if it's flowing somewhere. Wire it to your SIEM on day one.</li>
-                <li><strong>Letting the cluster diverge from <a class="glossary-link" href="glossary.html#term-iac">IaC</a>.</strong> Hot-fixes made with <code>kubectl edit</code> are silent drift. Run all changes through GitOps (Argo <a class="glossary-link" href="glossary.html#term-ci-cd">CD</a>, Flux) so the cluster's state is auditable.</li>
+                <li><strong>Letting the cluster diverge from IaC.</strong> Hot-fixes made with <code>kubectl edit</code> are silent drift. Run all changes through GitOps (Argo CD, Flux) so the cluster's state is auditable.</li>
                 <li><strong>Ignoring node-level concerns on "fully managed."</strong> Even on Autopilot, you own the workload security context. The cloud cannot stop you from running <code>privileged: true</code> if your namespace allows it.</li>
             </ul>
         </section>
@@ -905,7 +905,7 @@
             <p>Often, no. If you have one or two workloads, a <a class="glossary-link" href="glossary.html#term-serverless">serverless</a> container service (<a class="glossary-link" href="glossary.html#term-lambda">Cloud Run</a>, Fargate, Container Apps) gives you containerized deployment without operating a cluster. The decision point is around 5–10 distinct workloads with shared infrastructure needs (service-to-service identity, scheduled jobs, multi-region rollout). Below that, Kubernetes is overhead; above it, the operational model pays back.</p>
 
             <h3>EKS vs AKS vs GKE - which is "most secure"?</h3>
-            <p>The Kubernetes API surface is the same on all three. GKE has historically led on built-in defaults - Workload Identity, Binary Authorization, GKE Sandbox, Autopilot - but EKS and AKS have closed the gap and offer equivalents. The bigger driver is "which cloud do you already live in?" - running EKS from an Azure organization or GKE from AWS adds federation complexity you don't need.</p>
+            <p>The Kubernetes API surface is the same on all three. GKE has historically led on built-in defaults - Workload Identity, Binary Authorization, GKE Sandbox, Autopilot - but EKS and AKS have closed the gap and offer equivalents. The bigger driver is "which cloud do you already live in?" - running EKS from an Azure organization or GKE from AWS adds <a class="glossary-link" href="glossary.html#term-federation">federation</a> complexity you don't need.</p>
 
             <h3>Should I use Helm?</h3>
             <p>For deploying off-the-shelf software (a database operator, an ingress controller), Helm is the lingua franca and you'll use it whether you like it or not. For your own workloads, Helm <em>or</em> Kustomize <em>or</em> raw YAML are all defensible. The security-relevant choice is "are these manifests in git, reviewed, and deployed by a pipeline" - not which tool generated them.</p>
