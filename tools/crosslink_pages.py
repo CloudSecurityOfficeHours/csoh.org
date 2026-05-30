@@ -57,6 +57,8 @@ TARGET_PAGES = [
     "cspm-vs-cnapp.html",
     "cloud-security-certifications.html",
     "github-actions.html",
+    "terraform.html",
+    "version-control.html",
     "kevin-mitnick.html",
     "contribute.html",
     "contribute-resources.html",
