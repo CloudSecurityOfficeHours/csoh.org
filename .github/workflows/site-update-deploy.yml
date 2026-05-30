@@ -250,7 +250,15 @@ jobs:
         run: |
           # `tee` writes output to a file AND prints it. PIPESTATUS[0] is
           # the exit code of the FIRST command in the pipe (Python), not tee.
-          python3 tools/normalize_urls.py --apply 2>&1 | tee normalize-output.txt
+          # `--cache` backs redirect resolution with a committed JSON map so
+          # only URLs we've never resolved hit the network (the slow part was
+          # re-resolving all ~2,500 every run). The cache auto-does a full
+          # re-resolve once it's older than its TTL, so drift is still caught;
+          # safety checks on resolved destinations run every time regardless.
+          # The cache is seeded by CI on first run — never commit a local one,
+          # since redirect resolution is IP-dependent.
+          python3 tools/normalize_urls.py --apply \
+            --cache tools/url_resolution_cache.json 2>&1 | tee normalize-output.txt
           NORM_EXIT=${PIPESTATUS[0]}
           # Exit code 2 from normalize_urls.py = a redirect went to an
           # unsafe destination. Don't deploy; surface as a hard error.
@@ -263,18 +271,24 @@ jobs:
           if [ "$NORM_EXIT" -ne 0 ]; then
             echo "::warning::URL normalization exited with code $NORM_EXIT — some redirects may not have been resolved"
           fi
-          # Scope the diff check to HTML files only — other steps (URL safety)
-          # may leave report files modified, but we only want to commit HTML
-          # changes here. Without this scope, an empty `git add '*.html'`
-          # followed by `git commit` fails under `bash -e` and blocks deploy.
-          if git diff --quiet -- '*.html'; then
-            echo "No URL changes"
+          # Stage normalized HTML plus the refreshed resolution cache. Scope
+          # the staging to these paths only — other steps (URL safety) may
+          # leave report files modified, and we don't want to commit those.
+          # The cache changes whenever a new URL is resolved, even when no HTML
+          # changed, so we commit on either. `git diff --cached --quiet` then
+          # tells us whether anything is actually staged (avoids an empty
+          # commit failing under `bash -e`).
+          git add '*.html'
+          if [ -f tools/url_resolution_cache.json ]; then
+            git add tools/url_resolution_cache.json
+          fi
+          if git diff --cached --quiet; then
+            echo "No URL or cache changes"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add '*.html'
-            git commit -m "chore: normalize URLs (tracking params, redirects) [skip ci]"
+            git commit -m "chore: normalize URLs + refresh resolution cache [skip ci]"
             git push || (git pull --rebase origin main && git push)
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi

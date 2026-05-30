@@ -9,9 +9,16 @@ Usage:
     python3 tools/normalize_urls.py              # Dry-run (default)
     python3 tools/normalize_urls.py --apply       # Apply changes
     python3 tools/normalize_urls.py --skip-resolve # Only strip params + HTTPS upgrade
+
+    # Back redirect resolution with a persistent cache so only new URLs hit
+    # the network (per-push CI). Add --refresh-cache to re-resolve everything
+    # and rebuild the cache (monthly CI).
+    python3 tools/normalize_urls.py --apply --cache tools/url_resolution_cache.json
 """
 
 import argparse
+import datetime as dt
+import json
 import sys
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
@@ -208,8 +215,109 @@ def collect_all_urls():
     return file_urls, all_unique
 
 
+# --- Resolution cache ----------------------------------------------------
+#
+# Resolving every external URL's redirects over the network is the slowest
+# part of a run (thousands of URLs, almost none of which actually redirect).
+# The result is stable, so we persist {cleaned_url: {resolved, error}} to a
+# JSON file. On an incremental run we only hit the network for URLs we've
+# never seen; a periodic full refresh (--refresh-cache, run monthly) re-checks
+# everything so a redirect or its destination drifting is still caught. URLs
+# that drop off the site are pruned so the file can't grow without bound.
+#
+# Safety is unchanged: the downstream meaningful-redirect + destination
+# safety-check still runs on every URL each run, cache hit or not — the cache
+# only skips the *resolution* network call, never the safety decision.
+
+CACHE_VERSION = 1
+DEFAULT_CACHE_TTL_DAYS = 30
+
+
+def load_cache(path):
+    """Load the resolution cache, or return a fresh empty one."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get('entries'), dict):
+            return data
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {'version': CACHE_VERSION, 'last_full_refresh': None, 'entries': {}}
+
+
+def save_cache(path, cache):
+    """Write the cache with sorted keys so diffs stay minimal."""
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, indent=2, sort_keys=True)
+        f.write('\n')
+
+
+def _cache_is_stale(cache, ttl_days):
+    """True if the cache has never had a full refresh, or it's older than TTL."""
+    last = cache.get('last_full_refresh')
+    if not last:
+        return True
+    try:
+        last_date = dt.date.fromisoformat(last)
+    except (TypeError, ValueError):
+        return True
+    return (dt.date.today() - last_date).days >= ttl_days
+
+
+def resolve_urls_cached(urls_to_resolve, cache, *, refresh, ttl_days,
+                        workers, timeout):
+    """Like resolve_urls_concurrent, but back the network calls with `cache`.
+
+    Mutates `cache` in place (adds newly resolved entries, prunes URLs no
+    longer on the site, stamps last_full_refresh on a full run) and returns
+    the {url: (resolved, error)} map for every URL in urls_to_resolve.
+    """
+    entries = cache.setdefault('entries', {})
+    full = refresh or _cache_is_stale(cache, ttl_days)
+
+    if full:
+        to_fetch = list(urls_to_resolve)
+    else:
+        to_fetch = [u for u in urls_to_resolve if u not in entries]
+
+    fetched = {}
+    if to_fetch:
+        fetched = resolve_urls_concurrent(
+            to_fetch, max_workers=workers, timeout=timeout,
+            skip_domains=BOT_BLOCKED_DOMAINS,
+        )
+        for url, (resolved, error) in fetched.items():
+            entries[url] = {'resolved': resolved, 'error': error}
+
+    resolution_map = {}
+    for url in urls_to_resolve:
+        if url in fetched:
+            resolution_map[url] = fetched[url]
+        elif url in entries:
+            entry = entries[url]
+            resolution_map[url] = (entry.get('resolved', url),
+                                   entry.get('error'))
+        else:
+            resolution_map[url] = (url, None)
+
+    # Prune cached URLs that are no longer referenced anywhere on the site.
+    current = set(urls_to_resolve)
+    for url in [u for u in entries if u not in current]:
+        del entries[url]
+
+    cache['version'] = CACHE_VERSION
+    if full:
+        cache['last_full_refresh'] = dt.date.today().isoformat()
+
+    print(f"  Cache: {len(to_fetch)} resolved over network, "
+          f"{len(urls_to_resolve) - len(to_fetch)} from cache "
+          f"({'full refresh' if full else 'incremental'})")
+    return resolution_map
+
+
 def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
-                          workers=10):
+                          workers=10, cache=None, refresh_cache=False,
+                          ttl_days=DEFAULT_CACHE_TTL_DAYS):
     """Build {original_url: final_url} for all URLs that need changing."""
     replacements = {}  # original -> final
     categories = {
@@ -245,12 +353,19 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
         # Resolve the post-cleanup URLs (not originals) to avoid double-redirects
         urls_to_resolve = list(set(after_scheme.values()))
 
-        resolution_map = resolve_urls_concurrent(
-            urls_to_resolve,
-            max_workers=workers,
-            timeout=timeout,
-            skip_domains=BOT_BLOCKED_DOMAINS,
-        )
+        if cache is not None:
+            resolution_map = resolve_urls_cached(
+                urls_to_resolve, cache,
+                refresh=refresh_cache, ttl_days=ttl_days,
+                workers=workers, timeout=timeout,
+            )
+        else:
+            resolution_map = resolve_urls_concurrent(
+                urls_to_resolve,
+                max_workers=workers,
+                timeout=timeout,
+                skip_domains=BOT_BLOCKED_DOMAINS,
+            )
 
         for original_url in all_unique:
             cleaned_url = after_scheme[original_url]
@@ -427,6 +542,15 @@ def main():
                         help='HTTP timeout per URL in seconds (default: 10)')
     parser.add_argument('--workers', type=int, default=10,
                         help='Concurrent resolution workers (default: 10)')
+    parser.add_argument('--cache', metavar='PATH', default=None,
+                        help='Persist/reuse redirect resolutions at PATH. '
+                             'Incremental: only new URLs hit the network.')
+    parser.add_argument('--cache-ttl-days', type=int,
+                        default=DEFAULT_CACHE_TTL_DAYS,
+                        help='Force a full re-resolve when the cache is older '
+                             f'than this (default: {DEFAULT_CACHE_TTL_DAYS})')
+    parser.add_argument('--refresh-cache', action='store_true',
+                        help='Re-resolve every URL and rebuild the cache now')
     args = parser.parse_args()
 
     dry_run = not args.apply
@@ -437,6 +561,8 @@ def main():
     print(f"Found {total_refs} URL references ({len(all_unique)} unique) "
           f"across {len(file_urls)} files\n")
 
+    cache = load_cache(args.cache) if args.cache else None
+
     if not args.skip_resolve:
         print("Resolving URLs (this may take a minute)...")
     replacements, categories = build_replacement_map(
@@ -444,7 +570,15 @@ def main():
         skip_resolve=args.skip_resolve,
         timeout=args.timeout,
         workers=args.workers,
+        cache=cache,
+        refresh_cache=args.refresh_cache,
+        ttl_days=args.cache_ttl_days,
     )
+
+    # Persist the cache even in dry-run — resolutions are read-only facts and
+    # seeding the cache locally is the point of a dry-run with --cache.
+    if args.cache and cache is not None and not args.skip_resolve:
+        save_cache(args.cache, cache)
 
     # Apply to each file
     file_changes = {}
