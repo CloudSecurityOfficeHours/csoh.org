@@ -72,11 +72,11 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 
 | Resource | Size |
 |---|---|
-| 🔍 [Site-wide Search](https://csoh.org/search.html) | Pagefind full-text index across every page |
+| 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page |
 | 📖 [Glossary](https://csoh.org/glossary.html) | 300+ cloud-security terms, plain-English |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 350+ vendors, 30 categories, vendor-neutral one-liners |
 | 🛡️ [Resources Directory](https://csoh.org/resources.html) | 240+ tools, labs, CTFs, certifications (auto-refreshed weekly) |
-| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 37+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
+| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 39+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
 | 🏟️ [Conferences](https://csoh.org/conferences.html) | 27 security & hacker conferences, with pros & cons |
 | 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 10 real cloud breaches mapped to MITRE ATT&CK |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
