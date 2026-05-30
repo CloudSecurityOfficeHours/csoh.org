@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description"
+        content="Git and version control explained for newcomers, then shown in CSOH's real workflow: the working-tree/staging/commit model, branches and pull requests, how we review and ship every change, and the security rules that keep secrets out of history.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords"
+        content="git, version control, github, pull request, branching, merge, commit, git tutorial, version control systems, distributed version control, code review, secret scanning, signed commits, devsecops">
+    <title>Git &amp; Version Control - Cloud Security Office Hours</title>
+
+    <link rel="canonical" href="https://csoh.org/version-control.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/version-control.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/version-control.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Git &amp; Version Control - CSOH">
+    <meta property="og:description"
+        content="Learn version control by reading CSOH's real workflow - git's mental model, branches and pull requests, how we review and ship every change, and how we keep secrets out of history.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-05-29">
+    <meta property="article:modified_time" content="2026-05-29">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="DevSecOps">
+    <meta property="article:tag" content="Git">
+    <meta property="article:tag" content="Version Control">
+    <meta property="article:tag" content="GitHub">
+    <meta property="article:tag" content="pull request">
+    <meta property="article:tag" content="branching">
+    <meta property="article:tag" content="code review">
+    <meta property="article:tag" content="devsecops">
+    <meta property="og:url" content="https://csoh.org/version-control.html">
+    <meta property="og:image" content="https://csoh.org/img/og/version-control.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Git &amp; Version Control">
+    <meta name="twitter:description"
+        content="Version control explained for newcomers, then shown in CSOH's real, in-production git workflow.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/version-control.jpg">
+    <!-- Resource hints: warm up TCP+TLS to the external origins this page
+         links out to most (the Zoom signup, GitHub, and the Pro Git book host).
+         Saves 100-300ms on first hover-to-fetch to each. -->
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://git-scm.com">
+
+    <link rel="preload" href="/style.css?v=71499803" as="style"
+        integrity="sha384-nVDqe2NnLizJXqTciHpEc8IB7YdKig+48LhG6tdcwJyxGISh53nsDT4ruAO5XTej">
+    <link rel="stylesheet" href="/style.css?v=71499803"
+        integrity="sha384-nVDqe2NnLizJXqTciHpEc8IB7YdKig+48LhG6tdcwJyxGISh53nsDT4ruAO5XTej">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Git & Version Control",
+      "description": "Git and version control explained for newcomers, then shown in CSOH's real workflow - the working-tree/staging/commit model, branches, pull requests, and keeping secrets out of history.",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "datePublished": "2026-05-29",
+      "dateModified": "2026-05-29",
+      "mainEntityOfPage": "https://csoh.org/version-control.html",
+      "speakable": {
+        "@type": "SpeakableSpecification",
+        "cssSelector": ["h1", "main p:first-of-type"]
+      },
+      "image": "https://csoh.org/banner.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Git & Version Control",
+          "item": "https://csoh.org/version-control.html"
+        }
+      ]
+    }
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="index.html" class="logo-link">
+          <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="glossary.html">Glossary</a></li>
+                            <li><a href="faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Topics</span>
+                          <ul>
+                            <li><a href="cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="containers.html">Containers</a></li>
+                            <li><a href="kubernetes.html">Kubernetes</a></li>
+                            <li><a href="serverless.html">Serverless</a></li>
+                            <li><a href="service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="ci-cd.html">CI/CD</a></li>
+                            <li><a href="landing-zones.html">Landing Zones</a></li>
+                            <li><a href="iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="zero-trust.html">Zero Trust</a></li>
+                            <li><a href="network-security.html">Network Security</a></li>
+                            <li><a href="data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="api-security.html">API Security</a></li>
+                            <li><a href="saas-security.html">SaaS Security (SSPM)</a></li>
+                            <li><a href="backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="grc.html">GRC</a></li>
+                            <li><a href="compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li><a href="ai-learning.html">AI Learning</a></li>
+                            <li><a href="ai-ml-security.html">AI/ML Security</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Career &amp; Growth</span>
+                          <ul>
+                            <li><a href="learning-path.html">Learning Path</a></li>
+                            <li><a href="cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="cloud-security-careers.html">Careers</a></li>
+                            <li><a href="cloud-security-sales-engineer.html">Sales Engineer Path</a></li>
+                            <li><a href="mentorship.html">Mentorship</a></li>
+                            <li><a href="cloud-security-reading-list.html">Reading List</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">By Cloud <span class="caret" aria-hidden="true">&#9662;</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="aws-security.html">AWS Security</a></li>
+                        <li><a href="azure-security.html">Azure Security</a></li>
+                        <li><a href="gcp-security.html">GCP Security</a></li>
+                        <li><a href="cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="news.html">News</a></li>
+                        <li><a href="threat-research.html">Threat Research</a></li>
+                        <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="incident-response.html">Incident Response</a></li>
+                        <li><a href="cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-2col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="community.html">Community &amp; Signal</a></li>
+                            <li><a href="mentorship.html">Mentorship</a></li>
+                            <li><a href="conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="meetings.html">Meeting Recaps</a></li>
+                            <li><a href="presentations.html">Presentations</a></li>
+                            <li><a href="chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Behind the Scenes <span class="caret" aria-hidden="true">&#9662;</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="cloud-deployment.html">Multi-Cloud Deploy</a></li>
+                        <li><a href="github-actions.html">GitHub Actions</a></li>
+                        <li><a href="terraform.html">Terraform</a></li>
+                        <li><a href="version-control.html" aria-current="page">Git &amp; Version Control</a></li>
+                        <li><a href="contribute.html">Contribute</a></li>
+                        <li><a href="contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="index.html">Home</a></li>
+            <li><span aria-current="page">Git &amp; Version Control</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--illustrated">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>Git &amp; Version Control</h1>
+          <p>Version control is a time machine for your work and the foundation of every collaborative codebase. This page teaches the mental model from scratch, then shows it running for real - the exact branch, review, and ship workflow behind this website, and the security rules that keep secrets out of history. Whole-site source is public; you can read every commit.</p>
+          <div class="cta-buttons">
+            <a href="https://github.com/CloudSecurityOfficeHours/csoh.org" class="btn btn-primary" target="_blank" rel="noopener noreferrer">See our repo</a>
+            <a href="#tour" class="btn btn-secondary">Take the Tour</a>
+        </div>
+        </div>
+        <div class="hero-illustration" aria-hidden="true">
+          <svg viewBox="0 0 600 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Version control illustration" width="600" height="480"><defs><linearGradient id="hx-cloud" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#bae6fd"/><stop offset="60%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#2563eb"/></linearGradient><linearGradient id="hx-shield" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fde68a"/><stop offset="100%" stop-color="#f97316"/></linearGradient><linearGradient id="hx-tile" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient><radialGradient id="hx-halo" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.5"/><stop offset="60%" stop-color="#7dd3fc" stop-opacity="0.05"/><stop offset="100%" stop-color="#7dd3fc" stop-opacity="0"/></radialGradient></defs><circle cx="300" cy="240" r="190" fill="url(#hx-halo)"/><g opacity="0.7"><circle cx="80" cy="50" r="2" fill="#7dd3fc"/><circle cx="540" cy="80" r="1.5" fill="#fbbf24"/><circle cx="40" cy="260" r="1.5" fill="#a78bfa"/><circle cx="565" cy="300" r="2" fill="#7dd3fc"/><circle cx="55" cy="430" r="1.5" fill="#34d399"/><circle cx="555" cy="450" r="1.5" fill="#fbbf24"/></g><g stroke="#7dd3fc" stroke-width="1.5" stroke-dasharray="3 5" opacity="0.4" fill="none"><line x1="300" y1="240" x2="100" y2="100"/><line x1="300" y1="240" x2="500" y2="100"/><line x1="300" y1="240" x2="500" y2="240"/><line x1="300" y1="240" x2="500" y2="380"/><line x1="300" y1="240" x2="100" y2="380"/><line x1="300" y1="240" x2="100" y2="240"/></g><path d="M 200,260 a 50,50 0 0,1 60,-60 a 70,70 0 0,1 130,0 a 50,50 0 0,1 50,30 a 45,45 0 0,1 -25,80 H 220 a 45,45 0 0,1 -20,-50 z" fill="url(#hx-cloud)" stroke="#fff" stroke-width="1.5" stroke-opacity="0.4"/><g transform="translate(300, 235)"><path d="M -32 -36 L 32 -36 L 32 8 a 32 38 0 0 1 -32 32 a 32 38 0 0 1 -32 -32 z" fill="url(#hx-shield)" stroke="#fff" stroke-width="2.5"/><path d="M -13 -3 L -3 9 L 16 -16" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g><g transform="translate(60, 60)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#a78bfa" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-13" y="-2" width="26" height="20" rx="3"/><path d="M -8 -2 v -10 a 8 10 0 0 1 16 0 v 10"/></g></g><g transform="translate(460, 60)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#fbbf24" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="-7" cy="2" r="7"/><path d="M 0 2 L 16 2 M 11 2 v 6 M 16 2 v -5"/></g></g><g transform="translate(460, 200)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="0" cy="-12" r="4"/><circle cx="0" cy="12" r="4"/><path d="M 0 -8 V 8"/><circle cx="0" cy="0" r="2.5" fill="#7dd3fc"/></g></g><g transform="translate(460, 340)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#34d399" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M -17 0 c 4 -9 12 -13 17 -13 c 5 0 13 4 17 13 c -4 9 -12 13 -17 13 c -5 0 -13 -4 -17 -13 z"/><circle cx="0" cy="0" r="4.5"/></g></g><g transform="translate(60, 340)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#06b6d4" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="0" cy="-13" r="3.5"/><circle cx="-13" cy="11" r="3.5"/><circle cx="13" cy="11" r="3.5"/><line x1="-1.5" y1="-10" x2="-11" y2="9"/><line x1="1.5" y1="-10" x2="11" y2="9"/><line x1="-9" y1="11" x2="9" y2="11"/></g></g><g transform="translate(60, 200)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#fb7185" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M -9 -10 L -17 0 L -9 10"/><path d="M 9 -10 L 17 0 L 9 10"/><line x1="-3" y1="13" x2="3" y2="-13"/></g></g></svg>
+        </div>
+      </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+
+        <p class="page-meta"><time datetime="2026-05-29">Last updated <strong>2026-05-29</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/version-control.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <div class="info-box--blue">
+            <p><strong>The honest version:</strong> version control is a database of every change ever made to a set of files, with the power to compare, undo, branch, and merge that history. <strong>Git</strong> is the tool that won - a fast, distributed version control system where everyone has a full copy of the history. <strong>GitHub</strong> (or GitLab, or Bitbucket) is a website that <em>hosts</em> git repositories and adds collaboration on top: pull requests, reviews, issues, automation. People conflate "git" and "GitHub," but they're different layers - git is the engine, GitHub is one place to park it. This page teaches the engine, then shows the workflow we actually run on it.</p>
+            <p style="margin-top:0.75rem;"><strong>What you'll need:</strong> <a href="https://git-scm.com/downloads/" target="_blank" rel="noopener noreferrer">git installed</a> and a free <a href="https://github.com/" target="_blank" rel="noopener noreferrer">GitHub account</a>. A terminal helps, but you can do a surprising amount in the GitHub web UI alone.</p>
+        </div>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#what-is-it">What version control actually is</a></li>
+                <li><a href="#why-cool">Why it's essential (and where it bites)</a></li>
+                <li><a href="#mental-model">Git's mental model: four places your code lives</a></li>
+                <li><a href="#commands">The commands you'll actually use</a></li>
+                <li><a href="#branches-prs">Branches &amp; pull requests</a></li>
+                <li><a href="#tour">How CSOH actually uses git</a></li>
+                <li><a href="#concepts">Concepts that bite newcomers</a></li>
+                <li><a href="#security">Security baseline</a></li>
+                <li><a href="#further">Further reading</a></li>
+            </ol>
+        </div>
+
+        <section id="what-is-it">
+            <h2>What version control actually is</h2>
+            <p>A version control system (VCS) records snapshots of your files over time. Instead of <code>report-final.doc</code>, <code>report-final-v2.doc</code>, <code>report-FINAL-actually.doc</code>, you keep <em>one</em> set of files and the system remembers every state they've ever been in. That unlocks four superpowers:</p>
+            <ul>
+                <li><strong>History</strong> - see exactly what changed, when, by whom, and (if commit messages are good) why.</li>
+                <li><strong>Undo</strong> - return any file, or the whole project, to any past state.</li>
+                <li><strong>Branching</strong> - work on a change in isolation without disturbing the working version, then merge it back.</li>
+                <li><strong>Collaboration</strong> - many people change the same project at once, and the VCS reconciles the work.</li>
+            </ul>
+            <h3>Centralized vs distributed</h3>
+            <p>Older systems (CVS, Subversion) were <em>centralized</em>: one server held the history, and you checked files out from it. <strong>Git</strong> is <em>distributed</em> - when you clone a repository, you get the <em>entire</em> history on your machine. You can commit, branch, view history, and diff completely offline; you only need the network to share. That design (plus its speed) is why git is now the near-universal default, and why "version control" in practice usually means "git."</p>
+            <p>A quick vocabulary you'll see everywhere:</p>
+            <ul>
+                <li><strong>repository (repo)</strong> - the project plus its entire history.</li>
+                <li><strong>commit</strong> - one saved snapshot, with an author, timestamp, message, and a unique hash like <code>27e293d7</code>.</li>
+                <li><strong>branch</strong> - a movable pointer to a line of commits (e.g. <code>main</code>). Cheap to create; the heart of git's workflow.</li>
+                <li><strong>remote</strong> - a copy of the repo hosted elsewhere (e.g. on GitHub), conventionally named <code>origin</code>.</li>
+                <li><strong>clone / fork</strong> - copy a repo to your machine / copy it to your own account on the host.</li>
+            </ul>
+        </section>
+
+        <section id="why-cool">
+            <h2>Why it's essential (and where it bites)</h2>
+            <h3>What's good</h3>
+            <ul>
+                <li><strong>Nothing is ever lost.</strong> Every committed state is recoverable. "I broke it" becomes a five-second revert, not a crisis.</li>
+                <li><strong>Blame is a feature, not an accusation.</strong> <code>git blame</code> tells you which commit last touched a line - invaluable for "why is this here?" and for incident forensics.</li>
+                <li><strong>Branches make experiments free.</strong> Try a risky change on a branch; if it doesn't work out, delete the branch and it's gone. <code>main</code> never saw it.</li>
+                <li><strong>It's the substrate for everything else.</strong> Code review, <a class="glossary-link" href="glossary.html#term-ci-cd">CI</a>/CD, infrastructure-as-code, and automated deploys all hang off git. Our <a href="github-actions.html">GitHub Actions</a> and <a href="terraform.html">Terraform</a> only work because every change is a reviewable commit.</li>
+                <li><strong>It's a security control.</strong> A signed, reviewed, immutable history is an audit trail. Branch protection turns "who can change production?" into an enforceable policy.</li>
+            </ul>
+            <h3>Where it bites</h3>
+            <ul>
+                <li><strong>The learning curve is real.</strong> The mental model (below) is the part people skip, and skipping it is why git feels like memorized incantations. Ten minutes on the model saves ten hours of confusion.</li>
+                <li><strong>Merge conflicts feel scary the first time.</strong> They're just git saying "two people changed the same lines; you decide." Normal, and fixable.</li>
+                <li><strong>History can be rewritten - dangerously.</strong> <code>rebase</code>, <code>--force</code>, and <code>reset --hard</code> are powerful and can lose work or rewrite shared history. Respect them.</li>
+                <li><strong>Git is bad at big binaries.</strong> It's built for text. Large media bloats the repo forever (see Git LFS, and "secrets in history" below - the "forever" cuts both ways).</li>
+            </ul>
+        </section>
+
+        <section id="mental-model">
+            <h2>Git's mental model: four places your code lives</h2>
+            <p>Almost every confusing git moment comes from not knowing <em>which of four places</em> a file is in. Learn this diagram and git stops being magic.</p>
+            <figure class="workflow-figure">
+              <svg viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="vc-fig-title vc-fig-desc" width="820" height="280">
+                <title id="vc-fig-title">The four areas of git and the commands that move work between them</title>
+                <desc id="vc-fig-desc">Working directory to staging area via git add, staging to local repository via git commit, local to remote via git push, and remote back to working directory via git pull or clone.</desc>
+                <text x="410" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Where your work lives - and the commands that move it</text>
+                <defs><marker id="vc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/></marker></defs>
+                <g transform="translate(20, 70)">
+                  <rect width="160" height="90" rx="10" fill="#fff" stroke="#fb7185" stroke-width="2"/>
+                  <rect width="160" height="26" rx="10" fill="#fb7185"/>
+                  <rect y="16" width="160" height="10" fill="#fb7185"/>
+                  <text x="80" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Working directory</text>
+                  <text x="80" y="50" text-anchor="middle" font-size="10" fill="#0f172a">your files, as edited</text>
+                  <text x="80" y="66" text-anchor="middle" font-size="10" fill="#0f172a">right now on disk</text>
+                </g>
+                <g transform="translate(230, 70)">
+                  <rect width="160" height="90" rx="10" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+                  <rect width="160" height="26" rx="10" fill="#f59e0b"/>
+                  <rect y="16" width="160" height="10" fill="#f59e0b"/>
+                  <text x="80" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Staging area</text>
+                  <text x="80" y="50" text-anchor="middle" font-size="10" fill="#0f172a">changes chosen for</text>
+                  <text x="80" y="66" text-anchor="middle" font-size="10" fill="#0f172a">the next commit</text>
+                </g>
+                <g transform="translate(440, 70)">
+                  <rect width="160" height="90" rx="10" fill="#fff" stroke="#8b5cf6" stroke-width="2"/>
+                  <rect width="160" height="26" rx="10" fill="#8b5cf6"/>
+                  <rect y="16" width="160" height="10" fill="#8b5cf6"/>
+                  <text x="80" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Local repository</text>
+                  <text x="80" y="50" text-anchor="middle" font-size="10" fill="#0f172a">committed history</text>
+                  <text x="80" y="66" text-anchor="middle" font-size="10" fill="#0f172a">on your machine</text>
+                </g>
+                <g transform="translate(650, 70)">
+                  <rect width="150" height="90" rx="10" fill="#fff" stroke="#10b981" stroke-width="2"/>
+                  <rect width="150" height="26" rx="10" fill="#10b981"/>
+                  <rect y="16" width="150" height="10" fill="#10b981"/>
+                  <text x="75" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Remote (GitHub)</text>
+                  <text x="75" y="50" text-anchor="middle" font-size="10" fill="#0f172a">shared copy</text>
+                  <text x="75" y="66" text-anchor="middle" font-size="10" fill="#0f172a">everyone pulls from</text>
+                </g>
+                <path d="M 180 105 L 228 105" stroke="#94a3b8" stroke-width="2" marker-end="url(#vc-arrow)"/>
+                <text x="204" y="98" text-anchor="middle" font-size="9" font-family="monospace" fill="#475569">add</text>
+                <path d="M 390 105 L 438 105" stroke="#94a3b8" stroke-width="2" marker-end="url(#vc-arrow)"/>
+                <text x="414" y="98" text-anchor="middle" font-size="9" font-family="monospace" fill="#475569">commit</text>
+                <path d="M 600 105 L 648 105" stroke="#94a3b8" stroke-width="2" marker-end="url(#vc-arrow)"/>
+                <text x="624" y="98" text-anchor="middle" font-size="9" font-family="monospace" fill="#475569">push</text>
+                <path d="M 725 175 C 725 215, 100 215, 100 165" stroke="#10b981" stroke-width="1.8" stroke-dasharray="4 4" fill="none" marker-end="url(#vc-arrow)"/>
+                <text x="410" y="212" text-anchor="middle" font-size="9" font-family="monospace" fill="#0f766e">git pull / git clone (remote → your working copy)</text>
+              </svg>
+              <figcaption>You <code>add</code> edits to staging, <code>commit</code> staging into local history, and <code>push</code> local history to the remote. <code>pull</code> (or <code>clone</code>) brings others' work back down. A commit is a snapshot; a branch is just a sticky note pointing at one.</figcaption>
+            </figure>
+            <p>The staging area is the bit newcomers find odd and pros find indispensable: it lets you commit <em>some</em> of your changes and not others, so each commit is one coherent idea. "Edit everything, then assemble tidy commits" is a normal and good workflow.</p>
+        </section>
+
+        <section id="commands">
+            <h2>The commands you'll actually use</h2>
+            <p>You can get a long way with about a dozen commands. Here's the daily core:</p>
+            <div class="code-block"><pre># Start: copy a repo to your machine (you get the full history)
+git clone https://github.com/CloudSecurityOfficeHours/csoh.org
+cd csoh.org
+
+# Look around - run status constantly; it tells you exactly where things stand
+git status                 # what's changed, staged, and on which branch
+git log --oneline -10      # recent history, one line each
+git diff                   # what you've changed but not yet staged
+
+# The core loop
+git switch -c fix-typo     # create + move to a new branch (older: git checkout -b)
+# ...edit files...
+git add faq.html           # stage a specific file (git add -p to stage by chunk)
+git commit -m "Fix typo in FAQ answer about CSPM"
+git push -u origin fix-typo   # publish your branch to the remote
+
+# Staying current
+git switch main
+git pull                   # fetch + merge the latest main from origin</pre></div>
+            <p>Two habits that save beginners the most pain: run <code>git status</code> obsessively (it even suggests the command you probably want next), and write commit messages that finish the sentence "If applied, this commit will…" - imperative and specific, like the real ones in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/commits/main" target="_blank" rel="noopener noreferrer">our history</a>.</p>
+        </section>
+
+        <section id="branches-prs">
+            <h2>Branches &amp; pull requests</h2>
+            <p>A <strong>branch</strong> is an isolated line of work. You branch off <code>main</code>, make commits, and when the change is ready you ask for it to be merged back. On a host like GitHub, that request is a <strong>pull request (PR)</strong> - the unit of collaboration and review.</p>
+            <p>A PR is where the value of version control becomes obvious:</p>
+            <ul>
+                <li>It shows the <strong>exact diff</strong> - every added and removed line - so a reviewer sees precisely what would change.</li>
+                <li>It runs <strong>automated checks</strong> (CI) before anything merges - linting, tests, our HTML validator and link checker.</li>
+                <li>It's a <strong>conversation</strong> - reviewers comment on specific lines, you push fixes, the PR updates.</li>
+                <li>When approved and green, it <strong>merges</strong> to <code>main</code> - and on our repo, that triggers the deploy.</li>
+            </ul>
+            <p>The everyday flow is: <code>branch → commit → push → open PR → review → merge → delete branch</code>. Small, focused PRs get reviewed fast; giant ones sit for days. Keep each PR to one idea.</p>
+        </section>
+
+        <section id="tour">
+            <h2>How CSOH actually uses git</h2>
+            <p>This whole website lives in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">one public repository</a>. Reading it is a fine way to learn - real commits, real PRs, real history. Here's the workflow it runs on.</p>
+
+            <h3>If you're contributing: fork → branch → PR</h3>
+            <p>You don't need write access to help. The standard open-source flow (documented in our <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>) is:</p>
+            <div class="code-block"><pre># 1. Fork the repo on GitHub (creates your own copy)
+# 2. Clone YOUR fork
+git clone https://github.com/YOUR-USERNAME/csoh.org.git
+cd csoh.org
+
+# 3. Branch for your change
+git switch -c add-news-source
+
+# 4. Edit, stage, commit
+git add update_news.py
+git commit -m "Add TechCrunch security feed"
+
+# 5. Push to your fork and open a pull request on GitHub
+git push -u origin add-news-source</pre></div>
+            <p>For a one-line fix you don't even need a terminal: GitHub's pencil icon lets you edit a file in the browser, and "Commit changes" offers to open the PR for you. Either way, a maintainer reviews it.</p>
+
+            <h3>If you're a maintainer: small changes, straight to main</h3>
+            <p>Maintainers with write access can commit to <code>main</code> directly for routine, low-risk edits - which immediately triggers the build-and-deploy pipeline. That speed is exactly why the <em>safety net</em> below matters: the protections and automated checks are what make a direct push to production safe to do.</p>
+
+            <h3>What happens the moment something lands on <code>main</code></h3>
+            <p>A merge (or push) to <code>main</code> is the deploy trigger. Two <a href="github-actions.html">GitHub Actions</a> workflows fire automatically:</p>
+            <ol>
+                <li><strong>Housekeeping</strong> (<code>site-update-deploy.yml</code>) - regenerates Subresource Integrity hashes, checks URL safety, normalizes URLs, builds preview images and the sitemap, and commits the results back to <code>main</code>.</li>
+                <li><strong>Deploy</strong> (<code>deploy.yml</code>) - builds the site once and publishes it active/active to three clouds (AWS, GCP, Azure) behind Cloudflare, authenticating to each with keyless <a href="terraform.html">OIDC</a>.</li>
+            </ol>
+            <p>So a two-character typo fix in a PR becomes a fully-tested, <a class="glossary-link" href="glossary.html#term-public">multi-cloud</a> production deploy with no manual steps. That pipeline is the entire reason we keep changes small and reviewable - git is what makes "ship 20 times a day, safely" possible. Full details live in <a href="cloud-deployment.html">How We Deploy</a>.</p>
+
+            <h3>The PR checklist we actually use</h3>
+            <p>Before a change merges, it should clear the bar in our <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">contributor guide</a>: the change is clear and focused (one idea per PR), spelling and links check out, it looks right in both light and dark mode, the commit message is descriptive, and <strong>CI is green</strong> - the lint workflow (actionlint, ruff, yamllint) and the W3C HTML validator both pass. Green checks are a merge requirement, not a suggestion.</p>
+        </section>
+
+        <section id="concepts">
+            <h2>Concepts that bite newcomers</h2>
+
+            <h3>1. Merge conflicts are normal</h3>
+            <p>When two branches change the same lines, git can't guess who's right, so it marks the spot with <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> / <code>=======</code> / <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> and asks you to choose. Edit the file to the version you want, delete the markers, <code>git add</code> it, and continue. That's the whole ritual - no data is lost, and small frequent merges keep conflicts tiny.</p>
+
+            <h3>2. merge vs rebase</h3>
+            <p><code>git merge</code> joins two branches and records a merge commit - true history, occasionally messy. <code>git rebase</code> replays your commits on top of the latest base for a linear, tidy history - but it <em>rewrites</em> your commits (new hashes). Rule of thumb: rebase your <em>own</em> un-pushed work to tidy it; don't rebase commits other people have already pulled.</p>
+
+            <h3>3. <code>git pull --rebase</code> beats a wall of merge commits</h3>
+            <p>If <code>main</code> moved while you were working, <code>git pull --rebase</code> replays your local commits on top of the new <code>main</code> instead of creating a merge bubble. Our CI uses exactly this pattern when a workflow needs to commit back to a branch that may have moved: <code>git push || (git pull --rebase &amp;&amp; git push)</code>.</p>
+
+            <h3>4. Undo: <code>revert</code> (safe) vs <code>reset</code> (sharp)</h3>
+            <p><code>git revert &lt;commit&gt;</code> makes a <em>new</em> commit that undoes an old one - safe on shared branches because it doesn't rewrite history. <code>git reset</code> moves the branch pointer backward and can discard commits (<code>--hard</code> also throws away working changes). Reach for <code>revert</code> on anything already pushed; keep <code>reset --hard</code> for local-only cleanup you're sure about.</p>
+
+            <h3>5. <code>.gitignore</code>: keep junk and secrets out</h3>
+            <p>A <code>.gitignore</code> file lists paths git should never track - build output, dependency folders, local config, and (critically) anything secret. Our repo ignores things like <code>.env</code>, the Python <code>.venv/</code>, and <a class="glossary-link" href="glossary.html#term-terraform">Terraform</a>'s <code>.terraform/</code> and state. Set this up <em>before</em> your first commit; un-committing something later is harder than never committing it.</p>
+
+            <h3>6. Committed a secret? The history remembers - rotate it</h3>
+            <p>This is the one that catches people. Deleting a secret in a new commit does <strong>not</strong> remove it from history - it's still in the previous commit, forever, for anyone who clones the repo. If you commit a key, assume it's compromised: <strong>rotate (invalidate) it immediately</strong>, then scrub history with <a href="https://rtyley.github.io/bfg-repo-cleaner/" target="_blank" rel="noopener noreferrer">BFG</a> or <code>git filter-repo</code>. Prevention beats cleanup - see the security baseline next.</p>
+
+            <h3>7. Detached HEAD isn't broken</h3>
+            <p>Checking out a specific commit instead of a branch puts you in "detached HEAD" - you're looking at history, not on a branch. Look around all you like; if you want to keep changes made here, create a branch (<code>git switch -c new-branch</code>) before moving away.</p>
+        </section>
+
+        <blockquote class="pull-quote">
+          Git history is permanent by design. That's a superpower for auditing and a trap for secrets - a key committed once is a key leaked forever. Rotate, don't just delete.
+          <cite>- the rule we drill into every contributor</cite>
+        </blockquote>
+
+        <section id="security">
+            <h2>Security baseline</h2>
+            <p>Version control <em>is</em> a security boundary - it decides what reaches production and leaves an audit trail of who changed what. As a cloud-security community, this is the part we care most about:</p>
+            <ol>
+                <li><strong>Never commit secrets.</strong> No API keys, tokens, passwords, or private keys in the repo. Use environment variables or a <a class="glossary-link" href="glossary.html#term-secrets-manager">secrets manager</a>, and a <code>.gitignore</code> that covers <code>.env</code> and friends. If one slips in, <strong>rotate it</strong> - history is forever.</li>
+                <li><strong>Scan for secrets automatically.</strong> Turn on <a href="https://docs.github.com/en/code-security/concepts/secret-security/about-secret-scanning" target="_blank" rel="noopener noreferrer">GitHub secret scanning + push protection</a>, and add a pre-commit hook with <a href="https://github.com/gitleaks/gitleaks" target="_blank" rel="noopener noreferrer">gitleaks</a> or <a href="https://github.com/trufflesecurity/trufflehog" target="_blank" rel="noopener noreferrer">TruffleHog</a> so a key is caught before it's ever pushed.</li>
+                <li><strong>Protect <code>main</code>.</strong> Branch protection rules - require a PR, require review, require green status checks, block force-pushes - turn "don't break production" into something the platform enforces, not something you hope for.</li>
+                <li><strong>Sign your commits.</strong> GPG- or SSH-signed commits earn a "Verified" badge and prove a commit really came from you, defeating spoofed author names. Require signed commits on protected branches for a high-assurance history.</li>
+                <li><strong>Turn on 2FA, and use least-privilege tokens.</strong> Hardware or app-based 2FA on your GitHub account; prefer fine-grained, short-lived personal access tokens scoped to one repo over classic all-powerful PATs.</li>
+                <li><strong>Treat third-party PRs as untrusted input.</strong> Review forked PRs carefully and never let them run with your secrets. The <code>pull_request_target</code> footgun has leaked credentials on major projects - see our <a href="breach-timeline.html">breach kill chains</a> and the <a href="github-actions.html">GitHub Actions</a> security section.</li>
+                <li><strong>Pin and review your CI.</strong> The automation that runs on every push is itself attackable; pin Actions to commit SHAs and give workflows least-privilege permissions. (We cover this in depth on the <a href="github-actions.html">Actions page</a>.)</li>
+            </ol>
+        </section>
+
+        <section id="further">
+            <h2>Further reading</h2>
+            <ul>
+                <li><a href="https://git-scm.com/book/en/v2" target="_blank" rel="noopener noreferrer">Pro Git</a> - the free, official book. The first three chapters are the best git investment you can make.</li>
+                <li><a href="https://learngitbranching.js.org/" target="_blank" rel="noopener noreferrer">Learn Git Branching</a> - an interactive visual playground for branches, merge, and rebase.</li>
+                <li><a href="https://docs.github.com/en/get-started" target="_blank" rel="noopener noreferrer">GitHub docs: Getting started</a> and the <a href="https://docs.github.com/en/pull-requests" target="_blank" rel="noopener noreferrer">pull requests guide</a>.</li>
+                <li><a href="https://training.github.com/downloads/github-git-cheat-sheet.pdf" target="_blank" rel="noopener noreferrer">GitHub git cheat sheet</a> (PDF) - the daily commands on one page.</li>
+                <li><a href="https://www.conventionalcommits.org/" target="_blank" rel="noopener noreferrer">Conventional Commits</a> - a simple convention for commit messages (the <code>feat:</code>/<code>fix:</code>/<code>docs:</code> style you'll see in our log).</li>
+                <li><a href="https://github.com/gitleaks/gitleaks" target="_blank" rel="noopener noreferrer">gitleaks</a> - scan a repo (and its history) for committed secrets.</li>
+                <li>On this site: <a href="github-actions.html">How We Use GitHub Actions</a>, <a href="terraform.html">How We Use Terraform</a>, <a href="cloud-deployment.html">How We Deploy</a>, and the <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">contributor guide</a>.</li>
+            </ul>
+        </section>
+
+        <section class="cta-section">
+            <h2>Questions?</h2>
+            <p>Bring them to <a href="sessions.html">Friday Zoom</a>. Whether you're stuck on your first merge conflict or designing a branch-protection policy for a regulated environment, someone in the room has been there. The best way to learn git is to use it on something real - so <a href="contribute.html">contribute to this site</a> and we'll review your first PR together.</p>
+        </section>
+
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Explore</h3>
+        <ul>
+          <li><a href="index.html#about">About CSOH</a></li>
+          <li><a href="learning-path.html">Learning Path</a></li>
+          <li><a href="resources.html">Resources</a></li>
+          <li><a href="news.html">News</a></li>
+          <li><a href="sessions.html">Zoom Sessions</a></li>
+          <li><a href="meetings.html">Meeting Recaps</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Connect</h3>
+        <ul>
+          <li><a href="mailto:admin@csoh.org">Contact</a></li>
+          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="rss.html">RSS Feed</a></li>
+          <li><a href="contribute.html">Contribute</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Developer Docs</h3>
+        <ul>
+          <li><a href="github-actions.html">GitHub Actions</a></li>
+          <li><a href="cloud-deployment.html">Multi-Cloud Deploy</a></li>
+          <li><a href="terraform.html">Terraform</a></li>
+          <li><a href="version-control.html">Git &amp; Version Control</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="about.html">About</a></li>
+        <li><a href="privacy.html">Privacy</a></li>
+        <li><a href="code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=d8882831" integrity="sha384-lKd4MzrpmXU23ws/ZryGObudmLTuV3KfyBCfj+TUIUd8a2ZUgX3P7liFMYd8bUBn"
+        defer></script>
+</body>
+
+</html>

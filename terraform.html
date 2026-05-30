@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description"
+        content="Terraform explained through CSOH's real, commented infrastructure code: providers, state, the terraform{} block, variables, outputs, and keyless OIDC across AWS, GCP, Azure, and Cloudflare. Learn by reading our HCL.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords"
+        content="Terraform, infrastructure as code, IaC, HCL, terraform state, terraform backend, terraform tutorial, multi-cloud terraform, OpenTofu, keyless OIDC, terraform providers, devsecops">
+    <title>How We Use Terraform - Cloud Security Office Hours</title>
+
+    <link rel="canonical" href="https://csoh.org/terraform.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/terraform.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/terraform.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="How We Use Terraform - CSOH">
+    <meta property="og:description"
+        content="Learn Terraform by reading CSOH's actual infrastructure-as-code - providers, state, variables, outputs, and keyless OIDC, all explained against real production HCL across four clouds.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-05-29">
+    <meta property="article:modified_time" content="2026-05-29">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="DevSecOps">
+    <meta property="article:tag" content="Terraform">
+    <meta property="article:tag" content="Infrastructure as Code">
+    <meta property="article:tag" content="IaC">
+    <meta property="article:tag" content="HCL">
+    <meta property="article:tag" content="terraform state">
+    <meta property="article:tag" content="multi-cloud">
+    <meta property="article:tag" content="OpenTofu">
+    <meta property="article:tag" content="devsecops">
+    <meta property="og:url" content="https://csoh.org/terraform.html">
+    <meta property="og:image" content="https://csoh.org/img/og/terraform.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="How We Use Terraform">
+    <meta name="twitter:description"
+        content="Terraform explained through CSOH's real, commented infrastructure code across four clouds.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/terraform.jpg">
+    <!-- Resource hints: warm up TCP+TLS to the external origins this page
+         links out to most (the Zoom signup, GitHub for the source files, and
+         the Terraform registry/docs). Saves 100-300ms on first hover-to-fetch. -->
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://developer.hashicorp.com">
+
+    <link rel="preload" href="/style.css?v=71499803" as="style"
+        integrity="sha384-nVDqe2NnLizJXqTciHpEc8IB7YdKig+48LhG6tdcwJyxGISh53nsDT4ruAO5XTej">
+    <link rel="stylesheet" href="/style.css?v=71499803"
+        integrity="sha384-nVDqe2NnLizJXqTciHpEc8IB7YdKig+48LhG6tdcwJyxGISh53nsDT4ruAO5XTej">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "How We Use Terraform",
+      "description": "Terraform explained through CSOH's real infrastructure code - providers, state, variables, outputs, and keyless OIDC across AWS, GCP, Azure, and Cloudflare.",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "datePublished": "2026-05-29",
+      "dateModified": "2026-05-29",
+      "mainEntityOfPage": "https://csoh.org/terraform.html",
+      "speakable": {
+        "@type": "SpeakableSpecification",
+        "cssSelector": ["h1", "main p:first-of-type"]
+      },
+      "image": "https://csoh.org/banner.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How We Use Terraform",
+          "item": "https://csoh.org/terraform.html"
+        }
+      ]
+    }
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="index.html" class="logo-link">
+          <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="glossary.html">Glossary</a></li>
+                            <li><a href="faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Topics</span>
+                          <ul>
+                            <li><a href="cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="containers.html">Containers</a></li>
+                            <li><a href="kubernetes.html">Kubernetes</a></li>
+                            <li><a href="serverless.html">Serverless</a></li>
+                            <li><a href="service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="ci-cd.html">CI/CD</a></li>
+                            <li><a href="landing-zones.html">Landing Zones</a></li>
+                            <li><a href="iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="zero-trust.html">Zero Trust</a></li>
+                            <li><a href="network-security.html">Network Security</a></li>
+                            <li><a href="data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="api-security.html">API Security</a></li>
+                            <li><a href="saas-security.html">SaaS Security (SSPM)</a></li>
+                            <li><a href="backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="grc.html">GRC</a></li>
+                            <li><a href="compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li><a href="ai-learning.html">AI Learning</a></li>
+                            <li><a href="ai-ml-security.html">AI/ML Security</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Career &amp; Growth</span>
+                          <ul>
+                            <li><a href="learning-path.html">Learning Path</a></li>
+                            <li><a href="cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="cloud-security-careers.html">Careers</a></li>
+                            <li><a href="cloud-security-sales-engineer.html">Sales Engineer Path</a></li>
+                            <li><a href="mentorship.html">Mentorship</a></li>
+                            <li><a href="cloud-security-reading-list.html">Reading List</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">By Cloud <span class="caret" aria-hidden="true">&#9662;</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="aws-security.html">AWS Security</a></li>
+                        <li><a href="azure-security.html">Azure Security</a></li>
+                        <li><a href="gcp-security.html">GCP Security</a></li>
+                        <li><a href="cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="news.html">News</a></li>
+                        <li><a href="threat-research.html">Threat Research</a></li>
+                        <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="incident-response.html">Incident Response</a></li>
+                        <li><a href="cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-2col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="community.html">Community &amp; Signal</a></li>
+                            <li><a href="mentorship.html">Mentorship</a></li>
+                            <li><a href="conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="meetings.html">Meeting Recaps</a></li>
+                            <li><a href="presentations.html">Presentations</a></li>
+                            <li><a href="chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Behind the Scenes <span class="caret" aria-hidden="true">&#9662;</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="cloud-deployment.html">Multi-Cloud Deploy</a></li>
+                        <li><a href="github-actions.html">GitHub Actions</a></li>
+                        <li><a href="terraform.html" aria-current="page">Terraform</a></li>
+                        <li><a href="version-control.html">Git &amp; Version Control</a></li>
+                        <li><a href="contribute.html">Contribute</a></li>
+                        <li><a href="contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="index.html">Home</a></li>
+            <li><span aria-current="page">Terraform</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--illustrated">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>How We Use Terraform</h1>
+          <p><a class="glossary-link" href="glossary.html#term-terraform">Terraform</a> explained against real, working production code - every concept tied to a specific file in CSOH's own infrastructure. The whole site runs on four small Terraform stacks (AWS, GCP, Azure, Cloudflare) that you can read top to bottom. If you learn better from someone else's HCL than from the docs, start here.</p>
+          <div class="cta-buttons">
+            <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Browse our Terraform</a>
+            <a href="#tour" class="btn btn-secondary">Take the Tour</a>
+        </div>
+        </div>
+        <div class="hero-illustration" aria-hidden="true">
+          <svg viewBox="0 0 600 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Infrastructure-as-code illustration" width="600" height="480"><defs><linearGradient id="hx-cloud" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#bae6fd"/><stop offset="60%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#2563eb"/></linearGradient><linearGradient id="hx-shield" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fde68a"/><stop offset="100%" stop-color="#f97316"/></linearGradient><linearGradient id="hx-tile" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient><radialGradient id="hx-halo" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.5"/><stop offset="60%" stop-color="#7dd3fc" stop-opacity="0.05"/><stop offset="100%" stop-color="#7dd3fc" stop-opacity="0"/></radialGradient></defs><circle cx="300" cy="240" r="190" fill="url(#hx-halo)"/><g opacity="0.7"><circle cx="80" cy="50" r="2" fill="#7dd3fc"/><circle cx="540" cy="80" r="1.5" fill="#fbbf24"/><circle cx="40" cy="260" r="1.5" fill="#a78bfa"/><circle cx="565" cy="300" r="2" fill="#7dd3fc"/><circle cx="55" cy="430" r="1.5" fill="#34d399"/><circle cx="555" cy="450" r="1.5" fill="#fbbf24"/></g><g stroke="#7dd3fc" stroke-width="1.5" stroke-dasharray="3 5" opacity="0.4" fill="none"><line x1="300" y1="240" x2="100" y2="100"/><line x1="300" y1="240" x2="500" y2="100"/><line x1="300" y1="240" x2="500" y2="240"/><line x1="300" y1="240" x2="500" y2="380"/><line x1="300" y1="240" x2="100" y2="380"/><line x1="300" y1="240" x2="100" y2="240"/></g><path d="M 200,260 a 50,50 0 0,1 60,-60 a 70,70 0 0,1 130,0 a 50,50 0 0,1 50,30 a 45,45 0 0,1 -25,80 H 220 a 45,45 0 0,1 -20,-50 z" fill="url(#hx-cloud)" stroke="#fff" stroke-width="1.5" stroke-opacity="0.4"/><g transform="translate(300, 235)"><path d="M -32 -36 L 32 -36 L 32 8 a 32 38 0 0 1 -32 32 a 32 38 0 0 1 -32 -32 z" fill="url(#hx-shield)" stroke="#fff" stroke-width="2.5"/><path d="M -13 -3 L -3 9 L 16 -16" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g><g transform="translate(60, 60)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#a78bfa" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-13" y="-2" width="26" height="20" rx="3"/><path d="M -8 -2 v -10 a 8 10 0 0 1 16 0 v 10"/></g></g><g transform="translate(460, 60)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#fbbf24" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="-7" cy="2" r="7"/><path d="M 0 2 L 16 2 M 11 2 v 6 M 16 2 v -5"/></g></g><g transform="translate(460, 200)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#7dd3fc" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-15" y="-13" width="30" height="11" rx="2"/><rect x="-15" y="2" width="30" height="11" rx="2"/></g></g><g transform="translate(460, 340)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#34d399" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M -17 0 c 4 -9 12 -13 17 -13 c 5 0 13 4 17 13 c -4 9 -12 13 -17 13 c -5 0 -13 -4 -17 -13 z"/><circle cx="0" cy="0" r="4.5"/></g></g><g transform="translate(60, 340)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#06b6d4" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="0" cy="-13" r="3.5"/><circle cx="-13" cy="11" r="3.5"/><circle cx="13" cy="11" r="3.5"/><line x1="-1.5" y1="-10" x2="-11" y2="9"/><line x1="1.5" y1="-10" x2="11" y2="9"/><line x1="-9" y1="11" x2="9" y2="11"/></g></g><g transform="translate(60, 200)"><rect width="80" height="80" rx="16" fill="url(#hx-tile)" stroke="rgba(255,255,255,0.18)"/><g transform="translate(40, 40)" stroke="#fb7185" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M -9 -10 L -17 0 L -9 10"/><path d="M 9 -10 L 17 0 L 9 10"/><line x1="-3" y1="13" x2="3" y2="-13"/></g></g></svg>
+        </div>
+      </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+
+        <p class="page-meta"><time datetime="2026-05-29">Last updated <strong>2026-05-29</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/terraform.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <div class="info-box--blue">
+            <p><strong>The honest version:</strong> Terraform is how you describe cloud infrastructure as text files instead of clicking around a console. You write what you <em>want</em> to exist - a bucket, a DNS record, an IAM role - and Terraform figures out the API calls to make reality match. Re-run it and it only changes what drifted. The mental model is small; the surface area is large. The fastest way to actually <em>get</em> it is to read a real, working configuration and trace what each block does - which is exactly what this page is. Every concept points at a specific file in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">our repo</a>.</p>
+            <p style="margin-top:0.75rem;"><strong>What you'll need:</strong> the <a href="https://developer.hashicorp.com/terraform/install" target="_blank" rel="noopener noreferrer">Terraform CLI</a> (or <a href="https://opentofu.org/" target="_blank" rel="noopener noreferrer">OpenTofu</a> - see below), one cloud account, and comfort reading config files. No prior Terraform experience required.</p>
+        </div>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#what-is-it">What Terraform actually is</a></li>
+                <li><a href="#why-cool">Why it's great (and where it bites)</a></li>
+                <li><a href="#opentofu">A note on licensing &amp; OpenTofu</a></li>
+                <li><a href="#anatomy">Anatomy of a Terraform stack</a></li>
+                <li><a href="#tour">A tour of CSOH's four stacks</a></li>
+                <li><a href="#concepts">Concepts that bite newcomers</a></li>
+                <li><a href="#security">Security baseline</a></li>
+                <li><a href="#using-our-repo">Using our repo as a learning resource</a></li>
+                <li><a href="#further">Further reading</a></li>
+            </ol>
+        </div>
+
+        <section id="what-is-it">
+            <h2>What Terraform actually is</h2>
+            <p>Terraform is an open-source <strong>infrastructure-as-code</strong> (IaC) tool from HashiCorp. You declare the cloud resources you want in <code>.tf</code> files written in HCL (HashiCorp Configuration Language), and Terraform talks to each cloud's API to create, update, or delete resources until the real world matches your code.</p>
+            <p>The loop has three verbs you'll use constantly:</p>
+            <ul>
+                <li><strong><code>terraform init</code></strong> - download the provider plugins your code needs and connect to where your state is stored. Run it once per stack, and again whenever you add a provider.</li>
+                <li><strong><code>terraform plan</code></strong> - compare your code to reality and print exactly what <em>would</em> change. Nothing is applied. This is your safety net; read it every time.</li>
+                <li><strong><code>terraform apply</code></strong> - make the changes from the plan. Terraform records what it created in a <em>state file</em> so it knows what it owns next time.</li>
+            </ul>
+            <p>The thing that makes it <em>declarative</em>: you don't write "create a bucket." You write "a bucket named X should exist," and Terraform decides whether that means create it, change it, or do nothing. Here's the absolute minimum - a single AWS S3 bucket:</p>
+            <div class="code-block"><pre>terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~&gt; 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_s3_bucket" "example" {
+  bucket = "my-globally-unique-bucket-name"
+}</pre></div>
+            <p><code>terraform init &amp;&amp; terraform apply</code>, and the bucket exists. Change the code and apply again, and only the difference is applied. Delete the block and apply, and Terraform deletes the bucket. That shape - declare, plan, apply - stays the same whether you're managing one bucket or an entire <a class="glossary-link" href="glossary.html#term-public">multi-cloud</a> edge.</p>
+        </section>
+
+        <section id="why-cool">
+            <h2>Why it's great (and where it bites)</h2>
+            <h3>What's good</h3>
+            <ul>
+                <li><strong>Your infrastructure is reviewable.</strong> Every change is a diff in a pull request. You can see <em>exactly</em> what's about to change to production before it happens - and so can a reviewer. (See <a href="version-control.html">Git &amp; Version Control</a> and <a href="github-actions.html">how we wire that into CI</a>.)</li>
+                <li><strong>It's reproducible.</strong> The same code builds the same infra in a new account or region. Disaster recovery becomes "re-run apply" instead of "remember what we clicked two years ago."</li>
+                <li><strong>One language, many clouds.</strong> AWS, GCP, Azure, Cloudflare, GitHub, Datadog - 4,000+ providers, all driven from the same HCL and the same <code>plan</code>/<code>apply</code> workflow. Our site spans four providers in one repo.</li>
+                <li><strong>It documents itself.</strong> The <code>.tf</code> files <em>are</em> the source of truth for what exists. No stale wiki describing a console nobody remembers configuring.</li>
+                <li><strong>Drift is visible.</strong> <code>terraform plan</code> tells you if someone hand-edited a resource in the console. That's a config-management feature and a <em>security</em> feature - unexpected drift can be the first sign of a problem.</li>
+            </ul>
+            <h3>Where it bites</h3>
+            <ul>
+                <li><strong>State is the whole ballgame.</strong> Terraform tracks what it owns in a state file. Lose it, corrupt it, or let two people apply at once, and you get a bad day. Remote, locked, versioned state is not optional (we'll show ours).</li>
+                <li><strong>State can contain secrets.</strong> Generated passwords, keys, and connection strings land in state in plaintext. State must be treated as sensitive and access-controlled.</li>
+                <li><strong>The plan is a promise, not a guarantee.</strong> Most of the time apply matches plan. Occasionally an API rejects a change mid-apply and you're left in a partial state. Small, frequent applies hurt less than big-bang ones.</li>
+                <li><strong>Provider upgrades can surprise you.</strong> A major-version provider bump can rename or deprecate arguments. Pin versions and read the changelog (we use <code>~&gt;</code> constraints and commit the lock file).</li>
+                <li><strong>Destroy is real.</strong> <code>terraform destroy</code> - or removing a resource block and applying - deletes live infrastructure. <code>plan</code> first, every time, and read the "destroy" lines carefully.</li>
+            </ul>
+        </section>
+
+        <section id="opentofu">
+            <h2>A note on licensing &amp; OpenTofu</h2>
+            <div class="info-box--yellow">
+              <p>In 2023 HashiCorp moved Terraform from an open-source (MPL) license to the Business Source License (BSL). The community responded with <a href="https://opentofu.org/" target="_blank" rel="noopener noreferrer">OpenTofu</a>, a fork now stewarded by the Linux Foundation that stays open-source and remains a near drop-in replacement (<code>tofu</code> in place of <code>terraform</code>). For a project like ours the two are interchangeable; everything on this page applies to both. We say "Terraform" generically throughout - if your org cares about the license, OpenTofu is the vendor-neutral choice, and switching is mostly a matter of swapping the binary.</p>
+            </div>
+        </section>
+
+        <section id="anatomy">
+            <h2>Anatomy of a Terraform stack</h2>
+            <figure class="workflow-figure">
+              <svg viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tf-fig-title tf-fig-desc" width="820" height="300">
+                <title id="tf-fig-title">The Terraform workflow: code to cloud, tracked by state</title>
+                <desc id="tf-fig-desc">Your HCL is read by terraform init, compared to remote state and the cloud by plan, then reconciled by apply, which updates both the cloud and the state file.</desc>
+                <text x="410" y="22" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">From .tf files to live cloud - and how state keeps them in sync</text>
+                <defs><marker id="tf-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/></marker></defs>
+                <g transform="translate(20, 60)">
+                  <rect width="150" height="90" rx="10" fill="#fff" stroke="#7b42bc" stroke-width="2"/>
+                  <rect width="150" height="26" rx="10" fill="#7b42bc"/>
+                  <rect y="16" width="150" height="10" fill="#7b42bc"/>
+                  <text x="75" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">.tf files (HCL)</text>
+                  <text x="75" y="48" text-anchor="middle" font-size="10" fill="#0f172a">terraform {} block</text>
+                  <text x="75" y="64" text-anchor="middle" font-size="10" fill="#0f172a">providers · variables</text>
+                  <text x="75" y="80" text-anchor="middle" font-size="10" fill="#0f172a">resources · outputs</text>
+                </g>
+                <path d="M 175 105 L 205 105" stroke="#94a3b8" stroke-width="2" marker-end="url(#tf-arrow)"/>
+                <g transform="translate(210, 60)">
+                  <rect width="150" height="90" rx="10" fill="#fff" stroke="#3b82f6" stroke-width="2"/>
+                  <rect width="150" height="26" rx="10" fill="#3b82f6"/>
+                  <rect y="16" width="150" height="10" fill="#3b82f6"/>
+                  <text x="75" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">plan</text>
+                  <text x="75" y="50" text-anchor="middle" font-size="10" fill="#0f172a">diff: code vs reality</text>
+                  <text x="75" y="66" text-anchor="middle" font-size="10" fill="#0f172a">+ create ~ change</text>
+                  <text x="75" y="80" text-anchor="middle" font-size="10" fill="#0f172a">- destroy</text>
+                </g>
+                <path d="M 365 105 L 395 105" stroke="#94a3b8" stroke-width="2" marker-end="url(#tf-arrow)"/>
+                <g transform="translate(400, 60)">
+                  <rect width="150" height="90" rx="10" fill="#fff" stroke="#10b981" stroke-width="2"/>
+                  <rect width="150" height="26" rx="10" fill="#10b981"/>
+                  <rect y="16" width="150" height="10" fill="#10b981"/>
+                  <text x="75" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">apply</text>
+                  <text x="75" y="50" text-anchor="middle" font-size="10" fill="#0f172a">call cloud APIs</text>
+                  <text x="75" y="66" text-anchor="middle" font-size="10" fill="#0f172a">make it so</text>
+                  <text x="75" y="80" text-anchor="middle" font-size="10" fill="#0f172a">record in state</text>
+                </g>
+                <path d="M 555 105 L 585 105" stroke="#94a3b8" stroke-width="2" marker-end="url(#tf-arrow)"/>
+                <g transform="translate(590, 60)">
+                  <rect width="150" height="90" rx="10" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+                  <rect width="150" height="26" rx="10" fill="#f59e0b"/>
+                  <rect y="16" width="150" height="10" fill="#f59e0b"/>
+                  <text x="75" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">live cloud</text>
+                  <text x="75" y="50" text-anchor="middle" font-size="10" fill="#0f172a">S3 · <a class="glossary-link" href="glossary.html#term-lambda">Cloud Run</a></text>
+                  <text x="75" y="66" text-anchor="middle" font-size="10" fill="#0f172a">Blob · Load Balancer</text>
+                  <text x="75" y="80" text-anchor="middle" font-size="10" fill="#0f172a">DNS · IAM</text>
+                </g>
+                <g transform="translate(210, 210)">
+                  <rect width="340" height="60" rx="10" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+                  <rect width="340" height="22" rx="10" fill="#dc2626"/>
+                  <rect y="12" width="340" height="10" fill="#dc2626"/>
+                  <text x="170" y="16" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">remote state (GCS bucket, locked + versioned)</text>
+                  <text x="170" y="40" text-anchor="middle" font-size="10" fill="#0f172a">the JSON record mapping your code to real cloud objects</text>
+                  <text x="170" y="53" text-anchor="middle" font-size="9" fill="#6b7280">read by plan · written by apply · shared by humans and <a class="glossary-link" href="glossary.html#term-ci-cd">CI</a></text>
+                </g>
+                <path d="M 285 200 L 285 160" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#tf-arrow)"/>
+                <path d="M 475 160 L 475 200" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#tf-arrow)"/>
+              </svg>
+              <figcaption>Code → plan → apply → cloud, with remote state as the memory in the middle. <code>plan</code> reads state to compute the diff; <code>apply</code> writes state after changing the cloud. Lose or unshare that state and Terraform forgets what it owns.</figcaption>
+            </figure>
+            <p>Open <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/versions.tf" target="_blank" rel="noopener noreferrer"><code>infra/terraform/aws/versions.tf</code></a> in another tab and follow along - it's short and shows the three pieces that configure Terraform itself.</p>
+
+            <h3 id="anatomy-1">The <code>terraform {}</code> block - configuring the tool</h3>
+            <p>This block configures Terraform <em>itself</em>, not any cloud. It pins versions and says where state lives, so every laptop and every CI run behaves identically:</p>
+            <div class="code-block"><pre>terraform {
+  required_version = "&gt;= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~&gt; 5.0"     # any 5.x, never 6.0
+    }
+  }
+
+  backend "gcs" {            # where state is stored
+    bucket = "csoh-org-495800-tfstate"
+    prefix = "csoh/aws"
+  }
+}</pre></div>
+            <p>Three things to notice: <code>required_version</code> refuses to run on an old CLI; the <code>~&gt;</code> ("pessimistic") constraint takes bug-fix releases but never a breaking major bump; and the <code>backend</code> says state lives in a Google Cloud Storage bucket. Yes - our <em>AWS</em> stack keeps its state in <em>GCS</em>. That's deliberate: one state store to secure instead of one per cloud (the rationale is commented at the top of the file).</p>
+
+            <h3 id="anatomy-2">Providers - the plugins that talk to each cloud</h3>
+            <p>A <em>provider</em> is the plugin that translates HCL into a specific platform's API calls. You declare which ones you need (above) and configure them (below):</p>
+            <div class="code-block"><pre>provider "aws" {
+  region              = var.aws_region
+  allowed_account_ids = [var.aws_account_id]   # safety tripwire
+}</pre></div>
+            <p>Notice what's <em>not</em> here: credentials. They come from the environment - your local AWS profile, or in CI a short-lived OIDC token. That's why no secrets appear in the file. <code>allowed_account_ids</code> is a guardrail we love: if the credentials Terraform happens to be using point at the wrong account, the apply aborts before touching anything.</p>
+
+            <h3 id="anatomy-3">Variables, resources, and outputs</h3>
+            <p>The other three building blocks, each in its own file by convention:</p>
+            <ul>
+                <li><strong><code>variable</code></strong> (in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/variables.tf" target="_blank" rel="noopener noreferrer">variables.tf</a>) - named inputs with a type and an optional default, read elsewhere as <code>var.name</code>. Ours all have defaults, so the stack runs with zero manual input.</li>
+                <li><strong><code>resource</code></strong> (in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/s3.tf" target="_blank" rel="noopener noreferrer">s3.tf</a>, etc.) - one real cloud object to create and manage. <code>resource "TYPE" "NAME" { ... }</code>; refer to it elsewhere as <code>TYPE.NAME.attribute</code>.</li>
+                <li><strong><code>output</code></strong> (in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/outputs.tf" target="_blank" rel="noopener noreferrer">outputs.tf</a>) - values to surface after apply (a bucket name, a role ARN). We feed these into GitHub repo Variables that the deploy workflow reads.</li>
+            </ul>
+            <p>References between blocks (<code>var.bucket_name</code>, <code>aws_s3_bucket.site.arn</code>) do double duty: they pass values around <em>and</em> they tell Terraform the dependency order, so it builds the bucket before the role that points at it. You never sequence things by hand.</p>
+        </section>
+
+        <section id="tour">
+            <h2>A tour of CSOH's four stacks</h2>
+            <p>The entire site is static, served active/active from three clouds behind Cloudflare. That shape is described in <a href="cloud-deployment.html">How We Deploy</a>; here we're reading the Terraform that builds it. The code lives in four independent stacks under <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer"><code>infra/terraform/</code></a>:</p>
+            <div class="code-block"><pre>infra/terraform/
+  aws/          S3 (private) + CloudFront/OAC + GitHub OIDC role
+  azure/        Storage account + $web static website + federated cred
+  gcp/          Cloud Run + Artifact Registry + Workload Identity Federation
+  cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules</pre></div>
+            <p>Each directory is its own stack with its own state - you <code>cd</code> in (or use <code>-chdir</code>) and run <code>init</code>/<code>plan</code>/<code>apply</code> there. All four keep state in the <em>same</em> GCS bucket under separate prefixes (<code>csoh/aws</code>, <code>csoh/azure</code>, <code>csoh/prod</code>, <code>csoh/cloudflare</code>): one secured store, no per-cloud bootstrapping.</p>
+
+            <h3>Why split into four stacks instead of one?</h3>
+            <p>A smaller <em><a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a></em>. A bad <code>apply</code> to the Cloudflare stack can't accidentally delete the AWS bucket, because AWS isn't in that state file. Each cloud also authenticates differently, plans faster on its own, and can be destroyed independently. The trade-off is coordinating outputs between stacks by hand - which for a four-stack, solo-maintained repo is a fine price.</p>
+
+            <h3>Keyless deploys: the security centerpiece</h3>
+            <p>The file worth reading twice is <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/oidc.tf" target="_blank" rel="noopener noreferrer"><code>aws/oidc.tf</code></a>. It sets up deploys with <strong>no long-lived cloud secret in the repo at all</strong>. Instead, GitHub Actions proves its identity to AWS with a short-lived, signed OIDC token, and AWS hands back temporary credentials. The trust is scoped tighter than most people's first attempt:</p>
+            <div class="code-block"><pre>condition {
+  test     = "StringEquals"
+  variable = "token.actions.githubusercontent.com:sub"
+  values   = ["repo:${var.github_owner}/${var.github_repo}:environment:production"]
+}</pre></div>
+            <p>Read that condition out loud: <em>only</em> a workflow in <em>this</em> repo, running in the <em>production</em> environment, may assume the deploy role. A token from any other repo, any fork, or any other environment is rejected. The role's <em>permissions</em> are equally tight - write to one bucket and invalidate one CloudFront distribution, nothing else. So even if a token leaked, it could touch exactly one site's files and nothing else in the account. GCP does the same thing with <a class="glossary-link" href="glossary.html#term-oidc-federation">Workload Identity Federation</a> in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/gcp/wif.tf" target="_blank" rel="noopener noreferrer"><code>gcp/wif.tf</code></a>; Azure with a federated credential in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/azure/identity.tf" target="_blank" rel="noopener noreferrer"><code>azure/identity.tf</code></a>.</p>
+
+            <h3>A resource, start to finish</h3>
+            <p>From <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/s3.tf" target="_blank" rel="noopener noreferrer"><code>aws/s3.tf</code></a>, the private origin bucket and one of its settings:</p>
+            <div class="code-block"><pre>resource "aws_s3_bucket" "site" {
+  bucket = var.bucket_name
+}
+
+resource "aws_s3_bucket_versioning" "site" {
+  bucket = aws_s3_bucket.site.id      # depends on the bucket above
+  versioning_configuration {
+    status = "Enabled"                # cheap rollback / forensics trail
+  }
+}</pre></div>
+            <p>Two idioms worth internalizing. First, AWS bucket settings are split across several small resources (versioning, encryption, public-access block, policy) that each point back at the one bucket via <code>bucket = aws_s3_bucket.site.id</code> - that reference both targets the bucket and orders the work. Second, <code>versioning</code> here is a deliberate security choice: a bad publish can be rolled back object-by-object, and accidental deletes are recoverable.</p>
+        </section>
+
+        <section id="concepts">
+            <h2>Concepts that bite newcomers</h2>
+
+            <h3>1. State is shared, so it must be remote and locked</h3>
+            <p>By default Terraform writes <code>terraform.tfstate</code> to your local disk. That's fine for a tutorial and a disaster for a team or CI: two applies at once race and corrupt it. The fix is a <em>remote backend</em> (our <code>gcs</code> backend) so state is centralized, and <em>state locking</em> so a second apply waits for the first to finish. Never commit a state file to git, and never let two people run apply against the same state simultaneously.</p>
+
+            <h3>2. State can hold secrets - treat it as sensitive</h3>
+            <p>Any secret a resource generates (a database password, an access key, a TLS private key) is stored in state in <strong>plaintext</strong>, even if you marked the output <code>sensitive</code> (that only hides it from the console). So the bucket holding state must be encrypted, access-controlled, and versioned - exactly the properties our GCS state bucket is configured with at bootstrap.</p>
+
+            <h3>3. Always <code>plan</code> before <code>apply</code></h3>
+            <p>Read the plan. <code>+</code> is create, <code>~</code> is change-in-place, <code>-/+</code> is <em>destroy and recreate</em> (downtime!), and <code>-</code> is destroy. The recreate and destroy lines are where production incidents come from. In CI, save the plan and apply <em>that exact plan</em> so what you reviewed is what runs.</p>
+
+            <h3>4. Pin providers and commit the lock file</h3>
+            <p><code>terraform init</code> writes <code>.terraform.lock.hcl</code>, which records the exact provider versions and their checksums. <strong>Commit it.</strong> It's the supply-chain equivalent of a <code>package-lock.json</code>: it guarantees every machine and every CI run uses byte-identical provider binaries, and it'll catch a tampered provider via checksum mismatch. Ours are committed in each stack (e.g. <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/.terraform.lock.hcl" target="_blank" rel="noopener noreferrer">aws/.terraform.lock.hcl</a>).</p>
+
+            <h3>5. Drift: the console fights your code</h3>
+            <p>If someone changes a resource by hand in the cloud console, your code and reality "drift." The next <code>plan</code> shows it - Terraform wants to put things back the way your code says. The discipline: change infrastructure <em>in the code</em>, not the console. We even tag every AWS resource <code>managedBy = "terraform"</code> as a visible reminder.</p>
+
+            <h3>6. <code>count</code> and <code>for_each</code> - don't copy-paste resources</h3>
+            <p>Need three near-identical buckets? Don't write three blocks. <code>for_each</code> over a map (or <code>count</code> over a number) makes one block manage many instances. The gotcha: <code>count</code> indexes by position, so removing the middle item renumbers everything after it and Terraform plans destroy/recreate. Prefer <code>for_each</code> with stable keys when items can be added or removed.</p>
+
+            <h3>7. <code>terraform -chdir</code> and per-directory state</h3>
+            <p>Because our four stacks are separate directories, we drive them without <code>cd</code>-ing around: <code>terraform -chdir=infra/terraform/aws plan</code>. Each directory is an isolated root module with its own state and its own <code>init</code>. Forgetting which directory you're in is the most common "why is the plan empty?" moment.</p>
+
+            <h3>8. <code>import</code> existing resources instead of recreating them</h3>
+            <p>Already built something by hand and want Terraform to manage it? <code>terraform import</code> (or an <code>import {}</code> block) brings an existing cloud object under management without destroying it. The alternative - letting Terraform create a duplicate - is how people accidentally end up with two load balancers.</p>
+        </section>
+
+        <blockquote class="pull-quote">
+          The state file is the most sensitive thing in your repo's orbit - it can contain secrets and it <em>is</em> the keys to your infrastructure. Secure it like production, because it is.
+          <cite>- the rule we apply to all four CSOH stacks</cite>
+        </blockquote>
+
+        <section id="security">
+            <h2>Security baseline</h2>
+            <p>Terraform is a security tool when you use it well and a footgun when you don't. From day one:</p>
+            <ol>
+                <li><strong>Remote, encrypted, versioned, access-controlled state.</strong> No local state for anything real. Lock it. Assume it contains secrets, because it can.</li>
+                <li><strong>No secrets in <code>.tf</code> or <code>.tfvars</code> files.</strong> Pull credentials from the environment, a <a class="glossary-link" href="glossary.html#term-secrets-manager">secrets manager</a>, or - best of all - don't use long-lived credentials at all. Add <code>*.tfvars</code> and <code>.terraform/</code> to <a href="version-control.html">.gitignore</a>.</li>
+                <li><strong>Prefer keyless / OIDC for CI.</strong> Our deploys carry zero static cloud keys; GitHub federates short-lived tokens to each cloud. If you take one idea from this page, take this one. See <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/oidc.tf" target="_blank" rel="noopener noreferrer">oidc.tf</a>.</li>
+                <li><strong>Least-privilege everything.</strong> The deploy role can write one bucket and invalidate one CDN - not "PowerUserAccess." Scope provider credentials and resource permissions to exactly the job.</li>
+                <li><strong>Pin provider versions and commit <code>.terraform.lock.hcl</code>.</strong> Supply-chain hygiene; checksums catch tampering.</li>
+                <li><strong>Scan your IaC.</strong> Static analyzers - <a href="https://github.com/aquasecurity/trivy" target="_blank" rel="noopener noreferrer">Trivy</a>, <a href="https://github.com/bridgecrewio/checkov" target="_blank" rel="noopener noreferrer">Checkov</a>, tfsec - catch "this bucket is public" or "this SG is 0.0.0.0/0" before apply. Our deploy pipeline already runs Trivy on the GCP container image; IaC scanning is the same idea, one step earlier.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-guardrails">Guardrails</a> against the wrong account.</strong> <code>allowed_account_ids</code> (AWS) and equivalent checks abort an apply pointed at the wrong place. Cheap insurance.</li>
+                <li><strong>Review the plan like a code review.</strong> Treat a surprising <code>-/+</code> or <code>-</code> the way you'd treat a surprising <code>rm -rf</code> in a PR.</li>
+            </ol>
+        </section>
+
+        <section id="using-our-repo">
+            <h2>Using our repo as a learning resource</h2>
+            <p>The point of this page is that <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">our Terraform</a> is real, in-production, and <em>heavily commented for beginners</em> - every non-obvious line has a one-to-three-line explanation. A suggested reading order:</p>
+            <ol>
+                <li><strong>Start with the tool config:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/versions.tf" target="_blank" rel="noopener noreferrer">aws/versions.tf</a>. The <code>terraform{}</code> block, provider <a class="glossary-link" href="glossary.html#term-pinning">pinning</a>, and the remote backend in one short file.</li>
+                <li><strong>Then the inputs:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/variables.tf" target="_blank" rel="noopener noreferrer">aws/variables.tf</a>. How values are declared once and reused as <code>var.x</code>.</li>
+                <li><strong>Then a real resource:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/s3.tf" target="_blank" rel="noopener noreferrer">aws/s3.tf</a> and <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/cloudfront.tf" target="_blank" rel="noopener noreferrer">cloudfront.tf</a>. Resources, references, and how settings split across small blocks.</li>
+                <li><strong>Then the security set-piece:</strong> <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/oidc.tf" target="_blank" rel="noopener noreferrer">aws/oidc.tf</a>. Trust policy vs permissions policy, scoped to one repo and environment.</li>
+                <li><strong>Finally the edge:</strong> the <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform/cloudflare" target="_blank" rel="noopener noreferrer">cloudflare/</a> stack - a different provider entirely (Load Balancer, pools, header/redirect/cache rules) driven by the same workflow. Proof that the shape transfers across clouds.</li>
+            </ol>
+            <p>The <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md" target="_blank" rel="noopener noreferrer">infra/README.md</a> ties it together: the architecture diagram, the bootstrap commands, the cutover/rollback plan, and the cost table (~$8-12/mo across three clouds). Fork the repo, swap in your own account IDs and bucket names, and you have a working multi-cloud static-hosting setup to learn from.</p>
+        </section>
+
+        <section id="further">
+            <h2>Further reading</h2>
+            <ul>
+                <li><a href="https://developer.hashicorp.com/terraform/docs" target="_blank" rel="noopener noreferrer">Terraform documentation</a> - the official source of truth.</li>
+                <li><a href="https://developer.hashicorp.com/terraform/language/state" target="_blank" rel="noopener noreferrer">State</a> and <a href="https://developer.hashicorp.com/terraform/language/backend" target="_blank" rel="noopener noreferrer">backends</a> - read these early; state is where the sharp edges are.</li>
+                <li><a href="https://registry.terraform.io/" target="_blank" rel="noopener noreferrer">Terraform Registry</a> - providers and reusable modules. Check the source before you trust a module.</li>
+                <li><a href="https://opentofu.org/" target="_blank" rel="noopener noreferrer">OpenTofu</a> - the open-source, Linux Foundation fork. Drop-in for everything here.</li>
+                <li><a href="https://github.com/aquasecurity/trivy" target="_blank" rel="noopener noreferrer">Trivy</a> / <a href="https://github.com/bridgecrewio/checkov" target="_blank" rel="noopener noreferrer">Checkov</a> - scan IaC for misconfigurations before apply.</li>
+                <li><a href="https://github.com/terraform-linters/tflint" target="_blank" rel="noopener noreferrer">TFLint</a> and <a href="https://terraform-docs.io/" target="_blank" rel="noopener noreferrer">terraform-docs</a> - linting and auto-generated docs.</li>
+                <li>On this site: <a href="github-actions.html">How We Use GitHub Actions</a> (the CI that runs this Terraform), <a href="cloud-deployment.html">How We Deploy</a> (the architecture it builds), and <a href="version-control.html">Git &amp; Version Control</a> (the workflow that reviews every change).</li>
+            </ul>
+        </section>
+
+        <section class="cta-section">
+            <h2>Questions?</h2>
+            <p>Bring them to <a href="sessions.html">Friday Zoom</a>. Several regulars run nontrivial Terraform at work (multi-account AWS, GCP org policies, Terraform Cloud, Atlantis) and are happy to walk through state strategy, module design, or keyless CI. The <a href="meetings.html">meeting recaps</a> surface plenty of IaC war stories worth learning from.</p>
+        </section>
+
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Explore</h3>
+        <ul>
+          <li><a href="index.html#about">About CSOH</a></li>
+          <li><a href="learning-path.html">Learning Path</a></li>
+          <li><a href="resources.html">Resources</a></li>
+          <li><a href="news.html">News</a></li>
+          <li><a href="sessions.html">Zoom Sessions</a></li>
+          <li><a href="meetings.html">Meeting Recaps</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Connect</h3>
+        <ul>
+          <li><a href="mailto:admin@csoh.org">Contact</a></li>
+          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="rss.html">RSS Feed</a></li>
+          <li><a href="contribute.html">Contribute</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Developer Docs</h3>
+        <ul>
+          <li><a href="github-actions.html">GitHub Actions</a></li>
+          <li><a href="cloud-deployment.html">Multi-Cloud Deploy</a></li>
+          <li><a href="terraform.html">Terraform</a></li>
+          <li><a href="version-control.html">Git &amp; Version Control</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="about.html">About</a></li>
+        <li><a href="privacy.html">Privacy</a></li>
+        <li><a href="code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=d8882831" integrity="sha384-lKd4MzrpmXU23ws/ZryGObudmLTuV3KfyBCfj+TUIUd8a2ZUgX3P7liFMYd8bUBn"
+        defer></script>
+</body>
+
+</html>

@@ -5,7 +5,7 @@
 # sequence of housekeeping steps (SRI hashes, URL safety, URL normalization,
 # presentations schema, sitemap dates, preview screenshots), committing each
 # one back to main if anything changed. The actual deploy to production is
-# done by `gcp-deploy.yml` — this workflow only does the housekeeping that
+# done by `deploy.yml` — this workflow only does the housekeeping that
 # belongs upstream of the deploy.
 #
 # Each step that commits-and-pushes uses
@@ -13,16 +13,24 @@
 # so that if another workflow pushed a commit while this one was working,
 # this run rebases on top and tries again instead of failing.
 #
-# The downstream gcp-deploy.yml is triggered by the housekeeping commits
+# The downstream deploy.yml is triggered by the housekeeping commits
 # this workflow pushes (since they're authored by the csoh-ci App, not the
 # default GITHUB_TOKEN, so they trigger downstream workflows correctly).
 # =============================================================================
 
+# This whole file is a "workflow": a set of automated jobs that GitHub runs
+# for us on its own servers (no laptop required) whenever a trigger fires.
+# `name:` is just the label shown in the repo's Actions tab and in commit
+# status checks so a human can tell which workflow ran.
 name: Site Housekeeping (SRI, sitemap, previews)
 
+# `on:` lists the events that start this workflow. Below it lists two:
+# a `push` to a branch, and a manual button click (`workflow_dispatch`).
 on:
   # Auto-run on every push to main, but ONLY when one of the listed file
   # patterns changed. Editing tools/ or docs alone won't trigger a run.
+  # `paths:` are glob patterns: `*` matches within one path segment and
+  # `**` matches across directories, so `img/**` means any file under img/.
   push:
     branches:
       - main
@@ -37,17 +45,26 @@ on:
       - 'breach-timeline.js'
       - 'update_sri.py'
   # Manual trigger from the Actions tab.
+  # `workflow_dispatch:` adds a "Run workflow" button so a human can launch
+  # this run on demand (e.g. to regenerate previews) without pushing a commit.
   workflow_dispatch:
 
+# `permissions:` sets what the automatic, throwaway credential GitHub hands
+# this run (called GITHUB_TOKEN) is allowed to do against this repo. Starting
+# from least-privilege and granting only what's needed is the safe default.
 # Read-only on the auto-injected GITHUB_TOKEN. Every step that pushes
 # commits (SRI, sitemap, previews, etc.) uses an installation token minted
 # from the csoh-ci GitHub App. The default token only needs to clone the repo.
+# (`contents: read` = may read repo files; it cannot write/push.)
 permissions:
   contents: read
 
-# Shared concurrency group across all workflows that push commits to main:
-# site-update-deploy, update-news, normalize-urls. They queue serially
-# rather than racing.
+# `concurrency:` stops two runs that share the same `group:` name from
+# executing at the same time — GitHub lets only one run per group proceed and
+# holds (or cancels) the rest. This `deploy-pipeline` group is shared across
+# all the workflows that push commits to main (site-update-deploy,
+# update-news, normalize-urls) so they queue serially instead of racing and
+# clobbering each other.
 #
 # cancel-in-progress: true — if a newer push is queued while an older
 # housekeeping run is in flight, cancel the older one so we don't push
@@ -56,10 +73,24 @@ concurrency:
   group: deploy-pipeline
   cancel-in-progress: true
 
+# `jobs:` holds one or more jobs. A "job" is an independent unit of work that
+# runs on its own fresh virtual machine. This workflow has a single job; jobs
+# run in parallel by default unless one declares it `needs:` another.
 jobs:
+  # `update-sri-and-previews` is the job's id (our name for it). Everything
+  # indented under it belongs to this one job.
   update-sri-and-previews:
+    # `runs-on:` picks the type of machine GitHub spins up for the job here a
+    # fresh, GitHub-hosted Ubuntu Linux VM that is wiped after the run.
     runs-on: ubuntu-latest
+    # `steps:` is the ordered list of actions/commands the job runs, top to
+    # bottom, on that VM. Each `- name:` below is one step.
     steps:
+      # This is the first step. Two ways a step can do work: `uses:` runs a
+      # prebuilt, shareable action (someone else's packaged code), while
+      # `run:` (seen later) executes raw shell commands. This step `uses:` an
+      # action. `id:` gives the step a handle so later steps can read its
+      # outputs (e.g. `steps.app-token.outputs.token`).
       # Mint a short-lived (~1h) installation token from the csoh-ci GitHub
       # App. Replaces the long-lived PAT_TOKEN we used to use here. We need a
       # non-default token (not the auto-injected GITHUB_TOKEN) because the
@@ -69,22 +100,40 @@ jobs:
       # from this workflow are accepted.
       - name: Mint installation token
         id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        # The text after `@` pins the action to one exact Git commit (a SHA),
+        # not a movable tag like `v3`. Pinning by SHA means a compromised
+        # upstream tag can't silently swap in malicious code on our next run;
+        # the `# v3.1.1` comment just records which release that SHA is.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        # `with:` passes inputs to the action above (like function arguments).
         with:
+          # `${{ ... }}` is a GitHub Actions expression, evaluated before the
+          # step runs. `secrets.NAME` reads an encrypted repo secret (stored
+          # in Settings, never printed in logs) — here the App's credentials.
           # `client-id` (the Iv23.* string from the App's settings page) —
           # the older `app-id` (numeric App ID) was deprecated in v3.x.
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
+      # The VM starts empty, so the first thing almost every workflow does is
+      # `actions/checkout` to clone this repo's code onto the machine.
       # App-authenticated full clone. fetch-depth: 0 = no shallow clone, so
       # `git diff` and `git log` see full history (needed for the
       # diff-against-original-SHA checks below).
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          # Reuse the App token from the previous step (via its `id`) as the
+          # clone credential. checkout saves it, so later `git push` commands
+          # in `run:` steps authenticate as the App without re-supplying it.
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
+      # First `run:` step: instead of a prebuilt action, it runs a shell
+      # command directly on the VM. Writing `key=value` lines into the special
+      # file named by `$GITHUB_OUTPUT` publishes a step output that other steps
+      # read as `steps.<id>.outputs.<key>` (here: steps.original_sha.outputs.sha).
+      # `$(...)` runs `git rev-parse HEAD` and substitutes its result (the SHA).
       # Remember the commit SHA we started from. Later steps push new commits
       # and we want to compare against THIS sha (not HEAD) to know what the
       # original push actually changed.
@@ -92,12 +141,18 @@ jobs:
         id: original_sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Install Python — most of the housekeeping scripts are Python.
+      # The fresh VM has no project tooling pre-configured, so we install what
+      # the scripts need. Install Python — most of the housekeeping scripts
+      # are Python. `actions/setup-python` puts a Python on PATH; `'3.x'` means
+      # "the latest Python 3" (quoted so YAML keeps it a string, not the
+      # number 3.0).
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.x'
 
+      # `run: |` — the `|` is YAML for "a multi-line block"; every indented
+      # line below is one shell command, run in order in the same shell.
       # Install Playwright + Pillow (used by generate_preview.py to capture
       # and resize screenshots) plus a headless Chromium binary.
       # Pinned versions: bump deliberately when needed rather than picking
@@ -112,6 +167,10 @@ jobs:
       # tag carries a sha384 hash of the file it loads; browsers refuse to
       # execute the file if the hash mismatches. We recompute these hashes
       # whenever style.css or main.js changes, otherwise the page breaks.
+      # This step sets the pattern most steps below reuse: run a Python script
+      # that rewrites files, then commit & push ONLY if something actually
+      # changed. Read the inline comments here once and the later steps will
+      # look familiar.
       - name: Update SRI hashes in HTML files (MUST RUN BEFORE DEPLOY)
         id: sri
         run: |
@@ -140,9 +199,16 @@ jobs:
       # Validate every URL in our HTML against safety lists. We block the
       # whole deploy if anything unsafe slipped through — this is the
       # deploy-time equivalent of the per-PR check.
+      # How "blocking" works: by default, if any command in a step exits with
+      # a nonzero code the whole step fails and the rest of the job is
+      # abandoned. So the `exit 1` further down is what actually halts the run.
       - name: Check URL safety (must pass before normalization)
         id: url_safety
         run: |
+          # `> file` redirects normal output (stdout) to the report file, and
+          # `2>&1` sends error output (stderr) to the same place. `|| true`
+          # swallows a nonzero exit here so we can inspect the report ourselves
+          # below rather than failing immediately on this line.
           python3 tools/check_all_site_urls.py > url-safety-report.txt 2>&1 || true
           cat url-safety-report.txt
           if grep -q "❌ UNSAFE" url-safety-report.txt; then
@@ -155,16 +221,25 @@ jobs:
             echo "safe=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # An "artifact" is a file the run saves and attaches to itself so you can
+      # download it from the run's page afterward (the VM is destroyed, so this
+      # is how files outlive the run). `if:` is a condition controlling whether
+      # a step runs at all; normally a step is skipped once an earlier step has
+      # failed.
       # Save the safety report so reviewers can read it. `if: always()` =
       # upload even if the previous step failed (that's exactly when we
       # most want the report).
       - name: Upload safety report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
+          # `name:` is what the downloadable artifact is called; `path:` is the
+          # file(s) to bundle into it.
           name: deploy-url-safety-report
           path: url-safety-report.txt
+          # Auto-delete after 30 days so artifacts don't pile up forever.
           retention-days: 30
+          # If the file is missing, just warn instead of failing the step.
           if-no-files-found: warn
 
       # Strip tracking params and resolve redirects on every URL. Same logic
@@ -293,6 +368,11 @@ jobs:
           fi
           cat preview-check.txt
 
+      # This `if:` reads the output the previous step published
+      # (steps.check_previews.outputs.missing) and runs only when it equals the
+      # string 'true'. Note the quotes: step outputs are always text, so we
+      # compare against the string 'true', not a YAML boolean. If it's 'false'
+      # this step (and the next one) are skipped, saving time.
       # Headless-Chromium screenshot every URL that's missing a preview.
       # Conditional — only runs if the previous step found something missing.
       - name: Generate missing previews
@@ -305,6 +385,9 @@ jobs:
       - name: Optimize images
         if: steps.check_previews.outputs.missing == 'true'
         run: |
+          # The Ubuntu VM lets us install system packages on the fly.
+          # `apt-get update` refreshes the package lists; `install -y` then
+          # installs jpegoptim, answering "yes" to any prompt automatically.
           sudo apt-get update
           sudo apt-get install -y jpegoptim
           # `find ... -exec`: run jpegoptim once per file. `\;` ends the

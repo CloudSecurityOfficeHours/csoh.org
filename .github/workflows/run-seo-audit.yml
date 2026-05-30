@@ -11,14 +11,29 @@
 # halves of SCORECARD.md current without manual cadence.
 # =============================================================================
 
+# A GitHub Actions "workflow" is an automated job defined in YAML. GitHub runs
+# it on a fresh cloud machine whenever one of the triggers below fires. This
+# `name:` is what shows up in the repo's Actions tab.
 name: Run SEO Audit
 
+# `on:` lists the events that start this workflow. There are three here.
 on:
-  # Mondays 14:15 UTC. Offset 15 min from check-pagespeed so the two SCORECARD
-  # updates land as separate PRs (easier to diff and revert independently).
+  # `schedule` runs the workflow on a timer using cron syntax. The five fields
+  # of a cron expression are: minute, hour, day-of-month, month, day-of-week.
+  # So '15 14 * * 1' = minute 15, hour 14, any day, any month, weekday 1
+  # (Monday) — i.e. every Monday at 14:15 UTC. Cron in GitHub Actions is
+  # ALWAYS in UTC, never your local timezone. The 14:15 is offset 15 min from
+  # check-pagespeed so the two SCORECARD updates land as separate PRs (easier
+  # to diff and revert independently).
   schedule:
     - cron: '15 14 * * 1'
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
+  # human can trigger this run manually, on demand, without waiting for Monday.
   workflow_dispatch:
+  # `push` fires when commits land on the branch(es) listed below. The `paths`
+  # filter narrows that further: this only runs when one of those exact files
+  # changes. So a normal site edit won't trigger an SEO audit — only an edit to
+  # the audit script or this workflow file will.
   # Re-run on changes to the audit script itself, so threshold/logic tweaks
   # take effect on next push.
   push:
@@ -28,52 +43,114 @@ on:
       - 'tools/run_seo_audit.py'
       - '.github/workflows/run-seo-audit.yml'
 
-# Read-only on GITHUB_TOKEN. Writes (push, PR, approve, merge, issue) use the
-# csoh-ci App token + CSOH_PAT for self-approval — same pattern as
-# update-news.yml and check-pagespeed.yml.
+# `permissions:` sets what the auto-injected GITHUB_TOKEN (a temporary
+# credential GitHub hands every workflow run) is allowed to do. Here it's
+# locked to read-only — it can read repo contents but cannot push, open PRs,
+# or file issues. Those write actions instead use a separate, more powerful
+# token minted from the csoh-ci GitHub App (see the first step below), plus
+# CSOH_PAT for the self-approval step. Least-privilege: the default token can
+# only read. Every write here (push, PR, approve, merge, issue) goes through
+# the App token + CSOH_PAT — the same pattern as update-news.yml and
+# check-pagespeed.yml.
 permissions:
   contents: read
 
+# `concurrency:` prevents this workflow from running twice at the same time.
+# Any run with the same `group` name waits its turn. cancel-in-progress: false
+# means a queued run does NOT kill the one already running — they execute
+# one after another, so two audits never race to edit SCORECARD.md.
 concurrency:
   group: run-seo-audit
   cancel-in-progress: false
 
+# `jobs:` holds one or more jobs. Each job runs on its own machine; steps
+# inside a job share that machine and its filesystem. This workflow has a
+# single job named `audit`.
 jobs:
   audit:
+    # `runs-on` picks the type of machine GitHub spins up. ubuntu-latest is a
+    # fresh, throwaway Linux VM provisioned just for this run and discarded
+    # afterward.
     runs-on: ubuntu-latest
 
+    # `steps:` is the ordered list of things the job does, top to bottom. Each
+    # step either runs a prebuilt action (`uses:`) or a shell command (`run:`).
+    # If a step fails, the remaining steps are skipped unless they opt back in
+    # with an `if:` condition.
     steps:
+      # `uses:` pulls in a reusable, prepackaged action published by someone
+      # else. This one mints a short-lived (~1 hour) token for the csoh-ci
+      # GitHub App. We need it because the default GITHUB_TOKEN is read-only
+      # AND, importantly, changes pushed with the default token do NOT trigger
+      # other workflows — but the App token's do, so the PR opened later gets
+      # its required status checks. `id:` names this step so later steps can
+      # read its outputs via steps.app-token.*.
+      # The `@...` after the action name pins it to an exact commit SHA (the
+      # trailing comment notes which version that is). Pinning to a SHA, rather
+      # than a moving tag like @v3, stops a hijacked tag from silently running
+      # new code in our pipeline — a supply-chain safety measure.
       - name: Mint installation token
         id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        # `with:` passes inputs to the action. `${{ ... }}` is GitHub Actions
+        # expression syntax; `secrets.*` reads encrypted repository secrets
+        # (configured in repo Settings, never printed in logs). These two
+        # identify and authenticate the csoh-ci App.
         with:
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
+      # The VM starts empty — this official action clones the repo onto it so
+      # later steps can read and edit files. We hand it the App token (from the
+      # step above, via its `outputs.token`) instead of the default one so that
+      # commits this job pushes are attributed to the App and can trigger CI.
+      # fetch-depth: 0 fetches the FULL git history (the default is a shallow,
+      # single-commit clone); the diff/issue logic later needs that history.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
+      # Install Python on the VM. '3.x' means "the latest available Python 3".
+      # The audit script (tools/run_seo_audit.py) is Python, so we need an
+      # interpreter before we can run it.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.x'
 
-      # Snapshot the most recent Internal SEO audit row (filter to non-PSI
-      # rows — PSI rows have " / " in cells). Used by the regression step.
+      # `run:` executes shell commands on the VM (here, Bash). The `|` makes
+      # this a multi-line block. We grab the most recent Internal SEO audit row
+      # from SCORECARD.md NOW, before the audit overwrites it, so a later step
+      # can compare old vs new and detect a score drop. We filter to non-PSI
+      # rows (PageSpeed rows have " / " in their cells) since this audit only
+      # compares against prior Internal-audit scores.
       - name: Snapshot previous score
         id: prev
         run: |
+          # Strict mode: -e exits on any failed command, -u errors on
+          # unset variables, -o pipefail makes a piped command fail if any
+          # stage fails. Together they stop the script silently limping on
+          # after an error.
           set -euo pipefail
+          # awk scans the file line by line. This program flips an "in table"
+          # flag on at the "| Overall" header, off at the next "## " heading,
+          # and remembers the last data row (starts "| YYYY-") that is NOT a
+          # PageSpeed row (those contain " / "). END prints that last match.
           prev_row=$(awk '
             /\| Overall / {in_t=1; next}
             in_t && /^## / {in_t=0}
             in_t && /^\| [0-9]{4}-/ && !/ \/ / {last=$0}
             END {print last}
           ' seo-audits/SCORECARD.md)
+          # Log it so it's visible in the run output for debugging.
           echo "previous row: $prev_row"
+          # Append a step output named `row` so later steps can read it as
+          # steps.prev.outputs.row. $GITHUB_OUTPUT is a file GitHub gives each
+          # step for exactly this. The `row<<EOF ... EOF` heredoc form is the
+          # safe way to store a value that might contain special characters or
+          # span lines.
           {
             echo "row<<EOF"
             echo "$prev_row"
@@ -86,10 +163,18 @@ jobs:
       - name: Run SEO audit
         id: audit
         run: |
+          # `set +e` temporarily turns OFF "exit on error" so we can inspect
+          # the script's exit code ourselves instead of the job aborting.
           set +e
           python3 tools/run_seo_audit.py
+          # $? holds the exit code of the command that just ran.
           code=$?
+          # Turn strict-error mode back on for the rest of the script.
           set -e
+          # Exit code 1 = the script ran fine but the score regressed: record
+          # regressed=true as an output and keep going (we still want the PR
+          # and the issue). Exit 0 = no regression. Any other code is a real
+          # crash — print to stderr (>&2) and fail the job with that code.
           if [ "$code" = "1" ]; then
             echo "regressed=true" >> "$GITHUB_OUTPUT"
           elif [ "$code" = "0" ]; then
@@ -99,27 +184,44 @@ jobs:
             exit "$code"
           fi
 
+      # `if:` gates whether this step runs at all. It only runs when the audit
+      # step set regressed=true (read via steps.audit.outputs.regressed). When
+      # the condition is false, GitHub skips the step.
       # Build a human-readable issue body from the previous vs new rows.
       - name: Prepare regression body
         id: regression
         if: steps.audit.outputs.regressed == 'true'
         run: |
+          # `python3 <<'PYEOF' ... PYEOF` feeds the lines between the markers
+          # to Python as a script via stdin (a heredoc). Quoting 'PYEOF' tells
+          # the shell NOT to substitute $variables inside, so the Python code
+          # is passed through literally.
           python3 <<'PYEOF'
           import os, re
+          # Read the scorecard and keep only Internal-audit data rows: lines
+          # that begin with a "| YYYY-MM-DD |" date and do NOT contain " / "
+          # (that pattern marks PageSpeed rows, which we want to ignore here).
           text = open('seo-audits/SCORECARD.md').read()
           rows = [line for line in text.splitlines()
                   if re.match(r'^\| \d{4}-\d{2}-\d{2}\s*\|', line) and ' / ' not in line]
+          # Need at least two rows (a before and an after) to describe a drop.
           if len(rows) < 2:
               print('only one audit row — no regression body to write'); exit(0)
+          # The second-to-last row is the previous run; the last is this run.
           prev, new = rows[-2], rows[-1]
+          # Pull the date and the first number (the overall score) out of a
+          # "| date | score | ... |" markdown table row.
           def parse(r):
               cells = [c.strip() for c in r.strip('|').split('|')]
               date = cells[0]
               overall_m = re.search(r'(\d+)', cells[1])
               overall = int(overall_m.group(1)) if overall_m else 0
               return date, overall
+          # pd/ps = previous date/score, nd/ns = new date/score.
           pd, ps = parse(prev)
           nd, ns = parse(new)
+          # Compose the markdown that will become the GitHub issue body.
+          # {ns - ps:+d} formats the delta with an explicit +/- sign.
           body = (
               f"SEO audit overall score dropped vs the previous run.\n\n"
               f"**Previous** ({pd}): **{ps}/100**\n"
@@ -130,12 +232,21 @@ jobs:
               f"Full scorecard: "
               f"[seo-audits/SCORECARD.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/seo-audits/SCORECARD.md)\n"
           )
+          # Write the body to $GITHUB_OUTPUT as a multi-line `body` output (the
+          # <<BODYEOF ... BODYEOF heredoc keeps the newlines intact) so the
+          # issue step further down can read it as steps.regression.outputs.body.
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write('body<<BODYEOF\n')
               f.write(body)
               f.write('\nBODYEOF\n')
+          # This closing PYEOF marks the end of the Python heredoc started above.
           PYEOF
 
+      # Did the audit actually change anything on disk? `git diff --name-only`
+      # lists modified tracked files; `git ls-files --others --exclude-standard`
+      # lists brand-new untracked files (like today's report). If the combined
+      # string is empty (-z), set has_changes=false so the PR step below is
+      # skipped — no point opening an empty PR.
       - name: Detect changed files
         id: changes
         run: |
@@ -145,16 +256,26 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # A note on "[skip ci]": putting that text in a commit message tells
+      # GitHub Actions to NOT run workflows for that commit. We deliberately
+      # do NOT use it here — see why below.
       # The audit writes a new file (seo-audits/YYYY-MM-DD.md) and modifies
       # SCORECARD.md. Both live under seo-audits/, which the deploy +
       # site-housekeeping workflows' path filters exclude — so they won't
       # be triggered by this PR's merge. No need for [skip ci] in the commit
       # message (which would also suppress the required lint checks and
       # leave the PR blocked indefinitely on required-status-check report).
+      # This action commits the changed files to a new branch and opens a pull
+      # request for them. It runs only when has_changes was true. Its `id: cpr`
+      # lets the next steps read steps.cpr.outputs.pull-request-number.
       - name: Create Pull Request
         id: cpr
         if: steps.changes.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        # Inputs to the action: the App token (so the PR can trigger required
+        # checks), the commit message + PR title, the multi-line PR body
+        # (`|` preserves line breaks), the branch name to push to, an
+        # instruction to delete that branch after merge, and labels to tag it.
         with:
           token: ${{ steps.app-token.outputs.token }}
           commit-message: 'chore: weekly SEO audit'
@@ -170,12 +291,21 @@ jobs:
           delete-branch: true
           labels: automated, seo
 
+      # Approve the PR we just opened. `gh` is GitHub's official command-line
+      # tool, preinstalled on the runner; it reads its credentials from the
+      # GH_TOKEN environment variable. `env:` sets variables just for this
+      # step. We approve with a SECOND identity (CSOH_PAT, a Personal Access
+      # Token) because GitHub forbids approving your own PR, and our auto-merge
+      # rule still requires one approval. The `if:` skips this when no PR was
+      # created (pull-request-number is empty).
       - name: Auto approve
         if: steps.cpr.outputs.pull-request-number != ''
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
         env:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
-
+      # Turn on auto-merge so GitHub squash-merges the PR automatically once
+      # its required status checks pass — no human needed. This uses the App
+      # token (not the PAT) to perform the merge.
       - name: Enable auto-merge
         if: steps.cpr.outputs.pull-request-number != ''
         run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
@@ -185,6 +315,9 @@ jobs:
       # Idempotent: if today already has an open "SEO audit regression"
       # issue, append a comment instead of opening a duplicate. Body via
       # stdin so markdown `|` chars in table rows can't get shell-expanded.
+      # Runs only on a regression. `env:` pulls in the App token (for `gh`) and
+      # the issue text built earlier (steps.regression.outputs.body) into the
+      # ISSUE_BODY variable.
       - name: Open or update regression issue
         if: steps.audit.outputs.regressed == 'true'
         env:
@@ -192,7 +325,12 @@ jobs:
           ISSUE_BODY: ${{ steps.regression.outputs.body }}
         run: |
           set -euo pipefail
+          # Title includes today's UTC date. `date -u` forces UTC.
           TITLE="SEO audit regression on $(date -u +%Y-%m-%d)"
+          # Look for an already-open issue with this exact title.
+          # `github.repository` is the built-in "owner/name" of this repo. The
+          # `--jq` flag extracts the first match's number from the JSON, or an
+          # empty string if there are none.
           existing=$(gh issue list \
             --repo "${{ github.repository }}" \
             --state open \
@@ -200,6 +338,11 @@ jobs:
             --search "in:title \"$TITLE\"" \
             --json number \
             --jq '.[0].number // empty')
+          # Idempotent: if such an issue already exists (re-run or manual
+          # trigger on the same day), add a comment instead of opening a
+          # duplicate; otherwise create a fresh issue. In both cases the body
+          # is piped in via stdin (`--body-file -`) so the `|` characters in
+          # the markdown table rows aren't interpreted by the shell.
           if [ -n "$existing" ]; then
             echo "Found existing open issue #$existing — appending comment."
             printf '%s' "$ISSUE_BODY" | gh issue comment "$existing" \

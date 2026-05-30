@@ -1,0 +1,473 @@
+# =============================================================================
+# Build once, publish to three clouds (AWS + GCP + Azure)
+# -----------------------------------------------------------------------------
+# The site is served active/active from three origins behind Cloudflare's Load
+# Balancer. This workflow builds the site a single time, then fans out to
+# publish the identical content to each origin in parallel:
+#
+#   build ──► publish-aws    (S3 sync + CloudFront invalidation)
+#         ├─► publish-azure  (Blob $web sync)
+#         └─► publish-gcp    (container build + Trivy scan + Cloud Run deploy)
+#
+# Every cloud uses keyless OIDC auth — no long-lived cloud secrets in the repo.
+# Non-secret resource IDs come from repo Variables (Settings → Variables),
+# populated from the matching `terraform output` (see infra/README.md).
+#
+# NOTE: third-party actions below are pinned to version tags for readability;
+# pin to commit SHAs (as the GCP auth steps already are) before relying on
+# this in anger.
+# =============================================================================
+
+# A "workflow" is one automated process GitHub runs for you on its own
+# servers. This whole file IS one workflow. `name:` is just the label shown in
+# the repo's Actions tab so humans can tell workflows apart.
+name: Deploy — build once, publish to AWS + GCP + Azure
+
+# `on:` lists the events that TRIGGER this workflow — i.e. what has to happen
+# for GitHub to start running it. There can be several triggers.
+on:
+  # Trigger 1: a `push` (new commits landing in the repo).
+  push:
+    # ...but only pushes to the `main` branch. Pushes to other branches are
+    # ignored by this workflow.
+    branches: [main]
+    # ...and even on main, only run if at least one CHANGED file matches a
+    # pattern below. No point redeploying the site if a commit only touched,
+    # say, the README or Terraform. Patterns use glob syntax: `*` = any chars
+    # in one path segment, `**` = any depth of subdirectories.
+    paths:
+      - '*.html'
+      - 'chat-screenshots/**'
+      - 'img/**'
+      - 'style.css'
+      - 'main.js'
+      - 'chat-resources.js'
+      - 'breach-timeline.css'
+      - 'breach-timeline.js'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - 'nginx-security-headers.conf'
+      - 'search.html'
+      - 'search.css'
+      - 'search-init.js'
+      - 'search-synonyms.json'
+      - 'tools/build_search_index.py'
+      - 'tools/site-publish.filter'
+      - 'tools/stage_site.sh'
+      - 'vendor/**'
+      - '.github/workflows/deploy.yml'
+  # Trigger 2: `workflow_dispatch` adds a "Run workflow" button in the Actions
+  # tab so a human can deploy on demand (e.g. to redeploy after a config
+  # change that didn't touch any of the paths above).
+  workflow_dispatch:
+
+# `permissions:` sets what the automatic, per-run GITHUB_TOKEN is allowed to do
+# against THIS repo. We deliberately keep it minimal (least privilege).
+permissions:
+  # Read-only access to the repo contents — enough to check out the code.
+  contents: read
+  # This is the key line for keyless cloud auth. `id-token: write` lets the run
+  # mint a short-lived, signed OIDC (OpenID Connect) token that proves "I am
+  # this GitHub workflow." Each cloud is configured to trust that token and
+  # hand back temporary credentials in exchange — so there are NO long-lived
+  # cloud keys stored in the repo. Without this line, all three logins fail.
+  id-token: write   # required for OIDC token exchange (all three clouds)
+
+# `concurrency:` stops overlapping runs from racing each other. Runs that share
+# the same `group` name are serialized.
+concurrency:
+  # A fixed name, so every run of this workflow lands in the same group.
+  group: deploy
+  # If a new deploy starts while an older one is still going, cancel the older
+  # one. The newest commit is what we want live, so finishing a stale deploy
+  # would be wasteful (and could publish older bytes after newer ones).
+  cancel-in-progress: true
+
+# `jobs:` holds the units of work. A "job" runs on its own fresh virtual
+# machine ("runner"). By default jobs run in PARALLEL; the `needs:` key (used
+# below) is how you force one job to wait for another. Each job is made of
+# ordered "steps".
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build the public file set once. tools/build_search_index.py regenerates
+  # /search-index.json, then tools/stage_site.sh produces dist/ — the exact
+  # set of files that should be public (mirrors nginx.conf blocks + Dockerfile
+  # strip list). dist/ is uploaded as an artifact for the object-storage jobs.
+  # ---------------------------------------------------------------------------
+  # `build` is this job's internal id (referenced later by `needs: build`).
+  build:
+    # `runs-on:` picks the runner type. `ubuntu-latest` is a GitHub-hosted
+    # Linux VM, created clean for this job and thrown away when it finishes.
+    runs-on: ubuntu-latest
+    # The ordered list of things this job does, top to bottom.
+    steps:
+      # A step is one action. `name:` is just its label in the run logs.
+      # Two ways to run a step: `uses:` (run a prebuilt, shareable Action) or
+      # `run:` (run shell commands). This step uses `uses:`.
+      - name: Checkout
+        # `actions/checkout` clones this repo onto the runner. Without it the
+        # VM is empty and our scripts/files aren't there. The `@<40-hex>` after
+        # the name pins the action to one exact Git commit instead of a movable
+        # tag like `v6` — so a compromised or changed upstream tag can't
+        # silently alter what runs. The `# v6.0.2` note records which release
+        # that commit corresponds to, for human readers.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      # This step uses `run:` to execute shell. The `|` makes the value a
+      # multi-line block: every following indented line is one line of a Bash
+      # script run on the runner.
+      - name: Build search index
+        run: |
+          # Make the script fail fast and loudly: -e exit on any error,
+          # -u error on use of an unset variable, -o pipefail catch a failure
+          # anywhere in a pipeline (not just the last command).
+          set -euo pipefail
+          # Regenerate the client-side search index file from the site content.
+          python3 tools/build_search_index.py
+          # Confirm the file was actually produced.
+          test -f search-index.json
+          # Measure its size in bytes (stat -c%s prints just the byte count).
+          size=$(stat -c%s search-index.json)
+          # Guard against a silently-broken build: a real index is large, so a
+          # tiny file almost certainly means indexing failed. Fail the job.
+          if [ "$size" -lt 100000 ]; then
+            # `>&2` sends this message to standard error (the error stream).
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            # A non-zero exit code marks the step (and job) as failed.
+            exit 1
+          fi
+          # Log the size in KB for the run output.
+          echo "search-index.json built: $((size / 1024)) KB"
+
+      # Run the staging script, which copies only the public files into a fresh
+      # dist/ directory (see tools/stage_site.sh). dist/ is exactly what gets
+      # published to the object-storage origins.
+      - name: Stage public site into dist/
+        run: ./tools/stage_site.sh dist
+
+      # Each job runs on its own throwaway VM, so files don't automatically
+      # carry over to other jobs. An "artifact" is a bundle of files this job
+      # saves to GitHub so LATER jobs can download it. Here we save dist/ for
+      # the AWS and Azure publish jobs to fetch.
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        # `with:` passes inputs (named settings) to a `uses:` action — like
+        # arguments to a function.
+        with:
+          # The artifact's name; the download steps refer to it by this name.
+          name: site-dist
+          # Which folder to bundle up.
+          path: dist/
+          # Auto-delete after 1 day. This artifact is only a hand-off between
+          # jobs in the same run, so it doesn't need to linger (and storage
+          # isn't free).
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # AWS: sync dist/ to the private S3 origin, then invalidate CloudFront.
+  # ---------------------------------------------------------------------------
+  publish-aws:
+    # `needs: build` makes this job WAIT until `build` finishes successfully.
+    # That's also how it gets access to the dist/ artifact build uploaded. The
+    # three publish jobs all `needs: build` but not each other, so they run in
+    # parallel once build is done.
+    needs: build
+    runs-on: ubuntu-latest
+    # `environment:` ties this job to a named GitHub Environment ("production").
+    # Environments can carry their own variables/secrets and protection rules
+    # (e.g. required approvals). They also scope which OIDC tokens the cloud
+    # will trust — the AWS/Azure trust policies require environment=production.
+    environment: production
+    steps:
+      # Pull down the dist/ bundle the build job uploaded, into a local dist
+      # folder on this fresh VM.
+      - name: Download dist artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: site-dist
+          path: dist
+
+      # Exchange the run's OIDC token for temporary AWS credentials (no stored
+      # keys). The action calls AWS sts:AssumeRoleWithWebIdentity behind the
+      # scenes and exports the resulting short-lived creds for later steps.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59  # v6.1.3
+        with:
+          # `${{ ... }}` is GitHub Actions expression syntax — it gets
+          # substituted before the step runs. `vars.NAME` reads a repo-level
+          # Variable (Settings → Variables), used for NON-secret values like
+          # this IAM role's ARN. (Sensitive values would use `secrets.NAME`
+          # instead, which GitHub masks in logs — but keyless OIDC means we
+          # have no AWS secrets to store here.) The role's trust policy is what
+          # decides whether to accept our OIDC token.
+          role-to-assume: ${{ vars.AWS_PUBLISHER_ROLE_ARN }}
+          # AWS region for the API calls below. S3 + CloudFront control-plane
+          # operations are handled via us-east-1.
+          aws-region: us-east-1
+
+      # Mirror dist/ up to the S3 bucket that backs the AWS origin.
+      - name: Sync to S3
+        run: |
+          # `aws s3 sync` uploads only what changed. `--delete` removes objects
+          # from the bucket that no longer exist locally, so the bucket exactly
+          # matches dist/. `--no-progress` keeps the CI log clean.
+          aws s3 sync dist "s3://${{ vars.AWS_BUCKET_NAME }}" \
+            --delete --no-progress
+
+      # S3 is the origin, but Cloudflare/CloudFront cache copies at the edge.
+      # After uploading new files we must purge the CDN cache or visitors keep
+      # getting stale pages.
+      - name: Invalidate CloudFront
+        run: |
+          # Tell the CloudFront distribution to drop its cached copies.
+          # `--paths "/*"` invalidates everything (the whole site).
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*"
+
+  # ---------------------------------------------------------------------------
+  # Azure: sync dist/ to the Blob static-website $web container. `blob sync`
+  # mirrors the directory, including deletions of removed files.
+  # ---------------------------------------------------------------------------
+  publish-azure:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # Same dist/ bundle, downloaded onto this job's separate VM.
+      - name: Download dist artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: site-dist
+          path: dist
+
+      # Azure's flavour of keyless OIDC login. Entra ID (Azure's identity
+      # system) has a "federated credential" that trusts this workflow's OIDC
+      # token and signs us in as the app below — again, no stored secret.
+      - name: Azure login (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          # The app (service principal) identity to sign in as. This one IS a
+          # repo Variable because Terraform generates it on apply.
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          # Tenant + subscription are fixed accounts (identifiers, not secrets),
+          # pinned here and in infra/terraform/azure to match. AZURE_CLIENT_ID
+          # stays a repo Variable because it's an output of `terraform apply`.
+          tenant-id: 10e6d2fb-a320-46fa-8df1-9aa7a8f6b2dc
+          subscription-id: f973ebad-a06c-4d5c-8161-0faf2a13076c
+
+      # Upload dist/ to the Azure Storage static-website container.
+      - name: Sync to Blob $web
+        # The azure/cli action runs commands inside a container that already
+        # has the `az` CLI installed, reusing the login from the step above.
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52  # v3.0.0
+        with:
+          # Which az CLI version the container should use.
+          azcliversion: latest
+          # `inlineScript` is this action's way of taking shell to run (the
+          # action's equivalent of a `run:` block).
+          inlineScript: |
+            # Mirror the local dist folder into the storage account. Static
+            # websites in Azure are served from a special container literally
+            # named `$web`. `blob sync` uploads changes AND deletes files that
+            # are gone locally, so the site matches dist/ exactly. `--auth-mode
+            # login` uses our OIDC sign-in (an account identity) rather than a
+            # storage account key.
+            az storage blob sync \
+              --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" \
+              --auth-mode login \
+              -c '$web' \
+              -s dist
+
+  # ---------------------------------------------------------------------------
+  # GCP: build the nginx container, Trivy-scan it, push to Artifact Registry,
+  # and deploy a Cloud Run revision. Cloud Run is now a direct Cloudflare
+  # origin (ingress=all, no GCLB / Cloud CDN — so no cache invalidation step).
+  # ---------------------------------------------------------------------------
+  publish-gcp:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    # `env:` here defines environment variables shared by EVERY step in this
+    # job. They name the GCP project, region, and resource names once, so the
+    # steps below can reference them (via `${{ env.NAME }}` in expressions or
+    # `$NAME` in shell) instead of repeating literals.
+    env:
+      PROJECT_ID: csoh-org-495800
+      REGION: us-central1
+      SERVICE: csoh-site
+      REPO: csoh-containers
+      IMAGE_NAME: csoh-site
+    steps:
+      # Unlike the object-storage jobs, GCP rebuilds the site INTO a container
+      # image, so it needs the source code — hence checkout (not just the
+      # dist/ artifact).
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      # GCP's keyless login: Workload Identity Federation (WIF). The provider
+      # below is configured to trust this workflow's OIDC token and then act as
+      # the named service account — no service-account key file involved.
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          # The full resource path of the WIF provider that vets our OIDC token.
+          workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          # The GCP service account this job impersonates (its deploy identity).
+          service_account: csoh-deployer@csoh-org-495800.iam.gserviceaccount.com
+
+      # Install and configure the `gcloud` CLI on the runner, reusing the WIF
+      # credentials from the previous step.
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db  # v3.0.1
+
+      # Teach Docker how to authenticate to Artifact Registry (GCP's container
+      # registry) so the later push is allowed. The registry host is
+      # region-specific, hence `${{ env.REGION }}`.
+      - name: Configure docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # Build the full image reference (registry path + tag) and publish it as
+      # this step's output so later steps can reuse the exact same value.
+      - name: Compute image tag
+        # `id:` gives the step a handle. Other steps read its outputs via
+        # `steps.tag.outputs.<name>` (see the build/scan/push/deploy steps).
+        id: tag
+        run: |
+          # `$GITHUB_SHA` is the commit being built; `::12` is Bash substring
+          # syntax taking the first 12 chars — a short, unique-enough tag.
+          SHA="${GITHUB_SHA::12}"
+          # Assemble the Artifact Registry path: HOST/PROJECT/REPO/IMAGE.
+          REF="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}"
+          # Writing `name=value` to the special `$GITHUB_OUTPUT` file is how a
+          # step exports an output. This sets output `image` to the full
+          # `path:shortsha`, consumed below as steps.tag.outputs.image.
+          echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      # Same index the object-storage origins serve, baked into the image via
+      # the Dockerfile's `COPY . /usr/share/nginx/html/`.
+      # (Rebuilt here because this job has the source, not the dist/ artifact;
+      # same fail-fast + size sanity guard as the build job.)
+      - name: Build search index
+        run: |
+          set -euo pipefail
+          python3 tools/build_search_index.py
+          test -f search-index.json
+          size=$(stat -c%s search-index.json)
+          if [ "$size" -lt 100000 ]; then
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            exit 1
+          fi
+
+      # Build the Docker image locally on the runner from the repo's Dockerfile.
+      # `docker build` reads the Dockerfile in the build context (the trailing
+      # `.` = current directory) and produces an image. `--tag` names it with
+      # the exact reference computed earlier. The three `--label` flags stamp
+      # standard OpenContainers (OCI) metadata onto the image so anyone
+      # inspecting it can trace it back to its source/commit/build-time;
+      # `github.repository` and `github.sha` come from the `github` context
+      # (built-in info about the run: owner/repo and the commit SHA), and the
+      # created timestamp is computed at run time by `date` in UTC ISO-8601.
+      # (Comments are kept ABOVE the command: a `#` line between two
+      # backslash-continued shell lines would break the command.)
+      - name: Build container image
+        run: |
+          docker build \
+            --tag "${{ steps.tag.outputs.image }}" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            .
+
+      # Install Trivy, an open-source vulnerability scanner, so we can check the
+      # image for known security flaws BEFORE it ever reaches the registry.
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          # Pin the exact version we want...
+          TRIVY_VERSION="0.70.0"
+          # ...and its expected SHA-256 checksum, so we can verify the download
+          # wasn't tampered with or corrupted.
+          TRIVY_SHA256="8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9"
+          # Download the release tarball. curl flags: -f fail on HTTP errors,
+          # -s silent, -S still show errors, -L follow redirects.
+          curl -fsSL -o /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          # Verify the download matches the pinned checksum; `sha256sum -c -`
+          # exits non-zero (failing the step) if it doesn't.
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          # Extract just the `trivy` binary into a directory on the PATH.
+          sudo tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          # Clean up the tarball and confirm the binary runs.
+          rm /tmp/trivy.tar.gz
+          trivy --version
+
+      # Scan the freshly built image and BLOCK the deploy if serious, fixable
+      # vulnerabilities are found. Flags below (kept above the command so a
+      # comment never lands between backslash-continued lines):
+      #   --exit-code 1   fail the job if anything matches
+      #   --ignore-unfixed   skip vulns with no fix available (we can't act on
+      #                      them, so they shouldn't block shipping)
+      #   --severity HIGH,CRITICAL   only the two most serious levels
+      #   --format table / --no-progress   readable output, no spinner in logs
+      # The final argument is the exact image we just built.
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --no-progress \
+            "${{ steps.tag.outputs.image }}"
+
+      # Artifact Registry has immutable_tags=true, so re-pushing a tag fails.
+      # Make push idempotent for workflow reruns by checking AR first.
+      # ("Idempotent" = safe to run more than once with the same result; a
+      # re-run of the same commit won't error out on the push.)
+      - name: Push container image (skip if already in registry)
+        run: |
+          set -euo pipefail
+          # `describe` succeeds only if that exact image:tag is already in the
+          # registry. We discard its output (>/dev/null) and errors (2>&1).
+          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
+            # Already there from a prior run — nothing to do.
+            echo "Image already exists in Artifact Registry — skipping push (idempotent rerun)."
+          else
+            # Not present yet — upload it.
+            docker push "${{ steps.tag.outputs.image }}"
+          fi
+
+      # Roll out a new Cloud Run revision running the image we just pushed.
+      # Cloud Run scales to zero when idle and back up on demand. Flags below
+      # (kept above the command so a comment never lands between
+      # backslash-continued lines):
+      #   --image   the exact image to run (same reference used all job long)
+      #   --platform managed   Google runs the servers, not us
+      #   --ingress all   accept traffic from anywhere; Cloudflare reaches this
+      #                   service directly as one of the three origins
+      #   --service-account   the RUNTIME identity the container runs as —
+      #                       separate from the deployer identity above and kept
+      #                       minimal (least privilege)
+      #   --quiet   don't prompt for confirmation; CI can't answer prompts
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ steps.tag.outputs.image }}" \
+            --platform managed \
+            --ingress all \
+            --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --quiet
+
+      # Print which revision is now live and its URL — handy confirmation in the
+      # run log that the deploy actually took effect.
+      - name: Show deployed revision
+        run: |
+          # `--format='value(...)'` prints just the two named fields, space-
+          # separated, with no surrounding table/labels.
+          gcloud run services describe "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --format='value(status.latestReadyRevisionName,status.url)'

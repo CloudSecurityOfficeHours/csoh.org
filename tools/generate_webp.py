@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""Generate .webp siblings for every JPEG image under img/og/ and img/previews/.
+"""Generate .webp siblings for raster images (JPEG + PNG) used on the site.
 
 Why .webp: modern browsers send `Accept: image/webp`; serving WebP saves
-~25-35% bandwidth at equivalent quality. The `.htaccess` rule we add does
-content negotiation transparently — no HTML changes needed.
+~25-35% bandwidth at equivalent quality. Delivery is via <picture><source
+type="image/webp"> in the HTML (run tools/wrap_img_webp.py after this) — our
+object-storage origins can't do Accept-based negotiation, so there's no
+.htaccess trick to lean on.
 
-Idempotent: skips files whose .webp sibling is newer than the .jpg source.
+Encoding: lossy WebP at quality 82 (the sweet spot — visually indistinguishable
+from the source at display size, well under half the bytes). Site images (photos
++ page-screenshot thumbnails) are only ever shown scaled down, so lossless would
+just bloat git history for no visible gain. A generated .webp that isn't actually
+smaller than its source is discarded, so we never serve a larger file (and
+wrap_img_webp.py then leaves that <img> alone).
+
+Idempotent: skips files whose .webp sibling is newer than the source.
 
 Requires Pillow (pip install Pillow). On the deploy runner Pillow is
 already installed alongside Playwright for the preview generator.
 
 Usage:
-    python3 tools/generate_webp.py             # all dirs
-    python3 tools/generate_webp.py img/og      # specific dir
-    python3 tools/generate_webp.py --force     # regenerate even if up-to-date
+    python3 tools/generate_webp.py                   # all default dirs
+    python3 tools/generate_webp.py chat-screenshots  # specific dir
+    python3 tools/generate_webp.py --force           # regenerate even if up-to-date
 """
 
 from __future__ import annotations
@@ -23,32 +32,40 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DIRS = [REPO_ROOT / "img" / "og", REPO_ROOT / "img" / "previews"]
+DEFAULT_DIRS = [
+    REPO_ROOT / "img" / "og",
+    REPO_ROOT / "img" / "previews",
+    REPO_ROOT / "chat-screenshots",
+]
 # Quality 82 is the sweet spot: indistinguishable from JPEG at the same
 # perceived quality, but ~30% smaller. 75 is too soft on text; 90 starts
 # bloating without visible benefit.
 WEBP_QUALITY = 82
 
 
-def convert(src: Path, force: bool) -> tuple[bool, int, int]:
-    """Returns (converted, src_bytes, dst_bytes)."""
+def convert(src: Path, force: bool) -> tuple[str, int, int]:
+    """Returns (status, src_bytes, dst_bytes) where status is one of
+    'converted', 'uptodate', 'not-smaller'."""
     dst = src.with_suffix(".webp")
+    src_b = src.stat().st_size
     if not force and dst.exists() and dst.stat().st_mtime >= src.stat().st_mtime:
-        return False, src.stat().st_size, dst.stat().st_size
+        return "uptodate", src_b, dst.stat().st_size
 
     from PIL import Image
     with Image.open(src) as img:
-        # If the source has a palette or transparency mode, convert to RGB
-        # so WebP encoding doesn't drop information unpredictably.
+        # Preserve alpha (PNG transparency); coerce palette/other modes to a
+        # WebP-friendly one. WebP lossy keeps an alpha channel fine.
         if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
-        img.save(
-            dst,
-            "WEBP",
-            quality=WEBP_QUALITY,
-            method=6,    # slowest/best compression
-        )
-    return True, src.stat().st_size, dst.stat().st_size
+            img = img.convert("RGBA" if img.mode in ("P", "LA", "PA") else "RGB")
+        img.save(dst, "WEBP", quality=WEBP_QUALITY, method=6)
+
+    dst_b = dst.stat().st_size
+    # Never keep a .webp that isn't actually smaller — serving a larger file
+    # would defeat the purpose. wrap_img_webp.py then leaves that <img> alone.
+    if dst_b >= src_b:
+        dst.unlink()
+        return "not-smaller", src_b, src_b
+    return "converted", src_b, dst_b
 
 
 def main() -> int:
@@ -70,34 +87,39 @@ def main() -> int:
     total_dst = 0
     converted = 0
     skipped = 0
+    not_smaller = 0
     failed = 0
 
     for d in targets:
         if not d.exists():
             print(f"  - skip (missing): {d.relative_to(REPO_ROOT)}")
             continue
-        jpgs = sorted(list(d.glob("*.jpg")) + list(d.glob("*.jpeg")))
-        if not jpgs:
+        srcs = sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
+        srcs.sort()
+        if not srcs:
             continue
-        print(f"📁 {d.relative_to(REPO_ROOT)} — {len(jpgs)} source JPEGs")
-        for src in jpgs:
+        print(f"📁 {d.relative_to(REPO_ROOT)} — {len(srcs)} source images")
+        for src in srcs:
             try:
-                did, src_b, dst_b = convert(src, force=args.force)
+                status, src_b, dst_b = convert(src, force=args.force)
             except Exception as e:
                 print(f"  ✗ {src.name}: {e}")
                 failed += 1
                 continue
             total_src += src_b
             total_dst += dst_b
-            if did:
+            if status == "converted":
                 converted += 1
+            elif status == "not-smaller":
+                not_smaller += 1
             else:
                 skipped += 1
 
     if total_src:
         savings_pct = 100 * (total_src - total_dst) / total_src
         print(
-            f"\n✓ {converted} converted, {skipped} up-to-date, {failed} failed."
+            f"\n✓ {converted} converted, {skipped} up-to-date,"
+            f" {not_smaller} skipped (webp not smaller), {failed} failed."
             f" Total: {total_src/1024:.0f}KB → {total_dst/1024:.0f}KB"
             f" ({savings_pct:.0f}% smaller)."
         )

@@ -16,58 +16,137 @@
 # satisfy the "1 required approval" rule).
 # =============================================================================
 
+# A "workflow" is one automated process GitHub Actions runs for this repo.
+# This whole file defines a single workflow. `name:` is just the label that
+# shows up in the repo's "Actions" tab so humans can tell workflows apart.
 name: Update Resources
 
+# `on:` lists the events that cause this workflow to run (its "triggers").
+# A workflow can have several triggers; any one of them firing starts a run.
 on:
-  # Mondays at 14:00 UTC (10:00 ET / 09:00 CT). cron timezone is always UTC.
+  # `schedule:` runs the workflow automatically on a clock, like a cron job.
+  # cron is the classic Unix time format: five fields meaning
+  #   minute  hour  day-of-month  month  day-of-week.
+  # `0 14 * * 1` = minute 0, hour 14, any day-of-month, any month, weekday 1
+  # (Monday). So: every Monday at 14:00 UTC (10:00 ET / 09:00 CT). GitHub
+  # always interprets cron in UTC.
   schedule:
     - cron: '0 14 * * 1'
-  # Manual trigger from the Actions tab.
+  # `workflow_dispatch:` adds a "Run workflow" button in the Actions tab so a
+  # human can kick off the workflow by hand, on demand, without waiting for
+  # the schedule.
   workflow_dispatch:
 
+# `permissions:` controls what the automatic, built-in token (called
+# GITHUB_TOKEN) is allowed to do with this repo during the run. GitHub
+# injects that token into every run; here we keep it deliberately minimal.
 # Default token is read-only. Write access comes from the App installation
 # token minted below, matching the pattern in update-news.yml.
 # `id-token: write` is required by anthropics/claude-code-action@v1 — it
 # exchanges a GitHub OIDC token for short-lived Claude credentials.
 permissions:
+  # `contents: read` = the token may clone/read this repo's files, nothing
+  # more. It cannot push commits; the GitHub App token (minted in the first
+  # step) provides write access where it's actually needed.
   contents: read
+  # OIDC (OpenID Connect) is a standard way for one system to prove its
+  # identity to another using a short-lived, signed token instead of a stored
+  # password. `id-token: write` lets this run request such a token from
+  # GitHub. The same keyless idea powers this site's cloud deploys (AWS/GCP/
+  # Azure trust GitHub's OIDC token instead of long-lived secrets); here the
+  # Claude Code action trades it for temporary Claude credentials.
   id-token: write
 
-# Don't let two scheduled runs stomp each other. Queue serially.
+# `concurrency:` stops the same workflow from running on top of itself.
+# Runs that share one "group" name are serialized: only one runs at a time,
+# so two scheduled runs never stomp each other.
 concurrency:
+  # All runs of this workflow share this group name, so they take turns.
   group: update-resources
+  # `false` = a new run WAITS for the in-flight one to finish instead of
+  # canceling it. We never want to interrupt a half-finished resource edit.
   cancel-in-progress: false
 
+# `jobs:` holds the units of work. A workflow has one or more jobs; each job
+# runs on its own fresh virtual machine. By default jobs run in parallel, but
+# this workflow has just one job, so there's nothing to parallelize here.
 jobs:
+  # `update-resources` is this job's internal id (our choice of name).
   update-resources:
+    # `runs-on:` picks the type of machine GitHub spins up for the job.
+    # `ubuntu-latest` = a clean, throwaway Linux VM, discarded after the run.
     runs-on: ubuntu-latest
+    # Safety cap: if the job hangs (e.g. Claude or the network stalls), GitHub
+    # kills it after 20 minutes so it doesn't run — and bill — indefinitely.
     timeout-minutes: 20
 
+    # `steps:` are the ordered actions inside a job. They run top-to-bottom on
+    # the same VM, sharing its filesystem, so a later step sees files an
+    # earlier step created. Each step is EITHER a `uses:` (a prebuilt, shared
+    # action pulled from another repo) OR a `run:` (raw shell commands).
     steps:
       # Mint a short-lived installation token from the csoh-ci GitHub App so
       # the create-PR step has push access AND the PR can trigger downstream
       # CI (the default GITHUB_TOKEN cannot trigger workflows on PRs it opens).
+      # `- name:` is the human-readable label shown in the run's logs.
       - name: Mint installation token
+        # `id:` gives this step a handle so later steps can read its results
+        # via `steps.app-token.outputs.<name>` (used below as the push token).
         id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+        # `uses:` runs a prebuilt action from another GitHub repo. The part
+        # after `@` pins the EXACT version. Here it's a full 40-char commit
+        # SHA (not a tag like `v3`) because tags can be silently moved to new
+        # code; a SHA is immutable, so we always run the exact reviewed code.
+        # The trailing `# v3.1.1` is just a human note for which release it is.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        # `with:` passes named inputs to the action — like function arguments.
         with:
+          # `${{ ... }}` is GitHub Actions' expression syntax, substituted at
+          # run time. `secrets.NAME` reads an encrypted value stored in the
+          # repo/org settings; it's never printed in logs. These two identify
+          # and authenticate the csoh-ci GitHub App so it can mint a token.
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
+      # The VM starts empty — it has none of the repo's files. The standard
+      # `actions/checkout` action clones the repository onto the VM so the
+      # later steps can read and edit resources.html.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          # Clone using the App token (from the step above) instead of the
+          # default GITHUB_TOKEN. That matters because commits/PRs created
+          # with the App token CAN trigger downstream workflows; the default
+          # token deliberately cannot, to prevent infinite CI loops.
           token: ${{ steps.app-token.outputs.token }}
+          # `fetch-depth: 0` clones the FULL git history (not just the latest
+          # commit). The create-PR action needs full history to build a clean
+          # branch and diff. (0 means "no depth limit / everything".)
           fetch-depth: 0
 
       # Hand Claude Code a prompt that mirrors the manual workflow we used
       # to seed the catalog. The model researches new resources, checks for
       # duplicates against existing cards, and edits resources.html in place.
       - name: Run Claude Code to add new resources
-        uses: anthropics/claude-code-action@v1
+        # This action is pinned to the moving tag `@v1` rather than a SHA.
+        # That's a deliberate tradeoff: it's Anthropic's own first-party
+        # action and we want its latest v1 fixes automatically. Third-party
+        # actions above are SHA-pinned for stricter supply-chain safety.
+        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251  # v1.0.133
         with:
+          # The credential the action uses to talk to Claude. It's the OAuth
+          # token from `claude setup-token`, stored as an encrypted repo
+          # secret, so model usage bills against the subscription quota.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Command-line flags forwarded to the Claude Code CLI. `--model`
+          # picks which model to use. `--allowedTools` is an allowlist of the
+          # ONLY tools Claude may use this run; `Bash(grep:*)` means it may run
+          # grep but not arbitrary shell — a guardrail so it can't, say, push.
           claude_args: '--model claude-opus-4-7 --allowedTools "Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),Bash(python3:*),WebSearch,WebFetch"'
+          # `prompt:` is the instructions handed to Claude. The `|` is YAML's
+          # "literal block scalar": every indented line below is kept verbatim
+          # (newlines preserved) and passed through as one multi-line string.
+          # The text below is that prompt's content, not YAML config.
           prompt: |
             You are updating the cloud security resources catalog at
             resources.html. The file is large (~3,800 lines); read it in
@@ -139,15 +218,32 @@ jobs:
       # Bail out cleanly if Claude didn't change anything (e.g., it concluded
       # there was nothing high-quality to add this week, or hit an error).
       - name: Detect changed files
+        # This step is named via `id:` so later steps can branch on its
+        # results, e.g. `steps.changes.outputs.has_changes`.
         id: changes
+        # `run:` executes shell commands directly on the VM (no prebuilt
+        # action). The `|` again means "treat the indented block below as one
+        # multi-line script." Lines starting with `#` are shell comments.
         run: |
+          # Bash "strict mode": -e exit on any error, -u error on undefined
+          # variables, -o pipefail fail if any command in a pipe fails. This
+          # makes the script stop loudly instead of silently misbehaving.
           set -euo pipefail
+          # `git diff --name-only` lists paths Claude modified vs the last
+          # commit. We capture that list into the `files` shell variable.
           files="$(git diff --name-only)"
+          # `[ -z "$files" ]` is true when the list is empty (no edits).
           if [ -z "$files" ]; then
+            # `$GITHUB_OUTPUT` is a file GitHub gives each step; appending
+            # `key=value` to it publishes a step "output" that later steps
+            # read via `steps.<id>.outputs.key`. Here we record that there
+            # were no changes, so the PR steps below get skipped.
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "No changes — Claude added nothing this run."
+            # `exit 0` ends this step successfully (0 = success); no PR needed.
             exit 0
           fi
+          # There were changes — flag it and print them into the run log.
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "Changed files:"
           echo "$files"
@@ -155,9 +251,15 @@ jobs:
           # Safety check: Claude was told to only edit resources.html. If it
           # touched anything else, surface that in the PR so a human catches
           # it. We don't fail the run — the PR review is the gate.
+          # `grep -v` keeps lines that do NOT match; the regex `^resources\.html$`
+          # matches that exact filename. So this `if` is true when at least one
+          # changed file is something OTHER than resources.html.
           if echo "$files" | grep -v '^resources\.html$' >/dev/null; then
+            # Something unexpected changed — record it so the PR body warns a
+            # human and auto-merge stays off.
             echo "unexpected_files=true" >> "$GITHUB_OUTPUT"
           else
+            # Clean: only resources.html changed — safe to auto-merge later.
             echo "unexpected_files=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -166,12 +268,27 @@ jobs:
       # PR stays open for human review — important safety valve.
       - name: Create Pull Request
         id: cpr
+        # `if:` is a guard: the step runs only when this expression is true.
+        # `'true'` is in quotes because step outputs are always strings.
+        # Skip opening a PR unless the previous step found real changes.
         if: steps.changes.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+        # This third-party action bundles several git operations into one:
+        # it creates a branch, commits the working-tree changes, pushes, and
+        # opens (or updates) the pull request.
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
+          # Push/PR with the App token (not the default one) so opening this
+          # PR is allowed to trigger the downstream deploy CI.
           token: ${{ steps.app-token.outputs.token }}
+          # The commit message used for the single commit on the PR branch.
           commit-message: 'chore: weekly resources catalog refresh'
+          # The PR's title, shown in the pull-request list.
           title: 'chore: Weekly resources update'
+          # The PR description. `|` keeps the multi-line text below literal,
+          # so it's body content, not YAML config. The one `${{ A && B || C }}`
+          # inside it is GitHub's stand-in for "if A then B else C": when
+          # unexpected files changed it inserts a warning, otherwise an
+          # "auto-merge enabled" note.
           body: |
             Automated weekly refresh of `resources.html`.
 
@@ -183,8 +300,14 @@ jobs:
             after merge.
 
             ${{ steps.changes.outputs.unexpected_files == 'true' && '⚠️  **Heads up:** Claude touched files other than `resources.html`. Auto-merge is disabled on this PR — please review the diff carefully before merging.' || 'Auto-merge enabled — only `resources.html` was changed.' }}
+          # Always reuse this fixed branch name for the PR. Reusing one branch
+          # means a new run updates the existing PR instead of piling up new
+          # ones week after week.
           branch: update-resources-content
+          # Delete that branch automatically once the PR is merged or closed,
+          # to keep the branch list tidy.
           delete-branch: true
+          # Attach these labels to the PR for easy filtering in the PR list.
           labels: automated, content
 
       # Approve the PR using a separate identity (CSOH_PAT). GitHub blocks
@@ -193,8 +316,18 @@ jobs:
       # second identity approving is the only way to drive auto-merge to
       # completion. Same rationale as update-news.yml.
       - name: Auto approve
+        # Run only if BOTH conditions hold (`&&` = and): a PR was actually
+        # created (its number is not empty, `!=` = not equal), AND only the
+        # expected file changed. Otherwise we don't rubber-stamp it.
         if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.unexpected_files == 'false'
+        # `gh` is GitHub's official command-line tool, preinstalled on the VM.
+        # `gh pr review --approve <number>` posts an approving review on the
+        # PR that the create-PR step opened.
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
+        # `env:` sets environment variables just for this step. `gh` reads its
+        # credentials from GH_TOKEN; pointing it at CSOH_PAT makes the approval
+        # come from that separate identity, satisfying GitHub's "can't approve
+        # your own PR" rule.
         env:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
 
@@ -202,9 +335,16 @@ jobs:
       # Claude wandered off and touched something else, the PR stays open
       # until a human reviews.
       - name: Enable PR auto-merge when only resources.html changed
+        # Same dual guard as the approve step: clean diff AND a PR exists.
+        # Auto-merge means "merge automatically once required checks pass and
+        # the approval is in" — it does not merge immediately.
         if: steps.changes.outputs.unexpected_files == 'false' && steps.cpr.outputs.pull-request-number != ''
         uses: peter-evans/enable-pull-request-automerge@a660677d5469627102a1c1e11409dd063606628d  # v3.0.0
         with:
+          # App token again, so the action is allowed to act on the PR.
           token: ${{ steps.app-token.outputs.token }}
+          # Which PR to enable auto-merge on — the one we just opened.
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          # `squash` collapses the PR's commits into a single commit on main,
+          # keeping the main-branch history clean (one commit per merge).
           merge-method: squash

@@ -1,0 +1,72 @@
+# =============================================================================
+# csoh.org static-publish filter (rsync --filter merge file)
+# -----------------------------------------------------------------------------
+# Produces the EXACT public file set that the GCP nginx container serves, for
+# upload to the object-storage origins (AWS S3, Azure Blob static website).
+#
+# Static object hosting has no request-time access rules — whatever we upload
+# is publicly readable. So instead of replicating nginx's `deny`/`return 403`
+# blocks at request time, we simply never upload the files nginx would block.
+# This file is the single source of truth for "what is public"; keep it in
+# sync with nginx.conf (block rules) and the Dockerfile (strip list).
+#
+# Rules are evaluated top-to-bottom, FIRST MATCH WINS — so the JSON allowlist
+# must precede the `*.json` block.
+# =============================================================================
+
+# --- JSON: keep only the four files nginx allowlists; block all others ---
+#     (preview-mapping.json, manifest.json, meetings-search-index.json,
+#      search-index.json — see nginx.conf `location = /*.json` blocks)
++ /manifest.json
++ /preview-mapping.json
++ /meetings-search-index.json
++ /search-index.json
+- *.json
+
+# --- Hidden files/dirs (nginx: `location ~ /\.` -> 403) ---
+- .git/
+- .github/
+- .claude/
+- .well-known/
+- .*
+
+# --- Scripts, docs, configs, backups ---
+#     (nginx ext blocklist: py|pyc|md|sh|bak|config|dist|fla|inc|ini|log|psd|
+#      sql|swp|swo  +  Dockerfile find-delete: pem|key|crt)
+- *.py
+- *.pyc
+- *.pyo
+- *.md
+- *.sh
+- *.bak
+- *.log
+- *.config
+- *.dist
+- *.fla
+- *.inc
+- *.ini
+- *.psd
+- *.sql
+- *.sw[op]
+- *.pem
+- *.key
+- *.crt
+- *-report.txt
+
+# --- Internal dirs / build + dev artefacts (Dockerfile + .dockerignore) ---
+- /tools/
+- /seo-audits/
+- __pycache__/
+- /.venv/
+- /.ruff_cache/
+- /dist/
+
+# --- Config / docker / lint / license files at repo root ---
+- /Dockerfile
+- /docker-compose.yml
+- /nginx.conf
+- /nginx-security-headers.conf
+- /pyproject.toml
+- /LICENSE
+- /preview-check.txt
+- /normalize-output.txt

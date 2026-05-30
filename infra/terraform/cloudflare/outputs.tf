@@ -1,0 +1,45 @@
+# This file declares Terraform "outputs". An output is a named value that
+# Terraform prints after "terraform apply" and stores in its state file. Think
+# of outputs as the official "return values" of this Cloudflare configuration:
+# other people, scripts, or other Terraform setups can read them with
+# "terraform output <name>" instead of having to dig through the cloud console.
+# Outputs never create or change anything — they only expose information about
+# resources that were already created in the other .tf files in this folder
+# (zone.tf, load_balancer.tf, rules.tf, etc.).
+
+# Output #1: the public hostname of the load balancer that serves the live site.
+# "description" is human-readable help text shown next to the value.
+# "value" is what gets returned. Here we reference an attribute of another
+# resource using the form  <resource_type>.<resource_name>.<attribute> —
+# cloudflare_load_balancer.site is the Load Balancer resource defined in
+# load_balancer.tf, and ".name" is its hostname (set to the apex domain,
+# e.g. "csoh.org"). This is the single front door in front of all three clouds
+# (AWS, GCP, Azure); referencing the resource instead of hardcoding the string
+# means the output always reflects whatever the load balancer actually uses.
+output "load_balancer_hostname" {
+  description = "The active/active LB hostname (the production site)."
+  value       = cloudflare_load_balancer.site.name
+}
+
+# Output #2: the ID Cloudflare assigned to the "pool" of origins. In Cloudflare
+# load balancing, a "pool" is a group of backend servers (here the three cloud
+# origins: AWS CloudFront, GCP Cloud Run, Azure Blob) that the load balancer can
+# send traffic to. The pool's ".id" is a machine-generated identifier created
+# by Cloudflare when the pool is made (it is not something we chose). Surfacing
+# it makes troubleshooting and API/CLI calls easier — e.g. you can look the pool
+# up directly by ID instead of by name.
+output "pool_id" {
+  description = "Load Balancer pool holding the three cloud origins."
+  value       = cloudflare_load_balancer_pool.origins.id
+}
+
+# Output #3: the ID of the health monitor. The monitor is the probe defined in
+# load_balancer.tf that repeatedly fetches "/" over HTTPS from each origin; if
+# an origin stops returning HTTP 200, Cloudflare pulls it out of rotation until
+# it recovers (this is what makes the active/active setup self-healing). Like
+# the pool ID above, ".id" is Cloudflare's generated identifier for that
+# monitor, exposed here so it can be referenced or inspected later.
+output "monitor_id" {
+  description = "Health monitor ID."
+  value       = cloudflare_load_balancer_monitor.site.id
+}

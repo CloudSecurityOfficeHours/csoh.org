@@ -13,15 +13,31 @@
 # still publishing?" — which dead-link checks can't see.
 # =============================================================================
 
+# A GitHub Actions "workflow" is an automated job defined in YAML and stored
+# under .github/workflows/. GitHub watches for the events listed below and,
+# when one fires, spins up a fresh virtual machine (a "runner") to execute the
+# steps. Nothing here runs on our servers — it all runs on GitHub's machines.
+# This `name:` is the human-friendly label shown in the repo's Actions tab.
 name: Check Reading List Staleness
 
+# `on:` lists the events that trigger this workflow. Any one of them is enough
+# to start a run; they are alternatives, not requirements.
 on:
   # First of the month, 07:00 UTC. Monthly is plenty — most blogs go quiet
   # over weeks, not days, and we don't want a noisy report nagging us.
+  # `schedule:` runs the workflow on a timer using cron syntax. A cron string
+  # has five space-separated fields (see the trailing comment for their order).
+  # Decoded, '0 7 1 * *' means: at minute 0 of hour 7, on day-of-month 1, in
+  # every month, on any day-of-week — i.e. 07:00 UTC on the 1st of each month.
+  # An asterisk (*) means "every value" for that field. Times are always UTC.
   schedule:
     - cron: '0 7 1 * *'    # min hour day-of-month month day-of-week
-  # Manual trigger from the GitHub Actions tab.
+  # `workflow_dispatch:` adds a "Run workflow" button on the Actions tab so a
+  # human can launch this on demand without waiting for the schedule.
   workflow_dispatch:
+  # `push:` fires when commits land on the branch(es) listed below. The
+  # `paths:` filter narrows that further: only pushes that touch one of the
+  # listed files start a run, so unrelated commits don't waste a run.
   # Re-run if someone edits the checker or the page itself, so the issue
   # stays current with whatever URLs were just added or removed.
   push:
@@ -31,45 +47,93 @@ on:
       - 'tools/check_reading_list_staleness.py'
       - '.github/workflows/check-reading-list-staleness.yml'
 
-# Read-only on the repo, write on issues so we can post / update the report.
-# We never modify source files here.
+# `permissions:` sets what the automatic per-run token (GITHUB_TOKEN) is
+# allowed to do. It's a least-privilege control: grant only what the job needs
+# so a bug or a malicious dependency can't do more damage. Anything not listed
+# defaults to no access. Here we can read repo contents and write issues so we
+# can post / update the report — and nothing else (no pushing code, no
+# releases, etc.). We never modify source files in this workflow.
 permissions:
   contents: read
   issues: write
 
-# Per-workflow concurrency: a freshly-queued run cancels any in-flight one.
-# Read-only — safe to interrupt mid-crawl.
+# `concurrency:` prevents overlapping runs. Runs that share the same `group:`
+# string are serialized; with `cancel-in-progress: true`, starting a new one
+# cancels whichever is already running. The group name here is a fixed string,
+# so this whole workflow allows only one run at a time across the repo. This
+# crawl is read-only, so interrupting an in-flight run is safe.
 concurrency:
   group: check-reading-list-staleness
   cancel-in-progress: true
 
+# `jobs:` holds one or more jobs. A "job" is a set of steps that run together
+# on a single fresh runner. Separate jobs run in parallel by default and on
+# different machines. This workflow has just one job, so there's nothing to
+# coordinate (no `needs:` to chain jobs, no matrix to fan out).
 jobs:
+  # This is the job's internal id (`check-staleness`). It's referenced in logs
+  # and could be referenced by other jobs; the name is otherwise arbitrary.
   check-staleness:
+    # `runs-on:` picks the runner OS/image. `ubuntu-latest` is GitHub's
+    # standard hosted Linux VM — created clean for this run and thrown away
+    # afterward, so nothing persists between runs except what we cache or save.
     runs-on: ubuntu-latest
 
+    # `steps:` are the ordered actions inside the job. Each step is either a
+    # `uses:` (run a prebuilt, shareable action) or a `run:` (run shell
+    # commands). Steps execute top to bottom on the same runner, sharing its
+    # filesystem, so a file written by one step is visible to the next.
     steps:
-      # Pull the repo onto the runner.
+      # `uses:` runs a published action — reusable, packaged automation from
+      # the GitHub Marketplace or another repo. This first one, actions/checkout,
+      # clones THIS repository onto the runner; without it the runner starts
+      # empty and our files wouldn't be here. The `@<40-hex-chars>` pins the
+      # action to one exact commit SHA (the `# v6.0.2` notes which release that
+      # is). Pinning to a SHA — rather than a moving tag like `@v6` — is a
+      # supply-chain safeguard: the code can't change underneath us even if the
+      # tag is later repointed at something malicious.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      # Installs Python on the runner and puts it on the PATH so the next step
+      # can call `python3`. `with:` passes inputs (named settings) to a `uses:`
+      # action — think of them as the action's function arguments. Here the one
+      # input is `python-version: '3.x'`, meaning "any latest Python 3.x."
       # The checker is a Python script using stdlib only — no pip install.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.x'
 
-      # Run the staleness check. Writes a markdown report to staleness.md.
-      # Never exits non-zero on stale entries (intentional — this is a report,
-      # not a gate). If the script itself crashes, the step fails and we
-      # notice via the normal workflow-failure path.
+      # `run:` (instead of `uses:`) executes shell commands directly on the
+      # runner — here, one line invoking our Python script. The script reads
+      # cloud-security-reading-list.html, looks up each source's feed, and
+      # writes its findings to the file named by `--output`. In shell, a
+      # command's "exit code" signals success (0) or failure (non-zero); a step
+      # is considered failed only if its command exits non-zero. This script
+      # deliberately exits 0 even when entries are stale (it writes the markdown
+      # report to staleness.md), so a stale finding does not turn the run red —
+      # this is a report, not a gate. If the script itself crashes it does exit
+      # non-zero, so the step fails and we notice via the normal
+      # workflow-failure path.
       - name: Run staleness check
         run: python3 tools/check_reading_list_staleness.py --output staleness.md
 
+      # An "artifact" is a file (or folder) saved from the run and attached to
+      # the run's summary page, so you can download it afterward. The runner
+      # itself is deleted when the run ends, so uploading is how anything
+      # leaves the machine. `if:` gates whether a step runs; by default a step
+      # is skipped once an earlier step has failed. `if: always()` overrides
+      # that so we still capture the report even if a later step errors.
+      # Inside `with:`: `name` is the download label, `path` is what to upload,
+      # `retention-days` is how long GitHub keeps it (90 here), and
+      # `if-no-files-found: warn` logs a warning instead of failing if the file
+      # is missing.
       # Upload the report as an artifact so reviewers can grab it from the
       # run page even if the issue-update step fails for any reason.
       - name: Upload staleness report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: reading-list-staleness-report
           path: staleness.md
@@ -81,16 +145,48 @@ jobs:
       # filtering and for future automation. We use the auto-injected
       # GITHUB_TOKEN — issues:write was granted above and that's all we need.
       - name: Open or update tracking issue
+        # `env:` defines environment variables available to this step's shell
+        # as $GH_TOKEN, $REPO, $RUN_URL. `${{ ... }}` is GitHub Actions'
+        # expression syntax: GitHub evaluates what's inside before the shell
+        # runs and substitutes the result. Passing dynamic values via env (and
+        # then quoting "$VAR" in the script) is safer than pasting `${{ ... }}`
+        # straight into the command line, where attacker-controlled text could
+        # break out and inject commands.
         env:
+          # `secrets.GITHUB_TOKEN` is the short-lived token GitHub mints
+          # automatically for each run; its powers are exactly the
+          # `permissions:` set above (read contents, write issues). `secrets.`
+          # values are masked in logs. The `gh` CLI reads this from $GH_TOKEN
+          # to authenticate. (Note: this token is per-run and unrelated to the
+          # keyless cloud OIDC used by the deploy workflows.)
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `github.repository` is a built-in context value: the "owner/repo"
+          # slug of this repository (e.g. "Nunley/csoh.org").
           REPO: ${{ github.repository }}
+          # Build a direct URL to THIS run by stitching together the server
+          # base (github.server_url), the repo slug, and this run's unique id
+          # (github.run_id). We embed it in the issue so a reader can jump back.
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # The `|` makes this a multi-line "literal block": every following
+        # indented line is one shell script, newlines preserved, run together.
         run: |
+          # Bash safety switches: -e aborts on the first failing command, -u
+          # errors on use of an unset variable, and -o pipefail makes a
+          # pipeline fail if ANY stage fails (not just the last). Together they
+          # turn silent mistakes into a loud, failed step.
           set -euo pipefail
 
+          # The issue's exact title and the label we attach. Both are matched
+          # on later to find the existing issue, so they must stay constant.
           title="Reading list: monthly staleness report"
           label="reading-list-staleness"
 
+          # `gh` is GitHub's official command-line tool, preinstalled on hosted
+          # runners; it talks to the GitHub API using $GH_TOKEN. The trailing
+          # backslashes join these lines into one command. `2>/dev/null`
+          # discards the error output, and `|| true` forces a success exit code
+          # so `set -e` won't abort: if the label already exists the API
+          # returns HTTP 409 (conflict), which here is fine to ignore.
           # Ensure the label exists. `gh label create` 409s on duplicate, so
           # we swallow the error — there's no idempotent flag for this.
           gh label create "$label" \
@@ -100,6 +196,11 @@ jobs:
 
           # Wrap the markdown report with run metadata so a reader landing on
           # the issue can jump back to the workflow run that produced it.
+          # `{ ...; } > issue-body.md` runs all the commands in the braces as a
+          # group and redirects their combined output into one file. `echo`
+          # prints a line; `cat staleness.md` dumps the report the Python step
+          # wrote. So the file becomes: a header link to this run, a blank
+          # line, the report, then a footer note — assembled in order.
           {
             echo "_Auto-updated by [check-reading-list-staleness]($RUN_URL)._"
             echo ""
@@ -111,6 +212,14 @@ jobs:
             echo "monthly run will reopen / refresh it as needed._"
           } > issue-body.md
 
+          # `$( ... )` is command substitution: run the command inside and
+          # capture its printed output into the `existing` variable. We ask the
+          # API for open issues carrying our label whose title matches, return
+          # the data as JSON (--json), then filter it with --jq (a built-in
+          # jq query): keep only issues whose title is an EXACT match and emit
+          # their numbers. `--search` does loose text matching, so the jq
+          # `select(.title == ...)` is what enforces the exact title. `head -n1`
+          # keeps just the first number. If none match, `existing` is empty.
           # Look up an existing open issue by exact title + label.
           existing="$(gh issue list \
             --repo "$REPO" \
@@ -121,6 +230,12 @@ jobs:
             --jq ".[] | select(.title == \"$title\") | .number" \
             | head -n1)"
 
+          # `[ -n "$existing" ]` is true when the string is non-empty — i.e. we
+          # found a matching open issue. In that case overwrite its body with
+          # our freshly assembled file (--body-file) instead of opening a
+          # duplicate. Otherwise, create a brand-new issue with that title,
+          # label, and body. This "update if present, else create" pattern is
+          # what makes the report a single sticky issue month over month.
           if [ -n "$existing" ]; then
             echo "updating issue #$existing"
             gh issue edit "$existing" --repo "$REPO" --body-file issue-body.md

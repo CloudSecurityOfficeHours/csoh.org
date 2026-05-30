@@ -7,8 +7,12 @@
 # knows what to remove.
 # =============================================================================
 
+# A "workflow" is one automated process GitHub Actions runs for this repo.
+# `name:` is just the human-readable label shown in the repo's Actions tab.
 name: Check URL Safety
 
+# `on:` lists the events ("triggers") that start this workflow. Any one of
+# the events below is enough to launch a fresh run.
 on:
   # Run on PRs that touch HTML — that's where new URLs get introduced.
   pull_request:
@@ -17,10 +21,18 @@ on:
   # Weekly recheck (Mondays at 06:30 UTC) catches domains that turn malicious
   # AFTER they were originally safe to link.
   schedule:
+    # A cron string has five fields. This one — minute 30, hour 6, any
+    # day-of-month, any month, weekday 1 (Monday) — means "06:30 UTC every
+    # Monday". GitHub cron always runs on UTC, never your local time zone.
     - cron: '30 6 * * 1'   # min hour day-of-month month day-of-week
-  # Manual trigger from the Actions tab.
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
+  # human can launch a run on demand, without waiting for a PR or the weekly
+  # schedule.
   workflow_dispatch:
 
+# Every run gets an automatic, short-lived credential called GITHUB_TOKEN.
+# `permissions:` sets exactly what that token is allowed to do — least
+# privilege, so a bug or bad dependency can't do more than intended.
 # `contents: read` = read repo files. `pull-requests: write` = post comments.
 # This workflow never modifies the codebase, so write access to contents is
 # deliberately withheld.
@@ -29,26 +41,43 @@ permissions:
   pull-requests: write
 
 
-# Per-ref concurrency: a new push to the same PR cancels the old run. Read-only,
-# so safe to interrupt. PRs on different branches still run in parallel.
+# `${{ ... }}` is GitHub Actions' expression syntax: at run time it gets
+# replaced with a real value. `github.ref` here is the branch/tag being built,
+# so each branch gets its own concurrency group (its own "lane") and PRs on
+# different branches still run in parallel; only a new push to the SAME PR
+# cancels its old run. That cancellation is safe because this check is read-only.
 concurrency:
   group: check-url-safety-${{ github.ref }}
   cancel-in-progress: true
 
+# `jobs:` holds the actual work. A workflow has one or more jobs; jobs run on
+# separate fresh machines and (unless told otherwise) run in parallel.
 jobs:
+  # `check-urls` is this job's internal id. A job is an ordered list of steps
+  # that all run on the same machine, sharing its files and environment.
   check-urls:
+    # `runs-on` picks the runner (the throwaway VM GitHub spins up for the
+    # job). `ubuntu-latest` is GitHub's current Ubuntu Linux image.
     runs-on: ubuntu-latest
     # Hard cap so a hung HTTP request can't burn the 6-hour job budget.
     timeout-minutes: 15
 
+    # `steps:` is the to-do list, run top to bottom. Each step either pulls in
+    # a prebuilt action with `uses:` or runs shell commands with `run:`.
     steps:
       # Pull the code so we can read HTML files.
+      # `uses:` runs a reusable action published on GitHub. The part after `@`
+      # pins the EXACT commit (a SHA hash) instead of a moving tag like `v6`,
+      # so a hijacked or retagged release can't silently change what runs here;
+      # the trailing comment just notes which human-friendly version that is.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       # Install Python — the safety check is a Python script.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        # `with:` passes named inputs (settings) into the action above — like
+        # arguments to a function. This action reads `python-version`.
         with:
           python-version: '3.x'   # any Python 3 — script is version-tolerant
 
@@ -62,26 +91,41 @@ jobs:
           # If the report contains the string "❌ UNSAFE", the script flagged
           # at least one bad URL — fail the workflow with a GH-Actions error.
           if grep -q "❌ UNSAFE" site-wide-url-safety-report.txt; then
+            # `::error::` is a GitHub log command — this text shows up as a red
+            # error annotation on the run. `exit 1` (nonzero) is what actually
+            # marks the step — and thus the whole run — as failed.
             echo "::error::Unsafe URLs detected in HTML files"
             exit 1
           fi
 
-      # Save the report so a reviewer can download it from the run page.
+      # An "artifact" is a file the run saves so a reviewer can download it
+      # afterward from the run's summary page. The runner itself is wiped when
+      # the job ends, so this is how a file outlives the run.
+      # Normally a step is skipped once an earlier step has failed.
       # `if: always()` = upload even if the script failed (the report still
       # exists and is what we need to debug).
       - name: Upload safety report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
+          # `name` is the label of the downloadable bundle; `path` is the file
+          # to put in it.
           name: site-wide-url-safety-report
           path: site-wide-url-safety-report.txt
+          # Auto-delete the artifact after 30 days so storage doesn't pile up.
           retention-days: 30
+          # If the file is missing, just warn instead of failing the step.
           if-no-files-found: warn
 
-      # If the previous step failed AND we're on a PR, post a summary comment.
+      # `if:` decides whether this step runs at all. `failure()` is true only
+      # when an earlier step failed, and `github.event_name` is what triggered
+      # the run — so this posts a summary comment only on a failed PR run (not
+      # on the weekly schedule, where there's no PR to comment on).
       - name: Comment on PR with results
         if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8.0.0
+        # `github-script` lets you write a little JavaScript inline (below)
+        # instead of pulling in a whole separate action just to call the API.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           # JS that runs in a Node sandbox the action provides. `github`,
           # `context`, etc. are pre-bound helpers for the GH API.

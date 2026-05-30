@@ -17,26 +17,42 @@
 # Read-only on the repo; never modifies code, never posts comments.
 # =============================================================================
 
+# This whole file is a "workflow": a GitHub Actions automation that runs in
+# response to events in the repo (a push, a pull request, a button click).
+# GitHub reads it because it lives under .github/workflows/ and ends in .yml.
+# `name:` is just the human-friendly label shown in the repo's Actions tab.
 name: Lint
 
 # -----------------------------------------------------------------------------
 # §1 — Triggers (matches "Anatomy / §1" on github-actions.html)
 # -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. Any one of the events below
+# is enough to trigger a run; they are alternatives, not requirements.
 on:
-  # Lint every PR — this is the quality gate for incoming changes.
+  # `pull_request` fires whenever someone opens or updates a PR. With no
+  # filters it covers PRs targeting any branch — this is the quality gate for
+  # incoming changes.
   pull_request:
-  # Lint pushes to main as a safety net for direct commits that bypass PRs.
+  # `push` fires when commits land on a branch. `branches:` narrows it to
+  # only the listed branch(es) — here just `main` — as a safety net for
+  # direct commits that bypass PRs.
   push:
     branches:
       - main
-  # Manual run from the Actions tab.
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
+  # human can launch this manually on demand (no code change required).
   workflow_dispatch:
 
 # -----------------------------------------------------------------------------
 # §2 — Permissions
 # Read-only. The lint job never writes to the repo or posts comments.
 # -----------------------------------------------------------------------------
+# Every run gets an automatic, throwaway credential called GITHUB_TOKEN.
+# `permissions:` sets what that token is allowed to do. Listing only what's
+# needed (least privilege) limits the damage if a step misbehaves.
 permissions:
+  # `contents: read` lets the run read repo files (needed to check them out)
+  # but not push commits, tags, or releases.
   contents: read
 
 # -----------------------------------------------------------------------------
@@ -44,8 +60,16 @@ permissions:
 # Per-ref lock so a new push to the same PR cancels the in-flight lint run.
 # Different PRs lint in parallel.
 # -----------------------------------------------------------------------------
+# `concurrency:` lets at most one run hold a named "group" at a time. Runs in
+# the same group queue up or cancel each other; runs in different groups are
+# unaffected and proceed in parallel.
 concurrency:
+  # `${{ ... }}` is GitHub Actions' expression syntax — it's substituted with
+  # a real value at run time. `github.ref` is the branch/PR ref being built,
+  # so each branch or PR gets its own group (e.g. "lint-refs/heads/main").
   group: lint-${{ github.ref }}
+  # When a newer run claims the group, cancel the older in-progress one. This
+  # avoids wasting minutes linting a commit you've already superseded.
   cancel-in-progress: true
 
 # -----------------------------------------------------------------------------
@@ -53,35 +77,60 @@ concurrency:
 # Three independent jobs running in parallel. Each fails the workflow on its
 # own — we don't want a Python lint failure to mask a workflow lint failure.
 # -----------------------------------------------------------------------------
+# `jobs:` holds the units of work. Each job runs on its own fresh virtual
+# machine and, unless one job declares it `needs:` another, all jobs start at
+# once and run in parallel. A job is a sequence of `steps:` (below).
 jobs:
   # -------------------------------------------------------------------------
   # actionlint — checks .github/workflows/*.yml for syntax issues, bad
   # `uses:` references, malformed `if:` expressions, and (via the bundled
   # shellcheck) shell issues inside `run:` blocks like unquoted variables.
   # -------------------------------------------------------------------------
+  # `actionlint:` is the job's internal id (used to reference it elsewhere).
   actionlint:
+    # `runs-on:` picks the runner OS. "ubuntu-latest" is a GitHub-hosted
+    # Linux VM, created fresh for this job and discarded when it finishes.
     runs-on: ubuntu-latest
+    # `steps:` is the ordered to-do list for this job. Each list item ("- ")
+    # is one step and runs top-to-bottom on the same VM. A step either runs a
+    # prebuilt action (`uses:`) or a shell command (`run:`).
     steps:
+      # `name:` is the label shown for this step in the run's log.
       - name: Checkout repository
+        # `uses:` pulls in a reusable, prepackaged action. This first-party
+        # one copies your repo's code onto the runner — without it the VM is
+        # empty. The "@<40-hex-chars>" pins the action to an exact commit SHA
+        # (not a moving tag) so a hijacked tag can't swap in malicious code;
+        # the trailing "# v6.0.2" comment just notes the human-readable
+        # version that SHA corresponds to.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       # raven-actions/actionlint bundles actionlint + shellcheck and emits
       # GitHub Actions error annotations so failures show up inline on PRs.
       - name: Run actionlint
+        # A third-party action, again pinned to a full commit SHA for safety.
         uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8  # v2.1.2
+        # `with:` passes input settings to the action (like function args).
         with:
+          # Make the step (and thus the job) fail if actionlint finds a
+          # problem, so a bad workflow can't slip through as a green check.
           fail-on-error: true
 
   # -------------------------------------------------------------------------
   # ruff — Python linter. Config lives in pyproject.toml. We use the default
   # rule set (E + F + W): catches real bugs without surfacing style nits.
   # -------------------------------------------------------------------------
+  # A separate job, so it runs in parallel with actionlint on its own VM.
   ruff:
     runs-on: ubuntu-latest
     steps:
+      # Same checkout step as above — each job's VM starts empty, so every
+      # job that needs the code must check it out for itself.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      # Runs ruff with no `with:`, so it uses defaults and reads its rules
+      # from pyproject.toml in the repo. A lint failure fails the job.
       - name: Run ruff
         uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b  # v4.0.0
 
@@ -90,16 +139,25 @@ jobs:
   # disables the rules that don't fit GitHub Actions YAML (line-length,
   # truthy, document-start). Everything else stays at default.
   # -------------------------------------------------------------------------
+  # The third parallel job, on its own VM.
   yamllint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      # yamllint is on PyPI; pip-install rather than pulling a third-party
-      # action so we keep the supply-chain surface small.
+      # `run:` (instead of `uses:`) executes a shell command on the runner.
+      # The ubuntu-latest VM already has Python+pip, so we pip-install yamllint
+      # here — rather than pulling a third-party action — to keep the
+      # supply-chain surface small. Pinning the exact version (==1.38.0) keeps
+      # results reproducible: a new release can't silently change which rules
+      # fire.
       - name: Install yamllint
         run: pip install yamllint==1.38.0
 
+      # `yamllint .` scans every YAML file from the repo root down. It applies
+      # the repo's .yamllint.yml automatically (yamllint looks for that file),
+      # so the GitHub-Actions-friendly rule tweaks there take effect. A
+      # non-zero exit (any reported problem) fails the step and the job.
       - name: Run yamllint
         run: yamllint .

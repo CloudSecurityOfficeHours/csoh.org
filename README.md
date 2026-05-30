@@ -66,7 +66,7 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 | 🧰 [Cloud Security Home Lab](https://csoh.org/cloud-security-home-lab.html) | Free-tier setups, budget guardrails, kill-switches |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | ⚙️ [How We Use GitHub Actions](https://csoh.org/github-actions.html) | Learn CI/CD by reading our heavily-commented workflows |
-| ☁️ [How We Deploy to GCP](https://csoh.org/cloud-deployment.html) | Cloud Run + WIF + Cloud CDN + Cloud Armor - the full dogfooded stack |
+| ☁️ [How We Deploy Across AWS, GCP & Azure](https://csoh.org/cloud-deployment.html) | One static site, three active/active cloud origins behind Cloudflare, keyless OIDC deploys - the full dogfooded stack |
 
 ## 📚 Reference & Practice
 
@@ -235,8 +235,8 @@ A directory of **350+ cloud-security vendors** across 30 categories - CNAPP, CSP
 ### ⚙️ How We Use GitHub Actions (`github-actions.html`)
 Learn-by-example explainer for GitHub Actions, using CSOH's workflow files as the teaching material. Covers triggers, concurrency, secrets, the GITHUB_TOKEN vs PAT distinction, the `workflow` scope gotcha, OIDC trust to GCP, and a recommended reading order through our heavily-commented YAML.
 
-### ☁️ How We Deploy to GCP (`cloud-deployment.html`)
-The dogfooded GCP architecture: Cloud Run + Workload Identity Federation + Cloud CDN + Cloud Armor + Artifact Registry + Cloud Monitoring, with the security controls called out at every layer. Pairs with the GitHub Actions explainer to give a complete CI/CD-to-cloud reference.
+### ☁️ How We Deploy Across AWS, GCP & Azure (`cloud-deployment.html`)
+The dogfooded multi-cloud architecture: one static site served active/active from AWS (S3 + CloudFront), GCP (Cloud Run), and Azure (Blob static website) behind a single Cloudflare edge (TLS, WAF, security headers, redirects, Load Balancer with health-check failover), deployed to each cloud with keyless OIDC. Security controls called out at every layer. Pairs with the GitHub Actions explainer to give a complete CI/CD-to-cloud reference.
 
 ### 📚 Resources (`resources.html`)
 Comprehensive catalog of **240+ cloud security resources** organized by 6 categories:
@@ -548,7 +548,7 @@ csoh.org/
 │   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
 │   ├── check-pagespeed.yml          # Weekly Google PageSpeed Insights run → SCORECARD row + regression issue (Mon 14:00 UTC)
 │   ├── run-seo-audit.yml            # Weekly deterministic structural SEO audit → SCORECARD row + regression issue (Mon 14:15 UTC)
-│   ├── gcp-deploy.yml               # Build, scan, deploy to Cloud Run via WIF
+│   ├── deploy.yml                   # Build once, publish to AWS + GCP + Azure (keyless OIDC)
 │   └── CHECK_URL_SAFETY_WORKFLOW.md # Workflow configuration notes
 │
 ├── preview-mapping.json        # Metadata for resource previews
@@ -680,7 +680,7 @@ This site uses **GitHub Actions workflows** to automate all major site updates. 
 - `update_sri.py`
 - Manual trigger via the GitHub Actions tab
 
-**What it does (housekeeping only - actual deploy is `gcp-deploy.yml`):**
+**What it does (housekeeping only - actual deploy is `deploy.yml`):**
 - Updates SRI hashes and cache-busting tags if CSS/JS changed (using `update_sri.py`)
 - Checks URL safety - blocks normalization if unsafe URLs are detected (using `check_all_site_urls.py`)
 - Normalizes URLs - strips tracking parameters, upgrades HTTP to HTTPS, resolves redirects (using `normalize_urls.py`)
@@ -691,9 +691,9 @@ This site uses **GitHub Actions workflows** to automate all major site updates. 
 - Optimizes generated images
 - Each step that mutates files commits the change back to `main` (with `[skip ci]` markers) so the next workflow run sees fresh state
 
-**Why this is separate from the deploy:** the housekeeping commits this workflow makes (SRI updates, sitemap refreshes, etc.) are themselves what triggers `gcp-deploy.yml` - that workflow watches the same paths and picks up the post-housekeeping state. Splitting them keeps each workflow's responsibility narrow.
+**Why this is separate from the deploy:** the housekeeping commits this workflow makes (SRI updates, sitemap refreshes, etc.) are themselves what triggers `deploy.yml` - that workflow watches the same paths and picks up the post-housekeeping state. Splitting them keeps each workflow's responsibility narrow.
 
-**News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `gcp-deploy.yml` ships it.
+**News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `deploy.yml` ships it.
 
 ### Standalone URL Normalization Workflow
 
@@ -711,33 +711,34 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
 
 **Full docs:** See [tools/UPDATE_SRI_README.md](tools/UPDATE_SRI_README.md), [tools/GENERATE_PREVIEW_README.md](tools/GENERATE_PREVIEW_README.md), [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md), and [tools/CHECK_URL_SAFETY_README.md](tools/CHECK_URL_SAFETY_README.md)
 
-### GCP Cloud Run Deploy Workflow
+### Multi-Cloud Deploy Workflow
 
-**Workflow file:** `.github/workflows/gcp-deploy.yml`
+**Workflow file:** `.github/workflows/deploy.yml`
 
-Builds a container image, scans it for HIGH/CRITICAL CVEs, pushes to Artifact Registry, and deploys to Cloud Run. This is the workflow that actually publishes csoh.org to production.
+Builds the site once, then publishes it active/active to three cloud origins behind Cloudflare. This is the workflow that actually publishes csoh.org to production.
 
 **Triggers on pushes to `main` when these files change:**
 - The same path filters as `site-update-deploy.yml` (HTML, CSS, JS, screenshots, images)
-- `Dockerfile`, `nginx.conf`, `.github/workflows/gcp-deploy.yml`
+- `Dockerfile`, `nginx.conf`, `tools/stage_site.sh`, `tools/site-publish.filter`, `.github/workflows/deploy.yml`
 - Manual trigger via the GitHub Actions tab
 
-**What it does:**
-- Authenticates to GCP via **Workload Identity Federation** - no service account JSON key is stored or rotated. The OIDC token GitHub mints for the run is exchanged at run-time for a 1-hour GCP access token, gated to this repository only.
-- Builds the container with `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade` + the `nginx-security-headers.conf` snippet that's `include`d into every location block).
-- Runs Trivy against the built image; build fails on any HIGH or CRITICAL CVE that has a fix available.
-- Pushes to Artifact Registry with an immutable SHA-based tag (no `:latest`).
-- Deploys a new Cloud Run revision pinned to that SHA.
+**What it does — build once, fan out:**
+- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set — mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact so all origins serve byte-identical content.
+- **publish-aws:** assumes an IAM role via OIDC, `aws s3 sync --delete` to the private bucket, invalidates CloudFront.
+- **publish-azure:** logs in via an Entra federated credential (OIDC), `az storage blob sync` into the `$web` static-website container.
+- **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. Auth is Workload Identity Federation — no stored key.
 
-**Edge in front of Cloud Run:** Global HTTPS load balancer with Cloud CDN and Cloud Armor (OWASP CRS WAF, per-IP rate limit, adaptive L7 DDoS), modern TLS policy (1.2+), HTTP→HTTPS redirect. Logs (LB requests, Cloud Armor blocks, IAM admin activity, audit logs) route to a 400-day-retention bucket.
+Every cloud uses **keyless OIDC** — no long-lived cloud credentials in the repo. Non-secret resource IDs come from repo Variables (see [infra/README.md](infra/README.md)).
 
-**Full architecture and bootstrap steps:** [infra/README.md](infra/README.md). Security model and rotation: [SECURITY.md → Deployment Security](SECURITY.md#deployment-security).
+**Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover. (This replaced the old GCP Global HTTPS load balancer + Cloud Armor + Cloud CDN, which were redundant with Cloudflare and cost ~$100/mo.)
+
+**Full architecture, cost, and cutover runbook:** [infra/README.md](infra/README.md). The full security walkthrough is the public teaching page [cloud-deployment.html](cloud-deployment.html). Security model and rotation: [SECURITY.md → Deployment Security](SECURITY.md#deployment-security).
 
 ### Setup Note
 
 Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints short-lived (~1h) installation tokens at job start, plus a small fine-grained PAT (`CSOH_PAT`) used only to approve App-opened PRs (GitHub blocks self-approval). The full model - App config, ruleset bypass, why one PAT remains - is documented in [SECURITY.md → CI/CD Authentication](SECURITY.md#cicd-authentication). Setup / rotation steps for the PAT are in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md#setup-requirements).
 
-`gcp-deploy.yml` does *not* use the GitHub App - it authenticates to GCP via Workload Identity Federation and only needs the auto-injected `GITHUB_TOKEN` (with `id-token: write` for the OIDC exchange). There is no GCP-side credential to set up or rotate.
+`deploy.yml` does *not* use the GitHub App - it authenticates to each cloud via keyless OIDC (GCP Workload Identity Federation, an AWS IAM role, an Azure Entra federated credential) and only needs the auto-injected `GITHUB_TOKEN` (with `id-token: write` for the OIDC exchanges). There is no cloud-side credential to set up or rotate for any of the three.
 
 ### Weekly SEO Monitoring Workflows
 
