@@ -348,6 +348,9 @@ python3 tools/check_url_safety.py "https://example.com/resource"
 python3 tools/normalize_urls.py
 # Apply changes:
 python3 tools/normalize_urls.py --apply
+# CI adds `--cache tools/url_resolution_cache.json` so it only re-resolves new
+# URLs. Don't pass --cache locally or commit the cache — it's CI-seeded and
+# redirect resolution is IP-dependent.
 ```
 
 ### Linting (run by `lint.yml` on every push/PR)
@@ -577,6 +580,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `feed.xml` | RSS feed | **Don't edit** -- auto-generated |
 | `update_news.py` | News feed aggregation script | Adding/removing RSS sources |
 | `tools/normalize_urls.py` | URL normalizer (tracking params, HTTPS upgrade, redirects) | **Don't edit** -- runs in CI |
+| `tools/url_resolution_cache.json` | Cached redirect resolutions so the per-push CI run only re-resolves *new* URLs (kept the Normalize step from re-checking ~2,500 links every run) | **Don't edit** -- CI-seeded; never commit a local copy (redirect resolution is IP-dependent, so a workstation seed can differ from CI and falsely block deploys) |
 | `tools/check_all_site_urls.py` | Site-wide URL safety scanner | Running local safety audits |
 | `tools/update_sitemap.py` | Refreshes `<lastmod>` dates in `sitemap.xml` from git history | **Don't edit** -- runs in CI and alongside `update_news.py` |
 | `tools/update_presentations_schema.py` | Regenerates `VideoObject` JSON-LD on `presentations.html` | **Don't edit** -- runs in CI on every deploy |
