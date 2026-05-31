@@ -1,0 +1,35 @@
+# Trivy vulnerability ignore list.
+# Docs: https://trivy.dev/docs/configuration/filtering/#trivyignoreyaml
+#
+# Entries here are scoped, justified, and TIME-BOXED. Once an entry's
+# `expired_at` date passes, Trivy stops honoring it and the deploy fails
+# again — forcing a fresh review instead of silently suppressing a real CVE
+# forever. Keep this list short; delete entries the moment they are moot.
+
+vulnerabilities:
+  - id: CVE-2026-6732
+    # libxml2: denial of service via a crafted, XSD-validated XML document
+    # (type confusion). Ignored for two independent reasons:
+    #
+    #   1. Not reachable in this artifact. The image is nginx serving STATIC
+    #      files; libxml2 is only a transitive dependency and is never invoked
+    #      on any request path — nginx core does not parse client XML, let
+    #      alone perform XSD validation. There is no input route to the
+    #      vulnerable code (a VEX "not_affected" case).
+    #
+    #   2. Not yet patchable. Alpine's secdb advisory lists the fix as
+    #      libxml2 2.13.9-r1, but that binary is NOT yet published to the
+    #      v3.21 mirror (still 2.13.9-r0 as of 2026-05-31), so the Dockerfile's
+    #      `apk upgrade --no-cache` has nothing newer to install.
+    #
+    # When r1 reaches the mirror, `apk upgrade` installs it and Trivy stops
+    # reporting this CVE at all (installed >= fixed), making the entry a no-op.
+    # The expiry is a backstop: if r1 still is not available by then — e.g.
+    # Alpine 3.21 only fixes it in a later branch — the deploy breaks and we
+    # re-review (likely bump the base image) rather than suppress indefinitely.
+    statement: >-
+      Not exploitable: static-file nginx image never invokes libxml2 XSD/XML
+      parsing on any request path. Fix (2.13.9-r1) not yet on the Alpine v3.21
+      mirror, so apk upgrade cannot pull it. Time-boxed; auto-expires for
+      re-review.
+    expired_at: 2026-07-15
