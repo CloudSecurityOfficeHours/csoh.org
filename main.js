@@ -59,6 +59,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // search UI lives at /search.html (Pagefind-backed).
     injectSearchLink();
 
+    // Measure the sticky header and expose its real height as --header-height
+    // so anchor jumps clear it. Runs after injectSearchLink() since that
+    // mutates the nav (and thus the header's height).
+    initHeaderHeightVar();
+
     // Add accessible label for search input
     if (domCache.searchInput && !document.querySelector('label[for="searchInput"]')) {
         const label = document.createElement('label');
@@ -614,6 +619,37 @@ function updateVisibleCount() {
             ? 'No resources match your search.'
             : 'Showing ' + visibleCount + ' resource' + (visibleCount !== 1 ? 's' : '') + '.';
     }
+}
+
+// Sticky-header offset for anchor jumps.
+// The header's height varies by viewport (the nav collapses to a hamburger on
+// mobile and wraps to multiple rows in a narrow band above that), so a single
+// fixed CSS value can't keep linked headings clear of it everywhere. Measure
+// the real height and publish it as --header-height; html { scroll-padding-top }
+// consumes it. CSS holds sane fallbacks if this never runs.
+function initHeaderHeightVar() {
+    const header = document.querySelector('header');
+    if (!header) return;
+    const root = document.documentElement;
+    const measure = function () {
+        // Only offset when the header actually overlaps content. On mobile the
+        // header is position:static (it scrolls away), so no offset is needed
+        // and any would just leave dead space at the top after a jump.
+        const pos = getComputedStyle(header).position;
+        const sticks = pos === 'sticky' || pos === 'fixed';
+        // A little breathing room so the heading isn't flush against the bar.
+        const h = sticks ? Math.round(header.getBoundingClientRect().height) + 12 : 0;
+        root.style.setProperty('--header-height', h + 'px');
+    };
+    // Measure now: the nav DOM is settled by this point and the site uses the
+    // system font stack, so there's no async web-font reflow to wait on.
+    measure();
+    window.addEventListener('load', measure);            // belt-and-suspenders re-measure
+    // Throttle resize with rAF (the page is visible while the user drags).
+    let raf = 0;
+    window.addEventListener('resize', function () {
+        if (!raf) raf = requestAnimationFrame(function () { raf = 0; measure(); });
+    }, { passive: true });
 }
 
 // Dark mode
