@@ -29,7 +29,7 @@ The glossary itself, error pages (`403.html`, `404.html`), and the Google site v
 ## Linking rules
 
 - **First occurrence per page only.** Subsequent mentions of the same term on the same page are not linked, to keep prose readable.
-- **Acronyms (all-caps, 2–8 chars) match case-sensitively.** This prevents `cd` (the shell command) from matching `CD` (Continuous Delivery), `Kev` (a person's name) from matching `KEV` (Known Exploited Vulnerabilities), etc. Multi-word and lowercase glossary entries continue to match case-insensitively.
+- **Acronyms (all-caps, 2-8 chars) match case-sensitively.** This prevents `cd` (the shell command) from matching `CD` (Continuous Delivery), `Kev` (a person's name) from matching `KEV` (Known Exploited Vulnerabilities), etc. Multi-word and lowercase glossary entries continue to match case-insensitively.
 - **Skip zones** - the linker never touches text inside any of these:
   - existing `<a>` tags (no double-linking)
   - `<code>`, `<pre>`, `<script>`, `<style>`

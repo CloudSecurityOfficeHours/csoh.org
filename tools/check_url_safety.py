@@ -34,7 +34,7 @@ SUSPICIOUS_PATTERNS = [
     r'-{10,}',  # Excessive dashes (obfuscation technique)
 ]
 
-# Domains known to be URL shorteners/redirectors — checked by exact domain match
+# Domains known to be URL shorteners/redirectors - checked by exact domain match
 SHORTENER_DOMAINS = [
     'bit.ly', 'goo.gl', 'tinyurl.com', 'ow.ly', 't.co',
     'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at',
@@ -44,7 +44,7 @@ SHORTENER_DOMAINS = [
 BLOCKLIST = [
     'malicious-example.com',
     'spam-domain.tk',
-    # Bot-detection redirect trap — legitimate sites 302 to this when they
+    # Bot-detection redirect trap - legitimate sites 302 to this when they
     # see a non-browser User-Agent. Never a real destination.
     'survey-smiles.com',
 ]
@@ -114,7 +114,7 @@ def resolve_url(url: str, timeout: int = 5) -> Tuple[str, Optional[str]]:
         except urllib.error.HTTPError as e:
             if method == "HEAD" and (e.code == 405 or e.code >= 400):
                 continue  # HEAD is unreliable on many hosts; try GET
-            # 308 Permanent Redirect — follow it via the Location header
+            # 308 Permanent Redirect - follow it via the Location header
             if e.code == 308:
                 location = e.headers.get("Location")
                 if location:
@@ -211,7 +211,7 @@ class URLSafetyChecker:
             except Exception:
                 pass
 
-        # Note resolution failures (warning, not error — graceful fallback)
+        # Note resolution failures (warning, not error - graceful fallback)
         if resolve_error:
             self.warnings.append(f"Could not resolve URL: {resolve_error}")
 

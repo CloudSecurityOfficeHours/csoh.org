@@ -32,7 +32,7 @@ from urllib.parse import urljoin, urlparse
 READING_LIST_PATH = "cloud-security-reading-list.html"
 
 # Only these sections contain things that have feeds. The books, people, and
-# papers sections are by nature one-shot links — no feed to check.
+# papers sections are by nature one-shot links - no feed to check.
 FEED_SECTIONS = ("newsletters", "blogs", "podcasts", "youtube")
 
 # Pretend to be a real browser. A lot of CDNs (Cloudflare in particular) 403
@@ -55,10 +55,10 @@ FALLBACK_FEED_PATHS = (
 #   1. Feed lives at a non-standard path the fallback probe doesn't guess
 #      (wiz.io serves /feed/rss.xml, not /feed/).
 #   2. The page itself is bot-protected (Cloudflare/CDN 403s our User-Agent) so
-#      we never even reach feed discovery — but the feed endpoint is open.
+#      we never even reach feed discovery - but the feed endpoint is open.
 # When a URL is overridden we skip the page fetch entirely and read the feed
 # directly. Worst case (the feed 403s too) it shows as "feed unreachable" with
-# this exact URL — strictly more useful than a bare "no feed discovered".
+# this exact URL - strictly more useful than a bare "no feed discovered".
 # Verify a candidate returns parseable, dated entries before adding it here.
 FEED_OVERRIDES = {
     "https://www.wiz.io/blog": "https://www.wiz.io/feed/rss.xml",
@@ -80,7 +80,7 @@ def fetch(url: str, *, accept: str = "*/*") -> Tuple[Optional[bytes], Optional[s
         return None, f"HTTP {e.code}"
     except urllib.error.URLError as e:
         return None, f"network: {e.reason}"
-    except Exception as e:                              # noqa: BLE001 — diagnostic only
+    except Exception as e:                              # noqa: BLE001 - diagnostic only
         return None, f"{type(e).__name__}: {e}"
 
 
@@ -109,7 +109,7 @@ def extract_section_urls(html_text: str) -> List[Tuple[str, str]]:
 
 def discover_feed_url(page_url: str, html_text: str) -> Optional[str]:
     """Look for a <link rel="alternate" type="application/(rss|atom)+xml">."""
-    # Lower-cased match against the head only — body links to feeds (e.g. a
+    # Lower-cased match against the head only - body links to feeds (e.g. a
     # "Subscribe via RSS" button) are not always the canonical feed.
     head_match = re.search(r"<head\b[^>]*>(.*?)</head>", html_text, re.DOTALL | re.IGNORECASE)
     head = head_match.group(1) if head_match else html_text[:8000]
@@ -160,7 +160,7 @@ def try_fallback_feed(page_url: str) -> Optional[str]:
             body, err = fetch(candidate, accept="application/rss+xml, application/atom+xml")
             if err or not body:
                 continue
-            # Cheap sanity check — must look like XML and contain a feed root.
+            # Cheap sanity check - must look like XML and contain a feed root.
             head = body[:512].lower()
             if b"<rss" in head or b"<feed" in head or b"<rdf" in head:
                 return candidate
@@ -203,14 +203,14 @@ def parse_feed_latest(xml_bytes: bytes) -> Optional[dt.datetime]:
 
 def _parse_date(value: str) -> Optional[dt.datetime]:
     """Parse RFC 822 (RSS) and ISO 8601 / RFC 3339 (Atom) date strings."""
-    # RFC 822 — what RSS pubDate uses.
+    # RFC 822 - what RSS pubDate uses.
     try:
         d = parsedate_to_datetime(value)
         if d is not None:
             return _to_utc(d)
     except (TypeError, ValueError):
         pass
-    # ISO 8601 — what Atom <updated>/<published> use. Python's fromisoformat
+    # ISO 8601 - what Atom <updated>/<published> use. Python's fromisoformat
     # accepts the trailing 'Z' only on 3.11+, which matches our target.
     try:
         return _to_utc(dt.datetime.fromisoformat(value.replace("Z", "+00:00")))
@@ -229,7 +229,7 @@ def check_url(section: str, url: str) -> Dict[str, object]:
     result: Dict[str, object] = {"section": section, "url": url}
 
     # A known feed for this URL? Skip the page fetch (which may be bot-blocked)
-    # and the discovery guesswork — read the feed directly.
+    # and the discovery guesswork - read the feed directly.
     override = FEED_OVERRIDES.get(url)
     if override:
         result["feed_url"] = override
@@ -301,11 +301,11 @@ def format_report(results: List[Dict[str, object]], max_age_days: int) -> str:
             (stale if latest < cutoff else healthy).append(r)
 
     lines: List[str] = []
-    lines.append(f"_Reading list staleness check — generated {now.strftime('%Y-%m-%d')} UTC_")
+    lines.append(f"_Reading list staleness check - generated {now.strftime('%Y-%m-%d')} UTC_")
     lines.append("")
     lines.append(
         f"Threshold: any feed whose newest entry is older than **{max_age_days} days** is flagged. "
-        "This page is hand-curated, so nothing is auto-edited — use this report to decide what to "
+        "This page is hand-curated, so nothing is auto-edited - use this report to decide what to "
         "refresh, replace, or drop."
     )
     lines.append("")
@@ -336,7 +336,7 @@ def format_report(results: List[Dict[str, object]], max_age_days: int) -> str:
                 extras.append(f"[feed]({r['feed_url']})")
             if "detail" in r:
                 extras.append(f"_{r['detail']}_")
-            suffix = f" — {' · '.join(extras)}" if extras else ""
+            suffix = f" - {' · '.join(extras)}" if extras else ""
             lines.append(f"- **{section}** · <{url}>{suffix}")
         lines.append("")
 

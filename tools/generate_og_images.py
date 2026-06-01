@@ -5,7 +5,7 @@ Renders a CSOH-branded 1200×630 image for each page in PAGES, saves them
 under ../img/og/<slug>.jpg, and rewrites each page's <meta property="og:image">
 + <meta name="twitter:image"> to point at the new file.
 
-Idempotent — re-running regenerates images for any page whose content
+Idempotent - re-running regenerates images for any page whose content
 might have changed; pages whose OG image is already set to the per-page
 version won't get a redundant URL update.
 
@@ -32,7 +32,7 @@ TEMPLATE_PATH = REPO_ROOT / "tools" / "og" / "template.html"
 OUT_DIR = REPO_ROOT / "img" / "og"
 OG_VIEWPORT = {"width": 1200, "height": 630}
 
-# (filename, title, subtitle, badge) — keep titles ≤ ~60 chars and subtitles
+# (filename, title, subtitle, badge) - keep titles ≤ ~60 chars and subtitles
 # ≤ ~140 chars so the template doesn't have to clamp aggressively. The
 # subtitle prints under the headline; choose a one-line value prop, not
 # the page meta description.
@@ -43,7 +43,7 @@ PAGES = [
      "Community"),
     ("what-is-cloud-security.html",
      "What is Cloud Security?",
-     "Shared responsibility, the threats that matter, the tool landscape — explained by practitioners.",
+     "Shared responsibility, the threats that matter, the tool landscape - explained by practitioners.",
      "Pillar Guide"),
     ("learning-path.html",
      "Cloud Security Learning Path",
@@ -51,7 +51,7 @@ PAGES = [
      "Roadmap"),
     ("cloud-security-best-practices.html",
      "Cloud Security Best Practices",
-     "The controls that actually prevent breaches — ranked by what shows up as root cause in real incident reports.",
+     "The controls that actually prevent breaches - ranked by what shows up as root cause in real incident reports.",
      "Practitioner Guide"),
     ("shared-responsibility-model.html",
      "The Shared Responsibility Model",
@@ -63,7 +63,7 @@ PAGES = [
      "Tool Comparison"),
     ("cloud-security-certifications.html",
      "Cloud Security Certifications Compared",
-     "CCSK, CCSP, AWS, Azure, GCP, CKS — side by side, with recommended paths by role.",
+     "CCSK, CCSP, AWS, Azure, GCP, CKS - side by side, with recommended paths by role.",
      "Comparison"),
     ("github-actions.html",
      "How We Use GitHub Actions",
@@ -71,15 +71,15 @@ PAGES = [
      "Tutorial"),
     ("terraform.html",
      "How We Use Terraform",
-     "Learn infrastructure-as-code by reading our real multi-cloud Terraform. State, providers, keyless OIDC — all real.",
+     "Learn infrastructure-as-code by reading our real multi-cloud Terraform. State, providers, keyless OIDC - all real.",
      "Tutorial"),
     ("version-control.html",
      "Git & Version Control",
-     "Version control from first principles, then our real git workflow — branches, pull requests, secrets out of history.",
+     "Version control from first principles, then our real git workflow - branches, pull requests, secrets out of history.",
      "Tutorial"),
     ("resources.html",
      "240+ Cloud Security Resources",
-     "CTFs, labs, tools, certifications, and AI-security resources — curated by the CSOH community.",
+     "CTFs, labs, tools, certifications, and AI-security resources - curated by the CSOH community.",
      "Directory"),
     ("ctfs.html",
      "Cloud Security CTF Challenges",
@@ -87,11 +87,11 @@ PAGES = [
      "Hands-On"),
     ("conferences.html",
      "Security & Hacker Conferences",
-     "RSA, DEF CON, Black Hat, fwd:cloudsec, CCC, OffensiveCon, BSides — and which ones are worth attending.",
+     "RSA, DEF CON, Black Hat, fwd:cloudsec, CCC, OffensiveCon, BSides - and which ones are worth attending.",
      "Directory"),
     ("glossary.html",
      "The Cloud Security Glossary",
-     "300+ terms — IAM, CNAPP, CSPM, MITRE ATT&CK, AI security and more — in plain English.",
+     "300+ terms - IAM, CNAPP, CSPM, MITRE ATT&CK, AI security and more - in plain English.",
      "Reference"),
     ("breach-timeline.html",
      "Cloud Breach Kill Chains",
@@ -99,11 +99,11 @@ PAGES = [
      "Threat Library"),
     ("threat-research.html",
      "Cloud Threat Research Directory",
-     "Vendor research teams, IOC feeds, MITRE ATT&CK Cloud mappings, government advisories — curated.",
+     "Vendor research teams, IOC feeds, MITRE ATT&CK Cloud mappings, government advisories - curated.",
      "Defender Resource"),
     ("meetings.html",
      "94 Weekly Cloud Security Recaps",
-     "Topic-by-topic notes from every CSOH Friday session — 94 meetings searchable by speaker and topic.",
+     "Topic-by-topic notes from every CSOH Friday session - 94 meetings searchable by speaker and topic.",
      "Archive"),
     ("faq.html",
      "Cloud Security Office Hours FAQ",
@@ -111,7 +111,7 @@ PAGES = [
      "FAQ"),
     ("news.html",
      "Cloud Security News",
-     "AWS, Azure, GCP, Kubernetes news — curated daily from 39 vendor-neutral sources.",
+     "AWS, Azure, GCP, Kubernetes news - curated daily from 39 vendor-neutral sources.",
      "Daily News"),
     ("sessions.html",
      "Free Weekly Cloud Security Zoom",
@@ -119,7 +119,7 @@ PAGES = [
      "Community"),
     ("presentations.html",
      "Cloud Security Talks Archive",
-     "Recordings of past CSOH Zoom sessions — speakers, talks, and walkthroughs.",
+     "Recordings of past CSOH Zoom sessions - speakers, talks, and walkthroughs.",
      "Archive"),
     ("about-shawn-nunley.html",
      "About Shawn Nunley",
@@ -139,7 +139,7 @@ PAGES = [
      "Policy"),
     ("security-policy.html",
      "Security Vulnerability Disclosure",
-     "How to responsibly report security issues to CSOH — scope, response timeline, and recognition.",
+     "How to responsibly report security issues to CSOH - scope, response timeline, and recognition.",
      "Policy"),
     ("code-of-conduct.html",
      "Code of Conduct",
@@ -147,11 +147,11 @@ PAGES = [
      "Policy"),
     ("rss.html",
      "Subscribe to Cloud Security News",
-     "RSS feed of curated cloud security news from 39 vendor-neutral sources — updated daily.",
+     "RSS feed of curated cloud security news from 39 vendor-neutral sources - updated daily.",
      "Subscribe"),
     ("kevin-mitnick.html",
-     "Kevin Mitnick — In Memoriam",
-     "A personal tribute by Shawn Nunley. From adversaries to brothers — a story of justice, redemption, and friendship.",
+     "Kevin Mitnick - In Memoriam",
+     "A personal tribute by Shawn Nunley. From adversaries to brothers - a story of justice, redemption, and friendship.",
      "Memorial"),
 
     # ── Topic pages (cloud-security disciplines & technologies) ─────────────
@@ -161,7 +161,7 @@ PAGES = [
      "Topic Guide"),
     ("zero-trust.html",
      "Zero Trust Architecture",
-     "NIST SP 800-207, BeyondCorp, CISA Maturity Model — what Zero Trust actually means for cloud workloads.",
+     "NIST SP 800-207, BeyondCorp, CISA Maturity Model - what Zero Trust actually means for cloud workloads.",
      "Topic Guide"),
     ("network-security.html",
      "Cloud Network Security",
@@ -229,7 +229,7 @@ PAGES = [
      "Topic Guide"),
     ("compliance-frameworks.html",
      "Compliance Frameworks",
-     "SOC 2, ISO 27001, PCI DSS, HIPAA, FedRAMP, CMMC, GDPR — what each one actually requires in the cloud.",
+     "SOC 2, ISO 27001, PCI DSS, HIPAA, FedRAMP, CMMC, GDPR - what each one actually requires in the cloud.",
      "Topic Guide"),
     ("ai-learning.html",
      "Learn Cloud Security with AI",
@@ -238,7 +238,7 @@ PAGES = [
 
     # ── Provider-specific hubs ──────────────────────────────────────────────
     ("aws-security.html",
-     "AWS Security — The Complete Guide",
+     "AWS Security - The Complete Guide",
      "IAM, GuardDuty, Security Hub, KMS, Organizations, SCPs. Vendor-neutral take on securing AWS at scale.",
      "Provider Hub"),
     ("azure-security.html",
@@ -251,7 +251,7 @@ PAGES = [
      "Provider Hub"),
     ("containers.html",
      "Container Security",
-     "Image hardening, runtime defense, IMDS exposure, the supply chain — boundary security for containerized workloads.",
+     "Image hardening, runtime defense, IMDS exposure, the supply chain - boundary security for containerized workloads.",
      "Topic Guide"),
     ("kubernetes.html",
      "Kubernetes & Managed K8s",
@@ -266,12 +266,12 @@ PAGES = [
      "How CSOH deploys to GCP: Cloud Run + Workload Identity Federation + Cloud CDN + Cloud Armor. Learn by reading.",
      "Reference"),
     ("cloud-security-comparison.html",
-     "AWS vs Azure vs GCP — Security",
+     "AWS vs Azure vs GCP - Security",
      "10 comparison tables and a scorecard across IAM, logging, posture, detection, encryption, network and pricing.",
      "Comparison"),
     ("vendor-landscape.html",
      "Cloud Security Vendor Landscape",
-     "350+ vendors across 28 categories. CNAPP, CSPM, SIEM, EDR, DSPM and the rest — mapped, not ranked.",
+     "350+ vendors across 28 categories. CNAPP, CSPM, SIEM, EDR, DSPM and the rest - mapped, not ranked.",
      "Reference"),
 
     # ── Career & community pages ────────────────────────────────────────────
@@ -310,7 +310,7 @@ PAGES = [
      "Build-system compromise → SUNBURST → on-prem to cloud pivot → Golden SAML → US-government espionage.",
      "Breach Kill Chain"),
     ("breaches/lastpass.html",
-     "LastPass 2022–23 Breach Kill Chain",
+     "LastPass 2022-23 Breach Kill Chain",
      "DevOps engineer endpoint compromise → cloud backups exfiltrated → customer vaults at risk. Full chain and defenses.",
      "Breach Kill Chain"),
     ("breaches/uber.html",
@@ -334,7 +334,7 @@ PAGES = [
      "Over-permissive Azure storage SAS token in an open-source repo → 38 TB of internal data exposed. Full chain.",
      "Breach Kill Chain"),
     ("breaches/promptware.html",
-     "Promptware 2024–26 Breach Kill Chain",
+     "Promptware 2024-26 Breach Kill Chain",
      "Prompt-injection kill chain across LLM-powered apps and AI agents. Defenses for builders and defenders.",
      "Breach Kill Chain"),
     ("breaches/mitnick-novell.html",
@@ -349,7 +349,7 @@ PAGES = [
      "Portfolio Project"),
     ("portfolio/cloudgoat.html",
      "Walk every CloudGoat scenario",
-     "Portfolio project: complete and write up Rhino Security Labs' CloudGoat — the canonical AWS-attack lab.",
+     "Portfolio project: complete and write up Rhino Security Labs' CloudGoat - the canonical AWS-attack lab.",
      "Portfolio Project"),
     ("portfolio/cnapp-comparison.html",
      "Write a CNAPP comparison",

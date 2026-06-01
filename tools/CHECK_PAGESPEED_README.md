@@ -4,7 +4,7 @@ Runs Google PageSpeed Insights against `csoh.org` (mobile + desktop in parallel)
 
 ## Why
 
-The internal SEO audit (the structural one tracked at the top of SCORECARD.md) is measured from inside the codebase. PSI is the only way to capture the synthetic-lab signal Google actually surfaces — Lighthouse Performance/Accessibility/Best Practices/SEO scores plus the lab-measured Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index). Running it after every meaningful change keeps the second half of SCORECARD.md current.
+The internal SEO audit (the structural one tracked at the top of SCORECARD.md) is measured from inside the codebase. PSI is the only way to capture the synthetic-lab signal Google actually surfaces - Lighthouse Performance/Accessibility/Best Practices/SEO scores plus the lab-measured Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index). Running it after every meaningful change keeps the second half of SCORECARD.md current.
 
 ## One-time setup: API key
 
@@ -20,7 +20,7 @@ export PSI_API_KEY=AIza…
 # Or stash it in your shell profile so it sticks
 ```
 
-No quota cost for typical hobby use — the default per-project quota is 25,000 queries/day.
+No quota cost for typical hobby use - the default per-project quota is 25,000 queries/day.
 
 ## Usage
 
@@ -43,7 +43,7 @@ Output is the four 0-100 category scores per strategy plus a one-line Core Web V
 ## When to run
 
 - After any change that could affect rendering (CSS, JS, images, layout-shift sources, render-blocking resources).
-- Weekly is fine for steady-state monitoring — the score moves slowly absent code changes.
+- Weekly is fine for steady-state monitoring - the score moves slowly absent code changes.
 - Pair with a Google Search Console check so you see both the synthetic lab data (PSI) and the real-user CrUX data side by side.
 
 ## Requirements

@@ -223,7 +223,7 @@ If you want to provide your own, save a JPG under ~150 KB with a clear name (e.g
 - `<span class="tag job">` = Job Search (pink)
 - `<span class="tag">` = Regular tag (gray)
 
-> **Note:** All tag colors automatically adapt to dark mode - you don't need to add any dark mode–specific styles.
+> **Note:** All tag colors automatically adapt to dark mode - you don't need to add any dark mode-specific styles.
 
 **Don't worry about images or SRI hashes!** The site will handle those automatically after you open a pull request. If you want to add a custom preview image, [see Step 5](#step-5-add-a-preview-image-optional).
 

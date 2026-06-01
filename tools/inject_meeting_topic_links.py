@@ -28,7 +28,7 @@ MEETINGS_DIR = REPO_ROOT / "meetings"
 
 # (topic-page, [keywords ordered by specificity, most specific first]).
 # Keywords are matched as whole words, case-insensitive.
-# Order matters — earlier rows get priority when multiple topics match.
+# Order matters - earlier rows get priority when multiple topics match.
 TOPIC_KEYWORDS: list[tuple[str, list[str]]] = [
     ("../ai-ml-security.html",        ["prompt injection", "LLM security", "AI agent", "AI agents", "Claude code", "model security", "AI security", "AI/ML security", "AI/LLM"]),
     ("../iam.html",                   ["IAM Identity Center", "Okta", "Entra ID", "Azure AD", "identity provider", "MFA fatigue", "Identity and Access Management", "least privilege", "privilege escalation", "credential theft", "access management", "role-based access"]),
@@ -62,7 +62,7 @@ TOPIC_KEYWORDS: list[tuple[str, list[str]]] = [
     ("../breach-timeline.html",       ["Capital One breach", "SolarWinds breach", "MGM breach", "Uber breach", "LastPass breach", "Snowflake breach", "Storm-0558"]),
 ]
 
-# Words that are too generic to safely wrap — never link these.
+# Words that are too generic to safely wrap - never link these.
 DENYLIST = {"AI", "ML", "AWS", "Azure", "GCP", "S3", "EC2", "IAM"}
 
 MAX_LINKS_PER_MEETING = 3
@@ -173,12 +173,12 @@ def main() -> int:
                                        for href, phrase in inserts)
             print(f"  ✓ {p.relative_to(REPO_ROOT)}: {insert_summary}")
         else:
-            # Skip silent — too verbose to print every no-op meeting
+            # Skip silent - too verbose to print every no-op meeting
             pass
 
     print(f"\nUpdated {updated}/{len(targets)} meetings; inserted {total_inserts} contextual links.")
     if args.dry_run:
-        print("(dry-run — no files written)")
+        print("(dry-run - no files written)")
     return 0
 
 

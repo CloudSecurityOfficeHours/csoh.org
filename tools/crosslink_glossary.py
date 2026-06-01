@@ -13,7 +13,7 @@ links the first occurrence of each term per dd group to keep things
 readable.
 
 Re-runnable: rerunning the script after editing the glossary won't
-duplicate links — existing <a class="glossary-link"> wrappers are
+duplicate links - existing <a class="glossary-link"> wrappers are
 preserved and treated as already-linked.
 """
 import re
@@ -188,7 +188,7 @@ def _link_text(
     self_slug: str,
 ) -> str:
     """Wrap glossary-term occurrences in text with <a>. Within a sentence,
-    each target slug is linked only once — repeating the same word (or
+    each target slug is linked only once - repeating the same word (or
     another alias of the same term) inside one sentence does not get a
     second link. Sentence boundaries are `.`, `!`, `?`. Self-links are
     always skipped."""

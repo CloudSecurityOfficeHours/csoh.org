@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from check_url_safety import URLSafetyChecker
 
-# Section IDs in ctfs.html — each maps to a section heading on the page
+# Section IDs in ctfs.html - each maps to a section heading on the page
 SECTIONS = {
     '1': ('wiz-standalone', 'Wiz Standalone Challenges (always-available)'),
     '2': ('aws-ctfs', 'AWS CTFs'),
@@ -63,7 +63,7 @@ def select_from_list(prompt, options):
         print(f"  ❌ Invalid selection. Choose from {', '.join(options.keys())}\n")
 
 def select_tags():
-    """Interactive tag selection — CTF-tuned."""
+    """Interactive tag selection - CTF-tuned."""
     print("\n📋 Select relevant tags (CTF tag is added automatically)\n")
     print("  Cloud / Platform:")
     for i, t in enumerate(CLOUD_TAGS, 1):
@@ -155,7 +155,7 @@ def insert_card_into_section(html_content, section_id, card_html):
     # Find the last </a> (last card in the resource-grid) inside the section
     last_a = section_html.rfind('</a>')
     if last_a == -1:
-        return None, 'No existing card found in section — cannot determine insertion point'
+        return None, 'No existing card found in section - cannot determine insertion point'
 
     insertion_point = section_start + last_a + len('</a>')
     new_html = (html_content[:insertion_point]
@@ -233,7 +233,7 @@ def main():
 
     # Step 3: Description
     print_section("Step 3: Short Description")
-    print("1 sentence shown below the title. Example: 'AWS IAM privilege escalation — 31 attack paths via Terraform.'")
+    print("1 sentence shown below the title. Example: 'AWS IAM privilege escalation - 31 attack paths via Terraform.'")
     description = get_input("Description")
 
     # Step 4: Tooltip (extended)
@@ -324,7 +324,7 @@ def main():
         else:
             print(f"❌ Push failed: {out}")
 
-    print_header("✨ Submission Complete — thanks!")
+    print_header("✨ Submission Complete - thanks!")
     return 0
 
 

@@ -224,7 +224,7 @@ repo                               | pr_url                | submitted   | statu
 iknowjason/Awesome-CloudSec-Labs   | https://github.com/.. | 2026-04-30  | merged
 ```
 
-- **Once accepted**, the backlink takes 1–4 weeks to influence Google
+- **Once accepted**, the backlink takes 1-4 weeks to influence Google
   rankings. Don't expect overnight.
 
 ---
@@ -233,7 +233,7 @@ iknowjason/Awesome-CloudSec-Labs   | https://github.com/.. | 2026-04-30  | merge
 
 Diminishing returns kick in fast. A backlink from a well-maintained
 list with 5,000+ stars and 500+ forks is worth ~10x one from a list
-with 50 stars. Focus the effort on the top 3–4 in this document.
+with 50 stars. Focus the effort on the top 3-4 in this document.
 
 The rest of the search-visibility lift comes from on-page SEO (which
 we've handled) and original linkable content (which the pillars and

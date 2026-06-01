@@ -18,7 +18,7 @@ Required Zoom S2S OAuth scopes beyond the fetcher:
     meeting:read:summary:admin
 
 Usage:
-    # Dry run — list what would be added, make no changes
+    # Dry run - list what would be added, make no changes
     python3 tools/backfill_zoom_summaries.py --dry-run
 
     # Full backfill (default: skip dates already on page)
@@ -265,7 +265,7 @@ def build_markdown(summary: dict, pacific_date: str) -> str:
     content = summary.get("summary_content", "").strip()
     if not content:
         raise ValueError("empty summary_content")
-    # Strip Zoom's "Next steps" section first — those entries reference private
+    # Strip Zoom's "Next steps" section first - those entries reference private
     # tasks.zoom.us action-item URLs and are mostly noise on a public page.
     # Stop at the next heading (## or ###).
     content = re.sub(
@@ -364,7 +364,7 @@ def main() -> int:
         print(f"  limited to first {len(candidate_dates)}.", file=sys.stderr)
 
     # add_meeting.py inserts each new article at the TOP of the list, so to end
-    # up with newest-first order we need to publish OLDEST first — the newest
+    # up with newest-first order we need to publish OLDEST first - the newest
     # date lands on top last.
     todo_dates = list(reversed(candidate_dates))
 
@@ -380,7 +380,7 @@ def main() -> int:
 
     for date in todo_dates:
         # Try each candidate on this date (longest duration first) until one has
-        # non-empty content — Zoom often produces short fragment summaries when
+        # non-empty content - Zoom often produces short fragment summaries when
         # a recording was stopped/restarted.
         detail = None
         tried = 0

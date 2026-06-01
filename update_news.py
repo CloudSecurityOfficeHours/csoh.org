@@ -652,7 +652,7 @@ NEAR_DUP_STOPWORDS = frozenset({
 # Long tokens that show up across unrelated cybersec headlines and so don't
 # imply same-event when shared. Excluded from the "distinctive" signature.
 # (Vendor names, product names, attack names, and topic anchors like
-# "ransomware"/"kubernetes"/"vulnerability" are deliberately *not* listed —
+# "ransomware"/"kubernetes"/"vulnerability" are deliberately *not* listed -
 # sharing those across two articles is a real signal.)
 NEAR_DUP_GENERIC_LONG = frozenset({
     "addressing", "affecting", "announced", "announces", "announcing",
@@ -698,7 +698,7 @@ def near_dup_signature(entry: Dict[str, str]) -> Tuple[frozenset, frozenset, fro
     distinctive = frozenset(
         t for t in all_tokens if len(t) >= 8 and t not in NEAR_DUP_GENERIC_LONG
     )
-    # Title set drops generic content words too — "AWS Patches Critical X
+    # Title set drops generic content words too - "AWS Patches Critical X
     # Vulnerability" headlines shouldn't count {patches, critical, vulnerability}
     # toward an event-match against a different vendor's bulletin.
     title_significant = frozenset(

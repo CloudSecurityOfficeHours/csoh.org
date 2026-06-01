@@ -54,7 +54,7 @@ TRACKING_PARAMS = {
     '_bhlid',
 }
 
-# Domains that block bots — skip HTTP resolution (sourced from .lychee.toml)
+# Domains that block bots - skip HTTP resolution (sourced from .lychee.toml)
 BOT_BLOCKED_DOMAINS = [
     'linkedin.com', 'web.archive.org',
     'blog.appsecco.com', 'bleepingcomputer.com', 'community.sap.com',
@@ -166,7 +166,7 @@ def is_meaningful_redirect(original, resolved):
     if any(marker in r.path.lower() for marker in bot_challenge_markers):
         return False
 
-    # All other redirects are meaningful — including trailing-slash
+    # All other redirects are meaningful - including trailing-slash
     # and www-prefix differences, which are real HTTP 301s that cost
     # an extra round-trip for every visitor.
     return True
@@ -178,7 +178,7 @@ def is_meaningful_redirect(original, resolved):
 def is_own_domain(url):
     """Return True for URLs pointing at csoh.org itself.
 
-    These must never be rewritten by this script — canonical, og:url,
+    These must never be rewritten by this script - canonical, og:url,
     twitter:image, internal navigation, RSS alternate links, etc. all
     reference our own domain. Following a 301 from /meetings.html to
     /sessions.html (a real same-site redirect) and "normalizing" the
@@ -195,7 +195,7 @@ def is_own_domain(url):
 def collect_all_urls():
     """Scan all HTML files and return {filepath: [urls]} and deduplicated list.
 
-    Same-domain (csoh.org) URLs are excluded — see is_own_domain for why.
+    Same-domain (csoh.org) URLs are excluded - see is_own_domain for why.
     """
     workspace = Path(__file__).parent.parent
     html_files = sorted(workspace.glob('*.html'))
@@ -226,7 +226,7 @@ def collect_all_urls():
 # that drop off the site are pruned so the file can't grow without bound.
 #
 # Safety is unchanged: the downstream meaningful-redirect + destination
-# safety-check still runs on every URL each run, cache hit or not — the cache
+# safety-check still runs on every URL each run, cache hit or not - the cache
 # only skips the *resolution* network call, never the safety decision.
 
 CACHE_VERSION = 1
@@ -422,7 +422,7 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
                 if cleaned_url != original_url:
                     replacements[original_url] = cleaned_url
     else:
-        # No resolution — only apply param strip + scheme upgrade
+        # No resolution - only apply param strip + scheme upgrade
         for original_url in all_unique:
             cleaned_url = after_scheme[original_url]
             if cleaned_url != original_url:
@@ -575,7 +575,7 @@ def main():
         ttl_days=args.cache_ttl_days,
     )
 
-    # Persist the cache even in dry-run — resolutions are read-only facts and
+    # Persist the cache even in dry-run - resolutions are read-only facts and
     # seeding the cache locally is the point of a dry-run with --cache.
     if args.cache and cache is not None and not args.skip_resolve:
         save_cache(args.cache, cache)
@@ -594,7 +594,7 @@ def main():
 
     total = print_report(replacements, categories, file_changes, dry_run)
 
-    # Fail loudly if any redirect resolved to an unsafe destination —
+    # Fail loudly if any redirect resolved to an unsafe destination -
     # block deploy regardless of dry-run / apply mode.
     if categories['skipped_unsafe_destination']:
         print("::error::One or more URLs on the site redirect to unsafe "

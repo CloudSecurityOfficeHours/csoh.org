@@ -17,7 +17,7 @@
 
     if (typeof MiniSearch === 'undefined') {
         // Defensive: vendor script failed to load (network, ad-blocker,
-        // mis-deploy). Leave the page alone — the noscript fallback
+        // mis-deploy). Leave the page alone - the noscript fallback
         // explains how to navigate without search.
         return;
     }
@@ -128,7 +128,7 @@
             storeFields: ['url', 'page', 'section', 'heading', 'title', 'text', 'type'],
             idField: 'id',
             // Process every term through the same pipeline at index AND
-            // query time. MiniSearch is strict about this — using
+            // query time. MiniSearch is strict about this - using
             // different processors causes "matched at index time but
             // not at query time" bugs that are hard to debug.
             processTerm: termProcessor,
@@ -194,7 +194,7 @@
             // 0.2 catches typos without producing nonsense hits.
             prefix: function (term) { return term.length > 2; },
             fuzzy: function (term) { return term.length > 3 ? 0.2 : false; },
-            // OR-combine — any token match contributes; AND would be
+            // OR-combine - any token match contributes; AND would be
             // too restrictive for short queries that hit the synonym
             // expansion ("nhi" expanded to 6 alternates).
             combineWith: 'OR'
@@ -204,7 +204,7 @@
             results = results.filter(function (r) { return (r.type || 'guide') === currentFilter; });
         }
 
-        // Collapse multiple hits within the same URL — only the
+        // Collapse multiple hits within the same URL - only the
         // best-scoring section per URL wins, with a secondary list of
         // other section matches shown beneath the primary result.
         // Exception: glossary terms each get their own result because

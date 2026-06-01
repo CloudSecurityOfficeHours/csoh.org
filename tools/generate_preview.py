@@ -32,7 +32,7 @@ TARGET_HEIGHT = 300
 SCREENSHOT_TIMEOUT = 30  # seconds
 MIN_PREVIEW_SIZE_KB = 8  # Real Playwright screenshots ~10-22KB; placeholders ~3KB
 
-# URLs that consistently fail to produce useful previews — bot detection,
+# URLs that consistently fail to produce useful previews - bot detection,
 # JS-heavy SPAs that render blank, login walls, etc. The --check command
 # will skip these so they don't block the deploy workflow on every run.
 PREVIEW_IGNORE_URLS = {
@@ -43,7 +43,7 @@ PREVIEW_IGNORE_URLS = {
     'https://otx.alienvault.com/',
     'https://www.cyber.gov.au/about-us/advisories',
     # Conferences pages with bot detection / JS-rendered hero / login walls
-    # that defeat headless screenshots — keep their existing placeholder JPGs.
+    # that defeat headless screenshots - keep their existing placeholder JPGs.
     'https://www.rsaconference.com/',
     'https://cloud.withgoogle.com/next',
     'https://www.blackhat.com/upcoming.html',
@@ -68,7 +68,7 @@ def is_preview_good(preview_path):
     We used to also require a minimum file size, but real Playwright screenshots
     of sparse pages (grep.app, offline pages, etc.) can legitimately be 1-4 KB.
     We now distinguish placeholders by a sidecar marker written at generation
-    time — any file without a marker is trusted.
+    time - any file without a marker is trusted.
     """
     full_path = Path(__file__).parent.parent / preview_path
     if not full_path.exists():
@@ -97,7 +97,7 @@ def generate_filename_from_url(url):
 
 # Minimum byte size for an og:image to count as a real preview. Anything
 # smaller is almost always a 1x1 tracking pixel, a tiny favicon, or a SVG
-# icon — none of which look good at our 400x300 card size.
+# icon - none of which look good at our 400x300 card size.
 MIN_OG_IMAGE_BYTES = 4_000
 
 # A modern desktop UA. Some sites (e.g. *.microsoft.com) return a stripped
@@ -119,7 +119,7 @@ def capture_from_og_image(url, output_path):
     - higher quality than a viewport-cropped page render,
     - immune to cookie banners and Cloudflare bot challenges (we never
       render the page, we just parse the HTML head).
-    Returns (True, message) on success — output_path will hold the raw
+    Returns (True, message) on success - output_path will hold the raw
     bytes of the OG image, ready for optimize_image() to resize/recompress.
     """
     try:
@@ -130,7 +130,7 @@ def capture_from_og_image(url, output_path):
 
         print(f"  🔗 Trying og:image for {url}")
 
-        # Fetch the page HTML. We don't need the full page — head/meta tags
+        # Fetch the page HTML. We don't need the full page - head/meta tags
         # are at the top, so a partial read of the first 256 KB is plenty
         # and avoids waiting on slow asset loads.
         req = urllib.request.Request(url, headers={
@@ -166,7 +166,7 @@ def capture_from_og_image(url, output_path):
         if not candidates:
             return False, "no og:image / twitter:image meta tag"
 
-        # Try each candidate in order — the first one that downloads as a
+        # Try each candidate in order - the first one that downloads as a
         # real, non-trivial image wins.
         for img_url in candidates:
             # Resolve relative URLs (//cdn.example.com/foo.png, /foo.png)
@@ -192,7 +192,7 @@ def capture_from_og_image(url, output_path):
                 print(f"    ↳ candidate {abs_url} too small ({len(data)} bytes)")
                 continue
 
-            # Pillow handles the format conversion — we write raw bytes
+            # Pillow handles the format conversion - we write raw bytes
             # here and let optimize_image() convert to JPEG + resize.
             with open(output_path, 'wb') as f:
                 f.write(data)
@@ -246,7 +246,7 @@ def capture_with_playwright(url, output_path):
             page.set_default_timeout(SCREENSHOT_TIMEOUT * 1000)
 
             # Navigate. `domcontentloaded` returns as soon as the HTML is
-            # parsed — way more reliable than `networkidle`, which hangs
+            # parsed - way more reliable than `networkidle`, which hangs
             # on pages with WebSockets, analytics beacons, or other
             # long-lived connections. We add an explicit settle delay
             # below so JS still has time to render.
@@ -254,7 +254,7 @@ def capture_with_playwright(url, output_path):
                 page.goto(url, wait_until='domcontentloaded')
             except Exception as e:
                 # If even DOMContentLoaded fails (e.g. ERR_TIMED_OUT on a
-                # really slow page), continue anyway — we may still have
+                # really slow page), continue anyway - we may still have
                 # enough of the page to screenshot.
                 print(f"    ⚠️  navigation warning: {e}")
 
@@ -263,7 +263,7 @@ def capture_with_playwright(url, output_path):
             time.sleep(3)
 
             # Hide cookie / consent banners so they don't cover the
-            # screenshot. Best-effort — if injection fails, fall through.
+            # screenshot. Best-effort - if injection fails, fall through.
             try:
                 page.add_style_tag(content=_COOKIE_BANNER_HIDE_CSS)
             except Exception:
@@ -312,7 +312,7 @@ def capture_with_screenshot_api(url, output_path):
         # thum.io returns a GIF loading spinner when it can't capture the page.
         # Reject anything that isn't a JPEG so we fall through to the placeholder.
         if 'jpeg' not in content_type and not data.startswith(b'\xff\xd8\xff'):
-            return False, f"API returned non-JPEG content ({content_type or 'unknown'}) — likely a placeholder"
+            return False, f"API returned non-JPEG content ({content_type or 'unknown'}) - likely a placeholder"
 
         with open(output_path, 'wb') as f:
             f.write(data)
@@ -521,12 +521,12 @@ def generate_preview(url, output_filename=None, force=False):
             print(f"  ⚠️  {message}")
 
     if success:
-        # Real capture — clear any stale placeholder marker from a prior run.
+        # Real capture - clear any stale placeholder marker from a prior run.
         marker = output_path.parent / '.placeholders' / (output_path.name + '.placeholder')
         if marker.exists():
             marker.unlink()
     else:
-        # All methods failed — fall back to a placeholder image.
+        # All methods failed - fall back to a placeholder image.
         print("  📝 Creating placeholder image...")
         result, message = create_placeholder_image(output_path)
         if not result:
@@ -552,7 +552,7 @@ def fix_html_image_paths():
     workflow's model) add new cards with `<img src="img/previews/foo.jpg">`
     using whatever filename they happen to pick. The screenshot generator
     derives its own filename from the URL via generate_filename_from_url()
-    and writes to that path — so the file on disk and the path the HTML
+    and writes to that path - so the file on disk and the path the HTML
     points to drift, leaving broken image references on the live site.
 
     Using preview-mapping.json as the source of truth, this function walks
@@ -566,7 +566,7 @@ def fix_html_image_paths():
     import re
 
     if not PREVIEW_MAPPING.exists():
-        print("⚠️  preview-mapping.json not found — nothing to rewrite.")
+        print("⚠️  preview-mapping.json not found - nothing to rewrite.")
         return 0
 
     with open(PREVIEW_MAPPING, 'r', encoding='utf-8') as f:
@@ -621,7 +621,7 @@ def fix_html_image_paths():
             url = match.group('url')
             correct_path = _mapping.get(url)
             if not correct_path:
-                # Not in the mapping yet — leave the card alone.
+                # Not in the mapping yet - leave the card alone.
                 return full
             # Some entries in the wild use a leading slash. Normalize to
             # the same form the HTML uses (no leading slash, relative).
@@ -631,7 +631,7 @@ def fix_html_image_paths():
                 nonlocal rewrites_this_page
                 old = m.group(2)
                 # Only rewrite if this is a preview image and the path is
-                # actually different — avoids gratuitous edits and skips
+                # actually different - avoids gratuitous edits and skips
                 # things like the site logo if it ever appears in a card.
                 if 'img/previews/' not in old:
                     return m.group(0)
@@ -685,7 +685,7 @@ def extract_urls_from_resources_html():
         content = page.read_text(encoding='utf-8')
         for pattern in patterns:
             for url in pattern.findall(content):
-                # Skip relative / internal links — we only screenshot external URLs
+                # Skip relative / internal links - we only screenshot external URLs
                 if not url.startswith(('http://', 'https://')):
                     continue
                 if url not in seen:

@@ -57,7 +57,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 # Allowlist of keys this script will consume from .env. Anything else in
-# the file is ignored — protects against an attacker (or a careless edit)
+# the file is ignored - protects against an attacker (or a careless edit)
 # slipping LD_PRELOAD, PATH, PYTHONPATH, etc. into .env and altering how
 # this script runs. Practical risk is near zero (you author .env yourself),
 # but the cost of the allowlist is one tiny set lookup.
@@ -159,7 +159,7 @@ def in_pacific(iso_utc: str) -> tuple[str, int, int] | None:
     Returns None on parse failure. Uses zoneinfo (Python 3.9+ stdlib)."""
     try:
         from zoneinfo import ZoneInfo
-        # Zoom sends "2026-04-17T14:01:23Z" — parse as UTC
+        # Zoom sends "2026-04-17T14:01:23Z" - parse as UTC
         if iso_utc.endswith("Z"):
             iso_utc = iso_utc[:-1] + "+00:00"
         when_utc = dt.datetime.fromisoformat(iso_utc)

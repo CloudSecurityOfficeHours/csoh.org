@@ -293,7 +293,7 @@ Net effect: a leaked workflow log compromises at most three ~1-hour tokens, each
 |------|-----------------|---------|
 | App installation token | Automatic, every ~1 hour | None - handled by GitHub |
 | App private key | Annually or on suspected compromise | Generate new key in App settings; replace `CSOH_CI_PRIVATE_KEY` secret; revoke old key |
-| `CSOH_PAT` | Every 6–12 months (or before its set expiry) | Generate new fine-grained PAT (resource owner: `CloudSecurityOfficeHours`, repo: `csoh.org`, permission: pull-requests: write only); replace org-level Actions secret |
+| `CSOH_PAT` | Every 6-12 months (or before its set expiry) | Generate new fine-grained PAT (resource owner: `CloudSecurityOfficeHours`, repo: `csoh.org`, permission: pull-requests: write only); replace org-level Actions secret |
 | Cloud access tokens (GCP/AWS/Azure) | Automatic, every ~1 hour | None - minted per workflow run via OIDC, no stored credential on any cloud |
 | GCP runtime SA roles | On every Terraform apply | The runtime SA's IAM bindings live in [`infra/terraform/gcp/service_accounts.tf`](infra/terraform/gcp/service_accounts.tf) - review on every change |
 

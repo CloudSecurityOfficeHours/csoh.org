@@ -3,11 +3,11 @@
 
 Why .webp: modern browsers send `Accept: image/webp`; serving WebP saves
 ~25-35% bandwidth at equivalent quality. Delivery is via <picture><source
-type="image/webp"> in the HTML (run tools/wrap_img_webp.py after this) — our
+type="image/webp"> in the HTML (run tools/wrap_img_webp.py after this) - our
 object-storage origins can't do Accept-based negotiation, so there's no
 .htaccess trick to lean on.
 
-Encoding: lossy WebP at quality 82 (the sweet spot — visually indistinguishable
+Encoding: lossy WebP at quality 82 (the sweet spot - visually indistinguishable
 from the source at display size, well under half the bytes). Site images (photos
 + page-screenshot thumbnails) are only ever shown scaled down, so lossless would
 just bloat git history for no visible gain. A generated .webp that isn't actually
@@ -60,7 +60,7 @@ def convert(src: Path, force: bool) -> tuple[str, int, int]:
         img.save(dst, "WEBP", quality=WEBP_QUALITY, method=6)
 
     dst_b = dst.stat().st_size
-    # Never keep a .webp that isn't actually smaller — serving a larger file
+    # Never keep a .webp that isn't actually smaller - serving a larger file
     # would defeat the purpose. wrap_img_webp.py then leaves that <img> alone.
     if dst_b >= src_b:
         dst.unlink()
@@ -98,7 +98,7 @@ def main() -> int:
         srcs.sort()
         if not srcs:
             continue
-        print(f"📁 {d.relative_to(REPO_ROOT)} — {len(srcs)} source images")
+        print(f"📁 {d.relative_to(REPO_ROOT)} - {len(srcs)} source images")
         for src in srcs:
             try:
                 status, src_b, dst_b = convert(src, force=args.force)

@@ -2,7 +2,7 @@
 """Run Google PageSpeed Insights against csoh.org (mobile + desktop) and
 append a row to seo-audits/SCORECARD.md.
 
-Uses the public PageSpeed Insights v5 API. An API key is required —
+Uses the public PageSpeed Insights v5 API. An API key is required -
 anonymous requests are rejected. Get a free key in ~30 seconds:
 https://developers.google.com/speed/docs/insights/v5/get-started
 
@@ -86,7 +86,7 @@ def extract_summary(payload: dict) -> dict:
             aid = ref.get("id")
             audit = audits.get(aid, {})
             s = audit.get("score")
-            # Score is None for informational audits — skip those.
+            # Score is None for informational audits - skip those.
             # 1.0 = perfect; anything less is a fail or near-fail.
             if s is not None and s < 1.0:
                 out.append(aid)
@@ -130,13 +130,13 @@ def extract_crux(payload: dict) -> dict | None:
     PSI exposes CrUX in two slots: `loadingExperience` (this URL) and
     `originLoadingExperience` (whole origin). Prefer URL-specific data
     when present and not flagged `origin_fallback`; otherwise fall back
-    to origin. Returns None when neither has data — Google requires a
+    to origin. Returns None when neither has data - Google requires a
     minimum traffic threshold before CrUX exposes anything.
 
     Metric units in CrUX:
-      LARGEST_CONTENTFUL_PAINT_MS, FIRST_CONTENTFUL_PAINT_MS — ms p75
-      INTERACTION_TO_NEXT_PAINT                              — ms p75
-      CUMULATIVE_LAYOUT_SHIFT_SCORE                          — score × 100
+      LARGEST_CONTENTFUL_PAINT_MS, FIRST_CONTENTFUL_PAINT_MS - ms p75
+      INTERACTION_TO_NEXT_PAINT                              - ms p75
+      CUMULATIVE_LAYOUT_SHIFT_SCORE                          - score × 100
         (so a `percentile` of 5 means a real CLS of 0.05)
     """
     page = payload.get("loadingExperience") or {}
@@ -204,7 +204,7 @@ def append_row(date: str, mobile: dict, desktop: dict, notes: str) -> None:
     text = SCORECARD.read_text(encoding="utf-8")
     lines = text.splitlines()
 
-    # Find the PageSpeed table — its header row contains "Mobile | Desktop"
+    # Find the PageSpeed table - its header row contains "Mobile | Desktop"
     psi_header_idx = None
     for i, line in enumerate(lines):
         if "| Mobile" in line and "| Desktop" in line:
@@ -213,7 +213,7 @@ def append_row(date: str, mobile: dict, desktop: dict, notes: str) -> None:
     if psi_header_idx is None:
         raise SystemExit("Could not locate the PageSpeed table in SCORECARD.md")
 
-    # The new row goes at the end of the table — find the first non-table
+    # The new row goes at the end of the table - find the first non-table
     # line after the header.
     insert_at = psi_header_idx + 2  # skip header + separator
     while insert_at < len(lines) and lines[insert_at].startswith("|"):
@@ -246,7 +246,7 @@ def main() -> int:
     if not args.quiet:
         print(f"⏱  Running PageSpeed Insights against {args.url} (mobile + desktop in parallel)…")
 
-    # Fan out both strategies in parallel — each PSI run takes 20-40s.
+    # Fan out both strategies in parallel - each PSI run takes 20-40s.
     with ThreadPoolExecutor(max_workers=2) as ex:
         fut_mobile = ex.submit(run_psi, args.url, "mobile", args.api_key)
         fut_desktop = ex.submit(run_psi, args.url, "desktop", args.api_key)
@@ -255,7 +255,7 @@ def main() -> int:
             desktop_raw = fut_desktop.result()
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")[:500]
-            print(f"ERROR: PSI HTTP {e.code} — {body}", file=sys.stderr)
+            print(f"ERROR: PSI HTTP {e.code} - {body}", file=sys.stderr)
             return 1
 
     mobile = extract_summary(mobile_raw)
@@ -267,7 +267,7 @@ def main() -> int:
     notes_parts = [f"Mobile: {fmt_metrics(mobile)}"]
     # Real-user CrUX data sits alongside the lab metrics. Surfaced separately
     # so it's clear which numbers are field (CrUX) vs lab (Lighthouse).
-    # CrUX is absent for low-traffic pages — silently skipped when missing.
+    # CrUX is absent for low-traffic pages - silently skipped when missing.
     if mobile_crux:
         crux_line = fmt_crux(mobile_crux)
         if crux_line:
@@ -293,7 +293,7 @@ def main() -> int:
     if args.quiet:
         print(row)
     else:
-        print("\nResults — `Perf / A11y / Best Practices / SEO` (out of 100)\n")
+        print("\nResults - `Perf / A11y / Best Practices / SEO` (out of 100)\n")
         print(f"  Mobile  : {fmt_cell(mobile)}  ({fmt_metrics(mobile)})")
         print(f"  Desktop : {fmt_cell(desktop)}  ({fmt_metrics(desktop)})")
         for label, crux in [("Mobile", mobile_crux), ("Desktop", desktop_crux)]:
@@ -328,7 +328,7 @@ def main() -> int:
                         if not items:
                             continue
                         for item in items[:5]:
-                            # Different audits expose details differently —
+                            # Different audits expose details differently -
                             # node.selector for DOM audits, source/url/
                             # description for console / network / robots-txt.
                             node = item.get("node") or {}

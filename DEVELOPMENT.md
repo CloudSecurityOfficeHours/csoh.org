@@ -185,22 +185,22 @@ csoh.org/
 
 ### Workflows at a Glance
 
-Every workflow has its own header banner — but if you just want to know "what runs when, and what does it touch," this is the one-screen version. Group by purpose, not alphabetical. Times are UTC; the auto-merge column shows whether the workflow can push to `main` without human review.
+Every workflow has its own header banner - but if you just want to know "what runs when, and what does it touch," this is the one-screen version. Group by purpose, not alphabetical. Times are UTC; the auto-merge column shows whether the workflow can push to `main` without human review.
 
 **Content automation (writes to site)**
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
 | [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 39 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
-| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2–3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
-| [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No — auto-approved, human merges |
-| [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A — commits directly |
+| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
+| [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - auto-approved, human merges |
+| [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
 
 **Deploy**
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud | N/A — direct deploy |
+| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud | N/A - direct deploy |
 
 **PR quality gates (block or warn)**
 
@@ -209,7 +209,7 @@ Every workflow has its own header banner — but if you just want to know "what 
 | [`lint.yml`](.github/workflows/lint.yml) | every push + PR | `actionlint` + `ruff` + `yamllint` in parallel | Yes |
 | [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | W3C HTML5 validator on every `.html` file | Yes, with PR comment |
 | [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Flags phishing patterns, suspicious TLDs, shortener domains | Yes |
-| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | Lychee crawl of every link; PR comment on failures | No — link rot is everywhere |
+| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | Lychee crawl of every link; PR comment on failures | No - link rot is everywhere |
 
 **Periodic audits (report-only, never edits the site)**
 
@@ -221,7 +221,7 @@ Every workflow has its own header banner — but if you just want to know "what 
 
 A few patterns worth knowing before you touch any of these:
 
-- **App token vs PAT.** Writes (push, PR, approve, merge) use a `csoh-ci` GitHub App installation token, not the auto-injected `GITHUB_TOKEN` — App tokens can trigger downstream workflows on the PRs they create. `CSOH_PAT` is a separate fine-grained PAT used *only* to approve the bot's own PRs, since GitHub blocks self-approval and auto-merge doesn't honor the ruleset bypass list for the approval requirement. See the comments in `update-news.yml` for the full story.
+- **App token vs PAT.** Writes (push, PR, approve, merge) use a `csoh-ci` GitHub App installation token, not the auto-injected `GITHUB_TOKEN` - App tokens can trigger downstream workflows on the PRs they create. `CSOH_PAT` is a separate fine-grained PAT used *only* to approve the bot's own PRs, since GitHub blocks self-approval and auto-merge doesn't honor the ruleset bypass list for the approval requirement. See the comments in `update-news.yml` for the full story.
 - **Auto-merge safety valve.** Workflows that auto-merge always check that the diff is restricted to a known set of files. If the bot touches anything outside that set, the PR stays open for a human.
 - **Pinned action SHAs.** All `uses:` references pin to a full commit SHA with the version as a trailing comment (`@de0fac…  # v6.0.2`). Don't replace these with tag refs.
 
@@ -263,7 +263,7 @@ A few patterns worth knowing before you touch any of these:
 **Reading List Staleness Check** (`.github/workflows/check-reading-list-staleness.yml`)
 - 1st of each month at 07:00 UTC, `tools/check_reading_list_staleness.py` walks every newsletter / blog / podcast / YouTube channel on `cloud-security-reading-list.html`, discovers each site's RSS or Atom feed (via `<link rel="alternate">` first, then probing common paths), and flags any whose newest entry is older than 180 days
 - The reading list is hand-curated; the workflow **never edits the page**. It uploads a markdown report as an artifact and opens-or-updates a sticky GitHub issue (labeled `reading-list-staleness`) so a human can decide what to drop, replace, or keep
-- Broken-link detection on the same page is already covered by `check-broken-links.yml`; this workflow exists to surface sources that are still reachable but no longer publishing — which lychee can't see
+- Broken-link detection on the same page is already covered by `check-broken-links.yml`; this workflow exists to surface sources that are still reachable but no longer publishing - which lychee can't see
 - See [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md) for the discovery rules and known limitations
 
 **Resources Auto-Refresh** (`.github/workflows/update-resources.yml`)
@@ -276,7 +276,7 @@ A few patterns worth knowing before you touch any of these:
 **Site-wide Search** (`search.html`, MiniSearch)
 - `tools/build_search_index.py` walks every `.html` file at repo root at deploy time and emits one entry per `<section id="…">` plus one per glossary `<dt id="term-…">` to `search-index.json` (~1.6MB raw, ~530KB gzipped)
 - The index ships with the static site; `search-init.js` lazy-loads it on first keystroke and feeds it into [MiniSearch](https://lucaong.github.io/minisearch/) (self-hosted at `vendor/minisearch-*.min.js` with SRI)
-- `search-synonyms.json` provides acronym ↔ expansion mappings (`NHI ↔ non-human identity`, `CIEM ↔ cloud infrastructure entitlement management`, etc.) — expanded at both index-time and query-time so `NHI` matches docs that only spell out "non-human identity" and vice versa
+- `search-synonyms.json` provides acronym ↔ expansion mappings (`NHI ↔ non-human identity`, `CIEM ↔ cloud infrastructure entitlement management`, etc.) - expanded at both index-time and query-time so `NHI` matches docs that only spell out "non-human identity" and vice versa
 - Results return with section anchors (`iam.html#nhi`), grouped by URL, with a "+ N more sections on this page" sublist when multiple sections of one page match
 - `search.css`, `search-init.js`, and the vendored MiniSearch are external files (not inline) because the site's strict Content-Security-Policy blocks inline styles and scripts; CSP is `script-src 'self'` with no `unsafe-eval`, no `unsafe-inline`, no `wasm-unsafe-eval`
 - The search page has a 60-second `Cache-Control` cap so CSS tweaks propagate fast during iteration
@@ -349,7 +349,7 @@ python3 tools/normalize_urls.py
 # Apply changes:
 python3 tools/normalize_urls.py --apply
 # CI adds `--cache tools/url_resolution_cache.json` so it only re-resolves new
-# URLs. Don't pass --cache locally or commit the cache — it's CI-seeded and
+# URLs. Don't pass --cache locally or commit the cache - it's CI-seeded and
 # redirect resolution is IP-dependent.
 ```
 
@@ -487,7 +487,7 @@ When you add a new HTML page, do all of the following - none are automated:
    - **Community** (mega-menu) - sessions, conferences, recaps, presentations, chat resources
    - **Behind the Scenes** (dropdown) - the dogfooded ops pages (Multi-Cloud Deploy, GitHub Actions, Terraform, Git & Version Control) plus Contribute / Add a Resource
 
-   The canonical nav **and** footer are generated by `tools/sync_chrome.py` — edit `CANON_NAV` / `CANON_FOOTER` there, then run `python3 tools/sync_chrome.py` from the repo root. It regenerates `<nav>` and `<footer>` on all ~175 pages (root + `breaches/` + `meetings/`), handles `../` prefixes for subdirectories, re-applies `aria-current="page"` + active dropdown state per file, and is idempotent (confirm exactly one nav + one footer variant afterward). Editing by hand is bug-prone (you'll drift on indent or aria attributes), so always use the script — and never run the removed `sync_navs.py` / `redesign_nav.py` / `unify_footer.py`, which encoded an older nav and would clobber the current one.
+   The canonical nav **and** footer are generated by `tools/sync_chrome.py` - edit `CANON_NAV` / `CANON_FOOTER` there, then run `python3 tools/sync_chrome.py` from the repo root. It regenerates `<nav>` and `<footer>` on all ~175 pages (root + `breaches/` + `meetings/`), handles `../` prefixes for subdirectories, re-applies `aria-current="page"` + active dropdown state per file, and is idempotent (confirm exactly one nav + one footer variant afterward). Editing by hand is bug-prone (you'll drift on indent or aria attributes), so always use the script - and never run the removed `sync_navs.py` / `redesign_nav.py` / `unify_footer.py`, which encoded an older nav and would clobber the current one.
 9. **Add the page to `TARGET_PAGES` in `tools/crosslink_pages.py`** so glossary terms get auto-linked across the new page. Then run:
    ```bash
    python3 tools/crosslink_pages.py
@@ -518,29 +518,29 @@ If your script needs to be sure it overwrote even an identical file (e.g., to re
 
 ### Tracking SEO performance
 
-Three complementary signals — codebase health, synthetic lab data, real-user truth. All three feed into `seo-audits/SCORECARD.md` (the first two automatically).
+Three complementary signals - codebase health, synthetic lab data, real-user truth. All three feed into `seo-audits/SCORECARD.md` (the first two automatically).
 
-#### 1. The codebase scorecard — Internal SEO audit (this repo, auto-cron)
+#### 1. The codebase scorecard - Internal SEO audit (this repo, auto-cron)
 
-Lives in `seo-audits/SCORECARD.md` (top table). Updated automatically by `.github/workflows/run-seo-audit.yml` every **Monday at 14:15 UTC** (07:15 PT). The workflow runs `tools/run_seo_audit.py` — a deterministic structural checker that mirrors what the `/seo-audit` skill mechanically tests across every indexable HTML page in the repo: canonical, title 30–65 chars, meta description 100–165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`.
+Lives in `seo-audits/SCORECARD.md` (top table). Updated automatically by `.github/workflows/run-seo-audit.yml` every **Monday at 14:15 UTC** (07:15 PT). The workflow runs `tools/run_seo_audit.py` - a deterministic structural checker that mirrors what the `/seo-audit` skill mechanically tests across every indexable HTML page in the repo: canonical, title 30-65 chars, meta description 100-165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`.
 
 Each weekly run:
 - Writes a per-day report to `seo-audits/YYYY-MM-DD.md`
 - Appends a row to SCORECARD's Internal SEO audit table
-- Opens a PR (auto-merged) — the deploy workflows' path filters exclude `seo-audits/`, so SCORECARD-only changes don't trigger a build
+- Opens a PR (auto-merged) - the deploy workflows' path filters exclude `seo-audits/`, so SCORECARD-only changes don't trigger a build
 - Files a tracking issue if the overall score dropped vs the previous run
 
 Run off-cycle locally with `python3 tools/run_seo_audit.py` (stdlib-only, no deps). See [tools/RUN_SEO_AUDIT_README.md](tools/RUN_SEO_AUDIT_README.md). For qualitative depth (internal-linking strategy, content depth, AI visibility) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually.
 
-What this catches: missing meta tags, broken JSON-LD, generic alt text, heading-hierarchy skips, OG-image regressions, stale `<meta>` content. What it can't see: actual rankings or real-user performance — that's signals #2 and #3 below.
+What this catches: missing meta tags, broken JSON-LD, generic alt text, heading-hierarchy skips, OG-image regressions, stale `<meta>` content. What it can't see: actual rankings or real-user performance - that's signals #2 and #3 below.
 
-#### 1b. PageSpeed Insights — Synthetic lab scores (this repo, auto-cron)
+#### 1b. PageSpeed Insights - Synthetic lab scores (this repo, auto-cron)
 
-Lives in the same `seo-audits/SCORECARD.md` (second table). Updated automatically by `.github/workflows/check-pagespeed.yml` every **Monday at 14:00 UTC** (15 min before the Internal audit, so the two SCORECARD updates land as separate PRs). The workflow runs `tools/check_pagespeed.py` which hits Google's PageSpeed Insights v5 API — mobile + desktop in parallel — pulls the 4 category scores (Performance / Accessibility / Best Practices / SEO), lab Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index), and a list of any audit IDs that scored < 100 with their failing DOM nodes.
+Lives in the same `seo-audits/SCORECARD.md` (second table). Updated automatically by `.github/workflows/check-pagespeed.yml` every **Monday at 14:00 UTC** (15 min before the Internal audit, so the two SCORECARD updates land as separate PRs). The workflow runs `tools/check_pagespeed.py` which hits Google's PageSpeed Insights v5 API - mobile + desktop in parallel - pulls the 4 category scores (Performance / Accessibility / Best Practices / SEO), lab Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index), and a list of any audit IDs that scored < 100 with their failing DOM nodes.
 
 Requires `PSI_API_KEY` in repo secrets (free key from <https://console.cloud.google.com/apis/credentials> with restriction "PageSpeed Insights API"). Run locally with `export PSI_API_KEY=… && python3 tools/check_pagespeed.py`. See [tools/CHECK_PAGESPEED_README.md](tools/CHECK_PAGESPEED_README.md).
 
-What this catches: synthetic Lighthouse regressions — color-contrast failures, image-alt gaps, render-blocking resources, third-party script issues (CSP violations get surfaced as console errors and dock Best Practices). What it can't see: real-user variance — that's signal #2.
+What this catches: synthetic Lighthouse regressions - color-contrast failures, image-alt gaps, render-blocking resources, third-party script issues (CSP violations get surfaced as console errors and dock Best Practices). What it can't see: real-user variance - that's signal #2.
 
 #### 2. Google Search Console (external truth)
 
@@ -561,7 +561,7 @@ After every deploy that touches HTML structure or `.htaccess`, spot-check live U
 
 #### When the signals disagree
 
-- **Codebase scorecard says 100, PSI says a category dropped** → something at the live-site layer is being injected or rewritten that the source HTML doesn't reflect. Common culprits: Cloudflare Browser Insights injecting a beacon script (caught and disabled 2026-05-23 — Accessibility 100 → 96 was a `color-contrast` regression on `.card-action` links, surfaced because PSI tests the rendered page); Cloudflare's "Managed robots.txt" appending `Content-Signal:` directives Lighthouse's parser doesn't recognize.
+- **Codebase scorecard says 100, PSI says a category dropped** → something at the live-site layer is being injected or rewritten that the source HTML doesn't reflect. Common culprits: Cloudflare Browser Insights injecting a beacon script (caught and disabled 2026-05-23 - Accessibility 100 → 96 was a `color-contrast` regression on `.card-action` links, surfaced because PSI tests the rendered page); Cloudflare's "Managed robots.txt" appending `Content-Signal:` directives Lighthouse's parser doesn't recognize.
 
 - **Codebase scorecard says 100, GSC says traffic dropped** → something at the server/CDN/redirect layer is undoing what the HTML claims. That's how we caught the `.htaccess` `meetings.html → sessions.html` stale redirect: HTML had the right canonical, but the live site was 301'ing away from it.
 

@@ -346,7 +346,7 @@ def main():
     print_section("Step 4: Extended Tooltip Description")
     print("Write 2-3 sentences that appear when someone hovers over the card.")
     print("Cover what makes it unique, who benefits most, and any prerequisites.")
-    print("(Press Enter to skip — you can always add one later)")
+    print("(Press Enter to skip - you can always add one later)")
     tooltip = get_input("Tooltip description", required=False)
 
     # Step 5: Select category

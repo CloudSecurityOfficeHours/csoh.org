@@ -53,7 +53,7 @@ Zoom's AI Companion often produces multiple `summary_content` records for one Fr
 For each selected date, the script:
 
 1. Fetches the full summary content from Zoom (`summary_overview`, `summary_details`, formatted `summary_content` markdown).
-2. Infers 1–4 topical tags by keyword-matching the overview + topic headings against the existing tag vocabulary (AI, Supply Chain, Vulnerabilities, Conferences, Governance, Guest Speaker, Community, etc.).
+2. Infers 1-4 topical tags by keyword-matching the overview + topic headings against the existing tag vocabulary (AI, Supply Chain, Vulnerabilities, Conferences, Governance, Guest Speaker, Community, etc.).
 3. Prepends `# CSOH YYYY-MM-DD` so `add_meeting.py` can parse it.
 4. Runs `add_meeting.py --tag …` for each inferred tag.
 5. Each new meeting lands in the list, the table of contents picks it up, and the filter-bar month/tag facets auto-populate on next page load.
@@ -61,7 +61,7 @@ For each selected date, the script:
 ## Caveats
 
 - **AI transcription quirks.** Summaries are generated from Zoom's transcription, which occasionally mis-hears names (`Axi` → `XZ`, `Cisa` → `CISA`, `Psi Ops` → `Psy Ops`, etc.). Spot-check a few entries after a big backfill and apply targeted fixes with `sed` or an editor pass.
-- **Tag inference is rule-based.** Simple keyword matching, not an LLM. Some meetings will land with only 1–2 tags where a richer set would fit. Edit by hand after the fact, or extend `TAG_RULES` in the script.
+- **Tag inference is rule-based.** Simple keyword matching, not an LLM. Some meetings will land with only 1-2 tags where a richer set would fit. Edit by hand after the fact, or extend `TAG_RULES` in the script.
 - **Date selection assumes ~7am PT Friday.** Meetings scheduled elsewhere (different time, different day, one-off sessions) won't match the filter.
 - **Scope of published content.** The script only touches `meetings.html` articles + TOC. It doesn't commit, doesn't push. Review with `git diff` and commit yourself.
 

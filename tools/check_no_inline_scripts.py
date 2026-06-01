@@ -5,7 +5,7 @@ CI gate: refuse inline <script> blocks in HTML files.
 The site's strict CSP (`script-src 'self'`) silently blocks inline scripts
 in production. JSON-LD blocks (<script type="application/ld+json">) are
 allowed because the CSP `script-src` directive only applies to executable
-scripts — JSON-LD is data and is not affected.
+scripts - JSON-LD is data and is not affected.
 
 Exits non-zero if any executable inline <script> block is found, printing
 file:line for each offender.

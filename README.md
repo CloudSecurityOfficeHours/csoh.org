@@ -87,7 +87,7 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 
 ## 🌐 About
 
-Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no trackers, no analytics, no on-site advertising. (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner — never a separate promotional email.)
+Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no trackers, no analytics, no on-site advertising. (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner - never a separate promotional email.)
 
 Sign up for the weekly Zoom link at **[csoh.kit.com](https://csoh.kit.com/39feb4f397)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
 
@@ -230,7 +230,7 @@ The definitive vendor-neutral comparison. Ten side-by-side `.comparison-table` b
 A directory of **350+ cloud-security vendors** across 30 categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. Vendor-neutral one-liners, no rankings. Wiz affiliation disclosed.
 
 ### 🔍 Site Search (`search.html`)
-[MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict — `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
+[MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict - `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
 
 ### ⚙️ How We Use GitHub Actions (`github-actions.html`)
 Learn-by-example explainer for GitHub Actions, using CSOH's workflow files as the teaching material. Covers triggers, concurrency, secrets, the GITHUB_TOKEN vs PAT distinction, the `workflow` scope gotcha, OIDC trust to GCP, and a recommended reading order through our heavily-commented YAML.
@@ -371,12 +371,12 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 | Capital One | 2019 | AWS | T1190, T1552.005, T1619, T1530 |
 | SolarWinds | 2020 | Azure AD / AWS | T1195.002, T1071.004, T1606.002, T1114.002 |
 | Uber | 2022 | AWS / GCP | T1078, T1621, T1552.001, T1078.004 |
-| LastPass | 2022–2023 | LastPass / AWS S3 | T1195.002, T1203, T1555, T1530 |
+| LastPass | 2022-2023 | LastPass / AWS S3 | T1195.002, T1203, T1555, T1530 |
 | Storm-0558 | 2023 | Azure | T1078, T1552, T1606.001, T1114.002 |
 | Microsoft SAS Leak | 2023 | Azure | T1552.004, T1530 |
 | Scattered Spider / MGM | 2023 | Okta / Azure | T1598, T1078, T1484, T1486 |
 | Snowflake / UNC5537 | 2024 | Snowflake | T1078.004, T1555.003, T1530, T1657 |
-| Promptware | 2024–2026 | AI / LLM (Gemini, Copilot) | T1566, T1071.001, T1534, T1530 |
+| Promptware | 2024-2026 | AI / LLM (Gemini, Copilot) | T1566, T1071.001, T1534, T1530 |
 
 ### How to contribute a kill chain
 
@@ -419,7 +419,7 @@ Edit `threat-research.html` directly - each link is a standard `.resource-card` 
 
 - A link to the primary research output (blog index, report landing page, or feed URL - not a marketing page)
 - A one-sentence description of what's unique about the source
-- 2–3 tags (use existing tag classes where possible: `ctf`, `tool`, `lab`, `certification`, `job`, `ai-security`, `new`)
+- 2-3 tags (use existing tag classes where possible: `ctf`, `tool`, `lab`, `certification`, `job`, `ai-security`, `new`)
 
 ---
 
@@ -722,13 +722,13 @@ Builds the site once, then publishes it active/active to three cloud origins beh
 - `Dockerfile`, `nginx.conf`, `tools/stage_site.sh`, `tools/site-publish.filter`, `.github/workflows/deploy.yml`
 - Manual trigger via the GitHub Actions tab
 
-**What it does — build once, fan out:**
-- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set — mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact so all origins serve byte-identical content.
+**What it does - build once, fan out:**
+- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set - mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact so all origins serve byte-identical content.
 - **publish-aws:** assumes an IAM role via OIDC, `aws s3 sync --delete` to the private bucket, invalidates CloudFront.
 - **publish-azure:** logs in via an Entra federated credential (OIDC), `az storage blob sync` into the `$web` static-website container.
-- **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. Auth is Workload Identity Federation — no stored key.
+- **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. Auth is Workload Identity Federation - no stored key.
 
-Every cloud uses **keyless OIDC** — no long-lived cloud credentials in the repo. Non-secret resource IDs come from repo Variables (see [infra/README.md](infra/README.md)).
+Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo. Non-secret resource IDs come from repo Variables (see [infra/README.md](infra/README.md)).
 
 **Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover. (This replaced the old GCP Global HTTPS load balancer + Cloud Armor + Cloud CDN, which were redundant with Cloudflare and cost ~$100/mo.)
 
@@ -744,13 +744,13 @@ Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints sho
 
 Two complementary workflows run every Monday around 14:00 UTC to keep `seo-audits/SCORECARD.md` current without manual cadence. Both follow the same csoh-ci App + `CSOH_PAT` pattern as `update-news.yml`: PR-based update, auto-approved, auto-merged. The deploy and site-housekeeping workflows have path filters that exclude `seo-audits/`, so SCORECARD-only changes naturally don't trigger a redeploy. Both file a tracking issue (label `regression`) if the overall score dropped vs the previous row.
 
-**`check-pagespeed.yml` — Mondays 14:00 UTC**
+**`check-pagespeed.yml` - Mondays 14:00 UTC**
 
-Runs `tools/check_pagespeed.py` against `https://csoh.org/` — mobile + desktop in parallel — using Google's PageSpeed Insights v5 API. Captures the four Lighthouse category scores (Performance / Accessibility / Best Practices / SEO), lab Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index), and for any category < 100 the specific failing audit IDs plus the failing DOM nodes' CSS selectors. Appends a row to the PageSpeed Insights table in SCORECARD.md. Requires `PSI_API_KEY` repo secret (free key from [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials), restricted to "PageSpeed Insights API").
+Runs `tools/check_pagespeed.py` against `https://csoh.org/` - mobile + desktop in parallel - using Google's PageSpeed Insights v5 API. Captures the four Lighthouse category scores (Performance / Accessibility / Best Practices / SEO), lab Core Web Vitals (LCP, CLS, TBT, FCP, Speed Index), and for any category < 100 the specific failing audit IDs plus the failing DOM nodes' CSS selectors. Appends a row to the PageSpeed Insights table in SCORECARD.md. Requires `PSI_API_KEY` repo secret (free key from [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials), restricted to "PageSpeed Insights API").
 
-**`run-seo-audit.yml` — Mondays 14:15 UTC**
+**`run-seo-audit.yml` - Mondays 14:15 UTC**
 
-Runs `tools/run_seo_audit.py` — a deterministic structural SEO audit across all 178 indexable HTML pages (top-level + breaches + portfolio + meetings). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30–65 chars, meta description 100–165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
+Runs `tools/run_seo_audit.py` - a deterministic structural SEO audit across all 178 indexable HTML pages (top-level + breaches + portfolio + meetings). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30-65 chars, meta description 100-165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
 
 For qualitative depth (internal-linking strategy, content depth, AI visibility, topical authority) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually and add a row off-cycle.
 
@@ -816,7 +816,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Content optimization discipline
 
-- ✅ Title tags 45–60 chars, meta descriptions 120–160 chars on every indexable page
+- ✅ Title tags 45-60 chars, meta descriptions 120-160 chars on every indexable page
 - ✅ One `<h1>` per page, semantic heading hierarchy
 - ✅ `alt` text on every content image
 - ✅ Skip links + ARIA labels for accessibility (which Google increasingly weighs)
@@ -905,8 +905,8 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 
 This project is dual-licensed:
 
-- **Website Code** (HTML markup, CSS, JS, Python, config): [MIT License](LICENSE) — fork, modify, and reuse freely with attribution.
-- **Editorial Content** (articles, guides, glossary entries, breach reconstructions, resource descriptions): [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) — you may share with attribution, but no commercial use and no derivative works without permission.
+- **Website Code** (HTML markup, CSS, JS, Python, config): [MIT License](LICENSE) - fork, modify, and reuse freely with attribution.
+- **Editorial Content** (articles, guides, glossary entries, breach reconstructions, resource descriptions): [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) - you may share with attribution, but no commercial use and no derivative works without permission.
 - **Linked Resources**: Property of their respective creators/owners.
 - **News Articles**: Linked to original sources with proper attribution.
 

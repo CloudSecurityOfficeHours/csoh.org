@@ -3,9 +3,9 @@
 Check all URLs across all HTML files on the site for safety.
 
 Three-phase pipeline:
-  1. Extract  — collect all URLs from all HTML files, deduplicate
-  2. Resolve  — batch-resolve unique URLs concurrently (skip whitelisted domains)
-  3. Check    — run safety checks on resolved URLs, per file
+  1. Extract  - collect all URLs from all HTML files, deduplicate
+  2. Resolve  - batch-resolve unique URLs concurrently (skip whitelisted domains)
+  3. Check    - run safety checks on resolved URLs, per file
 """
 
 import re
@@ -16,7 +16,7 @@ from check_url_safety import URLSafetyChecker, resolve_urls_concurrent
 
 def extract_urls_from_html(file_path):
     """Extract all URLs from an HTML file."""
-    # XML namespace URIs are identifiers, not fetchable URLs — never normalize.
+    # XML namespace URIs are identifiers, not fetchable URLs - never normalize.
     # The SVG/XLink/XHTML/XML/MathML namespaces are spec-defined as the http://
     # form and rejected by HTML5 validators if rewritten to https://.
     XML_NAMESPACE_URIS = {

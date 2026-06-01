@@ -18,7 +18,7 @@ from pathlib import Path
 BANNER_DIR = Path(__file__).parent.parent / "img" / "news-banners"
 BANNER_DIR.mkdir(parents=True, exist_ok=True)
 
-# Unique source sites — slug to homepage URL
+# Unique source sites - slug to homepage URL
 # Shared domains (The Register × 2, CISA × 3) map to a single slug.
 SOURCES = {
     "aws-security-blog":      "https://aws.amazon.com/blogs/security/",
@@ -78,7 +78,7 @@ def capture_banner(slug: str, url: str, force: bool = False) -> bool:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("Error: playwright not installed — pip install playwright && playwright install chromium")
+        print("Error: playwright not installed - pip install playwright && playwright install chromium")
         return False
 
     print(f"  📸 Capturing {slug} → {url}")
@@ -109,7 +109,7 @@ def capture_banner(slug: str, url: str, force: bool = False) -> bool:
             img = img.resize((400, 300), Image.LANCZOS)
             img.save(output, "JPEG", quality=85, optimize=True)
         except ImportError:
-            pass  # Pillow not available — raw screenshot is fine
+            pass  # Pillow not available - raw screenshot is fine
 
         size_kb = os.path.getsize(output) / 1024
         print(f"  ✔ {slug}.jpg ({size_kb:.0f} KB)")
@@ -138,7 +138,7 @@ def main():
     try:
         from PIL import Image
     except ImportError:
-        print("\nSkipping .webp generation — Pillow not installed.")
+        print("\nSkipping .webp generation - Pillow not installed.")
         return
 
     webp_made = 0

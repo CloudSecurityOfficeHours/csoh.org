@@ -2,7 +2,7 @@
 
 Wraps the first occurrence of cloud-security topic keywords in each meeting recap with a link to the matching topic page (e.g. `disaster recovery` → `../backup-dr.html`).
 
-Used to give each meeting recap 2–3 contextual internal links to topic pages - improves both reader navigation and internal-link equity flowing into the pillar/topic pages.
+Used to give each meeting recap 2-3 contextual internal links to topic pages - improves both reader navigation and internal-link equity flowing into the pillar/topic pages.
 
 ## How it works
 

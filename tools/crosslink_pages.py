@@ -99,10 +99,25 @@ TARGET_PAGES = [
     "vendor-landscape.html",
     # Behind-the-scenes
     "cloud-deployment.html",
+    # May 2026: cloud-security career & role deep-dive pages
+    "cloud-security-careers.html",
+    "cloud-security-engineer.html",
+    "cloud-security-architect.html",
+    "cloud-security-appsec-engineer.html",
+    "cloud-security-cnapp-analyst.html",
+    "cloud-security-detection-engineer.html",
+    "cloud-security-grc-engineer.html",
+    "cloud-security-iam-architect.html",
+    "cloud-security-incident-responder.html",
+    "cloud-security-penetration-tester.html",
+    "cloud-security-platform-engineer.html",
+    "cloud-security-sales-engineer.html",
+    "cloud-security-customer-success-engineer.html",
+    "help-desk-to-cloud-security.html",
 ]
 
 # Subdirectory pages (per-breach, per-meeting) are auto-discovered rather
-# than listed individually — there are 91 meeting pages and they update
+# than listed individually - there are 91 meeting pages and they update
 # as new sessions get added. Subdir pages need a "../" prefix to reach
 # glossary.html; the GLOSSARY_LINK_HREF_PREFIX is computed per-file based
 # on each path's depth (see crosslink_page below).
@@ -148,7 +163,7 @@ DENYLIST = {
     "account",
     "accounts",
     # False-positive single-word remnants extracted from compound entries
-    # like "Blue / Red Team" or "Kev / Kevin" — link the full phrase only.
+    # like "Blue / Red Team" or "Kev / Kevin" - link the full phrase only.
     "blue",
     "red",
     "purple",
@@ -165,7 +180,7 @@ DENYLIST = {
 
 # Sections of the file to skip wholesale (no links anywhere inside).
 SKIP_BLOCK_TAGS = (
-    # Skip the entire <head> — <title>, <meta>, JSON-LD <script>, OG tags etc.
+    # Skip the entire <head> - <title>, <meta>, JSON-LD <script>, OG tags etc.
     # never contain user-visible prose and must not have <a> tags inserted.
     # (Without this, text inside <title> and <meta description> gets linked.)
     "head",
@@ -184,14 +199,14 @@ SKIP_BLOCK_TAGS = (
     "h6",
     # An <a> inside a <button> is invalid HTML; skip button content entirely.
     "button",
-    # <title> belongs to <head>, but defensive — in case <head> is malformed
+    # <title> belongs to <head>, but defensive - in case <head> is malformed
     # or the linker is run on a fragment without <head>, still skip <title>.
     "title",
 )
 
 # Default href prefix for glossary cross-links (root-level pages).
 # For pages in subdirectories (e.g. breaches/), we compute "../glossary.html#..."
-# instead — see _glossary_prefix_for() below.
+# instead - see _glossary_prefix_for() below.
 GLOSSARY_LINK_HREF_PREFIX = "glossary.html#"
 
 
@@ -224,7 +239,7 @@ def derive_keys(dt_inner_html: str) -> list[str]:
     """Same logic as crosslink_glossary.derive_keys."""
     text = re.sub(r"<[^>]+>", "", dt_inner_html)
     text = unescape(text).strip()
-    parts = re.split(r"\s*[—–]\s*", text, maxsplit=1)
+    parts = re.split(r"\s*[\u2014\u2013]\s*", text, maxsplit=1)
     lhs = parts[0]
     rhs = parts[1] if len(parts) > 1 else ""
     keys: list[str] = []
@@ -285,7 +300,7 @@ def load_glossary_terms() -> tuple[dict[str, str], list[str]]:
 
 
 def is_acronym(key: str) -> bool:
-    """All-uppercase, 2-8 chars, no spaces — require case-sensitive match
+    """All-uppercase, 2-8 chars, no spaces - require case-sensitive match
     so 'AI' (the acronym) matches but 'ai' (in 'aim', 'rain', etc.) doesn't."""
     return (
         2 <= len(key) <= 8
@@ -404,7 +419,7 @@ def link_text_segments(
     href_prefix: str = "glossary.html#",
 ) -> tuple[str, list[str]]:
     """Walk masked content, only inserting links in text-between-tags.
-    Records which slugs got linked (one per slug max — first per page)."""
+    Records which slugs got linked (one per slug max - first per page)."""
     out: list[str] = []
     cursor = 0
     linked_slugs: set[str] = set()
@@ -460,7 +475,7 @@ def _link_chunk(
                 best = (m.start(), m.end(), word, slug)
 
         if best is None:
-            # No more linkable matches — but a pattern may have matched a
+            # No more linkable matches - but a pattern may have matched a
             # slug that was already linked. We need to skip past those too.
             next_skip = _next_match_anywhere(text, cursor, patterns, key_to_slug)
             if next_skip is None:

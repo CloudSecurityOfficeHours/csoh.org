@@ -14,9 +14,9 @@ a file (HTML or plain text). The script:
 
 Supported input formats:
 
-1. Apple Notes HTML export — `<div>`/`<h1>`/`<h2>` soup as returned by the
+1. Apple Notes HTML export - `<div>`/`<h1>`/`<h2>` soup as returned by the
    Apple Notes MCP `get_note_content` tool.
-2. Plain text / Markdown — lines beginning with `#` or `##` are treated as
+2. Plain text / Markdown - lines beginning with `#` or `##` are treated as
    headings; everything else is a paragraph belonging to the most recent
    heading.
 
@@ -216,7 +216,7 @@ def render_article_body(meeting: dict, headline: str) -> str:
     n = len(meeting["topics"])
     summary_label = f"Show {n} discussion topics" if n != 1 else "Show discussion topic"
     return (
-        f'<h2><time datetime="{iso}">{h.escape(human)}</time> — {h.escape(headline)}</h2>\n'
+        f'<h2><time datetime="{iso}">{h.escape(human)}</time> - {h.escape(headline)}</h2>\n'
         f'            <p><strong>Quick recap.</strong> {h.escape(meeting["recap"])}</p>\n'
         f'            <div class="resource-tags meeting-tags">{tag_spans}</div>\n'
         f'            <details class="meeting-topics">\n'
@@ -284,12 +284,12 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
     )
     out = re.sub(
         r"<title>[^<]*</title>",
-        f"<title>{human} — CSOH Meeting Recap</title>",
+        f"<title>{human} - CSOH Meeting Recap</title>",
         out, count=1,
     )
     out = re.sub(
         r'<meta property="og:title" content="[^"]*">',
-        f'<meta property="og:title" content="{human} CSOH Recap — {h.escape(headline_safe[:80], quote=True)}">',
+        f'<meta property="og:title" content="{human} CSOH Recap - {h.escape(headline_safe[:80], quote=True)}">',
         out, count=1,
     )
     out = re.sub(
@@ -329,8 +329,8 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
         out, count=1,
     )
     out = re.sub(
-        r"<h1>[^<]+— Meeting Recap</h1>",
-        f"<h1>{human} — Meeting Recap</h1>",
+        r"<h1>[^<]+- Meeting Recap</h1>",
+        f"<h1>{human} - Meeting Recap</h1>",
         out, count=1,
     )
     # Hero subtitle <p> immediately after the <h1>
@@ -399,7 +399,7 @@ def render_card(meeting: dict, headline: str) -> str:
     return (
         f'        <article class="section meeting-card" id="meeting-{iso}">\n'
         f'            <a class="meeting-card-link" href="meetings/{iso}.html">\n'
-        f'                <h2><time datetime="{iso}">{h.escape(human)}</time> — {h.escape(headline)}</h2>\n'
+        f'                <h2><time datetime="{iso}">{h.escape(human)}</time> - {h.escape(headline)}</h2>\n'
         f'                <p class="meeting-card-summary">{h.escape(teaser)}</p>\n'
         f'                <div class="resource-tags meeting-tags">{tags_html}</div>\n'
         f'                <span class="meeting-card-cta">Read recap →</span>\n'
@@ -523,7 +523,7 @@ def update_search_index(meeting: dict, headline: str) -> None:
     iso = meeting["date"]
     human = human_date(iso).lower()
     parts = [
-        f"{human} — {headline.lower()}",
+        f"{human} - {headline.lower()}",
         "quick recap.", meeting["recap"].lower(),
     ]
     for hd, bd in meeting["topics"]:

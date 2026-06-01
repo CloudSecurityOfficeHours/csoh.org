@@ -1,4 +1,4 @@
-# csoh.org Infrastructure — multi-cloud static hosting
+# csoh.org Infrastructure - multi-cloud static hosting
 
 csoh.org is a static site served **active/active from three cloud origins**
 behind Cloudflare. Cloudflare is the single edge (TLS, caching, security
@@ -7,7 +7,7 @@ failover); each cloud hosts an interchangeable copy of the site:
 
 ```
                  ┌─────────────────────────────────────────────┐
-  csoh.org  ───► │  Cloudflare (Free) — proxied                 │
+  csoh.org  ───► │  Cloudflare (Free) - proxied                 │
   www.csoh.org   │   • Universal SSL (edge TLS, Full strict)    │
                  │   • Load Balancer (active/active + health)   │
                  │   • Transform Rules  → security headers      │
@@ -25,20 +25,20 @@ failover); each cloud hosts an interchangeable copy of the site:
 ```
 
 **Why this shape.** The site is 100% static, so it doesn't need a server or a
-cloud load balancer — object/static hosting on each provider costs pennies.
+cloud load balancer - object/static hosting on each provider costs pennies.
 The previous single-cloud design (GCP Cloud Run behind a Global HTTPS Load
 Balancer + Cloud Armor + Cloud CDN) duplicated the edge that Cloudflare
 already provides, for ~$100/mo. Spreading across three origins is *cheaper*
-and turns the deploy into a working multi-cloud + keyless-OIDC lesson — see
+and turns the deploy into a working multi-cloud + keyless-OIDC lesson - see
 [cloud-deployment.html](https://csoh.org/cloud-deployment.html).
 
 Each origin must expose **HTTPS with a valid cert** so the Cloudflare→origin
 leg runs at **Full (strict)**:
-- **AWS** — private S3 bucket reached only via **CloudFront + OAC** (the S3
+- **AWS** - private S3 bucket reached only via **CloudFront + OAC** (the S3
   website endpoint is HTTP-only, so we don't use it).
-- **GCP** — **Cloud Run** (scale-to-zero); its `*.run.app` URL is HTTPS and
+- **GCP** - **Cloud Run** (scale-to-zero); its `*.run.app` URL is HTTPS and
   free at idle. The GCLB / Cloud Armor / Cloud CDN were retired.
-- **Azure** — Storage Account **static website** (`$web`), served on its
+- **Azure** - Storage Account **static website** (`$web`), served on its
   built-in `*.web.core.windows.net` HTTPS endpoint.
 
 ## File layout
@@ -59,7 +59,7 @@ of the dirs.
 
 ## Build & publish
 
-`tools/stage_site.sh` produces `dist/` — the exact public file set (its rsync
+`tools/stage_site.sh` produces `dist/` - the exact public file set (its rsync
 filter, `tools/site-publish.filter`, mirrors nginx.conf's block rules and the
 Dockerfile strip list, so all three origins serve byte-identical content).
 `.github/workflows/deploy.yml` builds once, then fans out:
@@ -70,7 +70,7 @@ build (search index + stage dist/) ──► publish-aws    (s3 sync + CF invali
                                     └─► publish-gcp    (container + Trivy + Cloud Run)
 ```
 
-Every cloud authenticates with **keyless OIDC** — no long-lived cloud secrets
+Every cloud authenticates with **keyless OIDC** - no long-lived cloud secrets
 in the repo. Non-secret resource IDs are read from **repo Variables**
 (Settings → Secrets and variables → Actions → Variables), populated from the
 Terraform outputs below:
@@ -85,7 +85,7 @@ Terraform outputs below:
 
 The AWS account ID, Azure subscription ID, and Azure tenant ID are fixed
 accounts hardcoded in the Terraform (`infra/terraform/aws`, `.../azure`) and
-the deploy workflow — they're identifiers, not secrets, so they're committed
+the deploy workflow - they're identifiers, not secrets, so they're committed
 rather than configured as Variables.
 
 ## One-time bootstrap
@@ -122,7 +122,7 @@ terraform -chdir=infra/terraform/cloudflare apply \
   -var azure_origin_host="$(terraform -chdir=infra/terraform/azure output -raw static_website_host)"
 ```
 
-Then run the deploy workflow once (`gh workflow run "Deploy — build once, publish to AWS + GCP + Azure"`)
+Then run the deploy workflow once (`gh workflow run "Deploy - build once, publish to AWS + GCP + Azure"`)
 so all three origins have content before any DNS points at them.
 
 ## Cutover (safety-gated) & rollback
@@ -130,7 +130,7 @@ so all three origins have content before any DNS points at them.
 This is production. Cut over in stages and keep the old GCP LB IP as a rollback
 target until you're confident.
 
-1. **Verify each origin directly** (bypass Cloudflare) — confirm 200s, headers,
+1. **Verify each origin directly** (bypass Cloudflare) - confirm 200s, headers,
    and that no sensitive files are reachable:
    ```bash
    curl -I "https://$(terraform -chdir=infra/terraform/aws   output -raw cloudfront_domain)/"
@@ -164,7 +164,7 @@ step, the old path stays intact and reversible throughout.
 
 ```bash
 # Force a full redeploy to all three clouds
-gh workflow run "Deploy — build once, publish to AWS + GCP + Azure"
+gh workflow run "Deploy - build once, publish to AWS + GCP + Azure"
 
 # Watch Cloudflare LB origin health (dashboard): Traffic → Load Balancing
 # Pull one origin for testing: set enabled=false on it in the pool + apply
@@ -181,15 +181,15 @@ gcloud run services update-traffic csoh-site --region us-central1 \
 
 | Component | Approx. monthly |
 |---|---|
-| Cloudflare Load Balancing add-on (Free plan + LB) | ~$5–7 |
-| AWS S3 + CloudFront (free-tier egress) | ~$0–1 |
-| GCP Cloud Run (scale-to-zero) + Artifact Registry | ~$0–1 |
-| Azure Blob static website | ~$0–1 |
+| Cloudflare Load Balancing add-on (Free plan + LB) | ~$5-7 |
+| AWS S3 + CloudFront (free-tier egress) | ~$0-1 |
+| GCP Cloud Run (scale-to-zero) + Artifact Registry | ~$0-1 |
+| Azure Blob static website | ~$0-1 |
 | GCS Terraform state | <$1 |
-| **Total** | **~$8–12/mo** (down from ~$100) |
+| **Total** | **~$8-12/mo** (down from ~$100) |
 
 The bulk of the old cost was the GCP Global HTTPS Load Balancer (two
-forwarding rules) + Cloud Armor — redundant with Cloudflare's edge.
+forwarding rules) + Cloud Armor - redundant with Cloudflare's edge.
 
 ## Trade-offs vs. the old GCP stack
 
@@ -200,5 +200,5 @@ forwarding rules) + Cloud Armor — redundant with Cloudflare's edge.
   rewrite has no static-hosting equivalent. Prefer `<picture>` / direct `.webp`
   references in HTML, or Cloudflare Polish (paid).
 - **Origin-side request blocking** (deny dotfiles/`.json`/scripts) is replaced
-  by **not uploading** those files — `tools/site-publish.filter` is the single
+  by **not uploading** those files - `tools/site-publish.filter` is the single
   source of truth for what's public.

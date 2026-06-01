@@ -2,12 +2,12 @@
 """
 Build a static search index over the full text of every per-meeting page.
 
-Output: /meetings-search-index.json — a JSON array, one entry per meeting:
+Output: /meetings-search-index.json - a JSON array, one entry per meeting:
   {"id": "meeting-2026-04-17", "text": "lowercased plain-text body…"}
 
 The meetings.html search reads this file lazily (on first keystroke) and
 intersects matches against the card list. Without this, search only
-matches against card summaries — which miss most speaker mentions and
+matches against card summaries - which miss most speaker mentions and
 topical detail buried in the full recap.
 
 Idempotent: re-running with no meeting changes leaves the file untouched.
@@ -40,7 +40,7 @@ ENTITY_RE = re.compile(r"&([a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);")
 
 ENTITIES = {
     "amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'",
-    "nbsp": " ", "mdash": "—", "ndash": "–", "hellip": "…",
+    "nbsp": " ", "mdash": "-", "ndash": "-", "hellip": "…",
     "ldquo": "“", "rdquo": "”", "lsquo": "‘", "rsquo": "’",
 }
 
@@ -98,7 +98,7 @@ def main() -> int:
 
     out_path.write_text(payload)
     size_kb = len(payload.encode("utf-8")) / 1024
-    print(f"wrote: {out_path.relative_to(repo)} — {len(entries)} entries, {size_kb:.1f} KB")
+    print(f"wrote: {out_path.relative_to(repo)} - {len(entries)} entries, {size_kb:.1f} KB")
     return 0
 
 

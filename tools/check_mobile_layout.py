@@ -7,7 +7,7 @@ Renders a representative sample of pages at iPhone-13 viewport and asserts:
      - Every nav link / button is fully inside the viewport horizontally.
      - Tap targets are ≥ 40px tall (Apple's 44pt guideline minus a hair).
      - Sibling rows in the open Learn / Defend / Attend dropdowns line up
-       — same `padding-left` and same height, so the menu doesn't look
+       - same `padding-left` and same height, so the menu doesn't look
        jagged.
   3. The hero h1 doesn't visually overflow.
 
@@ -104,7 +104,7 @@ def serve_repo(port: int) -> socketserver.ThreadingTCPServer:
 
 def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) -> list[str]:
     """Run all assertions against a single page. Returns a list of failure
-    messages — empty if the page passes."""
+    messages - empty if the page passes."""
     failures: list[str] = []
     page.goto(url, wait_until="domcontentloaded")
     # Give CSS animations / fonts a beat to settle.
@@ -184,7 +184,7 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
     )
     if hierarchy and hierarchy["gap"] < 12:
         # Less than ~12px additional indent and there's no visual cue that
-        # a row is "inside" a dropdown — looks like a flat list to the eye.
+        # a row is "inside" a dropdown - looks like a flat list to the eye.
         failures.append(
             f"weak hierarchy: sub-items only {hierarchy['gap']:.0f}px more indented than top-level "
             f"({hierarchy['tlPad']:.0f} → {hierarchy['subPad']:.0f}). Need clearer visual nesting."
@@ -264,7 +264,7 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
         )
 
     # Save a screenshot if requested. Take TWO frames per page so we see
-    # both the menu chrome and the worst-case dropdown (Learn — 10 items).
+    # both the menu chrome and the worst-case dropdown (Learn - 10 items).
     if screenshots_dir:
         try:
             slug = page_path.replace("/", "_").replace(".html", "")

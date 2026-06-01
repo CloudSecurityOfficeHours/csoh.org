@@ -2,7 +2,7 @@
 """
 Build the site-wide full-text search index used by /search.html.
 
-Output: /search-index.json — a JSON document with two top-level fields:
+Output: /search-index.json - a JSON document with two top-level fields:
   - "synonyms": {term: [aliases...]} loaded from search-synonyms.json
   - "docs": [{id, url, page, section, heading, title, text, type}, ...]
 
@@ -136,7 +136,7 @@ H3_RE = re.compile(r"<h3\b[^>]*>(.*?)</h3>", re.DOTALL | re.IGNORECASE)
 
 # Glossary term shape: <dt id="term-..."><term text></dt> ... <dd>def</dd>.
 # The glossary page is dense enough that we extract each <dt>/<dd> pair as
-# its own indexable doc — search for "NHI" should land directly on the
+# its own indexable doc - search for "NHI" should land directly on the
 # glossary's NHI entry, not just the page.
 GLOSSARY_TERM_RE = re.compile(
     r'<dt\b[^>]*\bid=["\'](term-[^"\']+)["\'][^>]*>(.*?)</dt>\s*<dd\b[^>]*>(.*?)</dd>',
@@ -175,7 +175,7 @@ def body(raw: str) -> str:
 
 def short_page_title(full_title: str) -> str:
     """Trim "Foo - CSOH" / "Foo | CSOH" suffixes for clean display."""
-    for sep in (" - ", " — ", " | "):
+    for sep in (" - ", " - ", " | "):
         if sep in full_title:
             base, tail = full_title.rsplit(sep, 1)
             if tail.strip().lower() in {"csoh", "cloud security office hours"}:
@@ -234,7 +234,7 @@ def emit_docs(filename: str, raw: str) -> Iterable[dict]:
 
     sections = list(SECTION_RE.finditer(main))
     if not sections:
-        # No <section id="..."> structure — emit one page-level doc.
+        # No <section id="..."> structure - emit one page-level doc.
         text = (description + " " + strip_html(main))[:2400]
         yield {
             "id": filename,
@@ -272,7 +272,7 @@ def emit_docs(filename: str, raw: str) -> Iterable[dict]:
         # MiniSearch handles per-field boosts on the frontend.
         text = strip_html(section_body)
         # Truncate very long sections to keep the index tractable.
-        # 4000 chars is roughly 600-700 words — plenty for snippet hits.
+        # 4000 chars is roughly 600-700 words - plenty for snippet hits.
         text = text[:2400]
         yield {
             "id": f"{filename}#{section_id}",
@@ -280,7 +280,7 @@ def emit_docs(filename: str, raw: str) -> Iterable[dict]:
             "page": title,
             "section": heading,
             "heading": heading,
-            "title": f"{heading} — {title}",
+            "title": f"{heading} - {title}",
             "text": text,
             "type": ptype,
         }
@@ -307,7 +307,7 @@ def main() -> int:
             continue
         raw = path.read_text(encoding="utf-8", errors="replace")
         for doc in emit_docs(path.name, raw):
-            # Skip empty entries (defensive — should not happen).
+            # Skip empty entries (defensive - should not happen).
             if not doc.get("text") and not doc.get("heading"):
                 continue
             docs.append(doc)

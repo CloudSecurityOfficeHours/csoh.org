@@ -11,7 +11,7 @@ Eligibility for wrapping:
   - <img> src is a local .jpg/.jpeg/.png (skips data:, http(s):, protocol-rel,
     SVG, and anything with a query string),
   - a .webp sibling already exists on disk (run tools/generate_webp.py first),
-  - the <img> is NOT already inside a <picture> (idempotent — re-runs are safe).
+  - the <img> is NOT already inside a <picture> (idempotent - re-runs are safe).
 
 The <source srcset> reuses the img's exact src path with the extension swapped,
 so it resolves from the same location (absolute "/img/..", page-relative
@@ -81,7 +81,7 @@ def process(path: Path, dry_run: bool) -> tuple[int, Counter]:
         webp_src = webp_for(src, path)
         if not webp_src:
             mm = LOCAL_IMG_EXT_RE.match(src)
-            if mm:  # a local raster with no .webp sibling — report it
+            if mm:  # a local raster with no .webp sibling - report it
                 skipped_no_webp[src] += 1
             return tag
         wrapped += 1

@@ -102,7 +102,7 @@ The monthly `wiz-championship` section is intentionally excluded from the script
 - Cloud tags: `AWS`, `Azure`, `GCP`, `Kubernetes`, `Multi-Cloud`
 - Focus tags: `IAM`, `Containers`, `Serverless`, `Recon`, `Incident Response`, `Reverse Engineering`, `IaC`, `Secrets Management`, `CI/CD`, `AI/ML`, `Cloud Security`
 
-Pick 1–3 tags beyond `CTF`.
+Pick 1-3 tags beyond `CTF`.
 
 ## See Also
 

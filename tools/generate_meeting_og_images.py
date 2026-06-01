@@ -40,7 +40,7 @@ HERO_SUBHEAD_RE = re.compile(
     re.DOTALL,
 )
 H2_LINE_RE = re.compile(
-    r'<h2><time datetime="\d{4}-\d{2}-\d{2}">[^<]+</time>\s*[—–-]\s*(.*?)</h2>',
+    r'<h2><time datetime="\d{4}-\d{2}-\d{2}">[^<]+</time>\s*[\u2014\u2013-]\s*(.*?)</h2>',
     re.DOTALL,
 )
 

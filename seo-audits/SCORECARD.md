@@ -45,7 +45,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 
 ## How to use
 
-**This file is auto-updated weekly by two GitHub Actions workflows** — no manual scorecard maintenance needed for the routine case. Both fire Mondays around 14:00 UTC, open auto-merged PRs labeled `automated, seo`, and file a tracking issue (label `regression`) if the overall score dropped.
+**This file is auto-updated weekly by two GitHub Actions workflows** - no manual scorecard maintenance needed for the routine case. Both fire Mondays around 14:00 UTC, open auto-merged PRs labeled `automated, seo`, and file a tracking issue (label `regression`) if the overall score dropped.
 
 | Table | Updated by | Cron | Local equivalent |
 |---|---|---|---|
@@ -54,8 +54,8 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 
 **Off-cycle / qualitative runs**:
 
-- Run `/seo-audit csoh.org` (the SearchFit skill) when you want qualitative depth beyond what the deterministic script checks — internal-linking strategy, content depth, AI visibility, topical clustering. Save the report as `seo-audits/YYYY-MM-DD.md` and append a row to the Internal table manually.
-- Both workflows expose `workflow_dispatch` — trigger a fresh run any time from the Actions tab without waiting for Monday.
+- Run `/seo-audit csoh.org` (the SearchFit skill) when you want qualitative depth beyond what the deterministic script checks - internal-linking strategy, content depth, AI visibility, topical clustering. Save the report as `seo-audits/YYYY-MM-DD.md` and append a row to the Internal table manually.
+- Both workflows expose `workflow_dispatch` - trigger a fresh run any time from the Actions tab without waiting for Monday.
 
 ## External signals to track alongside this
 

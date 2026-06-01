@@ -9,7 +9,7 @@ Thank you for helping grow the CSOH Breach Kill Chain resource! This guide expla
 A kill chain is a **step-by-step reconstruction of a real cloud security breach** - from the attacker's first move to the moment of discovery. It's not a news summary. It's a structured breakdown of *exactly how* the attack progressed, mapped to MITRE ATT&CK Cloud techniques, so security professionals can learn from it and defend against it.
 
 Each entry has:
-- A numbered sequence of attack steps (typically 4–8 steps)
+- A numbered sequence of attack steps (typically 4-8 steps)
 - Each step mapped to a real MITRE ATT&CK technique with a link
 - Technical detail in each step (what command, what API, what misconfiguration)
 - A "Key Lessons / How to Defend" section at the bottom
@@ -53,7 +53,7 @@ Each step should answer three questions:
 **Good step example:**
 > **EC2 IAM role credentials retrieved from IMDS - no authentication required**
 > Thompson used the SSRF to GET `/latest/meta-data/iam/security-credentials/ISRM-WAF-Role`, which returned temporary AWS credentials (AccessKeyId, SecretAccessKey, SessionToken). IMDSv1 served these to any request made from the instance - no token required. The role had been granted far broader S3 permissions than a WAF function ever needs.
-> `MITRE: T1552.005 – Cloud Instance Metadata API`
+> `MITRE: T1552.005 - Cloud Instance Metadata API`
 
 **Bad step example (too vague):**
 > The attacker got AWS credentials and used them to access data.
@@ -72,20 +72,20 @@ Common cloud techniques:
 
 | What happened | MITRE Technique |
 |---|---|
-| SSRF to metadata service | T1552.005 – Cloud Instance Metadata API |
-| Misconfigured S3 / storage bucket | T1530 – Data from Cloud Storage |
-| Stolen/reused credentials | T1078 – Valid Accounts |
-| MFA push fatigue / bombing | T1621 – MFA Request Generation |
-| Secret in source code / file | T1552.001 – Credentials in Files |
-| Public repository secret exposure | T1552.004 – Private Keys |
-| SAML token forgery (Golden SAML) | T1606.002 – SAML Tokens |
-| OAuth token forgery | T1606.001 – Web Cookies / Tokens |
-| Supply chain software compromise | T1195.002 – Compromise Software Supply Chain |
-| Cloud storage enumeration | T1619 – Cloud Storage Object Discovery |
-| Exfiltration from cloud storage | T1530 – Data from Cloud Storage |
-| Email collection (Exchange/M365) | T1114.002 – Remote Email Collection |
-| DNS-based C2 | T1071.004 – DNS |
-| Adding persistent OAuth app | T1098.001 – Additional Account Credentials |
+| SSRF to metadata service | T1552.005 - Cloud Instance Metadata API |
+| Misconfigured S3 / storage bucket | T1530 - Data from Cloud Storage |
+| Stolen/reused credentials | T1078 - Valid Accounts |
+| MFA push fatigue / bombing | T1621 - MFA Request Generation |
+| Secret in source code / file | T1552.001 - Credentials in Files |
+| Public repository secret exposure | T1552.004 - Private Keys |
+| SAML token forgery (Golden SAML) | T1606.002 - SAML Tokens |
+| OAuth token forgery | T1606.001 - Web Cookies / Tokens |
+| Supply chain software compromise | T1195.002 - Compromise Software Supply Chain |
+| Cloud storage enumeration | T1619 - Cloud Storage Object Discovery |
+| Exfiltration from cloud storage | T1530 - Data from Cloud Storage |
+| Email collection (Exchange/M365) | T1114.002 - Remote Email Collection |
+| DNS-based C2 | T1071.004 - DNS |
+| Adding persistent OAuth app | T1098.001 - Additional Account Credentials |
 
 ---
 
@@ -121,9 +121,9 @@ Also add a tab button to the `<nav class="incident-tabs">` section at the top.
       <!-- Provider options: prov-aws (yellow), prov-azure (blue) -->
       <!-- For GCP: style="background:rgba(34,197,94,.15);color:#4ade80;" -->
     </div>
-    <h2 class="inc-title">Short Name – Step1 → Step2 → Step3 → Impact</h2>
+    <h2 class="inc-title">Short Name - Step1 → Step2 → Step3 → Impact</h2>
     <p class="inc-summary">
-      2–4 sentence plain English summary of what happened, who did it,
+      2-4 sentence plain English summary of what happened, who did it,
       what went wrong, and what the impact was.
     </p>
     <div class="inc-stats">
@@ -146,11 +146,11 @@ Also add a tab button to the `<nav class="incident-tabs">` section at the top.
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">One sentence describing what the attacker did</div>
-          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/TXXXX/" target="_blank" rel="noopener">TXXXX – Technique Name</a>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/TXXXX/" target="_blank" rel="noopener">TXXXX - Technique Name</a>
           <!-- MITRE tag classes: mt-ta mt-ex mt-pe mt-de mt-ca mt-di mt-lm mt-co mt-ef mt-p2 -->
         </div>
         <p class="step-desc">
-          2–4 sentences explaining what happened, how it worked technically,
+          2-4 sentences explaining what happened, how it worked technically,
           and why the security control failed.
         </p>
         <div class="step-code">
@@ -173,7 +173,7 @@ Also add a tab button to the `<nav class="incident-tabs">` section at the top.
       <div class="def-items">
         <div class="def-item"><strong>Specific control 1.</strong> Explanation of what to do and why it would have stopped this attack.</div>
         <div class="def-item"><strong>Specific control 2.</strong> Be concrete - name the AWS service, Azure policy, or tool. Not "improve monitoring" but "enable GuardDuty finding X."</div>
-        <!-- Add 3–5 defender items -->
+        <!-- Add 3-5 defender items -->
       </div>
     </div>
 

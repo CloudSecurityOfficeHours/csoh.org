@@ -10,7 +10,7 @@ Shift (CLS) and tanks the page's Core Web Vitals score.
 Adding width and height attributes (matching the viewBox numbers) lets the
 browser compute the SVG's aspect ratio at parse time and reserve the right
 space on first paint. CSS `width: 100%; height: auto` still wins for the
-final rendered size — the attributes only provide the aspect ratio.
+final rendered size - the attributes only provide the aspect ratio.
 
 Exits non-zero if any offender is found, printing file:line for each.
 """

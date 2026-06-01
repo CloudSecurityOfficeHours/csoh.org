@@ -504,13 +504,13 @@
             <p>The original service mesh architecture put a proxy container (almost always <a href="https://www.envoyproxy.io/" target="_blank" rel="noopener noreferrer">Envoy</a>) into every application pod as a <em>sidecar</em>. Every packet leaving the application container was redirected (via <code>iptables</code> rules installed by an init container) into the local sidecar, which then handled mTLS, policy, observability, and traffic management before sending the packet out to its destination - where another sidecar received it and reversed the process.</p>
             <p>The sidecar pattern works, and it shipped to production for the better part of a decade. It has well-known costs:</p>
             <ul>
-                <li><strong>Resource overhead.</strong> A sidecar Envoy adds 50–200 MB of memory and a fraction of a CPU per pod. Across a 5,000-pod cluster, that's hundreds of GB of RAM and dozens of cores spent on proxies.</li>
-                <li><strong>Latency.</strong> Two extra proxy hops on every call. Usually 1–3 ms per direction; sometimes worse under load.</li>
+                <li><strong>Resource overhead.</strong> A sidecar Envoy adds 50-200 MB of memory and a fraction of a CPU per pod. Across a 5,000-pod cluster, that's hundreds of GB of RAM and dozens of cores spent on proxies.</li>
+                <li><strong>Latency.</strong> Two extra proxy hops on every call. Usually 1-3 ms per direction; sometimes worse under load.</li>
                 <li><strong>Lifecycle coupling.</strong> The sidecar starts before the app and shuts down after it; mismatches produced the famous "job pod never terminates because the sidecar is still running" class of bugs. Kubernetes 1.29's native sidecar support (KEP-753) finally fixed this.</li>
                 <li><strong>Upgrade churn.</strong> Every Envoy CVE means rolling every workload to pick up a new sidecar image. The cadence is unrelenting.</li>
                 <li><strong><a class="glossary-link" href="glossary.html#term-blast-radius">Blast radius</a>.</strong> A misconfigured sidecar can take down the application pod it's attached to.</li>
             </ul>
-            <p>The 2024–2026 architectural shift is to move the data plane <em>out of the pod</em>:</p>
+            <p>The 2024-2026 architectural shift is to move the data plane <em>out of the pod</em>:</p>
             <ul>
                 <li><strong>Istio Ambient.</strong> Replaces sidecars with a per-node L4 proxy (ztunnel) for mTLS and identity, plus an optional per-namespace L7 proxy (waypoint) for advanced features. GA at Istio 1.22. Same control plane, different data plane.</li>
                 <li><strong>Cilium Service Mesh.</strong> Uses eBPF programs in the kernel to do the work a sidecar would. No proxy in the pod; the L4 path runs in eBPF and L7 features run in an Envoy that lives at the node (one per node, not one per pod).</li>
@@ -829,14 +829,14 @@
 
         <section id="ambient">
             <h2>Ambient mode &amp; sidecarless</h2>
-            <p>The biggest architectural shift in service mesh in 2024–2026 is the move away from per-pod sidecars. The reasons are operational: thousands of sidecars consume tens or hundreds of GB of memory, every Envoy CVE means rolling everything, and the per-pod attribution of cost / latency / failures is a real burden.</p>
+            <p>The biggest architectural shift in service mesh in 2024-2026 is the move away from per-pod sidecars. The reasons are operational: thousands of sidecars consume tens or hundreds of GB of memory, every Envoy CVE means rolling everything, and the per-pod attribution of cost / latency / failures is a real burden.</p>
             <h3>Istio Ambient</h3>
             <p>Two-tier data plane:</p>
             <ul>
                 <li><strong>ztunnel</strong> - a per-node L4 proxy (one DaemonSet pod per node) that handles mTLS, identity, and L4 authorization for every pod on the node. Written in Rust; HBONE (HTTP-Based Overlay Network Environment) protocol for inter-node transport.</li>
                 <li><strong>Waypoint proxy</strong> - optional, per-namespace or per-service-account Envoy that handles L7 features (HTTP-level authorization, JWT validation, request transformation). Deployed only where the L7 features are actually needed.</li>
             </ul>
-            <p>GA at Istio 1.22 (mid-2024) and steadily maturing through 2025–2026. The migration story from sidecar to ambient is supported by the Istio operator; ambient and sidecar pods can coexist during transition.</p>
+            <p>GA at Istio 1.22 (mid-2024) and steadily maturing through 2025-2026. The migration story from sidecar to ambient is supported by the Istio operator; ambient and sidecar pods can coexist during transition.</p>
             <h3>Cilium Service Mesh (sidecarless from the start)</h3>
             <p>Cilium's mesh has never used sidecars. The L4 path (mTLS, identity, encryption, NetworkPolicy enforcement) runs in eBPF programs attached to network hooks in the Linux kernel; there is no proxy in the pod. L7 features (HTTP-level routing, authorization with HTTP-aware predicates) run in a per-node Envoy that Cilium manages. The result is one of the leanest data planes in the ecosystem - most of the work happens in the kernel, on the packet, without a userspace proxy round-trip.</p>
             <h3>What sidecarless costs you</h3>
@@ -1069,7 +1069,7 @@
             <ul>
                 <li><strong>Enabling strict mTLS without a permissive transition.</strong> The most common production outage. Strict mTLS rejects every non-mesh client; <a class="glossary-link" href="glossary.html#term-ci-cd">CI</a> runners, legacy probes, third-party integrations all break simultaneously. Always: PERMISSIVE first, validate via telemetry, then STRICT namespace by namespace.</li>
                 <li><strong>Ignoring proxy CVEs.</strong> Envoy and the mesh control planes ship CVEs on an ongoing basis. Treat the mesh upgrade cadence as a security obligation, not a feature backlog item. Subscribe to the project security advisories.</li>
-                <li><strong>No policy at all.</strong> Encryption without authorization is a partial answer. Every breach demo from 2020–2024 includes "the mTLS was on; the attacker just took the path the policy hadn't restricted". Configure deny-by-default policy at the namespace level once you have basic mTLS coverage.</li>
+                <li><strong>No policy at all.</strong> Encryption without authorization is a partial answer. Every breach demo from 2020-2024 includes "the mTLS was on; the attacker just took the path the policy hadn't restricted". Configure deny-by-default policy at the namespace level once you have basic mTLS coverage.</li>
                 <li><strong>Forgetting egress.</strong> A mesh that perfectly governs east-west traffic but allows any pod to <code>curl</code> the internet has not closed the lateral-movement loop. Egress gateways or FQDN-aware egress policy belong in every production mesh.</li>
                 <li><strong>Mesh-only ACLs instead of layered defense.</strong> If the mesh control plane is the only thing standing between a compromised workload and the rest of the cluster, control-plane compromise is total. Layer with NetworkPolicy, namespace isolation, and host-level controls.</li>
                 <li><strong>Choosing the wrong mesh for the team.</strong> Istio on a team without dedicated platform engineering tends to fail; Linkerd on a team that needs rich L7 features will outgrow the mesh quickly. Match the mesh to the team, not to the slide.</li>

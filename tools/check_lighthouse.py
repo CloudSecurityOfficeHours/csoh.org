@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run Lighthouse against a sample of pages and assert SEO/a11y/perf thresholds.
 
-Wraps the `lighthouse` CLI (Node.js). Picks a representative sample —
+Wraps the `lighthouse` CLI (Node.js). Picks a representative sample -
 homepage, a pillar page, a card page, a per-meeting page, a per-breach
-page — runs each in headless Chrome, parses the JSON report, and prints
+page - runs each in headless Chrome, parses the JSON report, and prints
 a pass/fail table.
 
 Targets (override via flags):
@@ -22,7 +22,7 @@ Usage:
     python3 tools/check_lighthouse.py --pages index.html resources.html
     python3 tools/check_lighthouse.py --seo 90 --perf 70  # relax thresholds
 
-Exit code is non-zero if any sampled page misses any threshold — wire
+Exit code is non-zero if any sampled page misses any threshold - wire
 into CI to catch regressions.
 """
 
