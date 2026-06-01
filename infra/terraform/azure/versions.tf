@@ -1,4 +1,4 @@
-# Azure origin for csoh.org — a Storage Account "static website" ($web
+# Azure origin for csoh.org - a Storage Account "static website" ($web
 # container) served over its built-in HTTPS endpoint, fronted by Cloudflare.
 #
 # State shares the GCP GCS bucket under a separate prefix (see the AWS dir
@@ -35,7 +35,7 @@ terraform {
     }
     # azuread = the Azure Active Directory / Entra ID provider. It manages
     # identity objects (the app registration, service principal, and the
-    # GitHub OIDC federated credential in identity.tf) — the "who can deploy"
+    # GitHub OIDC federated credential in identity.tf) - the "who can deploy"
     # half, separate from the "what gets deployed" half above.
     azuread = {
       source = "hashicorp/azuread"
@@ -44,14 +44,14 @@ terraform {
     }
   }
 
-  # Terraform records everything it has created in a "state file" — a JSON map
+  # Terraform records everything it has created in a "state file" - a JSON map
   # between this code and the real cloud objects. By default that file lives on
   # your laptop, which is fragile and unshareable. A "backend" stores it
   # remotely instead, so CI and every teammate read/write the SAME state and
   # don't clobber each other. This project reuses ONE Google Cloud Storage
   # (GCS) bucket for all three clouds' state, isolating each under its own
   # "prefix" (folder). Note: the backend that HOLDS the state (GCS) is
-  # independent of the clouds this code MANAGES (Azure) — they need not match.
+  # independent of the clouds this code MANAGES (Azure) - they need not match.
   backend "gcs" {
     # The GCS bucket that holds the shared state files (created in the GCP dir).
     bucket = "csoh-org-495800-tfstate"
@@ -63,7 +63,7 @@ terraform {
 
 # Having LISTED the providers above, this block CONFIGURES the azurerm one:
 # how it connects to Azure. It does NOT create anything. Credentials are NOT
-# set here — in CI the github actions azure/login step supplies short-lived
+# set here - in CI the github actions azure/login step supplies short-lived
 # OIDC tokens (no stored secret), and locally Terraform uses your `az login`
 # session. We only pin WHICH subscription and tenant to act in.
 provider "azurerm" {
@@ -76,7 +76,7 @@ provider "azurerm" {
   # Pinning it prevents the deploy from landing in whatever subscription your
   # local `az` session happens to point at.
   subscription_id = var.subscription_id
-  # Pin the Entra ID (Azure AD) tenant — the directory of users/apps that owns
+  # Pin the Entra ID (Azure AD) tenant - the directory of users/apps that owns
   # this subscription. Set on BOTH providers so they operate in the same tenant.
   tenant_id = var.tenant_id
 }

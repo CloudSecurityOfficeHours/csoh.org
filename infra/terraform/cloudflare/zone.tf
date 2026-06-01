@@ -1,5 +1,5 @@
 # --- Background for newcomers -------------------------------------------------
-# A "zone" in Cloudflare is one domain you manage there — here, csoh.org. This
+# A "zone" in Cloudflare is one domain you manage there - here, csoh.org. This
 # file tunes the zone-wide settings that control HOW Cloudflare talks to your
 # visitors and to the three cloud origins (AWS, GCP, Azure) behind it.
 # --
@@ -7,7 +7,7 @@
 # in Cloudflare). Terraform compares this desired state to what already exists
 # and makes only the changes needed. (Contrast with a "data" source, used
 # elsewhere, which only READS existing things and never changes them.) The
-# provider — declared once in versions.tf as `provider "cloudflare" {}` — is the
+# provider - declared once in versions.tf as `provider "cloudflare" {}` - is the
 # plugin that knows how to call Cloudflare's API; every cloudflare_* resource in
 # this folder is created through it, authenticated by the CLOUDFLARE_API_TOKEN
 # environment variable (no secret is stored in the repo).
@@ -15,15 +15,15 @@
 # Zone-level TLS posture. "strict" = Full (strict): Cloudflare validates the
 # origin certificate on the Cloudflare→origin leg. All three origins present
 # valid certs for their own hostnames (CloudFront default cert, run.app,
-# Azure web endpoint), so strict works end-to-end — no unencrypted or
+# Azure web endpoint), so strict works end-to-end - no unencrypted or
 # unauthenticated hop anywhere. This replaces the GCP modern-TLS SSL policy.
 # This resource type, cloudflare_zone_settings_override, doesn't create a new
-# object — it overrides a bundle of dials on the EXISTING csoh.org zone. The two
+# object - it overrides a bundle of dials on the EXISTING csoh.org zone. The two
 # words after the type ("site") are this resource's local Terraform name; other
 # .tf files refer to it as cloudflare_zone_settings_override.site.
 resource "cloudflare_zone_settings_override" "site" {
   # Which zone to apply these settings to. `var.zone_id` reads the input
-  # variable `zone_id` declared in variables.tf — this is "interpolation," the
+  # variable `zone_id` declared in variables.tf - this is "interpolation," the
   # ${...}-style way Terraform plugs one value into another (here in its short
   # bare form, `var.zone_id`). Keeping the actual ID in a variable rather than
   # hardcoding it lets the same code target a different zone without edits.
@@ -52,7 +52,7 @@ resource "cloudflare_zone_settings_override" "site" {
     automatic_https_rewrites = "on"
     # HSTS and the other security headers are set explicitly in the response
     # header transform ruleset (rules.tf) so there is one source of truth that
-    # mirrors nginx-security-headers.conf — we do NOT also enable the native
+    # mirrors nginx-security-headers.conf - we do NOT also enable the native
     # zone HSTS feature here, to avoid two systems setting the same header.
   }
 }

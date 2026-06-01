@@ -8,15 +8,15 @@
 # the sibling files (s3.tf, cloudfront.tf, oidc.tf) by writing
 # `TYPE.NAME.attribute`; the GitHub Actions deploy workflow reads these outputs
 # so it knows which bucket to upload to, which CDN to refresh, and which role to
-# log in as — all without any value being hardcoded twice.
+# log in as - all without any value being hardcoded twice.
 #
 # The public hostname AWS assigned to the CloudFront distribution, e.g.
 # "d111111abcdef8.cloudfront.net". Cloudflare's load balancer is configured to
-# treat this hostname as the "AWS origin" — the backend it forwards visitor
+# treat this hostname as the "AWS origin" - the backend it forwards visitor
 # traffic to when it picks the AWS cloud. Publishing it as an output means the
 # address can be wired into the Cloudflare config without copy-pasting by hand.
 output "cloudfront_domain" {
-  description = "CloudFront distribution hostname — this is the Cloudflare LB origin address for AWS."
+  description = "CloudFront distribution hostname - this is the Cloudflare LB origin address for AWS."
   value       = aws_cloudfront_distribution.site.domain_name
 }
 
@@ -41,13 +41,13 @@ output "bucket_name" {
   value       = aws_s3_bucket.site.bucket
 }
 
-# The ARN (Amazon Resource Name — AWS's globally-unique ID for an object) of the
+# The ARN (Amazon Resource Name - AWS's globally-unique ID for an object) of the
 # IAM role that GitHub Actions temporarily "assumes" to deploy, defined in
 # oidc.tf. Remember deploys are keyless: instead of a stored access key, the
 # workflow presents a short-lived OIDC token and asks AWS to let it become this
 # role. To start that exchange, the GitHub Actions login step must be told the
 # role's ARN, so we publish it here. The ARN is not a secret (it grants nothing
-# on its own — only the approved workflow can actually assume the role), so this
+# on its own - only the approved workflow can actually assume the role), so this
 # output is plain text and is intentionally not marked `sensitive`.
 output "publisher_role_arn" {
   description = "IAM role ARN the GitHub Actions publish job assumes via OIDC."

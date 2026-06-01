@@ -18,7 +18,7 @@
 # the CI pipeline.
 resource "google_cloud_run_v2_service" "site" {
   # Which GCP project this service lives in. `var.project_id` reads the
-  # `project_id` input variable defined in variables.tf — `var.NAME` is how
+  # `project_id` input variable defined in variables.tf - `var.NAME` is how
   # Terraform pulls in a value so it isn't hard-coded in many places.
   project = var.project_id
   # The service's name within the project (shows up in the GCP console and in
@@ -40,7 +40,7 @@ resource "google_cloud_run_v2_service" "site" {
   # Service-level scaling. This is separate from `template.scaling` (which
   # configures per-revision auto-scaling). The Cloud Run v2 API populates
   # this block with default zeros on every service whether you declare it
-  # or not — declaring it explicitly here keeps `terraform plan` clean
+  # or not - declaring it explicitly here keeps `terraform plan` clean
   # rather than showing a perpetual "remove this block" no-op diff.
   scaling {
     # Allow the service to scale down to 0 running copies when idle: cheapest
@@ -90,7 +90,7 @@ resource "google_cloud_run_v2_service" "site" {
 
       # CPU/memory each copy of the container is allowed to use.
       resources {
-        # Upper bounds per copy: 1 vCPU and 256 MiB of RAM — plenty for
+        # Upper bounds per copy: 1 vCPU and 256 MiB of RAM - plenty for
         # serving small static files.
         limits = {
           cpu    = "1"
@@ -135,7 +135,7 @@ resource "google_cloud_run_v2_service" "site" {
   }
 
   # "lifecycle" tweaks how Terraform manages this resource. `ignore_changes`
-  # lists fields Terraform should set once at creation and then leave alone —
+  # lists fields Terraform should set once at creation and then leave alone -
   # so it won't try to "fix" them back on later runs.
   lifecycle {
     ignore_changes = [
@@ -156,11 +156,11 @@ resource "google_cloud_run_v2_service" "site" {
   # service. Terraform usually infers order from references, but here we make
   # the prerequisites explicit because the service won't work without them.
   depends_on = [
-    # The required GCP APIs (like run.googleapis.com) must be enabled first —
+    # The required GCP APIs (like run.googleapis.com) must be enabled first -
     # defined in apis.tf.
     google_project_service.apis,
     # The Artifact Registry repo that will hold our container images must
-    # exist first — defined in artifact_registry.tf.
+    # exist first - defined in artifact_registry.tf.
     google_artifact_registry_repository.containers,
   ]
 }
@@ -168,7 +168,7 @@ resource "google_cloud_run_v2_service" "site" {
 # GCP IAM concept: even though `ingress` (above) lets requests REACH the
 # service over the network, Cloud Run also checks PERMISSION ("IAM") on each
 # call. By default only authenticated callers with the run.invoker role may
-# invoke it. This resource grants that role so anyone can call the service —
+# invoke it. This resource grants that role so anyone can call the service -
 # i.e. it allows unauthenticated invocations so Cloudflare (and its
 # health-check monitors) can reach the service at its *.run.app URL. The
 # service is one of three interchangeable origins behind the Cloudflare Load
@@ -187,7 +187,7 @@ resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   # Cloud Run service."
   role = "roles/run.invoker"
   # Who gets it: "allUsers" is GCP's special identity meaning everyone on the
-  # internet, even unauthenticated. That's intentional here — the real
+  # internet, even unauthenticated. That's intentional here - the real
   # gatekeeping (TLS, WAF, rate limiting) happens at Cloudflare's edge.
   member = "allUsers"
 }

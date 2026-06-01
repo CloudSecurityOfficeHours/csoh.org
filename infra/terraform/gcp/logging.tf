@@ -4,7 +4,7 @@
 # Google Cloud Logging is GCP's built-in service that collects logs from your
 # cloud resources (here, the Cloud Run container that serves the website). By
 # default GCP keeps those logs only ~30 days. This file (1) creates a log
-# "bucket" that keeps chosen logs much longer, and (2) creates a "sink" — a
+# "bucket" that keeps chosen logs much longer, and (2) creates a "sink" - a
 # rule that copies matching log entries into that long-retention bucket.
 #
 # TERRAFORM CONCEPTS (taught once, here):
@@ -26,7 +26,7 @@
 # ---------------------------------------------------------------------------
 
 # A LOG BUCKET is a named container inside Cloud Logging that stores log
-# entries (it is NOT a Cloud Storage / object-storage bucket — same word,
+# entries (it is NOT a Cloud Storage / object-storage bucket - same word,
 # different service). Its main knob is how long entries are kept before being
 # auto-deleted. GCP auto-creates a "_Default" bucket that retains logs only
 # 30 days; this resource adds a second bucket with a much longer (400-day)
@@ -37,7 +37,7 @@ resource "google_logging_project_bucket_config" "long_retention" {
   # Which GCP project this log bucket belongs to (read from variables.tf).
   project = var.project_id
   # Where the bucket lives. "global" is a valid Cloud Logging location that
-  # is not tied to one geographic region — appropriate for project-wide logs.
+  # is not tied to one geographic region - appropriate for project-wide logs.
   location = "global"
   # The bucket's fixed ID/name within the project. We reference this exact
   # string from the sink below, so its destination always points here.
@@ -65,18 +65,18 @@ resource "google_logging_project_sink" "security" {
   #   - ${google_logging_project_bucket_config.long_retention.bucket_id} reads
   #     the bucket_id off the bucket resource defined earlier. Referencing the
   #     bucket this way also makes Terraform create the bucket BEFORE this sink
-  #     automatically — the dependency is inferred, no manual ordering needed.
+  #     automatically - the dependency is inferred, no manual ordering needed.
   destination = "logging.googleapis.com/projects/${var.project_id}/locations/global/buckets/${google_logging_project_bucket_config.long_retention.bucket_id}"
 
   # `filter` is the matching rule, written in Cloud Logging's query language;
   # only entries matching it get routed. (The Cloud Armor / LB clauses were
-  # dropped with the GCLB — edge WAF + error logging now live in Cloudflare's
-  # zone analytics/logs.) The `<<-EOT ... EOT` syntax is a "heredoc" — a tidy
+  # dropped with the GCLB - edge WAF + error logging now live in Cloudflare's
+  # zone analytics/logs.) The `<<-EOT ... EOT` syntax is a "heredoc" - a tidy
   # way to write a multi-line string; the leading dash lets the lines be
   # indented for readability without the indentation becoming part of the
   # string. The three OR'd clauses below match, in order:
   #   1. Cloud Run requests whose HTTP status is 400 or higher (client/server
-  #      errors) — useful signal about origin problems and probing.
+  #      errors) - useful signal about origin problems and probing.
   #   2. Any log produced by the IAM service (iam.googleapis.com), i.e. changes
   #      to who-can-do-what permissions.
   #   3. Audit Logs (the @type tag marks an entry as a Cloud Audit Log), which
@@ -87,12 +87,12 @@ resource "google_logging_project_sink" "security" {
     OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"
   EOT
 
-  # A sink writes into its destination using a service account — a non-human
+  # A sink writes into its destination using a service account - a non-human
   # "robot" identity that GCP services use to act on each other. Setting this
   # to true makes GCP mint a DEDICATED service account just for this sink
   # (instead of a single shared one used by all sinks). That dedicated
   # identity can then be granted permission to write only into this one
-  # bucket — a least-privilege practice (give each component the narrowest
+  # bucket - a least-privilege practice (give each component the narrowest
   # access it needs). After apply, this identity is exposed as the sink's
   # `writer_identity` attribute so a separate IAM grant can authorize it.
   unique_writer_identity = true

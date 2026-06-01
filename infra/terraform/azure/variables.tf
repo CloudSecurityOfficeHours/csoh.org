@@ -2,14 +2,14 @@
 # infrastructure. A Terraform "variable" is a named knob you can set from the
 # outside (a CLI flag, an environment variable, or a .tfvars file) without
 # editing the code. Elsewhere in this folder the variables are read with the
-# syntax `var.<name>` — for example `var.location`. Each block below can set:
+# syntax `var.<name>` - for example `var.location`. Each block below can set:
 #   - description: human-readable note explaining the knob (shown in tooling)
 #   - type:        the kind of value allowed; `string` here means plain text
 #   - default:     the value used when nobody passes one in, so `terraform
 #                  apply` works with no extra arguments. A variable with a
 #                  default is effectively optional.
 # None of these are marked `sensitive`, because IDs/names below are not secrets
-# (the real secret — a cloud password or key — is deliberately never used here;
+# (the real secret - a cloud password or key - is deliberately never used here;
 # GitHub Actions authenticates with short-lived OIDC tokens instead).
 # ---------------------------------------------------------------------------
 # Azure organizes everything you pay for inside a "subscription" (a billing +
@@ -26,7 +26,7 @@ variable "subscription_id" {
 }
 
 # A "tenant" is your organization's identity directory in Microsoft Entra ID
-# (the service formerly called Azure Active Directory) — it's where users, app
+# (the service formerly called Azure Active Directory) - it's where users, app
 # registrations, and login/permission rules live. Every subscription belongs to
 # one tenant. This GUID identifies ours and is pinned on BOTH providers in
 # versions.tf: the azurerm provider (which manages resources) and the azuread
@@ -44,7 +44,7 @@ variable "tenant_id" {
 # for both the resource group and the storage account. The exact region matters
 # less than usual for this project: the static site is cached and served
 # globally by Cloudflare's edge, so this Azure copy is just one of three origins
-# Cloudflare falls back to — visitors rarely hit it directly.
+# Cloudflare falls back to - visitors rarely hit it directly.
 variable "location" {
   description = "Azure region for the resource group + storage account."
   type        = string
@@ -52,7 +52,7 @@ variable "location" {
 }
 
 # A "resource group" is an Azure container that holds related resources so they
-# can be managed and deleted together — think of it as a labeled folder for this
+# can be managed and deleted together - think of it as a labeled folder for this
 # project's Azure objects. storage.tf creates a group with this name and then
 # places the storage account inside it. Deleting the group would delete
 # everything in it, so the name is fixed here to keep deploys pointed at the
@@ -66,11 +66,11 @@ variable "resource_group_name" {
 # A "storage account" is Azure's object-storage service (the rough equivalent
 # of an AWS S3 bucket or a GCS bucket). It holds the site's files. Azure turns
 # such an account into a website by serving a special container named "$web"
-# over a built-in HTTPS address — that address is the Azure ORIGIN that
+# over a built-in HTTPS address - that address is the Azure ORIGIN that
 # Cloudflare's load balancer sends traffic to. The name has strict rules
 # because it becomes part of a public hostname: it must be GLOBALLY unique
 # across all of Azure (no other customer can have taken it) and 3-24 lowercase
-# letters/digits only — hence "csohorgsite" with no dots or dashes. Used in
+# letters/digits only - hence "csohorgsite" with no dots or dashes. Used in
 # storage.tf as the account's `name`.
 variable "storage_account_name" {
   description = "Globally-unique storage account name (3-24 chars, lowercase alphanumeric). Its $web static-website endpoint is the Cloudflare LB origin for Azure."
@@ -87,7 +87,7 @@ variable "storage_account_name" {
 # configured (in identity.tf) to trust that token, but only if its details
 # match values it was told to expect. These variables supply those expected
 # values, so the trust is narrow: only this owner's repo can obtain Azure
-# credentials, and only briefly. This is "least privilege" — grant the minimum
+# credentials, and only briefly. This is "least privilege" - grant the minimum
 # access to the minimum identity.
 # This first variable, github_owner, is the GitHub organization (or user)
 # account that owns the repo. It's combined with github_repo in identity.tf to
@@ -108,7 +108,7 @@ variable "github_repo" {
   default     = "csoh.org"
 }
 
-# The branch that is allowed to publish — "main", the line of code that goes
+# The branch that is allowed to publish - "main", the line of code that goes
 # live. Note a subtlety: this stack's OIDC trust is keyed to a GitHub
 # "Environment" named production (subject ...:environment:production in
 # identity.tf), NOT directly to a branch name. The main-only rule is actually

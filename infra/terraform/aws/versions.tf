@@ -1,12 +1,12 @@
-# AWS origin for csoh.org — private S3 bucket served over HTTPS by
+# AWS origin for csoh.org - private S3 bucket served over HTTPS by
 # CloudFront, fronted (like all three origins) by Cloudflare.
 #
 # State lives in the SAME GCS bucket as the GCP stack, under a separate
 # prefix. We deliberately keep one state store across all clouds rather
 # than bootstrapping a state bucket in each provider: it's one thing to
 # secure, the bucket already exists, and storage cost is pennies. The
-# trade-off — Terraform needs GCS application-default creds present when
-# running the AWS dir — is acceptable for a solo-maintained repo.
+# trade-off - Terraform needs GCS application-default creds present when
+# running the AWS dir - is acceptable for a solo-maintained repo.
 # The `terraform {}` block configures Terraform ITSELF (not any cloud).
 # It pins tool/provider versions and says where state is stored, so every
 # machine and CI run behaves identically. A "provider" is the plugin that
@@ -30,12 +30,12 @@ terraform {
     }
   }
 
-  # The "backend" is WHERE Terraform stores its state file — the JSON record
+  # The "backend" is WHERE Terraform stores its state file - the JSON record
   # mapping the resources in this code to the real cloud objects it created.
   # State must be shared/remote so CI and humans don't fight over local copies.
   # `gcs` = Google Cloud Storage. Note: this AWS stack deliberately keeps its
   # state in a GCS bucket (the same one the GCP stack uses), per the rationale
-  # at the top of this file — one state store to secure instead of one per cloud.
+  # at the top of this file - one state store to secure instead of one per cloud.
   backend "gcs" {
     # The existing GCS bucket that holds all of this repo's Terraform state.
     bucket = "csoh-org-495800-tfstate"
@@ -48,11 +48,11 @@ terraform {
 
 # Configures the AWS provider declared above: the credentials/region context
 # every AWS resource in this stack is created under. Credentials are NOT set
-# here — they arrive from the environment (locally your AWS profile; in CI a
+# here - they arrive from the environment (locally your AWS profile; in CI a
 # short-lived OIDC token), which is why no secrets appear in this file.
 provider "aws" {
   # `var.X` reads an input variable (defined in variables.tf). This is
-  # Terraform's interpolation/reference syntax — values flow between files
+  # Terraform's interpolation/reference syntax - values flow between files
   # instead of being hard-coded. Here, the region for region-scoped resources
   # like the S3 bucket (default: us-east-1).
   region = var.aws_region
@@ -63,14 +63,14 @@ provider "aws" {
   allowed_account_ids = [var.aws_account_id]
 
   # `default_tags` automatically stamps these key/value tags onto every
-  # taggable AWS resource this provider creates — no need to repeat them on
+  # taggable AWS resource this provider creates - no need to repeat them on
   # each resource. Tags are metadata used for cost tracking, search, and
   # knowing at a glance what created a resource.
   default_tags {
     tags = {
       # Which project this belongs to.
       project = "csoh.org"
-      # Signals these resources are managed by Terraform — don't hand-edit
+      # Signals these resources are managed by Terraform - don't hand-edit
       # them in the AWS console, or you'll drift from the code.
       managedBy = "terraform"
       # Which part of the system: this stack is the static-site origin.

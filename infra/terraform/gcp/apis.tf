@@ -1,7 +1,7 @@
 # In Google Cloud, every service (Cloud Run, logging, etc.) is fronted by an
 # "API" that must be explicitly turned ON for a project before you can use it.
 # A brand-new project has almost everything disabled, so this file's job is to
-# enable exactly the APIs csoh.org depends on — and nothing more (least
+# enable exactly the APIs csoh.org depends on - and nothing more (least
 # privilege: a smaller enabled surface is a smaller attack surface).
 # A `locals` block defines named values local to this Terraform configuration.
 # Think of them as constants you can reference elsewhere as `local.<name>`.
@@ -22,13 +22,13 @@ locals {
     # serves the static site (this is csoh.org's GCP origin behind Cloudflare).
     "run.googleapis.com",
     # IAM (Identity and Access Management): the service that manages "who can
-    # do what" — service accounts and their roles/permissions.
+    # do what" - service accounts and their roles/permissions.
     "iam.googleapis.com",
     # IAM Credentials: needed to mint short-lived tokens and impersonate
     # service accounts (used by Workload Identity Federation, see wif.tf).
     "iamcredentials.googleapis.com",
     # Security Token Service (STS): exchanges an external OIDC token (the one
-    # GitHub Actions presents) for a temporary Google credential — the core of
+    # GitHub Actions presents) for a temporary Google credential - the core of
     # keyless, no-stored-secrets deploys.
     "sts.googleapis.com",
     # Cloud Resource Manager: lets Terraform read/manage project-level settings
@@ -58,13 +58,13 @@ locals {
 
 # A `resource` block tells Terraform to CREATE and manage a real cloud object
 # (as opposed to a `data` source, which only READS something that already
-# exists). The first label "google_project_service" is the resource type — it
+# exists). The first label "google_project_service" is the resource type - it
 # comes from the Google provider configured in versions.tf, which is the plugin
 # that translates these blocks into Google Cloud API calls. The second label
 # "apis" is a local name we choose to refer to this resource elsewhere.
 # This particular resource type enables a single API on a project.
 resource "google_project_service" "apis" {
-  # `for_each` creates one copy of this resource per element in a set/map —
+  # `for_each` creates one copy of this resource per element in a set/map -
   # here, one "enable this API" object for each entry in required_apis. (Using
   # for_each instead of a single block keeps each API tracked individually in
   # state, so adding/removing one API only touches that one.) `toset(...)`
@@ -77,7 +77,7 @@ resource "google_project_service" "apis" {
   # variable like this avoids hard-coding the project ID in many places.
   project = var.project_id
   # The API to enable for this instance of the loop. Inside a for_each block,
-  # `each.value` is the current element — here the API name string (and because
+  # `each.value` is the current element - here the API name string (and because
   # we used toset, `each.key` is the same string).
   service = each.value
   # By default, removing this resource (or `terraform destroy`) would DISABLE

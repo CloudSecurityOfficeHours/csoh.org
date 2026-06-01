@@ -2,9 +2,9 @@
 # This file builds the active/active multi-cloud load balancer at Cloudflare.
 # Three building blocks, created in this order because each depends on the
 # previous one:
-#   1) a "monitor"      — the recurring health check that probes each origin
-#   2) a "pool"         — the group of three cloud origins the monitor watches
-#   3) a "load balancer"— the public hostname that hands traffic to the pool
+#   1) a "monitor"      - the recurring health check that probes each origin
+#   2) a "pool"         - the group of three cloud origins the monitor watches
+#   3) a "load balancer"- the public hostname that hands traffic to the pool
 # Plus one DNS record so "www.csoh.org" reaches the same place as the apex.
 #
 # Terraform vocabulary used throughout this file:
@@ -14,18 +14,18 @@
 #     remove the block. (A "data" source, not used here, only READS an existing
 #     object without creating anything.)
 #   - The two strings after `resource` are the TYPE and a local NAME you choose,
-#     e.g. resource "cloudflare_load_balancer_monitor" "site" — the type comes
+#     e.g. resource "cloudflare_load_balancer_monitor" "site" - the type comes
 #     from the Cloudflare provider; "site" is just a label you reference later.
 #   - `var.something` reads an input variable defined in variables.tf. Values
 #     come from outside this code (the three cloud origin hostnames, the zone
 #     IDs, etc.), so the same config works without hardcoding secrets/IDs.
 #   - One resource can REFERENCE another by writing type.name.attribute, e.g.
 #     cloudflare_load_balancer_monitor.site.id. Terraform reads that as "create
-#     the monitor first, then plug its generated ID in here" — an implicit
+#     the monitor first, then plug its generated ID in here" - an implicit
 #     dependency that orders the work for you (no manual depends_on needed).
 # --------------------------------------------------------------------------
 
-# Health monitor — Cloudflare probes each origin over HTTPS and pulls
+# Health monitor - Cloudflare probes each origin over HTTPS and pulls
 # unhealthy origins out of rotation automatically. Because the three origins
 # answer on different hostnames (cloudfront.net, run.app, web.core.windows.net)
 # each pool origin sets its own Host header override below, which the monitor
@@ -47,7 +47,7 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # An origin is considered healthy only if it answers with HTTP 200 (OK).
   # Anything else (errors, redirects, timeouts) counts as a failed probe.
   expected_codes = "200"
-  # How often to run the probe, in seconds — here, once per minute per origin.
+  # How often to run the probe, in seconds - here, once per minute per origin.
   interval = 60
   # How many seconds to wait for a response before giving up on a single probe.
   timeout = 5
@@ -68,7 +68,7 @@ resource "cloudflare_load_balancer_monitor" "site" {
 }
 
 # One pool holding all three origins. origin_steering "random" spreads live
-# traffic across every healthy origin — this is the active/active behavior:
+# traffic across every healthy origin - this is the active/active behavior:
 # AWS, GCP, and Azure all serve simultaneously, and any that fails its health
 # check is skipped until it recovers.
 #
@@ -83,7 +83,7 @@ resource "cloudflare_load_balancer_pool" "origins" {
   # Human-readable note describing what is inside the pool.
   description = "AWS S3+CloudFront, GCP Cloud Run, Azure Blob static website"
   # Attach the health check defined above to this pool. We pass the monitor's
-  # generated ID via cloudflare_load_balancer_monitor.site.id — this reference
+  # generated ID via cloudflare_load_balancer_monitor.site.id - this reference
   # is what makes Terraform create the monitor BEFORE the pool.
   monitor = cloudflare_load_balancer_monitor.site.id
   # The pool is considered "up" only while at least this many origins are
@@ -163,14 +163,14 @@ resource "cloudflare_load_balancer_pool" "origins" {
 
 # The Load Balancer itself, published at the apex. proxied=true keeps it
 # behind Cloudflare's edge (cache + TLS + WAF). steering_policy "off" means
-# "use the default pool" — and since all three origins live in that one pool,
+# "use the default pool" - and since all three origins live in that one pool,
 # origin_steering above does the active/active distribution.
 resource "cloudflare_load_balancer" "site" {
   # Unlike the monitor/pool, a load balancer is tied to a specific ZONE (the
   # csoh.org domain), so it takes zone_id rather than account_id.
   zone_id = var.zone_id
   # The hostname this LB answers on. var.zone_name defaults to "csoh.org", so
-  # the load balancer IS the apex domain — visitors hitting csoh.org land here.
+  # the load balancer IS the apex domain - visitors hitting csoh.org land here.
   name = var.zone_name
   # The pool(s) to use under normal conditions. This is a LIST (note the square
   # brackets), but we only need one pool since it already holds all three
@@ -178,7 +178,7 @@ resource "cloudflare_load_balancer" "site" {
   # also makes Terraform build the pool before this load balancer.
   default_pool_ids = [cloudflare_load_balancer_pool.origins.id]
   # The pool to fall back to if every default pool is unhealthy. We point it at
-  # the same single pool — there is nothing else to fall back to, and this
+  # the same single pool - there is nothing else to fall back to, and this
   # field is required.
   fallback_pool_id = cloudflare_load_balancer_pool.origins.id
   # true = run this hostname THROUGH Cloudflare's network (orange-cloud), so it
@@ -203,7 +203,7 @@ resource "cloudflare_record" "www" {
   name = "www"
   # A CNAME is an alias: "www" points at another name rather than an IP.
   type = "CNAME"
-  # The target of the alias — the apex "csoh.org", i.e. the load balancer.
+  # The target of the alias - the apex "csoh.org", i.e. the load balancer.
   # (Cloudflare "flattens" the CNAME so the apex resolves correctly.)
   content = var.zone_name
   # true = also send www through Cloudflare's edge, matching the apex so both

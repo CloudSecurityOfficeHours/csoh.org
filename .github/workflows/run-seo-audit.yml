@@ -1,7 +1,7 @@
 # =============================================================================
 # Weekly SEO Audit
 # -----------------------------------------------------------------------------
-# Every Monday at 14:15 UTC (07:15 PT — 15 min after the PageSpeed check), runs
+# Every Monday at 14:15 UTC (07:15 PT - 15 min after the PageSpeed check), runs
 # tools/run_seo_audit.py against the current repo. Writes a per-day audit
 # report under seo-audits/ and appends a row to seo-audits/SCORECARD.md's
 # Internal SEO audit table. If the overall score dropped vs the previous run,
@@ -21,7 +21,7 @@ on:
   # `schedule` runs the workflow on a timer using cron syntax. The five fields
   # of a cron expression are: minute, hour, day-of-month, month, day-of-week.
   # So '15 14 * * 1' = minute 15, hour 14, any day, any month, weekday 1
-  # (Monday) — i.e. every Monday at 14:15 UTC. Cron in GitHub Actions is
+  # (Monday) - i.e. every Monday at 14:15 UTC. Cron in GitHub Actions is
   # ALWAYS in UTC, never your local timezone. The 14:15 is offset 15 min from
   # check-pagespeed so the two SCORECARD updates land as separate PRs (easier
   # to diff and revert independently).
@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
   # `push` fires when commits land on the branch(es) listed below. The `paths`
   # filter narrows that further: this only runs when one of those exact files
-  # changes. So a normal site edit won't trigger an SEO audit — only an edit to
+  # changes. So a normal site edit won't trigger an SEO audit - only an edit to
   # the audit script or this workflow file will.
   # Re-run on changes to the audit script itself, so threshold/logic tweaks
   # take effect on next push.
@@ -45,19 +45,19 @@ on:
 
 # `permissions:` sets what the auto-injected GITHUB_TOKEN (a temporary
 # credential GitHub hands every workflow run) is allowed to do. Here it's
-# locked to read-only — it can read repo contents but cannot push, open PRs,
+# locked to read-only - it can read repo contents but cannot push, open PRs,
 # or file issues. Those write actions instead use a separate, more powerful
 # token minted from the csoh-ci GitHub App (see the first step below), plus
 # CSOH_PAT for the self-approval step. Least-privilege: the default token can
 # only read. Every write here (push, PR, approve, merge, issue) goes through
-# the App token + CSOH_PAT — the same pattern as update-news.yml and
+# the App token + CSOH_PAT - the same pattern as update-news.yml and
 # check-pagespeed.yml.
 permissions:
   contents: read
 
 # `concurrency:` prevents this workflow from running twice at the same time.
 # Any run with the same `group` name waits its turn. cancel-in-progress: false
-# means a queued run does NOT kill the one already running — they execute
+# means a queued run does NOT kill the one already running - they execute
 # one after another, so two audits never race to edit SCORECARD.md.
 concurrency:
   group: run-seo-audit
@@ -82,13 +82,13 @@ jobs:
       # else. This one mints a short-lived (~1 hour) token for the csoh-ci
       # GitHub App. We need it because the default GITHUB_TOKEN is read-only
       # AND, importantly, changes pushed with the default token do NOT trigger
-      # other workflows — but the App token's do, so the PR opened later gets
+      # other workflows - but the App token's do, so the PR opened later gets
       # its required status checks. `id:` names this step so later steps can
       # read its outputs via steps.app-token.*.
       # The `@...` after the action name pins it to an exact commit SHA (the
       # trailing comment notes which version that is). Pinning to a SHA, rather
       # than a moving tag like @v3, stops a hijacked tag from silently running
-      # new code in our pipeline — a supply-chain safety measure.
+      # new code in our pipeline - a supply-chain safety measure.
       - name: Mint installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
@@ -100,7 +100,7 @@ jobs:
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
-      # The VM starts empty — this official action clones the repo onto it so
+      # The VM starts empty - this official action clones the repo onto it so
       # later steps can read and edit files. We hand it the App token (from the
       # step above, via its `outputs.token`) instead of the default one so that
       # commits this job pushes are attributed to the App and can trigger CI.
@@ -157,7 +157,7 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Run the audit. Exit code 1 means score regressed vs prior row —
+      # Run the audit. Exit code 1 means score regressed vs prior row -
       # we capture that into a step output but DON'T fail the job, so the
       # PR still opens and the issue still files.
       - name: Run SEO audit
@@ -174,7 +174,7 @@ jobs:
           # Exit code 1 = the script ran fine but the score regressed: record
           # regressed=true as an output and keep going (we still want the PR
           # and the issue). Exit 0 = no regression. Any other code is a real
-          # crash — print to stderr (>&2) and fail the job with that code.
+          # crash - print to stderr (>&2) and fail the job with that code.
           if [ "$code" = "1" ]; then
             echo "regressed=true" >> "$GITHUB_OUTPUT"
           elif [ "$code" = "0" ]; then
@@ -206,7 +206,7 @@ jobs:
                   if re.match(r'^\| \d{4}-\d{2}-\d{2}\s*\|', line) and ' / ' not in line]
           # Need at least two rows (a before and an after) to describe a drop.
           if len(rows) < 2:
-              print('only one audit row — no regression body to write'); exit(0)
+              print('only one audit row - no regression body to write'); exit(0)
           # The second-to-last row is the previous run; the last is this run.
           prev, new = rows[-2], rows[-1]
           # Pull the date and the first number (the overall score) out of a
@@ -246,7 +246,7 @@ jobs:
       # lists modified tracked files; `git ls-files --others --exclude-standard`
       # lists brand-new untracked files (like today's report). If the combined
       # string is empty (-z), set has_changes=false so the PR step below is
-      # skipped — no point opening an empty PR.
+      # skipped - no point opening an empty PR.
       - name: Detect changed files
         id: changes
         run: |
@@ -258,10 +258,10 @@ jobs:
 
       # A note on "[skip ci]": putting that text in a commit message tells
       # GitHub Actions to NOT run workflows for that commit. We deliberately
-      # do NOT use it here — see why below.
+      # do NOT use it here - see why below.
       # The audit writes a new file (seo-audits/YYYY-MM-DD.md) and modifies
       # SCORECARD.md. Both live under seo-audits/, which the deploy +
-      # site-housekeeping workflows' path filters exclude — so they won't
+      # site-housekeeping workflows' path filters exclude - so they won't
       # be triggered by this PR's merge. No need for [skip ci] in the commit
       # message (which would also suppress the required lint checks and
       # leave the PR blocked indefinitely on required-status-check report).
@@ -286,7 +286,7 @@ jobs:
             - New audit report under `seo-audits/YYYY-MM-DD.md`
             - New row appended to `seo-audits/SCORECARD.md`
 
-            Safe to auto-merge — both files are tracking artifacts, not site content.
+            Safe to auto-merge - both files are tracking artifacts, not site content.
           branch: seo-audit-weekly
           delete-branch: true
           labels: automated, seo
@@ -304,7 +304,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
       # Turn on auto-merge so GitHub squash-merges the PR automatically once
-      # its required status checks pass — no human needed. This uses the App
+      # its required status checks pass - no human needed. This uses the App
       # token (not the PAT) to perform the merge.
       - name: Enable auto-merge
         if: steps.cpr.outputs.pull-request-number != ''
@@ -344,7 +344,7 @@ jobs:
           # is piped in via stdin (`--body-file -`) so the `|` characters in
           # the markdown table rows aren't interpreted by the shell.
           if [ -n "$existing" ]; then
-            echo "Found existing open issue #$existing — appending comment."
+            echo "Found existing open issue #$existing - appending comment."
             printf '%s' "$ISSUE_BODY" | gh issue comment "$existing" \
               --repo "${{ github.repository }}" \
               --body-file -

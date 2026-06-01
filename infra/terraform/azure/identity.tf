@@ -1,6 +1,6 @@
 # This whole file sets up "keyless" deploys to Azure: GitHub Actions proves who
 # it is using a short-lived, signed token (OIDC) instead of a stored password or
-# secret. It's the Azure counterpart to GCP WIF and the AWS OIDC role — an Entra
+# secret. It's the Azure counterpart to GCP WIF and the AWS OIDC role - an Entra
 # ID app registration trusts GitHub's OIDC issuer via a federated credential, and
 # the workflow's token is exchanged for an Azure access token. No client secret
 # is ever created or stored. Background concepts used throughout:
@@ -15,17 +15,17 @@
 #     manages the actual Azure resources (storage, etc.).
 # A "data" source READS existing info instead of creating anything. This one
 # returns details about the identity Terraform itself is currently logged in as
-# (the operator running `terraform apply`) — notably its object ID and tenant
+# (the operator running `terraform apply`) - notably its object ID and tenant
 # ID, reused below as the owner of the app objects and exported as an output.
 data "azuread_client_config" "current" {}
 
 # Two Entra objects together form an app identity, and beginners trip on the
 # distinction:
 #   - an "application" (a.k.a. app registration) is the GLOBAL definition/
-#     blueprint of the app — its name, its client_id, and which external tokens
+#     blueprint of the app - its name, its client_id, and which external tokens
 #     it trusts (the federated credential is attached to it).
 #   - a "service principal" (next resource) is the LOCAL instance of that app
-#     inside THIS tenant — the actual identity that can be granted Azure
+#     inside THIS tenant - the actual identity that can be granted Azure
 #     permissions and that signs in.
 # You need both: the application to define and be trusted, the service principal
 # to receive roles and act. This resource is the application half.
@@ -34,7 +34,7 @@ resource "azuread_application" "github" {
   # site's GitHub publisher identity.
   display_name = "csoh-site-github-publisher"
   # Who may administer this app object in Entra. We set the operator (read from
-  # the data source above) as owner. The "[ ]" make this a list — `owners`
+  # the data source above) as owner. The "[ ]" make this a list - `owners`
   # accepts multiple object IDs even though there's one here.
   owners = [data.azuread_client_config.current.object_id]
 }
@@ -53,14 +53,14 @@ resource "azuread_service_principal" "github" {
 
 # A "federated identity credential" is the heart of keyless auth: instead of a
 # password or client secret, it tells Entra "trust an OIDC token from THIS
-# external issuer, addressed to THIS audience, describing THIS exact subject —
+# external issuer, addressed to THIS audience, describing THIS exact subject -
 # and treat it as proof of identity for this app." When all three match, Entra
 # hands back a short-lived Azure access token. It's the Azure analogue of the
 # AWS trust policy and GCP's WIF provider mapping.
 # The federated credential locks the trust to this repo's `production` GitHub
 # Environment. The deploy jobs declare `environment: production`, so the OIDC
 # sub claim is `repo:OWNER/REPO:environment:production` (not the
-# `ref:refs/heads/...` form) — `subject` must match that. The branch
+# `ref:refs/heads/...` form) - `subject` must match that. The branch
 # restriction is enforced by the GitHub Environment itself (main-only).
 resource "azuread_application_federated_identity_credential" "github" {
   # Which app registration this credential is attached to. `.id` references the
@@ -69,7 +69,7 @@ resource "azuread_application_federated_identity_credential" "github" {
   application_id = azuread_application.github.id
   # A human-readable label for this credential in the Entra portal; cosmetic.
   display_name = "github-production"
-  # Free-text note shown alongside it. The "${...}" is Terraform interpolation —
+  # Free-text note shown alongside it. The "${...}" is Terraform interpolation -
   # it splices variable values into the string. With the variables.tf defaults
   # this reads "...for CloudSecurityOfficeHours/csoh.org".
   description = "GitHub Actions OIDC (production environment) for ${var.github_owner}/${var.github_repo}"
@@ -87,14 +87,14 @@ resource "azuread_application_federated_identity_credential" "github" {
   # must match it exactly or Entra rejects the exchange. With the defaults it
   # resolves to "repo:CloudSecurityOfficeHours/csoh.org:environment:production",
   # so ONLY a job in this repo running in the GitHub "production" Environment is
-  # trusted — any other repo, fork, branch, or environment is refused.
+  # trusted - any other repo, fork, branch, or environment is refused.
   subject = "repo:${var.github_owner}/${var.github_repo}:environment:production"
 }
 
 # An Azure "role assignment" is the three-part grant that actually gives an
 # identity permissions: WHO (a principal) gets WHAT role (a bundle of allowed
 # actions) over WHICH scope (a subscription, resource group, or single
-# resource). This is Azure's RBAC (Role-Based Access Control) system — the
+# resource). This is Azure's RBAC (Role-Based Access Control) system - the
 # rough equivalent of attaching an IAM policy to a role in AWS, except the role
 # (the permission set) and the assignment (granting it here) are separate
 # concepts. Nothing the service principal created above can DO anything until a
@@ -114,14 +114,14 @@ resource "azurerm_role_assignment" "github_blob_writer" {
   scope = azurerm_storage_account.site.id
   # "role_definition_name" is the named permission bundle to grant. Azure ships
   # hundreds of built-in roles; this one is deliberately narrow. The "Data"
-  # roles act on the DATA PLANE (the bytes inside blobs) — exactly what's needed
+  # roles act on the DATA PLANE (the bytes inside blobs) - exactly what's needed
   # to upload the site's files into the $web container. It grants NO control
   # plane rights (creating/deleting/reconfiguring the account itself), so even
   # if this credential leaked it couldn't tear down or repoint the account.
   role_definition_name = "Storage Blob Data Contributor"
   # "principal_id" is WHO receives the role: the service principal created
   # above. `.object_id` is that principal's unique ID in the Entra directory
-  # (every directory object — app, service principal, user — has one). This
+  # (every directory object - app, service principal, user - has one). This
   # reference also orders creation: the service principal exists before the
   # grant that targets it.
   principal_id = azuread_service_principal.github.object_id

@@ -1,5 +1,5 @@
 # =============================================================================
-# Response security headers — the edge equivalent of nginx-security-headers.conf
+# Response security headers - the edge equivalent of nginx-security-headers.conf
 # -----------------------------------------------------------------------------
 # Set once at Cloudflare, applied to every response regardless of which origin
 # served it. This is the single source of truth for the site's security
@@ -33,14 +33,14 @@ resource "cloudflare_ruleset" "security_headers" {
     ref         = "set_security_headers"
     description = "Set HSTS, CSP, and the rest on all responses"
     # "expression" is Cloudflare's rule language deciding which requests match.
-    # "true" means "match everything" — these headers go on every response.
+    # "true" means "match everything" - these headers go on every response.
     expression = "true"
     # "rewrite" is the action for the headers phase: add/replace response headers.
     action = "rewrite"
     # The rule is live. Set false to keep it defined but turned off.
     enabled = true
 
-    # "action_parameters" carries the details of what the action does — here, the
+    # "action_parameters" carries the details of what the action does - here, the
     # exact headers to set. Each "headers" block sets one response header.
     action_parameters {
       # Each header block has: "name" (the HTTP header), "operation" ("set"
@@ -54,7 +54,7 @@ resource "cloudflare_ruleset" "security_headers" {
         value     = "max-age=31536000; includeSubDomains; preload"
       }
       # "nosniff" stops browsers from guessing a file's type and running, say, a
-      # text file as JavaScript — a common attack vector.
+      # text file as JavaScript - a common attack vector.
       headers {
         name      = "X-Content-Type-Options"
         operation = "set"
@@ -113,7 +113,7 @@ resource "cloudflare_ruleset" "security_headers" {
 
   # A "lifecycle" block tunes how Terraform manages this resource.
   # "ignore_changes" lists attributes Terraform should STOP comparing against the
-  # live cloud state — so differences there won't trigger an update. Here it is a
+  # live cloud state - so differences there won't trigger an update. Here it is a
   # deliberate workaround for a provider bug (explained just below):
   lifecycle {
     # The cloudflare v4 provider returns this rule's multi-header block in a
@@ -126,7 +126,7 @@ resource "cloudflare_ruleset" "security_headers" {
 }
 
 # =============================================================================
-# Legacy redirects — the edge equivalent of the .htaccess RewriteRules
+# Legacy redirects - the edge equivalent of the .htaccess RewriteRules
 # -----------------------------------------------------------------------------
 # The /csoh/* prefix strip and the bare /index.php redirect. Rules evaluate
 # top-to-bottom; redirect is terminating. Verify with curl after apply (see the
@@ -166,7 +166,7 @@ resource "cloudflare_ruleset" "redirects" {
         target_url {
           # wildcard_replace(input, pattern, replacement): take the full request
           # URL, match "https://www.<anything>", and rebuild it without the
-          # "www." — "$${1}" inserts whatever the "*" matched. (The doubled $$ is
+          # "www." - "$${1}" inserts whatever the "*" matched. (The doubled $$ is
           # Terraform escaping so it passes a literal "${1}" through to Cloudflare
           # instead of trying to interpolate it itself.)
           expression = "wildcard_replace(http.request.full_uri, \"https://www.*\", \"https://$${1}\")"
@@ -199,7 +199,7 @@ resource "cloudflare_ruleset" "redirects" {
     }
   }
 
-  # The old PHP home page URL — send it to the real home page.
+  # The old PHP home page URL - send it to the real home page.
   rules {
     ref         = "bare_index_php"
     description = "/index.php -> home"
@@ -221,7 +221,7 @@ resource "cloudflare_ruleset" "redirects" {
 }
 
 # =============================================================================
-# Cache rules — uniform caching across all three origins
+# Cache rules - uniform caching across all three origins
 # -----------------------------------------------------------------------------
 # The object-storage origins (S3, Azure) don't emit the same Cache-Control the
 # nginx container did, so we set caching at the edge instead. edge_ttl controls
@@ -229,7 +229,7 @@ resource "cloudflare_ruleset" "redirects" {
 # client. Mirrors the nginx tiers: search.html 60s, HTML/XML 1h, assets 1y.
 # =============================================================================
 # A third ruleset, in the cache-settings phase. These rules decide how long each
-# kind of file is cached — at Cloudflare's edge AND in the visitor's browser.
+# kind of file is cached - at Cloudflare's edge AND in the visitor's browser.
 resource "cloudflare_ruleset" "cache" {
   zone_id     = var.zone_id
   name        = "csoh-cache"
@@ -242,7 +242,7 @@ resource "cloudflare_ruleset" "cache" {
   # Tier 1: the search page. It must stay fresh, so cache it only briefly.
   rules {
     ref         = "cache_search_html"
-    description = "search.html — effectively uncached (60s)"
+    description = "search.html - effectively uncached (60s)"
     # Match exactly the /search.html path.
     expression = "http.request.uri.path eq \"/search.html\""
     # This action sets the caching rules carried in action_parameters below.
@@ -273,7 +273,7 @@ resource "cloudflare_ruleset" "cache" {
   # cache for a very long time.
   rules {
     ref         = "cache_assets_immutable"
-    description = "CSS/JS/images — 1 year immutable"
+    description = "CSS/JS/images - 1 year immutable"
     # Match by file extension. "in { ... }" tests whether the URL's extension is
     # one of the listed values (space-separated set).
     expression = "http.request.uri.path.extension in {\"css\" \"js\" \"png\" \"jpg\" \"jpeg\" \"gif\" \"webp\" \"svg\" \"ico\"}"
@@ -297,7 +297,7 @@ resource "cloudflare_ruleset" "cache" {
   # a moderate window.
   rules {
     ref         = "cache_html_xml_short"
-    description = "HTML + XML — 1 hour, revalidate"
+    description = "HTML + XML - 1 hour, revalidate"
     # Match .html and .xml files by extension.
     expression = "http.request.uri.path.extension in {\"html\" \"xml\"}"
     action     = "set_cache_settings"

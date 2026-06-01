@@ -1,4 +1,4 @@
-# Cloudflare edge for csoh.org — the control plane that ties the three cloud
+# Cloudflare edge for csoh.org - the control plane that ties the three cloud
 # origins together. This is where TLS termination, the active/active Load
 # Balancer + health checks, security headers, legacy redirects, caching, and
 # the (free) managed WAF all live. Previously most of this was the GCP load
@@ -21,7 +21,7 @@ terraform {
 
   # A "provider" is the plugin that teaches Terraform how to talk to one specific
   # platform's API (here, Cloudflare). Terraform core has no built-in knowledge
-  # of any cloud — every cloud object is managed through its provider plugin.
+  # of any cloud - every cloud object is managed through its provider plugin.
   # "required_providers" declares which provider plugins this folder needs and
   # which versions are acceptable, so Terraform can download the right ones.
   required_providers {
@@ -39,7 +39,7 @@ terraform {
     }
   }
 
-  # The "backend" decides WHERE Terraform stores its state file — the JSON record
+  # The "backend" decides WHERE Terraform stores its state file - the JSON record
   # mapping the resources defined here to the real objects that exist in
   # Cloudflare. By default state is a local file, but that doesn't work for a
   # team or CI; "gcs" keeps it in a Google Cloud Storage bucket so every run
@@ -58,5 +58,5 @@ terraform {
 # Configure the Cloudflare provider declared above. The block is intentionally
 # empty: we deliberately do NOT put the API token here (secrets must never live
 # in the repo). Instead the provider reads the CLOUDFLARE_API_TOKEN environment
-# variable automatically at runtime — see the auth note in the header above.
+# variable automatically at runtime - see the auth note in the header above.
 provider "cloudflare" {}

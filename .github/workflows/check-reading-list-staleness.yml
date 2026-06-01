@@ -4,31 +4,31 @@
 # Once a month, walks every podcast / blog / newsletter / YouTube channel on
 # cloud-security-reading-list.html, discovers its RSS or Atom feed, and flags
 # anything whose newest post is older than the threshold. The reading list is
-# hand-curated and opinionated, so this workflow NEVER edits the page — it
+# hand-curated and opinionated, so this workflow NEVER edits the page - it
 # only opens (or updates) a tracking issue with the report. A human decides
 # whether to drop, replace, or keep each entry.
 #
 # Broken-link detection for the same page is already covered by the weekly
 # check-broken-links.yml workflow; this one only looks at "is the source
-# still publishing?" — which dead-link checks can't see.
+# still publishing?" - which dead-link checks can't see.
 # =============================================================================
 
 # A GitHub Actions "workflow" is an automated job defined in YAML and stored
 # under .github/workflows/. GitHub watches for the events listed below and,
 # when one fires, spins up a fresh virtual machine (a "runner") to execute the
-# steps. Nothing here runs on our servers — it all runs on GitHub's machines.
+# steps. Nothing here runs on our servers - it all runs on GitHub's machines.
 # This `name:` is the human-friendly label shown in the repo's Actions tab.
 name: Check Reading List Staleness
 
 # `on:` lists the events that trigger this workflow. Any one of them is enough
 # to start a run; they are alternatives, not requirements.
 on:
-  # First of the month, 07:00 UTC. Monthly is plenty — most blogs go quiet
+  # First of the month, 07:00 UTC. Monthly is plenty - most blogs go quiet
   # over weeks, not days, and we don't want a noisy report nagging us.
   # `schedule:` runs the workflow on a timer using cron syntax. A cron string
   # has five space-separated fields (see the trailing comment for their order).
   # Decoded, '0 7 1 * *' means: at minute 0 of hour 7, on day-of-month 1, in
-  # every month, on any day-of-week — i.e. 07:00 UTC on the 1st of each month.
+  # every month, on any day-of-week - i.e. 07:00 UTC on the 1st of each month.
   # An asterisk (*) means "every value" for that field. Times are always UTC.
   schedule:
     - cron: '0 7 1 * *'    # min hour day-of-month month day-of-week
@@ -51,7 +51,7 @@ on:
 # allowed to do. It's a least-privilege control: grant only what the job needs
 # so a bug or a malicious dependency can't do more damage. Anything not listed
 # defaults to no access. Here we can read repo contents and write issues so we
-# can post / update the report — and nothing else (no pushing code, no
+# can post / update the report - and nothing else (no pushing code, no
 # releases, etc.). We never modify source files in this workflow.
 permissions:
   contents: read
@@ -75,7 +75,7 @@ jobs:
   # and could be referenced by other jobs; the name is otherwise arbitrary.
   check-staleness:
     # `runs-on:` picks the runner OS/image. `ubuntu-latest` is GitHub's
-    # standard hosted Linux VM — created clean for this run and thrown away
+    # standard hosted Linux VM - created clean for this run and thrown away
     # afterward, so nothing persists between runs except what we cache or save.
     runs-on: ubuntu-latest
 
@@ -84,12 +84,12 @@ jobs:
     # commands). Steps execute top to bottom on the same runner, sharing its
     # filesystem, so a file written by one step is visible to the next.
     steps:
-      # `uses:` runs a published action — reusable, packaged automation from
+      # `uses:` runs a published action - reusable, packaged automation from
       # the GitHub Marketplace or another repo. This first one, actions/checkout,
       # clones THIS repository onto the runner; without it the runner starts
       # empty and our files wouldn't be here. The `@<40-hex-chars>` pins the
       # action to one exact commit SHA (the `# v6.0.2` notes which release that
-      # is). Pinning to a SHA — rather than a moving tag like `@v6` — is a
+      # is). Pinning to a SHA - rather than a moving tag like `@v6` - is a
       # supply-chain safeguard: the code can't change underneath us even if the
       # tag is later repointed at something malicious.
       - name: Checkout repository
@@ -97,22 +97,22 @@ jobs:
 
       # Installs Python on the runner and puts it on the PATH so the next step
       # can call `python3`. `with:` passes inputs (named settings) to a `uses:`
-      # action — think of them as the action's function arguments. Here the one
+      # action - think of them as the action's function arguments. Here the one
       # input is `python-version: '3.x'`, meaning "any latest Python 3.x."
-      # The checker is a Python script using stdlib only — no pip install.
+      # The checker is a Python script using stdlib only - no pip install.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.x'
 
       # `run:` (instead of `uses:`) executes shell commands directly on the
-      # runner — here, one line invoking our Python script. The script reads
+      # runner - here, one line invoking our Python script. The script reads
       # cloud-security-reading-list.html, looks up each source's feed, and
       # writes its findings to the file named by `--output`. In shell, a
       # command's "exit code" signals success (0) or failure (non-zero); a step
       # is considered failed only if its command exits non-zero. This script
       # deliberately exits 0 even when entries are stale (it writes the markdown
-      # report to staleness.md), so a stale finding does not turn the run red —
+      # report to staleness.md), so a stale finding does not turn the run red -
       # this is a report, not a gate. If the script itself crashes it does exit
       # non-zero, so the step fails and we notice via the normal
       # workflow-failure path.
@@ -143,7 +143,7 @@ jobs:
       # Sticky issue: if an open issue with this exact title exists, replace
       # its body. Otherwise create one. The label gives a stable handle for
       # filtering and for future automation. We use the auto-injected
-      # GITHUB_TOKEN — issues:write was granted above and that's all we need.
+      # GITHUB_TOKEN - issues:write was granted above and that's all we need.
       - name: Open or update tracking issue
         # `env:` defines environment variables available to this step's shell
         # as $GH_TOKEN, $REPO, $RUN_URL. `${{ ... }}` is GitHub Actions'
@@ -188,7 +188,7 @@ jobs:
           # so `set -e` won't abort: if the label already exists the API
           # returns HTTP 409 (conflict), which here is fine to ignore.
           # Ensure the label exists. `gh label create` 409s on duplicate, so
-          # we swallow the error — there's no idempotent flag for this.
+          # we swallow the error - there's no idempotent flag for this.
           gh label create "$label" \
             --color "fbca04" \
             --description "Auto-generated reports from check-reading-list-staleness.yml" \
@@ -200,14 +200,14 @@ jobs:
           # group and redirects their combined output into one file. `echo`
           # prints a line; `cat staleness.md` dumps the report the Python step
           # wrote. So the file becomes: a header link to this run, a blank
-          # line, the report, then a footer note — assembled in order.
+          # line, the report, then a footer note - assembled in order.
           {
             echo "_Auto-updated by [check-reading-list-staleness]($RUN_URL)._"
             echo ""
             cat staleness.md
             echo ""
             echo "---"
-            echo "_The reading list is hand-curated. This issue is a checklist, not a queue —"
+            echo "_The reading list is hand-curated. This issue is a checklist, not a queue -"
             echo "close it when you've decided which (if any) entries to act on; the next"
             echo "monthly run will reopen / refresh it as needed._"
           } > issue-body.md
@@ -230,7 +230,7 @@ jobs:
             --jq ".[] | select(.title == \"$title\") | .number" \
             | head -n1)"
 
-          # `[ -n "$existing" ]` is true when the string is non-empty — i.e. we
+          # `[ -n "$existing" ]` is true when the string is non-empty - i.e. we
           # found a matching open issue. In that case overwrite its body with
           # our freshly assembled file (--body-file) instead of opening a
           # duplicate. Otherwise, create a brand-new issue with that title,

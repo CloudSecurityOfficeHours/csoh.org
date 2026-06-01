@@ -9,11 +9,11 @@
 # What these numbers mean: Cloudflare proxies + caches all production traffic,
 # so these metrics count only requests that missed Cloudflare's edge cache and
 # actually reached Cloud Run. For total-visitor numbers, use Cloudflare zone
-# analytics. These are the right answer for "what is our origin doing" —
+# analytics. These are the right answer for "what is our origin doing" -
 # cold-start behavior, origin error rates, request volume past the cache.
 # A "resource" block tells Terraform to CREATE and manage a real cloud object.
-# The two strings are (1) the resource TYPE — here a Cloud Monitoring
-# dashboard — and (2) a local NAME ("csoh_origin") used only inside this
+# The two strings are (1) the resource TYPE - here a Cloud Monitoring
+# dashboard - and (2) a local NAME ("csoh_origin") used only inside this
 # Terraform code to refer back to this object. (Contrast with a "data" source,
 # which only READS something that already exists instead of creating it.)
 resource "google_monitoring_dashboard" "csoh_origin" {
@@ -45,7 +45,7 @@ resource "google_monitoring_dashboard" "csoh_origin" {
           height = 4
           # `widget` is the actual chart drawn inside this tile.
           widget = {
-            title = "Cloud Run — request rate by response code class"
+            title = "Cloud Run - request rate by response code class"
             # `xyChart` = a time-series line/area chart (X = time, Y = value).
             xyChart = {
               # `dataSets` = the one or more series of data plotted on this
@@ -82,7 +82,7 @@ resource "google_monitoring_dashboard" "csoh_origin" {
                 }
                 # STACKED_AREA stacks the per-class series on top of each other,
                 # so total height = total req/s and each band is one status
-                # class — a quick read on how much traffic is erroring.
+                # class - a quick read on how much traffic is erroring.
                 plotType = "STACKED_AREA"
                 # Plot against the primary (left) Y axis, named "Y1".
                 targetAxis = "Y1"
@@ -99,13 +99,13 @@ resource "google_monitoring_dashboard" "csoh_origin" {
           }
         },
         # Tile 2: top-right panel. `xPos = 6` shifts it 6 columns to the right
-        # so it sits beside Tile 1 (which occupies columns 0–5). Same 6x4 size.
+        # so it sits beside Tile 1 (which occupies columns 0-5). Same 6x4 size.
         {
           xPos   = 6
           width  = 6
           height = 4
           widget = {
-            title = "Cloud Run — request latency percentiles (ms)"
+            title = "Cloud Run - request latency percentiles (ms)"
             xyChart = {
               # Three data sets on one chart: the 50th, 95th, and 99th
               # percentile of request latency. A percentile answers "X% of
@@ -131,7 +131,7 @@ resource "google_monitoring_dashboard" "csoh_origin" {
                   }
                   # `legendTemplate` is the label shown in the chart legend.
                   legendTemplate = "p50"
-                  # A plain line (not stacked) — these series overlay, not add.
+                  # A plain line (not stacked) - these series overlay, not add.
                   plotType   = "LINE"
                   targetAxis = "Y1"
                 },
@@ -153,7 +153,7 @@ resource "google_monitoring_dashboard" "csoh_origin" {
                   targetAxis     = "Y1"
                 },
                 # Data set 3: p99, the slow tail. Same as above with
-                # REDUCE_PERCENTILE_99 — the slowest 1% of requests.
+                # REDUCE_PERCENTILE_99 - the slowest 1% of requests.
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
@@ -185,7 +185,7 @@ resource "google_monitoring_dashboard" "csoh_origin" {
           width  = 6
           height = 4
           widget = {
-            title = "Cloud Run — active instance count"
+            title = "Cloud Run - active instance count"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {

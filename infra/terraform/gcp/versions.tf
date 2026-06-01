@@ -47,7 +47,7 @@ terraform {
     }
   }
 
-  # Terraform records what it has built in a "state file" — a JSON inventory
+  # Terraform records what it has built in a "state file" - a JSON inventory
   # mapping each resource in these .tf files to the real cloud object it
   # created (IDs, settings, etc.). The "backend" decides WHERE that state
   # file lives. "gcs" means store it in a Google Cloud Storage bucket
@@ -56,7 +56,7 @@ terraform {
   # state and prevents two runs from clobbering each other.
   backend "gcs" {
     # The Cloud Storage bucket that holds the state file. This bucket is
-    # created/managed outside this config (a "bootstrap" step) — a backend
+    # created/managed outside this config (a "bootstrap" step) - a backend
     # cannot store its own state, so the bucket must already exist before
     # "terraform init" can use it.
     bucket = "csoh-org-495800-tfstate"
@@ -72,7 +72,7 @@ terraform {
 # manages, so we do not repeat them on each resource. (How Terraform actually
 # logs in to Google is NOT set here: in CI it comes from the short-lived
 # OIDC credentials that GitHub Actions obtains via Workload Identity
-# Federation — see wif.tf — so no long-lived key sits in this file.)
+# Federation - see wif.tf - so no long-lived key sits in this file.)
 provider "google" {
   # The Google Cloud project these resources live in. "var.project_id" reads
   # the value of the "project_id" variable (defined in variables.tf,

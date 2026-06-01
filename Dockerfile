@@ -9,7 +9,7 @@ FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef
 
 # Refresh Alpine packages on top of the pinned base. The digest pin
 # guarantees we start from known bytes, but the packages baked into that
-# digest age — `apk upgrade` pulls current versions from Alpine's repos,
+# digest age - `apk upgrade` pulls current versions from Alpine's repos,
 # picking up security patches (libssl3, libxml2, libpng, etc.) without
 # losing reproducibility on the base layer. Trivy will catch any HIGH/
 # CRITICAL CVEs that survive this step.
@@ -25,7 +25,7 @@ COPY nginx-security-headers.conf /etc/nginx/conf.d/security-headers.conf
 
 # Copy site files. The .dockerignore at the repo root excludes secrets,
 # private keys, internal directories, etc., so they never enter the build
-# context — defense in depth alongside the post-COPY rm/find below.
+# context - defense in depth alongside the post-COPY rm/find below.
 COPY . /usr/share/nginx/html/
 
 # Remove files that should not be served. Belt-and-braces: most of these
@@ -48,7 +48,7 @@ RUN rm -rf /usr/share/nginx/html/.git \
 
 # Remove sensitive file types (scripts, markdown docs, backups, secrets,
 # private keys). The `.env`/`*.pem`/`*.key` patterns are the security-
-# critical ones — even though .dockerignore should have prevented them
+# critical ones - even though .dockerignore should have prevented them
 # from being COPY'd in the first place, this is the second line of defense.
 RUN find /usr/share/nginx/html -name '*.py' -delete && \
     find /usr/share/nginx/html -name '*.pyc' -delete && \

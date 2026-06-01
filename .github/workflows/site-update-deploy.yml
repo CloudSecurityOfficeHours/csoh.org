@@ -1,11 +1,11 @@
 # =============================================================================
-# Site housekeeping — SRI hashes, URL safety, sitemap, preview images
+# Site housekeeping - SRI hashes, URL safety, sitemap, preview images
 # -----------------------------------------------------------------------------
 # Runs on every push to main that touches site files. Walks through a
 # sequence of housekeeping steps (SRI hashes, URL safety, URL normalization,
 # presentations schema, sitemap dates, preview screenshots), committing each
 # one back to main if anything changed. The actual deploy to production is
-# done by `deploy.yml` — this workflow only does the housekeeping that
+# done by `deploy.yml` - this workflow only does the housekeeping that
 # belongs upstream of the deploy.
 #
 # Each step that commits-and-pushes uses
@@ -60,13 +60,13 @@ permissions:
   contents: read
 
 # `concurrency:` stops two runs that share the same `group:` name from
-# executing at the same time — GitHub lets only one run per group proceed and
+# executing at the same time - GitHub lets only one run per group proceed and
 # holds (or cancels) the rest. This `deploy-pipeline` group is shared across
 # all the workflows that push commits to main (site-update-deploy,
 # update-news, normalize-urls) so they queue serially instead of racing and
 # clobbering each other.
 #
-# cancel-in-progress: true — if a newer push is queued while an older
+# cancel-in-progress: true - if a newer push is queued while an older
 # housekeeping run is in flight, cancel the older one so we don't push
 # stale SRI/sitemap state on top of a newer base.
 concurrency:
@@ -95,7 +95,7 @@ jobs:
       # App. Replaces the long-lived PAT_TOKEN we used to use here. We need a
       # non-default token (not the auto-injected GITHUB_TOKEN) because the
       # housekeeping steps below push commits to main and we want those to
-      # trigger downstream workflows — GITHUB_TOKEN-authored commits do not.
+      # trigger downstream workflows - GITHUB_TOKEN-authored commits do not.
       # The App is on the main-branch ruleset bypass list, so direct pushes
       # from this workflow are accepted.
       - name: Mint installation token
@@ -109,8 +109,8 @@ jobs:
         with:
           # `${{ ... }}` is a GitHub Actions expression, evaluated before the
           # step runs. `secrets.NAME` reads an encrypted repo secret (stored
-          # in Settings, never printed in logs) — here the App's credentials.
-          # `client-id` (the Iv23.* string from the App's settings page) —
+          # in Settings, never printed in logs) - here the App's credentials.
+          # `client-id` (the Iv23.* string from the App's settings page) -
           # the older `app-id` (numeric App ID) was deprecated in v3.x.
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
@@ -142,7 +142,7 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The fresh VM has no project tooling pre-configured, so we install what
-      # the scripts need. Install Python — most of the housekeeping scripts
+      # the scripts need. Install Python - most of the housekeeping scripts
       # are Python. `actions/setup-python` puts a Python on PATH; `'3.x'` means
       # "the latest Python 3" (quoted so YAML keeps it a string, not the
       # number 3.0).
@@ -151,7 +151,7 @@ jobs:
         with:
           python-version: '3.x'
 
-      # `run: |` — the `|` is YAML for "a multi-line block"; every indented
+      # `run: |` - the `|` is YAML for "a multi-line block"; every indented
       # line below is one shell command, run in order in the same shell.
       # Install Playwright + Pillow (used by generate_preview.py to capture
       # and resize screenshots) plus a headless Chromium binary.
@@ -187,7 +187,7 @@ jobs:
             # `*.html` is shell-globbed by git itself; commit ONLY HTML files.
             git add '*.html'
             # `[skip ci]` in a commit message tells GitHub Actions NOT to
-            # trigger workflows on this commit — avoids a deploy loop.
+            # trigger workflows on this commit - avoids a deploy loop.
             git commit -m "chore: update SRI hashes for CSS/JS files [skip ci]"
             # If push fails (race with another deploy-pipeline run), pull
             # with rebase and retry. See file header for context.
@@ -197,7 +197,7 @@ jobs:
           fi
 
       # Validate every URL in our HTML against safety lists. We block the
-      # whole deploy if anything unsafe slipped through — this is the
+      # whole deploy if anything unsafe slipped through - this is the
       # deploy-time equivalent of the per-PR check.
       # How "blocking" works: by default, if any command in a step exits with
       # a nonzero code the whole step fails and the rest of the job is
@@ -214,7 +214,7 @@ jobs:
           if grep -q "❌ UNSAFE" url-safety-report.txt; then
             # `::error::` makes GitHub Actions render this as a red error
             # annotation in the run summary.
-            echo "::error::Unsafe URLs detected — blocking normalization and deploy"
+            echo "::error::Unsafe URLs detected - blocking normalization and deploy"
             echo "safe=false" >> "$GITHUB_OUTPUT"
             exit 1
           else
@@ -255,7 +255,7 @@ jobs:
           # re-resolving all ~2,500 every run). The cache auto-does a full
           # re-resolve once it's older than its TTL, so drift is still caught;
           # safety checks on resolved destinations run every time regardless.
-          # The cache is seeded by CI on first run — never commit a local one,
+          # The cache is seeded by CI on first run - never commit a local one,
           # since redirect resolution is IP-dependent.
           python3 tools/normalize_urls.py --apply \
             --cache tools/url_resolution_cache.json 2>&1 | tee normalize-output.txt
@@ -263,16 +263,16 @@ jobs:
           # Exit code 2 from normalize_urls.py = a redirect went to an
           # unsafe destination. Don't deploy; surface as a hard error.
           if [ "$NORM_EXIT" -eq 2 ]; then
-            echo "::error::Normalization detected redirects to unsafe destinations — blocking deploy"
+            echo "::error::Normalization detected redirects to unsafe destinations - blocking deploy"
             exit 1
           fi
           # Other nonzero exits are warnings (couldn't resolve some URLs);
           # `::warning::` shows them as yellow annotations but doesn't fail.
           if [ "$NORM_EXIT" -ne 0 ]; then
-            echo "::warning::URL normalization exited with code $NORM_EXIT — some redirects may not have been resolved"
+            echo "::warning::URL normalization exited with code $NORM_EXIT - some redirects may not have been resolved"
           fi
           # Stage normalized HTML plus the refreshed resolution cache. Scope
-          # the staging to these paths only — other steps (URL safety) may
+          # the staging to these paths only - other steps (URL safety) may
           # leave report files modified, and we don't want to commit those.
           # The cache changes whenever a new URL is resolved, even when no HTML
           # changed, so we commit on either. `git diff --cached --quiet` then
@@ -357,7 +357,7 @@ jobs:
       # Validate that every news source banner referenced in news.html exists
       # on disk. Catches the case where update_news.py:SOURCE_SLUGS gains a
       # new entry but the matching img/news-banners/{slug}.{jpg,webp} pair
-      # was never committed — which silently broke cards before this check
+      # was never committed - which silently broke cards before this check
       # was added. Fails the deploy so the missing banners get generated
       # (see tools/generate_news_banners.py) before going live.
       - name: Check news source banners exist
@@ -370,7 +370,7 @@ jobs:
       - name: Check for missing previews
         id: check_previews
         run: |
-          # `|| true` — don't fail this step if the script exits nonzero;
+          # `|| true` - don't fail this step if the script exits nonzero;
           # we just want the report to grep.
           python3 tools/generate_preview.py --check > preview-check.txt || true
           if grep -q "Found.*resources without previews" preview-check.txt; then
@@ -388,7 +388,7 @@ jobs:
       # compare against the string 'true', not a YAML boolean. If it's 'false'
       # this step (and the next one) are skipped, saving time.
       # Headless-Chromium screenshot every URL that's missing a preview.
-      # Conditional — only runs if the previous step found something missing.
+      # Conditional - only runs if the previous step found something missing.
       - name: Generate missing previews
         if: steps.check_previews.outputs.missing == 'true'
         run: |
@@ -396,7 +396,7 @@ jobs:
 
       # Squeeze ONLY the JPGs the generate step just produced (strip metadata,
       # recompress at quality 85). jpegoptim is idempotent, so re-running it on
-      # the other ~540 already-optimized previews is pure wasted CI time — that
+      # the other ~540 already-optimized previews is pure wasted CI time - that
       # was the bulk of this step's runtime. New previews show up as untracked
       # files; a regenerated one shows as modified. Nothing else writes to
       # img/previews before this step, so git status is an exact list of what
@@ -426,7 +426,7 @@ jobs:
           rm -f new-previews.txt
 
       # Always sync HTML <img src> paths to preview-mapping.json, even
-      # when no new previews were generated this run — past contributors
+      # when no new previews were generated this run - past contributors
       # (humans or the weekly Update Resources model) often type
       # made-up filenames into the HTML that drift from what the
       # screenshot generator actually writes to disk. This step is the
@@ -437,7 +437,7 @@ jobs:
 
       # Commit and push the new preview JPGs + the mapping file. We rely on
       # the credentials persisted by actions/checkout (which used the App
-      # token) — same pattern as the SRI / sitemap / normalize steps above.
+      # token) - same pattern as the SRI / sitemap / normalize steps above.
       # No need to embed the token in the remote URL.
       - name: Commit and push preview images
         run: |

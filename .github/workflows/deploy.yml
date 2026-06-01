@@ -9,7 +9,7 @@
 #         ├─► publish-azure  (Blob $web sync)
 #         └─► publish-gcp    (container build + Trivy scan + Cloud Run deploy)
 #
-# Every cloud uses keyless OIDC auth — no long-lived cloud secrets in the repo.
+# Every cloud uses keyless OIDC auth - no long-lived cloud secrets in the repo.
 # Non-secret resource IDs come from repo Variables (Settings → Variables),
 # populated from the matching `terraform output` (see infra/README.md).
 #
@@ -21,9 +21,9 @@
 # A "workflow" is one automated process GitHub runs for you on its own
 # servers. This whole file IS one workflow. `name:` is just the label shown in
 # the repo's Actions tab so humans can tell workflows apart.
-name: Deploy — build once, publish to AWS + GCP + Azure
+name: Deploy - build once, publish to AWS + GCP + Azure
 
-# `on:` lists the events that TRIGGER this workflow — i.e. what has to happen
+# `on:` lists the events that TRIGGER this workflow - i.e. what has to happen
 # for GitHub to start running it. There can be several triggers.
 on:
   # Trigger 1: a `push` (new commits landing in the repo).
@@ -64,12 +64,12 @@ on:
 # `permissions:` sets what the automatic, per-run GITHUB_TOKEN is allowed to do
 # against THIS repo. We deliberately keep it minimal (least privilege).
 permissions:
-  # Read-only access to the repo contents — enough to check out the code.
+  # Read-only access to the repo contents - enough to check out the code.
   contents: read
   # This is the key line for keyless cloud auth. `id-token: write` lets the run
   # mint a short-lived, signed OIDC (OpenID Connect) token that proves "I am
   # this GitHub workflow." Each cloud is configured to trust that token and
-  # hand back temporary credentials in exchange — so there are NO long-lived
+  # hand back temporary credentials in exchange - so there are NO long-lived
   # cloud keys stored in the repo. Without this line, all three logins fail.
   id-token: write   # required for OIDC token exchange (all three clouds)
 
@@ -90,7 +90,7 @@ concurrency:
 jobs:
   # ---------------------------------------------------------------------------
   # Build the public file set once. tools/build_search_index.py regenerates
-  # /search-index.json, then tools/stage_site.sh produces dist/ — the exact
+  # /search-index.json, then tools/stage_site.sh produces dist/ - the exact
   # set of files that should be public (mirrors nginx.conf blocks + Dockerfile
   # strip list). dist/ is uploaded as an artifact for the object-storage jobs.
   # ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ jobs:
         # `actions/checkout` clones this repo onto the runner. Without it the
         # VM is empty and our scripts/files aren't there. The `@<40-hex>` after
         # the name pins the action to one exact Git commit instead of a movable
-        # tag like `v6` — so a compromised or changed upstream tag can't
+        # tag like `v6` - so a compromised or changed upstream tag can't
         # silently alter what runs. The `# v6.0.2` note records which release
         # that commit corresponds to, for human readers.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -151,7 +151,7 @@ jobs:
       # the AWS and Azure publish jobs to fetch.
       - name: Upload dist artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        # `with:` passes inputs (named settings) to a `uses:` action — like
+        # `with:` passes inputs (named settings) to a `uses:` action - like
         # arguments to a function.
         with:
           # The artifact's name; the download steps refer to it by this name.
@@ -176,7 +176,7 @@ jobs:
     # `environment:` ties this job to a named GitHub Environment ("production").
     # Environments can carry their own variables/secrets and protection rules
     # (e.g. required approvals). They also scope which OIDC tokens the cloud
-    # will trust — the AWS/Azure trust policies require environment=production.
+    # will trust - the AWS/Azure trust policies require environment=production.
     environment: production
     steps:
       # Pull down the dist/ bundle the build job uploaded, into a local dist
@@ -193,11 +193,11 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59  # v6.1.3
         with:
-          # `${{ ... }}` is GitHub Actions expression syntax — it gets
+          # `${{ ... }}` is GitHub Actions expression syntax - it gets
           # substituted before the step runs. `vars.NAME` reads a repo-level
           # Variable (Settings → Variables), used for NON-secret values like
           # this IAM role's ARN. (Sensitive values would use `secrets.NAME`
-          # instead, which GitHub masks in logs — but keyless OIDC means we
+          # instead, which GitHub masks in logs - but keyless OIDC means we
           # have no AWS secrets to store here.) The role's trust policy is what
           # decides whether to accept our OIDC token.
           role-to-assume: ${{ vars.AWS_PUBLISHER_ROLE_ARN }}
@@ -243,7 +243,7 @@ jobs:
 
       # Azure's flavour of keyless OIDC login. Entra ID (Azure's identity
       # system) has a "federated credential" that trusts this workflow's OIDC
-      # token and signs us in as the app below — again, no stored secret.
+      # token and signs us in as the app below - again, no stored secret.
       - name: Azure login (OIDC)
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
         with:
@@ -282,7 +282,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # GCP: build the nginx container, Trivy-scan it, push to Artifact Registry,
   # and deploy a Cloud Run revision. Cloud Run is now a direct Cloudflare
-  # origin (ingress=all, no GCLB / Cloud CDN — so no cache invalidation step).
+  # origin (ingress=all, no GCLB / Cloud CDN - so no cache invalidation step).
   # ---------------------------------------------------------------------------
   publish-gcp:
     needs: build
@@ -300,14 +300,14 @@ jobs:
       IMAGE_NAME: csoh-site
     steps:
       # Unlike the object-storage jobs, GCP rebuilds the site INTO a container
-      # image, so it needs the source code — hence checkout (not just the
+      # image, so it needs the source code - hence checkout (not just the
       # dist/ artifact).
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       # GCP's keyless login: Workload Identity Federation (WIF). The provider
       # below is configured to trust this workflow's OIDC token and then act as
-      # the named service account — no service-account key file involved.
+      # the named service account - no service-account key file involved.
       - name: Authenticate to GCP via WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
         with:
@@ -335,7 +335,7 @@ jobs:
         id: tag
         run: |
           # `$GITHUB_SHA` is the commit being built; `::12` is Bash substring
-          # syntax taking the first 12 chars — a short, unique-enough tag.
+          # syntax taking the first 12 chars - a short, unique-enough tag.
           SHA="${GITHUB_SHA::12}"
           # Assemble the Artifact Registry path: HOST/PROJECT/REPO/IMAGE.
           REF="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}"
@@ -437,10 +437,10 @@ jobs:
           # `describe` succeeds only if that exact image:tag is already in the
           # registry. We discard its output (>/dev/null) and errors (2>&1).
           if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
-            # Already there from a prior run — nothing to do.
-            echo "Image already exists in Artifact Registry — skipping push (idempotent rerun)."
+            # Already there from a prior run - nothing to do.
+            echo "Image already exists in Artifact Registry - skipping push (idempotent rerun)."
           else
-            # Not present yet — upload it.
+            # Not present yet - upload it.
             docker push "${{ steps.tag.outputs.image }}"
           fi
 
@@ -452,7 +452,7 @@ jobs:
       #   --platform managed   Google runs the servers, not us
       #   --ingress all   accept traffic from anywhere; Cloudflare reaches this
       #                   service directly as one of the three origins
-      #   --service-account   the RUNTIME identity the container runs as —
+      #   --service-account   the RUNTIME identity the container runs as -
       #                       separate from the deployer identity above and kept
       #                       minimal (least privilege)
       #   --quiet   don't prompt for confirmation; CI can't answer prompts
@@ -467,7 +467,7 @@ jobs:
             --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
             --quiet
 
-      # Print which revision is now live and its URL — handy confirmation in the
+      # Print which revision is now live and its URL - handy confirmation in the
       # run log that the deploy actually took effect.
       - name: Show deployed revision
         run: |

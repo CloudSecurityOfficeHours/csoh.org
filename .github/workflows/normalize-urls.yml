@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Once a month, scans every link in our HTML, strips tracking parameters
 # (utm_*, fbclid, gclid…), upgrades http → https, and follows redirects to
-# the final destination. Opens a PR with the changes — auto-approved but NOT
+# the final destination. Opens a PR with the changes - auto-approved but NOT
 # auto-merged, so a human can eyeball cross-domain redirects before they land.
 # =============================================================================
 
@@ -13,7 +13,7 @@
 # this YAML to know what to do, when to do it, and what permissions to grant.
 
 # `name` is the human-friendly label shown in the repo's Actions tab and in
-# the list of workflow runs. It has no effect on behavior — just identification.
+# the list of workflow runs. It has no effect on behavior - just identification.
 name: Normalize URLs
 
 # `on` declares the EVENTS that trigger this workflow to run. A workflow with
@@ -24,7 +24,7 @@ on:
   # expression. Cron has five space-separated fields:
   #   minute  hour  day-of-month  month  day-of-week
   # Here `0 8 1 * *` means: minute 0, hour 08, the 1st day of the month, every
-  # month (*), any day of the week (*) — i.e. 08:00 UTC on the 1st each month.
+  # month (*), any day of the week (*) - i.e. 08:00 UTC on the 1st each month.
   # A `*` means "every value." Cron times are ALWAYS in UTC, never local time.
   schedule:
     - cron: '0 8 1 * *'   # min hour day-of-month month day-of-week
@@ -35,7 +35,7 @@ on:
 
 # `permissions` controls what the auto-generated GITHUB_TOKEN (a temporary
 # credential GitHub injects into every run) is allowed to do against THIS
-# repo. Locking it to the minimum needed is a security best practice — a
+# repo. Locking it to the minimum needed is a security best practice - a
 # leaked token can only do what we granted here.
 # Needs `contents: write` because the create-PR action commits & pushes a new
 # branch. `pull-requests: write` lets it open and label the PR.
@@ -62,7 +62,7 @@ concurrency:
 jobs:
   normalize-urls:
     # `runs-on` picks the virtual machine ("runner") GitHub spins up fresh for
-    # this job. `ubuntu-latest` is a clean, throwaway Linux box — nothing
+    # this job. `ubuntu-latest` is a clean, throwaway Linux box - nothing
     # persists between runs, so every step starts from a blank slate.
     runs-on: ubuntu-latest
     # `timeout-minutes` auto-cancels the job if it exceeds this many minutes,
@@ -78,7 +78,7 @@ jobs:
     steps:
       # Mint a short-lived installation token from the csoh-ci GitHub App.
       # Used to push the normalize-urls branch and open the PR. We do NOT
-      # auto-approve the PR — a human reads the diff before merging because
+      # auto-approve the PR - a human reads the diff before merging because
       # cross-domain redirects need attention.
       # `name` is the step's display label in the run log.
       - name: Mint installation token
@@ -87,17 +87,17 @@ jobs:
         id: app-token
         # `uses` runs a prebuilt action published by someone else, instead of
         # our own shell. The part after `@` pins the EXACT version: here it's a
-        # full 40-character commit SHA, which is the most secure way to pin —
+        # full 40-character commit SHA, which is the most secure way to pin -
         # unlike a tag (v3.1.1) a SHA can't be silently re-pointed at malicious
         # code later. The trailing comment just notes the human-readable tag
         # that SHA corresponds to.
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
-        # `with` passes input parameters to the action — like arguments to a
+        # `with` passes input parameters to the action - like arguments to a
         # function. Which inputs exist is defined by the action's own docs.
         with:
           # `client-id` is the modern input name; the older `app-id` (numeric
           # App ID) was deprecated in v3.x of the action.
-          # `${{ ... }}` is GitHub Actions expression syntax — it gets
+          # `${{ ... }}` is GitHub Actions expression syntax - it gets
           # evaluated and substituted before the step runs. `secrets.*` reads
           # an encrypted repo/org secret; its value never appears in logs.
           # These two credentials identify and authenticate the csoh-ci App so
@@ -130,18 +130,18 @@ jobs:
           # reads it as text, not a number.
           python-version: '3.x'
 
-      # This step uses `run:` instead of `uses:` — it executes shell commands
+      # This step uses `run:` instead of `uses:` - it executes shell commands
       # directly on the runner (default shell is bash on Linux). The `|`
       # introduces a multi-line block, so every indented line below is one
       # script run in sequence.
       # Run safety check FIRST. We don't want to follow redirects that lead
-      # to malicious destinations — the redirect resolver could otherwise
+      # to malicious destinations - the redirect resolver could otherwise
       # silently rewrite a benign-looking URL to something bad.
       - name: Check URL safety (must pass before normalization)
         run: |
           # `> file` redirects the script's normal output into a file;
           # `2>&1` folds error output into that same file. `|| true` swallows
-          # a non-zero exit so the workflow doesn't stop here — we decide
+          # a non-zero exit so the workflow doesn't stop here - we decide
           # pass/fail ourselves a few lines down by inspecting the report.
           python3 tools/check_all_site_urls.py > url-safety-report.txt 2>&1 || true
           # Echo the report into the run log so it's visible without opening
@@ -150,9 +150,9 @@ jobs:
           # Halt the workflow if the report flags any unsafe URLs.
           # `grep -q` searches silently and succeeds if the pattern is found.
           if grep -q "❌ UNSAFE" url-safety-report.txt; then
-            # `::error::` is a GitHub Actions log command — this line shows up
+            # `::error::` is a GitHub Actions log command - this line shows up
             # as a red error annotation on the run, not just plain text.
-            echo "::error::Unsafe URLs detected — blocking normalization"
+            echo "::error::Unsafe URLs detected - blocking normalization"
             # A non-zero exit code fails the step, which stops the whole job
             # before any URL rewriting happens.
             exit 1
@@ -164,7 +164,7 @@ jobs:
       # survives for download.
       - name: Upload safety report
         # `if:` decides whether a step runs. `always()` forces this step to
-        # run even when an earlier step failed — so we still get the safety
+        # run even when an earlier step failed - so we still get the safety
         # report when the safety check itself blocked the job above.
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -195,7 +195,7 @@ jobs:
       # commits the files the normalizer changed, pushes it, and opens a PR.
       # We open a PR (rather than committing straight to main) so a human can
       # review the URL rewrites before they go live. It reuses the same
-      # `normalize-urls` branch each month — the old branch is auto-deleted
+      # `normalize-urls` branch each month - the old branch is auto-deleted
       # after merge.
       - name: Create Pull Request
         # Gives the step an id so a later step could read outputs like
@@ -223,7 +223,7 @@ jobs:
             - Upgraded HTTP links to HTTPS
             - Resolved redirecting URLs to their final destinations
 
-            **Review the changes carefully** — especially any cross-domain redirects.
+            **Review the changes carefully** - especially any cross-domain redirects.
 
             Full report is available in the workflow artifacts.
           # Name of the branch the action creates/updates for this PR. Reusing
@@ -239,7 +239,7 @@ jobs:
 
       # No auto-approve step. We deliberately leave the PR un-approved so
       # that a human has to read the diff and click both "approve" and
-      # "merge" — important because cross-domain redirects can change link
+      # "merge" - important because cross-domain redirects can change link
       # destinations in ways that need attention. (The earlier auto-approve
       # via APPROVAL_PAT_TOKEN was just a one-click convenience and added
       # no real safety; removing it is a strict improvement.)

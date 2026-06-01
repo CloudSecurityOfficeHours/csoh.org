@@ -10,24 +10,24 @@
 name: Validate HTML
 
 # -----------------------------------------------------------------------------
-# §1 — Triggers (matches "Anatomy / §1" on github-actions.html)
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
 # When does this workflow run?
 # -----------------------------------------------------------------------------
 # A "workflow" is one automation file. GitHub watches for the events listed
 # under `on:` and, when one fires, runs the jobs defined further down. A
 # workflow contains jobs; a job contains steps. Each event below is a
-# separate trigger — any one of them can start this workflow.
+# separate trigger - any one of them can start this workflow.
 on:
   # `pull_request` fires when someone opens or updates a PR. `paths:` filters
   # it down: the workflow only runs if a changed file matches a pattern here.
   # `'**.html'` means "any .html file in any folder" (** = any directory depth),
-  # so PRs that only edit CSS, scripts, or docs are skipped — no point
+  # so PRs that only edit CSS, scripts, or docs are skipped - no point
   # re-validating then.
   pull_request:
     paths:
       - '**.html'
   # `push` fires when commits land on a branch. `branches:` limits it to
-  # `main`, and `paths:` again limits it to HTML changes — so both conditions
+  # `main`, and `paths:` again limits it to HTML changes - so both conditions
   # must hold for this trigger to fire. This catches direct commits to main
   # that bypass the PR flow, so we don't have to wait for the weekly cron.
   push:
@@ -38,8 +38,8 @@ on:
   # `schedule` runs the workflow on a timer using cron syntax (five fields:
   # minute, hour, day-of-month, month, day-of-week; `*` means "every").
   # `0 7 * * 1` reads: minute 0, hour 7, every day-of-month, every month,
-  # weekday 1 (Monday) — i.e. 07:00 UTC every Monday. GitHub cron is always
-  # UTC, not your local time. This weekly run is a safety net — the last line
+  # weekday 1 (Monday) - i.e. 07:00 UTC every Monday. GitHub cron is always
+  # UTC, not your local time. This weekly run is a safety net - the last line
   # of defense for anything that somehow slipped past both PR and push triggers.
   schedule:
     - cron: '0 7 * * 1'   # cron format: min hour day-of-month month day-of-week
@@ -47,10 +47,10 @@ on:
   workflow_dispatch:
 
 # -----------------------------------------------------------------------------
-# §2 — Permissions (matches "Anatomy / §2" on github-actions.html)
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
 # What this workflow is allowed to do.
 # `contents: read` = can read repo files. `pull-requests: write` = can post
-# review comments. Read-only on the codebase — safer than the default.
+# review comments. Read-only on the codebase - safer than the default.
 # -----------------------------------------------------------------------------
 permissions:
   contents: read
@@ -58,11 +58,11 @@ permissions:
 
 
 # -----------------------------------------------------------------------------
-# §3 — Concurrency (matches "Anatomy / §3" on github-actions.html)
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
 # "Don't let two of these run at the same time."
 # `group` is the lock name; same group + same ref = queued/cancelled.
 # `${{ github.ref }}` makes the lock per-branch/per-PR, so different PRs
-# can validate in parallel — only the SAME PR cancels its old run.
+# can validate in parallel - only the SAME PR cancels its old run.
 # `cancel-in-progress: true` = if you push a new commit to a PR, kill the
 # old validation run and start fresh on the latest commit. Read-only checks
 # are safe to interrupt.
@@ -75,7 +75,7 @@ concurrency:
   cancel-in-progress: true
 
 # -----------------------------------------------------------------------------
-# §4 — Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
 # Each job runs on its own fresh VM ("runner"). Steps inside a job share
 # the same filesystem and run in order; a failed step fails the whole job
 # unless the step is marked `if: always()` or `continue-on-error: true`.
@@ -86,49 +86,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1 — Pull the repo onto the runner so we can read the files.
+      # Step 1 - Pull the repo onto the runner so we can read the files.
       # A step either calls a prebuilt, reusable action with `uses:` (like
       # this one) or runs shell commands with `run:` (see the next step).
       # `actions/checkout@<sha>` is GitHub's official action that clones the
       # repo onto the runner; without it the runner starts empty. The pinned
-      # SHA (instead of @v6) is a security best practice — it prevents a
+      # SHA (instead of @v6) is a security best practice - it prevents a
       # compromised tag from running malicious code on our runner.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      # This step uses `run:` instead of `uses:` — it executes a shell command
+      # This step uses `run:` instead of `uses:` - it executes a shell command
       # on the runner. Here it launches a small Python script that lives in the
       # repo (checked out in Step 1) under tools/.
-      # Step 2 — Refuse inline <script> blocks. Production CSP is
+      # Step 2 - Refuse inline <script> blocks. Production CSP is
       # `script-src 'self'`, so inline scripts are silently blocked in the
-      # browser — they "pass" HTML validation but break behavior. JSON-LD
+      # browser - they "pass" HTML validation but break behavior. JSON-LD
       # and other data-typed <script> blocks are allowed (CSP exempts them).
       - name: Reject inline scripts (CSP gate)
         run: python3 tools/check_no_inline_scripts.py
 
-      # Step 3 — Require width/height on every <svg viewBox>. Without the
+      # Step 3 - Require width/height on every <svg viewBox>. Without the
       # attributes the browser can't derive an aspect ratio at parse time,
       # so the element is laid out at a default size and then jumps to its
-      # CSS-driven size — Cumulative Layout Shift (CLS) that hurts Core
+      # CSS-driven size - Cumulative Layout Shift (CLS) that hurts Core
       # Web Vitals. The attributes only set the aspect ratio; final
       # rendered size still comes from CSS.
       - name: Require SVG dimensions (CLS gate)
         run: python3 tools/check_svg_dimensions.py
 
-      # Step 4 — Run the actual W3C validator. This action wraps the Nu
+      # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
         uses: Cyb3r-Jak3/html5validator-action@443b108eb8e134b63a1f8a8ba0c942d552608ed7  # master 2025-09-19
-        # `with:` passes input parameters into a `uses:` action — like
+        # `with:` passes input parameters into a `uses:` action - like
         # arguments to a function. The keys an action accepts are defined by
         # that action; here we set its `root` and `blacklist` inputs.
         with:
           root: .                                       # scan the whole repo
           # Skip files we don't want validated. The Google verification stub
-          # is intentionally non-standard HTML — Google requires it as-is.
+          # is intentionally non-standard HTML - Google requires it as-is.
           blacklist: google66d489593949bd4c.html
 
-      # Step 5 — Stash the validation log as an "artifact": a file the runner
+      # Step 5 - Stash the validation log as an "artifact": a file the runner
       # saves and attaches to the run so a human can download it from the
       # GitHub run page. The runner's disk is wiped when the job ends, so
       # uploading is the only way to keep the log around. `if: always()` = run
@@ -148,9 +148,9 @@ jobs:
           retention-days: 30                            # auto-delete after 30 days
           if-no-files-found: warn
 
-      # Step 6 — If validation failed AND this is a PR, post the errors as a
+      # Step 6 - If validation failed AND this is a PR, post the errors as a
       # comment so the contributor sees them without digging through logs.
-      # The `if:` here is a guard: the step only runs when BOTH are true —
+      # The `if:` here is a guard: the step only runs when BOTH are true -
       # `failure()` (an earlier step in this job failed) AND `github.event_name`
       # is `pull_request` (this run came from a PR, not a push or the cron).
       # So contributors get feedback on their PR, but pushes/cron stay quiet.

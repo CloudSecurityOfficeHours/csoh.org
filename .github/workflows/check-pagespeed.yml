@@ -6,7 +6,7 @@
 # seo-audits/SCORECARD.md. If any of the 8 category scores dropped vs the
 # previous row, opens a tracking issue so a regression doesn't go unnoticed.
 #
-# The SCORECARD diff is one line in one file — safe to auto-merge.
+# The SCORECARD diff is one line in one file - safe to auto-merge.
 # =============================================================================
 
 # This whole file is a "workflow": a set of automated steps GitHub Actions
@@ -23,17 +23,17 @@ on:
     # A cron expression has five space-separated fields:
     #   minute hour day-of-month month day-of-week
     # Here: minute 0, hour 14, any day-of-month (*), any month (*),
-    # day-of-week 1 (Monday) — i.e. "every Monday at 14:00".
+    # day-of-week 1 (Monday) - i.e. "every Monday at 14:00".
     - cron: '0 14 * * 1'
   # `workflow_dispatch:` adds a "Run workflow" button in the Actions tab so a
   # human can trigger this on demand (e.g. to test it without waiting a week).
   workflow_dispatch:
   # `push:` fires when commits land on a branch. The `branches` and `paths`
   # filters below narrow it down so we only run when it's actually relevant.
-  # Re-run when the checker script changes — exercise the new logic
+  # Re-run when the checker script changes - exercise the new logic
   # immediately on next push.
   push:
-    # Only pushes to the `main` branch count — ignore feature branches.
+    # Only pushes to the `main` branch count - ignore feature branches.
     branches:
       - main
     # ...and only if one of these files changed. A push that touches nothing
@@ -42,8 +42,8 @@ on:
       - 'tools/check_pagespeed.py'
       - '.github/workflows/check-pagespeed.yml'
 
-# `permissions:` controls what the automatic, built-in credential — the
-# `GITHUB_TOKEN` that GitHub injects into every run — is allowed to do.
+# `permissions:` controls what the automatic, built-in credential - the
+# `GITHUB_TOKEN` that GitHub injects into every run - is allowed to do.
 # Granting the least access needed is a security best practice. The detailed
 # comment below explains why this token stays read-only and which other
 # identities do the actual writing.
@@ -86,7 +86,7 @@ jobs:
     # commands we write ourselves). Steps execute in order on the same VM.
     steps:
       # Mint a short-lived (~1h) installation token from the csoh-ci GitHub
-      # App. Same pattern as update-news.yml — App token can trigger
+      # App. Same pattern as update-news.yml - App token can trigger
       # downstream CI on the PR it opens; the default GITHUB_TOKEN can't.
       # `name:` is the human-readable label for this step in the run log.
       - name: Mint installation token
@@ -94,14 +94,14 @@ jobs:
         # e.g. `steps.app-token.outputs.token` further down.
         id: app-token
         # `uses:` runs a prebuilt action published on GitHub. The text after
-        # `@` pins the EXACT commit (a 40-char SHA) of that action — far safer
+        # `@` pins the EXACT commit (a 40-char SHA) of that action - far safer
         # than a movable tag like `v3`, because a SHA can't be changed under us
         # to inject malicious code. The trailing `# v3.1.1` is just a
         # human-friendly note of which release that SHA corresponds to.
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
         # `with:` passes inputs (named parameters) into the action.
         with:
-          # `${{ ... }}` is a GitHub Actions expression — it's evaluated and
+          # `${{ ... }}` is a GitHub Actions expression - it's evaluated and
           # substituted before the step runs. `secrets.NAME` pulls an encrypted
           # value stored in repo/org settings; secrets are never printed in
           # logs. These two identify and prove ownership of the csoh-ci App.
@@ -110,14 +110,14 @@ jobs:
 
       # The runner starts empty, so this standard action clones our repo onto
       # the VM so later steps can read and edit the files.
-      # Full clone — we need the file write access for SCORECARD updates
+      # Full clone - we need the file write access for SCORECARD updates
       # and the history depth for the diff/issue body.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           # Clone using the App token from the previous step (referenced by its
           # `id`), so any commits/pushes are attributed to the App, not the
-          # default GITHUB_TOKEN — that's what lets the PR trigger downstream CI.
+          # default GITHUB_TOKEN - that's what lets the PR trigger downstream CI.
           token: ${{ steps.app-token.outputs.token }}
           # `fetch-depth: 0` clones the FULL git history (the default is a
           # shallow 1-commit clone). We need history for the diff/issue body.
@@ -184,7 +184,7 @@ jobs:
         id: regression
         run: |
           # `python3 <<'PYEOF' ... PYEOF` feeds everything between the markers
-          # to Python as a script (an inline heredoc) — handy for logic too
+          # to Python as a script (an inline heredoc) - handy for logic too
           # fiddly for shell. Quoting the marker ('PYEOF') stops the shell from
           # touching `$` inside, so Python sees the code verbatim.
           python3 <<'PYEOF'
@@ -197,10 +197,10 @@ jobs:
               line for line in text.splitlines()
               if re.match(r"^\| \d{4}-\d{2}-\d{2}\s*\|", line)
           ]
-          # Filter to PageSpeed table rows — they have "/" inside each cell.
+          # Filter to PageSpeed table rows - they have "/" inside each cell.
           ps_rows = [r for r in rows if " / " in r]
           if len(ps_rows) < 2:
-              print("Only one PSI row in SCORECARD — nothing to compare. Skipping.")
+              print("Only one PSI row in SCORECARD - nothing to compare. Skipping.")
               sys.exit(0)
 
           prev_row, new_row = ps_rows[-2], ps_rows[-1]
@@ -222,7 +222,7 @@ jobs:
           # stay above 75. The other three categories are deterministic
           # Lighthouse audits and any drop is a real signal.
           THRESHOLDS = {
-              # label: (min_drop, max_new_score) — both conditions must hold
+              # label: (min_drop, max_new_score) - both conditions must hold
               "Performance":    (10, 75),   # ≥10 drop AND new < 75
               "Accessibility":  (1,  100),  # any drop, regardless of new score
               "Best Practices": (1,  100),
@@ -260,8 +260,8 @@ jobs:
                   print(f"✓ No regressions. {prev_date} → {new_date}")
           PYEOF
 
-      # Did the script change anything? (It always should — appending a
-      # row — but guard against the no-op case.)
+      # Did the script change anything? (It always should - appending a
+      # row - but guard against the no-op case.)
       # This records a `has_changes` true/false output that the next step's
       # `if:` reads, so we only open a PR when there's actually a diff to ship.
       - name: Detect changed files
@@ -278,7 +278,7 @@ jobs:
 
       # Open a PR with the SCORECARD update. Deploy + site-housekeeping
       # workflows have path filters that exclude seo-audits/, so a
-      # SCORECARD-only change won't trigger them — no need for the [skip ci]
+      # SCORECARD-only change won't trigger them - no need for the [skip ci]
       # marker (which would also suppress the required lint checks and
       # leave the PR blocked indefinitely).
       # ([skip ci] is a magic phrase in a commit message that tells GitHub
@@ -328,7 +328,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
 
       # Enable auto-merge. The diff is a single-line SCORECARD append; safe
-      # to merge once status checks pass. No file-allowlist gate needed —
+      # to merge once status checks pass. No file-allowlist gate needed -
       # check_pagespeed.py only touches SCORECARD.md.
       - name: Enable auto-merge
         if: steps.cpr.outputs.pull-request-number != ''
@@ -362,7 +362,7 @@ jobs:
           # `${{ github.repository }}` is a built-in context value that GitHub
           # fills in as "owner/repo" (here CloudSecurityOfficeHours/csoh.org).
           # `--json number --jq ...` returns just the first match's number, or
-          # empty if none — so `existing` is set only when a duplicate exists.
+          # empty if none - so `existing` is set only when a duplicate exists.
           existing=$(gh issue list \
             --repo "${{ github.repository }}" \
             --state open \
@@ -372,9 +372,9 @@ jobs:
             --jq '.[0].number // empty')
           # `[ -n ... ]` is true when the string is NON-empty (we found one).
           if [ -n "$existing" ]; then
-            echo "Found existing open issue #$existing — appending comment."
+            echo "Found existing open issue #$existing - appending comment."
             # Pipe the body in on stdin; `--body-file -` means "read the body
-            # from stdin" — keeps the markdown's `|` chars away from the shell.
+            # from stdin" - keeps the markdown's `|` chars away from the shell.
             printf '%s' "$ISSUE_BODY" | gh issue comment "$existing" \
               --repo "${{ github.repository }}" \
               --body-file -

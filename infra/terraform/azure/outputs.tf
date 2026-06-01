@@ -6,21 +6,21 @@
 # `output "NAME" { ... }` block has a `description` (a human note) and a `value`
 # (what to publish). The values below read attributes off resources defined in
 # the sibling files (storage.tf, identity.tf) using the form
-# `TYPE.NAME.attribute` — for example `azurerm_storage_account.site.name` means
+# `TYPE.NAME.attribute` - for example `azurerm_storage_account.site.name` means
 # "the `name` attribute of the storage account resource named `site`". The
 # GitHub Actions deploy workflow reads these outputs so it knows which storage
 # account to upload to and which identity to log in as, with no value hardcoded
 # in two places.
 #
 # The hostname of the Azure static-website endpoint, e.g.
-# "csohorgsite.z13.web.core.windows.net" (no "https://" prefix — that is why the
+# "csohorgsite.z13.web.core.windows.net" (no "https://" prefix - that is why the
 # description says to strip the scheme). Cloudflare's load balancer treats this
 # hostname as the "Azure origin": one of the three backends it forwards visitor
 # traffic to when it routes a request to the Azure cloud. `primary_web_host` is
 # the bare host; the `..._endpoint` output below is the same thing with the full
 # "https://" URL.
 output "static_website_host" {
-  description = "Azure $web static-website hostname — the Cloudflare LB origin for Azure (strip the https:// scheme from the endpoint)."
+  description = "Azure $web static-website hostname - the Cloudflare LB origin for Azure (strip the https:// scheme from the endpoint)."
   value       = azurerm_storage_account.site.primary_web_host
 }
 
@@ -50,9 +50,9 @@ output "storage_account_name" {
 # keyless: instead of a stored password, the workflow presents a short-lived
 # OIDC token from GitHub and Azure trusts it (this is "OIDC federation"). To
 # start that login, the `azure/login` step must be told which app to
-# authenticate as — that identifier is this client ID, which the workflow reads
+# authenticate as - that identifier is this client ID, which the workflow reads
 # into its AZURE_CLIENT_ID input. A client ID is a public identifier, not a
-# secret (it grants nothing by itself — only the approved GitHub workflow can
+# secret (it grants nothing by itself - only the approved GitHub workflow can
 # complete the federated login), so this output is plain text and is
 # deliberately not marked `sensitive`.
 output "github_client_id" {
@@ -61,11 +61,11 @@ output "github_client_id" {
 }
 
 # The tenant ID is the unique identifier of the Entra ID directory (the Azure
-# "tenant" — your organization's whole identity boundary) that the app above
+# "tenant" - your organization's whole identity boundary) that the app above
 # lives in. The `azure/login` step needs it alongside the client ID to know
 # WHICH directory to authenticate against, and reads it into its AZURE_TENANT_ID
 # input. Rather than referencing a resource we created, this value comes from a
-# `data` source — `data.azuread_client_config.current` (see identity.tf) reads
+# `data` source - `data.azuread_client_config.current` (see identity.tf) reads
 # back facts about whoever is currently running Terraform, and `.tenant_id` is
 # the tenant they are signed into. A tenant ID is not a secret either, so it is
 # published as plain text.

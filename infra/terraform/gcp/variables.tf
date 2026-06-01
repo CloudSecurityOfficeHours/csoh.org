@@ -13,7 +13,7 @@
 #                   every variable here has a default, this configuration runs
 #                   without anyone having to supply values by hand.
 # None of these are marked `sensitive`, because they are all public, non-secret
-# identifiers (project IDs, repo names, a domain) — there are no passwords or
+# identifiers (project IDs, repo names, a domain) - there are no passwords or
 # keys here. (Keyless deploys via OIDC are exactly why no secrets are needed.)
 
 # The GCP "project" is the top-level container that owns and bills for all the
@@ -32,7 +32,7 @@ variable "project_id" {
 # `project_id` above is the human-readable text name; this is its numeric
 # twin). Some Google APIs insist on the number rather than the text ID. Here
 # it is needed to build the long "principalSet://..." identifier in wif.tf
-# that names exactly which GitHub repo is allowed to log in — Workload
+# that names exactly which GitHub repo is allowed to log in - Workload
 # Identity Federation (WIF) is GCP's way of letting an outside system like
 # GitHub Actions authenticate WITHOUT a stored password or key file.
 variable "project_number" {
@@ -56,7 +56,7 @@ variable "region" {
 # The public website address visitors type into their browser. On GCP this is
 # mostly informational (Cloudflare owns the real domain at the edge and
 # forwards traffic to Cloud Run's built-in *.run.app URL), but it is handy to
-# have on hand — for example the uptime/monitoring checks in monitoring.tf
+# have on hand - for example the uptime/monitoring checks in monitoring.tf
 # reference the site by this name.
 variable "domain" {
   description = "Production domain"
@@ -67,14 +67,14 @@ variable "domain" {
 # (Removed: staging_domain. It only fed the GCP managed SSL cert on the
 # now-retired load balancer. Cloudflare terminates TLS at the edge and
 # reaches Cloud Run at its *.run.app hostname, which already has a valid
-# Google cert — no GCP-managed cert, and no staging hostname, required.)
+# Google cert - no GCP-managed cert, and no staging hostname, required.)
 
 # The next three variables together pin down EXACTLY which GitHub repository
 # and branch are trusted to deploy this site, with no stored credentials. They
 # are stitched into the WIF rules in wif.tf: when a GitHub Actions run asks GCP
 # for access, GCP checks the run's identity token (its "claims") against these
 # values and only hands back a short-lived token if they match. This is the
-# heart of "least privilege" + "keyless" auth — only the right repo/branch,
+# heart of "least privilege" + "keyless" auth - only the right repo/branch,
 # nothing else, can ever act as the deployer identity.
 
 # Which GitHub account (organization or user) owns the repo. Combined with

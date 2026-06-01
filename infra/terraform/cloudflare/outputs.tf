@@ -3,14 +3,14 @@
 # of outputs as the official "return values" of this Cloudflare configuration:
 # other people, scripts, or other Terraform setups can read them with
 # "terraform output <name>" instead of having to dig through the cloud console.
-# Outputs never create or change anything — they only expose information about
+# Outputs never create or change anything - they only expose information about
 # resources that were already created in the other .tf files in this folder
 # (zone.tf, load_balancer.tf, rules.tf, etc.).
 
 # Output #1: the public hostname of the load balancer that serves the live site.
 # "description" is human-readable help text shown next to the value.
 # "value" is what gets returned. Here we reference an attribute of another
-# resource using the form  <resource_type>.<resource_name>.<attribute> —
+# resource using the form  <resource_type>.<resource_name>.<attribute> -
 # cloudflare_load_balancer.site is the Load Balancer resource defined in
 # load_balancer.tf, and ".name" is its hostname (set to the apex domain,
 # e.g. "csoh.org"). This is the single front door in front of all three clouds
@@ -26,7 +26,7 @@ output "load_balancer_hostname" {
 # origins: AWS CloudFront, GCP Cloud Run, Azure Blob) that the load balancer can
 # send traffic to. The pool's ".id" is a machine-generated identifier created
 # by Cloudflare when the pool is made (it is not something we chose). Surfacing
-# it makes troubleshooting and API/CLI calls easier — e.g. you can look the pool
+# it makes troubleshooting and API/CLI calls easier - e.g. you can look the pool
 # up directly by ID instead of by name.
 output "pool_id" {
   description = "Load Balancer pool holding the three cloud origins."

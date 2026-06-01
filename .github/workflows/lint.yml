@@ -3,17 +3,17 @@
 # -----------------------------------------------------------------------------
 # Quality gate for code & GitHub Actions on every push and PR. Three checks:
 #
-#   1. actionlint  — workflow syntax + shellcheck on inline `run:` blocks.
+#   1. actionlint  - workflow syntax + shellcheck on inline `run:` blocks.
 #                    Catches things like unquoted variables, typo'd `uses:`
 #                    versions, bad `if:` expressions BEFORE we ship.
-#   2. ruff        — Python lint on the .py housekeeping scripts. Catches
+#   2. ruff        - Python lint on the .py housekeeping scripts. Catches
 #                    real bugs (unused imports, undefined names, bare
 #                    `except`) without nitpicking on style.
-#   3. yamllint    — structural sanity on every YAML file with a config that's
+#   3. yamllint    - structural sanity on every YAML file with a config that's
 #                    relaxed for GitHub Actions quirks (see .yamllint.yml).
 #
 # All three are fast (<30s combined). They run as parallel jobs so failures
-# in one check don't hide failures in the others — you see everything at once.
+# in one check don't hide failures in the others - you see everything at once.
 # Read-only on the repo; never modifies code, never posts comments.
 # =============================================================================
 
@@ -24,17 +24,17 @@
 name: Lint
 
 # -----------------------------------------------------------------------------
-# §1 — Triggers (matches "Anatomy / §1" on github-actions.html)
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
 # -----------------------------------------------------------------------------
 # `on:` lists the events that start this workflow. Any one of the events below
 # is enough to trigger a run; they are alternatives, not requirements.
 on:
   # `pull_request` fires whenever someone opens or updates a PR. With no
-  # filters it covers PRs targeting any branch — this is the quality gate for
+  # filters it covers PRs targeting any branch - this is the quality gate for
   # incoming changes.
   pull_request:
   # `push` fires when commits land on a branch. `branches:` narrows it to
-  # only the listed branch(es) — here just `main` — as a safety net for
+  # only the listed branch(es) - here just `main` - as a safety net for
   # direct commits that bypass PRs.
   push:
     branches:
@@ -44,7 +44,7 @@ on:
   workflow_dispatch:
 
 # -----------------------------------------------------------------------------
-# §2 — Permissions
+# §2 - Permissions
 # Read-only. The lint job never writes to the repo or posts comments.
 # -----------------------------------------------------------------------------
 # Every run gets an automatic, throwaway credential called GITHUB_TOKEN.
@@ -56,7 +56,7 @@ permissions:
   contents: read
 
 # -----------------------------------------------------------------------------
-# §3 — Concurrency
+# §3 - Concurrency
 # Per-ref lock so a new push to the same PR cancels the in-flight lint run.
 # Different PRs lint in parallel.
 # -----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ permissions:
 # the same group queue up or cancel each other; runs in different groups are
 # unaffected and proceed in parallel.
 concurrency:
-  # `${{ ... }}` is GitHub Actions' expression syntax — it's substituted with
+  # `${{ ... }}` is GitHub Actions' expression syntax - it's substituted with
   # a real value at run time. `github.ref` is the branch/PR ref being built,
   # so each branch or PR gets its own group (e.g. "lint-refs/heads/main").
   group: lint-${{ github.ref }}
@@ -73,16 +73,16 @@ concurrency:
   cancel-in-progress: true
 
 # -----------------------------------------------------------------------------
-# §4 — Jobs and steps
+# §4 - Jobs and steps
 # Three independent jobs running in parallel. Each fails the workflow on its
-# own — we don't want a Python lint failure to mask a workflow lint failure.
+# own - we don't want a Python lint failure to mask a workflow lint failure.
 # -----------------------------------------------------------------------------
 # `jobs:` holds the units of work. Each job runs on its own fresh virtual
 # machine and, unless one job declares it `needs:` another, all jobs start at
 # once and run in parallel. A job is a sequence of `steps:` (below).
 jobs:
   # -------------------------------------------------------------------------
-  # actionlint — checks .github/workflows/*.yml for syntax issues, bad
+  # actionlint - checks .github/workflows/*.yml for syntax issues, bad
   # `uses:` references, malformed `if:` expressions, and (via the bundled
   # shellcheck) shell issues inside `run:` blocks like unquoted variables.
   # -------------------------------------------------------------------------
@@ -98,7 +98,7 @@ jobs:
       # `name:` is the label shown for this step in the run's log.
       - name: Checkout repository
         # `uses:` pulls in a reusable, prepackaged action. This first-party
-        # one copies your repo's code onto the runner — without it the VM is
+        # one copies your repo's code onto the runner - without it the VM is
         # empty. The "@<40-hex-chars>" pins the action to an exact commit SHA
         # (not a moving tag) so a hijacked tag can't swap in malicious code;
         # the trailing "# v6.0.2" comment just notes the human-readable
@@ -117,14 +117,14 @@ jobs:
           fail-on-error: true
 
   # -------------------------------------------------------------------------
-  # ruff — Python linter. Config lives in pyproject.toml. We use the default
+  # ruff - Python linter. Config lives in pyproject.toml. We use the default
   # rule set (E + F + W): catches real bugs without surfacing style nits.
   # -------------------------------------------------------------------------
   # A separate job, so it runs in parallel with actionlint on its own VM.
   ruff:
     runs-on: ubuntu-latest
     steps:
-      # Same checkout step as above — each job's VM starts empty, so every
+      # Same checkout step as above - each job's VM starts empty, so every
       # job that needs the code must check it out for itself.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -135,7 +135,7 @@ jobs:
         uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b  # v4.0.0
 
   # -------------------------------------------------------------------------
-  # yamllint — structural lint for every YAML file. Config in .yamllint.yml
+  # yamllint - structural lint for every YAML file. Config in .yamllint.yml
   # disables the rules that don't fit GitHub Actions YAML (line-length,
   # truthy, document-start). Everything else stays at default.
   # -------------------------------------------------------------------------
@@ -148,7 +148,7 @@ jobs:
 
       # `run:` (instead of `uses:`) executes a shell command on the runner.
       # The ubuntu-latest VM already has Python+pip, so we pip-install yamllint
-      # here — rather than pulling a third-party action — to keep the
+      # here - rather than pulling a third-party action - to keep the
       # supply-chain surface small. Pinning the exact version (==1.38.0) keeps
       # results reproducible: a new release can't silently change which rules
       # fire.

@@ -1,6 +1,6 @@
 # A "resource" block tells Terraform to CREATE and manage a real cloud object
 # (contrast with a "data" source, which only READS something that already
-# exists — you'll see one of those in identity.tf). The two strings after
+# exists - you'll see one of those in identity.tf). The two strings after
 # "resource" are the type ("azurerm_resource_group") and a local name ("site")
 # you use to refer back to this object elsewhere in the code.
 #
@@ -17,7 +17,7 @@ resource "azurerm_resource_group" "site" {
 }
 
 # A Storage Account is Azure's container for blobs (files), and it's where
-# this site's HTML/CSS/JS actually lives — this is the Azure "origin" that
+# this site's HTML/CSS/JS actually lives - this is the Azure "origin" that
 # Cloudflare pulls from. The block below creates a StorageV2 account with a
 # TLS 1.2 floor and HTTPS-only traffic (so the Cloudflare origin leg can run at
 # Full (strict)), serving anonymous reads from the special $web container only.
@@ -31,7 +31,7 @@ resource "azurerm_storage_account" "site" {
   name = var.storage_account_name
   # Place this account inside the resource group created above. Writing
   # "azurerm_resource_group.site.name" REFERENCES that other resource's "name"
-  # attribute — Terraform reads this as a dependency and will create the group
+  # attribute - Terraform reads this as a dependency and will create the group
   # FIRST, then the account. No explicit depends_on is needed; the reference
   # itself wires up the ordering.
   resource_group_name = azurerm_resource_group.site.name
@@ -62,7 +62,7 @@ resource "azurerm_storage_account" "site" {
   allow_nested_items_to_be_public = true # required for the $web static site
 
   # Tags are free-form key/value labels attached to the resource. They don't
-  # change behavior — they're for humans and tooling (cost reports, "who owns
+  # change behavior - they're for humans and tooling (cost reports, "who owns
   # this?", "what created it?"). The whole stack uses the same set.
   tags = {
     project   = "csoh.org"
@@ -75,7 +75,7 @@ resource "azurerm_storage_account" "site" {
 # above. It's a separate block (rather than an argument inside the account)
 # because Azure treats it as its own configuration object. Azure then serves
 # $web over a built-in HTTPS endpoint (https://<account>.zNN.web.core.windows.net)
-# with a managed cert — no LB or CDN required. Azure static websites support a
+# with a managed cert - no LB or CDN required. Azure static websites support a
 # 404 document but have no 403 concept (there are no forbidden objects in $web),
 # which is fine: we never upload sensitive files (see tools/site-publish.filter).
 resource "azurerm_storage_account_static_website" "site" {

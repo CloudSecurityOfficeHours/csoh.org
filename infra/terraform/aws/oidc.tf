@@ -9,7 +9,7 @@
 #     describing that run. AWS can be told to trust those tokens.
 #   - IAM = AWS's permission system (Identity and Access Management): "roles"
 #     bundle permissions; something trusted can temporarily "assume" a role.
-# Keyless deploy from GitHub Actions — the AWS counterpart to GCP's
+# Keyless deploy from GitHub Actions - the AWS counterpart to GCP's
 # Workload Identity Federation. GitHub mints an OIDC token for the workflow
 # run; AWS STS exchanges it for short-lived credentials. No static
 # AWS_ACCESS_KEY_ID secret ever lives in the repo.
@@ -26,9 +26,9 @@ resource "aws_iam_openid_connect_provider" "github" {
   client_id_list = ["sts.amazonaws.com"]
 
   # A "thumbprint" is a fingerprint (SHA-1 hash) of the TLS certificate that
-  # secures the issuer URL above — historically AWS used it to pin who it was
+  # secures the issuer URL above - historically AWS used it to pin who it was
   # talking to. GitHub's OIDC certs now chain to a CA AWS already trusts, so
-  # these values are no longer security-load-bearing — but the API field is
+  # these values are no longer security-load-bearing - but the API field is
   # still mandatory, hence the two published GitHub intermediate thumbprints
   # below.
   thumbprint_list = [
@@ -40,10 +40,10 @@ resource "aws_iam_openid_connect_provider" "github" {
 # An IAM "policy" is just a JSON document listing what's allowed/denied. This
 # `aws_iam_policy_document` data source is a Terraform helper that BUILDS that
 # JSON for us in readable HCL instead of hand-writing JSON; ".json" on it later
-# yields the rendered text. Being a "data" source, it creates nothing in AWS —
+# yields the rendered text. Being a "data" source, it creates nothing in AWS -
 # it only assembles a value other resources consume.
 # This particular document is a "trust policy" (a.k.a. assume-role policy): it
-# answers the question "WHO is allowed to assume this role?" — not "what can the
+# answers the question "WHO is allowed to assume this role?" - not "what can the
 # role then do" (that second question is answered by the separate policy below).
 # Trust policy: only this repo's `production` GitHub Environment may assume the
 # role. Because the deploy jobs declare `environment: production`, GitHub mints
@@ -56,12 +56,12 @@ data "aws_iam_policy_document" "github_assume" {
     # The single action this rule permits: exchange a web-identity (OIDC) token
     # for temporary AWS credentials. This is the API call GitHub Actions makes.
     actions = ["sts:AssumeRoleWithWebIdentity"]
-    # "Allow" (vs "Deny") — this statement grants the action above.
+    # "Allow" (vs "Deny") - this statement grants the action above.
     effect = "Allow"
 
     # "principals" = WHO this rule is about. "Federated" means an external
     # identity provider rather than an AWS user. The identifier points at the
-    # OIDC provider we registered above — `aws_iam_openid_connect_provider.github.arn`
+    # OIDC provider we registered above - `aws_iam_openid_connect_provider.github.arn`
     # is a REFERENCE to that resource's ARN (its unique AWS ID). Terraform reads
     # these cross-references to learn the right order to create things in, so it
     # builds the provider first, then this policy that depends on it.
@@ -72,7 +72,7 @@ data "aws_iam_policy_document" "github_assume" {
 
     # "conditions" narrow the rule further by inspecting claims (fields) inside
     # the incoming OIDC token. Without these, ANY GitHub repo's token accepted
-    # by the provider could assume the role — so these two checks are the real
+    # by the provider could assume the role - so these two checks are the real
     # security gate. "StringEquals" means the claim must match exactly.
     # First check: the token's "aud" (audience) claim must equal the AWS STS
     # audience. Confirms the token was minted for AWS and not some other system.
@@ -84,7 +84,7 @@ data "aws_iam_policy_document" "github_assume" {
 
     # Second check: the "sub" (subject) claim identifies exactly which workflow
     # context produced the token. The "${...}" syntax is Terraform interpolation
-    # — it substitutes variable values into the string. So with the defaults in
+    # - it substitutes variable values into the string. So with the defaults in
     # variables.tf this resolves to
     # "repo:CloudSecurityOfficeHours/csoh.org:environment:production", meaning
     # ONLY a job in this repo running in the "production" GitHub Environment is
@@ -98,7 +98,7 @@ data "aws_iam_policy_document" "github_assume" {
 }
 
 # The actual IAM role GitHub Actions becomes when it deploys. A role is an
-# identity with no password — it's "assumed" temporarily and hands back
+# identity with no password - it's "assumed" temporarily and hands back
 # short-lived credentials. Permissions are attached separately (just below).
 resource "aws_iam_role" "publisher" {
   # Fixed, human-readable name; CI references the role by its ARN (see the
@@ -114,7 +114,7 @@ resource "aws_iam_role" "publisher" {
 # This is the role's PERMISSIONS policy (what it may DO once assumed), as
 # opposed to the trust policy above (who may assume it). "Least privilege" is
 # the security principle of granting only the exact actions and exact targets a
-# job needs and nothing more — here: write objects to the one bucket, list it
+# job needs and nothing more - here: write objects to the one bucket, list it
 # (for `aws s3 sync` delete reconciliation), and invalidate this one
 # distribution. So even if this token leaked, it could only touch this one
 # site's bucket and CDN, not the rest of the account.
@@ -125,7 +125,7 @@ data "aws_iam_policy_document" "publisher" {
     # JSON; it has no effect on what's allowed.
     sid = "SyncSiteObjects"
     # Upload new files (PutObject), remove deleted ones (DeleteObject), and list
-    # bucket contents (ListBucket) — exactly what `aws s3 sync` needs to make
+    # bucket contents (ListBucket) - exactly what `aws s3 sync` needs to make
     # the bucket match the built site, including pruning stale files.
     actions = ["s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
     # WHICH objects these actions apply to. S3 distinguishes the bucket itself
@@ -145,7 +145,7 @@ data "aws_iam_policy_document" "publisher" {
     # CloudFront action granted.
     actions = ["cloudfront:CreateInvalidation"]
     # Scoped to just this site's distribution (defined in cloudfront.tf), again
-    # by ARN reference — the role can't touch any other distribution.
+    # by ARN reference - the role can't touch any other distribution.
     resources = [aws_cloudfront_distribution.site.arn]
   }
 }
@@ -156,7 +156,7 @@ data "aws_iam_policy_document" "publisher" {
 # S3 + CloudFront actions.
 resource "aws_iam_role_policy" "publisher" {
   name = "csoh-site-publisher-policy"
-  # Which role to attach to — `.id` here is the role's name. Referencing the
+  # Which role to attach to - `.id` here is the role's name. Referencing the
   # role resource also tells Terraform to create the role before this attachment.
   role = aws_iam_role.publisher.id
   # The permissions, rendered to JSON from the data source above.

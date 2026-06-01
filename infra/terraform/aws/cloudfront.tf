@@ -1,4 +1,4 @@
-# This file provisions AWS CloudFront (Amazon's CDN — content delivery
+# This file provisions AWS CloudFront (Amazon's CDN - content delivery
 # network) plus the small "access control" object that lets CloudFront read
 # our private S3 bucket. In Terraform, a `resource "TYPE" "NAME" { ... }`
 # block declares one real cloud object that Terraform will create and manage:
@@ -12,12 +12,12 @@
 # to it; CloudFront in turn fetches the files from S3.
 #
 # This first resource is an Origin Access Control (OAC): the mechanism that
-# lets CloudFront — and ONLY this CloudFront distribution — read the
+# lets CloudFront - and ONLY this CloudFront distribution - read the
 # otherwise-private S3 bucket. OAC is the modern replacement for the older
 # Origin Access Identity. Some terms: "SigV4" is AWS's standard
-# request-signing scheme — CloudFront cryptographically signs each request it
+# request-signing scheme - CloudFront cryptographically signs each request it
 # sends to S3 so S3 can verify the caller. "AWS:SourceArn" matches this
-# distribution's ARN (Amazon Resource Name — the unique ID/address AWS assigns
+# distribution's ARN (Amazon Resource Name - the unique ID/address AWS assigns
 # every object); the bucket policy in s3.tf pins that ARN, so no other caller
 # is accepted. The net effect: the bucket needs zero public access.
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -48,13 +48,13 @@ resource "aws_cloudfront_distribution" "site" {
   comment = "csoh.org static origin (behind Cloudflare)"
   # Price class controls which of AWS's worldwide edge locations are used.
   # PriceClass_100 = only the cheapest regions (North America + Europe). That
-  # is fine here because Cloudflare — not CloudFront — is the true global edge
+  # is fine here because Cloudflare - not CloudFront - is the true global edge
   # that visitors actually hit; CloudFront only needs to serve Cloudflare.
   price_class = "PriceClass_100" # NA + EU edges; Cloudflare is the real global edge
 
   # An "origin" is the backend CloudFront pulls content from. Here it is our
   # S3 bucket. The values below reference OTHER resources by writing
-  # `TYPE.NAME.attribute` — Terraform reads that attribute from the named
+  # `TYPE.NAME.attribute` - Terraform reads that attribute from the named
   # resource and automatically figures out the right creation order (the
   # bucket and the OAC are built before this distribution). These cross-block
   # references are how Terraform stitches infrastructure together.
@@ -105,7 +105,7 @@ resource "aws_cloudfront_distribution" "site" {
   # the file to serve; "error_caching_min_ttl" is how long, in seconds, to
   # cache that error before re-asking the origin.)
   # 404: missing object (ListBucket is granted, so S3 returns a true 404).
-  # 403: genuinely forbidden (should be rare — we simply don't upload
+  # 403: genuinely forbidden (should be rare - we simply don't upload
   #      sensitive files; see the publish exclude list in CI).
   custom_error_response {
     # Origin said "not found".
@@ -144,7 +144,7 @@ resource "aws_cloudfront_distribution" "site" {
   # identity and encrypts the connection). "SNI" is the part of the TLS
   # handshake where the client says which hostname it wants. Since Cloudflare
   # reaches CloudFront via its built-in *.cloudfront.net hostname, AWS's free
-  # default certificate already matches the SNI name — so Cloudflare origin TLS
+  # default certificate already matches the SNI name - so Cloudflare origin TLS
   # can run at Full (strict), and there is no need to request an ACM certificate
   # (AWS Certificate Manager) or custom domain on this distribution, because the
   # public csoh.org certificate lives on Cloudflare, not here.

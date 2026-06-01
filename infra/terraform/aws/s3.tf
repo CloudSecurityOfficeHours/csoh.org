@@ -8,12 +8,12 @@
 # Terraform will create and manage. TYPE is the kind of object
 # (aws_s3_bucket = an S3 storage bucket); NAME ("site") is the local handle
 # other blocks use to refer to it, e.g. aws_s3_bucket.site.id. S3 is AWS's
-# object storage — think of a bucket as a private folder that holds the
+# object storage - think of a bucket as a private folder that holds the
 # website's files.
 resource "aws_s3_bucket" "site" {
   # The bucket's globally-unique name. `var.bucket_name` pulls the value from
   # the `bucket_name` variable in variables.tf (default "csoh-org-site-origin").
-  # `var.` is how Terraform reads an input variable — keeping the name in one
+  # `var.` is how Terraform reads an input variable - keeping the name in one
   # place rather than hard-coding it here.
   bucket = var.bucket_name
 }
@@ -31,7 +31,7 @@ resource "aws_s3_bucket_versioning" "site" {
   bucket = aws_s3_bucket.site.id
   versioning_configuration {
     # "Enabled" makes S3 keep every past version of an object instead of
-    # overwriting it in place — that is the rollback/forensics trail above.
+    # overwriting it in place - that is the rollback/forensics trail above.
     status = "Enabled"
   }
 }
@@ -62,7 +62,7 @@ resource "aws_s3_bucket_ownership_controls" "site" {
   bucket = aws_s3_bucket.site.id
   rule {
     # "BucketOwnerEnforced" turns ACLs OFF: the bucket owner owns every object
-    # and access is decided purely by IAM/bucket policy. Simpler and safer —
+    # and access is decided purely by IAM/bucket policy. Simpler and safer -
     # there is no ACL left that could accidentally widen access.
     object_ownership = "BucketOwnerEnforced" # ACLs disabled; policy-only access
   }
@@ -70,7 +70,7 @@ resource "aws_s3_bucket_ownership_controls" "site" {
 
 # Encrypt every object at rest. "Server-side encryption" means S3 scrambles
 # the bytes on disk and unscrambles them on read, transparently. This is free,
-# automatic, and what AWS already applies by default — declaring it explicitly
+# automatic, and what AWS already applies by default - declaring it explicitly
 # keeps the intent visible and locked in as code.
 resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
   # Apply this encryption setting to the site bucket.
@@ -85,7 +85,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
 }
 
 # A "data source" (the `data` keyword) READS or COMPUTES something rather than
-# creating a cloud object — the opposite of a `resource`. This particular data
+# creating a cloud object - the opposite of a `resource`. This particular data
 # source is a helper that BUILDS an IAM policy document: instead of writing raw
 # JSON by hand, we describe the rules in HCL and Terraform renders the JSON for
 # us (referenced below as `.json`). IAM is AWS's permission system; a "bucket
@@ -106,13 +106,13 @@ data "aws_iam_policy_document" "site_bucket" {
     # the caller can do nothing beyond what it strictly needs.
     actions = ["s3:GetObject"]
     # `resources` says WHICH objects the rule covers. `${...}` is Terraform
-    # "interpolation" — it splices a value into a string. Here it inserts the
+    # "interpolation" - it splices a value into a string. Here it inserts the
     # bucket's ARN (its unique AWS address) and appends `/*`, meaning "every
     # object inside this bucket".
     resources = ["${aws_s3_bucket.site.arn}/*"]
 
     # `principals` is WHO the rule applies to. Type "Service" plus the
-    # identifier below means the AWS CloudFront service itself is the caller —
+    # identifier below means the AWS CloudFront service itself is the caller -
     # not a user or the public. This is how the bucket trusts CloudFront.
     principals {
       type        = "Service"
@@ -174,6 +174,6 @@ resource "aws_s3_bucket_policy" "site" {
   # Terraform to create the bucket before this policy.
   bucket = aws_s3_bucket.site.id
   # The policy text itself. `.json` renders the data source above into the
-  # exact JSON string AWS expects — we never hand-write that JSON.
+  # exact JSON string AWS expects - we never hand-write that JSON.
   policy = data.aws_iam_policy_document.site_bucket.json
 }

@@ -20,9 +20,9 @@ variable "account_id" {
   type        = string
 }
 
-# The zone-level identifier for the csoh.org domain. Zone-scoped resources —
+# The zone-level identifier for the csoh.org domain. Zone-scoped resources -
 # the DNS records, the Load Balancer published at the apex, and the zone TLS
-# settings (zone.tf) — are attached to this zone via var.zone_id. Also
+# settings (zone.tf) - are attached to this zone via var.zone_id. Also
 # required (no default), for the same reason as account_id.
 variable "zone_id" {
   description = "Cloudflare zone ID for csoh.org."
@@ -30,7 +30,7 @@ variable "zone_id" {
 }
 
 # The human-readable domain name itself. "Apex" (also called the root or naked
-# domain) means csoh.org with no subdomain in front — as opposed to
+# domain) means csoh.org with no subdomain in front - as opposed to
 # www.csoh.org. This value names the Load Balancer and is the CNAME target for
 # the www record (load_balancer.tf).
 #
@@ -43,20 +43,20 @@ variable "zone_name" {
   default     = "csoh.org"
 }
 
-# The next three variables are the real addresses of the three "origins" —
+# The next three variables are the real addresses of the three "origins" -
 # the actual servers behind Cloudflare that hold copies of the site (AWS
 # CloudFront, GCP Cloud Run, Azure static website). Cloudflare's Load Balancer
 # (load_balancer.tf) needs to know each origin's hostname so it can forward
 # requests to them and health-check them.
 #
 # "no scheme" means provide just the hostname (e.g. d111.cloudfront.net), NOT
-# https://d111.cloudfront.net — Cloudflare adds the protocol itself.
+# https://d111.cloudfront.net - Cloudflare adds the protocol itself.
 #
 # These are kept as required variables (no defaults) and fed in at deploy time
 # rather than hardcoded, because each one is an OUTPUT of a different Terraform
 # project. The commands just below show exactly how each hostname is read from
 # the aws/gcp/azure stacks' outputs, so the value here always matches whatever
-# those stacks actually created — no copying stale hostnames by hand:
+# those stacks actually created - no copying stale hostnames by hand:
 #   aws_origin_host   = terraform -chdir=../aws   output -raw cloudfront_domain
 #   gcp_origin_host   = host part of  terraform -chdir=../gcp   output -raw cloud_run_service_url
 #   azure_origin_host = terraform -chdir=../azure output -raw static_website_host
@@ -70,7 +70,7 @@ variable "aws_origin_host" {
 
 # The GCP origin: the *.run.app hostname of the Cloud Run service (the nginx
 # container that scales to zero). Note this is just the host part of the full
-# Cloud Run service URL — see the command comment above for how it's extracted.
+# Cloud Run service URL - see the command comment above for how it's extracted.
 variable "gcp_origin_host" {
   description = "GCP Cloud Run *.run.app hostname (no scheme)."
   type        = string
