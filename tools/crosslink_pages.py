@@ -176,6 +176,9 @@ DENYLIST = {
     "vault",      # ambiguous: HashiCorp/Azure Key Vault depending on context
     "blast",      # only useful in "blast radius"
     "ad",         # shell `ad`, ambiguous
+    "csp",        # cloud prose: usually Cloud Service Provider, not Content Security Policy
+    "sp",         # "NIST SP" (Special Publication) collides with SP - Service Provider
+    "soc",        # ambiguous: Security Operations Center vs the SOC 1/2/3 report family
 }
 
 # Sections of the file to skip wholesale (no links anywhere inside).
@@ -239,7 +242,7 @@ def derive_keys(dt_inner_html: str) -> list[str]:
     """Same logic as crosslink_glossary.derive_keys."""
     text = re.sub(r"<[^>]+>", "", dt_inner_html)
     text = unescape(text).strip()
-    parts = re.split(r"\s*[\u2014\u2013]\s*", text, maxsplit=1)
+    parts = re.split(r"\s+-\s+|\s*[\u2014\u2013]\s*", text, maxsplit=1)
     lhs = parts[0]
     rhs = parts[1] if len(parts) > 1 else ""
     keys: list[str] = []
@@ -452,50 +455,50 @@ def _link_chunk(
     linked_words: list[str],
     href_prefix: str = "glossary.html#",
 ) -> str:
-    """Find the earliest match across all patterns; iterate left-to-right."""
+    """Walk left-to-right. At each step take the EARLIEST match across all
+    patterns and, among matches starting there, the LONGEST. Link it when its
+    slug is unlinked; otherwise emit the whole matched span unchanged and skip
+    past it. Claiming the full longest span (even when its slug is already
+    linked or denylisted) stops a shorter acronym from grabbing the leftover of
+    a longer term - e.g. linking "SOC" out of an already-linked "SOC 2", or
+    "IAM" out of "IAM Access Analyzer"."""
     if not text:
         return text
     out: list[str] = []
     cursor = 0
     while cursor < len(text):
-        # Find the earliest match across all patterns from the cursor.
-        best: tuple[int, int, str, str] | None = None  # (start, end, word, slug)
+        # 1) Earliest position any pattern matches at/after the cursor.
+        earliest: int | None = None
         for pat, _case_sensitive in patterns:
             m = pat.search(text, cursor)
-            if not m:
-                continue
-            word = m.group(1)
-            slug = key_to_slug.get(word.lower())
-            if not slug or slug in linked_slugs:
-                # Try the next match within this pattern beyond this one.
-                # We'll handle skipped slugs by just looking further with
-                # iterative finditer below in a fallback loop.
-                continue
-            if best is None or m.start() < best[0]:
-                best = (m.start(), m.end(), word, slug)
+            if m and (earliest is None or m.start() < earliest):
+                earliest = m.start()
+        if earliest is None:
+            out.append(text[cursor:])
+            break
 
+        # 2) Among matches anchored at `earliest`, take the longest.
+        best: tuple[int, str] | None = None  # (end, word)
+        for pat, _case_sensitive in patterns:
+            m = pat.match(text, earliest)
+            if m and (best is None or m.end() > best[0]):
+                best = (m.end(), m.group(1))
         if best is None:
-            # No more linkable matches - but a pattern may have matched a
-            # slug that was already linked. We need to skip past those too.
-            next_skip = _next_match_anywhere(text, cursor, patterns, key_to_slug)
-            if next_skip is None:
-                out.append(text[cursor:])
-                break
-            # Just emit text up through the unlinkable match and continue.
-            out.append(text[cursor : next_skip])
-            cursor = next_skip
-            # Step at least one char so we don't loop.
-            out.append(text[cursor])
-            cursor += 1
+            out.append(text[cursor : earliest + 1])
+            cursor = earliest + 1
             continue
 
-        start, end, word, slug = best
-        out.append(text[cursor:start])
-        out.append(
-            f'<a class="glossary-link" href="{href_prefix}{slug}">{word}</a>'
-        )
-        linked_slugs.add(slug)
-        linked_words.append(word)
+        end, word = best
+        slug = key_to_slug.get(word.lower())
+        out.append(text[cursor:earliest])
+        if slug and slug not in linked_slugs:
+            out.append(
+                f'<a class="glossary-link" href="{href_prefix}{slug}">{word}</a>'
+            )
+            linked_slugs.add(slug)
+            linked_words.append(word)
+        else:
+            out.append(text[earliest:end])
         cursor = end
     return "".join(out)
 

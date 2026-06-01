@@ -389,7 +389,7 @@
         <p class="page-meta"><time datetime="2026-05-15">Last updated <strong>2026-05-15</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/containers.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
-            <p><strong>The 30-second version:</strong> A <strong>container</strong> is a Linux process (or set of processes) isolated by <em>namespaces</em> and <em>cgroups</em>, packaged with its dependencies into an immutable image. Multiple containers share <em>one host kernel</em> - so the boundary is real but thin. In the cloud, containers run on a VM whose instance metadata service hands out the VM's IAM credentials. A compromised container that can reach IMDS gets the whole VM's cloud permissions.</p>
+            <p><strong>The 30-second version:</strong> A <strong>container</strong> is a Linux process (or set of processes) isolated by <em>namespaces</em> and <em>cgroups</em>, packaged with its dependencies into an immutable image. Multiple containers share <em>one host kernel</em> - so the boundary is real but thin. In the cloud, containers run on a VM whose instance metadata service hands out the VM's <a class="glossary-link" href="glossary.html#term-iam">IAM</a> credentials. A compromised container that can reach IMDS gets the whole VM's cloud permissions.</p>
             <p style="margin-top:0.75rem;">That's the dominant cloud-container risk: <strong>identity chaining</strong> - pivoting from "code execution in one container" to "the cloud role attached to the VM." Add container escapes via privileged flags or kernel CVEs, flat pod-to-pod networking, and pulled-from-public-internet base images, and you have the full container-security surface in the cloud.</p>
         </div>
 
@@ -433,7 +433,7 @@
                 <li><strong>Sub-second startup.</strong> A VM takes 30-90 seconds to boot. A container takes 50ms. When traffic spikes 10x, only containers scale in time.</li>
                 <li><strong>Density.</strong> Hundreds of containers fit on a VM that would host one or two VMs. Cloud compute is billed by the VM; density translates directly to cost.</li>
                 <li><strong>Immutable artifacts.</strong> The image is content-addressed. The same image hash that ran in staging runs in prod - no "works on my machine," no config drift.</li>
-                <li><strong>One artifact across clouds.</strong> An OCI image runs on <a class="glossary-link" href="glossary.html#term-eks">EKS</a>, AKS, GKE, ECS, <a class="glossary-link" href="glossary.html#term-lambda">Cloud Run</a>, Container Apps, App Runner, Lambda (with caveats). The portability argument matters when you have to leave one cloud.</li>
+                <li><strong>One artifact across clouds.</strong> An OCI image runs on <a class="glossary-link" href="glossary.html#term-eks">EKS</a>, AKS, GKE, <a class="glossary-link" href="glossary.html#term-ecs">ECS</a>, <a class="glossary-link" href="glossary.html#term-lambda">Cloud Run</a>, Container Apps, App Runner, Lambda (with caveats). The portability argument matters when you have to leave one cloud.</li>
                 <li><strong>Operability.</strong> Health checks, log shipping, metrics, auto-restart on crash - the container runtime gives you these for free, regardless of language.</li>
             </ul>
             <p>The cost of that efficiency, from a security standpoint, is a shared kernel and a shared network namespace on the host. Both become <a class="glossary-link" href="glossary.html#term-attack-surface">attack surface</a> when the threat model is "untrusted code in a container" instead of "trusted code on a VM."</p>
@@ -443,7 +443,7 @@
             <h2>The boundary - is a container a security boundary?</h2>
             <p>It is not. Or more precisely: a container is a <em>process-isolation</em> boundary, not a <em><a class="glossary-link" href="glossary.html#term-tenant">tenant</a>-isolation</em> boundary. The difference matters.</p>
             <p>If you run two of <em>your own</em> microservices in two containers on the same VM, the isolation is fine for most purposes - the kernel keeps their namespaces separate, cgroups keep one from starving the other. That's process isolation. It works.</p>
-            <p>If you run two <em>different customers'</em> code in two containers on the same VM, the isolation is not fine. A kernel CVE affects both. A misconfigured capability on one container can let it inspect or modify the other. A noisy-neighbor exploit (Spectre, Foreshadow) can leak data across the shared CPU cache. That's a tenant boundary, and the container abstraction was not designed for it.</p>
+            <p>If you run two <em>different customers'</em> code in two containers on the same VM, the isolation is not fine. A kernel <a class="glossary-link" href="glossary.html#term-cve">CVE</a> affects both. A misconfigured capability on one container can let it inspect or modify the other. A noisy-neighbor exploit (Spectre, Foreshadow) can leak data across the shared CPU cache. That's a tenant boundary, and the container abstraction was not designed for it.</p>
             <p>The cloud providers know this. That's why <a href="https://aws.amazon.com/fargate/" target="_blank" rel="noopener noreferrer">AWS Fargate</a>, <a href="https://learn.microsoft.com/en-us/azure/container-apps/" target="_blank" rel="noopener noreferrer">Azure Container Apps</a>, <a href="https://cloud.google.com/run" target="_blank" rel="noopener noreferrer">Cloud Run</a>, and similar managed services run each workload in its own micro-VM (<a href="https://firecracker-microvm.github.io/" target="_blank" rel="noopener noreferrer">Firecracker</a> or equivalent). The container API is preserved; the actual isolation is at the VM level, where the hypervisor is the boundary.</p>
             <p>If you self-host on EKS / AKS / GKE / vanilla VMs, you control where containers land. If two workloads should not share a kernel - different trust levels, customer multi-tenancy, regulated data - use sandbox runtimes (<a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gVisor</a>, <a href="https://katacontainers.io/" target="_blank" rel="noopener noreferrer">Kata Containers</a>) or pin them to different node pools. The platform won't do this for you.</p>
         </section>
@@ -507,11 +507,11 @@
             <h2>Identity chaining - IMDS and stolen cloud roles</h2>
             <p>This is the cloud-specific container risk. Every cloud VM has an Instance Metadata Service at the link-local address 169.254.169.254 (or fd00:ec2::254 on AWS IPv6, similar paths on Azure and GCP). The metadata service hands out, among other things, the IAM credentials of the role attached to the VM.</p>
             <p>By default, containers running on the VM share its network namespace - they can reach 169.254.169.254. A compromised container with code execution can run <code>curl http://169.254.169.254/...</code> and walk away with the VM's full cloud permissions. That's identity chaining: <em>workload compromise → host compromise → cloud compromise</em>, in one hop.</p>
-            <p>This is exactly the Capital One breach pattern (see the <a href="breaches/capital-one.html">Capital One kill chain</a>) - except instead of an SSRF in a WAF, the entry point is whatever runs in your container.</p>
+            <p>This is exactly the Capital One breach pattern (see the <a href="breaches/capital-one.html">Capital One kill chain</a>) - except instead of an <a class="glossary-link" href="glossary.html#term-ssrf">SSRF</a> in a <a class="glossary-link" href="glossary.html#term-waf">WAF</a>, the entry point is whatever runs in your container.</p>
             <h3>The fix has two parts</h3>
             <p><strong>1. Per-workload identity, not per-host.</strong> Every cloud now offers a way to give an individual workload (pod, container, function) its own short-lived cloud credentials, scoped to that workload only:</p>
             <ul>
-                <li>AWS - <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a> on EKS, <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a>, task roles on <a class="glossary-link" href="glossary.html#term-ecs">ECS</a>, function roles on Lambda.</li>
+                <li>AWS - <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a> on EKS, <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a>, task roles on ECS, function roles on Lambda.</li>
                 <li>Azure - <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">Workload Identity</a> on AKS (federated to Entra), managed identity per Container Apps revision.</li>
                 <li>GCP - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">Workload Identity Federation</a> on GKE, per-revision service account on Cloud Run.</li>
             </ul>
@@ -538,8 +538,8 @@
             <h3>What containment looks like</h3>
             <ul>
                 <li><strong>Network policies.</strong> On Kubernetes, <a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener noreferrer">NetworkPolicy</a> resources define allowed ingress/egress per pod. Default-deny in production namespaces, then explicitly allow what's needed.</li>
-                <li><strong><a class="glossary-link" href="glossary.html#term-service-mesh">Service mesh</a>.</strong> Istio, Linkerd, Cilium, Consul - mTLS between services, identity-based authorization, traffic-flow telemetry. Brings the "every connection is authenticated" zero-trust model down to the pod level.</li>
-                <li><strong>Egress controls.</strong> Restrict outbound to a curated allow-list (your package registries, your dependencies, your APIs). Egress proxies (Cilium's L7 policies, NAT gateways with allow-list rules, service mesh egress gateways) make this practical.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-service-mesh">Service mesh</a>.</strong> Istio, Linkerd, Cilium, Consul - <a class="glossary-link" href="glossary.html#term-mtls">mTLS</a> between services, identity-based authorization, traffic-flow telemetry. Brings the "every connection is authenticated" zero-trust model down to the pod level.</li>
+                <li><strong>Egress controls.</strong> Restrict outbound to a curated allow-list (your package registries, your dependencies, your APIs). Egress proxies (Cilium's L7 policies, <a class="glossary-link" href="glossary.html#term-nat">NAT</a> gateways with allow-list rules, service mesh egress gateways) make this practical.</li>
                 <li><strong>No direct external exposure.</strong> Containers behind a load balancer, ingress, or API gateway - never with a public IP directly on the pod.</li>
                 <li><strong>Block link-local addresses.</strong> Drop traffic to 169.254.0.0/16 from containers unless explicitly required.</li>
             </ul>
@@ -551,7 +551,7 @@
             <p>The container image is the artifact that ships to every environment. Compromising it compromises every deploy. The supply chain risks layer up:</p>
             <ul>
                 <li><strong>Public base images.</strong> Pulling <code>FROM ubuntu:latest</code> means inheriting whatever's in that image - including unpatched CVEs, packages you don't need, and a writable root. <a class="glossary-link" href="glossary.html#term-pinning">Pinning</a> to a digest (<code>FROM ubuntu@sha256:...</code>) at least makes the input deterministic; switching to a <strong>distroless</strong> or minimal base (Distroless, Wolfi, Chainguard, Alpine when libc-compatible) shrinks attack surface dramatically.</li>
-                <li><strong>Public dependency repositories.</strong> <a class="glossary-link" href="glossary.html#term-npm">npm</a>, PyPI, RubyGems, Maven Central, NuGet, Go modules. All have been the source of typosquats, <a class="glossary-link" href="glossary.html#term-dependency-confusion">dependency confusion</a> attacks, and account takeovers that injected malicious code. Lockfiles + vulnerability scanning + private mirrors are the standard mitigations.</li>
+                <li><strong>Public dependency repositories.</strong> <a class="glossary-link" href="glossary.html#term-npm">npm</a>, <a class="glossary-link" href="glossary.html#term-pypi">PyPI</a>, RubyGems, Maven Central, NuGet, Go modules. All have been the source of typosquats, <a class="glossary-link" href="glossary.html#term-dependency-confusion">dependency confusion</a> attacks, and account takeovers that injected malicious code. Lockfiles + vulnerability scanning + private mirrors are the standard mitigations.</li>
                 <li><strong>Layer cache poisoning.</strong> Build caches in CI/CD shared across jobs can leak credentials and let one job's layer poison another's image.</li>
                 <li><strong>Registry compromise.</strong> If anyone can push to your image registry, anyone can replace prod images. Lock down registry write access to your CI pipeline; require signed images.</li>
                 <li><strong>Long-running images.</strong> The image you built six months ago still has six-month-old CVEs. Rebuild on a schedule even when the source hasn't changed, so base-image patches flow through.</li>
@@ -561,8 +561,8 @@
                 <li><strong>Scan every image at build and push time</strong> - <a class="glossary-link" href="glossary.html#term-iac-scanners">Trivy</a>, Grype, Snyk, Wiz, the cloud's native scanner (ECR scanning, <a class="glossary-link" href="glossary.html#term-guardduty">Defender for Cloud</a>, Artifact Registry vulnerability scanning). Fail the build on HIGH/CRITICAL.</li>
                 <li><strong>Sign every image</strong> - <a class="glossary-link" href="glossary.html#term-sigstore">Cosign</a> / Sigstore. Push signature attestations to the registry.</li>
                 <li><strong>Verify at deploy time</strong> - admission controllers reject unsigned images. AWS Signer + Kyverno on EKS; Binary Authorization on GKE; Defender admission control on AKS.</li>
-                <li><strong>Generate and store SBOMs</strong> - Syft, the cloud's SBOM tools. When the next big CVE drops, you query the SBOM database instead of running through your fleet image-by-image.</li>
-                <li><strong>SLSA <a class="glossary-link" href="glossary.html#term-provenance">provenance</a></strong> - emit attestations describing which builder built the image from which source. Reject images without provenance in prod.</li>
+                <li><strong>Generate and store SBOMs</strong> - Syft, the cloud's <a class="glossary-link" href="glossary.html#term-sbom">SBOM</a> tools. When the next big CVE drops, you query the SBOM database instead of running through your fleet image-by-image.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-slsa">SLSA</a> <a class="glossary-link" href="glossary.html#term-provenance">provenance</a></strong> - emit attestations describing which builder built the image from which source. Reject images without provenance in prod.</li>
             </ul>
             <p>The pipeline that builds the image is part of the supply chain. See the <a href="ci-cd.html">CI/CD page</a> for how to lock that down.</p>
         </section>
@@ -586,7 +586,7 @@
                 </div>
                 <div class="pillar-card pillar-card-detect">
                     <h3><a href="https://www.wiz.io/" target="_blank" rel="noopener noreferrer">Wiz</a> secured images</h3>
-                    <p>Wiz ships hardened base images bundled with their CNAPP - minimal, signed, scanned in the same plane as the runtime workloads they observe. Differentiator is the closed loop: the image, the registry scan, and the production-runtime detection are all in one product.</p>
+                    <p>Wiz ships hardened base images bundled with their <a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a> - minimal, signed, scanned in the same plane as the runtime workloads they observe. Differentiator is the closed loop: the image, the registry scan, and the production-runtime detection are all in one product.</p>
                 </div>
                 <div class="pillar-card pillar-card-posture">
                     <h3><a href="https://www.rapidfort.com/" target="_blank" rel="noopener noreferrer">RapidFort</a></h3>
@@ -634,9 +634,9 @@
             <ul>
                 <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a> - <a class="glossary-link" href="glossary.html#term-cncf">CNCF</a> project, the de facto open-source runtime-security engine. Rule-based detection on syscalls, container metadata, and Kubernetes audit logs.</li>
                 <li><a href="https://tetragon.io/" target="_blank" rel="noopener noreferrer">Tetragon</a> - from Isovalent/Cilium, eBPF runtime enforcement (can <em>block</em>, not just alert).</li>
-                <li><strong>CNAPP runtime modules</strong> - Wiz, Aqua, Sysdig, CrowdStrike, Defender for Containers. Same idea, packaged as managed agents with SaaS analytics.</li>
+                <li><strong>CNAPP runtime modules</strong> - Wiz, Aqua, Sysdig, CrowdStrike, Defender for Containers. Same idea, packaged as managed agents with <a class="glossary-link" href="glossary.html#term-saas">SaaS</a> analytics.</li>
             </ul>
-            <p>What runtime detection catches: shell spawns inside production containers, processes writing to <code>/etc/shadow</code>, network connections to known C2 infrastructure, capability escalation, attempts to access <code>/proc/1/root</code>, anomalous outbound DNS. The signal is high; tuning the rules to fit your normal workload behavior is the work.</p>
+            <p>What runtime detection catches: shell spawns inside production containers, processes writing to <code>/etc/shadow</code>, network connections to known <a class="glossary-link" href="glossary.html#term-c2">C2</a> infrastructure, capability escalation, attempts to access <code>/proc/1/root</code>, anomalous outbound DNS. The signal is high; tuning the rules to fit your normal workload behavior is the work.</p>
             <p>If you don't have runtime visibility, the answer to "did anything weird run in our containers last month?" is "we don't know."</p>
         </section>
 
@@ -694,7 +694,7 @@
                         </tr>
                         <tr>
                             <th scope="row">Per-workload identity</th>
-                            <td>IRSA, EKS Pod Identity, ECS task roles</td>
+                            <td><a class="glossary-link" href="glossary.html#term-irsa">IRSA</a>, EKS Pod Identity, ECS task roles</td>
                             <td>AKS workload identity (federated to Entra)</td>
                             <td>GKE workload identity, Cloud Run service accounts</td>
                         </tr>
@@ -743,7 +743,7 @@
                     <p>Default-deny network policy. Explicit egress allow-list. mTLS for service-to-service. No direct public IPs on workload containers.</p>
                 </div>
             </div>
-            <p>Layer on top: admission controllers that enforce these defaults (Pod Security Standards, Kyverno, OPA Gatekeeper); runtime detection (Falco, Tetragon, or your CNAPP's runtime module); centralized logs from every container; and an SBOM database for fast CVE response.</p>
+            <p>Layer on top: admission controllers that enforce these defaults (<a class="glossary-link" href="glossary.html#term-pss">Pod Security Standards</a>, Kyverno, <a class="glossary-link" href="glossary.html#term-opa">OPA</a> Gatekeeper); runtime detection (Falco, Tetragon, or your CNAPP's runtime module); centralized logs from every container; and an SBOM database for fast CVE response.</p>
         </section>
 
         <section id="pitfalls">
@@ -773,7 +773,7 @@
             <h3>Tooling</h3>
             <ul>
                 <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a> - runtime security</li>
-                <li><a href="https://trivy.dev/" target="_blank" rel="noopener noreferrer">Trivy</a> - vulnerability and IaC scanning</li>
+                <li><a href="https://trivy.dev/" target="_blank" rel="noopener noreferrer">Trivy</a> - vulnerability and <a class="glossary-link" href="glossary.html#term-iac">IaC</a> scanning</li>
                 <li><a href="https://www.sigstore.dev/" target="_blank" rel="noopener noreferrer">Sigstore</a> &amp; Cosign - signing &amp; provenance</li>
                 <li><a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gVisor</a> - user-space kernel sandbox</li>
                 <li><a href="https://katacontainers.io/" target="_blank" rel="noopener noreferrer">Kata Containers</a> - VM-isolated containers</li>

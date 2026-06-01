@@ -42,6 +42,9 @@ DENYLIST = {
     "registry",
     "principal",
     "first",
+    "csp",
+    "sp",
+    "soc",
 }
 
 
@@ -51,7 +54,7 @@ def derive_keys(dt_inner_html: str) -> list[str]:
     text = unescape(text).strip()
 
     # Split off the long-form description after an em/en dash.
-    parts = re.split(r"\s*[\u2014\u2013]\s*", text, maxsplit=1)
+    parts = re.split(r"\s+-\s+|\s*[\u2014\u2013]\s*", text, maxsplit=1)
     lhs = parts[0]
     rhs = parts[1] if len(parts) > 1 else ""
 
