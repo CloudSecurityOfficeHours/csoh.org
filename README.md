@@ -67,6 +67,45 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | ⚙️ [How We Use GitHub Actions](https://csoh.org/github-actions.html) | Learn CI/CD by reading our heavily-commented workflows |
 | ☁️ [How We Deploy Across AWS, GCP & Azure](https://csoh.org/cloud-deployment.html) | One static site, three active/active cloud origins behind Cloudflare, keyless OIDC deploys - the full dogfooded stack |
+| 🧱 [How We Use Terraform](https://csoh.org/terraform.html) | Learn IaC by reading the line-by-line-commented Terraform that provisions our own multi-cloud infra |
+| 🔀 [Git & Version Control](https://csoh.org/version-control.html) | Version-control fundamentals taught through this repo's own history |
+| 📖 [Cloud Security Reading List](https://csoh.org/cloud-security-reading-list.html) | Books, blogs, podcasts, newsletters & people to follow - staleness-checked monthly |
+| 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
+| 💬 [Community & Signal](https://csoh.org/community.html) | The Signal chat and how to join the conversation between Fridays |
+
+### Career roles, in depth
+
+Deep-dive guides for the specific roles that make up a cloud-security org - day-to-day work, required skills, salary signals, and how to break in.
+
+| Role | Track |
+|---|---|
+| [Cloud Security Engineer](https://csoh.org/cloud-security-engineer.html) | The generalist core role |
+| [Cloud Security Architect](https://csoh.org/cloud-security-architect.html) | Staff+ IC design track |
+| [IAM / Identity Architect](https://csoh.org/cloud-security-iam-architect.html) | Identity-first specialization |
+| [Cloud AppSec / IaC Security Engineer](https://csoh.org/cloud-security-appsec-engineer.html) | Shift-left, pipeline & IaC |
+| [CSPM / CNAPP Analyst](https://csoh.org/cloud-security-cnapp-analyst.html) | Posture & findings triage |
+| [Cloud Detection Engineer](https://csoh.org/cloud-security-detection-engineer.html) | Detection-as-code |
+| [Cloud Incident Responder (DFIR)](https://csoh.org/cloud-security-incident-responder.html) | Cloud forensics & IR |
+| [Cloud Penetration Tester / Red Team](https://csoh.org/cloud-security-penetration-tester.html) | Offensive cloud |
+| [Security SRE / Platform Security Engineer](https://csoh.org/cloud-security-platform-engineer.html) | Security platform & reliability |
+| [Cloud GRC / Compliance Engineer](https://csoh.org/cloud-security-grc-engineer.html) | Governance, risk, audit |
+| [Cloud Security Sales Engineer](https://csoh.org/cloud-security-sales-engineer.html) | Pre-sales / SE track |
+| [Cloud Security Customer Success Engineer](https://csoh.org/cloud-security-customer-success-engineer.html) | Post-sales / CSE track |
+| [Help Desk → Cloud Security](https://csoh.org/help-desk-to-cloud-security.html) | The realistic transition from IT support |
+
+### Hands-on portfolio projects
+
+[Cloud Security Portfolio Projects](https://csoh.org/cloud-security-portfolio-projects.html) is a hub of build-it-yourself projects that prove cloud-security skills to hiring managers. Each has a full step-by-step walkthrough under `portfolio/`:
+
+| Project | What you build |
+|---|---|
+| [Build a multi-account AWS Org with SCPs](https://csoh.org/portfolio/aws-org-scps.html) | 3-account AWS Org, Identity Center, guardrail SCPs, centralized CloudTrail |
+| [Walk every CloudGoat scenario](https://csoh.org/portfolio/cloudgoat.html) | Complete and write up Rhino's CloudGoat AWS-attack labs |
+| [Write a CNAPP comparison](https://csoh.org/portfolio/cnapp-comparison.html) | Trial 3 CNAPPs against one vulnerable account, compare findings |
+| [Build 5 detections in a lab SIEM](https://csoh.org/portfolio/detection-lab.html) | Free SIEM + CloudTrail + Sigma rules, validated with Stratus Red Team |
+| [Prowler audit + remediation](https://csoh.org/portfolio/prowler-audit.html) | Audit your own AWS account, Terraform a fix for every finding |
+| [Recreate the Capital One breach](https://csoh.org/portfolio/recreate-capital-one.html) | Build the vulnerable SSRF/IMDSv1 stack, exploit it, then detect it |
+| [Contribute to OSS cloud security](https://csoh.org/portfolio/open-source-contribution.html) | Ship your first PR to Prowler / Cloud Custodian / Pacu / etc. |
 
 ## 📚 Reference & Practice
 
@@ -75,7 +114,7 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page |
 | 📖 [Glossary](https://csoh.org/glossary.html) | 300+ cloud-security terms, plain-English |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 350+ vendors, 30 categories, vendor-neutral one-liners |
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 240+ tools, labs, CTFs, certifications (auto-refreshed weekly) |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 280+ tools, labs, CTFs, certifications (auto-refreshed weekly) |
 | 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 39+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
 | 🏟️ [Conferences](https://csoh.org/conferences.html) | 27 security & hacker conferences, with pros & cons |
 | 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 10 real cloud breaches mapped to MITRE ATT&CK |
@@ -131,7 +170,22 @@ Step-by-step roadmap from "no cloud experience" to working practitioner: prerequ
 Academic paths for cloud security: when a degree pays off, degree types and what they fit, what to look for in a program, NSA/CISA CAE and equivalent designations, named US universities (research, federal-track, applied), online and professional master's, and international programs (UK, EU, Canada, Australia, Israel, Asia). FAQ schema.
 
 ### 🧭 Cloud Security Careers (`cloud-security-careers.html`)
-Roles and salary bands, what hiring managers actually look for, interview formats, portfolio projects, and how to translate from adjacent roles. FAQ schema.
+Roles and salary bands, what hiring managers actually look for, interview formats, portfolio projects, and how to translate from adjacent roles. FAQ schema. The careers hub fans out to a **role-in-depth series** and a **portfolio-projects hub** (below).
+
+### 🧑‍💼 Career Roles, In Depth (`cloud-security-*.html`)
+A series of one-page-per-role deep dives covering day-to-day work, the skills that actually matter, salary signals, and how to break in: Cloud Security Engineer, Cloud Security Architect (Staff+ IC), IAM / Identity Architect, Cloud AppSec / IaC Security Engineer, CSPM / CNAPP Analyst, Cloud Detection Engineer, Cloud Incident Responder (DFIR), Cloud Penetration Tester / Red Team, Security SRE / Platform Security Engineer, Cloud GRC / Compliance Engineer, Cloud Security Sales Engineer, and Cloud Security Customer Success Engineer. `help-desk-to-cloud-security.html` is the companion transition guide for people coming from IT support. Each role page carries FAQ schema.
+
+### 🛠️ Cloud Security Portfolio Projects (`cloud-security-portfolio-projects.html` + `portfolio/`)
+A hub of build-it-yourself projects that demonstrate real cloud-security skill to hiring managers, each with a full step-by-step walkthrough under `portfolio/`: build a multi-account AWS Org with SCPs, walk every CloudGoat scenario, write a CNAPP comparison, build 5 detections in a lab SIEM, run a Prowler audit and Terraform the fixes, recreate the Capital One breach end to end, and ship a first OSS contribution to a cloud-security project.
+
+### 📖 Cloud Security Reading List (`cloud-security-reading-list.html`)
+A hand-curated, opinionated list of books, blogs, podcasts, newsletters, and people to follow. A monthly GitHub Actions workflow (`check-reading-list-staleness.yml`) discovers each source's feed and flags anything that has gone quiet - it never edits the page, only files a tracking issue for a human to review.
+
+### 🤝 Mentorship (`mentorship.html`)
+How CSOH connects mentors and mentees within the community, what to expect, and how to take part.
+
+### 💬 Community & Signal (`community.html`)
+The community Signal chat and how to join the conversation between Friday sessions.
 
 ### 🧰 Cloud Security Home Lab (`cloud-security-home-lab.html`)
 Free-tier setups across AWS / Azure / GCP, budget guardrails, kill-switches, and the lab progression that builds a real portfolio without a surprise bill.
@@ -233,13 +287,19 @@ A directory of **350+ cloud-security vendors** across 30 categories - CNAPP, CSP
 [MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict - `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
 
 ### ⚙️ How We Use GitHub Actions (`github-actions.html`)
-Learn-by-example explainer for GitHub Actions, using CSOH's workflow files as the teaching material. Covers triggers, concurrency, secrets, the GITHUB_TOKEN vs PAT distinction, the `workflow` scope gotcha, OIDC trust to GCP, and a recommended reading order through our heavily-commented YAML.
+Learn-by-example explainer for GitHub Actions, using CSOH's workflow files as the teaching material. Covers triggers, concurrency, secrets, the GITHUB_TOKEN vs PAT distinction, the `workflow` scope gotcha, OIDC trust to GCP, and a recommended reading order through the workflow files - every one of which is commented line by line (roughly half of each file is explanatory comments) specifically so a newcomer can read it top to bottom and understand it.
 
 ### ☁️ How We Deploy Across AWS, GCP & Azure (`cloud-deployment.html`)
 The dogfooded multi-cloud architecture: one static site served active/active from AWS (S3 + CloudFront), GCP (Cloud Run), and Azure (Blob static website) behind a single Cloudflare edge (TLS, WAF, security headers, redirects, Load Balancer with health-check failover), deployed to each cloud with keyless OIDC. Security controls called out at every layer. Pairs with the GitHub Actions explainer to give a complete CI/CD-to-cloud reference.
 
+### 🧱 How We Use Terraform (`terraform.html`)
+Learn-by-example IaC explainer, using the Terraform that provisions CSOH's own multi-cloud infrastructure (AWS, GCP, Azure, Cloudflare) as the teaching material. Every `.tf` file under `infra/terraform/` is exhaustively commented inline - roughly two of every three lines is a comment, and even core Terraform vocabulary ("resource" vs "data", providers, state, dependencies) is explained in place - specifically so a complete newcomer can read the multi-cloud build end to end and understand it. The third leg of the "Behind the Scenes" developer-docs set alongside GitHub Actions and the multi-cloud deploy page.
+
+### 🔀 Git & Version Control (`version-control.html`)
+Version-control fundamentals - branching, commits, pull requests, and history hygiene - taught through this repository's own workflow.
+
 ### 📚 Resources (`resources.html`)
-Comprehensive catalog of **240+ cloud security resources** organized by 6 categories:
+Comprehensive catalog of **280+ cloud security resources** organized by 6 categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -295,7 +355,7 @@ Comprehensive catalog of **240+ cloud security resources** organized by 6 catego
 
 ### 💬 Chat Resources (`chat-resources.html`)
 Community-shared resources from weekly Zoom sessions:
-- **557+ URLs** shared by community members during live sessions
+- **580+ URLs** shared by community members during live sessions
 - **Security validated** - All URLs automatically checked for malicious patterns
 - **Filterable by date, person, category** - Find resources from specific sessions
 - **Descriptive titles** - Auto-generated from page content
@@ -344,6 +404,9 @@ A plain-English glossary of cloud-security acronyms and concepts:
 
 ### ❓ FAQ (`faq.html`)
 Frequently asked questions covering CSOH's format, mailing list, recording policy, contributing, and presenter pitches. Backed by `FAQPage` schema for rich-snippet eligibility.
+
+### 🌐 About CSOH (`about.html`)
+The mission-and-ethos page: who we are, why CSOH is vendor-neutral and free, and how the community operates. The founder bio with full `Person` / `ProfilePage` schema lives separately at `about-shawn-nunley.html` (see [Author authority](#author-authority-e-e-a-t)).
 
 ### 🤝 Code of Conduct (`code-of-conduct.html`)
 Community standards for every CSOH-organized space - Friday Zoom session, mailing list, GitHub repo. Covers expected and unacceptable behavior, reporting, and enforcement. Adapted from the Contributor Covenant.
@@ -426,7 +489,7 @@ Edit `threat-research.html` directly - each link is a standard `.resource-card` 
 
 ## Features
 
-- Static HTML - no database, no server-side code; deploys to GitHub Pages, Vercel, S3.
+- Static HTML - no database, no server-side code. Published active/active to AWS, GCP & Azure behind a single Cloudflare edge via keyless OIDC (see [How Automation Works](#-how-automation-works)).
 - URL-safety gate - every PR is scanned for unsafe URLs before merge (`check_all_site_urls.py`).
 - RSS feed - `feed.xml` regenerated with each news update. See [RSS_FEED_README.md](RSS_FEED_README.md).
 - Dark mode - toggle plus `prefers-color-scheme` detection, persisted in `localStorage`.
@@ -447,11 +510,24 @@ csoh.org/
 ├── cloud-security-careers.html        # Roles, salaries, interviews, portfolio (FAQ schema)
 ├── cloud-security-home-lab.html       # Free-tier setups, budget guardrails, kill-switches
 ├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
+├── cloud-security-reading-list.html   # Curated reading list (staleness-checked monthly)
+├── cloud-security-portfolio-projects.html # Portfolio projects hub (walkthroughs in portfolio/)
+├── cloud-security-<role>.html         # Career role-in-depth series: engineer, architect,
+│                                      #   iam-architect, appsec-engineer, cnapp-analyst,
+│                                      #   detection-engineer, incident-responder, penetration-tester,
+│                                      #   platform-engineer, grc-engineer, sales-engineer,
+│                                      #   customer-success-engineer (FAQ schema)
+├── help-desk-to-cloud-security.html   # Transition guide: IT help desk -> cloud security
 ├── github-actions.html         # Learn GitHub Actions via our heavily-commented workflows
+├── cloud-deployment.html       # Multi-cloud deploy architecture (the dogfooded stack)
+├── terraform.html              # Learn Terraform via our own multi-cloud IaC
+├── version-control.html        # Git & version-control fundamentals via this repo
 ├── resources.html              # Main resource directory (240+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (557+ URLs)
 ├── sessions.html               # Weekly Zoom session information
+├── community.html              # Community & Signal chat
+├── mentorship.html             # Community mentorship program
 ├── presentations.html          # Archive of recorded presentations
 ├── meetings.html               # Weekly meeting recaps (94+ entries, topic-by-topic)
 ├── ctfs.html                   # Dedicated cloud CTF directory (39+ challenges)
@@ -461,9 +537,12 @@ csoh.org/
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 ├── code-of-conduct.html        # Community Code of Conduct
 ├── privacy.html                # Privacy Policy (no cookies, no trackers, no on-site ads)
+├── about.html                  # About CSOH: mission and ethos
+├── about-shawn-nunley.html     # Founder bio (Person / ProfilePage schema, E-E-A-T)
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages live in /breaches/)
 ├── breaches/                   # 10 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 94 per-meeting recap pages (split from meetings.html)
+├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── cloud-security-best-practices.html  # Practitioner's controls checklist
 ├── shared-responsibility-model.html    # Provider vs. customer security split
 ├── cspm-vs-cnapp.html                  # Tool-category comparison
@@ -518,6 +597,22 @@ csoh.org/
 │   ├── crosslink_glossary.py               # Auto-link every glossary term mention to its <dt> entry
 │   ├── crosslink_pages.py                  # Auto-link glossary terms across the rest of the site
 │   ├── build_meetings_search_index.py      # Build meetings-search-index.json from meetings.html
+│   ├── build_search_index.py               # Build site-wide search-index.json (sections + glossary)
+│   ├── sync_chrome.py                      # Stamp ONE canonical nav + footer onto every page
+│   ├── inject_meeting_topic_links.py       # Inject contextual topic-page links into recaps
+│   ├── generate_og_images.py               # Generate 1200x630 OG social images (top-level pages)
+│   ├── generate_meeting_og_images.py       # Generate OG images for meeting recaps
+│   ├── generate_news_banners.py            # Generate banner images for news sources
+│   ├── generate_webp.py                    # Generate .webp siblings for raster images
+│   ├── wrap_img_webp.py                    # Wrap <img> in <picture> with a WebP <source>
+│   ├── run_seo_audit.py                    # Deterministic structural SEO audit -> SCORECARD
+│   ├── check_pagespeed.py                  # Google PageSpeed Insights run -> SCORECARD
+│   ├── check_lighthouse.py                 # Lighthouse SEO / a11y / perf threshold check
+│   ├── check_mobile_layout.py              # Mobile layout regression check
+│   ├── check_news_banners.py               # Verify every news source has a banner image
+│   ├── check_no_inline_scripts.py          # CI gate: no inline <script> blocks in HTML
+│   ├── check_svg_dimensions.py             # CI gate: width/height on every <svg> with viewBox
+│   ├── check_reading_list_staleness.py     # Flag stale reading-list sources (monthly)
 │   ├── SUBMIT_RESOURCE_README.md           # Interactive resource submission docs
 │   ├── SUBMIT_RESOURCE_EXAMPLE.md          # Walkthrough example for the resource tool
 │   ├── SUBMIT_NEWS_SOURCE_README.md        # News source submission docs
@@ -546,6 +641,7 @@ csoh.org/
 │   ├── validate-html.yml            # HTML5 validation on PRs + weekly
 │   ├── lint.yml                     # actionlint + ruff + yamllint on every push/PR
 │   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
+│   ├── check-reading-list-staleness.yml # Monthly reading-list feed staleness -> tracking issue
 │   ├── check-pagespeed.yml          # Weekly Google PageSpeed Insights run → SCORECARD row + regression issue (Mon 14:00 UTC)
 │   ├── run-seo-audit.yml            # Weekly deterministic structural SEO audit → SCORECARD row + regression issue (Mon 14:15 UTC)
 │   ├── deploy.yml                   # Build once, publish to AWS + GCP + Azure (keyless OIDC)
@@ -563,6 +659,15 @@ csoh.org/
 ├── pyproject.toml              # Config for the ruff job in lint.yml (Python lint)
 ├── .editorconfig               # Editor consistency rules
 ├── .dockerignore               # Files excluded from the Docker build context
+│
+├── infra/                      # Infrastructure-as-code for the multi-cloud deploy
+│   ├── README.md               # Architecture, cost, and cutover runbook
+│   └── terraform/              # Terraform for AWS, GCP, Azure & Cloudflare - every .tf file
+│       │                       #   commented line by line so a newcomer can read it
+│       ├── aws/                # S3 + CloudFront origin, OIDC deploy role
+│       ├── gcp/                # Cloud Run origin, Workload Identity Federation, Artifact Registry
+│       ├── azure/              # Blob static-website origin, federated identity
+│       └── cloudflare/         # Edge: zone, rules, active/active load balancer + health checks
 │
 ├── CONTRIBUTING.md             # Umbrella contributing guide
 ├── CONTRIBUTING_RESOURCES.md   # Contributing resources specifically
@@ -645,7 +750,7 @@ Run `python3 tools/submit_ctf.py` to add a challenge to `ctfs.html` interactivel
 
 ### Adding a Glossary Term
 
-1. Open `glossary.html` and locate the right `<h2 id="...">` section (cloud models, IAM, network, data, detection, posture, vuln, compliance, attack, AI, ops, standards bodies).
+1. Open `glossary.html` and locate the right `<h2 id="...">` section (cloud models, compute/containers, IAM, network, data, detection, posture, vuln, compliance, attack, AI, ops, standards bodies).
 2. Add a new `<dt>...</dt>` + `<dd>...</dd>` pair anywhere inside that section's `<dl class="glossary-list">`. Format the headword as `ABBR - Long Form` or just `Term Name`; aliases can be separated by `/`.
 3. Run `python3 tools/crosslink_glossary.py` - it will:
    - Add an `id="term-..."` to your new `<dt>`.
@@ -756,6 +861,14 @@ For qualitative depth (internal-linking strategy, content depth, AI visibility, 
 
 **Full docs:** [tools/CHECK_PAGESPEED_README.md](tools/CHECK_PAGESPEED_README.md), [tools/RUN_SEO_AUDIT_README.md](tools/RUN_SEO_AUDIT_README.md).
 
+### Monthly Reading-List Staleness Check
+
+**Workflow file:** `.github/workflows/check-reading-list-staleness.yml`
+
+Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog / newsletter / YouTube channel on `cloud-security-reading-list.html`, discovers its RSS/Atom feed, and flags anything whose newest post is older than the threshold. The reading list is hand-curated and opinionated, so this workflow **never edits the page** - it only opens (or updates) a single tracking issue with the report for a human to act on.
+
+**Full docs:** [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md).
+
 ---
 
 ## 🔍 SEO & Search Optimization
@@ -768,7 +881,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - 15 pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - 80+ pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
@@ -791,7 +904,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - 128 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - 190 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -802,7 +915,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - 140+ unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), 94 meeting recaps via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - 170+ unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), 94 meeting recaps via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
