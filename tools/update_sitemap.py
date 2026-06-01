@@ -12,6 +12,8 @@ is set to:
 Exit code is 0 whether or not the sitemap changed. Prints a one-line summary.
 """
 
+from __future__ import annotations
+
 import datetime as dt
 import os
 import re
