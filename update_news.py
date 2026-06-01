@@ -123,6 +123,7 @@ def fetch_feed(url: str, timeout: int = 15) -> Optional[str]:
 def strip_html(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = html.unescape(text)
+    text = text.replace("\u2014", "-").replace("\u2013", "-")  # normalize em/en dashes to hyphens (no AI-looking dashes from external feeds)
     text = re.sub(r"\s+", " ", text).strip()
     # Remove HTML5-forbidden code points (C0 except TAB/LF/CR, DEL, C1 except U+0085)
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x84\x86-\x9f]", "", text)
