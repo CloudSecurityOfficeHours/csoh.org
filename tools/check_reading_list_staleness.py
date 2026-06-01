@@ -65,6 +65,15 @@ FEED_OVERRIDES = {
     "https://awsteele.com/": "https://awsteele.com/feed.xml",
     "https://securitylabs.datadoghq.com/": "https://securitylabs.datadoghq.com/rss/feed.xml",
     "https://resilientcyber.substack.com/": "https://resilientcyber.substack.com/feed",
+    # GCP threat-intel blog feed lives on the cloudblog.withgoogle.com host; the
+    # cloud.google.com/blog/... path returns HTML, not a feed.
+    "https://cloud.google.com/blog/topics/threat-intelligence": "https://cloudblog.withgoogle.com/topics/threat-intelligence/rss/",
+    # cisoseries.com Cloudflare-403s every non-browser client; read the flagship
+    # CISO Series Podcast from its (open) Libsyn host feed instead.
+    "https://cisoseries.com/": "https://rss.libsyn.com/shows/24425/destinations/37324.xml",
+    # cloudsecuritypodcast.tv is a JS-rendered SPA with no feed link in its HTML;
+    # this is its audio feed (anchor.fm, links back to the site, author TechRiot.io).
+    "https://www.cloudsecuritypodcast.tv/": "https://anchor.fm/s/10fb9928/podcast/rss",
 }
 
 REQUEST_TIMEOUT = 20
