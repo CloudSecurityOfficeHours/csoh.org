@@ -40,7 +40,7 @@ CANON_NAV = """\
                 <ul>
                     <li class="has-dropdown has-mega">
                       <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
-                      <div class="dropdown-menu mega-menu mega-4col">
+                      <div class="dropdown-menu mega-menu mega-5col">
                         <div class="mega-col">
                           <span class="mega-heading">Foundations</span>
                           <ul>
@@ -85,6 +85,15 @@ CANON_NAV = """\
                             <li><a href="compliance-frameworks.html">Compliance Frameworks</a></li>
                             <li><a href="ai-learning.html">AI Learning</a></li>
                             <li><a href="ai-ml-security.html">AI/ML Security</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="github-actions.html">GitHub Actions</a></li>
+                            <li><a href="terraform.html">Terraform</a></li>
+                            <li><a href="version-control.html">Git &amp; Version Control</a></li>
                           </ul>
                         </div>
                       </div>
