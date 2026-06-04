@@ -522,9 +522,9 @@ csoh.org/
 ├── cloud-deployment.html       # Multi-cloud deploy architecture (the dogfooded stack)
 ├── terraform.html              # Learn Terraform via our own multi-cloud IaC
 ├── version-control.html        # Git & version-control fundamentals via this repo
-├── resources.html              # Main resource directory (240+ resources in 6 categories)
+├── resources.html              # Main resource directory (280+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
-├── chat-resources.html         # Community-shared URLs from Zoom sessions (557+ URLs)
+├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── sessions.html               # Weekly Zoom session information
 ├── community.html              # Community & Signal chat
 ├── mentorship.html             # Community mentorship program
@@ -855,7 +855,7 @@ Runs `tools/check_pagespeed.py` against `https://csoh.org/` - mobile + desktop i
 
 **`run-seo-audit.yml` - Mondays 14:15 UTC**
 
-Runs `tools/run_seo_audit.py` - a deterministic structural SEO audit across all 178 indexable HTML pages (top-level + breaches + portfolio + meetings). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30-65 chars, meta description 100-165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
+Runs `tools/run_seo_audit.py` - a deterministic structural SEO audit across all 190 indexable HTML pages (top-level + breaches + portfolio + meetings). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30-65 chars, meta description 100-165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
 
 For qualitative depth (internal-linking strategy, content depth, AI visibility, topical authority) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually and add a row off-cycle.
 
@@ -881,7 +881,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - 80+ pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - 48 pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
@@ -897,7 +897,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (21 pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (65 pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
@@ -920,7 +920,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Performance signals (Core Web Vitals)
 
-- ✅ **WebP everywhere** - homepage banner, all 29 news-source banners, and the author photo all serve WebP via `<picture>` with JPG/PNG fallback (≈40-60% smaller payloads)
+- ✅ **WebP everywhere** - homepage banner, all 36 news-source banners, and the author photo all serve WebP via `<picture>` with JPG/PNG fallback (≈40-60% smaller payloads)
 - ✅ **`<link rel="preload">`** for critical CSS, with **SRI integrity hashes** auto-updated on every deploy
 - ✅ **`loading="lazy"`** on below-the-fold images
 - ✅ **`width` / `height`** attributes on every `<img>` to prevent CLS
