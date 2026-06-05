@@ -12,18 +12,32 @@
 
 ## ⭐ Featured Guides
 
-The vendor-neutral curriculum, written by practitioners. **Foundations**, **disciplines**, and **per-cloud hubs** below.
+The vendor-neutral curriculum, written by practitioners. This catalog mirrors the site navigation - **Learn**, **By Cloud**, **Threat Intel**, **Careers**, and **Community** - so the README and the nav stay in step. (The nav itself is canonical in [`tools/sync_chrome.py`](tools/sync_chrome.py).)
 
-### Foundations
+### Learn
+
+#### Foundations
 | Guide | What it covers |
 |---|---|
 | 📚 [What is Cloud Security?](https://csoh.org/what-is-cloud-security.html) | Plain-English foundation - shared responsibility, threats, tool landscape |
-| 🛣️ [Cloud Security Learning Path](https://csoh.org/learning-path.html) | Beginner → working practitioner roadmap with milestones |
 | ⚖️ [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html) | What the cloud provider secures vs. what you secure (AWS / Azure / GCP) |
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
+| ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 350+ cloud-security vendors across 30 categories. No rankings, just orientation |
+| 📖 [Glossary](https://csoh.org/glossary.html) | 300+ cloud-security terms, plain-English, every cross-reference hyperlinked |
+| ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
-### Disciplines
+#### Workloads & Platform
+| Guide | What it covers |
+|---|---|
+| 📦 [Containers & Cloud Security](https://csoh.org/containers.html) | Trust boundary, escape paths, identity chaining via IMDS, supply chain |
+| ☸️ [Kubernetes & Managed Kubernetes](https://csoh.org/kubernetes.html) | EKS / AKS / GKE - shared responsibility, workload identity, RBAC, admission |
+| ⚡ [Serverless Functions](https://csoh.org/serverless.html) | Lambda / Azure Functions / Cloud Functions - event injection, IAM, denial of wallet |
+| 🕸️ [Service Mesh Security](https://csoh.org/service-mesh-security.html) | Istio / Linkerd / Cilium / Consul, mTLS, SPIFFE/SPIRE, ambient mode |
+| 🔄 [CI/CD for Cloud Deployments](https://csoh.org/ci-cd.html) | Pipeline anatomy, OIDC federation, AWS/Azure/GCP toolchains |
+| 📐 [Landing Zones](https://csoh.org/landing-zones.html) | Cloud foundations - Control Tower / Azure CAF / GCP blueprint |
+
+#### Security Domains
 | Guide | What it covers |
 |---|---|
 | 🔐 [IAM & Cloud Identity](https://csoh.org/iam.html) | Federation, RBAC/ABAC, JIT, workload identity, privilege-escalation paths |
@@ -33,21 +47,24 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 | 🐛 [Vulnerability Management](https://csoh.org/vulnerability-management.html) | CVSS/EPSS/KEV prioritization, reachability, SAST/SCA/DAST, SBOM/VEX, ASPM |
 | 🔌 [API Security](https://csoh.org/api-security.html) | OWASP API Top 10, BOLA, JWT pitfalls, GraphQL/gRPC, runtime defense |
 | 📡 [SaaS Security (SSPM)](https://csoh.org/saas-security.html) | M365 / Workspace / Salesforce / GitHub / Slack, OAuth app risk, ITDR |
+
+#### Governance & AI
+| Guide | What it covers |
+|---|---|
 | 💾 [Backup, DR & Ransomware](https://csoh.org/backup-dr.html) | 3-2-1-1-0, immutability per cloud, ransomware kill chain, key custody |
 | 🧠 [Threat Modeling](https://csoh.org/threat-modeling.html) | STRIDE/PASTA/LINDDUN, attack trees, ATT&CK Cloud, three worked examples |
-| 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
-| 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
-| 🎯 [Cloud Pentesting & Red Teaming](https://csoh.org/cloud-pentesting.html) | AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound, MITRE ATT&CK Cloud |
-| 🤖 [AI/ML & LLM Security](https://csoh.org/ai-ml-security.html) | OWASP LLM Top 10, prompt injection, agentic AI, model supply chain, ATLAS |
-| 🕸️ [Service Mesh Security](https://csoh.org/service-mesh-security.html) | Istio / Linkerd / Cilium / Consul, mTLS, SPIFFE/SPIRE, ambient mode |
-| 📐 [Landing Zones](https://csoh.org/landing-zones.html) | Cloud foundations - Control Tower / Azure CAF / GCP blueprint |
-| 📦 [Containers & Cloud Security](https://csoh.org/containers.html) | Trust boundary, escape paths, identity chaining via IMDS, supply chain |
-| ☸️ [Kubernetes & Managed Kubernetes](https://csoh.org/kubernetes.html) | EKS / AKS / GKE - shared responsibility, workload identity, RBAC, admission |
-| ⚡ [Serverless Functions](https://csoh.org/serverless.html) | Lambda / Azure Functions / Cloud Functions - event injection, IAM, denial of wallet |
-| 🔄 [CI/CD for Cloud Deployments](https://csoh.org/ci-cd.html) | Pipeline anatomy, OIDC federation, AWS/Azure/GCP toolchains |
-| 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
 | 📜 [GRC for Cloud](https://csoh.org/grc.html) | Governance, Risk, Compliance - frameworks, policy-as-code, audit evidence |
 | 📋 [Compliance Frameworks](https://csoh.org/compliance-frameworks.html) | SOC 2, ISO 27001, PCI DSS, HIPAA, FedRAMP, CMMC, NIST CSF, GDPR |
+| 💡 [AI Learning](https://csoh.org/ai-learning.html) | Using AI assistants to learn cloud security faster - prompts, workflows, study tactics |
+| 🤖 [AI/ML & LLM Security](https://csoh.org/ai-ml-security.html) | OWASP LLM Top 10, prompt injection, agentic AI, model supply chain, ATLAS |
+
+#### Build It
+| Guide | What it covers |
+|---|---|
+| ☁️ [Multi-Cloud Secure Deploy](https://csoh.org/cloud-deployment.html) | One static site, three active/active cloud origins behind Cloudflare, keyless OIDC deploys - the full dogfooded stack |
+| ⚙️ [How We Use GitHub Actions](https://csoh.org/github-actions.html) | Learn CI/CD by reading our heavily-commented workflows |
+| 🧱 [How We Use Terraform](https://csoh.org/terraform.html) | Learn IaC by reading the line-by-line-commented Terraform that provisions our own multi-cloud infra |
+| 🔀 [Git & Version Control](https://csoh.org/version-control.html) | Version-control fundamentals taught through this repo's own history |
 
 ### By Cloud
 | Hub | Focus |
@@ -57,43 +74,54 @@ The vendor-neutral curriculum, written by practitioners. **Foundations**, **disc
 | 🟩 [GCP Security](https://csoh.org/gcp-security.html) | Encryption-by-default, SCC Enterprise, VPC Service Controls deep-dive |
 | ⚖️ [AWS vs Azure vs GCP](https://csoh.org/cloud-security-comparison.html) | Definitive side-by-side - 10 comparison tables and a 20-row scorecard |
 
-### Career & community
+### Threat Intel
 | Guide | What it covers |
 |---|---|
+| 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 39 sources |
+| 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 10 real cloud breaches mapped to MITRE ATT&CK |
+| 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
+| 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
+| 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
+| 🎯 [Cloud Pentesting & Red Teaming](https://csoh.org/cloud-pentesting.html) | AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound, MITRE ATT&CK Cloud |
+| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 39+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
+
+### Careers
+
+#### Getting Started
+| Guide | What it covers |
+|---|---|
+| 🧭 [Cloud Security Careers](https://csoh.org/cloud-security-careers.html) | Roles, salary bands, interview formats, portfolio projects |
+| 🛣️ [Cloud Security Learning Path](https://csoh.org/learning-path.html) | Beginner → working practitioner roadmap with milestones |
+| 🪜 [Help Desk → Cloud Security](https://csoh.org/help-desk-to-cloud-security.html) | The realistic transition from IT support |
 | 🎓 [Cloud Security Certifications](https://csoh.org/cloud-security-certifications.html) | CCSK, CCSP, AWS, Azure, GCP, CKS compared side by side |
 | 🎓 [Cloud Security Degree Programs](https://csoh.org/cloud-security-degree-programs.html) | Academic paths, what to look for, named US/international universities |
-| 🧭 [Cloud Security Careers](https://csoh.org/cloud-security-careers.html) | Roles, salary bands, interview formats, portfolio projects |
 | 🧰 [Cloud Security Home Lab](https://csoh.org/cloud-security-home-lab.html) | Free-tier setups, budget guardrails, kill-switches |
-| ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
-| ⚙️ [How We Use GitHub Actions](https://csoh.org/github-actions.html) | Learn CI/CD by reading our heavily-commented workflows |
-| ☁️ [How We Deploy Across AWS, GCP & Azure](https://csoh.org/cloud-deployment.html) | One static site, three active/active cloud origins behind Cloudflare, keyless OIDC deploys - the full dogfooded stack |
-| 🧱 [How We Use Terraform](https://csoh.org/terraform.html) | Learn IaC by reading the line-by-line-commented Terraform that provisions our own multi-cloud infra |
-| 🔀 [Git & Version Control](https://csoh.org/version-control.html) | Version-control fundamentals taught through this repo's own history |
+| 🛠️ [Portfolio Projects](https://csoh.org/cloud-security-portfolio-projects.html) | Build-it-yourself projects that prove skills to hiring managers (walkthroughs below) |
 | 📖 [Cloud Security Reading List](https://csoh.org/cloud-security-reading-list.html) | Books, blogs, podcasts, newsletters & people to follow - staleness-checked monthly |
 | 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
-| 💬 [Community & Signal](https://csoh.org/community.html) | The Signal chat and how to join the conversation between Fridays |
 
-### Career roles, in depth
-
-Deep-dive guides for the specific roles that make up a cloud-security org - day-to-day work, required skills, salary signals, and how to break in.
-
+#### Engineering Roles
 | Role | Track |
 |---|---|
 | [Cloud Security Engineer](https://csoh.org/cloud-security-engineer.html) | The generalist core role |
 | [Cloud Security Architect](https://csoh.org/cloud-security-architect.html) | Staff+ IC design track |
-| [IAM / Identity Architect](https://csoh.org/cloud-security-iam-architect.html) | Identity-first specialization |
+| [Security SRE / Platform Security Engineer](https://csoh.org/cloud-security-platform-engineer.html) | Security platform & reliability |
 | [Cloud AppSec / IaC Security Engineer](https://csoh.org/cloud-security-appsec-engineer.html) | Shift-left, pipeline & IaC |
 | [CSPM / CNAPP Analyst](https://csoh.org/cloud-security-cnapp-analyst.html) | Posture & findings triage |
+| [IAM / Identity Architect](https://csoh.org/cloud-security-iam-architect.html) | Identity-first specialization |
+
+#### Specialist & Field Roles
+| Role | Track |
+|---|---|
 | [Cloud Detection Engineer](https://csoh.org/cloud-security-detection-engineer.html) | Detection-as-code |
 | [Cloud Incident Responder (DFIR)](https://csoh.org/cloud-security-incident-responder.html) | Cloud forensics & IR |
 | [Cloud Penetration Tester / Red Team](https://csoh.org/cloud-security-penetration-tester.html) | Offensive cloud |
-| [Security SRE / Platform Security Engineer](https://csoh.org/cloud-security-platform-engineer.html) | Security platform & reliability |
 | [Cloud GRC / Compliance Engineer](https://csoh.org/cloud-security-grc-engineer.html) | Governance, risk, audit |
 | [Cloud Security Sales Engineer](https://csoh.org/cloud-security-sales-engineer.html) | Pre-sales / SE track |
 | [Cloud Security Customer Success Engineer](https://csoh.org/cloud-security-customer-success-engineer.html) | Post-sales / CSE track |
-| [Help Desk → Cloud Security](https://csoh.org/help-desk-to-cloud-security.html) | The realistic transition from IT support |
 
-### Hands-on portfolio projects
+#### Hands-on portfolio projects
 
 [Cloud Security Portfolio Projects](https://csoh.org/cloud-security-portfolio-projects.html) is a hub of build-it-yourself projects that prove cloud-security skills to hiring managers. Each has a full step-by-step walkthrough under `portfolio/`:
 
@@ -107,20 +135,31 @@ Deep-dive guides for the specific roles that make up a cloud-security org - day-
 | [Recreate the Capital One breach](https://csoh.org/portfolio/recreate-capital-one.html) | Build the vulnerable SSRF/IMDSv1 stack, exploit it, then detect it |
 | [Contribute to OSS cloud security](https://csoh.org/portfolio/open-source-contribution.html) | Ship your first PR to Prowler / Cloud Custodian / Pacu / etc. |
 
+### Community
+
+#### Live
+| Resource | What it covers |
+|---|---|
+| 📅 [Friday Zoom Sessions](https://csoh.org/sessions.html) | Every Friday 7am PT - format, speakers, and how to join |
+| 💬 [Community & Signal](https://csoh.org/community.html) | The Signal chat and how to join the conversation between Fridays |
+| 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
+| 🏟️ [Conferences](https://csoh.org/conferences.html) | 27 security & hacker conferences, with pros & cons |
+
+#### Archive
+| Resource | What it covers |
+|---|---|
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | 94 weekly session recaps, searchable |
+| 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
+| 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
+
 ## 📚 Reference & Practice
 
-| Resource | Size |
+Cross-cutting entry points that sit outside the topic menus (everything else now lives under its nav section above):
+
+| Resource | What it is |
 |---|---|
-| 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page |
-| 📖 [Glossary](https://csoh.org/glossary.html) | 300+ cloud-security terms, plain-English |
-| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 350+ vendors, 30 categories, vendor-neutral one-liners |
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 280+ tools, labs, CTFs, certifications (auto-refreshed weekly) |
-| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 39+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
-| 🏟️ [Conferences](https://csoh.org/conferences.html) | 27 security & hacker conferences, with pros & cons |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 10 real cloud breaches mapped to MITRE ATT&CK |
-| 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 39 sources |
-| 📅 [Meeting Recaps](https://csoh.org/meetings.html) | 94 weekly session recaps, searchable |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 280+ tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
 
