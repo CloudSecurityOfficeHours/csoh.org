@@ -1,3 +1,17 @@
+// Respect Do Not Track / Global Privacy Control. If the visitor has a privacy
+// signal set, opt them out of analytics entirely: setting no_onload before
+// /vendor/goatcounter-count.js runs (it is deferred and appears after this
+// file, so this executes first) stops the pageview beacon and click-event
+// binding without modifying the vendored script. See count.js (the
+// `if (!goatcounter.no_onload)` guard).
+(function () {
+    var dnt = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+    if (navigator.globalPrivacyControl === true || dnt === '1' || dnt === 'yes') {
+        window.goatcounter = window.goatcounter || {};
+        window.goatcounter.no_onload = true;
+    }
+})();
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
