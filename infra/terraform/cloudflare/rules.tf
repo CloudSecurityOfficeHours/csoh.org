@@ -89,10 +89,18 @@ resource "cloudflare_ruleset" "security_headers" {
       # the Wayback Machine; "frame-ancestors 'none'" blocks embedding; and
       # "object-src 'none'" bans plugins like Flash. This is the strongest single
       # defense against cross-site scripting (XSS).
+      #
+      # NOTE: the lifecycle block below sets ignore_changes = [rules], so editing
+      # this CSP value does NOT reach the edge on `terraform apply`. To actually
+      # allow the GoatCounter origin (csoh.goatcounter.com, added to img-src +
+      # connect-src for cookieless analytics), update the CSP in the Cloudflare
+      # dashboard, or temporarily drop ignore_changes for one apply. Otherwise
+      # /vendor/goatcounter-count.js loads fine but the analytics beacon is
+      # silently CSP-blocked and no hits are recorded.
       headers {
         name      = "Content-Security-Policy"
         operation = "set"
-        value     = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com data:; font-src 'self'; connect-src 'self'; frame-src https://www.youtube.com https://web.archive.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        value     = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com https://csoh.goatcounter.com data:; font-src 'self'; connect-src 'self' https://csoh.goatcounter.com; frame-src https://www.youtube.com https://web.archive.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
       }
       # COOP: isolates this site into its own browser process group so other
       # windows/tabs it opens (or that open it) can't share memory with it.

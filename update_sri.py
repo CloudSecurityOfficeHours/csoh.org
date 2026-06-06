@@ -232,6 +232,25 @@ def update_html_file(html_path: Path, hashes: Dict[str, str],
 
         content = notfound_script_pattern.sub(replace_notfound_script, content)
 
+    if 'goatcounter-count.js' in hashes:
+        gc_script_pattern = re.compile(
+            r'<script\b[^>]*\bsrc=(["\'])/vendor/goatcounter-count\.js(?:\?[^"\']*)?(\1)[^>]*>',
+            re.IGNORECASE,
+        )
+
+        def replace_gc_script(match: re.Match) -> str:
+            tag = match.group(0)
+            tag = re.sub(
+                r'(src=["\'])/vendor/goatcounter-count\.js(?:\?[^"\']*)?(["\'])',
+                rf'\g<1>/vendor/goatcounter-count.js?v={cache_busts["goatcounter-count.js"]}\2',
+                tag,
+            )
+            tag = upsert_attr(tag, 'integrity', hashes['goatcounter-count.js'])
+            tag = remove_attr(tag, 'crossorigin')
+            return tag
+
+        content = gc_script_pattern.sub(replace_gc_script, content)
+
     if content != original_content:
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -252,6 +271,11 @@ def main():
         'meetings.js': repo_root / 'meetings.js',
         'glossary.js': repo_root / 'glossary.js',
         '404.js': repo_root / '404.js',
+        # GoatCounter's analytics loader, vendored from https://gc.zgo.at/count.js
+        # and served first-party (/vendor/) so the strict CSP (script-src 'self')
+        # needs no remote script origin. Re-vendor that file and rerun this
+        # script to pick up upstream updates.
+        'goatcounter-count.js': repo_root / 'vendor' / 'goatcounter-count.js',
     }
 
     print("Calculating SRI hashes...")

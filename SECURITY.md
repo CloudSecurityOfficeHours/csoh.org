@@ -35,9 +35,9 @@ Server version headers (`X-Powered-By`, `Server`) are stripped from HTTPS respon
 default-src 'self';
 script-src 'self';
 style-src 'self';
-img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com data:;
+img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com https://csoh.goatcounter.com data:;
 font-src 'self';
-connect-src 'self';
+connect-src 'self' https://csoh.goatcounter.com;
 frame-src https://www.youtube.com https://web.archive.org;
 frame-ancestors 'none';
 base-uri 'self';
@@ -52,6 +52,7 @@ Key points:
 - **`object-src 'none'`** - blocks Flash, Java applets, and other plugin content
 - Only YouTube and Web Archive are allowed as iframe sources
 - Only YouTube thumbnail domains are allowed as external image sources
+- `csoh.goatcounter.com` is allowed in `img-src` + `connect-src` for cookieless, privacy-friendly analytics; the loader is self-hosted at `/vendor/goatcounter-count.js`, so `script-src` stays `'self'`
 - The `.htaccess` and `nginx.conf` CSPs are byte-identical (no drift)
 
 In addition to CSP, the following cross-origin isolation headers are set:
