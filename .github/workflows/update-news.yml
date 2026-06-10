@@ -45,11 +45,12 @@ on:
 # the run ends - is allowed to do. Granting the least access needed is a
 # security best practice: if this token leaked, it could do nothing but read.
 # Read-only on the auto-injected GITHUB_TOKEN. Every step that needs write
-# access (push commits, open PRs, enable auto-merge) uses an installation
-# token from the csoh-ci GitHub App. CSOH_PAT (a fine-grained org-scoped
-# PAT) drives the auto-approve step because GitHub's auto-merge feature
-# does NOT honor the App's ruleset bypass when evaluating the "1 required
-# approval" rule (empirically verified, see "Auto approve" step comments).
+# access uses either the csoh-ci GitHub App installation token (for git
+# branch writes + auto-merge) or CSOH_PAT (a fine-grained org-scoped PAT) for
+# REST calls that create/update the PR and for the separate-identity approval.
+# GitHub's auto-merge feature does NOT honor the App's ruleset bypass when
+# evaluating the "1 required approval" rule (empirically verified, see "Auto
+# approve" step comments).
 permissions:
   # `contents: read` = may clone/read the repo, but may not push.
   contents: read
@@ -211,7 +212,12 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
-          token: ${{ steps.app-token.outputs.token }}   # App token so downstream CI runs
+          # Use PAT for the REST API create/update call. This avoids sporadic
+          # unauthenticated API failures observed with App tokens in this step.
+          token: ${{ secrets.CSOH_PAT }}
+          # Keep branch writes on the App token so pushes are made by the App
+          # identity and continue to trigger downstream workflows.
+          branch-token: ${{ steps.app-token.outputs.token }}
           commit-message: 'chore: update news feed content'
           title: 'chore: Update news articles'
           # Multi-line PR body. `|` keeps newlines literal.
