@@ -49,7 +49,7 @@ PREVIEW_IGNORE_URLS = {
     'https://www.blackhat.com/upcoming.html',
     # Substack / blog / podcast sites that block headless screenshots
     # or render blank without full JS execution.
-    'https://resilientcyber.substack.com/',
+    'https://www.resilientcyber.io/',
     'https://orca.security/resources/blog/',
     'https://www.philvenables.com/',
     'https://www.cloudsecuritypodcast.tv/',

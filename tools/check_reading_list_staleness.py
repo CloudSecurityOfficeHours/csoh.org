@@ -64,7 +64,9 @@ FEED_OVERRIDES = {
     "https://www.wiz.io/blog": "https://www.wiz.io/feed/rss.xml",
     "https://awsteele.com/": "https://awsteele.com/feed.xml",
     "https://securitylabs.datadoghq.com/": "https://securitylabs.datadoghq.com/rss/feed.xml",
-    "https://resilientcyber.substack.com/": "https://resilientcyber.substack.com/feed",
+    # Resilient Cyber moved off resilientcyber.substack.com to this custom
+    # domain (still Substack-hosted) in mid-2026; the old host 301s here.
+    "https://www.resilientcyber.io/": "https://www.resilientcyber.io/feed",
     # GCP threat-intel blog feed lives on the cloudblog.withgoogle.com host; the
     # cloud.google.com/blog/... path returns HTML, not a feed.
     "https://cloud.google.com/blog/topics/threat-intelligence": "https://cloudblog.withgoogle.com/topics/threat-intelligence/rss/",
