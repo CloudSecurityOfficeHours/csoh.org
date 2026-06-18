@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stamp ONE canonical nav + footer onto every HTML page in the site.
+"""Stamp ONE canonical nav, header buttons, and footer onto every HTML page.
 
 Why this exists
 ---------------
@@ -7,8 +7,10 @@ The nav and footer are hand-copied into each of ~175 static pages (no
 templating). Over time they drifted: the breaches/ and meetings/ pages still
 carried an older, smaller nav; a couple of root pages had stray extra items;
 the footer's "About CSOH" link was present on some pages and missing on
-others. This script makes the menu nav and the footer *byte-identical*
-everywhere, with only two legitimate per-page differences preserved:
+others. This script makes the menu nav, the two header buttons (hamburger and
+theme toggle), and the footer *byte-identical* everywhere, with only two
+legitimate per-page differences preserved (both apply to the nav/footer only;
+the header buttons are the same two lines on every page):
 
   1. `../` path prefixes on pages inside breaches/ and meetings/.
   2. The current-page markers (`aria-current="page"` on the active link and
@@ -29,6 +31,19 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+# --- Canonical header buttons (between the logo and the nav) -----------------
+# The hamburger and theme toggle live in every header but belong to neither the
+# <nav> block nor the <footer>, so nothing enforced them and they drifted:
+# about.html and rss.html picked up HTML-entity glyphs (&#9776; / &#127769;)
+# that the June 2026 docs review (PR #953) had to patch by hand. Stamping them
+# here keeps both lines byte-identical everywhere, same as the nav and footer.
+# They contain no links and no active state, so unlike the nav/footer there are
+# no per-page differences: no ../ prefixing, no current-page markers. Keep the
+# 12-space indent; the button patterns below consume the existing indentation
+# so these lines control it fully.
+CANON_HAMBURGER = '            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>'
+CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>'
 
 # --- Canonical menu nav (root-relative, no active markers) -------------------
 # This is the current site nav (Learn / Resources / By Cloud / Threat Intel /
@@ -248,6 +263,15 @@ CANON_FOOTER = """\
 NAV_PATTERN = re.compile(r'(?m)^[ \t]*<nav>\s*<ul>[\s\S]*?</ul>\s*</nav>')
 FOOTER_PATTERN = re.compile(r'(?m)^[ \t]*<footer>[\s\S]*?</footer>')
 
+# Match a whole header-button line whatever its attribute drift or glyph
+# encoding (literal vs HTML entity). The nav's dropdown buttons use different
+# classes (dropdown-toggle) and never match. Leading indentation is consumed
+# so the canonical lines control it, same as nav/footer.
+HAMBURGER_PATTERN = re.compile(
+    r'(?m)^[ \t]*<button[^>]*class="hamburger"[^>]*>[^<]*</button>')
+THEME_TOGGLE_PATTERN = re.compile(
+    r'(?m)^[ \t]*<button[^>]*class="theme-toggle"[^>]*>[^<]*</button>')
+
 # Build href -> enclosing top-level dropdown label, by scanning CANON_NAV.
 # Each dropdown <button> starts a new section; every page href that follows
 # belongs to it until the next button. resources.html is the lone top-level
@@ -325,9 +349,11 @@ def process(path: Path) -> str:
     if '<nav>' not in text or '<footer>' not in text:
         return 'skipped'
     new = text
+    new, n_burger = HAMBURGER_PATTERN.subn(lambda _: CANON_HAMBURGER, new, count=1)
+    new, n_toggle = THEME_TOGGLE_PATTERN.subn(lambda _: CANON_THEME_TOGGLE, new, count=1)
     new, n_nav = NAV_PATTERN.subn(lambda _: build_nav(path), new, count=1)
     new, n_foot = FOOTER_PATTERN.subn(lambda _: build_footer(path), new, count=1)
-    if n_nav == 0 or n_foot == 0:
+    if n_nav == 0 or n_foot == 0 or n_burger == 0 or n_toggle == 0:
         return 'skipped'
     if new == text:
         return 'unchanged'
