@@ -60,6 +60,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-06-10 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.05s · CLS 0.000 · TBT 0ms · FCP 1.05s |
 | 2026-06-15 | 98 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 2.27s · CLS 0.000 · TBT 0ms · FCP 1.07s |
 | 2026-06-22 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.07s · CLS 0.000 · TBT 0ms · FCP 1.05s |
+| 2026-06-29 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.83s · CLS 0.000 · TBT 0ms · FCP 1.05s · CrUX-M (origin): LCP 1.11s (FAST) · INP 54ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 0.96s (FAST) · INP 35ms (FAST) · CLS 0.000 (FAST) |
 
 ## How to use
 
