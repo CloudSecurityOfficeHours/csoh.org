@@ -85,8 +85,9 @@ resource "cloudflare_ruleset" "security_headers" {
       # Content-Security-Policy (CSP): a strict allowlist of where the page may
       # load each kind of resource from. "'self'" = only this domain. Scripts,
       # styles, fonts, and network calls are locked to 'self'; images also allow
-      # YouTube thumbnails + inline "data:" URIs; iframes only from YouTube and
-      # the Wayback Machine; "frame-ancestors 'none'" blocks embedding; and
+      # YouTube thumbnails + inline "data:" URIs; iframes from YouTube, the
+      # Wayback Machine, and Google Docs/Drive (embedded presentation decks on
+      # presentations.html); "frame-ancestors 'none'" blocks embedding; and
       # "object-src 'none'" bans plugins like Flash. This is the strongest single
       # defense against cross-site scripting (XSS).
       #
@@ -100,7 +101,7 @@ resource "cloudflare_ruleset" "security_headers" {
       headers {
         name      = "Content-Security-Policy"
         operation = "set"
-        value     = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com https://csoh.goatcounter.com data:; font-src 'self'; connect-src 'self' https://csoh.goatcounter.com; frame-src https://www.youtube.com https://web.archive.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        value     = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com https://csoh.goatcounter.com data:; font-src 'self'; connect-src 'self' https://csoh.goatcounter.com; frame-src https://www.youtube.com https://web.archive.org https://docs.google.com https://drive.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
       }
       # COOP: isolates this site into its own browser process group so other
       # windows/tabs it opens (or that open it) can't share memory with it.
