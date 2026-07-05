@@ -216,7 +216,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | Workflow | When | What it does | Where the report lands |
 | --- | --- | --- | --- |
 | [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Google PageSpeed Insights (mobile + desktop) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
-| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across 178 indexable pages | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
+| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across 190 indexable pages | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
 | [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | RSS-feed staleness check on `cloud-security-reading-list.html` | Opens or refreshes a sticky issue labeled `reading-list-staleness` |
 
 A few patterns worth knowing before you touch any of these:
