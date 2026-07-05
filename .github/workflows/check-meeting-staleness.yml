@@ -1,0 +1,126 @@
+# =============================================================================
+# Check Meeting Staleness
+# -----------------------------------------------------------------------------
+# Weekly, finds the newest meetings/YYYY-MM-DD.html recap and flags the archive
+# when its date is more than the threshold (default 14 days = two missed
+# Fridays) behind today. The weekly recap is the site's only guaranteed-weekly
+# fresh content, and faq.html / the homepage promise uninterrupted sessions, so
+# a stalled cadence quietly breaks a published claim and weakens the freshness
+# signal search + AI engines use.
+#
+# Like check-reading-list-staleness.yml this NEVER edits the site - it only
+# opens (or updates) a single sticky tracking issue with the report.
+# =============================================================================
+name: Check Meeting Staleness
+
+on:
+  # Mondays 15:00 UTC - a few days after the Friday session, so a same-week
+  # recap has time to be published before we flag a gap.
+  schedule:
+    - cron: '0 15 * * 1'    # min hour day-of-month month day-of-week
+  workflow_dispatch:
+  # Re-check when the checker or this workflow changes (they alter HOW
+  # staleness is computed). Content edits under meetings/ do NOT re-trigger.
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/check_meeting_staleness.py'
+      - '.github/workflows/check-meeting-staleness.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: check-meeting-staleness
+  cancel-in-progress: true
+
+jobs:
+  check-staleness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.x'
+
+      # Writes the markdown report to staleness.md. Exits 0 even when stale
+      # (this is a report, not a gate); only an internal error turns it red.
+      - name: Run staleness check
+        run: python3 tools/check_meeting_staleness.py --output staleness.md
+
+      - name: Upload staleness report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: meeting-staleness-report
+          path: staleness.md
+          retention-days: 90
+          if-no-files-found: warn
+
+      # Sticky issue only WHEN stale: create if absent, update if present, and
+      # close it automatically once the cadence recovers. Mirrors the
+      # reading-list workflow's exact-title + label matching.
+      - name: Open, update, or close tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          title="Meeting recaps: cadence has stalled"
+          label="meeting-staleness"
+
+          gh label create "$label" \
+            --color "fbca04" \
+            --description "Auto-generated reports from check-meeting-staleness.yml" \
+            --repo "$REPO" 2>/dev/null || true
+
+          # The report's Status line is the source of truth.
+          if grep -q "Status:\*\* STALE" staleness.md; then
+            stale=1
+          else
+            stale=0
+          fi
+
+          existing="$(gh issue list \
+            --repo "$REPO" \
+            --state open \
+            --label "$label" \
+            --search "in:title \"$title\"" \
+            --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" \
+            | head -n1)"
+
+          if [ "$stale" -eq 1 ]; then
+            {
+              echo "_Auto-updated by [check-meeting-staleness]($RUN_URL)._"
+              echo ""
+              cat staleness.md
+              echo ""
+              echo "---"
+              echo "_This issue auto-closes once a fresh recap lands and the cadence recovers._"
+            } > issue-body.md
+            if [ -n "$existing" ]; then
+              echo "updating issue #$existing"
+              gh issue edit "$existing" --repo "$REPO" --body-file issue-body.md
+            else
+              echo "creating new issue"
+              gh issue create \
+                --repo "$REPO" \
+                --title "$title" \
+                --label "$label" \
+                --body-file issue-body.md
+            fi
+          elif [ -n "$existing" ]; then
+            echo "cadence recovered - closing issue #$existing"
+            gh issue close "$existing" --repo "$REPO" \
+              --comment "Newest recap is now within threshold. Auto-closed by [check-meeting-staleness]($RUN_URL)."
+          else
+            echo "cadence healthy - nothing to do"
+          fi

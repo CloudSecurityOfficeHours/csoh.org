@@ -39,6 +39,8 @@
         '    <button type="button" data-filter="glossary" class="csoh-filter-chip" aria-pressed="false">Glossary</button>',
         '    <button type="button" data-filter="faq" class="csoh-filter-chip" aria-pressed="false">FAQ</button>',
         '    <button type="button" data-filter="feed" class="csoh-filter-chip" aria-pressed="false">News / Sessions</button>',
+        '    <button type="button" data-filter="breach" class="csoh-filter-chip" aria-pressed="false">Breaches</button>',
+        '    <button type="button" data-filter="meeting" class="csoh-filter-chip" aria-pressed="false">Recaps</button>',
         '  </div>',
         '</div>',
         '<p id="csoh-search-status" class="csoh-search-status" role="status" aria-live="polite">Start typing to search.</p>',
@@ -295,6 +297,8 @@
             case 'faq': return 'FAQ';
             case 'feed': return 'News';
             case 'site': return 'Site';
+            case 'breach': return 'Breach';
+            case 'meeting': return 'Recap';
             default: return 'Guide';
         }
     }

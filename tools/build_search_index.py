@@ -93,6 +93,16 @@ TYPE_TAGS: dict[str, str] = {
     "sessions.html": "feed",
 }
 
+# Subdirectory content that lives outside the root glob. Each page is
+# indexed as a single page-level doc so /search.html can surface a specific
+# breach kill chain or meeting recap by title, description, or body term.
+# (meetings.html also ships a dedicated full-body search; this adds the
+# recaps to the global index with their own filter chip.)
+SUBDIR_TYPES: list[tuple[str, str]] = [
+    ("breaches", "breach"),
+    ("meetings", "meeting"),
+]
+
 # ----- HTML parsing ------------------------------------------------------
 
 # Pull <main>...</main> if present, else <body>...</body>.
@@ -181,6 +191,26 @@ def short_page_title(full_title: str) -> str:
             if tail.strip().lower() in {"csoh", "cloud security office hours"}:
                 return base.strip()
     return full_title
+
+
+def emit_page_level(rel_url: str, raw: str, ptype: str) -> dict | None:
+    """Build one page-level doc for a subdirectory content page (breach or
+    meeting recap) that the root glob does not reach."""
+    title = short_page_title(page_title(raw)) or rel_url
+    description = page_description(raw)
+    text = (description + " " + strip_html(body(raw))).strip()[:2400]
+    if not text:
+        return None
+    return {
+        "id": rel_url.lstrip("/"),
+        "url": rel_url,
+        "page": title,
+        "section": "",
+        "heading": title,
+        "title": title,
+        "text": text,
+        "type": ptype,
+    }
 
 
 def emit_docs(filename: str, raw: str) -> Iterable[dict]:
@@ -311,6 +341,14 @@ def main() -> int:
             if not doc.get("text") and not doc.get("heading"):
                 continue
             docs.append(doc)
+
+    # Subdirectory content pages (breaches/, meetings/) - one doc each.
+    for subdir, ptype in SUBDIR_TYPES:
+        for path in sorted((REPO / subdir).glob("*.html")):
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            doc = emit_page_level(f"/{subdir}/{path.name}", raw, ptype)
+            if doc:
+                docs.append(doc)
 
     synonyms = load_synonyms()
     out = {

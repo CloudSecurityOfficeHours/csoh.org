@@ -158,7 +158,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 280+ tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 370+ tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -338,7 +338,7 @@ Learn-by-example IaC explainer, using the Terraform that provisions CSOH's own m
 Version-control fundamentals - branching, commits, pull requests, and history hygiene - taught through this repository's own workflow.
 
 ### 📚 Resources (`resources.html`)
-Comprehensive catalog of **280+ cloud security resources** organized by 6 categories:
+Comprehensive catalog of **370+ cloud security resources** organized by 6 categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -561,7 +561,7 @@ csoh.org/
 ├── cloud-deployment.html       # Multi-cloud deploy architecture (the dogfooded stack)
 ├── terraform.html              # Learn Terraform via our own multi-cloud IaC
 ├── version-control.html        # Git & version-control fundamentals via this repo
-├── resources.html              # Main resource directory (280+ resources in 6 categories)
+├── resources.html              # Main resource directory (370+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── sessions.html               # Weekly Zoom session information

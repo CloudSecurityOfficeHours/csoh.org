@@ -1,0 +1,78 @@
+# Deep Site Analysis & Roadmap - 2026-07-04
+
+Multi-agent qualitative analysis (15 agents: 10 site-slice readers + 3 external researchers + synthesis + adversarial critic). Complements the weekly automated audit, which scores 98-100 but only checks *presence* of SEO elements, not *validity* or content substance. 143 raw findings deduped and prioritized here.
+
+**Framing:** technical SEO is solved. The gap is one layer down: the site's most valuable asset - the 94-meeting archive (two years of dated first-hand practitioner discussion) - is neutralized by fixable defects, and several verified bugs are invisible to the weekly audit.
+
+## Verified bugs the weekly audit cannot see
+
+| Bug | Scope | Verification |
+|---|---|---|
+| Invalid JSON-LD on meeting pages (single-quoted strings; strict parsers reject the whole block, so the archive ships no structured data) | 82/94 Article, 91/94 BreadcrumbList | Confirmed with `json.loads` |
+| Meta descriptions ending in a literal ellipsis mid-list ("...KMS, WAF, Macie…") | 134 pages (30 root, 94 meetings, 10 breaches) | grep-verified |
+| Site search excludes all meetings/ and breaches/ pages while claiming full coverage (`build_search_index.py` globs only root `*.html`) | 104 pages invisible | verified against index |
+| Crosslinker bug: plain word "cloud" links to `#term-air-gap` 60x inside glossary.html; glossary anchors injected inside contribute.html code blocks | glossary + 2 contribute pages | verified |
+| `"sameAs": []` on Organization schema despite existing GitHub/YouTube/Kit; ~70 pages inline a duplicate publisher blob instead of `@id` | sitewide entity graph | verified |
+| FAQPage schema with no visible FAQ (careers hub cites "the careers FAQ above" which does not exist) | 7 pages | verified |
+| Content freeze: newest recap 2026-05-08 (8 missed Fridays) vs faq "we don't skip holidays"; presentations.html has no 2026 section | freshness | verified |
+
+## Week 1 - mechanical, high yield (SCRIPTABLE) - DONE 2026-07-05
+
+- [x] **Meetings metadata rescue** - fixed JSON-LD quoting (91 files, 173 broken blocks now parse; Meeple double-quote escaped); rewrote all 94 date-only titles to `[headline] - CSOH Recap, [Mon D, YYYY]` from the Article headline; sentence-aware description truncation applied to the 29 recaps where it yields a clean complete sentence (removes the trailing ellipsis). Generator (`tools/add_meeting.py`) fixed so new recaps come out right: `truncate()` prefers sentence boundaries, `<title>` uses the headline.
+- [x] **Ran `tools/inject_meeting_topic_links.py`** - 42 link-less recaps got 59 contextual topic links; no nested anchors.
+- [x] **Search index fix** - `build_search_index.py` now emits one page-level doc per breaches/ (10) and meetings/ (94) page; added "Breaches" + "Recaps" filter chips and typeLabel cases to search-init.js (loaded plain, no SRI). Browser-verified: "storm-0558" and "LiteLLM" now surface the right pages with correct badges; the page's "search across every page" claim is finally true.
+- [~] **Entity graph** - populated the canonical homepage Organization `sameAs` with the GitHub org. DEFERRED (needs design/URLs): the 175-page publisher `@id` swap would dangle (those pages don't define `#org`; valid inline blocks are safer than a broken reference); YouTube footer link + richer sameAs need a channel/org-LinkedIn/X URL from Shawn (none exist on the site today).
+- [x] **Air-gap link cleanup** - stripped all 60 spurious `#term-air-gap` anchors in glossary.html; guarded `crosslink_glossary.py` so parenthetical qualifiers ("Air Gap (Cloud)", "Ambient Mode (Service Mesh)") never become aliases (acronym/expansion pairs still do) + added "cloud" to DENYLIST; unwrapped 11 glossary anchors inside `.code-block`/`.tag-example` on the two contribute pages and taught `crosslink_pages.py` to mask those class-based regions.
+- [x] **Stats true-up** - resources "240+"/"280+" -> "370+" (actual 374) across index.html (incl. FAQPage JSON-LD), llms.txt, resources.html, README.md, faq.html; chat-resources "570 links" -> "580+" (actual 581).
+- [x] **CI lints** - `tools/check_jsonld.py` (blocking gate wired into validate-html.yml; all 427 blocks pass, catches regressions); `tools/check_meeting_staleness.py` + `check-meeting-staleness.yml` (weekly, opens/updates/auto-closes a sticky issue; currently reports 58 days / ~8 missed sessions). Ellipsis-ending meta lint DEFERRED to accompany the Week-2 root/breach/long-recap description rewrite (would fail now on ~100 not-yet-rewritten pages).
+
+### Follow-ups surfaced during Week 1
+- meetings/2026-02-20 and 2026-02-27 ship byte-identical recap *body* text (not just descriptions) - a source-content dup needing the real notes; titles now differ. (spawned as a task)
+- Search index is 2.48 MB (loaded on search.html only). Fine for now; revisit if search.html CWV suffers.
+
+## Week 2-3 - editorial passes
+
+- [x] **Breach citations** - 10 "Real-world example" links from topic pages to breaches/ (aws->capital-one, azure->microsoft-sas-leak, ci-cd->solarwinds, iam->uber + snowflake, ai-ml->promptware, data-security->lastpass, detection->storm-0558, incident-response->scattered-spider-mgm, kevin-mitnick->mitnick-novell). All verified to resolve; no nested anchors. Facts checked against each breach page.
+- [x] **Homepage pillar cards** - added a "Learn the fundamentals" grid to index.html linking 8 pillar guides (what-is, shared-responsibility, aws/azure/gcp, iam, zero-trust, cspm-vs-cnapp). Browser-verified: cards render, all OG images 200.
+- [x] **Glossary deep-dive links** - 34 "Deep dive: <guide>" trailing links added to glossary terms with a matching guide (surgical, per the glossary workflow). Also fixed a bug in `check_jsonld.py` (was descending into `.claude` worktrees). No nested anchors; all targets exist.
+- [x] **Trust pass** - added "How CSOH is funded" section (id=funding) to about.html; fixed the faq.html contradiction (visible answer + the "Does CSOH cost anything?" JSON-LD both no longer overclaim "no sponsorships"); added a Wiz affiliation-disclosure paragraph to cspm-vs-cnapp.html modeled on vendor-landscape.
+- [~] **Orphan rescue / sibling asymmetries** - added 6 contextual links: kevin-mitnick->mitnick-novell (breach pass), grc->compliance-frameworks, ctfs->cloud-pentesting, incident-response->backup-dr, ci-cd->version-control, cloud-pentesting->api-security. REMAINING orphans: ai-learning, degree-programs, terraform, service-mesh-security, threat-modeling still thin; more sibling pairs (aws->iam return, version-control->github-actions return) to reciprocate.
+- [x] **Surface GitHub issue forms** - "Fastest path: use a form" callout on contribute.html; reframed contribute-resources.html "Fastest option" to lead with the no-install Resource Suggestion form (was pushing `python3`); linked the resource + kill-chain forms in two faq.html answers and aligned the "add a resource" JSON-LD.
+- [x] **CONTRIBUTING_KILL_CHAINS.md rewrite** - replaced the dead single-page tab layout (incident-tabs/kc-main/incident-panel) with the current one-page-per-breach workflow (copy a breaches/ page -> fill inc-header/kill-chain body -> register: breach-card + ItemList numberOfItems bump + pager + sitemap + sync_chrome). Refreshed the stale 2022-23 candidate table to 2025-26 incidents (Salesloft/Drift, Codefinger, tj-actions, Midnight Blizzard, Sisense). Updated the Claude-assist and PR-submit steps.
+- [ ] FAQ schema compliance: visible "Quick answers" blocks on the 4 schema-only career pages + index; align mismatched question sets 1:1. **(the remaining Week 2-3 item)**
+- [ ] Recap backlog: run add_meeting.py for May-June (BLOCKED - needs Zoom notes); refresh chat-resources export; add 2026 presentations section; fix stale Cloud Next 25 link.
+
+## Month 2 - larger editorial
+
+- [ ] Rebuild sessions.html (thinnest page in the conversion path, #2 most-linked).
+- [ ] 2026 currency pass: vendor-landscape (5 stale entries, +NHI/+ASM-CTEM), cspm-vs-cnapp (+AI-SPM/CDR, drop Lacework), compliance-frameworks (+EU AI Act/ISO 42001).
+- [ ] cloud-security-engineer.html expansion to template parity (~4k vs 8.7-17k words).
+- [ ] "How csoh.org is secured" engineering-tour page + public securityheaders.com/Observatory grades.
+- [ ] AI-era sections on zero-trust, api-security, saas-security.
+- [ ] Static /csoh.ics + "Submit a question for Friday" Google Form.
+- [ ] Local-time `Intl.DateTimeFormat` snippet on session-time surfaces.
+- [ ] Consent/PII policy for named community members (gates the amplification work).
+
+## Quarter - new content (ranked by SERP winnability)
+
+- [ ] non-human-identity.html, mcp-security.html (zero coverage; MCP has no definitional SERP owner - first-mover decays fast).
+- [ ] Interview-questions hub + resume guide (fragmented SERP; community hiring managers = moat).
+- [ ] "how to get into cloud security with no experience" + "is cloud security a good career" (own every supporting asset already).
+- [ ] 2-3 new kill chains: Salesloft Drift/UNC6395, Codefinger S3, tj-actions.
+- [ ] breach-lessons.html + MITRE technique index (auto-generatable, highly quotable).
+- [ ] 1-2 comparison pages MAX: CNAPP vs XDR, maybe CSPM vs CWPP (NOT a 5-page franchise - rot rate). No vendor head-to-heads (Wiz conflict); use /how-to-evaluate-cnapp.html instead.
+- [ ] First-party data: quarterly community-pulse report, annual Cloud Breach Year in Review.
+- [ ] speakers.html + present.html (free backlinks - speakers share their own pages).
+
+## Killed by adversarial critic (do NOT do)
+
+- DiscussionForumPosting schema on recaps - they're owner-authored summaries, not UGC; spam-action risk.
+- Occupation/HowTo schema - Google deprecated both enrichments.
+- Guided CloudGoat/flAWS labs - rot fast, support burden a solo maintainer can't absorb.
+- Bot-injected "recent news" blocks into topic pages - conflicts with churn discipline, fake-freshness signal.
+- Regenerating all 94 recaps - add_meeting.py is publish-once; would clobber years of hand edits.
+- Inline Kit email form - CSP `form-action 'self'` (nginx + rules.tf with ignore_changes gotcha) blocks it; 4-surface change, not "low effort."
+
+## Sequencing note
+
+Extend `check_pagespeed.py` beyond the homepage to a representative heavy-page set (resources 548KB/376 imgs, glossary 272KB, a recap, a breach) before layering curation UI onto those pages. Stand up a monthly 20-30-prompt AI-citation baseline (repo CSV) before the content investments land, so impact is attributable. Sequence new-page work by Search Console impression/CTR data.

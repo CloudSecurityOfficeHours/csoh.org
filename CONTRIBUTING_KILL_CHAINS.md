@@ -32,13 +32,13 @@ Before you start, check these boxes:
 
 These incidents have solid post-mortems and haven't been added yet. Pick one up!
 
-| Incident | Year | Provider | Good Source |
+| Incident | Year | Provider | Where to find the source |
 |---|---|---|---|
-| Okta Support System Breach | 2023 | Okta / AWS | [Okta security advisory](https://sec.okta.com/harfiles) |
-| 3CX Supply Chain (Lazarus) | 2023 | AWS CloudFront | [Mandiant analysis](https://www.mandiant.com/resources/blog/3cx-software-supply-chain-compromise) |
-| CircleCI Secrets Breach | 2023 | CI/CD | [CircleCI post-mortem](https://circleci.com/blog/january-4-2023-security-alert/) |
-| Toyota Connected Car Data Exposure | 2023 | GCP | [Toyota statement](https://global.toyota/en/newsroom/corporate/39174380.html) |
-| Twilio / Authy SMS Phishing | 2022 | AWS | [Twilio post-mortem](https://www.twilio.com/blog/august-2022-social-engineering-attack) |
+| Salesloft / Drift OAuth token theft (UNC6395) | 2025 | SaaS / Salesforce | Google Threat Intelligence (Mandiant) blog - the canonical SaaS OAuth supply-chain breach, 700+ orgs |
+| Codefinger S3 SSE-C ransomware | 2025 | AWS S3 | Halcyon threat research - uniquely cloud-native ransomware using customer-supplied encryption keys |
+| tj-actions/changed-files action compromise | 2025 | GitHub Actions | StepSecurity and Wiz analyses - CI/CD action supply-chain compromise |
+| Midnight Blizzard (APT29) Microsoft corporate | 2024 | Azure / Entra | Microsoft MSRC blog - password-spray into a legacy tenant, then OAuth app abuse |
+| Sisense customer credential compromise | 2024 | Cloud BI | CISA advisory - cascading cloud-BI supply-chain exposure |
 
 ---
 
@@ -89,105 +89,99 @@ Common cloud techniques:
 
 ---
 
-## HTML structure for a new panel
+## How the breach library is structured
 
-Copy this template and fill it in. Add it inside the `<main class="kc-main">` element in `breach-timeline.html`, before the `<!-- Contribute CTA -->` comment.
+Each kill chain is its **own page** at `breaches/<incident-slug>.html` (e.g. `breaches/capital-one.html`). The single-page tabbed layout (`kc-main`, `incident-tabs`, `incident-panel`) described in older versions of this guide is gone. `breach-timeline.html` is now an **index**: a grid of cards, one per breach, each linking to its page.
 
-Also add a tab button to the `<nav class="incident-tabs">` section at the top.
+Adding a kill chain therefore has two parts: **(1) create the breach page**, then **(2) register it** on the timeline, in the sitemap, and in the prev/next pager.
 
-### Tab button (add to nav)
+### 1. Create `breaches/<slug>.html`
+
+The reliable way is to **copy the newest existing page in `breaches/`** and edit it in place - that inherits the correct `<head>`, nav, footer, shared-asset integrity hashes, and the `incident-pager` markup, so you only touch the content. In the copy, update:
+
+- `<title>`, `<meta name="description">`, `<link rel="canonical">`, the Open Graph / Twitter tags, and the OG image path.
+- The two JSON-LD blocks (`Article` and `BreadcrumbList`) - change the name, description, URL, and dates. **Every JSON-LD string must use double quotes**; `tools/check_jsonld.py` (a build gate) fails on single quotes.
+- The `<h1>` (e.g. `Capital One 2019`).
+- The `<main class="kc-main kc-page">` body (below).
+
+### Page body: header + kill chain
+
+Everything below goes inside `<main class="kc-main kc-page" id="main-content">`. Note glossary links use `../glossary.html#term-...` (the `../` is required - the page is one level down).
 
 ```html
-<button class="itab" data-panel="YOUR-PANEL-ID" data-year="YYYY" role="tab">
-  Incident Name YEAR
-  <span class="itab-prov prov-aws">AWS</span>
-  <!-- Use prov-azure for Azure incidents -->
-</button>
-```
+<div class="inc-header">
+  <div class="inc-meta">
+    <span class="inc-year">Month YYYY</span>
+    <span class="sev-badge sev-critical">Critical</span>   <!-- sev-critical | sev-high | sev-medium -->
+    <span class="prov-tag prov-aws">AWS</span>             <!-- prov-aws | prov-azure | prov-gcp | prov-purple (on-prem) -->
+  </div>
+  <h2 class="inc-title">Short Name - Step1 &rarr; Step2 &rarr; Step3 &rarr; Impact</h2>
+  <p class="inc-summary">2-4 sentence plain-English summary: who did it, what went wrong, the impact.</p>
+  <div class="inc-stats">
+    <div class="inc-stat"><strong>X</strong> records / orgs impacted</div>
+    <div class="inc-stat"><strong>X days</strong> dwell time</div>
+    <div class="inc-stat"><strong>Threat actor:</strong> Name / type</div>
+  </div>
+  <a class="pm-link" href="POST_MORTEM_URL" target="_blank" rel="noopener">Source name</a>
+</div>
 
-> **Important:** The `data-year="YYYY"` attribute is required - it's what the page uses to automatically sort tabs into chronological order. Replace `YYYY` with the 4-digit year the incident occurred. If you forget it, your tab will sort to the beginning.
+<div class="kill-chain">
 
-### Full panel template
+  <!-- Repeat phase-lbl + kc-step for each step. -->
+  <!-- Phase label classes: ph-recon ph-init ph-exec ph-cred ph-priv ph-persist ph-exfil ph-disco -->
+  <!-- Step colour classes: step-r step-o step-y step-p step-b step-c step-g -->
 
-```html
-<!-- ═══════════════ YOUR INCIDENT NAME ═══════════════ -->
-<div id="YOUR-PANEL-ID" class="incident-panel" role="tabpanel">
-  <div class="inc-header">
-    <div class="inc-meta">
-      <span class="inc-year">Month YYYY</span>
-      <span class="sev-badge sev-critical">Critical</span>
-      <!-- Severity options: sev-critical, sev-high, sev-medium -->
-      <span class="prov-tag prov-aws">AWS</span>
-      <!-- Provider options: prov-aws (yellow), prov-azure (blue) -->
-      <!-- For GCP: style="background:rgba(34,197,94,.15);color:#4ade80;" -->
+  <div class="phase-lbl ph-init">Initial Access</div>
+  <div class="kc-step step-r">
+    <div class="step-num">01</div>
+    <div class="step-body">
+      <div class="step-hdr">
+        <div class="step-title">One sentence describing what the attacker did</div>
+        <a class="mt mt-ta" href="https://attack.mitre.org/techniques/TXXXX/" target="_blank" rel="noopener">TXXXX - Technique Name</a>
+        <!-- MITRE tag classes: mt-ta mt-ex mt-pe mt-de mt-ca mt-di mt-lm mt-co mt-ef mt-p2 -->
+      </div>
+      <p class="step-desc">2-4 sentences: what happened, how it worked technically, why the control failed.</p>
+      <div class="step-code">
+        <span class="hl">Key detail:</span> value or command<br>
+        <span class="hl">Why it worked:</span> the specific failure that enabled this step<br>
+        <span class="hl">Defence gap:</span> what was missing
+      </div>
+      <div class="step-tags">
+        <span class="stag">Tag</span>
+        <span class="stag">TXXXX</span>
+      </div>
     </div>
-    <h2 class="inc-title">Short Name - Step1 → Step2 → Step3 → Impact</h2>
-    <p class="inc-summary">
-      2-4 sentence plain English summary of what happened, who did it,
-      what went wrong, and what the impact was.
-    </p>
-    <div class="inc-stats">
-      <div class="inc-stat"><strong>X</strong> records/orgs/impact metric</div>
-      <div class="inc-stat"><strong>X days</strong> dwell time</div>
-      <div class="inc-stat"><strong>Threat actor:</strong> Name / type</div>
-    </div>
-    <a class="pm-link" href="POST_MORTEM_URL" target="_blank" rel="noopener">📄 Source name ↗</a>
   </div>
 
-  <div class="kill-chain">
+  <!-- Add more phase labels and steps following the same pattern -->
 
-    <!-- Repeat this block for each step. Change phase-lbl text and class as appropriate. -->
-    <!-- Phase label classes: ph-recon ph-init ph-exec ph-cred ph-priv ph-persist ph-exfil ph-disco -->
-    <!-- Step colour classes: step-r (red) step-o (orange) step-y (yellow) step-p (purple) step-b (blue) step-c (cyan) step-g (green) -->
-
-    <div class="phase-lbl ph-init">⚡ Initial Access</div>
-    <div class="kc-step step-r">
-      <div class="step-num">01</div>
-      <div class="step-body">
-        <div class="step-hdr">
-          <div class="step-title">One sentence describing what the attacker did</div>
-          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/TXXXX/" target="_blank" rel="noopener">TXXXX - Technique Name</a>
-          <!-- MITRE tag classes: mt-ta mt-ex mt-pe mt-de mt-ca mt-di mt-lm mt-co mt-ef mt-p2 -->
-        </div>
-        <p class="step-desc">
-          2-4 sentences explaining what happened, how it worked technically,
-          and why the security control failed.
-        </p>
-        <div class="step-code">
-          <span class="hl">Key detail label:</span> Value or command<br>
-          <span class="hl">Why it worked:</span> The specific failure that enabled this step<br>
-          <span class="hl">Defence gap:</span> What was missing
-        </div>
-        <div class="step-tags">
-          <span class="stag">Tag1</span>
-          <span class="stag">Tag2</span>
-          <span class="stag">TXXXX</span>
-        </div>
-      </div>
+  <div class="def-box">
+    <h3>How to Defend Against This Chain</h3>
+    <div class="def-items">
+      <div class="def-item"><strong>Specific control.</strong> Name the AWS service, Azure policy, or tool - not "improve monitoring" but "enable GuardDuty finding X." Add 3-5 items.</div>
     </div>
-
-    <!-- Add more phase labels and steps following the same pattern -->
-
-    <div class="def-box">
-      <h3>🛡 How to Defend Against This Chain</h3>
-      <div class="def-items">
-        <div class="def-item"><strong>Specific control 1.</strong> Explanation of what to do and why it would have stopped this attack.</div>
-        <div class="def-item"><strong>Specific control 2.</strong> Be concrete - name the AWS service, Azure policy, or tool. Not "improve monitoring" but "enable GuardDuty finding X."</div>
-        <!-- Add 3-5 defender items -->
-      </div>
-    </div>
-
-    <div class="src-box">
-      <h4>Primary Sources</h4>
-      <div class="src-links">
-        <a class="src-link" href="URL" target="_blank" rel="noopener">Source Name</a>
-        <!-- Add all sources used -->
-      </div>
-    </div>
-
   </div>
+
+  <div class="src-box">
+    <h4>Primary Sources</h4>
+    <div class="src-links">
+      <a class="src-link" href="URL" target="_blank" rel="noopener">Source Name</a>
+      <!-- Add all sources used -->
+    </div>
+  </div>
+
 </div>
 ```
+
+Leave the `<nav class="incident-pager">` block that the copied page already has - you fix its links in step 2.
+
+### 2. Register the page
+
+- **Timeline card.** In `breach-timeline.html`, add a `<li class="breach-card" id="<slug>">` in date order, matching the existing cards exactly (meta row with `inc-year` / `sev-badge` / `prov-tag`, then `breach-card-title`, `breach-card-summary`, and the `breach-card-cta`), linking to `breaches/<slug>.html`.
+- **ItemList schema.** In the same file's `ItemList` JSON-LD, add a `ListItem` for the new page and **increment `numberOfItems`** (e.g. `10` to `11`). The count must equal the number of cards.
+- **Pager.** Fix the `incident-pager` prev/next links on the new page and on the two pages it now sits between, so the chain stays in order.
+- **Sitemap.** Add `https://csoh.org/breaches/<slug>.html` to `sitemap.xml`.
+- **Nav/footer.** Run `python3 tools/sync_chrome.py` so the shared header/footer stay identical site-wide.
 
 ---
 
@@ -195,14 +189,14 @@ Also add a tab button to the `<nav class="incident-tabs">` section at the top.
 
 If you've found a good post-mortem but don't want to write the HTML, you can use Claude (claude.ai) to do the heavy lifting. Here's how:
 
-1. **Download `breach-timeline.html`** from the repo (go to the file on GitHub, click the download icon)
+1. **Download the newest page in `breaches/`** from the repo (open the file on GitHub, click the download icon) to use as the style template
 2. **Open a new conversation** at [claude.ai](https://claude.ai)
 3. **Upload the file** using the attachment button
 4. **Send a message** like:
 
-   > *"Please add a kill chain for the Snowflake 2024 credential stuffing campaign to this file. Here's the post-mortem: [paste URL]"*
+   > *"Using this breach page as the template, write a new `breaches/salesloft-drift.html` for the Salesloft/Drift 2025 OAuth token theft campaign, keeping the exact same page structure, classes, and JSON-LD. Here's the post-mortem: [paste URL]"*
 
-5. Claude will research the incident, write the new panel in the exact same style as the existing entries, map each step to MITRE ATT&CK techniques, and return the updated file
+5. Claude will research the incident, write a new breach page in the exact same style as the template, map each step to MITRE ATT&CK techniques, and return the file (remind it to also give you the `breach-card` and `ItemList` entries for `breach-timeline.html`)
 6. **Review the output** - check the sources, verify the MITRE mappings, and make any corrections
 7. **Submit the updated file as a PR** following the steps below
 
@@ -216,7 +210,7 @@ This approach is particularly useful if you attended a Friday Zoom session where
 
 1. **Fork** the [CSOH GitHub repository](https://github.com/CloudSecurityOfficeHours/csoh.org)
 2. **Create a branch** named `kill-chain/incident-name-year` (e.g., `kill-chain/okta-2023`)
-3. **Edit `breach-timeline.html`** - add your tab button and panel following the template above
+3. **Create `breaches/<slug>.html`** and register it (timeline card, ItemList + `numberOfItems`, pager, sitemap, `sync_chrome.py`) following the two-step structure above
 4. **Open a pull request** with the title format: `Add kill chain: [Incident Name] [Year]`
 5. In the PR description, include:
    - A one-paragraph summary of the incident

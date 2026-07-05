@@ -195,10 +195,23 @@ def default_headline(meeting: dict) -> str:
 
 
 def truncate(s: str, n: int) -> str:
+    """Trim a recap to <= ~n chars for a meta description.
+
+    Prefer ending on a complete sentence: search for the last sentence
+    boundary at/under n+5 chars that still leaves at least half the budget.
+    Only when the first sentence itself overflows do we fall back to a word
+    boundary with a trailing ellipsis to signal truncation."""
+    s = " ".join(s.split())
     if len(s) <= n:
         return s
-    cut = s[: n - 1].rsplit(" ", 1)[0]
-    return cut + "…"
+    window = s[: n + 5]
+    best = -1
+    for m in re.finditer(r'[.!?]["\')\]]?(?=\s|$)', window):
+        if m.end() >= n * 0.5:
+            best = m.end()
+    if best != -1:
+        return window[:best].strip()
+    return s[: n - 1].rsplit(" ", 1)[0].rstrip(",;:· ") + "…"
 
 
 def render_article_body(meeting: dict, headline: str) -> str:
@@ -282,9 +295,11 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
         f'<meta name="keywords" content="cloud security meeting recap, CSOH, {iso}, Friday Zoom, {h.escape(headline_clean, quote=True)}">',
         out, count=1,
     )
+    short_date = dt.date.fromisoformat(iso).strftime("%b %-d, %Y")
+    title_headline = headline if len(headline) <= 70 else headline[:70].rsplit(" ", 1)[0]
     out = re.sub(
         r"<title>[^<]*</title>",
-        f"<title>{human} - CSOH Meeting Recap</title>",
+        f"<title>{h.escape(title_headline, quote=False)} - CSOH Recap, {short_date}</title>",
         out, count=1,
     )
     out = re.sub(

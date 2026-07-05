@@ -383,6 +383,17 @@ def mask_skip_zones(content: str) -> tuple[str, list[str]]:
             flags=re.DOTALL | re.IGNORECASE,
         )
 
+    # 2b. Class-based skip zones. Copy-paste examples and code samples that
+    #     are marked up as <div>/<span> (not <code>/<pre>) must never receive
+    #     injected <a> markup, or contributors paste anchor tags into PRs.
+    for tag in ("div", "span"):
+        content = re.sub(
+            rf'<{tag}\b[^>]*\bclass="[^"]*\b(?:code-block|tag-example)\b[^"]*"[^>]*>.*?</{tag}>',
+            stash,
+            content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
     # 3. Existing anchors anywhere
     content = re.sub(
         r"<a\b[^>]*>.*?</a>",

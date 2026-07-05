@@ -45,7 +45,18 @@ DENYLIST = {
     "csp",
     "sp",
     "soc",
+    "cloud",
 }
+
+
+def _acronymish(s: str) -> bool:
+    """True if s reads like an acronym (CNAPP, MFA, ATT&CK, S3) rather than
+    an ordinary word or phrase. Used to tell an acronym/expansion parenthetical
+    ("CNAPP (Cloud-Native Application Protection Platform)") apart from a
+    disambiguation qualifier ("Air Gap (Cloud)", "Ambient Mode (Service Mesh)")
+    that must never become a link alias."""
+    letters = re.sub(r"[^A-Za-z]", "", s)
+    return bool(letters) and len(s.strip()) <= 8 and letters.isupper()
 
 
 def derive_keys(dt_inner_html: str) -> list[str]:
@@ -67,11 +78,16 @@ def derive_keys(dt_inner_html: str) -> list[str]:
             piece = piece.strip()
             if piece:
                 keys.append(piece)
-        # Then any aliases inside parens.
+        # Then any aliases inside parens - but only when the pair reads as an
+        # acronym/expansion ("CNAPP (Cloud-Native Application Protection
+        # Platform)"), not a disambiguation qualifier ("Air Gap (Cloud)").
+        # Registering "Cloud" as an alias once wrapped the bare word "cloud"
+        # 60x across the glossary, all pointing at term-air-gap.
+        base_is_acronym = _acronymish(base)
         for m in re.finditer(r"\(([^)]+)\)", s):
             for piece in re.split(r"\s*/\s*", m.group(1)):
                 piece = piece.strip()
-                if piece:
+                if piece and (base_is_acronym or _acronymish(piece)):
                     keys.append(piece)
 
     add_with_parens(lhs)
