@@ -393,16 +393,48 @@ def patch_prev_pager(prev_iso: str, new_iso: str) -> None:
     p.write_text(txt, encoding="utf-8")
 
 
-def find_existing_newest_other_than(iso: str) -> str:
-    """Find the existing newest meeting iso, excluding the supplied one."""
-    candidates = sorted(
-        (p.stem for p in MEETINGS_DIR.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html")),
-        reverse=True,
+def patch_next_pager(next_iso: str, new_iso: str) -> None:
+    """Add or update an '← Older meeting' link on the next (newer) page so it
+    points back at a newly inserted page. Needed when a meeting is inserted in
+    the middle of the timeline, not just appended as the newest."""
+    p = MEETINGS_DIR / f"{next_iso}.html"
+    if not p.exists():
+        return
+    txt = p.read_text(encoding="utf-8")
+    if re.search(r'class="pager-link pager-prev"', txt):
+        txt = re.sub(
+            r'(<a class="pager-link pager-prev" href=")[^"]+(">[^<]*</a>)',
+            rf"\g<1>{new_iso}.html\g<2>",
+            txt, count=1,
+        )
+    else:
+        txt = re.sub(
+            r'(<a class="pager-link pager-index" href="\.\./meetings\.html">All meetings</a>)',
+            rf'<a class="pager-link pager-prev" href="{new_iso}.html">← Older meeting</a>\n            \1',
+            txt, count=1,
+        )
+    p.write_text(txt, encoding="utf-8")
+
+
+def find_neighbors(iso: str) -> tuple[str, str]:
+    """Return (older_iso, newer_iso): the chronological neighbors of `iso` among
+    existing meeting pages. Either may be "" when there is no neighbor on that
+    side. This lets a meeting be inserted anywhere in the timeline - not only
+    appended as the newest - and still wire its pager to the right pages."""
+    others = sorted(
+        p.stem
+        for p in MEETINGS_DIR.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html")
+        if p.stem != iso
     )
-    for d in candidates:
-        if d != iso:
-            return d
-    return ""
+    older = ""
+    newer = ""
+    for d in others:
+        if d < iso:
+            older = d          # ascending list, so the last one below iso wins
+        elif d > iso and not newer:
+            newer = d          # first one above iso
+    return older, newer
+
 
 
 def render_card(meeting: dict, headline: str) -> str:
@@ -440,11 +472,28 @@ def update_meetings_index(meeting: dict, headline: str) -> None:
     if existing_card_re.search(txt):
         txt = existing_card_re.sub(card, txt, count=1)
     else:
-        txt = re.sub(
-            r'(<div class="meeting-list">\s*\n)',
-            rf"\g<1>{card}\n",
-            txt, count=1,
-        )
+        # Insert in date-descending position: before the first existing card
+        # whose date is older than this one. Falls back to top (newest) or
+        # bottom (oldest) as appropriate, so mid-timeline back-fills land in
+        # the right slot instead of always at the top.
+        card_body = card.lstrip(" ")
+        cards = list(re.finditer(
+            r'<article class="section meeting-card" id="meeting-([0-9-]+)">.*?</article>',
+            txt, re.DOTALL,
+        ))
+        older = next((m for m in cards if m.group(1) < iso), None)
+        if older is not None:
+            pos = older.start()
+            txt = txt[:pos] + card_body + "\n        " + txt[pos:]
+        elif cards:
+            pos = cards[-1].end()
+            txt = txt[:pos] + "\n        " + card_body + txt[pos:]
+        else:
+            txt = re.sub(
+                r'(<div class="meeting-list">\s*\n)',
+                rf"\g<1>{card}\n",
+                txt, count=1,
+            )
 
     n_now = len(re.findall(r'<article class="section meeting-card"', txt))
 
@@ -463,9 +512,16 @@ def update_meetings_index(meeting: dict, headline: str) -> None:
             existing.append((em.group(1), em.group(2)))
         new_url = f"https://csoh.org/meetings/{iso}.html"
         new_name = f"{iso}: {headline.replace(chr(34), chr(39))}"
-        # Drop any prior entry for this iso (replace path).
+        # Drop any prior entry for this iso (replace path), then re-sort the
+        # whole list date-descending so a mid-timeline insert lands in order.
         existing = [(u, n) for (u, n) in existing if iso not in u]
-        full = [(new_url, new_name)] + existing
+        full = existing + [(new_url, new_name)]
+
+        def _iso_of(url: str) -> str:
+            m = re.search(r"/meetings/(\d{4}-\d{2}-\d{2})\.html", url)
+            return m.group(1) if m else ""
+
+        full.sort(key=lambda un: _iso_of(un[0]), reverse=True)
         rebuilt = []
         for pos, (url, name) in enumerate(full, start=1):
             rebuilt.append(
@@ -594,19 +650,23 @@ def main(argv: list[str] | None = None) -> int:
     headline = (args.headline or default_headline(meeting)).strip()
 
     iso = meeting["date"]
-    existing_newest = find_existing_newest_other_than(iso)
+    # Wire the pager to the meeting's actual chronological neighbors, so a
+    # back-filled recap can be inserted anywhere in the timeline (not only
+    # appended as the newest).
+    older_iso, newer_iso = find_neighbors(iso)
 
-    # Per-meeting page. New meeting becomes the newest, so next_iso is empty;
-    # prev_iso is the previously-newest (or its prior link if we're replacing).
-    page = render_full_page(meeting, headline, prev_iso=existing_newest, next_iso="")
+    page = render_full_page(meeting, headline, prev_iso=older_iso, next_iso=newer_iso)
     out_path = MEETINGS_DIR / f"{iso}.html"
     action = "Replaced" if out_path.exists() else "Wrote"
     out_path.write_text(page, encoding="utf-8")
     print(f"{action} {out_path.relative_to(REPO_ROOT)}")
 
-    if existing_newest and existing_newest != iso:
-        patch_prev_pager(existing_newest, iso)
-        print(f"  patched {existing_newest}.html pager → next={iso}")
+    if older_iso:
+        patch_prev_pager(older_iso, iso)
+        print(f"  patched {older_iso}.html pager → next={iso}")
+    if newer_iso:
+        patch_next_pager(newer_iso, iso)
+        print(f"  patched {newer_iso}.html pager → prev={iso}")
 
     update_meetings_index(meeting, headline)
     update_sitemap(iso)
