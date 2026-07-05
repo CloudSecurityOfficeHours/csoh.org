@@ -1038,3 +1038,55 @@ function initDropdownNav() {
         if (e.key === 'Escape') closeAll(null);
     });
 }
+
+// Localize the weekly session time. The session is Friday 07:00
+// America/Los_Angeles; show the viewer their local equivalent next to the
+// advertised "7am PT" so members outside Pacific time don't have to do the
+// math. Purely additive: if Intl is unavailable or the viewer is already on
+// Pacific time, the marker span is left empty.
+(function () {
+    var els = document.querySelectorAll('[data-session-localtime]');
+    if (!els.length || typeof Intl === 'undefined' || !Intl.DateTimeFormat) return;
+    var TZ = 'America/Los_Angeles';
+
+    // Offset (ms) of TZ at a given instant: local wall time minus UTC.
+    function tzOffset(instant) {
+        var parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: TZ, hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }).formatToParts(instant);
+        var m = {};
+        for (var i = 0; i < parts.length; i++) m[parts[i].type] = parts[i].value;
+        var hour = m.hour === '24' ? '00' : m.hour;
+        var asUTC = Date.UTC(+m.year, +m.month - 1, +m.day, +hour, +m.minute, +m.second);
+        return asUTC - instant.getTime();
+    }
+
+    // Instant of the upcoming Friday 07:00 PT. (Friday 7am is never near a
+    // DST switch, so the offset at 07:00 UTC that day equals the real one.)
+    var now = new Date();
+    var target = null;
+    for (var d = 0; d < 8 && !target; d++) {
+        var probe = new Date(now.getTime() + d * 86400000);
+        if (new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(probe) !== 'Fri') continue;
+        var ymd = new Intl.DateTimeFormat('en-CA', {
+            timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(probe).split('-');
+        var naiveUTC = Date.UTC(+ymd[0], +ymd[1] - 1, +ymd[2], 7, 0, 0);
+        var candidate = new Date(naiveUTC - tzOffset(new Date(naiveUTC)));
+        if (candidate.getTime() > now.getTime()) target = candidate;
+    }
+    if (!target) return;
+
+    var viewerTZ = '';
+    try { viewerTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    if (viewerTZ === TZ) return; // already Pacific - nothing to add
+
+    var local = new Intl.DateTimeFormat(undefined, {
+        weekday: 'long', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    }).format(target);
+    for (var j = 0; j < els.length; j++) {
+        els[j].textContent = ' (that’s ' + local + ' your time)';
+    }
+})();

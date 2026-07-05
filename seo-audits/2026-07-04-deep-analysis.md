@@ -51,7 +51,7 @@ Multi-agent qualitative analysis (15 agents: 10 site-slice readers + 3 external 
 - [ ] "How csoh.org is secured" engineering-tour page + public securityheaders.com/Observatory grades.
 - [ ] AI-era sections on zero-trust, api-security, saas-security.
 - [ ] Static /csoh.ics + "Submit a question for Friday" Google Form.
-- [ ] Local-time `Intl.DateTimeFormat` snippet on session-time surfaces.
+- [x] **Local-time snippet** - main.js computes the viewer's local equivalent of the next Friday 07:00 PT (DST-correct via Intl offset math) and appends it to `[data-session-localtime]` spans on index.html + sessions.html; skips silently for Pacific viewers. Verified: algorithm (LA 07:00 / NY 10:00 / London 15:00) + DOM fill in-browser. Rebumped main.js SRI across 205 pages (own commit).
 - [ ] Consent/PII policy for named community members (gates the amplification work).
 
 ## Quarter - new content (ranked by SERP winnability)
