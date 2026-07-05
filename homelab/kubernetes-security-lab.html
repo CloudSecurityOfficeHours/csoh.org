@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Build a free Kubernetes security lab on your laptop with kind and Kubernetes Goat: exploit RBAC, secrets, and container escape, then harden with Pod Security admission, NetworkPolicy, kube-bench, and kubescape.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="kubernetes security lab, kind kubernetes goat, kubernetes goat walkthrough, k8s rbac, pod security admission, networkpolicy, kube-bench, kubescape, container escape">
+    <title>Kubernetes security lab: kind + Kubernetes Goat - CSOH Home Lab</title>
+
+    <link rel="canonical" href="https://csoh.org/homelab/kubernetes-security-lab.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/homelab/kubernetes-security-lab.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/homelab/kubernetes-security-lab.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Kubernetes security lab: kind + Kubernetes Goat - CSOH">
+    <meta property="og:description" content="Build a free Kubernetes security lab on your laptop with kind and Kubernetes Goat: exploit RBAC, secrets, and container escape, then harden with Pod Security admission, NetworkPolicy, kube-bench, and kubescape.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-07-05">
+    <meta property="article:modified_time" content="2026-07-05">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="Home Lab">
+    <meta property="article:tag" content="kubernetes security lab">
+    <meta property="article:tag" content="kind kubernetes goat">
+    <meta property="article:tag" content="k8s rbac">
+    <meta property="article:tag" content="pod security admission">
+    <meta property="article:tag" content="kube-bench">
+    <meta property="article:tag" content="kubescape">
+    <meta property="og:url" content="https://csoh.org/homelab/kubernetes-security-lab.html">
+    <meta property="og:image" content="https://csoh.org/img/og/cloud-security-home-lab.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kubernetes security lab: kind + Kubernetes Goat">
+    <meta name="twitter:description" content="Build a free Kubernetes security lab on your laptop with kind and Kubernetes Goat: exploit RBAC, secrets, and container escape, then harden with Pod Security admission, NetworkPolicy, kube-bench, and kubescape.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/cloud-security-home-lab.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://www.paypal.com/us/home">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=fbfcc2db" as="style"
+        integrity="sha384-kDAccZlI8MgEpgryDTHyW5u7Qln3ej47mWOIg5CKFain7VrL+XyzcEz+tEzAWYAb">
+    <link rel="stylesheet" href="/style.css?v=fbfcc2db"
+        integrity="sha384-kDAccZlI8MgEpgryDTHyW5u7Qln3ej47mWOIg5CKFain7VrL+XyzcEz+tEzAWYAb">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Kubernetes security lab: kind + Kubernetes Goat",
+      "description": "Build a free Kubernetes security lab on your laptop with kind and Kubernetes Goat: exploit RBAC, secrets, and container escape, then harden with Pod Security admission, NetworkPolicy, kube-bench, and kubescape.",
+      "totalTime": "PT4H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-07-05",
+      "dateModified": "2026-07-05",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": { "@type": "ImageObject", "url": "https://csoh.org/banner.png" }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Install kind and kubectl",
+          "text": "Install the kind and kubectl binaries with Homebrew or the official release."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Create a multi-node cluster",
+          "text": "Write a kind config with one control-plane and two workers and run kind create cluster."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Deploy Kubernetes Goat",
+          "text": "Clone the repo and run setup-kubernetes-goat.sh and access-kubernetes-goat.sh."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Exploit exposed secrets",
+          "text": "Read the mounted service-account token from inside a compromised pod."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Map the RBAC blast radius",
+          "text": "Use kubectl auth can-i --list as a service account to see what a pod compromise reaches."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Baseline with kube-bench and kubescape",
+          "text": "Run the CIS benchmark and a posture scan and triage the findings."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Harden a namespace",
+          "text": "Apply restricted Pod Security admission and a default-deny NetworkPolicy, using Calico for enforcement."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Tear it down",
+          "text": "Run kind delete cluster to remove everything instantly and for free."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://csoh.org/" },
+        { "@type": "ListItem", "position": 2, "name": "Cloud Security Home Lab", "item": "https://csoh.org/cloud-security-home-lab.html" },
+        { "@type": "ListItem", "position": 3, "name": "Kubernetes security lab", "item": "https://csoh.org/homelab/kubernetes-security-lab.html" }
+      ]
+    }
+    </script>
+</head>
+
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="../index.html" class="logo-link">
+                <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-5col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">By Cloud <span class="caret" aria-hidden="true">&#9662;</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../aws-security.html">AWS Security</a></li>
+                        <li><a href="../azure-security.html">Azure Security</a></li>
+                        <li><a href="../gcp-security.html">GCP Security</a></li>
+                        <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../help-desk-to-cloud-security.html">Help Desk → Cloud Security</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html" aria-current="page">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-2col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+            <li><span aria-current="page">Kubernetes security lab</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Kubernetes security lab: kind + Kubernetes Goat</h1>
+        <p>Learn Kubernetes attack and defense on a real cluster that runs entirely on your laptop. Build it with kind, break it with Kubernetes Goat, then harden it - all for $0.</p>
+        <div class="cta-buttons">
+            <a href="#steps" class="btn btn-primary">Jump to the build</a>
+            <a href="../cloud-security-home-lab.html" class="btn btn-secondary">Back to Home Lab</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-07-05">Last updated <strong>2026-07-05</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~3 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>Stack:</strong> Docker &middot; kind &middot; kubectl &middot; Kubernetes Goat &middot; kube-bench &middot; kubescape</p>
+        </div>
+
+        <section id="intro">
+            <p>You can learn the overwhelming majority of Kubernetes attack and defense on your laptop, for free. <a href="https://kind.sigs.k8s.io/" target="_blank" rel="noopener noreferrer">kind</a> ("Kubernetes IN Docker") spins up a real, conformant cluster inside Docker containers in about thirty seconds. <a href="https://github.com/madhuakula/kubernetes-goat" target="_blank" rel="noopener noreferrer">Kubernetes Goat</a> is a deliberately vulnerable cluster full of realistic scenarios - leaked secrets, SSRF, container escape, over-permissive RBAC. This walkthrough builds the cluster, walks several Goat scenarios hands-on, then flips to defense: you baseline the cluster with kube-bench and kubescape and lock a namespace down with Pod Security admission and NetworkPolicies.</p>
+        </section>
+
+        <div class="highlight-box">
+            <p><strong>Laptop only.</strong> Kubernetes Goat is intentionally exploitable. Run it on a local kind cluster you can delete - never on a shared, cloud, or production cluster, and never expose its ports beyond localhost.</p>
+        </div>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#deliverables">What you will build</a></li>
+                <li><a href="#prereqs">Prerequisites</a></li>
+                <li><a href="#steps">Step-by-step</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="deliverables">
+            <h2>What you will build</h2>
+            <ul>
+                <li>A multi-node kind cluster you can create and destroy at will.</li>
+                <li>Kubernetes Goat deployed and reachable through local port-forwards.</li>
+                <li>Hands-on completion of several attack scenarios, with the exact commands.</li>
+                <li>A CIS benchmark (kube-bench) and posture (kubescape) baseline of the cluster.</li>
+                <li>A hardened namespace: default-deny NetworkPolicy plus restricted Pod Security.</li>
+            </ul>
+        </section>
+
+        <section id="prereqs">
+            <h2>Prerequisites</h2>
+            <ul>
+                <li><strong>Docker</strong> - kind runs each node as a container.</li>
+                <li><strong>kubectl</strong> - the Kubernetes CLI.</li>
+                <li><strong>kind</strong> - installed below.</li>
+                <li><strong>git</strong> - to clone Kubernetes Goat.</li>
+                <li>Skim the <a href="../kubernetes.html">Kubernetes security reference</a> first for the threat-model context - what RBAC, admission control, and the service-account token actually are.</li>
+            </ul>
+        </section>
+
+        <section id="steps">
+            <h2>Step-by-step</h2>
+
+            <h3>1. Install kind and kubectl</h3>
+<div class="code-block"><pre># macOS via Homebrew (see kubernetes.io / kind.sigs.k8s.io for Linux and Windows)
+brew install kubectl kind
+
+kind --version
+kubectl version --client</pre></div>
+            <h3>2. Create a multi-node cluster</h3>
+            <p><code>kind-config.yaml</code>:</p>
+<div class="code-block"><pre>kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker</pre></div>
+<div class="code-block"><pre>kind create cluster --name goat --config kind-config.yaml
+kubectl get nodes                     # one control-plane, two workers
+kubectl cluster-info --context kind-goat</pre></div>
+            <p>Each "node" is a Docker container running a full kubelet. A multi-node cluster lets you observe pod scheduling and NetworkPolicy behavior that a single node hides.</p>
+
+            <h3>3. Deploy Kubernetes Goat</h3>
+<div class="code-block"><pre>git clone https://github.com/madhuakula/kubernetes-goat.git
+cd kubernetes-goat
+bash setup-kubernetes-goat.sh         # deploys all the vulnerable workloads
+kubectl get pods                      # watch them reach Running
+bash access-kubernetes-goat.sh        # sets up the kubectl port-forwards</pre></div>
+            <p>With the port-forwards running, open <code>http://localhost:1234</code> for the Goat scenario hub. Each scenario has a short brief and a hint page.</p>
+
+            <h3>4. Scenario: secrets exposed to a pod</h3>
+            <p>Walk the "Sensitive keys in codebases" and "DIND (Docker-in-Docker) exploitation" scenarios. The core lesson is how much a single compromised pod can see:</p>
+<div class="code-block"><pre># what secrets can the default service account list?
+kubectl get secrets
+kubectl get secret &lt;name&gt; -o jsonpath='{.data}' | jq
+
+# from inside a compromised pod, read the mounted service-account token
+kubectl exec -it &lt;pod-name&gt; -- sh
+# ...then, inside the pod:
+cat /var/run/secrets/kubernetes.io/serviceaccount/token
+cat /var/run/secrets/kubernetes.io/serviceaccount/namespace</pre></div>
+            <p>Every pod gets a service-account token mounted at that path by default. If the pod is compromised and its service account is over-permissive, the attacker inherits those API rights. That single fact drives most in-cluster privilege escalation.</p>
+
+            <h3>5. Scenario: map the RBAC blast radius</h3>
+<div class="code-block"><pre># what can this service account actually do?
+kubectl auth can-i --list \
+  --as=system:serviceaccount:default:default
+
+# check one specific dangerous verb
+kubectl auth can-i create pods \
+  --as=system:serviceaccount:default:default</pre></div>
+            <p><code>kubectl auth can-i</code> is the single most useful RBAC command. Running it <em>as</em> a service account shows you the exact blast radius of a pod compromise. If a default service account can <code>create pods</code> or <code>get secrets</code> cluster-wide, that is your finding.</p>
+
+            <h3>6. Scenario: spot a container-escape path</h3>
+<div class="code-block"><pre># inspect a pod spec for the classic escape enablers
+kubectl get pod &lt;pod-name&gt; -o yaml \
+  | grep -iE 'hostPath|privileged|hostNetwork|hostPID|securityContext' -A2</pre></div>
+            <p>A <code>hostPath</code> mount of <code>/</code>, <code>privileged: true</code>, or <code>hostPID: true</code> each turns a container compromise into node compromise. Kubernetes Goat's "container escape to the host system" scenario walks the full exploitation; the grep above is how you find the same red flags in any real pod spec.</p>
+
+            <h3>7. Baseline the cluster with kube-bench and kubescape</h3>
+<div class="code-block"><pre># kube-bench: runs the CIS Kubernetes Benchmark as a Job
+kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml
+kubectl wait --for=condition=complete job/kube-bench --timeout=120s
+kubectl logs job/kube-bench
+
+# kubescape: posture scan against the NSA/CISA and MITRE frameworks
+brew install kubescape
+kubescape scan --format html --output kubescape-report.html</pre></div>
+            <p>kube-bench grades the cluster against the CIS benchmark control by control; kubescape maps findings to attack frameworks and produces a shareable report. Trivy can also scan the whole cluster in one shot: <code>trivy k8s --report summary cluster</code>. Reading these reports - deciding what is a real risk versus benchmark noise on a kind cluster - is the actual skill.</p>
+
+            <h3>8. Harden a namespace: Pod Security admission</h3>
+<div class="code-block"><pre>kubectl create namespace secure-app
+kubectl label namespace secure-app \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/warn=restricted
+
+# now try to run a privileged pod there - admission rejects it
+kubectl -n secure-app run bad --image=nginx \
+  --overrides='{"spec":{"containers":[{"name":"bad","image":"nginx","securityContext":{"privileged":true}}]}}' </pre></div>
+            <p>Pod Security admission is built into modern Kubernetes. The <code>restricted</code> profile blocks privileged containers, host namespaces, and <code>hostPath</code> mounts - the exact things you exploited in step 6. Watch the API server reject the bad pod with a clear policy violation.</p>
+
+            <h3>9. Harden the network: default-deny</h3>
+            <p><code>default-deny.yaml</code>:</p>
+<div class="code-block"><pre>apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: secure-app
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]</pre></div>
+            <div class="highlight-box">
+            <p><strong>Important caveat most tutorials skip:</strong> kind's default CNI (kindnet) does <em>not</em> enforce NetworkPolicy, so the policy above will appear to do nothing. To actually see traffic get denied, recreate the cluster with the default CNI disabled and install Calico or Cilium:</p>
+            </div>
+<div class="code-block"><pre># add `networking: {disableDefaultCNI: true}` to kind-config.yaml, then:
+kind create cluster --name goat --config kind-config.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+kubectl -n secure-app apply -f default-deny.yaml</pre></div>
+            <h3>10. Tear it down</h3>
+<div class="code-block"><pre>kind delete cluster --name goat</pre></div>
+            <p>Instant, complete, and free. Recreate the whole lab in thirty seconds whenever you want a clean slate.</p>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Running Kubernetes Goat on a real or shared cluster.</strong> It is deliberately vulnerable - laptop kind only.</li>
+                <li><strong>Expecting NetworkPolicy to work under kindnet.</strong> You need Calico or Cilium for enforcement.</li>
+                <li><strong>Skipping <code>kubectl auth can-i --list</code>.</strong> It is the fastest way to understand what a compromised pod can reach.</li>
+                <li><strong>Treating kube-bench output as a to-do list.</strong> Many controls are noise on a throwaway kind cluster; judgment about what matters is the point.</li>
+                <li><strong>Leaving the cluster running.</strong> It costs nothing but eats RAM - <code>kind delete cluster</code> when done.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="../kubernetes.html">Kubernetes security reference</a> - the concepts behind every command here.</li>
+                <li><a href="../containers.html">Container security</a> - image scanning and the escape threat model.</li>
+                <li><a href="localstack-aws-lab.html">Free AWS lab with LocalStack</a> - the same $0 approach for cloud APIs.</li>
+                <li><a href="../cloud-pentesting.html">Cloud pentesting</a> and <a href="../ctfs.html">the CTF directory</a> for more targets.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Explore</h3>
+        <ul>
+          <li><a href="../index.html#about">About CSOH</a></li>
+          <li><a href="../learning-path.html">Learning Path</a></li>
+          <li><a href="../resources.html">Resources</a></li>
+          <li><a href="../news.html">News</a></li>
+          <li><a href="../sessions.html">Zoom Sessions</a></li>
+          <li><a href="../meetings.html">Meeting Recaps</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Connect</h3>
+        <ul>
+          <li><a href="mailto:admin@csoh.org">Contact</a></li>
+          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="../rss.html">RSS Feed</a></li>
+          <li><a href="../contribute.html">Contribute</a></li>
+          <li><a href="../contribute-resources.html">Add a Resource</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Developer Docs</h3>
+        <ul>
+          <li><a href="../github-actions.html">GitHub Actions</a></li>
+          <li><a href="../cloud-deployment.html">Multi-Cloud Deploy</a></li>
+          <li><a href="../terraform.html">Terraform</a></li>
+          <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=945e0f48" integrity="sha384-ZXJxGO/qVRf4o2JPKOyPDss7ihs3g+T+C/RxkLFffqnOkQwmd4lw+DIbURQGs3kE"
+        defer></script>
+</body>
+
+</html>

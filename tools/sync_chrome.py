@@ -329,17 +329,19 @@ def active_href_for(path: Path) -> str | None:
         return 'meetings.html'
     if parent == 'portfolio':
         return 'cloud-security-portfolio-projects.html'
+    if parent == 'homelab':
+        return 'cloud-security-home-lab.html'
     return path.name
 
 
 def build_nav(path: Path) -> str:
-    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio')
+    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio', 'homelab')
     nav = mark_active(CANON_NAV, active_href_for(path))
     return add_prefix(nav) if is_sub else nav
 
 
 def build_footer(path: Path) -> str:
-    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio')
+    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio', 'homelab')
     return add_prefix(CANON_FOOTER) if is_sub else CANON_FOOTER
 
 
@@ -367,6 +369,7 @@ def main() -> None:
     paths.extend((REPO / 'breaches').glob('*.html'))
     paths.extend((REPO / 'meetings').glob('*.html'))
     paths.extend((REPO / 'portfolio').glob('*.html'))
+    paths.extend((REPO / 'homelab').glob('*.html'))
 
     tally = {'updated': 0, 'unchanged': 0, 'skipped': 0}
     skipped: list[str] = []
