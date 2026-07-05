@@ -45,7 +45,8 @@ Multi-agent qualitative analysis (15 agents: 10 site-slice readers + 3 external 
 ## Month 2 - larger editorial
 
 - [ ] Rebuild sessions.html (thinnest page in the conversion path, #2 most-linked).
-- [ ] 2026 currency pass: vendor-landscape (5 stale entries, +NHI/+ASM-CTEM), cspm-vs-cnapp (+AI-SPM/CDR, drop Lacework), compliance-frameworks (+EU AI Act/ISO 42001).
+- [x] **2026 currency pass** - vendor-landscape: fixed 4 stale entries (QRadar->Palo Alto, Secureworks->Sophos, Skyhigh un-Trellixed, Banyan->SonicWall) + added NHI and ASM/CTEM categories (ItemList 28->30). cspm-vs-cnapp: dropped Lacework->FortiCNAPP (3 spots), noted the ~$32B Google/Wiz acquisition, added an AI-SPM/CDR section. compliance-frameworks: added an "AI governance: EU AI Act & ISO 42001" section + decision-tree branch. All anchors + TOC + JSON-LD verified.
+- [x] **Quick wins (partial)** - fixed the stale Cloud Next link (->canonical /next/); shipped a static /csoh.ics (weekly Friday 7am PT with VTIMEZONE) linked from faq.html + sessions.html. DEFERRED: local-time Intl.DateTimeFormat snippet (doable but rebumps main.js SRI across ~190 pages - warrants its own commit). NEEDS INPUT: "Submit a question" Google Form URL; presentations.html 2026 talk data; chat-resources export data.
 - [ ] cloud-security-engineer.html expansion to template parity (~4k vs 8.7-17k words).
 - [ ] "How csoh.org is secured" engineering-tour page + public securityheaders.com/Observatory grades.
 - [ ] AI-era sections on zero-trust, api-security, saas-security.
