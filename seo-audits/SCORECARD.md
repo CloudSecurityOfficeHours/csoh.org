@@ -42,6 +42,7 @@ Track audit scores over time. Add a new row each time `/seo-audit` is run. Lower
 | 2026-06-29 | **100** | 100 | 99 | 100 | 100 | 100 | 0 | 1 | [report](2026-06-29-auto-1.md) |
 | 2026-07-05 | **89** | 100 | 44 | 100 | 100 | 100 | 0 | 56 | [report](2026-07-05.md) |
 | 2026-07-06 | **98** | 100 | 95 | 100 | 100 | 96 | 0 | 7 | [report](2026-07-06.md) |
+| 2026-07-06 | **86** | 100 | 30 | 100 | 100 | 100 | 0 | 70 | [report](2026-07-06-auto-1.md) |
 
 ## PageSpeed Insights - homepage (https://csoh.org/)
 
