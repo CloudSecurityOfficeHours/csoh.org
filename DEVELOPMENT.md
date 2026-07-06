@@ -140,7 +140,7 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 280+ curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # 370+ curated resources (largest page; auto-refreshed weekly)
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page
 │
@@ -166,8 +166,8 @@ csoh.org/
 ├── security-policy.html
 │
 │  ── Per-breach pages and meeting recaps ──
-├── breaches/                        # 10 per-breach kill chain pages (split from breach-timeline.html)
-├── meetings/                        # 94 per-meeting recap pages (split from meetings.html)
+├── breaches/                        # 13 per-breach kill chain pages (split from breach-timeline.html)
+├── meetings/                        # 102 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 │
 │  ── Shared assets ──
@@ -179,7 +179,7 @@ csoh.org/
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
-├── .github/workflows/      # CI/CD pipelines (12 workflows: update-news, update-resources, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
+├── .github/workflows/      # CI/CD pipelines (13 workflows: update-news, update-resources, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
 └── update_news.py          # News aggregation from 39 RSS feeds
 ```
 
@@ -216,8 +216,9 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | Workflow | When | What it does | Where the report lands |
 | --- | --- | --- | --- |
 | [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Google PageSpeed Insights (mobile + desktop) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
-| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across 190 indexable pages | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
+| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across every indexable page (counted at runtime) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
 | [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | RSS-feed staleness check on `cloud-security-reading-list.html` | Opens or refreshes a sticky issue labeled `reading-list-staleness` |
+| [`check-meeting-staleness.yml`](.github/workflows/check-meeting-staleness.yml) | Mon 15:00 | Checks the newest meeting recap isn't older than the threshold | Opens or refreshes a sticky issue labeled `meeting-staleness` |
 
 A few patterns worth knowing before you touch any of these:
 

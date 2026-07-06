@@ -79,7 +79,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 |---|---|
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 39 sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 10 real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 13 real cloud breaches mapped to MITRE ATT&CK |
 | 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
@@ -148,7 +148,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | 94 weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | 102 weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
 
@@ -479,6 +479,11 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 | Scattered Spider / MGM | 2023 | Okta / Azure | T1598, T1078, T1484, T1486 |
 | Snowflake / UNC5537 | 2024 | Snowflake | T1078.004, T1555.003, T1530, T1657 |
 | Promptware | 2024-2026 | AI / LLM (Gemini, Copilot) | T1566, T1071.001, T1534, T1530 |
+| Codefinger / S3 | 2025 | AWS S3 | T1552, T1078.004, T1486, T1657 |
+| tj-actions/changed-files | 2025 | GitHub Actions | T1195.001, T1552.001, T1078 |
+| Salesloft Drift / UNC6395 | 2025 | Salesforce / SaaS | T1528, T1078.004, T1213, T1530 |
+
+The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined this past year are collected in the **[2025 Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review-2025.html)**.
 
 ### How to contribute a kill chain
 
@@ -579,8 +584,8 @@ csoh.org/
 ├── about.html                  # About CSOH: mission and ethos
 ├── about-shawn-nunley.html     # Founder bio (Person / ProfilePage schema, E-E-A-T)
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages live in /breaches/)
-├── breaches/                   # 10 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 94 per-meeting recap pages (split from meetings.html)
+├── breaches/                   # 13 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── meetings/                   # 102 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── cloud-security-best-practices.html  # Practitioner's controls checklist
 ├── shared-responsibility-model.html    # Provider vs. customer security split
@@ -681,6 +686,7 @@ csoh.org/
 │   ├── lint.yml                     # actionlint + ruff + yamllint on every push/PR
 │   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
 │   ├── check-reading-list-staleness.yml # Monthly reading-list feed staleness -> tracking issue
+│   ├── check-meeting-staleness.yml   # Weekly check that the newest recap isn't stale -> sticky issue
 │   ├── check-pagespeed.yml          # Weekly Google PageSpeed Insights run → SCORECARD row + regression issue (Mon 14:00 UTC)
 │   ├── run-seo-audit.yml            # Weekly deterministic structural SEO audit → SCORECARD row + regression issue (Mon 14:15 UTC)
 │   ├── deploy.yml                   # Build once, publish to AWS + GCP + Azure (keyless OIDC)
@@ -894,7 +900,7 @@ Runs `tools/check_pagespeed.py` against `https://csoh.org/` - mobile + desktop i
 
 **`run-seo-audit.yml` - Mondays 14:15 UTC**
 
-Runs `tools/run_seo_audit.py` - a deterministic structural SEO audit across all 190 indexable HTML pages (top-level + breaches + portfolio + meetings). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30-65 chars, meta description 100-165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
+Runs `tools/run_seo_audit.py` - a deterministic structural SEO audit across every indexable HTML page (top-level + breaches + portfolio + meetings; the script counts them at runtime). Mirrors the mechanical checks the `/seo-audit` skill does: canonical, title 30-65 chars, meta description 100-165 chars, og:image ≠ banner.png, full Twitter Card, single H1, robots meta, JSON-LD presence, image alt coverage, `<html lang>`. Writes a per-day report under `seo-audits/YYYY-MM-DD.md` and appends a row to the Internal SEO audit table. Stdlib-only, no API costs, no LLM calls.
 
 For qualitative depth (internal-linking strategy, content depth, AI visibility, topical authority) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually and add a row off-cycle.
 
@@ -920,7 +926,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - 48 pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - 60 pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
@@ -943,7 +949,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - 190 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - 218 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -954,7 +960,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - 170+ unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), 94 meeting recaps via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - 170+ unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), 102 meeting recaps via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

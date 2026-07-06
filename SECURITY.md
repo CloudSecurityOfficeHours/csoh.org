@@ -201,6 +201,7 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 | `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only - deploy is `deploy.yml`) | direct (App is on ruleset bypass) |
 | `deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **keyless OIDC - no key** (GCP WIF, AWS IAM role, Azure federated cred) | no |
 | `lint.yml`, `validate-html.yml`, `check-broken-links.yml`, `check-url-safety.yml` | auto-injected `GITHUB_TOKEN` | n/a | no |
+| `check-pagespeed.yml`, `run-seo-audit.yml`, `check-reading-list-staleness.yml`, `check-meeting-staleness.yml` | auto-injected `GITHUB_TOKEN` (the two staleness checkers add `issues: write`; PageSpeed/SEO auditors stay `contents: read` and open issues via App/PAT) | n/a | no |
 
 Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead - keeping the default token strictly minimal. `deploy.yml` adds `id-token: write` for the OIDC tokens GitHub mints for the three clouds' federation exchanges.
 
@@ -377,6 +378,5 @@ We take security seriously - especially as a cloud security community.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| `Server: LiteSpeed` on HTTP redirect | Hosting limitation | The HTTP (port 80) redirect response leaks the server type. The HTTPS response correctly strips it. Requires hosting panel config to suppress. |
-| `cancel-in-progress: true` on deploy | Accepted trade-off | If a newer deploy is queued while one is running, the older run is cancelled mid-mirror. Avoids stale-content races but can leave the FTP server with a few files at the new state and others at the old until the next run completes. Worth revisiting if/when we move to a blue-green deploy. |
+| `cancel-in-progress: true` on deploy | Accepted trade-off | If a newer deploy is queued while one is running, the older run is cancelled. Each origin (S3, Azure Blob, Cloud Run) is synced independently, so a cancelled run can briefly leave origins at slightly different revisions until the next deploy reconciles them. Avoids stale-content races; worth revisiting if/when we move to a blue-green deploy. |
 | `http://flaws.cloud` link | Intentional | This AWS security training site only serves over HTTP. The link is intentional. |
