@@ -117,8 +117,8 @@ TARGET_PAGES = [
 ]
 
 # Subdirectory pages (per-breach, per-meeting) are auto-discovered rather
-# than listed individually - there are 91 meeting pages and they update
-# as new sessions get added. Subdir pages need a "../" prefix to reach
+# than listed individually - there are ~100 meeting pages and the set
+# grows as new sessions get added. Subdir pages need a "../" prefix to reach
 # glossary.html; the GLOSSARY_LINK_HREF_PREFIX is computed per-file based
 # on each path's depth (see crosslink_page below).
 SUBDIR_PATTERNS = [
@@ -127,7 +127,9 @@ SUBDIR_PATTERNS = [
 ]
 
 # Single-word terms common enough in English that linking them is more
-# distracting than helpful. Kept in sync with crosslink_glossary.py.
+# distracting than helpful. This is a superset of crosslink_glossary.py's
+# denylist - it adds words (cloud, data, policy, ...) that recur constantly in
+# page prose where crosslink_glossary.py only runs over the glossary itself.
 DENYLIST = {
     "public",
     "private",
@@ -512,25 +514,6 @@ def _link_chunk(
             out.append(text[earliest:end])
         cursor = end
     return "".join(out)
-
-
-def _next_match_anywhere(
-    text: str,
-    cursor: int,
-    patterns: list[tuple[re.Pattern[str], bool]],
-    key_to_slug: dict[str, str],
-) -> int | None:
-    """Earliest position where any pattern matches, regardless of slug
-    state. Used to advance the cursor past already-linked slug occurrences
-    so we don't infinite-loop."""
-    earliest: int | None = None
-    for pat, _ in patterns:
-        m = pat.search(text, cursor)
-        if not m:
-            continue
-        if earliest is None or m.start() < earliest:
-            earliest = m.start()
-    return earliest
 
 
 def crosslink_page(

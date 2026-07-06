@@ -36,6 +36,12 @@ OG_VIEWPORT = {"width": 1200, "height": 630}
 # ≤ ~140 chars so the template doesn't have to clamp aggressively. The
 # subtitle prints under the headline; choose a one-line value prop, not
 # the page meta description.
+#
+# To add a page: append a (filename, title, subtitle, badge) tuple in the
+# matching section below. For a subdirectory page use the relative path
+# (e.g. "breaches/foo.html"); the JPG is written alongside at
+# img/og/breaches/foo.jpg. Then run: python3 tools/generate_og_images.py
+# --pages breaches/foo.html   (regenerates just that one image).
 PAGES = [
     ("index.html",
      "Cloud Security, Vendor-Neutral",
@@ -460,7 +466,11 @@ def serve_repo(port: int) -> socketserver.ThreadingTCPServer:
 
 
 def slug_for(filename: str) -> str:
-    """index.html → index, ctfs.html → ctfs, breach-timeline.html → breach-timeline."""
+    """index.html -> index, breach-timeline.html -> breach-timeline.
+
+    Subdir pages keep their folder: breaches/capital-one.html ->
+    breaches/capital-one, so the JPG lands at img/og/breaches/capital-one.jpg.
+    """
     return filename[:-5] if filename.endswith(".html") else filename
 
 

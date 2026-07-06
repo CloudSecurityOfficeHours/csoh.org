@@ -10,6 +10,9 @@ is set to:
   3. the file mtime as a final fallback.
 
 Exit code is 0 whether or not the sitemap changed. Prints a one-line summary.
+
+Usage:
+    python3 tools/update_sitemap.py
 """
 
 from __future__ import annotations

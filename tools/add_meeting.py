@@ -8,8 +8,10 @@ a file (HTML or plain text). The script:
    the previously-newest meeting page as the template).
 2. Inserts a card at the top of /meetings.html and updates counts plus the
    ItemList JSON-LD.
-3. Patches the previously-newest meeting page's pager to add a
-   "Newer meeting →" link to the new page.
+3. Rewires the pager links on both chronological neighbors so a recap can
+   be inserted anywhere in the timeline, not just appended as the newest:
+   the older neighbor gets a "Newer meeting →" link to the new page and the
+   newer neighbor (if any) gets an "← Older meeting" link back to it.
 4. Adds an entry to sitemap.xml and meetings-search-index.json.
 
 Supported input formats:

@@ -302,7 +302,7 @@ def emit_docs(filename: str, raw: str) -> Iterable[dict]:
         # MiniSearch handles per-field boosts on the frontend.
         text = strip_html(section_body)
         # Truncate very long sections to keep the index tractable.
-        # 4000 chars is roughly 600-700 words - plenty for snippet hits.
+        # 2400 chars is roughly 350-400 words - plenty for snippet hits.
         text = text[:2400]
         yield {
             "id": f"{filename}#{section_id}",

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cross-link glossary.html.
 
-Reads ../glossary.html and:
+Reads glossary.html (at the repo root, one level up from tools/) and:
   1. Adds an `id="term-..."` to every <dt> element (idempotent).
   2. For every <dd>, wraps the first occurrence of any glossary term it
      mentions in an <a class="glossary-link" href="#term-...">.

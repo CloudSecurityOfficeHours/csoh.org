@@ -6,15 +6,18 @@ Automatically captures and optimizes screenshots of resource URLs
 to use as preview images.
 
 Features:
-- Multiple capture methods (Playwright, Screenshot API)
-- Image optimization and resizing
+- Multiple capture methods, tried in order: (1) the page's own og:image
+  social card, (2) a Playwright screenshot, (3) the thum.io screenshot API,
+  (4) a generated placeholder.
+- Image optimization and resizing (needs Pillow for every path)
 - Automatic preview-mapping.json updates
 - Fallback to placeholder images
 
 Usage:
-    python3 tools/generate_preview.py <url> [output_filename]
-    python3 tools/generate_preview.py --check resources.html
-    python3 tools/generate_preview.py --batch urls.txt
+    python3 tools/generate_preview.py <url> [output_filename]  # one URL
+    python3 tools/generate_preview.py --check resources.html   # report missing
+    python3 tools/generate_preview.py --batch-auto             # fill all gaps
+    python3 tools/generate_preview.py --fix-html               # repair <img> src paths
 """
 
 import sys
