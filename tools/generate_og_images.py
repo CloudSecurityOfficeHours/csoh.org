@@ -389,6 +389,18 @@ PAGES = [
      "Mitnick / Novell 1994 Breach Kill Chain",
      "OSINT → pretexting → phone social engineering → dial-up access → NetWare source code theft. Personal post-mortem.",
      "Breach Kill Chain"),
+    ("breaches/codefinger-s3.html",
+     "Codefinger S3 Ransomware 2025 Kill Chain",
+     "Stolen AWS keys + SSE-C → encrypted S3 buckets with attacker-held keys and 7-day delete timers. Full chain and defenses.",
+     "Breach Kill Chain"),
+    ("breaches/tj-actions-changed-files.html",
+     "tj-actions/changed-files 2025 Kill Chain",
+     "CVE-2025-30066: a retagged GitHub Action dumped CI runner memory and leaked secrets into public build logs. Full chain.",
+     "Breach Kill Chain"),
+    ("breaches/salesloft-drift-unc6395.html",
+     "Salesloft Drift / UNC6395 2025 Kill Chain",
+     "Stolen Drift OAuth tokens → bulk SOQL exfil across 700+ Salesforce tenants → secret mining. Full chain and SaaS defenses.",
+     "Breach Kill Chain"),
 
     # ── Portfolio projects ──────────────────────────────────────────────────
     ("portfolio/aws-org-scps.html",

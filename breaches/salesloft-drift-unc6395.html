@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="UNC6395 stole Salesloft Drift OAuth tokens, ran bulk SOQL queries against 700+ Salesforce tenants, and mined the exports for AWS keys and Snowflake tokens.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Salesloft Drift / UNC6395 2025, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2025, Salesloft Drift breach, UNC6395, GRUB1, OAuth token theft, Salesforce SOQL exfiltration">
+    <title>Salesloft Drift / UNC6395 2025 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/salesloft-drift-unc6395.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/salesloft-drift-unc6395.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/salesloft-drift-unc6395.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Salesloft Drift / UNC6395 2025 Breach Kill Chain">
+    <meta property="og:description" content="How UNC6395 (GRUB1) turned stolen Salesloft Drift OAuth tokens into bulk Salesforce data theft across 700+ organizations - a full MITRE ATT&amp;CK kill chain.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2025-08-26">
+    <meta property="article:modified_time" content="2026-07-05">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Salesloft Drift / UNC6395 2025">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2025">
+    <meta property="article:tag" content="Salesloft Drift breach">
+    <meta property="article:tag" content="UNC6395">
+    <meta property="article:tag" content="GRUB1">
+    <meta property="article:tag" content="OAuth token theft">
+    <meta property="article:tag" content="Salesforce SOQL exfiltration">
+    <meta property="og:url" content="https://csoh.org/breaches/salesloft-drift-unc6395.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/salesloft-drift-unc6395.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Salesloft Drift / UNC6395 2025 Breach Kill Chain">
+    <meta name="twitter:description" content="How UNC6395 (GRUB1) turned stolen Salesloft Drift OAuth tokens into bulk Salesforce data theft across 700+ organizations - a full MITRE ATT&amp;CK kill chain.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/salesloft-drift-unc6395.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://www.paypal.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=fbfcc2db" as="style"
+        integrity="sha384-kDAccZlI8MgEpgryDTHyW5u7Qln3ej47mWOIg5CKFain7VrL+XyzcEz+tEzAWYAb">
+    <link rel="stylesheet" href="/style.css?v=fbfcc2db"
+        integrity="sha384-kDAccZlI8MgEpgryDTHyW5u7Qln3ej47mWOIg5CKFain7VrL+XyzcEz+tEzAWYAb">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Salesloft Drift / UNC6395 - GitHub Compromise → Stolen Drift OAuth Tokens → Bulk SOQL Exfil → Secret-Mining → 700+ Orgs Hit",
+  "description": "UNC6395 stole Salesloft Drift OAuth tokens, ran bulk SOQL queries against 700+ Salesforce tenants, and mined the exports for AWS keys and Snowflake tokens.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2025-08-26",
+  "dateModified": "2026-07-05",
+  "mainEntityOfPage": "https://csoh.org/breaches/salesloft-drift-unc6395.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Salesloft Drift OAuth Token Campaign",
+    "startDate": "2025-08",
+    "description": "Stolen Drift OAuth tokens used to run bulk SOQL exports against hundreds of Salesforce tenants, mining the data for embedded secrets."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Salesforce"
+    },
+    {
+      "@type": "Organization",
+      "name": "Salesloft"
+    },
+    {
+      "@type": "Organization",
+      "name": "Google"
+    },
+    {
+      "@type": "Organization",
+      "name": "Mandiant"
+    },
+    {
+      "@type": "Organization",
+      "name": "UNC6395"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Salesloft Drift / UNC6395 2025",
+      "item": "https://csoh.org/breaches/salesloft-drift-unc6395.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <a href="../index.html" class="logo-link">
+                <div class="logo">
+                    <div class="logo-title">CSOH</div>
+                    <p>Cloud Security Office Hours</p>
+                </div>
+            </a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-5col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">By Cloud <span class="caret" aria-hidden="true">&#9662;</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../aws-security.html">AWS Security</a></li>
+                        <li><a href="../azure-security.html">Azure Security</a></li>
+                        <li><a href="../gcp-security.html">GCP Security</a></li>
+                        <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../help-desk-to-cloud-security.html">Help Desk → Cloud Security</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-2col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Salesloft Drift / UNC6395 2025</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Salesloft Drift / UNC6395 2025</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="salesloft-drift-unc6395-2025">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">August 2025</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag" style="background:rgba(56,189,248,.15);color:#38bdf8;">Salesforce</span>
+    </div>
+    <h2 class="inc-title">Salesloft Drift / UNC6395 - GitHub Compromise → Stolen Drift OAuth Tokens → Bulk SOQL Exfil → Secret-Mining → 700+ Orgs Hit</h2>
+    <p class="inc-summary">A threat actor tracked as UNC6395 (also referenced as GRUB1) stole OAuth refresh and access tokens tied to the Salesloft Drift third-party chat integration and used them to reach hundreds of organizations' Salesforce instances. Over roughly ten days in August 2025 the actor ran automated OAuth-authenticated SOQL queries to bulk-export Salesforce objects, then combed the exported data for embedded secrets - AWS access keys (AKIA...), Snowflake tokens, VPN credentials, and passwords - to enable downstream compromise. The root cause was traced back to a compromise of Salesloft's GitHub environment (March-June 2025) that let the actor pivot into the Drift AWS environment and harvest the integration's customer OAuth tokens. 700+ organizations were potentially affected, including major security vendors, making this one of the largest SaaS <a class="glossary-link" href="../glossary.html#term-supply-chain">supply-chain</a> incidents of 2025.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>700+</strong> organizations potentially affected</div>
+      <div class="inc-stat"><strong>Aug 8-18, 2025</strong> ~10-day exfiltration window</div>
+      <div class="inc-stat"><strong>OAuth tokens</strong> stolen Drift integration credentials</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> UNC6395 / GRUB1 (tracked by Google GTIG / Mandiant)</div>
+    </div>
+    <a class="pm-link" href="https://cloud.google.com/blog/topics/threat-intelligence/data-theft-salesforce-instances-via-salesloft-drift" target="_blank" rel="noopener">📄 Google Threat Intelligence Group - Salesloft Drift analysis ↗</a>
+    <a class="pm-link" href="https://blog.cloudflare.com/response-to-salesloft-drift-incident/" target="_blank" rel="noopener">📄 Cloudflare - response to the Salesloft Drift incident ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🕵️ Recon &amp; Upstream Compromise - Salesloft GitHub / Drift AWS</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Actor accessed Salesloft's GitHub between March and June 2025, then pivoted into the Drift AWS environment to harvest customer OAuth tokens</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
+        </div>
+        <p class="step-desc">The upstream root cause was a compromise of Salesloft's GitHub account. From March through June 2025 the actor downloaded content from multiple private repositories, added a guest user, and established suspicious CI/CD workflows. From there the actor pivoted into the Drift AWS environment, where the OAuth access and refresh tokens issued to Drift's customer integrations were stored. Harvesting those tokens gave the actor pre-authenticated access to every downstream Salesforce tenant that had connected Drift - no victim-side credential theft required.</p>
+        <div class="step-code">
+          <span class="hl">Upstream entry:</span> Salesloft GitHub account (repos downloaded, guest user + workflows added)<br>
+          <span class="hl">Pivot:</span> Salesloft GitHub → Drift AWS environment holding customer OAuth tokens<br>
+          <span class="hl">Dwell time:</span> Undetected GitHub access March-June 2025 before the Salesforce campaign
+        </div>
+        <div class="step-tags"><span class="stag">GitHub Compromise</span><span class="stag">AWS Pivot</span><span class="stag">Supply Chain</span><span class="stag">T1552</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - Stolen Drift OAuth Tokens</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">UNC6395 authenticated to victim Salesforce (and some Google Workspace) tenants using the stolen Drift OAuth tokens - no password or MFA challenge</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener">T1528 - Steal Application Access Token</a>
+        </div>
+        <p class="step-desc">The stolen Drift OAuth refresh and access tokens were valid, pre-authorized application credentials, so the actor connected directly to each customer's Salesforce instance through the trusted integration - bypassing user login, <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>, and password controls entirely. Because the access rode an approved third-party <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> integration, activity blended in with normal Drift API traffic. Separately, on August 9 the actor abused OAuth tokens for the Drift Email integration to read email from a very small number of Google Workspace accounts that had specifically connected Drift.</p>
+        <div class="step-code">
+          <span class="hl">Credential type:</span> OAuth refresh + access tokens for the Drift integration (T1528)<br>
+          <span class="hl">Auth path:</span> Trusted third-party app connection - no user login, MFA, or password prompt<br>
+          <span class="hl">Also abused:</span> Drift Email OAuth tokens → small number of Google Workspace mailboxes (Aug 9)
+        </div>
+        <div class="step-tags"><span class="stag">OAuth Token Theft</span><span class="stag">Drift Integration</span><span class="stag">No MFA Path</span><span class="stag">T1528</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery - Enumerate Salesforce Objects</div>
+    <div class="kc-step step-c">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Actor enumerated accessible Salesforce objects and mapped high-value tables via the API</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
+        </div>
+        <p class="step-desc">Operating through Salesforce's APIs with Python-based tooling, UNC6395 enumerated the standard objects reachable by the compromised Drift integration to find where sensitive text lived. The actor focused on records that commonly hold free-text and credential-bearing content - Cases (support ticket bodies), Accounts, Contacts, Users, and Opportunities. Support case text was a prime target because customers routinely paste keys, tokens, and passwords into tickets. The actor used custom user-agent strings to appear like a legitimate integration and reduce the chance of anomaly detection.</p>
+        <div class="step-code">
+          <span class="hl">Objects targeted:</span> Case, Account, Contact, User, Opportunity<br>
+          <span class="hl">Why Cases:</span> Support case bodies frequently contain pasted secrets and credentials<br>
+          <span class="hl">Evasion:</span> Custom user-agent strings to mimic legitimate Drift API traffic
+        </div>
+        <div class="step-tags"><span class="stag">Object Enumeration</span><span class="stag">Salesforce API</span><span class="stag">Support Cases</span><span class="stag">T1213</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a> - Bulk SOQL Queries</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Bulk SOQL queries and Bulk API exports pulled large volumes of records out of each tenant</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 - Data from Cloud Storage</a>
+        </div>
+        <p class="step-desc">The actor executed automated Salesforce Object Query Language (SOQL) queries and used the Bulk API to export large volumes of records from the targeted objects across hundreds of tenants. The queries and jobs ran through the same OAuth-authenticated integration channel, so exfiltration looked like ordinary bulk integration activity. Over the roughly ten-day window (August 8-18, 2025) the actor systematically drained support-case text, contact, and account data from 700+ organizations. Salesforce event logs retained the queries for post-incident forensics, but no real-time <a class="glossary-link" href="../glossary.html#term-dlp">DLP</a> alert fired during the bulk pulls.</p>
+        <div class="step-code">
+          <span class="hl">Method:</span> Automated SOQL queries + Salesforce Bulk API export jobs<br>
+          <span class="hl">Channel:</span> OAuth-authenticated Drift integration - blends with normal bulk API traffic<br>
+          <span class="hl">Scope:</span> 700+ tenants drained over ~10 days (Aug 8-18, 2025)<br>
+          <span class="hl">Detection gap:</span> No <a class="glossary-link" href="../glossary.html#term-dlp">DLP</a> or rate-limit alert on large SOQL / Bulk API exports
+        </div>
+        <div class="step-tags"><span class="stag">SOQL</span><span class="stag">Bulk API</span><span class="stag">Data Exfiltration</span><span class="stag">T1530</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💰 Impact - Mine Exports for Embedded Secrets</div>
+    <div class="kc-step step-r">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Exfiltrated data was mined for embedded secrets to enable downstream cloud compromise</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
+        </div>
+        <p class="step-desc">The campaign's real objective was credential harvesting, not the Salesforce data itself. UNC6395 scanned the stolen exports - likely with scripts and regex - for patterns that reveal secrets: AWS access key IDs (AKIA...), Snowflake tokens, VPN credentials, and password strings pasted into support cases. Any live secret found became a foothold into a victim's cloud estate, turning one SaaS integration breach into potential AWS and data-warehouse compromise. On August 20, 2025 Salesloft and Salesforce revoked all active Drift OAuth tokens and Salesforce removed the Drift app from AppExchange pending investigation.</p>
+        <div class="step-code">
+          <span class="hl">Secrets hunted:</span> AWS keys (AKIA...), Snowflake tokens, VPN credentials, plaintext passwords<br>
+          <span class="hl">Goal:</span> Downstream compromise - pivot from SaaS data into AWS / Snowflake environments<br>
+          <span class="hl">Containment:</span> Aug 20, 2025 - Salesloft &amp; Salesforce revoked Drift tokens; Drift pulled from AppExchange
+        </div>
+        <div class="step-tags"><span class="stag">Secret Mining</span><span class="stag">AKIA Keys</span><span class="stag">Downstream Compromise</span><span class="stag">T1552</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Inventory and scope every third-party OAuth integration connected to your SaaS tenants.</strong> Maintain a live register of connected apps in Salesforce, Google Workspace, and other SaaS platforms, and grant each the minimum OAuth scopes it actually needs. A chat widget should not carry broad read access to every Case, Account, and User object - narrow scopes shrink what a stolen token can reach.</div>
+        <div class="def-item"><strong>Deploy SaaS Security Posture Management (SSPM) to watch integration behavior, not just user logins.</strong> An <a class="glossary-link" href="../glossary.html#term-iam">IAM</a>-plus-SSPM approach that baselines each integration's normal API volume, objects, and user-agent can flag the anomaly here - a Drift token suddenly running bulk SOQL exports across every object. Feed connected-app and API telemetry into your <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a>.</div>
+        <div class="def-item"><strong>Never store secrets in support cases, CRM notes, or free-text SaaS fields.</strong> This breach was devastating because customers had pasted AWS keys, Snowflake tokens, and passwords into Salesforce Cases. Use a dedicated secrets manager, scan CRM and ticketing free-text for credential patterns (AKIA, token=, password:), and auto-redact or block them at ingestion.</div>
+        <div class="def-item"><strong>Rotate and short-lease integration tokens, and revoke aggressively on any provider incident.</strong> Long-lived OAuth refresh tokens are a standing key to your data. Prefer short token lifetimes, rotate integration credentials regularly, and when a SaaS provider discloses a compromise, immediately revoke that app's tokens and remove it from allowlists rather than waiting for guaranteed impact confirmation.</div>
+        <div class="def-item"><strong>Assume any exposed key is burned and rotate downstream credentials.</strong> Because the actor mined exports for embedded secrets, every AWS access key, Snowflake token, or password that ever touched an affected Salesforce or Workspace tenant should be rotated and monitored. Review CloudTrail and Snowflake query history for use of any potentially exposed credential after the exposure window.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://cloud.google.com/blog/topics/threat-intelligence/data-theft-salesforce-instances-via-salesloft-drift" target="_blank" rel="noopener">Google GTIG - Data Theft via Salesloft Drift</a>
+        <a class="src-link" href="https://blog.cloudflare.com/response-to-salesloft-drift-incident/" target="_blank" rel="noopener">Cloudflare - Salesloft Drift Incident Response</a>
+        <a class="src-link" href="https://cyberscoop.com/salesloft-drift-attack-root-cause-github-oauth/" target="_blank" rel="noopener">CyberScoop - GitHub Root Cause</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener">MITRE T1528</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../saas-security.html">SaaS security (SSPM)</a>
+    <a class="src-link" href="../iam.html">IAM, OAuth &amp; cloud identity</a>
+    <a class="src-link" href="../api-security.html">API security</a>
+    <a class="src-link" href="../threat-research.html">Cloud threat research</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="tj-actions-changed-files.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Explore</h3>
+        <ul>
+          <li><a href="../index.html#about">About CSOH</a></li>
+          <li><a href="../learning-path.html">Learning Path</a></li>
+          <li><a href="../resources.html">Resources</a></li>
+          <li><a href="../news.html">News</a></li>
+          <li><a href="../sessions.html">Zoom Sessions</a></li>
+          <li><a href="../meetings.html">Meeting Recaps</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Connect</h3>
+        <ul>
+          <li><a href="mailto:admin@csoh.org">Contact</a></li>
+          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="../rss.html">RSS Feed</a></li>
+          <li><a href="../contribute.html">Contribute</a></li>
+          <li><a href="../contribute-resources.html">Add a Resource</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Developer Docs</h3>
+        <ul>
+          <li><a href="../github-actions.html">GitHub Actions</a></li>
+          <li><a href="../cloud-deployment.html">Multi-Cloud Deploy</a></li>
+          <li><a href="../terraform.html">Terraform</a></li>
+          <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=6a0fa426" integrity="sha384-QnpBwBAmxSisT9jbfZ9wBfBMxyvLUeBIS/gV1bgiNa58sVx2P3VZ3diixodqvdrj"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=792b7abd" defer integrity="sha384-2UjvVpptg4JlEVgJI2PdscrjOjPcil/4F1ZvIMJ81CShQnEDSlPI+l4PfogvTLYi"></script>
+</body>
+
+</html>
