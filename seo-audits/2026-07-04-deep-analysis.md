@@ -59,7 +59,7 @@ Multi-agent qualitative analysis (15 agents: 10 site-slice readers + 3 external 
 - [x] **non-human-identity.html + mcp-security.html** - two new pillar-grade topic guides (drafted via workflow, wired + verified).
 - [x] **Interview-questions hub + resume guide** - cloud-security-interview-questions.html (45+ Qs by domain, with model-answer guidance + paste-in artifacts) and cloud-security-resume-guide.html (before/after bullets).
 - [x] **Career-question pages** - get-into-cloud-security-no-experience.html and is-cloud-security-a-good-career.html.
-- [ ] 2-3 new kill chains: Salesloft Drift/UNC6395, Codefinger S3, tj-actions.
+- [x] **3 new kill chains** - breaches/codefinger-s3.html (S3 SSE-C ransomware, Jan 2025), breaches/tj-actions-changed-files.html (CVE-2025-30066 CI/CD supply-chain, Mar 2025), breaches/salesloft-drift-unc6395.html (OAuth token theft -> bulk SOQL exfil, Aug 2025). Each: 5-step MITRE-mapped chain, def-box, primary sources, defense-topics. Registered: cards + ItemList (10->13) + pager chain (snowflake now has a next) + sitemap + llms.txt + OG images + search index. Fact-verified via WebSearch; drafted with a 3-agent workflow. Shipped 9be06d2f.
 - [x] **breach-lessons.html** - synthesis of recurring root causes across the 10 breach kill chains + a MITRE ATT&CK technique section; links each breach page.
 - [x] **Comparison pages** - cnapp-vs-xdr.html and cspm-vs-cwpp.html (category comparisons with tables; no vendor head-to-heads).
 - [ ] First-party data: quarterly community-pulse report, annual Cloud Breach Year in Review.

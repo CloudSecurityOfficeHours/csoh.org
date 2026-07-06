@@ -188,7 +188,7 @@ existing `cloud-security.md` if there's a dedicated file.
 **Entry text:**
 
 ```markdown
-- [Cloud Security Office Hours](https://csoh.org/) - Community-run vendor-neutral cloud-security hub. Weekly Friday Zoom (7am PT), pillar guides, [230+ term glossary](https://csoh.org/glossary.html), [10 breach kill chains](https://csoh.org/breach-timeline.html) mapped to MITRE ATT&CK Cloud, [91 weekly meeting recaps](https://csoh.org/meetings.html), [37+ CTFs](https://csoh.org/ctfs.html).
+- [Cloud Security Office Hours](https://csoh.org/) - Community-run vendor-neutral cloud-security hub. Weekly Friday Zoom (7am PT), pillar guides, [230+ term glossary](https://csoh.org/glossary.html), [13 breach kill chains](https://csoh.org/breach-timeline.html) mapped to MITRE ATT&CK Cloud, [91 weekly meeting recaps](https://csoh.org/meetings.html), [37+ CTFs](https://csoh.org/ctfs.html).
 ```
 
 ---
