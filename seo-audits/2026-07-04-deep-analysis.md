@@ -56,14 +56,14 @@ Multi-agent qualitative analysis (15 agents: 10 site-slice readers + 3 external 
 
 ## Quarter - new content (ranked by SERP winnability)
 
-- [ ] non-human-identity.html, mcp-security.html (zero coverage; MCP has no definitional SERP owner - first-mover decays fast).
-- [ ] Interview-questions hub + resume guide (fragmented SERP; community hiring managers = moat).
-- [ ] "how to get into cloud security with no experience" + "is cloud security a good career" (own every supporting asset already).
+- [x] **non-human-identity.html + mcp-security.html** - two new pillar-grade topic guides (drafted via workflow, wired + verified).
+- [x] **Interview-questions hub + resume guide** - cloud-security-interview-questions.html (45+ Qs by domain, with model-answer guidance + paste-in artifacts) and cloud-security-resume-guide.html (before/after bullets).
+- [x] **Career-question pages** - get-into-cloud-security-no-experience.html and is-cloud-security-a-good-career.html.
 - [ ] 2-3 new kill chains: Salesloft Drift/UNC6395, Codefinger S3, tj-actions.
-- [ ] breach-lessons.html + MITRE technique index (auto-generatable, highly quotable).
-- [ ] 1-2 comparison pages MAX: CNAPP vs XDR, maybe CSPM vs CWPP (NOT a 5-page franchise - rot rate). No vendor head-to-heads (Wiz conflict); use /how-to-evaluate-cnapp.html instead.
+- [x] **breach-lessons.html** - synthesis of recurring root causes across the 10 breach kill chains + a MITRE ATT&CK technique section; links each breach page.
+- [x] **Comparison pages** - cnapp-vs-xdr.html and cspm-vs-cwpp.html (category comparisons with tables; no vendor head-to-heads).
 - [ ] First-party data: quarterly community-pulse report, annual Cloud Breach Year in Review.
-- [ ] speakers.html + present.html (free backlinks - speakers share their own pages).
+- [x] **speakers.html + present.html** - guest-speaker index + speaker pitch guide (evergreen, no fabricated roster).
 
 ## Killed by adversarial critic (do NOT do)
 
