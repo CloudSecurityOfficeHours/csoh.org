@@ -24,6 +24,11 @@ python3 tools/check_url_safety.py --batch urls.txt
 python3 tools/check_url_safety.py --interactive
 ```
 
+**Skip redirect resolution** (redirect-following is ON by default; this checks the URL as-is):
+```bash
+python3 tools/check_url_safety.py --no-resolve <url>
+```
+
 ## Site-Wide URL Scanning
 
 The `check_all_site_urls.py` script scans **all HTML files** in your site (not just chat-resources.html) and checks every URL for safety issues.

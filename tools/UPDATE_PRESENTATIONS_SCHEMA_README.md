@@ -12,7 +12,7 @@ Prints how many `VideoObject` entries were emitted. Idempotent - re-runs report 
 
 ## How It Works
 
-1. Parses each `<a href="https://www.youtube.com/watch?v=...">` card in `presentations.html`.
+1. Parses each `<a href="https://www.youtube.com/watch?v=..." ... class="card-link">` card in `presentations.html`. The anchor must carry `class="card-link"` - a bare YouTube link without it is ignored.
 2. Extracts the video ID, title (`<h3>`), description (`<p>`), and date prefix (e.g. `"October 10, 2025: ..."`) from each card.
 3. Emits a `<script type="application/ld+json">` block with `@graph` containing one `VideoObject` per video.
 4. Injects the block just before `</head>`, replacing any prior block with the same marker comment:

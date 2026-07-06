@@ -22,7 +22,7 @@ The script is **idempotent** - every run strips existing cross-page glossary lin
 
 ## Where links go
 
-The list of target pages is at the top of `crosslink_pages.py` in `TARGET_PAGES`. Add new pages there as the site grows.
+The list of target pages is at the top of `crosslink_pages.py` in `TARGET_PAGES`. Add new top-level pages there as the site grows. Note: `breaches/*.html` and `meetings/*.html` are auto-discovered via `SUBDIR_PATTERNS` and rewritten too (with a computed `../glossary.html#` prefix), so you do NOT list those individually.
 
 The glossary itself, error pages (`403.html`, `404.html`), and the Google site verification stub are deliberately excluded.
 
@@ -47,7 +47,7 @@ The glossary itself, error pages (`403.html`, `404.html`), and the Google site v
 ## Output
 
 ```
-Loaded 201 unique glossary terms (338 aliases).
+Loaded 201 unique glossary terms (338 aliases).   # illustrative - a live run currently loads ~300 terms / ~500 aliases
     index.html: stripped 0, linked 0
     resources.html: stripped 1, linked 1 (AI)
     ctfs.html: stripped 7, linked 7 (Kubernetes, AI, SSRF, IMDSv2, OIDC, LLM, CI)
