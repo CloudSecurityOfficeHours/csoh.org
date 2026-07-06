@@ -5,7 +5,7 @@
 The [News page](https://csoh.org/news.html) is updated **automatically every 3 hours** - no one has to manually add articles. The script also generates an **RSS feed** (`feed.xml`) so subscribers get updates automatically. Here's how it works in plain English:
 
 1. **GitHub Actions** (a free automation service built into GitHub) runs a Python script on a schedule - every 3 hours.
-2. The script visits **32 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries.
+2. The script visits **39 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries.
 3. The script filters those articles for **cloud security topics** (looking for keywords like "AWS", "Azure", "Kubernetes", "vulnerability", "breach", etc.) and throws out duplicates.
 4. **Existing cards on `news.html` are preserved across runs.** RSS feeds are rolling windows, so today-dated articles from earlier runs would otherwise get dropped when feeds rotate. The script parses the current `news.html`, then merges in whatever new items this run's feeds surfaced, sorted by date and capped at 120 articles.
 5. If after that merge fewer than **10 today-dated articles** are on the page, the script tops up from a **relaxed-filter pool** - today-dated items from the same security feeds that didn't hit the strict keyword filter. The target is tunable with `--today-target`.
@@ -18,7 +18,7 @@ The [News page](https://csoh.org/news.html) is updated **automatically every 3 h
 
 ---
 
-## News Sources (32 feeds)
+## News Sources (39 feeds)
 
 The script pulls from these trusted, non-paywalled sources:
 
@@ -72,7 +72,7 @@ The script pulls from these trusted, non-paywalled sources:
 Want to **add a new source**? You have two options:
 
 1. Run `python3 tools/submit_news_source.py` (interactive, recommended)
-2. Or edit the `FEEDS` list at the top of `update_news.py` manually
+2. Or edit the `FEEDS` list at the top of `update_news.py` manually (this script lives at the repo ROOT, not in `tools/`; helper scripts like `submit_news_source.py` are in `tools/`). See the `FEEDS` list for the full current set of sources.
 
 **Script guide:** [SUBMIT_NEWS_SOURCE_README.md](SUBMIT_NEWS_SOURCE_README.md)
 

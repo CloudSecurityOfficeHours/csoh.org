@@ -12,7 +12,7 @@ Adds anchor IDs to every `<dt>` in `glossary.html` and hyperlinks every glossary
 3. **Hyperlinks every occurrence.** Walks every `<dd>` and wraps each glossary-term mention in `<a class="glossary-link" href="#term-...">`. Skips:
    - Text already inside an existing `<a>` tag (no nesting).
    - Self-references (a term won't link to itself in its own definition).
-   - A small denylist of generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `image`, `baseline`, `registry`, `principal`, `first`).
+   - A small denylist of generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `image`, `baseline`, `registry`, `principal`, `first`, `csp`, `sp`, `soc`, `cloud`).
 
 ## Usage
 
@@ -23,10 +23,10 @@ python3 tools/crosslink_glossary.py
 Output:
 
 ```
-Linked 180 term mentions across 197 unique terms.
+Linked 180 term mentions across 197 unique terms.   # illustrative - the live glossary has ~300 terms
 ```
 
-The script is **idempotent** - running it again after edits is safe. Existing `<a class="glossary-link">` wrappers are preserved; new mentions get linked; removed terms simply lose their lookup entry (but pre-existing links to a removed slug will 404 anchors and should be cleaned up by hand).
+The script is **rebuild-idempotent, not preservation-idempotent**: every run first STRIPS all existing `<a class="glossary-link">` wrappers (it prints `Stripped N existing link(s) for fresh relinking.`), then relinks from scratch under the current rules. So any hand-added or specially-scoped glossary link inside `glossary.html` is discarded on the next run - add glossary entries via the script's rules, not by hand-wrapping. Removed terms lose their lookup entry, and pre-existing links to a removed slug will 404 and should be cleaned up by hand.
 
 ## When to run
 
@@ -49,7 +49,7 @@ The script is **idempotent** - running it again after edits is safe. Existing `<
    python3 tools/crosslink_glossary.py
    ```
 
-3. If the total term count crosses a round number, update the search-bar placeholder text and the `<span id="visibleTerms">` initial count in `glossary.html`. Both currently read `201`.
+3. If the total term count crosses a round number, update the search-bar placeholder text and the `<span id="visibleTerms">` initial count in `glossary.html`. Both currently read `301` (the placeholder is `Search 300+ terms`).
 
 ## Adjusting the denylist
 

@@ -36,7 +36,7 @@ Categories scored: Technical SEO, On-Page SEO, Content & Structure. Performance 
 ## Usage
 
 ```bash
-# Default: audit all 178 indexable pages, write report + scorecard row
+# Default: audit every indexable page (counted at runtime), write report + scorecard row
 python3 tools/run_seo_audit.py
 
 # Print results, don't write
@@ -57,9 +57,9 @@ Exit codes:
 - All top-level `*.html` (excluding `403.html`, `404.html`, the Google site-verification stub, `chat-resources.html` which is noindexed, and `search.html` which is a utility page)
 - All `breaches/*.html`
 - All `portfolio/*.html`
-- All `meetings/*.html` (94 weekly recaps)
+- All `meetings/*.html` (~100 weekly recaps)
 
-Total: 178 indexable pages as of 2026-05-23.
+The script discovers the page set at runtime (top-level + breaches + portfolio + meetings), so the total grows as the site does - it is not a fixed number.
 
 ## When to run
 

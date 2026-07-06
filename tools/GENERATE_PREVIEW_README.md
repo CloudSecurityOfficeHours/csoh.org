@@ -63,19 +63,24 @@ This may take 10-30 seconds...
 
 The system tries multiple methods in order:
 
-1. **Playwright** (Best quality)
+1. **og:image extraction** (Tried first)
+   - Grabs the page's own social-card image (`<meta property="og:image">`)
+   - Immune to cookie banners and Cloudflare interstitials
+   - Requires: Pillow (to fetch/optimize the image)
+
+2. **Playwright** (Best quality)
    - Headless Chromium browser
    - Full JavaScript rendering
    - Waits for page load
    - Requires: `pip install playwright && playwright install chromium`
 
-2. **Screenshot API** (Fallback)
+3. **Screenshot API** (Fallback)
    - Uses thum.io free API
    - No dependencies required
    - Good for simple pages
    - Rate limited to prevent abuse
 
-3. **Placeholder** (Last resort)
+4. **Placeholder** (Last resort)
    - Creates a simple image with text
    - Ensures all resources have an image
    - Better than broken images

@@ -131,7 +131,7 @@ def select_tags():
         print(f"    {i}. {tag}")
 
     print("\n  Other Tags:")
-    other = ['NEW 2025', 'Free', 'Paid', 'Open Source']
+    other = ['NEW 2026', 'Free', 'Paid', 'Open Source']
     for i, tag in enumerate(other, len(platforms) + len(types) + len(focus) + 1):
         print(f"    {i}. {tag}")
 

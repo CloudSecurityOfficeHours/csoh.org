@@ -67,7 +67,8 @@ This Python script does all the work. Note that `style.css` includes a large dar
 1. Reads each tracked asset from the repo:
    - `style.css`, `main.js`
    - `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
-   - `meetings.js`, `glossary.js`
+   - `meetings.js`, `glossary.js`, `404.js`
+   - `vendor/goatcounter-count.js` (the vendored analytics counter)
 2. Calculates a **SHA-384 hash** (the fingerprint) for each file
 3. Calculates a **short SHA-256 hash** (the cache-bust `?v=` tag) for each file
 4. Scans every `.html` file in the repo
