@@ -2,8 +2,7 @@
 """Run Lighthouse against a sample of pages and assert SEO/a11y/perf thresholds.
 
 Wraps the `lighthouse` CLI (Node.js). Picks a representative sample -
-homepage, a pillar page, a card page, a per-meeting page, a per-breach
-page - runs each in headless Chrome, parses the JSON report, and prints
+homepage, a pillar page, a card page, a per-breach page - runs each in headless Chrome, parses the JSON report, and prints
 a pass/fail table.
 
 Targets (override via flags):
@@ -45,7 +44,7 @@ DEFAULT_SAMPLE = [
     "/cspm-vs-cnapp.html",
     "/resources.html",
     "/cloud-security-certifications.html",
-    "/breaches/capital-one-2019.html",
+    "/breaches/capital-one.html",
     "/github-actions.html",
 ]
 

@@ -8,9 +8,9 @@ via tools/add_meeting.py.
 
 Notes on de-duplication within a single Friday: Zoom AI Companion often
 produces multiple summary records per meeting when the host stopped and
-restarted the session. This script picks the EARLIEST summary on each
-Friday (typically the main morning block), which in practice also has
-the most complete recap.
+restarted the session. This script picks the LONGEST-duration summary on each
+Friday (typically the main morning block), falling back to shorter
+fragments only if the longest one has empty content.
 
 Required Zoom S2S OAuth scopes beyond the fetcher:
     meeting:read:list_summaries:admin

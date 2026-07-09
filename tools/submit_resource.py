@@ -482,7 +482,6 @@ def main():
     print("   ✅ URL safety validation")
     print("   🖼️  Preview image generation (if not done locally)")
     print("5. A maintainer will review and merge your PR!\n")
-    print("5. A maintainer will review and merge your PR!\n")
 
     auto_push = input("Would you like to push now? (y/n): ").strip().lower()
     if auto_push == 'y':

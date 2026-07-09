@@ -6,7 +6,8 @@ Renders a representative sample of pages at iPhone-13 viewport and asserts:
   2. With the hamburger menu OPEN:
      - Every nav link / button is fully inside the viewport horizontally.
      - Tap targets are ≥ 40px tall (Apple's 44pt guideline minus a hair).
-     - Sibling rows in the open Learn / Defend / Attend dropdowns line up
+     - Sibling rows in the open Learn / By Cloud / Threat Intel / Careers /
+       Community dropdowns line up
        - same `padding-left` and same height, so the menu doesn't look
        jagged.
   3. The hero h1 doesn't visually overflow.
@@ -168,7 +169,7 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
 
     # 2c. Open each dropdown and check that its rows align AND that they
     # look visually distinct from the top-level toggles above them. With
-    # 10 sub-items in Learn, the menu is a flat wall of links unless
+    # many sub-items in Learn, the menu is a flat wall of links unless
     # sub-items have a clearly different indent or marker.
     hierarchy = page.evaluate(
         """() => {
@@ -190,7 +191,9 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
             f"({hierarchy['tlPad']:.0f} → {hierarchy['subPad']:.0f}). Need clearer visual nesting."
         )
 
-    dropdowns = ["Learn", "Defend", "Attend", "Contribute"]
+    # Must track the real nav dropdown toggles (see CANON_NAV / index.html);
+    # a label that matches no toggle is silently skipped, disabling its check.
+    dropdowns = ["Learn", "By Cloud", "Threat Intel", "Careers", "Community"]
     for dropdown_label in dropdowns:
         # Find and click the dropdown toggle by visible label.
         try:
@@ -264,7 +267,7 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
         )
 
     # Save a screenshot if requested. Take TWO frames per page so we see
-    # both the menu chrome and the worst-case dropdown (Learn - 10 items).
+    # both the menu chrome and the worst-case dropdown (Learn, the largest).
     if screenshots_dir:
         try:
             slug = page_path.replace("/", "_").replace(".html", "")
@@ -280,7 +283,7 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
             page.wait_for_timeout(50)
             page.screenshot(path=str(screenshots_dir / f"{slug}__menu-top.png"), full_page=False)
             # Frame 2: open the Learn dropdown specifically (worst case
-            # because of 10 items) and capture full-page so all sub-rows
+            # because it is the largest) and capture full-page so all sub-rows
             # are visible.
             try:
                 learn_toggle = page.locator(

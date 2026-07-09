@@ -3,7 +3,9 @@
 Generate banner images for news sources.
 
 Captures homepage screenshots of each RSS feed source and saves them
-as preview banners for use in news article cards.
+as preview banners for use in news article cards. Each capture is resized
+to 400x300 to match the resource-preview card, and a .webp sibling is
+written alongside each .jpg.
 
 Usage:
     python3 tools/generate_news_banners.py          # generate all missing

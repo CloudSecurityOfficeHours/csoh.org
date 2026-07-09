@@ -4,7 +4,7 @@
 For each meetings/YYYY-MM-DD.html, scans the recap prose (the <article
 class="section meeting-page"> region) for cloud-security topic keywords
 and wraps the first occurrence of each in a link to the matching topic
-page (e.g. "IAM" → ../iam.html). Caps at 3 inserts per meeting to avoid
+page (e.g. "Kubernetes" → ../kubernetes.html). Caps at 3 inserts per meeting to avoid
 over-linking.
 
 Skips matches that are already inside an <a>...</a> tag, so existing

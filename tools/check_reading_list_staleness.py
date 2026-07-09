@@ -16,6 +16,11 @@ Usage:
     python3 tools/check_reading_list_staleness.py
     python3 tools/check_reading_list_staleness.py --max-age-days 365
     python3 tools/check_reading_list_staleness.py --output report.md
+    python3 tools/check_reading_list_staleness.py --input some-page.html
+    python3 tools/check_reading_list_staleness.py --exit-on-stale   # CI gate
+
+Exit code: 0 normally; 1 when --exit-on-stale is set and any feed is stale;
+2 if the input file cannot be read.
 """
 
 import argparse

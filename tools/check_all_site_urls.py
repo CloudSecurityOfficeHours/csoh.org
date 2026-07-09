@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Check all URLs across all HTML files on the site for safety.
+Check all URLs across every top-level HTML file for safety.
+(Subdirectory pages such as breaches/ and meetings/ are NOT scanned - this
+globs the repo root only.)
 
 Three-phase pipeline:
-  1. Extract  - collect all URLs from all HTML files, deduplicate
+  1. Extract  - collect all URLs from every top-level HTML file, deduplicate
   2. Resolve  - batch-resolve unique URLs concurrently (skip whitelisted domains)
   3. Check    - run safety checks on resolved URLs, per file
 """

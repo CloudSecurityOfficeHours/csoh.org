@@ -30,6 +30,7 @@ success the script prints one machine-readable line per key:
     MEETING_TOPIC=Cloud Security Office Hours
     MEETING_DURATION_MIN=62
     MEETING_ID=87654321098
+    TRANSCRIPT_BYTES=12345
 
 so a calling process (or Claude) can easily pick up the next steps.
 

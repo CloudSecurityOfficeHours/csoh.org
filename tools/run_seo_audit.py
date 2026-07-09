@@ -8,9 +8,10 @@ Produces a Markdown audit report at seo-audits/YYYY-MM-DD.md and appends
 a row to seo-audits/SCORECARD.md's Internal SEO audit table.
 
 Exit code:
-  0 - score >= previous OR no previous row to compare against
-  1 - score dropped from previous run (regression)
-  2 - script error
+  0 - score held, improved, or dropped by only 1 point (REGRESSION_THRESHOLD = 2),
+      or there is no previous row to compare against
+  1 - score dropped by 2 or more points vs the previous auto-row (regression)
+  2 - invalid CLI arguments (argparse only)
 
 Usage:
     python3 tools/run_seo_audit.py             # write audit + scorecard row

@@ -30,7 +30,7 @@ SUSPICIOUS_PATTERNS = [
     r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}',  # Raw IP addresses
     r'paypal|amazon|microsoft|google|apple.*login',  # Potential phishing
     r'secure.*account|verify.*account|suspended.*account',  # Common phishing phrases
-    r'exe$|\.scr$|\.bat$|\.cmd$|\.vbs$',  # Executable files in URL
+    r'\.exe$|\.scr$|\.bat$|\.cmd$|\.vbs$',  # Executable files in URL
     r'-{10,}',  # Excessive dashes (obfuscation technique)
 ]
 

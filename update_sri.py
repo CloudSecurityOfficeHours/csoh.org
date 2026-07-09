@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Update SRI (Subresource Integrity) hashes in HTML files.
 
-Calculates SHA-384 hashes for main.js and style.css and updates all HTML files
-with the new integrity attributes automatically.
+Calculates SHA-384 SRI hashes for the site's shared JS/CSS assets - style.css,
+main.js, chat-resources.js, breach-timeline.css, breach-timeline.js, meetings.js,
+glossary.js, 404.js, and the vendored vendor/goatcounter-count.js - and stamps the
+integrity attribute on every HTML file (rglob, all subdirectories). It also
+appends a ?v=<hash> cache-busting query to each asset URL and strips any stale
+crossorigin attribute.
 """
 
 import hashlib

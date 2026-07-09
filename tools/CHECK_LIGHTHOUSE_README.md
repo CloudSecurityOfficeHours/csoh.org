@@ -39,7 +39,7 @@ The default sample picks one of each kind of page:
 - `/cspm-vs-cnapp.html` - comparison pillar
 - `/resources.html` - card-heavy listing page
 - `/cloud-security-certifications.html` - pillar with FAQ schema
-- `/breaches/capital-one-2019.html` - per-breach split page
+- `/breaches/capital-one.html` - per-breach split page
 - `/github-actions.html` - internal docs page
 
 Pass `--pages` to override.
