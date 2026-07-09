@@ -297,11 +297,21 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
         f'<meta name="keywords" content="cloud security meeting recap, CSOH, {iso}, Friday Zoom, {h.escape(headline_clean, quote=True)}">',
         out, count=1,
     )
-    short_date = dt.date.fromisoformat(iso).strftime("%b %-d, %Y")
-    title_headline = headline if len(headline) <= 70 else headline[:70].rsplit(" ", 1)[0]
+    # Title budget: "<headline> - CSOH Recap" must stay <=65 chars for the
+    # SERP pixel budget (the deterministic SEO audit flags anything longer).
+    # " - CSOH Recap" is 13 chars, so the headline gets <=52. We drop the
+    # trailing date - it's already in the URL, the <h1>, and og/JSON-LD - and
+    # truncate at a word boundary so the title never ends mid-phrase. The
+    # richer, untruncated headline still lives in JSON-LD and og:title.
+    TITLE_SUFFIX = " - CSOH Recap"
+    max_headline = 65 - len(TITLE_SUFFIX)
+    if len(headline) <= max_headline:
+        title_headline = headline
+    else:
+        title_headline = headline[:max_headline].rsplit(" ", 1)[0].rstrip(" ,;:-")
     out = re.sub(
         r"<title>[^<]*</title>",
-        f"<title>{h.escape(title_headline, quote=False)} - CSOH Recap, {short_date}</title>",
+        f"<title>{h.escape(title_headline, quote=False)}{TITLE_SUFFIX}</title>",
         out, count=1,
     )
     out = re.sub(
