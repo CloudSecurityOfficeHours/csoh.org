@@ -94,7 +94,7 @@ Push now? (y/n): y
 | 6 | `multi-cloud-ctfs` | AWS + Azure + GCP in one |
 | 7 | `specialty-ctfs` | AI/ML, Secrets, CI/CD |
 
-The monthly `wiz-championship` section is intentionally excluded from the script - those are edited directly as part of the calendar.
+The script only offers the sections listed above; the monthly Wiz Championship block is not one of them and is edited directly in `ctfs.html`.
 
 ## Tags
 

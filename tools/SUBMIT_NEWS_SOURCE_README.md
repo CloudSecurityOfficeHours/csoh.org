@@ -45,6 +45,8 @@ Next steps:
 4. After your PR is merged, the unified workflow will automatically deploy the updated site.
 ```
 
+Before adding the feed, the script refuses duplicates (a source name or feed URL already in `FEEDS`) and runs a URL-safety check, prompting you to proceed if it only raises warnings.
+
 ## Common Errors
 
 - **`python3` not found**: Install Python from python.org and reopen your terminal

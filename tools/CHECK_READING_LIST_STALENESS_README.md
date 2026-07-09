@@ -41,6 +41,11 @@ python3 tools/check_reading_list_staleness.py --output staleness.md
 python3 tools/check_reading_list_staleness.py --exit-on-stale
 ```
 
+**Audit a different HTML file** (default `cloud-security-reading-list.html`):
+```bash
+python3 tools/check_reading_list_staleness.py --input some-other-page.html
+```
+
 Exit codes:
 
 - `0` - script ran successfully

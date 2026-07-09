@@ -49,7 +49,7 @@ python3 tools/run_seo_audit.py --quiet
 Exit codes:
 
 - `0` - score held or improved vs the previous Internal audit row
-- `1` - score dropped vs previous (regression)
+- `1` - score dropped by 2 or more points vs previous (a 1-point drop is tolerated; `REGRESSION_THRESHOLD = 2`)
 - `2` - script error
 
 ## Pages covered

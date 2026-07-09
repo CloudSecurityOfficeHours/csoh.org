@@ -206,9 +206,9 @@ python3 tools/generate_preview.py "https://example.com" custom-name.jpg
   ```
 
 ### Fallback
-If no dependencies installed:
+If Playwright isn't installed (Pillow is still required on every path, to save/optimize the image):
 - Uses thum.io API (free, no auth)
-- Creates placeholder images if API fails
+- Creates placeholder images if the API fails
 
 ## Customization
 

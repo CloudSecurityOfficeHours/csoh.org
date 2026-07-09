@@ -8,7 +8,7 @@ This tool guides you through the entire process of adding a resource:
 
 1. ✅ **Collects all required information** - Interactive prompts for name, URL, description, tooltip, category, tags
 2. 🔒 **Validates URL safety** - Automatic security checks using our URL safety validator
-3. 🖼️ **Generates preview image (optional)** - Captures a screenshot if you choose
+3. 🖼️ **Generates preview image (optional)** - Captures a screenshot if you choose (needs `generate_preview.py` plus Pillow/Playwright locally; if those aren't installed, the preview is deferred to GitHub Actions)
 4. 📝 **Generates proper HTML** - Creates correctly formatted resource card
 5. 🔧 **Inserts into correct section** - Automatically finds and updates the right category
 6. 🌿 **Creates git branch** - Sets up a new branch for your changes
@@ -194,7 +194,7 @@ The script automatically inserts your resource in the correct HTML section.
 
 Select from 20+ tags organized by:
 - **Platform Tags** - AWS, Azure, GCP, Kubernetes, Multi-Cloud
-- **Resource Type** - CTF, Labs, Tools, Certifications, Job Search
+- **Resource Type** - the script's exact tags are `CTF`, `Labs & Training`, `Tool`, `Certification`, `Job Search`
 - **Security Focus** - Penetration Testing, DevSecOps, IAM, Compliance, AI Security
 - **Other** - NEW 2026, Free, Paid, Open Source
 

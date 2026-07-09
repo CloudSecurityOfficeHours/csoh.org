@@ -9,7 +9,7 @@ The [News page](https://csoh.org/news.html) is updated **automatically every 3 h
 3. The script filters those articles for **cloud security topics** (looking for keywords like "AWS", "Azure", "Kubernetes", "vulnerability", "breach", etc.) and throws out duplicates.
 4. **Existing cards on `news.html` are preserved across runs.** RSS feeds are rolling windows, so today-dated articles from earlier runs would otherwise get dropped when feeds rotate. The script parses the current `news.html`, then merges in whatever new items this run's feeds surfaced, sorted by date and capped at 120 articles.
 5. If after that merge fewer than **10 today-dated articles** are on the page, the script tops up from a **relaxed-filter pool** - today-dated items from the same security feeds that didn't hit the strict keyword filter. The target is tunable with `--today-target`.
-6. It then writes fresh article cards to `news.html` (title, date, summary, source, link), regenerates `feed.xml` (the RSS feed), rebuilds the `NewsArticle` JSON-LD block on `news.html` from the top 20 articles, and refreshes `<lastmod>` dates in `sitemap.xml`.
+6. It then writes fresh article cards to `news.html` (title, date, summary, source, link), regenerates `feed.xml` (the RSS feed), rebuilds the `CollectionPage`/ItemList JSON-LD block on `news.html` (the top 20 articles as `NewsArticle` items), and refreshes `<lastmod>` dates in `sitemap.xml` (delegated to `tools/update_sitemap.py`, best-effort).
 7. Instead of pushing changes directly, it **creates a Pull Request** (a proposed change) so a maintainer can review it before it goes live.
 8. If the only files changed are `news.html`, `feed.xml`, and `sitemap.xml`, the PR is **automatically merged** - no human review needed for routine news updates.
 9. Once merged, the **unified site-update-deploy.yml workflow** automatically uploads the updated site to the web server via FTP.
@@ -142,7 +142,8 @@ python3 update_news.py \
   --resources-file resources.html \
   --max-articles 120 \
   --min-sources 10 \
-  --today-target 10
+  --today-target 10 \
+  --feed-file feed.xml
 ```
 
 `--today-target` sets the minimum number of today-dated entries the page should hold. If the strict keyword filter plus preserved cards don't hit this number, the script tops up from today-dated items on the same security feeds that narrowly missed the strict filter. Set to `0` to disable the top-up.
@@ -174,7 +175,7 @@ If preservation + new strict-filter items still leave fewer than `--today-target
 When this runs, workflow logs show a line like:
 
 ```
-Selected 120 entries (10 from today, 120 preserved, 3 new from feeds, 2 relaxed-filter today top-ups).
+Selected 120 entries (10 from today, 120 preserved, 3 new from feeds, 2 relaxed-filter today top-ups, 5 near-duplicates dropped).
 ```
 
 If the page still falls short of the target after the top-up, the script prints a warning but does not fabricate entries.

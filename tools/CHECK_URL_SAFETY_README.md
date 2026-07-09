@@ -51,7 +51,7 @@ This is automatically run by the `check-url-safety.yml` workflow on every pull r
 - ✅ **URL Format** - Valid HTTP/HTTPS URLs only
 - ⚠️ **HTTP vs HTTPS** - Warns if not using HTTPS
 - 🚫 **IP Addresses** - Flags raw IP addresses (potential malware)
-- 🚫 **Suspicious Patterns** - Phishing indicators, URL shorteners, free TLDs
+- 🚫 **Suspicious Patterns** - Phishing indicators and free TLDs (regex-based). URL shorteners are matched separately, via an exact-domain list (`SHORTENER_DOMAINS`: bit.ly, t.co, ...).
 - 🚫 **Blocklist** - Known malicious domains
 - ✅ **Whitelist** - Trusted domains (github.com, aws.amazon.com, etc.)
 - ⚠️ **Long Domains** - Unusually long domain names

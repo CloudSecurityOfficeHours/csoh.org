@@ -584,6 +584,8 @@ csoh.org/
 ├── about.html                  # About CSOH: mission and ethos
 ├── about-shawn-nunley.html     # Founder bio (Person / ProfilePage schema, E-E-A-T)
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages live in /breaches/)
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 13 chains
+├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
 ├── breaches/                   # 13 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 102 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)

@@ -35,6 +35,8 @@ The glossary itself, error pages (`403.html`, `404.html`), and the Google site v
   - `<code>`, `<pre>`, `<script>`, `<style>`
   - `<h1>` through `<h6>` (headings shouldn't get inline links)
   - `<header>`, `<footer>`, `<nav>` (chrome, not content)
+  - `<title>`/`<head>` and `<button>` text
+  - `.code-block` and `.tag-example` class blocks (example snippets)
   - HTML comments, attribute values, JSON-LD schema blocks
 - **DENYLIST** filters single-word terms that overlap with ordinary English (`public`, `data`, `cloud`, `agent`, etc.) plus single-word remnants accidentally extracted from compound entries like `Blue / Red Team`. If a generic word starts auto-linking somewhere unhelpful, add it to the `DENYLIST` set near the top of the script.
 
