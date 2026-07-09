@@ -22,7 +22,7 @@ layout-neutral (the <img> keeps behaving as the flex/grid child it was).
 
 Usage:
     python3 tools/wrap_img_webp.py --dry-run          # report only, change nothing
-    python3 tools/wrap_img_webp.py                    # root + breaches/ + meetings/ + portfolio/ (not homelab/)
+    python3 tools/wrap_img_webp.py                    # root + breaches/ + meetings/ + portfolio/ + homelab/
     python3 tools/wrap_img_webp.py news.html faq.html # specific files
 """
 
@@ -107,6 +107,7 @@ def main() -> int:
             + list(REPO_ROOT.glob("breaches/*.html"))
             + list(REPO_ROOT.glob("meetings/*.html"))
             + list(REPO_ROOT.glob("portfolio/*.html"))
+            + list(REPO_ROOT.glob("homelab/*.html"))
         )
 
     total, files_changed = 0, 0

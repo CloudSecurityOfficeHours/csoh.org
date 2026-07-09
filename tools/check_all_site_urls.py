@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Check all URLs across every top-level HTML file for safety.
-(Subdirectory pages such as breaches/ and meetings/ are NOT scanned - this
-globs the repo root only.)
+Check all URLs across every HTML file on the site for safety
+(root plus breaches/, meetings/, portfolio/, and homelab/ subdirectories).
 
 Three-phase pipeline:
-  1. Extract  - collect all URLs from every top-level HTML file, deduplicate
+  1. Extract  - collect all URLs from every HTML file (root + subdirs), deduplicate
   2. Resolve  - batch-resolve unique URLs concurrently (skip whitelisted domains)
   3. Check    - run safety checks on resolved URLs, per file
 """
@@ -71,7 +70,14 @@ def main():
 
     # Find all HTML files
     workspace_root = Path(__file__).parent.parent
-    html_files = sorted(workspace_root.glob('*.html'))
+    # Site-wide: root plus every published subdirectory of HTML pages.
+    html_files = sorted(
+        list(workspace_root.glob('*.html'))
+        + list(workspace_root.glob('breaches/*.html'))
+        + list(workspace_root.glob('meetings/*.html'))
+        + list(workspace_root.glob('portfolio/*.html'))
+        + list(workspace_root.glob('homelab/*.html'))
+    )
 
     print("=" * 80)
     print("COMPREHENSIVE SITE-WIDE URL SAFETY CHECK")

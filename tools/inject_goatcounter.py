@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Stamp the GoatCounter analytics tag onto root, meetings/, and breaches/ HTML pages.
+"""Stamp the GoatCounter analytics tag onto every HTML page.
 
 Why this exists
 ---------------
 The site has no templating - the footer scripts are hand-copied into each of
-~210 static pages (root + meetings/ + breaches/). NOTE: portfolio/ and homelab/
-are NOT in the glob, so those pages currently carry no GoatCounter tag. This script inserts ONE
+~220 static pages (root + meetings/ + breaches/ + portfolio/ + homelab/). This script inserts ONE
 canonical GoatCounter `<script>` tag, byte-identical, right before the closing
 `</body>` on every page, the same way tools/sync_chrome.py keeps the nav and
 footer uniform.
@@ -79,6 +78,8 @@ def main() -> int:
         list(REPO.glob("*.html"))
         + list(REPO.glob("meetings/*.html"))
         + list(REPO.glob("breaches/*.html"))
+        + list(REPO.glob("portfolio/*.html"))
+        + list(REPO.glob("homelab/*.html"))
     )
 
     added = present = skipped = 0

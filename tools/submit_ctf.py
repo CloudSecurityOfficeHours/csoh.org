@@ -15,6 +15,7 @@ Usage:
 
 import sys
 import re
+import json
 import subprocess
 from pathlib import Path
 from check_url_safety import URLSafetyChecker
@@ -163,6 +164,39 @@ def insert_card_into_section(html_content, section_id, card_html):
                 + html_content[insertion_point:])
     return new_html, None
 
+
+def update_ctf_itemlist(html_content, url, name):
+    """Keep the ctfs.html JSON-LD ItemList in sync with the cards.
+
+    Appends a ListItem (position = current count + 1) for the new CTF and bumps
+    numberOfItems, so the structured-data count never drifts from the page.
+    Returns (new_html, error_or_None); a None error with unchanged html means
+    the ItemList could not be located and should be updated by hand.
+    """
+    m = re.search(r'"@type":\s*"ItemList".*?"itemListElement":\s*\[(.*?)\n(\s*)\]',
+                  html_content, re.DOTALL)
+    if not m:
+        return html_content, "ItemList not found in ctfs.html"
+    block, inner, indent = m.group(0), m.group(1), m.group(2)
+    num_m = re.search(r'"numberOfItems":\s*(\d+)', block)
+    if not num_m:
+        return html_content, "numberOfItems not found in the ItemList"
+    new_pos = int(num_m.group(1)) + 1
+    new_item = (
+        '    {\n'
+        '      "@type": "ListItem",\n'
+        f'      "position": {new_pos},\n'
+        f'      "url": {json.dumps(url)},\n'
+        f'      "name": {json.dumps(name)}\n'
+        '    }'
+    )
+    new_block = block.replace(inner + "\n" + indent + "]",
+                              inner + ",\n" + new_item + "\n" + indent + "]")
+    new_block = re.sub(r'"numberOfItems":\s*\d+', f'"numberOfItems": {new_pos}',
+                       new_block, count=1)
+    return html_content.replace(block, new_block), None
+
+
 def git_command(args, capture_output=True):
     try:
         result = subprocess.run(['git'] + args, capture_output=capture_output,
@@ -299,6 +333,11 @@ def main():
         print(f"\n❌ {err}")
         print("\nYou can paste the card manually at the end of the relevant section.")
         return 1
+
+    new_content, ld_err = update_ctf_itemlist(new_content, url, name)
+    if ld_err:
+        print(f"\n⚠️  {ld_err} - add a ListItem and bump numberOfItems in "
+              f"the ctfs.html JSON-LD by hand.")
 
     ctfs_file.write_text(new_content, encoding='utf-8')
     print(f"\n✅ Updated {ctfs_file.name}")
