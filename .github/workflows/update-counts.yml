@@ -1,0 +1,104 @@
+# =============================================================================
+# Update Counts
+# -----------------------------------------------------------------------------
+# The site repeats the same numbers in many places - JSON-LD `numberOfItems`,
+# the Open Graph share-card subtitles ("380+ resources", "102 recaps") - and
+# they drift as content is added. This weekly job runs tools/sync_counts.py,
+# which recomputes every count from the real cards/files on disk and rewrites
+# them, then regenerates the share-card images whose text changed, and pushes
+# the result. So nobody has to remember to bump a count by hand.
+#
+# It commits directly to main (like site-update-deploy.yml) using the csoh-ci
+# App token, which is on the branch-protection bypass list. The commit is
+# NOT marked [skip ci], so it flows through the normal deploy so the corrected
+# counts actually go live.
+# =============================================================================
+name: Update Counts
+
+on:
+  # Mondays 07:30 UTC - just after the monthly reading-list check (07:00) and
+  # well clear of the Friday session, so a same-week recap is already counted.
+  schedule:
+    - cron: '30 7 * * 1'    # min hour day-of-month month day-of-week
+  # A "Run workflow" button for on-demand syncs.
+  workflow_dispatch:
+  # Re-run when the counting logic itself changes, so a fix takes effect at once.
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/sync_counts.py'
+      - '.github/workflows/update-counts.yml'
+
+# The auto-injected GITHUB_TOKEN stays read-only; the write happens through the
+# App token minted below (kept minimal, same pattern as site-update-deploy.yml).
+permissions:
+  contents: read
+
+# Never run two syncs at once - a second run waits for (and cancels) the first.
+concurrency:
+  group: update-counts
+  cancel-in-progress: true
+
+jobs:
+  update-counts:
+    runs-on: ubuntu-latest
+    steps:
+      # Mint a short-lived installation token from the csoh-ci GitHub App. We
+      # need a non-default token (not GITHUB_TOKEN) because this job pushes to
+      # main; the App is on the ruleset bypass list so the push is accepted.
+      - name: Mint installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
+          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
+
+      # Full clone (fetch-depth: 0) authenticated as the App, so `git push`
+      # later works without re-supplying credentials.
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: '3.x'
+
+      # Playwright + Pillow + headless Chromium are only needed to re-render the
+      # OG share cards; sync_counts.py itself is standard-library only.
+      # Pinned versions - bump deliberately (supply-chain reproducibility).
+      - name: Install dependencies
+        run: |
+          pip install 'playwright==1.59.0' 'Pillow==12.2.0'
+          playwright install chromium
+
+      # Recompute + rewrite all counts. If sync_counts changed the OG-card
+      # subtitles (it only edits generate_og_images.py when a count moved),
+      # re-render the three count-bearing cards so the images match the text.
+      # Then commit & push only if something actually changed.
+      - name: Sync counts and refresh count share-cards
+        run: |
+          python3 tools/sync_counts.py
+
+          if ! git diff --quiet tools/generate_og_images.py; then
+            echo "OG subtitles changed - regenerating count share-cards."
+            python3 tools/generate_og_images.py --skip-html \
+              --pages index.html resources.html meetings.html
+          fi
+
+          if git diff --quiet; then
+            echo "All counts already in sync - nothing to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            # Commit the count edits (HTML + the OG script) and any refreshed
+            # share-card images.
+            git add '*.html' tools/generate_og_images.py img/og
+            git commit -m "chore: sync site counts + refresh count share-cards"
+            # If another pipeline pushed while we worked, rebase and retry.
+            git push || (git pull --rebase origin main && git push)
+            echo "Counts synced and pushed."
+          fi

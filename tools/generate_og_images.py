@@ -45,7 +45,7 @@ OG_VIEWPORT = {"width": 1200, "height": 630}
 PAGES = [
     ("index.html",
      "Cloud Security, Vendor-Neutral",
-     "2,000+ practitioners. 370+ resources. Free weekly Zoom. No trackers.",
+     "2,000+ practitioners. 380+ resources. Free weekly Zoom. No trackers.",
      "Community"),
     ("what-is-cloud-security.html",
      "What is Cloud Security?",
@@ -84,7 +84,7 @@ PAGES = [
      "Version control from first principles, then our real git workflow - branches, pull requests, secrets out of history.",
      "Tutorial"),
     ("resources.html",
-     "370+ Cloud Security Resources",
+     "380+ Cloud Security Resources",
      "CTFs, labs, tools, certifications, and AI-security resources - curated by the CSOH community.",
      "Directory"),
     ("ctfs.html",

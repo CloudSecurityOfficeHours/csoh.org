@@ -179,7 +179,7 @@ csoh.org/
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
-├── .github/workflows/      # CI/CD pipelines (13 workflows: update-news, update-resources, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
+├── .github/workflows/      # CI/CD pipelines (14 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
 └── update_news.py          # News aggregation from 39 RSS feeds
 ```
 
@@ -195,6 +195,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - auto-approved, human merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
+| [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every site count (JSON-LD `numberOfItems`, OG-card subtitles) from the real cards and refreshes the count share-cards | N/A - commits directly |
 
 **Deploy**
 

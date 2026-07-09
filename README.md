@@ -689,6 +689,7 @@ csoh.org/
 │   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
 │   ├── check-reading-list-staleness.yml # Monthly reading-list feed staleness -> tracking issue
 │   ├── check-meeting-staleness.yml   # Weekly check that the newest recap isn't stale -> sticky issue
+│   ├── update-counts.yml            # Weekly: recompute site counts + refresh count share-cards
 │   ├── check-pagespeed.yml          # Weekly Google PageSpeed Insights run → SCORECARD row + regression issue (Mon 14:00 UTC)
 │   ├── run-seo-audit.yml            # Weekly deterministic structural SEO audit → SCORECARD row + regression issue (Mon 14:15 UTC)
 │   ├── deploy.yml                   # Build once, publish to AWS + GCP + Azure (keyless OIDC)
@@ -843,7 +844,7 @@ This site uses **GitHub Actions workflows** to automate all major site updates. 
 - Optimizes generated images
 - Each step that mutates files commits the change back to `main` (with `[skip ci]` markers) so the next workflow run sees fresh state
 
-**Why this is separate from the deploy:** the housekeeping commits this workflow makes (SRI updates, sitemap refreshes, etc.) are themselves what triggers `deploy.yml` - that workflow watches the same paths and picks up the post-housekeeping state. Splitting them keeps each workflow's responsibility narrow.
+**Why this is separate from the deploy:** these housekeeping commits carry `[skip ci]`, so they do NOT trigger `deploy.yml` (that would loop). `deploy.yml` runs independently from the original content push that started this workflow; the housekeeping commits land in `main` and ship with the next deploy. Splitting them keeps each workflow's responsibility narrow.
 
 **News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `deploy.yml` ships it.
 
