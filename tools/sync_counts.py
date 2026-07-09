@@ -250,7 +250,118 @@ def sync_og(counts: dict, apply: bool) -> tuple[bool, list[str]]:
     return bool(changed), changed
 
 
+# ---------------------------------------------------- cloud-security-reading-list
+READING_ITEM_RE = re.compile(r'<div class="resource-card">\s*<h3>\s*<a\s+[^>]*?href="([^"]+)"[^>]*>(.*?)</a>',
+                             re.DOTALL)
+
+
+def reading_list_items(html: str) -> list[tuple[str, str]]:
+    """Ordered (url, name) for every reading-list card, deduped by URL."""
+    seen: set[str] = set()
+    out: list[tuple[str, str]] = []
+    for url, raw in READING_ITEM_RE.findall(html):
+        name = html_lib.unescape(re.sub(r"<[^>]+>", "", raw).strip())
+        if url not in seen:
+            seen.add(url)
+            out.append((url, name))
+    return out
+
+
+def rebuild_reading_list(html: str) -> str:
+    """Regenerate the reading-list ItemList so it enumerates every item card
+    (was a hand-kept '6 ways' category stub)."""
+    items = reading_list_items(html)
+    entries = ",\n".join(
+        f'        {{ "@type": "ListItem", "position": {i}, '
+        f"\"name\": {json.dumps(n, ensure_ascii=False)}, "
+        f"\"url\": {json.dumps(u, ensure_ascii=False)} }}"
+        for i, (u, n) in enumerate(items, start=1)
+    )
+    block = (
+        '<script type="application/ld+json">\n'
+        "    {\n"
+        '      "@context": "https://schema.org",\n'
+        '      "@type": "ItemList",\n'
+        '      "name": "Cloud Security Reading List",\n'
+        '      "description": "Books, newsletters, blogs, podcasts, and people to follow that CSOH members read.",\n'
+        '      "itemListOrder": "https://schema.org/ItemListOrderAscending",\n'
+        f'      "numberOfItems": {len(items)},\n'
+        '      "itemListElement": [\n'
+        f"{entries}\n"
+        "      ]\n"
+        "    }\n"
+        "    </script>"
+    )
+    for m in LDJSON_RE.finditer(html):
+        try:
+            obj = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("@type") == "ItemList":
+            return html.replace(m.group(0), block, 1)
+    return html
+
+
+# ------------------------------------------------------- prose counts via markers
+# Prose counts are wrapped in HTML-comment sentinels so the tool can rewrite the
+# number without touching surrounding text, e.g.
+#     <!--count:resources_floor-->380+<!--/count--> curated resources
+# The comment is invisible in rendered HTML and on GitHub-rendered Markdown.
+MARKER_RE = re.compile(r"<!--count:([a-z_]+)-->(.*?)<!--/count-->", re.DOTALL)
+
+
+def display_values(counts: dict) -> dict:
+    return {
+        "resources_floor": f"{floor10(counts['resources'])}+",
+        "resources": str(counts["resources"]),
+        "meetings": str(counts["meetings"]),
+        "meetings_floor": f"{floor10(counts['meetings'])}+",
+        "breaches": str(counts["breaches"]),
+        "feeds": str(counts["feeds"]),
+    }
+
+
+def sync_markers(text: str, disp: dict) -> str:
+    def repl(m):
+        key = m.group(1)
+        if key not in disp:
+            return m.group(0)
+        return f"<!--count:{key}-->{disp[key]}<!--/count-->"
+    return MARKER_RE.sub(repl, text)
+
+
+def sync_llms(disp: dict, apply: bool) -> tuple[bool, list[str]]:
+    """llms.txt is plain text (HTML comments would show), so update its known
+    count phrases with targeted regexes instead of markers."""
+    path = REPO / "llms.txt"
+    text = path.read_text(encoding="utf-8")
+    rules = [
+        (r"\d+\+ curated resources", f"{disp['resources_floor']} curated resources"),
+        (r"\d+\+ curated tools", f"{disp['resources_floor']} curated tools"),
+        (r"\d+\+ weekly sessions", f"{disp['meetings_floor']} weekly sessions"),
+        (r"\d+ vendor-neutral sources", f"{disp['feeds']} vendor-neutral sources"),
+    ]
+    changed = []
+    for pat, rep in rules:
+        new = re.sub(pat, rep, text)
+        if new != text:
+            changed.append(rep)
+            text = new
+    if changed and apply:
+        path.write_text(text, encoding="utf-8")
+    return bool(changed), changed
+
+
 # ------------------------------------------------------------------------- counts
+def feeds_count() -> int:
+    """Number of FEEDS entries in update_news.py (the news source list)."""
+    text = (REPO / "update_news.py").read_text(encoding="utf-8")
+    m = re.search(r"FEEDS\s*=\s*\[(.*?)\n\]", text, re.DOTALL)
+    if not m:
+        return 0
+    return len(re.findall(r'"url"\s*:', m.group(1)))
+
+
 def canonical_counts() -> dict:
     res_html = (REPO / "resources.html").read_text(encoding="utf-8")
     gloss = (REPO / "glossary.html").read_text(encoding="utf-8")
@@ -258,6 +369,7 @@ def canonical_counts() -> dict:
         "resources": len(unique_resources(res_html)),
         "meetings": len(list((REPO / "meetings").glob("*.html"))),
         "breaches": len(list((REPO / "breaches").glob("*.html"))),
+        "feeds": feeds_count(),
         "glossary_terms": len(re.findall(r'id="term-[a-z0-9-]+"', gloss)),
     }
 
@@ -269,6 +381,17 @@ def html_files() -> list[Path]:
     return sorted(out)
 
 
+def md_files() -> list[Path]:
+    return sorted(list(REPO.glob("*.md")) + list((REPO / "tools").glob("*.md")))
+
+
+# Pages whose ItemList structured data is regenerated wholesale from the cards.
+MANAGED = {
+    "resources.html": rebuild_resources,
+    "cloud-security-reading-list.html": rebuild_reading_list,
+}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Keep site counts in sync with reality.")
     ap.add_argument("--check", action="store_true",
@@ -277,31 +400,37 @@ def main() -> int:
     apply = not args.check
 
     counts = canonical_counts()
+    disp = display_values(counts)
     print("Canonical counts:", ", ".join(f"{k}={v}" for k, v in counts.items()))
 
     drift = []
 
-    # 1. resources.html - regenerate both ItemLists from the cards.
-    res_path = REPO / "resources.html"
-    res_html = res_path.read_text(encoding="utf-8")
-    new_res = rebuild_resources(res_html)
-    if new_res != res_html:
-        drift.append(f"resources.html structured data ({counts['resources']} unique resources)")
-        if apply:
-            res_path.write_text(new_res, encoding="utf-8")
-
-    # 2. numberOfItems invariant across every page.
+    # 1. HTML pages: regenerate managed ItemLists (or enforce the count
+    #    invariant elsewhere), then refresh any <!--count:...--> prose markers.
     for f in html_files():
-        if f.name == "resources.html":
-            continue  # regenerated above
         txt = f.read_text(encoding="utf-8")
-        new_txt, notes = enforce_itemlist_invariant(txt)
+        new_txt = MANAGED[f.name](txt) if f.name in MANAGED else enforce_itemlist_invariant(txt)[0]
+        new_txt = sync_markers(new_txt, disp)
         if new_txt != txt:
-            drift.append(f"{f.relative_to(REPO)}: {'; '.join(notes)}")
+            drift.append(str(f.relative_to(REPO)))
             if apply:
                 f.write_text(new_txt, encoding="utf-8")
 
-    # 3. OG-card subtitles.
+    # 2. Markdown docs: prose markers only.
+    for f in md_files():
+        txt = f.read_text(encoding="utf-8")
+        new_txt = sync_markers(txt, disp)
+        if new_txt != txt:
+            drift.append(str(f.relative_to(REPO)))
+            if apply:
+                f.write_text(new_txt, encoding="utf-8")
+
+    # 3. llms.txt (plain text: regex, not markers).
+    llms_changed, _ = sync_llms(disp, apply)
+    if llms_changed:
+        drift.append("llms.txt")
+
+    # 4. OG-card subtitles.
     og_changed, og_notes = sync_og(counts, apply)
     if og_changed:
         drift.append("generate_og_images.py OG subtitles: " + "; ".join(og_notes))

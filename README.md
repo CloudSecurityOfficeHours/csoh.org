@@ -79,7 +79,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 |---|---|
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 39 sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | 13 real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->13<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
@@ -148,7 +148,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | 102 weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->102<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
 
@@ -338,7 +338,7 @@ Learn-by-example IaC explainer, using the Terraform that provisions CSOH's own m
 Version-control fundamentals - branching, commits, pull requests, and history hygiene - taught through this repository's own workflow.
 
 ### 📚 Resources (`resources.html`)
-Comprehensive catalog of **370+ cloud security resources** organized by 6 categories:
+Comprehensive catalog of **<!--count:resources_floor-->380+<!--/count--> cloud security resources** organized by 6 categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -420,7 +420,7 @@ Archive of past Zoom session presentations:
 
 ### 📝 Meeting Recaps (`meetings.html`)
 Topic-by-topic recaps of every weekly session:
-- **94+ meeting recaps** with per-topic summaries and speaker notes
+- **<!--count:meetings-->102<!--/count--> meeting recaps** with per-topic summaries and speaker notes
 - Searchable, filterable by tag (AWS, Azure, AI, supply chain, conferences, etc.)
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
@@ -566,7 +566,7 @@ csoh.org/
 ├── cloud-deployment.html       # Multi-cloud deploy architecture (the dogfooded stack)
 ├── terraform.html              # Learn Terraform via our own multi-cloud IaC
 ├── version-control.html        # Git & version-control fundamentals via this repo
-├── resources.html              # Main resource directory (370+ resources in 6 categories)
+├── resources.html              # Main resource directory (380+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── sessions.html               # Weekly Zoom session information
