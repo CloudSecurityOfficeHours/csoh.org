@@ -38,7 +38,7 @@ style-src 'self';
 img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com https://csoh.goatcounter.com data:;
 font-src 'self';
 connect-src 'self' https://csoh.goatcounter.com;
-frame-src https://www.youtube.com https://web.archive.org;
+frame-src https://www.youtube.com https://web.archive.org https://docs.google.com https://drive.google.com;
 frame-ancestors 'none';
 base-uri 'self';
 form-action 'self';
@@ -47,7 +47,7 @@ object-src 'none'
 
 Key points:
 - **No `unsafe-inline` or `unsafe-eval`** in `script-src` - inline scripts and `eval()` are blocked
-- **No wildcards** - every external domain is explicitly listed
+- **No wildcards** - every external domain is explicitly listed (`docs.google.com`/`drive.google.com` are present only to allow the embedded Google Slides decks on `presentations.html`)
 - **`frame-ancestors 'none'`** - supersedes `X-Frame-Options` for modern browsers
 - **`object-src 'none'`** - blocks Flash, Java applets, and other plugin content
 - Only YouTube and Web Archive are allowed as iframe sources
