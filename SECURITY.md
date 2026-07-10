@@ -115,14 +115,15 @@ This means even if the hosting account were compromised and files were tampered 
 - All `target="_blank"` links automatically receive `rel="noopener noreferrer"` via JavaScript enforcement on page load
 - This prevents reverse tabnapping attacks
 
-**No Third-Party JavaScript:**
-- Zero external scripts - no analytics, no tracking pixels, no CDN-hosted libraries
-- All JavaScript is first-party, self-hosted, and SRI-hashed
+**No Third-Party JavaScript (from external origins):**
+- Zero external scripts - no tracking pixels, no CDN-hosted libraries
+- All JavaScript is self-hosted and SRI-hashed
+- One exception: `GoatCounter` - a cookieless, privacy-friendly page-view counter whose loader is self-hosted at `/vendor/goatcounter-count.js` (so `script-src` stays `'self'`); the counting service at `csoh.goatcounter.com` is allowed in `connect-src` (see CSP section above)
 
-**No Cookies or Tracking:**
+**No Cookies or Cross-Site Tracking:**
 - The site sets no cookies of any kind
 - `localStorage` is used only for the dark mode theme preference (`theme` key)
-- No user data is collected, stored, or transmitted
+- No personally identifiable data is collected or transmitted; GoatCounter records only aggregate page paths, referrer, browser/OS, and screen size - no IP addresses, no user IDs, no cross-site tracking
 - See [privacy.html](privacy.html) for the user-facing Privacy Policy
 
 ---

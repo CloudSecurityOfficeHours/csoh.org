@@ -165,7 +165,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 ## 🌐 About
 
-Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no trackers, no analytics, no on-site advertising. (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner - never a separate promotional email.)
+Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no marketing trackers, no on-site advertising. (The site uses GoatCounter, a cookieless, privacy-friendly page-view counter - no cookies, no cross-site tracking, no IP storage.) (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner - never a separate promotional email.)
 
 Sign up for the weekly Zoom link at **[csoh.kit.com](https://csoh.kit.com/39feb4f397)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
 
@@ -573,7 +573,7 @@ csoh.org/
 ├── community.html              # Community & Signal chat
 ├── mentorship.html             # Community mentorship program
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (94+ entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (102 entries, topic-by-topic)
 ├── ctfs.html                   # Dedicated cloud CTF directory (39+ challenges)
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── rss.html                    # Landing page explaining the RSS feed to subscribers
@@ -921,7 +921,7 @@ Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog
 
 ## 🔍 SEO & Search Optimization
 
-CSOH is engineered for organic discovery across traditional search (Google, Bing), AI search/answer engines (ChatGPT, Perplexity, Claude, Gemini), and social previews (LinkedIn, Twitter/X, Slack). The site uses no tracking, no analytics, and no third-party scripts - just clean semantic HTML, structured data, and disciplined metadata.
+CSOH is engineered for organic discovery across traditional search (Google, Bing), AI search/answer engines (ChatGPT, Perplexity, Claude, Gemini), and social previews (LinkedIn, Twitter/X, Slack). The site uses no marketing trackers and no third-party-origin scripts - just clean semantic HTML, structured data, and disciplined metadata. Cookieless page-view analytics via GoatCounter (self-hosted script, no cookies, no cross-site tracking).
 
 ### Schema.org structured data (25+ types)
 
