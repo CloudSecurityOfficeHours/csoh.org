@@ -1,0 +1,201 @@
+# =============================================================================
+# Check Conference Staleness
+# -----------------------------------------------------------------------------
+# Monthly, scans conferences.html and flags any conference card whose "Next:"
+# date has slipped into the past. Each card carries a machine-readable
+# data-next-date="YYYY-MM-DD" attribute; once that start date is behind today,
+# the card advertises a "Next" edition that has already happened, which reads as
+# a neglected page. This is the self-policing half of showing concrete dates on
+# an otherwise static, hand-maintained site.
+#
+# Like check-meeting-staleness.yml and check-reading-list-staleness.yml, this
+# NEVER edits the site - it only opens (or updates, or closes) a single sticky
+# tracking issue with the report.
+# =============================================================================
+
+# This whole file is a "workflow": a GitHub Actions automation that runs when
+# something happens in the repo (a timer fires, a button is clicked, a push
+# lands). GitHub reads it because it lives under .github/workflows/ and ends in
+# .yml. `name:` is just the human-friendly label shown in the Actions tab.
+name: Check Conference Staleness
+
+# -----------------------------------------------------------------------------
+# §1 - Triggers
+# Runs on a monthly timer, on demand, or when the checker/workflow itself edits.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. Any one is enough to trigger.
+on:
+  # `schedule` runs on a timer using cron (minute, hour, day-of-month, month,
+  # day-of-week; `*` = every). GitHub cron is always UTC. Conference dates move
+  # on the scale of months, not days, so a monthly check is plenty.
+  # `0 14 1 * *` reads: 14:00 UTC on the 1st of every month.
+  schedule:
+    - cron: '0 14 1 * *'    # min hour day-of-month month day-of-week
+  # `workflow_dispatch` adds a "Run workflow" button so a human can launch it
+  # on demand (e.g. right after editing dates, to confirm nothing is stale).
+  workflow_dispatch:
+  # `push` re-checks only when the checker script or this workflow changes,
+  # because those files alter HOW staleness is computed. Editing dates in
+  # conferences.html does NOT re-trigger (it is not in `paths:`); the monthly
+  # timer and the manual button cover that.
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/check_conference_staleness.py'
+      - '.github/workflows/check-conference-staleness.yml'
+
+# -----------------------------------------------------------------------------
+# §2 - Permissions
+# Read the repo files; write Issues (to open/update/close the tracking issue).
+# -----------------------------------------------------------------------------
+# Every run gets an automatic, throwaway credential (GITHUB_TOKEN).
+# `permissions:` sets what it may do; listing only what's needed (least
+# privilege) limits the blast radius if a step misbehaves.
+permissions:
+  contents: read      # read repo files (needed to check them out); no pushing
+  issues: write       # create/edit/close the sticky tracking issue
+
+# -----------------------------------------------------------------------------
+# §3 - Concurrency
+# One global lock so two runs never race on the same tracking issue.
+# -----------------------------------------------------------------------------
+concurrency:
+  # A constant group name means every run of this workflow shares one lock.
+  group: check-conference-staleness
+  # A staleness report is a read-only computation, so cancelling an older
+  # in-progress run in favor of a newer one is safe.
+  cancel-in-progress: true
+
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps
+# One job: compute the report, save it as an artifact, then open/update/close
+# the tracking issue based on whether anything is stale.
+# -----------------------------------------------------------------------------
+jobs:
+  check-staleness:
+    # "ubuntu-latest" is a GitHub-hosted Linux VM, created fresh for this job
+    # and discarded when it finishes.
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1 - Pull the repo onto the runner so later steps can read
+      # conferences.html and the checker script. The "@<40-hex>" pins the action
+      # to an exact commit SHA (not a moving tag) so a hijacked tag can't swap in
+      # malicious code; the trailing "# v7.0.0" notes the human-readable version.
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      # Step 2 - Install a Python interpreter so the next step's `python3`
+      # command exists. The checker only uses the standard library.
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: '3.x'
+
+      # Step 3 - Run the checker. It scans conferences.html, pairs each
+      # data-next-date with its card title, and writes a markdown report to
+      # staleness.md whose "Status:" line reads STALE or OK. It exits 0 even when
+      # something is stale (report, not a gate); only an internal error (e.g. the
+      # card markup changed so no date lines are found) exits non-zero.
+      - name: Run staleness check
+        run: python3 tools/check_conference_staleness.py --output staleness.md
+
+      # Step 4 - Stash the report as an "artifact" a human can download from the
+      # run page. `if: always()` runs this even if an earlier step failed, so we
+      # still capture whatever was written.
+      - name: Upload staleness report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: conference-staleness-report
+          path: staleness.md
+          retention-days: 90
+          if-no-files-found: warn
+
+      # Step 5 - Manage the single sticky tracking issue. If anything is stale,
+      # create the issue (or update it if it already exists); once every date is
+      # refreshed, auto-close it. Mirrors the meeting/reading-list workflows'
+      # exact-title + label matching.
+      - name: Open, update, or close tracking issue
+        env:
+          # GITHUB_TOKEN is the automatic per-run credential; `gh` reads it from
+          # GH_TOKEN to authenticate its API calls.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `github.repository` expands to "owner/repo" at run time.
+          REPO: ${{ github.repository }}
+          # A deep link back to THIS run's page so the issue can credit its source.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # `set -euo pipefail` makes bash strict: exit on any command failure,
+          # error on an unset variable, and fail a pipeline if any stage fails.
+          set -euo pipefail
+
+          # The exact issue title (used both to search for an existing issue and
+          # to create a new one) and the label that tags these issues.
+          title="Conferences: a 'Next' date has gone stale"
+          label="conference-staleness"
+
+          # Make sure the label exists before we filter/tag by it. On a repo that
+          # already has it, `gh label create` errors; `2>/dev/null` hides that and
+          # `|| true` swallows the non-zero exit so strict mode doesn't abort.
+          gh label create "$label" \
+            --color "fbca04" \
+            --description "Auto-generated reports from check-conference-staleness.yml" \
+            --repo "$REPO" 2>/dev/null || true
+
+          # The report's Status line is the source of truth. `grep -q` sets an
+          # exit code only: STALE present -> stale=1, else stale=0. The `\*\*`
+          # matches the two literal asterisks of the "**Status:**" bold.
+          if grep -q "Status:\*\* STALE" staleness.md; then
+            stale=1
+          else
+            stale=0
+          fi
+
+          # Look up any already-open tracking issue so we update instead of
+          # opening a duplicate: list open issues with our label, keep only the
+          # exact-title match (the --search is loose), take at most one number.
+          existing="$(gh issue list \
+            --repo "$REPO" \
+            --state open \
+            --label "$label" \
+            --search "in:title \"$title\"" \
+            --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" \
+            | head -n1)"
+
+          # Branch on whether anything is stale.
+          if [ "$stale" -eq 1 ]; then
+            # Build the issue body: a credit line, a blank line, the full report,
+            # then a footer explaining the auto-close.
+            {
+              echo "_Auto-updated by [check-conference-staleness]($RUN_URL)._"
+              echo ""
+              cat staleness.md
+              echo ""
+              echo "---"
+              echo "_This issue auto-closes once every 'Next' date on conferences.html is refreshed._"
+            } > issue-body.md
+            # Non-empty `existing` means an issue is already open: edit in place.
+            # Otherwise open a new one. Either way feed the body file we built.
+            if [ -n "$existing" ]; then
+              echo "updating issue #$existing"
+              gh issue edit "$existing" --repo "$REPO" --body-file issue-body.md
+            else
+              echo "creating new issue"
+              gh issue create \
+                --repo "$REPO" \
+                --title "$title" \
+                --label "$label" \
+                --body-file issue-body.md
+            fi
+          # Not stale, but an issue is still open: the dates were refreshed, so
+          # close it with an explanatory comment.
+          elif [ -n "$existing" ]; then
+            echo "dates refreshed - closing issue #$existing"
+            gh issue close "$existing" --repo "$REPO" \
+              --comment "All conference 'Next' dates are upcoming again. Auto-closed by [check-conference-staleness]($RUN_URL)."
+          # Not stale and no open issue: nothing to do.
+          else
+            echo "all conference dates healthy - nothing to do"
+          fi
