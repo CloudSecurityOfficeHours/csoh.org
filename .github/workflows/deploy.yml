@@ -23,6 +23,10 @@
 # the repo's Actions tab so humans can tell workflows apart.
 name: Deploy - build once, publish to AWS + GCP + Azure
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Fires on pushes to main that touch published site files, or on manual run.
+# -----------------------------------------------------------------------------
 # `on:` lists the events that TRIGGER this workflow - i.e. what has to happen
 # for GitHub to start running it. There can be several triggers.
 on:
@@ -61,6 +65,10 @@ on:
   # change that didn't touch any of the paths above).
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read the repo, plus mint an OIDC token so all three clouds can log in keyless.
+# -----------------------------------------------------------------------------
 # `permissions:` sets what the automatic, per-run GITHUB_TOKEN is allowed to do
 # against THIS repo. We deliberately keep it minimal (least privilege).
 permissions:
@@ -73,16 +81,28 @@ permissions:
   # cloud keys stored in the repo. Without this line, all three logins fail.
   id-token: write   # required for OIDC token exchange (all three clouds)
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One global lock named "deploy"; a newer deploy cancels an older in-flight one.
+# -----------------------------------------------------------------------------
 # `concurrency:` stops overlapping runs from racing each other. Runs that share
 # the same `group` name are serialized.
 concurrency:
-  # A fixed name, so every run of this workflow lands in the same group.
+  # A fixed, constant name (not one keyed on `${{ github.ref }}`), so EVERY run
+  # of this workflow shares one lock - unlike the per-branch locks the read-only
+  # check workflows use. There is only one production site, so we never want two
+  # deploys publishing at once regardless of which ref triggered them.
   group: deploy
   # If a new deploy starts while an older one is still going, cancel the older
   # one. The newest commit is what we want live, so finishing a stale deploy
   # would be wasteful (and could publish older bytes after newer ones).
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One `build` job stages the site, then three publish jobs (`needs: build`) fan
+# out to AWS, Azure, and GCP in parallel.
+# -----------------------------------------------------------------------------
 # `jobs:` holds the units of work. A "job" runs on its own fresh virtual
 # machine ("runner"). By default jobs run in PARALLEL; the `needs:` key (used
 # below) is how you force one job to wait for another. Each job is made of

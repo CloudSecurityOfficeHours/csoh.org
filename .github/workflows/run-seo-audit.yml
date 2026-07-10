@@ -16,7 +16,13 @@
 # `name:` is what shows up in the repo's Actions tab.
 name: Run SEO Audit
 
-# `on:` lists the events that start this workflow. There are three here.
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Weekly Monday timer, a manual button, or a push that edits the audit script
+# or this workflow file.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. Any one of the three events
+# below is enough to trigger a run; they are alternatives, not requirements.
 on:
   # `schedule` runs the workflow on a timer using cron syntax. The five fields
   # of a cron expression are: minute, hour, day-of-month, month, day-of-week.
@@ -26,7 +32,7 @@ on:
   # check-pagespeed so the two SCORECARD updates land as separate PRs (easier
   # to diff and revert independently).
   schedule:
-    - cron: '15 14 * * 1'
+    - cron: '15 14 * * 1'   # min hour day-of-month month day-of-week
   # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
   # human can trigger this run manually, on demand, without waiting for Monday.
   workflow_dispatch:
@@ -43,6 +49,11 @@ on:
       - 'tools/run_seo_audit.py'
       - '.github/workflows/run-seo-audit.yml'
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read-only default token; every write goes through the GitHub App token +
+# CSOH_PAT minted in the steps below.
+# -----------------------------------------------------------------------------
 # `permissions:` sets what the auto-injected GITHUB_TOKEN (a temporary
 # credential GitHub hands every workflow run) is allowed to do. Here it's
 # locked to read-only - it can read repo contents but cannot push, open PRs,
@@ -55,14 +66,31 @@ on:
 permissions:
   contents: read
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One global lock so two audit runs never race to edit SCORECARD.md.
+# -----------------------------------------------------------------------------
 # `concurrency:` prevents this workflow from running twice at the same time.
 # Any run with the same `group` name waits its turn. cancel-in-progress: false
 # means a queued run does NOT kill the one already running - they execute
 # one after another, so two audits never race to edit SCORECARD.md.
 concurrency:
+  # A constant group name (not one keyed on `${{ github.ref }}`) means EVERY
+  # run of this workflow shares a single lock, regardless of branch. That is
+  # what serializes them - a per-ref group would let a push run and the cron
+  # run edit SCORECARD.md concurrently.
   group: run-seo-audit
+  # false = let the in-flight run finish; the newer run queues behind it
+  # rather than cancelling it. We never want to interrupt a run that may be
+  # mid-write to SCORECARD.md or mid-PR.
   cancel-in-progress: false
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job, `audit`: mint an App token, check out, run the audit, then (only if
+# it changed files) open + approve + auto-merge a PR, and file a regression
+# issue if the score dropped.
+# -----------------------------------------------------------------------------
 # `jobs:` holds one or more jobs. Each job runs on its own machine; steps
 # inside a job share that machine and its filesystem. This workflow has a
 # single job named `audit`.
@@ -121,11 +149,13 @@ jobs:
           python-version: '3.x'
 
       # `run:` executes shell commands on the VM (here, Bash). The `|` makes
-      # this a multi-line block. We grab the most recent Internal SEO audit row
-      # from SCORECARD.md NOW, before the audit overwrites it, so a later step
-      # can compare old vs new and detect a score drop. We filter to non-PSI
-      # rows (PageSpeed rows have " / " in their cells) since this audit only
-      # compares against prior Internal-audit scores.
+      # this a multi-line block. We capture the most recent Internal SEO audit
+      # row from SCORECARD.md and expose it as a step output
+      # (steps.prev.outputs.row), mainly for visibility in the run log. We
+      # filter to non-PSI rows (PageSpeed rows have " / " in their cells)
+      # because the audit only compares against prior Internal-audit scores.
+      # The actual regression decision is made inside run_seo_audit.py (which
+      # compares against the previous `-auto-N.md` row), not from this output.
       - name: Snapshot previous score
         id: prev
         run: |
@@ -157,9 +187,10 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Run the audit. Exit code 1 means score regressed vs prior row -
-      # we capture that into a step output but DON'T fail the job, so the
-      # PR still opens and the issue still files.
+      # Run the audit. Exit code 1 means the score dropped by >=2 points vs
+      # the previous auto-generated row (a regression) - we capture that into a
+      # step output but DON'T fail the job, so the PR still opens and the issue
+      # still files.
       - name: Run SEO audit
         id: audit
         run: |

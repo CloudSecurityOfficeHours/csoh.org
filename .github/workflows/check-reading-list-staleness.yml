@@ -20,6 +20,10 @@
 # This `name:` is the human-friendly label shown in the repo's Actions tab.
 name: Check Reading List Staleness
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs on a monthly timer, on demand, or when the checker/workflow itself edits.
+# -----------------------------------------------------------------------------
 # `on:` lists the events that trigger this workflow. Any one of them is enough
 # to start a run; they are alternatives, not requirements.
 on:
@@ -52,6 +56,10 @@ on:
       - 'tools/check_reading_list_staleness.py'
       - '.github/workflows/check-reading-list-staleness.yml'
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read the repo files; write Issues (to open/update the tracking issue).
+# -----------------------------------------------------------------------------
 # `permissions:` sets what the automatic per-run token (GITHUB_TOKEN) is
 # allowed to do. It's a least-privilege control: grant only what the job needs
 # so a bug or a malicious dependency can't do more damage. Anything not listed
@@ -59,18 +67,35 @@ on:
 # can post / update the report - and nothing else (no pushing code, no
 # releases, etc.). We never modify source files in this workflow.
 permissions:
+  # `contents: read` lets the run read repo files (needed to check them out)
+  # but not push commits, tags, or releases.
   contents: read
+  # `issues: write` lets the run create and edit Issues - which is how the
+  # last step manages the single sticky staleness tracking issue.
   issues: write
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One global lock so two staleness runs never race on the same tracking issue.
+# -----------------------------------------------------------------------------
 # `concurrency:` prevents overlapping runs. Runs that share the same `group:`
 # string are serialized; with `cancel-in-progress: true`, starting a new one
-# cancels whichever is already running. The group name here is a fixed string,
-# so this whole workflow allows only one run at a time across the repo. This
-# crawl is read-only, so interrupting an in-flight run is safe.
+# cancels whichever is already running. The group name here is a fixed string
+# (not one keyed on the branch/ref), so this whole workflow allows only one run
+# at a time across the repo - overlapping runs can't both edit the shared issue
+# and clobber each other. This crawl is read-only, so interrupting a run is safe.
 concurrency:
+  # A constant group name means every run of this workflow shares one lock.
   group: check-reading-list-staleness
+  # If a newer run starts, cancel the older in-progress one. A staleness report
+  # is a read-only computation, so interrupting a stale run is safe.
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: compute the report, save it as an artifact, then open/update the
+# tracking issue with the findings.
+# -----------------------------------------------------------------------------
 # `jobs:` holds one or more jobs. A "job" is a set of steps that run together
 # on a single fresh runner. Separate jobs run in parallel by default and on
 # different machines. This workflow has just one job, so there's nothing to

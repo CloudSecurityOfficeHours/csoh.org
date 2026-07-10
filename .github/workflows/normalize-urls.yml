@@ -16,8 +16,13 @@
 # the list of workflow runs. It has no effect on behavior - just identification.
 name: Normalize URLs
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs once a month on a timer, or on demand from the Actions tab.
+# -----------------------------------------------------------------------------
 # `on` declares the EVENTS that trigger this workflow to run. A workflow with
-# no triggers never runs. We list two triggers below.
+# no triggers never runs. Any one of the events below is enough to start a run;
+# they are alternatives, not requirements. We list two triggers below.
 on:
   # Monthly cleanup, 1st of the month at 08:00 UTC.
   # `schedule` runs the workflow automatically on a timer, written as a "cron"
@@ -33,20 +38,34 @@ on:
   # human can launch this on demand without waiting for the monthly schedule.
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Grant just enough to commit a branch and open a PR - nothing more.
+# -----------------------------------------------------------------------------
 # `permissions` controls what the auto-generated GITHUB_TOKEN (a temporary
 # credential GitHub injects into every run) is allowed to do against THIS
 # repo. Locking it to the minimum needed is a security best practice - a
-# leaked token can only do what we granted here.
-# Needs `contents: write` because the create-PR action commits & pushes a new
-# branch. `pull-requests: write` lets it open and label the PR.
+# leaked token can only do what we granted here. (Note: the actual push and PR
+# below use a separate GitHub App token, minted in §4; these scopes still bound
+# what any step in this job can do.)
 permissions:
+  # `contents: write` lets a step commit and push a branch (the create-PR
+  # action needs this to publish its normalize-urls branch).
   contents: write
+  # `pull-requests: write` lets a step open, label, and edit the PR.
   pull-requests: write
 
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One shared lane with site-update-deploy so repo-writing runs never overlap.
+# -----------------------------------------------------------------------------
 # `concurrency` prevents runs from stepping on each other. GitHub allows only
 # ONE active run per named `group` at a time; others wait in a queue. Any
-# workflow that sets the SAME group name shares that single lane.
+# workflow that sets the SAME group name shares that single lane. Unlike the
+# per-ref `${{ github.ref }}` groups other workflows use, this one is a fixed
+# constant so it locks against a DIFFERENT workflow (site-update-deploy), not
+# just other runs of itself - both write to the repo, so they must serialize.
 # Shared with site-update-deploy so commits to main never race each other.
 # Queue serially.
 concurrency:
@@ -57,8 +76,14 @@ concurrency:
   # one is queued. We never want to abort a deploy partway through.
   cancel-in-progress: false
 
-# `jobs` holds the workflow's jobs. We have just one. Each key under `jobs`
-# (here `normalize-urls`) is that job's internal ID.
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: mint an App token, check out, safety-check the URLs, normalize
+# them, then open a PR (auto-labeled, but left for a human to approve + merge).
+# -----------------------------------------------------------------------------
+# `jobs` holds the workflow's jobs. We have just one. Each job runs on its own
+# fresh virtual machine; a job is an ordered list of `steps:` (below). Each key
+# under `jobs` (here `normalize-urls`) is that job's internal ID.
 jobs:
   normalize-urls:
     # `runs-on` picks the virtual machine ("runner") GitHub spins up fresh for
@@ -147,8 +172,10 @@ jobs:
           # Echo the report into the run log so it's visible without opening
           # the downloadable artifact.
           cat url-safety-report.txt
-          # Halt the workflow if the report flags any unsafe URLs.
-          # `grep -q` searches silently and succeeds if the pattern is found.
+          # Halt the workflow if the report contains the unsafe-URL marker.
+          # `grep -q` searches silently and succeeds (exit 0) if the literal
+          # text "❌ UNSAFE" appears anywhere in the report, which is what
+          # `if` branches on here.
           if grep -q "❌ UNSAFE" url-safety-report.txt; then
             # `::error::` is a GitHub Actions log command - this line shows up
             # as a red error annotation on the run, not just plain text.
@@ -182,11 +209,13 @@ jobs:
       # report. `tee` saves output to a report file AND prints to the run log.
       - name: Run URL normalizer
         run: |
-          # `cd tools` runs the script from its own directory (it expects
-          # that). `2>&1` merges errors into normal output; `| tee FILE` then
-          # writes that combined stream to a file AND echoes it to the log.
-          # The report is written one level up (../) so it lands in the repo
-          # root alongside the safety report.
+          # `cd tools` moves into the script's directory before running it.
+          # (The script finds the HTML files relative to its own location, so
+          # this is mostly about where the report lands.) `2>&1` merges errors
+          # into normal output; `| tee FILE` then writes that combined stream
+          # to a file AND echoes it to the log. The `../` on the tee path puts
+          # the report one level up, in the repo root, next to the safety
+          # report.
           cd tools && python3 normalize_urls.py --apply 2>&1 | tee ../normalize-report.txt
           # Return to the repo root for any later steps.
           cd ..

@@ -14,6 +14,10 @@
 # label shown in the repo's "Actions" tab so we can spot this run among others.
 name: Check PageSpeed
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Weekly cron, a manual button, or a push that edits the checker/workflow.
+# -----------------------------------------------------------------------------
 # `on:` lists the events ("triggers") that start this workflow. Any one of
 # the entries below is enough to kick off a run.
 on:
@@ -42,6 +46,10 @@ on:
       - 'tools/check_pagespeed.py'
       - '.github/workflows/check-pagespeed.yml'
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read-only auto-token; every write is done by the App/PAT identities below.
+# -----------------------------------------------------------------------------
 # `permissions:` controls what the automatic, built-in credential - the
 # `GITHUB_TOKEN` that GitHub injects into every run - is allowed to do.
 # Granting the least access needed is a security best practice. The detailed
@@ -57,19 +65,30 @@ permissions:
   # open PRs, or touch issues. Those happen via the App/PAT tokens instead.
   contents: read
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One fixed-group lock so two runs never clobber the same SCORECARD commit.
+# -----------------------------------------------------------------------------
 # `concurrency:` stops two runs that share a "group" name from executing at
 # the same time, which prevents them from clobbering each other's changes.
 # This workflow only updates SCORECARD.md, so it doesn't race with the
 # deploy pipeline. Keep it in its own concurrency group; multiple runs
 # of itself still queue serially.
 concurrency:
-  # The group name. Other workflows use different names, so this one only
-  # ever competes with other copies of itself, never with deploys.
+  # A constant group name (not one keyed on `${{ github.ref }}`) means EVERY
+  # run of this workflow shares one lock, so two overlapping runs can never
+  # both be mid-write on SCORECARD.md. Other workflows use different names, so
+  # this one only competes with other copies of itself, never with deploys.
   group: check-pagespeed
   # `false` = a new run WAITS for the in-flight one to finish rather than
   # killing it. We don't want to abort a half-written SCORECARD commit.
   cancel-in-progress: false
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: mint tokens, run PSI, detect regressions, then open/merge the PR
+# and (only on a real drop) file a tracking issue.
+# -----------------------------------------------------------------------------
 # `jobs:` holds one or more jobs. A "job" is a unit of work that runs on its
 # own fresh virtual machine; its steps run top-to-bottom and share that VM's
 # disk. This workflow has exactly one job (named `check-pagespeed`).

@@ -11,16 +11,37 @@
 # Like check-reading-list-staleness.yml this NEVER edits the site - it only
 # opens (or updates) a single sticky tracking issue with the report.
 # =============================================================================
+
+# This whole file is a "workflow": a GitHub Actions automation that runs when
+# something happens in the repo (a timer fires, a button is clicked, a push
+# lands). GitHub reads it because it lives under .github/workflows/ and ends in
+# .yml. `name:` is just the human-friendly label shown in the Actions tab.
 name: Check Meeting Staleness
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs on a weekly timer, on demand, or when the checker/workflow itself edits.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. Any one of them is enough to
+# trigger a run; they are alternatives, not requirements.
 on:
-  # Mondays 15:00 UTC - a few days after the Friday session, so a same-week
-  # recap has time to be published before we flag a gap.
+  # `schedule` runs the workflow on a timer using cron syntax (five fields:
+  # minute, hour, day-of-month, month, day-of-week; `*` means "every"). GitHub
+  # cron is always UTC, never your local time.
+  # `0 15 * * 1` reads: minute 0, hour 15, every day-of-month, every month,
+  # weekday 1 (Monday) - i.e. 15:00 UTC every Monday. That is a few days after
+  # the Friday session, so a same-week recap has time to be published before
+  # we flag a gap.
   schedule:
     - cron: '0 15 * * 1'    # min hour day-of-month month day-of-week
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
+  # human can launch this manually on demand (no code change required).
   workflow_dispatch:
-  # Re-check when the checker or this workflow changes (they alter HOW
-  # staleness is computed). Content edits under meetings/ do NOT re-trigger.
+  # `push` fires when commits land on a branch. `branches:` narrows it to
+  # `main` and `paths:` narrows it further to just the two files below, so
+  # BOTH conditions must hold. We re-check only when the checker script or this
+  # workflow changes, because those files alter HOW staleness is computed.
+  # Content edits under meetings/ do NOT re-trigger (they are not in `paths:`).
   push:
     branches:
       - main
@@ -28,66 +49,161 @@ on:
       - 'tools/check_meeting_staleness.py'
       - '.github/workflows/check-meeting-staleness.yml'
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read the repo files; write Issues (to open/update/close the tracking issue).
+# -----------------------------------------------------------------------------
+# Every run gets an automatic, throwaway credential (GITHUB_TOKEN).
+# `permissions:` sets what that token may do. Listing only what's needed
+# (least privilege) limits the blast radius if a step misbehaves.
 permissions:
+  # `contents: read` lets the run read repo files (needed to check them out)
+  # but not push commits, tags, or releases.
   contents: read
+  # `issues: write` lets the run create, edit, and close Issues - which is how
+  # the last step manages the single sticky staleness tracking issue.
   issues: write
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One global lock so two staleness runs never race on the same tracking issue.
+# -----------------------------------------------------------------------------
+# `concurrency:` lets at most one run hold a named "group" at a time. Runs in
+# the same group queue up or cancel each other; runs in different groups are
+# unaffected. Because this workflow reads/writes a shared tracking issue, we
+# use one fixed group name (not one keyed on the branch/ref) so overlapping
+# runs can't both edit the issue and clobber each other.
 concurrency:
+  # A constant group name means every run of this workflow shares one lock.
   group: check-meeting-staleness
+  # If a newer run starts, cancel the older in-progress one. A staleness report
+  # is a read-only computation, so interrupting a stale run is safe.
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: compute the report, save it as an artifact, then open/update/close
+# the tracking issue based on whether the archive is stale.
+# -----------------------------------------------------------------------------
+# `jobs:` holds the units of work. Each job runs on its own fresh virtual
+# machine; a job is an ordered list of `steps:`. Steps in a job share the same
+# filesystem and run top-to-bottom; a failed step fails the whole job unless
+# it is guarded (e.g. `if: always()`).
 jobs:
+  # `check-staleness:` is this job's internal id.
   check-staleness:
+    # `runs-on:` picks the runner OS. "ubuntu-latest" is a GitHub-hosted Linux
+    # VM, created fresh for this job and discarded when it finishes.
     runs-on: ubuntu-latest
+    # `steps:` is the ordered to-do list for this job. Each item ("- ") is one
+    # step that either runs a prebuilt action (`uses:`) or a shell command
+    # (`run:`).
     steps:
+      # Step 1 - Pull the repo onto the runner so later steps can read the
+      # meetings/ files and the checker script. `actions/checkout` is GitHub's
+      # official action; without it the VM starts empty. The "@<40-hex-chars>"
+      # pins the action to an exact commit SHA (not a moving tag) so a hijacked
+      # tag can't swap in malicious code; the trailing "# v7.0.0" comment just
+      # notes the human-readable version that SHA corresponds to.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
+      # Step 2 - Install a Python interpreter on the runner so the next step's
+      # `python3` command exists. Another SHA-pinned first-party action.
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        # `with:` passes input settings to the action (like function args).
         with:
+          # '3.x' means "the latest available Python 3.x" - the checker only
+          # needs the standard library, so any modern 3.x is fine.
           python-version: '3.x'
 
-      # Writes the markdown report to staleness.md. Exits 0 even when stale
-      # (this is a report, not a gate); only an internal error turns it red.
+      # Step 3 - Run the checker. `run:` executes a shell command on the
+      # runner. The script scans meetings/ for the newest YYYY-MM-DD.html
+      # recap, compares its date to today, and writes a markdown report to
+      # staleness.md whose "Status:" line reads STALE or OK.
+      # It exits 0 even when the archive is stale (this is a report, not a
+      # gate); only an internal error (e.g. no recaps found) exits non-zero and
+      # turns the step red.
       - name: Run staleness check
         run: python3 tools/check_meeting_staleness.py --output staleness.md
 
+      # Step 4 - Stash the report as an "artifact": a file the runner saves and
+      # attaches to the run so a human can download it from the run page. The
+      # runner's disk is wiped when the job ends, so uploading is the only way
+      # to keep the report. `if: always()` runs this even if an earlier step
+      # failed, so we still capture whatever was written.
       - name: Upload staleness report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
+          # `name` is the label the download shows under; `path` is the file to
+          # capture (the report the checker just wrote).
           name: meeting-staleness-report
           path: staleness.md
+          # `retention-days` is how long GitHub keeps the artifact before
+          # auto-deleting it. `if-no-files-found: warn` means: if staleness.md
+          # is missing, print a warning instead of failing the step.
           retention-days: 90
           if-no-files-found: warn
 
-      # Sticky issue only WHEN stale: create if absent, update if present, and
-      # close it automatically once the cadence recovers. Mirrors the
-      # reading-list workflow's exact-title + label matching.
+      # Step 5 - Manage the single sticky tracking issue. If the archive is
+      # stale, create the issue (or update it if it already exists); once the
+      # cadence recovers, auto-close it. This mirrors the reading-list
+      # workflow's exact-title + label matching.
       - name: Open, update, or close tracking issue
+        # `env:` sets environment variables for THIS step only. The `run:`
+        # script below reads them by name.
         env:
+          # GITHUB_TOKEN is the automatic per-run credential; `gh` reads it
+          # from GH_TOKEN to authenticate its API calls.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `github.repository` expands to "owner/repo" at run time, so the
+          # `gh --repo` flags below target this repo.
           REPO: ${{ github.repository }}
+          # A deep link back to THIS run's page, stitched together from the
+          # server URL, repo, and run id, so the issue can credit its source.
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `run: |` runs a multi-line shell script on the runner.
         run: |
+          # `set -euo pipefail` makes bash strict: -e exits on any command
+          # failure, -u errors on an unset variable, and pipefail fails a
+          # pipeline if ANY stage fails (not just the last). Together they stop
+          # the script from limping on after an unexpected error.
           set -euo pipefail
 
+          # The exact issue title (used both to search for an existing issue
+          # and to create a new one) and the label that tags these issues.
           title="Meeting recaps: cadence has stalled"
           label="meeting-staleness"
 
+          # Make sure the label exists before we filter/tag by it. On a repo
+          # that already has the label, `gh label create` errors; `2>/dev/null`
+          # hides that noise and `|| true` swallows the non-zero exit so the
+          # strict `set -e` above doesn't abort the whole script.
           gh label create "$label" \
             --color "fbca04" \
             --description "Auto-generated reports from check-meeting-staleness.yml" \
             --repo "$REPO" 2>/dev/null || true
 
-          # The report's Status line is the source of truth.
+          # The report's Status line is the source of truth. `grep -q` runs
+          # quietly and just sets an exit code: if the STALE marker is present
+          # we record stale=1, otherwise stale=0. The `\*\*` matches the two
+          # literal asterisks of the markdown "**Status:**" bold.
           if grep -q "Status:\*\* STALE" staleness.md; then
             stale=1
           else
             stale=0
           fi
 
+          # Look up any already-open tracking issue so we update instead of
+          # opening a duplicate. This pipeline:
+          #   gh issue list ... --json number,title  -> issues as JSON
+          #   --jq 'select(.title == "...") | .number' -> keep only the exact
+          #     title match and print its number (the --search is a loose
+          #     match, so this exact-title filter avoids false hits)
+          #   head -n1                                -> at most one number
+          # `existing` ends up as that issue number, or empty if none.
           existing="$(gh issue list \
             --repo "$REPO" \
             --state open \
@@ -97,7 +213,12 @@ jobs:
             --jq ".[] | select(.title == \"$title\") | .number" \
             | head -n1)"
 
+          # Branch on whether the archive is stale.
           if [ "$stale" -eq 1 ]; then
+            # Build the issue body: a "who updated this" credit line, a blank
+            # line, the full report, then a footer explaining the auto-close.
+            # The `{ ... } > issue-body.md` groups the echoes/cat and redirects
+            # all their output into one file in a single shot.
             {
               echo "_Auto-updated by [check-meeting-staleness]($RUN_URL)._"
               echo ""
@@ -106,6 +227,9 @@ jobs:
               echo "---"
               echo "_This issue auto-closes once a fresh recap lands and the cadence recovers._"
             } > issue-body.md
+            # `[ -n "$existing" ]` is true when the string is non-empty, i.e.
+            # an issue already exists: edit it in place. Otherwise open a new
+            # one. Either way `--body-file` feeds the file we just built.
             if [ -n "$existing" ]; then
               echo "updating issue #$existing"
               gh issue edit "$existing" --repo "$REPO" --body-file issue-body.md
@@ -117,10 +241,13 @@ jobs:
                 --label "$label" \
                 --body-file issue-body.md
             fi
+          # Not stale, but an issue is still open (`-n` = non-empty): the
+          # cadence recovered, so close the issue with an explanatory comment.
           elif [ -n "$existing" ]; then
             echo "cadence recovered - closing issue #$existing"
             gh issue close "$existing" --repo "$REPO" \
               --comment "Newest recap is now within threshold. Auto-closed by [check-meeting-staleness]($RUN_URL)."
+          # Not stale and no open issue: nothing to do.
           else
             echo "cadence healthy - nothing to do"
           fi

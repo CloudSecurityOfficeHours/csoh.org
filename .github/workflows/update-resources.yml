@@ -22,6 +22,10 @@
 # shows up in the repo's "Actions" tab so humans can tell workflows apart.
 name: Update Resources
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs on a weekly Monday cron, or on demand from the Actions tab.
+# -----------------------------------------------------------------------------
 # `on:` lists the events that cause this workflow to run (its "triggers").
 # A workflow can have several triggers; any one of them firing starts a run.
 on:
@@ -38,6 +42,10 @@ on:
   # the schedule.
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Keep the built-in token read-only; real write access is a minted App token.
+# -----------------------------------------------------------------------------
 # `permissions:` controls what the automatic, built-in token (called
 # GITHUB_TOKEN) is allowed to do with this repo during the run. GitHub
 # injects that token into every run; here we keep it deliberately minimal.
@@ -58,16 +66,28 @@ permissions:
   # Claude Code action trades it for temporary Claude credentials.
   id-token: write
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One global lock so two resource-refresh runs never overlap; never cancel one.
+# -----------------------------------------------------------------------------
 # `concurrency:` stops the same workflow from running on top of itself.
 # Runs that share one "group" name are serialized: only one runs at a time,
 # so two scheduled runs never stomp each other.
 concurrency:
-  # All runs of this workflow share this group name, so they take turns.
+  # A constant group name (NOT one keyed on `${{ github.ref }}`) means EVERY
+  # run of this workflow shares the single lock, regardless of branch. That is
+  # what we want here: this workflow edits one shared file and one shared PR
+  # branch, so overlapping runs must be serialized, not run in parallel.
   group: update-resources
   # `false` = a new run WAITS for the in-flight one to finish instead of
-  # canceling it. We never want to interrupt a half-finished resource edit.
+  # canceling it. We never want to interrupt a half-finished resource edit
+  # (unlike the read-only lint/validate workflows, which cancel freely).
   cancel-in-progress: false
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: mint a token, check out, let Claude edit, then open/approve/merge PR.
+# -----------------------------------------------------------------------------
 # `jobs:` holds the units of work. A workflow has one or more jobs; each job
 # runs on its own fresh virtual machine. By default jobs run in parallel, but
 # this workflow has just one job, so there's nothing to parallelize here.

@@ -2,10 +2,11 @@
 # Check Broken Links
 # -----------------------------------------------------------------------------
 # Crawls every link in our published HTML pages - the root pages plus the
-# breaches/, meetings/, portfolio/, and homelab/ subfolders (using lychee) - and reports
-# any that 404, DNS-fail, or otherwise rot. Runs on PRs that touch HTML, weekly to catch
-# external link rot, and on demand. Posts a comment on PRs when problems are
-# found, but never fails - link rot is everywhere and shouldn't block merges.
+# breaches/, meetings/, portfolio/, and homelab/ subfolders (using lychee) -
+# and reports any that 404, DNS-fail, or otherwise rot. Runs on PRs that touch
+# HTML, weekly to catch external link rot, and on demand. Posts a comment on
+# PRs when problems are found, but never fails - link rot is everywhere and
+# shouldn't block merges.
 # =============================================================================
 
 # This whole file is a "workflow": a set of automated steps that GitHub runs
@@ -17,7 +18,12 @@
 # `name:` is just the human-friendly label shown in the repo's "Actions" tab.
 name: Check Broken Links
 
-# `on:` lists the events that start this workflow. Any one of them triggers it.
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs on PRs that touch HTML, on a weekly timer, or on demand.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. Any one of them triggers it;
+# they are alternatives, not requirements.
 on:
   # Validate links on any PR that touches an HTML file.
   # A "PR" (pull request) is a proposed code change someone wants to merge.
@@ -41,6 +47,10 @@ on:
   # human can kick it off on demand, without waiting for a PR or the weekly timer.
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read the repo files; write PR comments. Never modifies code.
+# -----------------------------------------------------------------------------
 # `permissions:` controls what the automatic per-run credential (the
 # GITHUB_TOKEN) is allowed to do against THIS repo. Best practice is to grant
 # the least access needed: read the files, write PR comments, nothing more.
@@ -52,6 +62,11 @@ permissions:
   pull-requests: write
 
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# Per-ref lock so a new push to the same PR cancels the in-flight crawl.
+# Different PRs crawl in parallel.
+# -----------------------------------------------------------------------------
 # `concurrency:` lets at most one run exist per named "group" at a time. This
 # crawl is read-only, so cancelling an in-flight run mid-crawl is safe.
 concurrency:
@@ -63,6 +78,11 @@ concurrency:
   # When a new run joins a group that's already running, cancel the old one.
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: crawl the links, save the report as an artifact, then comment on
+# the PR if any links are broken.
+# -----------------------------------------------------------------------------
 # `jobs:` holds the actual work. Each job runs on its own fresh machine and,
 # unless you say otherwise, jobs run in parallel. This workflow has one job.
 jobs:
@@ -113,14 +133,18 @@ jobs:
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411  # v2.8.0
         with:
           # `>-` is YAML's "fold this multi-line string into one line."
-          # CLI flags below: --cache reuses the cache restored above;
+          # CLI flags below: --config points lychee at .lychee.toml (its
+          # exclude-list of bot-blocking hosts, accepted status codes, and
+          # timeouts); --cache reuses the cache restored above;
           # --max-cache-age 3d treats results <3 days old as still good;
-          # --max-concurrency 20 hits servers in parallel (be polite);
-          # --glob-ignore-case so we catch HTML/Html/HTM equally.
+          # --verbose prints per-URL detail; --no-progress silences the live
+          # progress bar (noise in CI logs); --max-concurrency 20 hits servers
+          # in parallel (be polite); --glob-ignore-case so we catch
+          # HTML/Html/HTM equally.
           # The globs cover every published page: the root pages plus the
-          # breaches/, meetings/, portfolio/, and homelab/ subfolders (all flat). The
-          # tooling template tools/og/template.html has no real links, so it's
-          # deliberately left out.
+          # breaches/, meetings/, portfolio/, and homelab/ subfolders (all
+          # flat). The tooling template tools/og/template.html has no real
+          # links, so it's deliberately left out.
           args: >-
             --config .lychee.toml
             --cache

@@ -13,16 +13,38 @@
 # NOT marked [skip ci], so it flows through the normal deploy so the corrected
 # counts actually go live.
 # =============================================================================
+
+# This whole file is a "workflow": a GitHub Actions automation that runs when
+# something happens in the repo (a timer fires, a button is clicked, a push
+# lands). GitHub reads it because it lives under .github/workflows/ and ends in
+# .yml. `name:` is just the human-friendly label shown in the Actions tab.
 name: Update Counts
 
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs weekly on a timer, on demand, or when the counting logic itself changes.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. Any one of them is enough to
+# trigger a run; they are alternatives, not requirements.
 on:
-  # Mondays 07:30 UTC - just after the monthly reading-list check (07:00) and
-  # well clear of the Friday session, so a same-week recap is already counted.
+  # `schedule` runs the workflow on a timer using cron syntax (five fields:
+  # minute, hour, day-of-month, month, day-of-week; `*` means "every"). GitHub
+  # cron is always UTC, never your local time.
+  # `30 7 * * 1` reads: minute 30, hour 7, every day-of-month, every month,
+  # weekday 1 (Monday) - i.e. 07:30 UTC every Monday. That is just after the
+  # monthly reading-list check (07:00) and well clear of the Friday session, so
+  # a same-week recap is already on disk and counted by the time we run.
   schedule:
     - cron: '30 7 * * 1'    # min hour day-of-month month day-of-week
-  # A "Run workflow" button for on-demand syncs.
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab so a
+  # human can launch this manually on demand (no code change required).
   workflow_dispatch:
-  # Re-run when the counting logic itself changes, so a fix takes effect at once.
+  # `push` fires when commits land on a branch. `branches:` narrows it to
+  # `main` and `paths:` narrows it further to just the two files below, so BOTH
+  # conditions must hold. We re-run only when the counting script or this
+  # workflow changes, because those files alter HOW the counts are computed - a
+  # fix then takes effect at once instead of waiting for next Monday. Ordinary
+  # content edits do NOT re-trigger (they are not listed in `paths:`).
   push:
     branches:
       - main
@@ -30,75 +52,168 @@ on:
       - 'tools/sync_counts.py'
       - '.github/workflows/update-counts.yml'
 
-# The auto-injected GITHUB_TOKEN stays read-only; the write happens through the
-# App token minted below (kept minimal, same pattern as site-update-deploy.yml).
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# The auto-injected token stays read-only; the write goes through the App token.
+# -----------------------------------------------------------------------------
+# Every run gets an automatic, throwaway credential called GITHUB_TOKEN.
+# `permissions:` sets what THAT token may do. We deliberately leave it read-only
+# here: this job DOES push to main, but not with GITHUB_TOKEN. The push is made
+# with a separate GitHub App token minted in the first step below (see §4),
+# which is on the branch-protection bypass list. Keeping the default token
+# read-only follows least privilege (same pattern as site-update-deploy.yml).
 permissions:
+  # `contents: read` lets the run read repo files (needed to check them out)
+  # but not push commits, tags, or releases.
   contents: read
 
-# Never run two syncs at once - a second run waits for (and cancels) the first.
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One global lock so two count-syncs never push to main at the same time.
+# -----------------------------------------------------------------------------
+# `concurrency:` lets at most one run hold a named "group" at a time. Runs in
+# the same group queue up or cancel each other; runs in different groups are
+# unaffected. Because this workflow commits to a shared branch (main), we use
+# ONE fixed group name (not one keyed on `${{ github.ref }}`) so every run of
+# this workflow - scheduled, manual, or push-triggered - shares a single lock
+# and two of them can never race to push.
 concurrency:
+  # A constant group name (not per-branch) means every run shares one lock.
   group: update-counts
+  # If a newer run starts, cancel the older in-progress one. Recomputing counts
+  # reads the latest files from scratch, so the newest run always has the best
+  # data - nothing is lost by dropping the older one.
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: mint an App token, check out as the App, install deps, then sync the
+# counts, refresh any changed share-cards, and push the result to main.
+# -----------------------------------------------------------------------------
+# `jobs:` holds the units of work. Each job runs on its own fresh virtual
+# machine; a job is an ordered list of `steps:`. Steps in a job share the same
+# filesystem and run top-to-bottom; a failed step fails the whole job unless it
+# is guarded (e.g. `if: always()`).
 jobs:
+  # `update-counts:` is this job's internal id.
   update-counts:
+    # `runs-on:` picks the runner OS. "ubuntu-latest" is a GitHub-hosted Linux
+    # VM, created fresh for this job and discarded when it finishes.
     runs-on: ubuntu-latest
+    # `steps:` is the ordered to-do list for this job. Each item ("- ") either
+    # runs a prebuilt action (`uses:`) or a shell command (`run:`).
     steps:
-      # Mint a short-lived installation token from the csoh-ci GitHub App. We
-      # need a non-default token (not GITHUB_TOKEN) because this job pushes to
-      # main; the App is on the ruleset bypass list so the push is accepted.
+      # Step 1 - Mint a short-lived installation token from the csoh-ci GitHub
+      # App. We need a NON-default token (not the automatic GITHUB_TOKEN)
+      # because this job pushes to main, and branch protection rejects pushes
+      # made with GITHUB_TOKEN. The csoh-ci App is on the ruleset bypass list,
+      # so a push authenticated as the App is accepted. `id: app-token` names
+      # this step so a later step can read its output (the freshly minted token)
+      # via ${{ steps.app-token.outputs.token }}.
       - name: Mint installation token
         id: app-token
+        # SHA-pinned first-party action. The "@<40-hex-chars>" pins it to an
+        # exact commit (not a moving tag) so a hijacked tag can't swap in
+        # malicious code; the trailing "# v3.2.0" is just the human-readable
+        # version that SHA corresponds to.
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        # `with:` passes input settings to the action (like function args). The
+        # App's client id and private key are stored as encrypted repo secrets;
+        # `${{ secrets.NAME }}` injects them at run time without printing them in
+        # the logs.
         with:
           client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
           private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
-      # Full clone (fetch-depth: 0) authenticated as the App, so `git push`
-      # later works without re-supplying credentials.
+      # Step 2 - Pull the repo onto the runner so later steps can read the files
+      # and later push edits back. `actions/checkout` is GitHub's official
+      # action; without it the VM starts empty.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
+          # Check out authenticated as the App (using the token minted in Step
+          # 1) instead of the default GITHUB_TOKEN, so the `git push` at the end
+          # is already authorized - no need to re-supply credentials later.
           token: ${{ steps.app-token.outputs.token }}
+          # `fetch-depth: 0` clones the FULL history (the default is a shallow
+          # depth of 1). The push step may need to `git pull --rebase` if another
+          # pipeline pushed first, and a rebase needs real history to replay our
+          # commit onto.
           fetch-depth: 0
 
+      # Step 3 - Install a Python interpreter so the `python3` calls below work.
+      # Another SHA-pinned first-party action.
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        # `with:` passes input settings to the action (like function args).
         with:
+          # '3.x' means "the latest available Python 3.x". sync_counts.py is
+          # standard-library only, so any modern 3.x is fine.
           python-version: '3.x'
 
-      # Playwright + Pillow + headless Chromium are only needed to re-render the
-      # OG share cards; sync_counts.py itself is standard-library only.
-      # Pinned versions - bump deliberately (supply-chain reproducibility).
+      # Step 4 - Install the tools needed ONLY to re-render the Open Graph share
+      # cards. sync_counts.py itself needs nothing extra (standard library), but
+      # generate_og_images.py drives a headless browser to screenshot each card.
       - name: Install dependencies
+        # `run: |` runs a multi-line shell script on the runner.
         run: |
+          # playwright drives the headless browser; Pillow is its image helper.
+          # The versions are pinned with `==` so a new release can't silently
+          # change the rendered output - bump them deliberately (supply-chain
+          # reproducibility).
           pip install 'playwright==1.59.0' 'Pillow==12.2.0'
+          # Download the actual Chromium binary Playwright automates (the pip
+          # package ships the driver, not the browser itself).
           playwright install chromium
 
-      # Recompute + rewrite all counts. If sync_counts changed the OG-card
-      # subtitles (it only edits generate_og_images.py when a count moved),
-      # re-render the three count-bearing cards so the images match the text.
-      # Then commit & push only if something actually changed.
+      # Step 5 - The real work: recompute + rewrite every count, refresh the
+      # share-card images whose subtitle text changed, then commit and push only
+      # if something actually changed.
       - name: Sync counts and refresh count share-cards
         run: |
+          # Recompute all counts from the real cards/files on disk and rewrite
+          # them everywhere they appear (JSON-LD numberOfItems, the OG-card
+          # subtitles inside generate_og_images.py, prose count markers, and
+          # llms.txt). This edits files in place; it does not commit anything.
           python3 tools/sync_counts.py
 
+          # `git diff --quiet <path>` exits 0 (success) when that file is
+          # UNCHANGED and non-zero when it changed. The leading `!` flips that,
+          # so this block runs only WHEN sync_counts edited the OG-card script.
+          # sync_counts touches generate_og_images.py only when a count-bearing
+          # subtitle actually moved, so a change here is our signal that the
+          # count-bearing cards must be re-rendered to match the new text.
           if ! git diff --quiet tools/generate_og_images.py; then
             echo "OG subtitles changed - regenerating count share-cards."
+            # `--skip-html` re-renders only the JPGs (leaves the og:image meta
+            # tags alone); `--pages ...` limits it to the three cards whose
+            # subtitles carry counts, instead of rebuilding all ~120 images.
             python3 tools/generate_og_images.py --skip-html \
               --pages index.html resources.html meetings.html
           fi
 
+          # `git diff --quiet` with no path checks the WHOLE working tree. If it
+          # exits 0, nothing changed at all - the counts were already in sync -
+          # so there is nothing to commit and we stop here. Otherwise (the else
+          # branch) we commit and push.
           if git diff --quiet; then
             echo "All counts already in sync - nothing to commit."
           else
+            # Identify the commit as the standard github-actions bot (name plus
+            # the matching noreply email) so the history reads cleanly.
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            # Commit the count edits (HTML + the OG script) and any refreshed
-            # share-card images.
+            # Stage the count edits (all *.html at any depth - git's own
+            # pathspec `*.html` matches across folders, so subdir pages like
+            # breaches/ and meetings/ are included - plus the OG script) and any
+            # refreshed share-card images under img/og.
             git add '*.html' tools/generate_og_images.py img/og
             git commit -m "chore: sync site counts + refresh count share-cards"
-            # If another pipeline pushed while we worked, rebase and retry.
+            # Push to main. If another pipeline pushed while we worked, the plain
+            # `git push` is rejected (non-fast-forward); the `|| ( ... )` fallback
+            # then pulls their commits with --rebase (replaying our commit on
+            # top) and pushes again. The commit is NOT marked [skip ci], so it
+            # flows through the normal deploy and the corrected counts go live.
             git push || (git pull --rebase origin main && git push)
             echo "Counts synced and pushed."
           fi

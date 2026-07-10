@@ -7,21 +7,34 @@
 # knows what to remove.
 # =============================================================================
 
-# A "workflow" is one automated process GitHub Actions runs for this repo.
-# `name:` is just the human-readable label shown in the repo's Actions tab.
+# This whole file is a "workflow": a GitHub Actions automation that runs in
+# response to events in the repo (a PR, a timer, a button click). GitHub reads
+# it because it lives under .github/workflows/ and ends in .yml. `name:` is
+# just the human-friendly label shown in the repo's Actions tab.
 name: Check URL Safety
 
-# `on:` lists the events ("triggers") that start this workflow. Any one of
-# the events below is enough to launch a fresh run.
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs on HTML-touching PRs, a weekly timer, or on demand.
+# -----------------------------------------------------------------------------
+# `on:` lists the events ("triggers") that start this workflow. Any one of the
+# events below is enough to launch a fresh run; they are alternatives, not
+# requirements.
 on:
-  # Run on PRs that touch HTML - that's where new URLs get introduced.
+  # `pull_request` fires when someone opens or updates a PR. `paths:` filters
+  # it down: the workflow only runs if a changed file matches a pattern here.
+  # `'**.html'` means "any .html file in any folder" (** = any directory
+  # depth) - HTML is where new URLs get introduced, so PRs that only touch
+  # CSS, scripts, or docs are skipped.
   pull_request:
     paths:
       - '**.html'
-  # Weekly recheck (Mondays at 06:30 UTC) catches domains that turn malicious
-  # AFTER they were originally safe to link.
+  # `schedule` runs the workflow on a timer using cron syntax. This weekly
+  # recheck catches domains that turn malicious AFTER they were originally
+  # safe to link.
   schedule:
-    # A cron string has five fields. This one - minute 30, hour 6, any
+    # A cron string has five fields: minute, hour, day-of-month, month,
+    # day-of-week (`*` means "every"). This one - minute 30, hour 6, any
     # day-of-month, any month, weekday 1 (Monday) - means "06:30 UTC every
     # Monday". GitHub cron always runs on UTC, never your local time zone.
     - cron: '30 6 * * 1'   # min hour day-of-month month day-of-week
@@ -30,26 +43,44 @@ on:
   # schedule.
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read repo files; write PR comments. Never modifies the codebase.
+# -----------------------------------------------------------------------------
 # Every run gets an automatic, short-lived credential called GITHUB_TOKEN.
 # `permissions:` sets exactly what that token is allowed to do - least
 # privilege, so a bug or bad dependency can't do more than intended.
-# `contents: read` = read repo files. `pull-requests: write` = post comments.
-# This workflow never modifies the codebase, so write access to contents is
-# deliberately withheld.
 permissions:
+  # `contents: read` lets the run read repo files (needed to check them out).
+  # This workflow never modifies the codebase, so write access to contents is
+  # deliberately withheld.
   contents: read
+  # `pull-requests: write` lets the last step post a summary comment on the PR.
   pull-requests: write
 
 
-# `${{ ... }}` is GitHub Actions' expression syntax: at run time it gets
-# replaced with a real value. `github.ref` here is the branch/tag being built,
-# so each branch gets its own concurrency group (its own "lane") and PRs on
-# different branches still run in parallel; only a new push to the SAME PR
-# cancels its old run. That cancellation is safe because this check is read-only.
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# Per-ref lock so a new push to the same PR cancels its in-flight run.
+# -----------------------------------------------------------------------------
+# `concurrency:` lets at most one run hold a named "group" at a time. Runs in
+# the same group queue up or cancel each other; runs in different groups are
+# unaffected and proceed in parallel.
 concurrency:
+  # `${{ ... }}` is GitHub Actions' expression syntax: at run time it gets
+  # replaced with a real value. `github.ref` is the branch/PR being built, so
+  # each branch gets its own group (its own "lane") and PRs on different
+  # branches still run in parallel; only a new push to the SAME PR cancels its
+  # old run.
   group: check-url-safety-${{ github.ref }}
+  # When a newer run claims the group, cancel the older in-progress one. That
+  # cancellation is safe because this check is read-only.
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: scan URLs, fail on any unsafe hit, save the report, comment on PRs.
+# -----------------------------------------------------------------------------
 # `jobs:` holds the actual work. A workflow has one or more jobs; jobs run on
 # separate fresh machines and (unless told otherwise) run in parallel.
 jobs:
@@ -59,21 +90,28 @@ jobs:
     # `runs-on` picks the runner (the throwaway VM GitHub spins up for the
     # job). `ubuntu-latest` is GitHub's current Ubuntu Linux image.
     runs-on: ubuntu-latest
-    # Hard cap so a hung HTTP request can't burn the 6-hour job budget.
+    # `timeout-minutes` is a hard cap on the whole job: if a hung HTTP request
+    # stalls the scan, GitHub kills the job at 15 minutes instead of letting it
+    # burn the default 6-hour budget.
     timeout-minutes: 15
 
-    # `steps:` is the to-do list, run top to bottom. Each step either pulls in
-    # a prebuilt action with `uses:` or runs shell commands with `run:`.
+    # `steps:` is the to-do list, run top to bottom on the same VM. Each step
+    # either pulls in a prebuilt action with `uses:` or runs shell commands
+    # with `run:`.
     steps:
-      # Pull the code so we can read HTML files.
+      # Step 1 - Pull the repo's code onto the runner so later steps can read
+      # the HTML files; without this the VM starts empty.
       # `uses:` runs a reusable action published on GitHub. The part after `@`
-      # pins the EXACT commit (a SHA hash) instead of a moving tag like `v6`,
+      # pins the EXACT commit (a 40-hex SHA) instead of a moving tag like `v7`,
       # so a hijacked or retagged release can't silently change what runs here;
-      # the trailing comment just notes which human-friendly version that is.
+      # the trailing "# v7.0.0" comment just notes the human-friendly version
+      # that SHA corresponds to.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      # Install Python - the safety check is a Python script.
+      # Step 2 - Install Python on the runner so the next step's `python3`
+      # command exists; the safety check is a Python script. Another SHA-pinned
+      # first-party action.
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         # `with:` passes named inputs (settings) into the action above - like
@@ -81,15 +119,21 @@ jobs:
         with:
           python-version: '3.x'   # any Python 3 - script is version-tolerant
 
-      # Run the actual scanner. Pipes stdout+stderr into a report file.
-      # `|| true` keeps this step from failing on the script's nonzero exit;
-      # we want to inspect the report and decide ourselves whether to fail.
+      # Step 3 - Run the actual scanner and decide pass/fail.
+      # `run: |` runs a multi-line shell script on the runner.
       - name: Run URL safety check
         run: |
+          # Run the scanner, redirecting BOTH stdout and stderr (`2>&1`) into
+          # one report file. `|| true` swallows a nonzero exit so this line
+          # can't fail the step yet - we want to inspect the report and decide
+          # for ourselves whether to fail.
           python3 tools/check_all_site_urls.py > site-wide-url-safety-report.txt 2>&1 || true
+          # Echo the report into the step log so it is visible without
+          # downloading the artifact.
           cat site-wide-url-safety-report.txt
-          # If the report contains the string "❌ UNSAFE", the script flagged
-          # at least one bad URL - fail the workflow with a GH-Actions error.
+          # Gate on the report contents. `grep -q` runs quietly and just sets
+          # an exit code: if the "❌ UNSAFE" marker is present, enter the block
+          # and fail the run on purpose so the bad URL can't merge or ship.
           if grep -q "❌ UNSAFE" site-wide-url-safety-report.txt; then
             # `::error::` is a GitHub log command - this text shows up as a red
             # error annotation on the run. `exit 1` (nonzero) is what actually
@@ -98,12 +142,11 @@ jobs:
             exit 1
           fi
 
-      # An "artifact" is a file the run saves so a reviewer can download it
-      # afterward from the run's summary page. The runner itself is wiped when
-      # the job ends, so this is how a file outlives the run.
-      # Normally a step is skipped once an earlier step has failed.
-      # `if: always()` = upload even if the script failed (the report still
-      # exists and is what we need to debug).
+      # Step 4 - Stash the report as an "artifact": a file the run saves and
+      # attaches to the run page so a reviewer can download it afterward. The
+      # runner's disk is wiped when the job ends, so uploading is the only way
+      # to keep the report. `if: always()` runs this even when an earlier step
+      # failed (the report still exists and is exactly what we need to debug).
       - name: Upload safety report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -112,23 +155,29 @@ jobs:
           # to put in it.
           name: site-wide-url-safety-report
           path: site-wide-url-safety-report.txt
-          # Auto-delete the artifact after 30 days so storage doesn't pile up.
+          # `retention-days` is how long GitHub keeps the artifact before
+          # auto-deleting it, so storage doesn't pile up.
           retention-days: 30
-          # If the file is missing, just warn instead of failing the step.
+          # `if-no-files-found: warn` - if the file is missing, just print a
+          # warning instead of failing the step.
           if-no-files-found: warn
 
-      # `if:` decides whether this step runs at all. `failure()` is true only
-      # when an earlier step failed, and `github.event_name` is what triggered
-      # the run - so this posts a summary comment only on a failed PR run (not
-      # on the weekly schedule, where there's no PR to comment on).
+      # Step 5 - If the scan failed AND this run came from a PR, post a summary
+      # comment so the contributor sees it without digging through logs. The
+      # `if:` is a guard that runs the step only when BOTH are true: `failure()`
+      # (an earlier step in this job failed) AND `github.event_name` is
+      # `pull_request` (not the weekly schedule, where there's no PR to comment
+      # on).
       - name: Comment on PR with results
         if: failure() && github.event_name == 'pull_request'
         # `github-script` lets you write a little JavaScript inline (below)
         # instead of pulling in a whole separate action just to call the API.
+        # SHA-pinned like the other actions.
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
-          # JS that runs in a Node sandbox the action provides. `github`,
-          # `context`, etc. are pre-bound helpers for the GH API.
+          # `script:` is inline JS the action runs in a Node sandbox it
+          # provides. `github`, `context`, etc. are pre-bound helpers for the
+          # GitHub API.
           script: |
             const fs = require('fs');
             let report = '';

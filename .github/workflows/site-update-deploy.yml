@@ -27,8 +27,13 @@
 # status checks so a human can tell which workflow ran.
 name: Site Housekeeping (SRI, sitemap, previews)
 
-# `on:` lists the events that start this workflow. Below it lists two:
-# a `push` to a branch, and a manual button click (`workflow_dispatch`).
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs on pushes to main that touch site files, or on demand from the UI.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that start this workflow. It lists two below: a
+# `push` to a branch, and a manual button click (`workflow_dispatch`). Any one
+# of them is enough to start a run; they are alternatives, not requirements.
 on:
   # Auto-run on every push to main, but ONLY when one of the listed file
   # patterns changed. Editing tools/ or docs alone won't trigger a run.
@@ -53,16 +58,27 @@ on:
   # this run on demand (e.g. to regenerate previews) without pushing a commit.
   workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read-only on the auto-injected token; pushes use a GitHub App token instead.
+# -----------------------------------------------------------------------------
 # `permissions:` sets what the automatic, throwaway credential GitHub hands
 # this run (called GITHUB_TOKEN) is allowed to do against this repo. Starting
 # from least-privilege and granting only what's needed is the safe default.
 # Read-only on the auto-injected GITHUB_TOKEN. Every step that pushes
 # commits (SRI, sitemap, previews, etc.) uses an installation token minted
-# from the csoh-ci GitHub App. The default token only needs to clone the repo.
+# from the csoh-ci GitHub App (see the "Mint installation token" step). The
+# default token only needs to clone the repo.
 # (`contents: read` = may read repo files; it cannot write/push.)
 permissions:
+  # `contents: read` lets the run read repo files (needed to check them out)
+  # but not push commits, tags, or releases on the default token.
   contents: read
 
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One constant lock shared by every workflow that pushes commits to main.
+# -----------------------------------------------------------------------------
 # `concurrency:` stops two runs that share the same `group:` name from
 # executing at the same time - GitHub lets only one run per group proceed and
 # holds (or cancels) the rest. This `deploy-pipeline` group is shared across
@@ -74,12 +90,24 @@ permissions:
 # housekeeping run is in flight, cancel the older one so we don't push
 # stale SRI/sitemap state on top of a newer base.
 concurrency:
+  # A fixed, constant group name (NOT keyed on `${{ github.ref }}`) means
+  # every run of every commit-pushing workflow shares this one lock. A
+  # ref-keyed group would only serialize runs on the same branch, but these
+  # workflows all push to the same `main` and would still collide; the
+  # constant name forces them into a single serial queue.
   group: deploy-pipeline
   cancel-in-progress: true
 
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# One job: mint an App token, check out, then run each housekeeping script and
+# commit-and-push only what changed. Steps run top-to-bottom on the same VM.
+# -----------------------------------------------------------------------------
 # `jobs:` holds one or more jobs. A "job" is an independent unit of work that
 # runs on its own fresh virtual machine. This workflow has a single job; jobs
-# run in parallel by default unless one declares it `needs:` another.
+# run in parallel by default unless one declares it `needs:` another. Steps in
+# a job share the same filesystem and run in order; a failed step fails the
+# whole job unless it is guarded (e.g. `if: always()`).
 jobs:
   # `update-sri-and-previews` is the job's id (our name for it). Everything
   # indented under it belongs to this one job.
