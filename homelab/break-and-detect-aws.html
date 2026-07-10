@@ -370,47 +370,54 @@
             <h3>1. Turn on the sensors first</h3>
             <p>Enable detection before you attack, so every action is recorded from the start.</p>
 <div class="code-block"><pre># GuardDuty: enable the detector (30-day free trial on a new account)
-aws guardduty create-detector --enable --region us-east-1
-aws guardduty list-detectors</pre></div>
+aws guardduty create-detector --enable --region us-east-1   # a "detector" is GuardDuty's per-region sensor; --enable turns it on
+aws guardduty list-detectors                                # returns the detector id you just created - keep it handy</pre></div>
             <p>Now a CloudTrail trail delivering management events to S3. <code>trail.tf</code>:</p>
-<div class="code-block"><pre>resource "aws_s3_bucket" "trail" {
-  bucket        = "ct-lab-${data.aws_caller_identity.me.account_id}"
-  force_destroy = true
+<div class="code-block"><pre># The S3 bucket CloudTrail will write its log files into.
+resource "aws_s3_bucket" "trail" {
+  bucket        = "ct-lab-${data.aws_caller_identity.me.account_id}"   # account id makes the name globally unique
+  force_destroy = true                                                 # let `terraform destroy` delete it even when full of logs
 }
 
-data "aws_caller_identity" "me" {}
+data "aws_caller_identity" "me" {}   # a read-only lookup of the current account id (used above and below)
 
+# CloudTrail is an AWS service, not you, so the bucket needs a policy that lets
+# the service write to it. These two statements are the exact grants AWS documents.
 resource "aws_s3_bucket_policy" "trail" {
   bucket = aws_s3_bucket.trail.id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
+      # 1) Let CloudTrail read the bucket's ACL so it can verify ownership before writing.
       { Sid = "AclCheck", Effect = "Allow",
-        Principal = { Service = "cloudtrail.amazonaws.com" },
+        Principal = { Service = "cloudtrail.amazonaws.com" },   # the principal is the service, not a user
         Action = "s3:GetBucketAcl", Resource = aws_s3_bucket.trail.arn },
+      # 2) Let CloudTrail drop log objects under the AWSLogs/&lt;account&gt;/ prefix it uses.
       { Sid = "Write", Effect = "Allow",
         Principal = { Service = "cloudtrail.amazonaws.com" },
         Action = "s3:PutObject",
         Resource = "${aws_s3_bucket.trail.arn}/AWSLogs/${data.aws_caller_identity.me.account_id}/*",
-        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } } }
+        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } } }   # AWS requires this ACL on the write
     ]
   })
 }
 
 resource "aws_cloudtrail" "lab" {
   name                          = "lab-trail"
-  s3_bucket_name                = aws_s3_bucket.trail.id
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  depends_on                    = [aws_s3_bucket_policy.trail]
+  s3_bucket_name                = aws_s3_bucket.trail.id   # deliver logs to the bucket above
+  include_global_service_events = true                     # capture global services (IAM, STS) too, not just regional ones
+  is_multi_region_trail         = true                     # record activity in every region, so attacks can't hide in an unused one
+  depends_on                    = [aws_s3_bucket_policy.trail]   # the policy must exist first, or CloudTrail's first write is denied
 }</pre></div>
             <h3>2. Deploy the vulnerable stack</h3>
             <p><code>vuln.tf</code> - each resource is a real-world mistake you will recognize:</p>
-<div class="code-block"><pre># A public bucket holding fake "loot"
+<div class="code-block"><pre># A public bucket holding fake "loot" - the target an attacker exfiltrates.
 resource "aws_s3_bucket" "loot" {
   bucket        = "exports-lab-${data.aws_caller_identity.me.account_id}"
   force_destroy = true
 }
+# Same trick as the LocalStack lab: disabling all four guards is what lets the
+# public policy below actually expose the bucket.
 resource "aws_s3_bucket_public_access_block" "loot" {
   bucket                  = aws_s3_bucket.loot.id
   block_public_acls       = false
@@ -422,82 +429,88 @@ resource "aws_s3_bucket_policy" "loot" {
   bucket = aws_s3_bucket.loot.id
   policy = jsonencode({
     Version = "2012-10-17",
+    # Principal "*" = anyone on the internet may GetObject every object in the bucket.
     Statement = [{ Effect = "Allow", Principal = "*",
       Action = "s3:GetObject", Resource = "${aws_s3_bucket.loot.arn}/*" }]
   })
 }
 
-# A secret hiding in SSM Parameter Store
+# A secret hiding in SSM Parameter Store - the "collection" target for later.
 resource "aws_ssm_parameter" "db_password" {
   name  = "/lab/db_password"
-  type  = "SecureString"
-  value = "hunter2-not-a-real-secret"
+  type  = "SecureString"                 # SecureString = KMS-encrypted at rest; reading it needs --with-decryption
+  value = "hunter2-not-a-real-secret"    # obviously fake - never put a real secret in code
 }
 
-# An over-permissive IAM user with a long-lived access key ("the leaked key")
+# An over-permissive IAM user with a long-lived access key ("the leaked key").
 resource "aws_iam_user" "legacy" { name = "legacy-app" }
 resource "aws_iam_user_policy" "legacy" {
   name   = "too-much"
   user   = aws_iam_user.legacy.name
   policy = jsonencode({
     Version = "2012-10-17",
+    # Full control over IAM, S3, and SSM - broad enough to enumerate, escalate, and exfiltrate.
     Statement = [{ Effect = "Allow", Action = ["iam:*","s3:*","ssm:*"], Resource = "*" }]
   })
 }
-resource "aws_iam_access_key" "legacy" { user = aws_iam_user.legacy.name }
+resource "aws_iam_access_key" "legacy" { user = aws_iam_user.legacy.name }   # the static key you'll "leak" to yourself
 
+# Terraform outputs surface the generated key so the attack steps can read it back.
 output "leaked_access_key_id"     { value = aws_iam_access_key.legacy.id }
-output "leaked_secret_access_key" { value = aws_iam_access_key.legacy.secret, sensitive = true }</pre></div>
-<div class="code-block"><pre>terraform init
-terraform apply -auto-approve
-echo "top-secret export data" &gt; loot.txt
+output "leaked_secret_access_key" { value = aws_iam_access_key.legacy.secret, sensitive = true }   # sensitive = hide it from normal CLI output</pre></div>
+<div class="code-block"><pre>terraform init                    # download providers (run once per project)
+terraform apply -auto-approve     # create the trail + vulnerable stack; -auto-approve skips the prompt
+echo "top-secret export data" &gt; loot.txt   # make a decoy file to plant in the public bucket
+# Upload it. $(...) runs terraform output to fetch the real bucket name; if that fails,
+# the || fallback uses a placeholder you'd edit by hand.
 aws s3 cp loot.txt s3://$(terraform output -raw loot_bucket 2&gt;/dev/null || echo exports-lab-CHANGEME)/</pre></div>
             <h3>3. Attack path 1 - manual recon with the leaked key</h3>
             <p>Configure a profile with the leaked key (as if you found it in a public git repo), then walk the recon-to-collection chain:</p>
-<div class="code-block"><pre># use the leaked credentials from the Terraform outputs
-export AWS_ACCESS_KEY_ID=$(terraform output -raw leaked_access_key_id)
+<div class="code-block"><pre># Load the leaked key into this shell's environment (as if you'd found it in a public repo).
+export AWS_ACCESS_KEY_ID=$(terraform output -raw leaked_access_key_id)       # -raw = print the value with no quotes/formatting
 export AWS_SECRET_ACCESS_KEY=$(terraform output -raw leaked_secret_access_key)
-unset AWS_PROFILE
+unset AWS_PROFILE   # make sure these env vars win, not some admin profile in ~/.aws/config
 
-aws sts get-caller-identity                         # confirm who the key belongs to
-aws iam list-user-policies --user-name legacy-app   # what can it do?
-aws iam get-user-policy --user-name legacy-app --policy-name too-much
+aws sts get-caller-identity                         # step 1, credential access: confirm which identity the key is
+aws iam list-user-policies --user-name legacy-app   # step 2, discovery: what inline policies does it have?
+aws iam get-user-policy --user-name legacy-app --policy-name too-much   # read the policy - it's the wildcard admin one
 
-# find and read the loot
-aws s3 ls
-aws s3 cp s3://exports-lab-&lt;account-id&gt;/loot.txt -
-aws ssm get-parameter --name /lab/db_password --with-decryption \
-  --query Parameter.Value --output text</pre></div>
+# step 3, collection: find and read the loot, then decrypt the SSM secret
+aws s3 ls                                           # list buckets the key can see
+aws s3 cp s3://exports-lab-&lt;account-id&gt;/loot.txt -   # trailing "-" streams the object to stdout instead of a file
+aws ssm get-parameter --name /lab/db_password --with-decryption \   # --with-decryption returns the plaintext SecureString
+  --query Parameter.Value --output text             # --query/--output text = print just the value, nothing else</pre></div>
             <p>Each command is one link in a real kill chain: <em>credential access</em> (the leaked key), <em>discovery</em> (enumerating what it can do), and <em>collection</em> (reading the bucket and the decrypted secret). This is exactly how the majority of cloud breaches begin - see the <a href="../breach-timeline.html">breach kill chains</a> for the production versions.</p>
 
             <h3>4. Attack path 2 - automated enumeration with Pacu</h3>
 <div class="code-block"><pre>pip install pacu
-pacu
+pacu                               # launches Pacu's own interactive shell (its own prompt, not bash)
 # inside the Pacu shell:
-#   import_keys --import-aws-cli   (or set them manually)
-#   run iam__enum_permissions
-#   run iam__privesc_scan          # maps the wildcard policy to escalation paths
-#   run s3__download_bucket</pre></div>
+#   import_keys --import-aws-cli   # pull the leaked creds from your AWS CLI config into Pacu (or set them manually)
+#   run iam__enum_permissions      # enumerate every permission the key has
+#   run iam__privesc_scan          # take those permissions and map concrete paths to admin
+#   run s3__download_bucket        # bulk-download readable buckets - automated collection</pre></div>
             <p><a href="https://github.com/RhinoSecurityLabs/pacu" target="_blank" rel="noopener noreferrer">Pacu</a> is the AWS exploitation framework. <code>iam__privesc_scan</code> is the highlight: it takes the permissions you enumerated and tells you <em>how</em> to escalate to admin from them - the same reasoning an attacker (or a good IAM reviewer) applies to an over-permissive policy.</p>
 
             <h3>5. Attack path 3 - detonate ATT&amp;CK techniques with Stratus Red Team</h3>
 <div class="code-block"><pre>brew install stratus-red-team          # or grab a binary from the releases page
-stratus list                            # browse the catalog of cloud techniques
+stratus list                            # browse the catalog; each entry maps to a MITRE ATT&amp;CK technique
 
-# detonate a few - each creates its own prerequisites, performs the technique,
-# and can clean itself up afterwards
-stratus detonate aws.credential-access.ec2-steal-instance-credentials
-stratus detonate aws.defense-evasion.cloudtrail-stop
-stratus detonate aws.exfiltration.s3-backdoor-bucket-policy
+# detonate a few - each command spins up its own prerequisites, performs the technique,
+# and generates the exact telemetry a real attacker would leave in CloudTrail
+stratus detonate aws.credential-access.ec2-steal-instance-credentials   # steal an instance's role credentials
+stratus detonate aws.defense-evasion.cloudtrail-stop                    # stop logging to blind the defender
+stratus detonate aws.exfiltration.s3-backdoor-bucket-policy            # open a bucket to the world
 
-stratus cleanup --all                   # ALWAYS run this - it removes what it created</pre></div>
+stratus cleanup --all                   # ALWAYS run this - it deletes the instances/roles each technique created (they're billable)</pre></div>
             <p><a href="https://github.com/DataDog/stratus-red-team" target="_blank" rel="noopener noreferrer">Stratus Red Team</a> is purpose-built to test detections: each technique maps to a MITRE ATT&amp;CK ID and produces the exact telemetry a real attacker would. You are generating a labeled dataset of malicious activity in your own account.</p>
 
             <h3>6. Read the GuardDuty findings</h3>
-<div class="code-block"><pre>DETECTOR=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text)
-aws guardduty list-findings --detector-id "$DETECTOR"
-aws guardduty get-findings --detector-id "$DETECTOR" \
-  --finding-ids &lt;finding-id&gt; --query 'Findings[0].{type:Type,severity:Severity}' </pre></div>
+<div class="code-block"><pre># Grab the detector id into a shell variable so the next two commands can reuse it.
+DETECTOR=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text)   # --query pulls the first id out of the JSON
+aws guardduty list-findings --detector-id "$DETECTOR"        # list finding IDs GuardDuty has raised
+aws guardduty get-findings --detector-id "$DETECTOR" \       # fetch the full detail for one finding...
+  --finding-ids &lt;finding-id&gt; --query 'Findings[0].{type:Type,severity:Severity}'   # ...and print just its type and severity</pre></div>
             <p>Expect findings such as <code>Stealth:IAMUser/CloudTrailLoggingDisabled</code> (from the Stratus cloudtrail-stop), <code>UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS</code> (from the credential-theft technique), and <code>Policy:S3/BucketAnonymousAccessGranted</code> (from your public bucket). Findings can take minutes to hours to surface; to see the <em>shape</em> of a finding immediately, generate samples with <code>aws guardduty create-sample-findings --detector-id "$DETECTOR"</code>. Read each finding in full - every one is a real attack pattern, annotated, in an environment you control.</p>
         </section>
 
@@ -509,9 +522,10 @@ aws guardduty get-findings --detector-id "$DETECTOR" \
         <div class="highlight-box">
             <p><strong>Tear it all down.</strong> The most important step. Run it before you close the laptop:</p>
         </div>
-<div class="code-block"><pre>stratus cleanup --all
-terraform destroy -auto-approve
+<div class="code-block"><pre>stratus cleanup --all             # remove anything Stratus created (do this first - Terraform doesn't know about it)
+terraform destroy -auto-approve   # tear down the trail + vulnerable stack you built
 # sanity-check the console: no running EC2, no public bucket, no stray access keys
+# The || fallback prints a friendly message once the user (and its keys) is gone.
 aws iam list-access-keys --user-name legacy-app 2&gt;/dev/null || echo "user gone - good"</pre></div>
         <section id="mistakes">
             <h2>Common mistakes</h2>

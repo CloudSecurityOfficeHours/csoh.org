@@ -368,133 +368,151 @@
             <h2>Step-by-step</h2>
 
             <h3>1. Install LocalStack and the CLI wrappers</h3>
-<div class="code-block"><pre># The LocalStack CLI plus the thin awslocal / tflocal wrappers
-python3 -m pip install --user localstack awscli-local terraform-local
+<div class="code-block"><pre># Three pip packages, one command. What each one gives you:
+#   localstack       - the CLI that starts and stops the mock-cloud container
+#   awscli-local     - installs `awslocal`, an `aws` wrapper pre-pointed at LocalStack
+#   terraform-local  - installs `tflocal`, the same idea for Terraform
+python3 -m pip install --user localstack awscli-local terraform-local   # --user = no sudo; installs into your home dir
 
-# confirm
-localstack --version
-awslocal --version</pre></div>
+# Confirm both tools are on your PATH before continuing
+localstack --version    # prints the CLI version; the Docker image itself is pulled later, on first start
+awslocal --version      # prints the underlying aws-cli version that awslocal wraps</pre></div>
             <p><code>awslocal</code> is a one-line wrapper that calls the real <code>aws</code> CLI with <code>--endpoint-url=http://localhost:4566</code> injected, so you never have to type the endpoint. <code>tflocal</code> does the same for Terraform: it auto-points every AWS provider at LocalStack. Both call the tools you already have, so you can always fall back to <code>aws --endpoint-url=http://localhost:4566 &hellip;</code> directly.</p>
 
             <h3>2. Start LocalStack</h3>
-<div class="code-block"><pre>localstack start -d          # -d = detached (runs in the background)
-localstack status services   # list which service mocks are up</pre></div>
+<div class="code-block"><pre>localstack start -d          # start the mock cloud; -d = detached, so it runs in the background and frees your shell
+localstack status services   # print a table of every emulated service (s3, iam, lambda, ...) and whether each is 'available'</pre></div>
             <p>You will see a table of services (<code>s3</code>, <code>iam</code>, <code>lambda</code>, <code>sqs</code>, &hellip;) marked <code>available</code>. LocalStack pulls its Docker image on first run, so give it a minute. Tail logs with <code>localstack logs -f</code>; stop it later with <code>localstack stop</code>.</p>
 
             <h3>3. Your first calls against the mock cloud</h3>
-<div class="code-block"><pre># dummy credentials are fine - LocalStack accepts anything
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=us-east-1
+<div class="code-block"><pre># LocalStack never checks credentials, but the AWS CLI refuses to run without *some* value set.
+# These three exports satisfy that requirement; the literal string "test" is the community convention.
+export AWS_ACCESS_KEY_ID=test          # any non-empty value works
+export AWS_SECRET_ACCESS_KEY=test      # never a real secret - this is a throwaway mock
+export AWS_DEFAULT_REGION=us-east-1    # a region still has to be set; the CLI builds its endpoints from it
 
-# who am I? LocalStack returns the canned account 000000000000
+# Your first API call. Real AWS returns your 12-digit account id here; LocalStack
+# always returns the canned 000000000000 - that is your proof you are hitting the mock.
 awslocal sts get-caller-identity
 
-# create a bucket, upload an object, list it back
-awslocal s3 mb s3://lab-bucket
-echo "top secret" &gt; secret.txt
-awslocal s3 cp secret.txt s3://lab-bucket/
-awslocal s3 ls s3://lab-bucket/</pre></div>
+awslocal s3 mb s3://lab-bucket               # mb = "make bucket"
+echo "top secret" &gt; secret.txt               # create a throwaway local file to upload
+awslocal s3 cp secret.txt s3://lab-bucket/   # cp = copy the local file up into the bucket
+awslocal s3 ls s3://lab-bucket/              # ls = list the bucket's contents; you should see secret.txt</pre></div>
             <p>Every command is identical to real AWS; only the endpoint differs. Getting <code>000000000000</code> back from <code>get-caller-identity</code> is your proof you are hitting LocalStack and not a real account - check it any time you are unsure.</p>
 
             <h3>4. Deploy infrastructure with Terraform</h3>
             <p>Create a working directory and a provider file. <code>tflocal</code> wires the endpoints for you:</p>
-<div class="code-block"><pre>mkdir -p ~/localstack-lab &amp;&amp; cd ~/localstack-lab</pre></div>
+<div class="code-block"><pre>mkdir -p ~/localstack-lab &amp;&amp; cd ~/localstack-lab   # -p = no error if it exists; &amp;&amp; = only cd in if mkdir succeeded</pre></div>
             <p><code>main.tf</code>:</p>
 <div class="code-block"><pre>terraform {
   required_providers {
-    aws = { source = "hashicorp/aws", version = "~&gt; 5.0" }
+    aws = {
+      source  = "hashicorp/aws"   # pull the official AWS provider from the Terraform registry
+      version = "~&gt; 5.0"          # any 5.x release, never 6.0 - pins the API surface so upgrades don't surprise you
+    }
   }
 }
 
 provider "aws" {
   region     = "us-east-1"
-  access_key = "test"
+  access_key = "test"             # dummy creds again - LocalStack ignores them, but the provider wants values
   secret_key = "test"
-  # Belt-and-suspenders: these let the config work even if you accidentally
-  # run plain `terraform` instead of `tflocal`.
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_requesting_account_id  = true
+  # The three "skip" flags below turn off the provider's start-up calls to the *real*
+  # AWS STS and metadata endpoints. Without them, Terraform tries to reach AWS to
+  # validate the fake credentials and hangs. They also make this file safe if you ever
+  # run plain `terraform` out of habit instead of `tflocal`.
+  skip_credentials_validation = true   # don't verify the access key against real STS
+  skip_metadata_api_check     = true   # don't probe the EC2 instance-metadata endpoint
+  skip_requesting_account_id  = true   # don't call sts:GetCallerIdentity to learn the account id
 }</pre></div>
-<div class="code-block"><pre>tflocal init
-tflocal plan</pre></div>
+<div class="code-block"><pre>tflocal init    # download the AWS provider plugin into .terraform/ (run once per project, or after changing versions)
+tflocal plan    # dry run: print exactly what Terraform *would* create, without touching anything yet</pre></div>
             <h3>5. Build a deliberately-vulnerable stack</h3>
             <p>Now add resources that mirror the classic real-world misconfigurations. Append to <code>main.tf</code>:</p>
-<div class="code-block"><pre># 1) A bucket that is public to the world - the classic data-leak setup
+<div class="code-block"><pre># 1) A bucket that is public to the world - the classic data-leak setup.
 resource "aws_s3_bucket" "public_data" {
-  bucket = "customer-exports-lab"
+  bucket = "customer-exports-lab"        # the bucket's globally-unique name
 }
 
+# By default AWS blocks all public access. Flipping every guard to false is what
+# actually *lets* the public bucket policy below take effect - this block is the
+# real misconfiguration, not the policy on its own.
 resource "aws_s3_bucket_public_access_block" "public_data" {
-  bucket                  = aws_s3_bucket.public_data.id
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  bucket                  = aws_s3_bucket.public_data.id   # reference the bucket declared above
+  block_public_acls       = false   # allow public ACLs to be set
+  block_public_policy     = false   # allow a public bucket *policy* (the one defined next)
+  ignore_public_acls      = false   # honor public ACLs instead of silently ignoring them
+  restrict_public_buckets = false   # don't restrict anonymous / cross-account access
 }
 
+# The bucket policy that grants the entire internet read access to every object.
 resource "aws_s3_bucket_policy" "public_data" {
   bucket = aws_s3_bucket.public_data.id
-  policy = jsonencode({
+  policy = jsonencode({                 # jsonencode turns this HCL map into the JSON AWS expects
     Version = "2012-10-17",
     Statement = [{
       Sid       = "PublicRead",
       Effect    = "Allow",
-      Principal = "*",
-      Action    = "s3:GetObject",
-      Resource  = "${aws_s3_bucket.public_data.arn}/*"
+      Principal = "*",                  # "*" = anyone, no credentials required  &lt;- the dangerous part
+      Action    = "s3:GetObject",       # the one action allowed: download (GET) an object
+      Resource  = "${aws_s3_bucket.public_data.arn}/*"   # /* = every object in the bucket
     }]
   })
 }
 
-# 2) An IAM user with an inline admin policy and a long-lived access key
+# 2) An IAM user with an inline admin policy and a long-lived access key.
 resource "aws_iam_user" "app" {
   name = "legacy-app-user"
 }
 
 resource "aws_iam_user_policy" "app_admin" {
   name   = "app-admin"
-  user   = aws_iam_user.app.name
+  user   = aws_iam_user.app.name        # attach this inline policy directly to the user above
   policy = jsonencode({
     Version   = "2012-10-17",
+    # Action "*" on Resource "*" = permission to do anything to everything: full admin.
     Statement = [{ Effect = "Allow", Action = "*", Resource = "*" }]
   })
 }
 
+# A static access key for that user. Real keys like this, committed to a git repo,
+# are the single most common root cause of cloud breaches.
 resource "aws_iam_access_key" "app" {
   user = aws_iam_user.app.name
 }</pre></div>
-<div class="code-block"><pre>tflocal apply -auto-approve</pre></div>
+<div class="code-block"><pre>tflocal apply -auto-approve   # actually create the resources; -auto-approve skips the interactive "yes" prompt</pre></div>
             <p>Everything you just wrote is a real finding you will meet in production: a bucket policy with <code>Principal: "*"</code>, an access block that blocks nothing, a wildcard <code>Action: "*"</code> IAM policy, and a static access key that never rotates. LocalStack Community will happily <em>create</em> all of it (it just will not <em>enforce</em> the IAM half) - which is exactly what you want for practising the build-and-scan loop.</p>
 
             <h3>6. Poke at what you built</h3>
-<div class="code-block"><pre># Upload a fake "loot" file, then fetch it with NO credentials at all
-echo "aws_secret_access_key=AKIAFAKE..." &gt; creds.txt
+<div class="code-block"><pre># Stage a fake "loot" file in the public bucket...
+echo "aws_secret_access_key=AKIAFAKE..." &gt; creds.txt      # a decoy secret, not a real key
 awslocal s3 cp creds.txt s3://customer-exports-lab/
+# ...then fetch it over plain HTTP with NO credentials. The request succeeding is the whole point:
+# a public bucket policy means the object is reachable by anyone on the internet.
 curl http://localhost:4566/customer-exports-lab/creds.txt
 
-# Enumerate IAM the way an attacker with the leaked key would
-awslocal iam list-users
-awslocal iam list-access-keys --user-name legacy-app-user
-awslocal iam list-user-policies --user-name legacy-app-user
-awslocal iam get-user-policy --user-name legacy-app-user --policy-name app-admin</pre></div>
+# Now walk the IAM enumeration an attacker runs right after finding the leaked key:
+awslocal iam list-users                                             # who exists in this account?
+awslocal iam list-access-keys --user-name legacy-app-user          # what keys does this user have?
+awslocal iam list-user-policies --user-name legacy-app-user        # what inline policies are attached to it?
+awslocal iam get-user-policy --user-name legacy-app-user --policy-name app-admin   # read the policy - it's full admin</pre></div>
             <p>That anonymous <code>curl</code> succeeding is the whole point: a public bucket policy means the object is on the internet. The <code>iam list-*</code> / <code>get-user-policy</code> sequence is the enumeration muscle memory you will use for real in the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>.</p>
 
             <h3>7. Catch the issues with IaC scanning</h3>
             <p>This is where a local lab genuinely shines: static scanners find every one of these problems from the Terraform files alone - no deploy, no cloud, no cost.</p>
-<div class="code-block"><pre># Checkov - policy-as-code scanner for Terraform
+<div class="code-block"><pre># Checkov - a policy-as-code scanner that reads Terraform statically (no deploy, no cloud, no cost)
 python3 -m pip install --user checkov
-checkov -d .
+checkov -d .        # -d = scan every .tf file in this directory; prints a PASS/FAIL line per check
 
-# Trivy in config mode does the same and also covers Dockerfiles and k8s
-#   install: brew install trivy   (or see aquasecurity.github.io/trivy)
-trivy config .</pre></div>
+# Trivy in config mode does the same job and also covers Dockerfiles, Kubernetes manifests, and more
+#   install it first: brew install trivy   (or see aquasecurity.github.io/trivy)
+trivy config .      # scan the current directory's infrastructure-as-code for the same misconfigurations</pre></div>
             <p>Read the output. Checkov flags <code>CKV_AWS_*</code> IDs for the public bucket, the wildcard IAM policy, the missing default encryption, and more. Map each finding back to the exact resource you wrote, fix them one at a time, and re-scan until the run is clean. That loop - write, scan, remediate, re-scan - is precisely what an AppSec / IaC engineer does on every pull request. See the <a href="../ci-cd.html">CI/CD security</a> page for wiring the same scan into a pipeline.</p>
 
             <h3>8. Tear it down</h3>
-<div class="code-block"><pre>tflocal destroy -auto-approve   # remove the stack
-localstack stop                 # stop the container; state is ephemeral</pre></div>
+<div class="code-block"><pre>tflocal destroy -auto-approve   # delete everything Terraform created; -auto-approve skips the confirmation prompt
+localstack stop                 # stop the container - community-edition state lives in RAM, so this wipes it clean</pre></div>
             <p>Community-edition state lives in memory, so stopping the container wipes everything. That is a feature: every session starts from a clean slate.</p>
         </section>
 
