@@ -165,18 +165,20 @@ jobs:
       - name: Check URL safety (must pass before normalization)
         run: |
           # `> file` redirects the script's normal output into a file;
-          # `2>&1` folds error output into that same file. `|| true` swallows
-          # a non-zero exit so the workflow doesn't stop here - we decide
-          # pass/fail ourselves a few lines down by inspecting the report.
-          python3 tools/check_all_site_urls.py > url-safety-report.txt 2>&1 || true
+          # `2>&1` folds error output into that same file. The step runs under
+          # `bash -e`, so a non-zero exit would abort here; `|| rc=$?` intercepts
+          # it and stashes the real exit code so we can echo the report first
+          # and decide pass/fail ourselves a few lines down.
+          rc=0
+          python3 tools/check_all_site_urls.py > url-safety-report.txt 2>&1 || rc=$?
           # Echo the report into the run log so it's visible without opening
           # the downloadable artifact.
           cat url-safety-report.txt
-          # Halt the workflow if the report contains the unsafe-URL marker.
-          # `grep -q` searches silently and succeeds (exit 0) if the literal
-          # text "❌ UNSAFE" appears anywhere in the report, which is what
-          # `if` branches on here.
-          if grep -q "❌ UNSAFE" url-safety-report.txt; then
+          # Halt the workflow using the scanner's OWN exit code: it returns 1
+          # when unsafe URLs are found (0 for safe / suspicious-only runs).
+          # Gating on the exit code - not on report text - also blocks the run
+          # if the scanner itself crashes.
+          if [ "$rc" -ne 0 ]; then
             # `::error::` is a GitHub Actions log command - this line shows up
             # as a red error annotation on the run, not just plain text.
             echo "::error::Unsafe URLs detected - blocking normalization"

@@ -124,17 +124,19 @@ jobs:
       - name: Run URL safety check
         run: |
           # Run the scanner, redirecting BOTH stdout and stderr (`2>&1`) into
-          # one report file. `|| true` swallows a nonzero exit so this line
-          # can't fail the step yet - we want to inspect the report and decide
-          # for ourselves whether to fail.
-          python3 tools/check_all_site_urls.py > site-wide-url-safety-report.txt 2>&1 || true
+          # one report file. The step runs under `bash -e`, so a nonzero exit
+          # would normally abort here; `|| rc=$?` intercepts it and stashes the
+          # real exit code instead, letting us echo the report before deciding.
+          rc=0
+          python3 tools/check_all_site_urls.py > site-wide-url-safety-report.txt 2>&1 || rc=$?
           # Echo the report into the step log so it is visible without
           # downloading the artifact.
           cat site-wide-url-safety-report.txt
-          # Gate on the report contents. `grep -q` runs quietly and just sets
-          # an exit code: if the "❌ UNSAFE" marker is present, enter the block
-          # and fail the run on purpose so the bad URL can't merge or ship.
-          if grep -q "❌ UNSAFE" site-wide-url-safety-report.txt; then
+          # Gate on the scanner's OWN exit code: it returns 1 when unsafe URLs
+          # are found (and stays 0 for safe / suspicious-only runs). Gating on
+          # the exit code - rather than grepping report text - also fails the
+          # run if the scanner itself crashes, so a bad URL can't merge or ship.
+          if [ "$rc" -ne 0 ]; then
             # `::error::` is a GitHub log command - this text shows up as a red
             # error annotation on the run. `exit 1` (nonzero) is what actually
             # marks the step - and thus the whole run - as failed.
@@ -192,8 +194,11 @@ jobs:
             const summaryMatch = report.match(/SUMMARY[\s\S]*?={50,}/);
             const summary = summaryMatch ? summaryMatch[0] : 'See full report in artifacts';
 
-            // Extract the count from the report header for a punchy first line.
-            const unsafeMatch = report.match(/❌ UNSAFE URLS \((\d+)\):/);
+            // Extract the count from the report's "UNSAFE URLS (N)" summary
+            // header for a punchy first line. The header has no ❌ prefix and
+            // no trailing colon, so match exactly what the scanner prints; the
+            // uppercase "URLS" avoids matching the per-file "UNSAFE URLs:" lines.
+            const unsafeMatch = report.match(/UNSAFE URLS \((\d+)\)/);
             const unsafeCount = unsafeMatch ? unsafeMatch[1] : '0';
 
             let comment = `## ⚠️ URL Safety Check Failed\n\n`;
