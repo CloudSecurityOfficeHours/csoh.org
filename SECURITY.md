@@ -116,7 +116,7 @@ This means even if the hosting account were compromised and files were tampered 
 - This prevents reverse tabnapping attacks
 
 **No Third-Party JavaScript:**
-- Zero external scripts - no analytics, no tracking pixels, no CDN-hosted libraries
+- No third-party scripts - the only analytics is GoatCounter (cookieless, no IP storage, no cross-site tracking), and its loader is self-hosted at `/vendor/goatcounter-count.js` so `script-src` stays `'self'`; no tracking pixels, no CDN-hosted libraries
 - All JavaScript is first-party, self-hosted, and SRI-hashed
 
 **No Cookies or Tracking:**

@@ -165,7 +165,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 ## 🌐 About
 
-Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no trackers, no analytics, no on-site advertising. (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner - never a separate promotional email.)
+Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no cookies, no cross-site trackers, no on-site advertising (the only analytics is GoatCounter, a cookieless page-view counter). (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner - never a separate promotional email.)
 
 Sign up for the weekly Zoom link at **[csoh.kit.com](https://csoh.kit.com/39feb4f397)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
 
@@ -451,7 +451,7 @@ The mission-and-ethos page: who we are, why CSOH is vendor-neutral and free, and
 Community standards for every CSOH-organized space - Friday Zoom session, mailing list, GitHub repo. Covers expected and unacceptable behavior, reporting, and enforcement. Adapted from the Contributor Covenant.
 
 ### 🔐 Privacy Policy (`privacy.html`)
-Plain-English privacy policy. Short version: no cookies, no analytics, no marketing trackers, never sell or share data. The only personal data we hold is your mailing-list email. External links are scrubbed of tracking parameters before publication.
+Plain-English privacy policy. Short version: no cookies, no marketing or cross-site trackers, only cookieless page-view analytics (GoatCounter), never sell or share data. The only personal data we hold is your mailing-list email. External links are scrubbed of tracking parameters before publication.
 
 ### 🔒 Security Policy (`security-policy.html`)
 RFC 9116-compliant vulnerability disclosure policy. Mirrored at `/.well-known/security.txt`.
@@ -580,7 +580,7 @@ csoh.org/
 ├── glossary.html               # 300+ cloud security terms with live search & cross-links
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 ├── code-of-conduct.html        # Community Code of Conduct
-├── privacy.html                # Privacy Policy (no cookies, no trackers, no on-site ads)
+├── privacy.html                # Privacy Policy (no cookies, no cross-site trackers, no on-site ads)
 ├── about.html                  # About CSOH: mission and ethos
 ├── about-shawn-nunley.html     # Founder bio (Person / ProfilePage schema, E-E-A-T)
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages live in /breaches/)
@@ -921,7 +921,7 @@ Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog
 
 ## 🔍 SEO & Search Optimization
 
-CSOH is engineered for organic discovery across traditional search (Google, Bing), AI search/answer engines (ChatGPT, Perplexity, Claude, Gemini), and social previews (LinkedIn, Twitter/X, Slack). The site uses no tracking, no analytics, and no third-party scripts - just clean semantic HTML, structured data, and disciplined metadata.
+CSOH is engineered for organic discovery across traditional search (Google, Bing), AI search/answer engines (ChatGPT, Perplexity, Claude, Gemini), and social previews (LinkedIn, Twitter/X, Slack). The site uses no third-party scripts and no cross-site tracking - just clean semantic HTML, structured data, disciplined metadata, and a self-hosted cookieless page-view counter (GoatCounter).
 
 ### Schema.org structured data (25+ types)
 
@@ -985,7 +985,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Privacy as an SEO signal
 
-- ✅ Zero cookies, zero trackers, zero third-party analytics
+- ✅ Zero cookies, zero cross-site trackers, zero third-party scripts (analytics is cookieless, self-hosted GoatCounter)
 - ✅ Strict Content-Security-Policy
 - ✅ HSTS preload-eligible
 - ✅ All external scripts blocked at the CSP layer
@@ -1057,7 +1057,7 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 
 ### Policies
 - 🤝 **[Code of Conduct](code-of-conduct.html)** - community standards across Friday Zoom, mailing list, and GitHub
-- 🔐 **[Privacy Policy](privacy.html)** - no cookies, no trackers, no on-site ads
+- 🔐 **[Privacy Policy](privacy.html)** - no cookies, no cross-site trackers, no on-site ads
 - 🔒 **[Security Policy](security-policy.html)** / [SECURITY.md](SECURITY.md) - coordinated disclosure
 
 ---
