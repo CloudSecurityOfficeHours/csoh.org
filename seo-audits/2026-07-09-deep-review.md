@@ -16,6 +16,21 @@ Six-agent qualitative review (freshness, career/guidance quality, technical topi
 
 Validators after edits: check_jsonld OK, check_no_inline_scripts OK (223 files), 0 nested anchors, search index rebuilt (1617 docs).
 
+## Update log 2 (2026-07-11) - P3
+
+- **Bio drift RESOLVED**: standardized the author-card bio across 133 files to Shawn's chosen wording ("In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999)..."). about-shawn-nunley.html meta/OG/JSON-LD aligned to that page's own authoritative narrative (42 years, 1984 Read-Rite start, last 30 in security) rather than the generic card. NOTE: the card says "since 1983", the detailed bio page says "42 years / started 1984" - a 1-year framing gap left for Shawn to reconcile (1983 pre-Read-Rite vs 1984 first job).
+- **Wiz-Google**: verified the deal CLOSED March 11, 2026 (US Nov 2025, EU Feb 2026). Updated vendor-landscape + cspm-vs-cnapp from "agreed to acquire / operationally independent" to past tense.
+- **AWS SCS-C03**: web-verified the site's claim is CORRECT (released Dec 2, 2025). No change.
+- **Lacework currency (technical pages)**: swept aws-security, azure-security, grc, vulnerability-management, cloud-security-incident-responder -> FortiCNAPP; also fixed cloud-security-comparison + sales-engineer. Left correctly-annotated instances (vendor-landscape "acquired by Fortinet", resources "formerly Lacework", cspm-vs-cnapp "FortiCNAPP (formerly Lacework)").
+- **Post-quantum crypto (top technical gap)**: new "Post-quantum cryptography & crypto-agility" section on data-security.html (ML-KEM/ML-DSA/SLH-DSA, harvest-now-decrypt-later, hybrid PQC TLS on AWS/GCP/Cloudflare, crypto-agility playbook, CNSA 2.0 timeline) + a PQC-TLS note on network-security.html.
+- **DSPM**: new DSPM section on data-security.html (vs classification/CSPM/DLP, shadow-data problem, tool landscape). SSPM was already fully covered on saas-security (3 sections) - review's "SSPM under-developed" was inaccurate; skipped.
+- **Thin comparison page**: added a "Representative tooling (2026)" section to cnapp-vs-xdr.html (CNAPP/XDR/CDR vendor map) + TOC entry; "Through 2025" -> "and into 2026".
+- **faq.html FAQPage**: expanded mainEntity 6 -> 34 (now matches all visible questions 1:1), regenerated from the visible Q&A so schema==visible.
+- **Smaller**: "at least seven" -> "at least a dozen" (careers, help-desk); no-experience pay section now links careers#salary with the entry-band caveat.
+- **Stamps**: bumped Last-updated + article:modified_time on the 3 pages with major new sections (data-security, network-security, cnapp-vs-xdr); left published dates intact.
+
+Validation: check_jsonld OK, check_no_inline_scripts OK (223 files), 0 nested anchors + 0 em-dashes on all new-content pages, FAQPage 34 items valid, search index rebuilt (1620 docs). PQC/DSPM sections browser-verified rendering (display:block, correct headings, TOC anchors + cross-links resolve).
+
 ## Overall verdict
 
 The site is in the best shape it has ever been. Technical plumbing is near-perfect (sitemap 1:1, canonicals clean site-wide, feeds fresh to the hour, CI 100% green over the last 25+ runs, update-news token issue fixed and verified). Content is current within days on all automated surfaces and the career + technical sections are genuinely best-in-class for a free community site. The findings below are concentrated in four themes: (1) a handful of real defects introduced by recent workflow gaps, (2) the newest, highest-value pages being invisible from the nav, (3) an 11-month editorial dead zone in the breach franchise, and (4) repo-doc claims that lag the code by one feature cycle - including a falsified "zero analytics" privacy claim.

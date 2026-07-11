@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-17">
-    <meta property="article:modified_time" content="2026-05-17">
+    <meta property="article:modified_time" content="2026-07-11">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Cloud Security Topics">
     <meta property="article:tag" content="data security">
@@ -78,7 +78,7 @@
         }
       },
       "datePublished": "2026-05-17",
-      "dateModified": "2026-05-17",
+      "dateModified": "2026-07-11",
       "mainEntityOfPage": "https://csoh.org/data-security.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -433,7 +433,7 @@
           <figcaption>Photo by Pixabay on Pexels</figcaption>
         </figure>
 
-        <p class="page-meta"><time datetime="2026-05-17">Last updated <strong>2026-05-17</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/data-security.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-07-11">Last updated <strong>2026-07-11</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/data-security.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
             <p><strong>The 30-second version:</strong> Cloud data security is two disciplines stitched together: <strong>cryptography</strong> (the math - AES-GCM, RSA, ECDSA, the curves, the modes, the algorithms) and <strong>key management</strong> (the operational layer - who holds the keys, how they rotate, how they're audited, what happens when one is compromised). The first is solved; the providers ship the same <a class="glossary-link" href="glossary.html#term-nist">NIST</a>-approved primitives. The second is where every cloud breach involving "encrypted" data actually fails: a <a class="glossary-link" href="glossary.html#term-kms">KMS</a> key with a permissive policy, a secret committed to git, a database connection string in an environment variable, a <a class="glossary-link" href="glossary.html#term-service-account">service account</a> with permanent credentials.</p>
@@ -444,6 +444,7 @@
             <h2>On this page</h2>
             <ol>
                 <li><a href="#classification">Data classification</a></li>
+                <li><a href="#dspm">DSPM - data security posture management</a></li>
                 <li><a href="#at-rest">Encryption at rest</a></li>
                 <li><a href="#in-transit">Encryption in transit</a></li>
                 <li><a href="#kms">KMS fundamentals - envelope encryption</a></li>
@@ -452,6 +453,7 @@
                 <li><a href="#secrets">Secrets management</a></li>
                 <li><a href="#k8s-secrets">Kubernetes secrets</a></li>
                 <li><a href="#rotation">Key rotation</a></li>
+                <li><a href="#pqc">Post-quantum cryptography &amp; crypto-agility</a></li>
                 <li><a href="#tokenization">Tokenization vs encryption vs hashing</a></li>
                 <li><a href="#dlp">Data Loss Prevention (DLP)</a></li>
                 <li><a href="#confidential">Confidential computing</a></li>
@@ -488,6 +490,20 @@
             </div>
             <p>The tiers are not academic. They determine which KMS key family encrypts the data, which secrets manager holds the credentials, whether DLP rules apply, which network paths the data can traverse, where backups land, and whether confidential computing is on the table. <em>Without classification, every control discussion is about "data" in the abstract</em> - and abstract controls tend to be either everywhere (expensive) or nowhere (insecure).</p>
             <p>Practical execution: classify by data owner and storage location, not by individual record. A bucket holds restricted data; a table contains confidential records; a Kafka topic carries internal events. Tag the resource with the classification, propagate the tag through <a class="glossary-link" href="glossary.html#term-iac">IaC</a>, and let policy enforcement key off the tag. Tools like Macie, Purview Information Protection, and Cloud DLP can auto-discover and label data at scale, but the human-curated owner-mapping is still the spine.</p>
+        </section>
+
+        <section id="dspm">
+            <h2>DSPM - data security posture management</h2>
+            <p>Classification tells you what a data store <em>should</em> be. DSPM tells you what your data <em>actually</em> is, everywhere it has sprawled - and that gap is where most modern data breaches live. Data Security Posture Management continuously discovers and classifies sensitive data across your clouds (object storage, managed databases, warehouses like Snowflake and BigQuery, and increasingly SaaS), then maps <strong>who and what can reach it</strong> and flags the risky exposures: a public bucket with PII, a dev clone of the production database, a snapshot shared to another account, data landing in a region that violates residency rules.</p>
+            <h3>How it differs from the things next to it</h3>
+            <ul>
+                <li><strong>vs classification</strong> - classification is the policy and the owner-mapping (the spine above); DSPM is the engine that finds and labels the data continuously and, crucially, adds the <em>access and exposure graph</em> on top.</li>
+                <li><strong>vs <a class="glossary-link" href="glossary.html#term-cspm">CSPM</a></strong> - CSPM assesses <em>resource configuration</em> ("is this bucket public?"). DSPM is <em>data-centric</em> - it follows the sensitive data itself and answers "does this public bucket actually contain regulated data, and who can read it?" That is why DSPM is increasingly bundled into <a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a> platforms rather than sold purely standalone.</li>
+                <li><strong>vs DLP</strong> - <a href="#dlp">DLP</a> is inline enforcement on data in motion (block the exfil, quarantine the email). DSPM is posture on data at rest - where it lives, how sensitive it is, who can get to it. They are complements, not substitutes.</li>
+            </ul>
+            <h3>The shadow-data problem it exists to solve</h3>
+            <p>The reason DSPM became a category is <strong>shadow data</strong>: the copies, exports, backups, dev/test clones, and abandoned stores that no one classified because no one remembered creating them. A carefully-locked-down production database means little if a two-year-old snapshot sits in an unmonitored account with a permissive policy. DSPM's core value is finding the data you forgot you had, before someone else does.</p>
+            <p>The landscape: standalone tools (Cyera, Sentra, Symmetry, Varonis, and Palo Alto's Dig) and DSPM built into the CNAPP suites (Wiz, Orca, Prisma). The cloud-native discovery tools - <strong>Amazon Macie</strong>, <strong>Microsoft Purview</strong>, <strong>Google Cloud DLP / Sensitive Data Protection</strong> - do the discovery-and-classification half well within a single cloud, but generally lack the cross-cloud access-graph and exposure prioritization the dedicated tools lead with. See the <a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a> guide for where DSPM sits in the platform picture.</p>
         </section>
 
         <section id="at-rest">
@@ -773,6 +789,23 @@
                 <li><strong>Internal / public.</strong> KEKs annually (it's nearly free); secrets when needed (compromise, departure).</li>
             </ul>
             <p>The single highest-leverage move is <strong>eliminate long-lived static credentials</strong> - service account keys, IAM access keys, machine passwords. Replace with workload identity (<a class="glossary-link" href="glossary.html#term-irsa">IRSA</a>, Managed Identity, Workload Identity Federation, SPIFFE) and short-lived OIDC tokens. A credential that lives for 15 minutes doesn't need a rotation policy.</p>
+        </section>
+
+        <section id="pqc">
+            <h2>Post-quantum cryptography &amp; crypto-agility</h2>
+            <p>The public-key crypto underpinning almost every TLS handshake, signed artifact, and wrapped key today - RSA and elliptic-curve (ECDH/ECDSA) - is breakable by a sufficiently large quantum computer running Shor's algorithm. No such machine exists yet, and credible estimates put a cryptographically-relevant one years out. The reason this is a 2026 problem anyway is <strong>harvest now, decrypt later</strong>: an adversary can capture encrypted traffic or exfiltrate encrypted data today and simply store it until a quantum computer can open it. Anything whose confidentiality has to survive a decade or more - health records, government data, long-lived secrets, source code, PII you're legally required to protect - is effectively at risk now, not later.</p>
+            <h3>The standards are done - this is a migration, not a research project</h3>
+            <p>In August 2024, NIST finalized the first post-quantum standards: <strong>FIPS 203 (ML-KEM</strong>, from Kyber) for key establishment, and <strong>FIPS 204 (ML-DSA</strong>, from Dilithium) and <strong>FIPS 205 (SLH-DSA</strong>, from SPHINCS+) for signatures. These are drop-in replacements for the key-exchange and signature roles that RSA/ECC fill today. The symmetric side (AES-256, SHA-384) is already considered quantum-resistant - doubling key length defeats Grover's algorithm - so the migration is specifically about public-key crypto, not your KMS envelope encryption's AES core.</p>
+            <p>The major clouds and edges have already shipped the key-exchange half in <em>hybrid</em> mode (a classical curve <em>plus</em> ML-KEM, so you're never worse off than today): AWS added post-quantum hybrid key exchange to its KMS, ACM, and Secrets Manager TLS endpoints and to <a href="https://github.com/aws/s2n-tls" target="_blank" rel="noopener noreferrer">s2n-tls</a>; Google enabled ML-KEM hybrid in its internal ALTS transport and public TLS; and Cloudflare rolled X25519+ML-KEM across its network for TLS 1.3. See <a href="network-security.html">network security</a> for where this lands at the edge. Signatures (code signing, certificate chains, firmware) are the slower, harder half because long-lived signed artifacts have to remain verifiable for years.</p>
+            <h3>What to actually do now: crypto-agility</h3>
+            <p>You are not swapping every algorithm this quarter. The near-term, board-level ask is <strong>crypto-agility</strong> - being <em>able</em> to swap algorithms without re-architecting:</p>
+            <ul>
+                <li><strong>Inventory your cryptography.</strong> You cannot migrate what you can't find. Build a cryptographic bill of materials: where TLS terminates, what signs your code and artifacts, which certs and CAs you depend on, where you've hardcoded RSA/ECC key sizes or curve names.</li>
+                <li><strong>Turn on hybrid PQC key exchange where the platform offers it.</strong> On AWS/GCP/Cloudflare-fronted TLS this is often a client/config flag with no downside - it protects today's traffic against harvest-now-decrypt-later at essentially zero risk.</li>
+                <li><strong>Abstract algorithm choices behind config, not code.</strong> Prefer libraries and services that let you change the algorithm without a redeploy; treat "which curve/algorithm" as data, not a hardcoded constant.</li>
+                <li><strong>Prioritize by data shelf-life.</strong> Long-confidentiality data first (the harvest-now targets), then signing systems with long-lived trust roots. NSA's CNSA 2.0 timeline pushes software/firmware signing first and general adoption by the early 2030s; NIST plans to deprecate RSA-2048/ECC-256 around 2030 and disallow them by 2035.</li>
+            </ul>
+            <p>Migrating cryptography has historically taken large organizations a decade. The work that pays off now is the inventory and the agility - so that when your specific dependencies ship their PQC support, flipping to it is a config change, not a re-platforming.</p>
         </section>
 
         <section id="tokenization">
@@ -1099,7 +1132,7 @@
             </ul>
         </section>
 
-        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz, with 7+ years specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
+        <aside class="author-card" style="max-width:720px;margin:3rem auto 2rem;padding:1.5rem;border-top:2px solid var(--border-color, #e0e0e0);display:flex;align-items:flex-start;gap:1.25rem;flex-wrap:wrap;"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" style="border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy" decoding="async"></picture><div style="flex:1;min-width:240px;"><p style="margin:0 0 0.25rem;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted, #777);">About the author</p><p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:600;"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p style="margin:0;color:var(--text-muted, #555);">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more →</a></p></div></aside>
     </main>
 
   <footer>
