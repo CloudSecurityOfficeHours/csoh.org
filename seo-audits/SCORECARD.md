@@ -73,6 +73,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-07-05 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.05s · CLS 0.000 · TBT 0ms · FCP 1.05s · CrUX-M (origin): LCP 1.11s (FAST) · INP 54ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 0.99s (FAST) · INP 36ms (FAST) · CLS 0.000 (FAST) |
 | 2026-07-06 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.12s · CLS 0.000 · TBT 17ms · FCP 1.05s · CrUX-M (origin): LCP 1.11s (FAST) · INP 54ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 1.06s (FAST) · INP 35ms (FAST) · CLS 0.000 (FAST) |
 | 2026-07-10 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.14s · CLS 0.000 · TBT 6ms · FCP 1.08s · CrUX-M (origin): LCP 1.14s (FAST) · INP 51ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 1.09s (FAST) · INP 35ms (FAST) · CLS 0.000 (FAST) |
+| 2026-07-13 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.83s · CLS 0.000 · TBT 0ms · FCP 1.05s · CrUX-M (origin): LCP 1.20s (FAST) · INP 57ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 1.01s (FAST) · INP 36ms (FAST) · CLS 0.000 (FAST) |
 
 ## How to use
 
