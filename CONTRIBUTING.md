@@ -312,7 +312,7 @@ Whether you're fixing a typo or rewriting a section, the process is the same.
 - [glossary.html](glossary.html) - 300+ terms with cross-links
 - [faq.html](faq.html) - Frequently asked questions
 - [github-actions.html](github-actions.html) - GitHub Actions explainer
-- [cloud-deployment.html](cloud-deployment.html) - How csoh.org itself deploys to GCP
+- [cloud-deployment.html](cloud-deployment.html) - How csoh.org itself deploys to AWS, GCP, and Azure
 - [breach-timeline.html](breach-timeline.html) - Breach kill chain index (per-breach pages live in `breaches/`)
 - [threat-research.html](threat-research.html) - Cloud threat research source directory (incl. Supply Chain Attacks)
 - [code-of-conduct.html](code-of-conduct.html) - Community standards
