@@ -985,7 +985,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Privacy as an SEO signal
 
-- ✅ Zero cookies, zero trackers, zero third-party analytics
+- ✅ Zero cookies, zero marketing trackers; cookieless page-view analytics only (GoatCounter, self-hosted script)
 - ✅ Strict Content-Security-Policy
 - ✅ HSTS preload-eligible
 - ✅ All external scripts blocked at the CSP layer
