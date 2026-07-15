@@ -225,12 +225,33 @@ jobs:
           # operations are handled via us-east-1.
           aws-region: us-east-1
 
-      # Mirror dist/ up to the S3 bucket that backs the AWS origin.
-      - name: Sync to S3
+      # Mirror dist/ up to the S3 bucket that backs the AWS origin, ASSETS
+      # FIRST, then the HTML that references them.
+      #
+      # Why two passes: `aws s3 sync` uploads in arbitrary order, so a single
+      # pass can land index.html (asking for /style.css?v=NEW) before style.css
+      # itself. Any request in that window makes Cloudflare cache the OLD css
+      # under the NEW ?v= key - and since we serve assets `immutable,
+      # max-age=31536000`, that wrong answer sticks for a year. Browsers then
+      # reject the stylesheet on the SRI hash mismatch and the site renders
+      # unstyled. That is exactly what happened on 2026-07-15.
+      #
+      # Uploading every asset before any HTML closes the window: the new
+      # ?v= URL cannot be requested until the HTML naming it exists, and by
+      # then the asset it points at is already in place.
+      - name: Sync assets to S3 (everything except HTML)
         run: |
-          # `aws s3 sync` uploads only what changed. `--delete` removes objects
-          # from the bucket that no longer exist locally, so the bucket exactly
-          # matches dist/. `--no-progress` keeps the CI log clean.
+          # No --delete on this pass: dist/ minus *.html is not the full desired
+          # state, so pruning here would delete every live HTML page for the
+          # length of the deploy. Pass 2 does the pruning.
+          aws s3 sync dist "s3://${{ vars.AWS_BUCKET_NAME }}" \
+            --exclude "*.html" --no-progress
+
+      - name: Sync HTML to S3 (and prune deleted files)
+        run: |
+          # Full sync: uploads the HTML held back above (the asset re-check is a
+          # no-op), and --delete removes objects that no longer exist locally so
+          # the bucket exactly matches dist/.
           aws s3 sync dist "s3://${{ vars.AWS_BUCKET_NAME }}" \
             --delete --no-progress
 
@@ -287,12 +308,31 @@ jobs:
           # `inlineScript` is this action's way of taking shell to run (the
           # action's equivalent of a `run:` block).
           inlineScript: |
-            # Mirror the local dist folder into the storage account. Static
-            # websites in Azure are served from a special container literally
-            # named `$web`. `blob sync` uploads changes AND deletes files that
-            # are gone locally, so the site matches dist/ exactly. `--auth-mode
-            # login` uses our OIDC sign-in (an account identity) rather than a
-            # storage account key.
+            # Mirror the local dist folder into the storage account, ASSETS
+            # FIRST then HTML - same ordering rule as the S3 job above, for the
+            # same reason (see the long comment there: HTML landing before the
+            # asset it names lets Cloudflare cache the old asset under the new
+            # ?v= key for a year, and SRI then blocks it).
+            #
+            # Static websites in Azure are served from a special container
+            # literally named `$web`. `--auth-mode login` uses our OIDC sign-in
+            # (an account identity) rather than a storage account key.
+            #
+            # Pass 1 - assets only. `blob sync` deletes destination files that
+            # aren't in the source BY DEFAULT, and --exclude-pattern makes the
+            # HTML look absent, so this pass MUST pass --delete-destination
+            # false or it would wipe every live page. Pruning happens in pass 2.
+            az storage blob sync \
+              --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" \
+              --auth-mode login \
+              -c '$web' \
+              -s dist \
+              --exclude-pattern '*.html' \
+              --delete-destination false
+
+            # Pass 2 - full sync. Uploads the HTML held back above (assets
+            # re-check as no-ops) and prunes files that are gone locally, so the
+            # site matches dist/ exactly.
             az storage blob sync \
               --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" \
               --auth-mode login \
@@ -497,3 +537,128 @@ jobs:
             --project "${{ env.PROJECT_ID }}" \
             --region "${{ env.REGION }}" \
             --format='value(status.latestReadyRevisionName,status.url)'
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare is the CDN actually in front of all three origins, and nothing
+  # was purging it. The CloudFront invalidation in publish-aws only clears
+  # CloudFront, which visitors never touch.
+  #
+  # Normally the ?v=<content-hash> cache-buster makes a purge unnecessary: new
+  # content means a new URL means a guaranteed miss. But that only holds if the
+  # asset is in place before its URL is first requested. When it isn't, the
+  # edge caches the OLD bytes under the NEW key with `immutable,
+  # max-age=31536000` and serves them for a year; SRI then blocks the asset and
+  # the site renders unstyled (2026-07-15). The asset-before-HTML ordering in
+  # the publish jobs prevents that; this purge is the backstop that stops any
+  # such mistake from outliving the deploy.
+  #
+  # `needs:` all three publishers so the purge happens only once every origin
+  # is serving the new bytes - purging earlier could just re-cache stale ones.
+  #
+  # SETUP (one time, required before this job can pass):
+  #   1. Cloudflare → My Profile → API Tokens → Create Token → Custom token
+  #      with the single permission Zone → Cache Purge → Purge, and Zone
+  #      Resources limited to csoh.org. Nothing else.
+  #   2. Repo → Settings → Secrets and variables → Actions:
+  #      - Secret   CLOUDFLARE_API_TOKEN = that token
+  #      - Variable CLOUDFLARE_ZONE_ID   = the zone id from the Cloudflare
+  #        dashboard's Overview page (an identifier, not a secret)
+  # Until both exist this job fails by design: publishing to the origins while
+  # silently leaving a stale edge is the failure this whole job exists to stop.
+  # ---------------------------------------------------------------------------
+  purge-cloudflare:
+    needs: [publish-aws, publish-azure, publish-gcp]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # Unlike the clouds above, Cloudflare has no OIDC federation, so this is
+      # the one stored credential in the deploy: an API token scoped to a single
+      # permission (Zone → Cache Purge) on this zone alone. It cannot read DNS,
+      # edit rules, or touch any other zone. Rotate it in Settings → Secrets.
+      #
+      # The zone id is an identifier, not a credential, so it's a Variable -
+      # same split as AWS_PUBLISHER_ROLE_ARN (var) above. Both must exist before
+      # this job can pass; see the setup note in the job comment.
+      - name: Purge Cloudflare cache
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+        run: |
+          # -e: abort on error, -u: error on unset vars, -o pipefail: a failure
+          # anywhere in a pipeline fails the step (not just the last command).
+          set -euo pipefail
+
+          # Fail loudly rather than "succeeding" with an unpurged cache - a
+          # silent skip here is how a poisoned edge survives a green deploy.
+          if [ -z "${CF_API_TOKEN}" ] || [ -z "${CF_ZONE_ID}" ]; then
+            echo "::error::Missing Cloudflare config - cache NOT purged. Set the" \
+                 "CLOUDFLARE_API_TOKEN secret (Zone → Cache Purge on this zone only)" \
+                 "and the CLOUDFLARE_ZONE_ID variable."
+            exit 1
+          fi
+
+          # purge_everything rather than a URL list: the free plan caps purge-by
+          # -URL at 30 per call and every HTML page changes on a content deploy,
+          # so enumerating is both fiddly and easy to under-cover. The site is
+          # small and static; a cold edge refills in minutes.
+          response=$(curl -sS --fail-with-body \
+            -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+
+          # HTTP 200 is not enough: Cloudflare returns 200 with "success": false
+          # for things like a bad zone id, so check the body's success flag.
+          # (jq is preinstalled on ubuntu-latest runners.)
+          if ! echo "${response}" | jq -e '.success' >/dev/null; then
+            echo "::error::Cloudflare purge failed: $(echo "${response}" | jq -c '.errors')"
+            exit 1
+          fi
+          echo "Cloudflare cache purged."
+
+      # Prove the deploy is actually serving what the HTML asks for. This is the
+      # check that would have caught 2026-07-15 in CI instead of in production:
+      # it re-derives each asset's SHA-384 from the bytes the edge hands back and
+      # compares against the integrity= the live HTML declares for that URL.
+      - name: Verify live assets match their SRI hashes
+        run: |
+          set -euo pipefail
+          # Give the purge a moment to take effect across the edge.
+          sleep 10
+          python3 - <<'PY'
+          import base64, hashlib, re, sys, urllib.request
+
+          def get(url):
+              req = urllib.request.Request(url, headers={"User-Agent": "csoh-deploy-verify"})
+              # cache-control: no-cache asks the edge to revalidate rather than
+              # hand us a cached copy, so we verify what it would actually serve.
+              req.add_header("Cache-Control", "no-cache")
+              return urllib.request.urlopen(req, timeout=30).read()
+
+          html = get("https://csoh.org/").decode("utf-8", "replace")
+
+          # Pair each versioned asset URL with the integrity= alongside it.
+          pattern = re.compile(
+              r'(?:href|src)="(/[^"]+\?v=[0-9a-f]+)"[^>]*integrity="sha384-([^"]+)"'
+              r'|integrity="sha384-([^"]+)"[^>]*(?:href|src)="(/[^"]+\?v=[0-9a-f]+)"')
+
+          checked = failed = 0
+          for m in pattern.finditer(html):
+              url, want = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+              got = base64.b64encode(hashlib.sha384(get("https://csoh.org" + url)).digest()).decode()
+              checked += 1
+              if got != want:
+                  failed += 1
+                  print(f"::error::SRI MISMATCH {url}\n  serving: {got}\n  HTML wants: {want}")
+              else:
+                  print(f"ok  {url}")
+
+          if not checked:
+              print("::error::No versioned assets found in the live HTML - check the selector.")
+              sys.exit(1)
+          if failed:
+              print(f"::error::{failed} of {checked} assets do not match their SRI hash; "
+                    "browsers will refuse them and the site will render unstyled.")
+              sys.exit(1)
+          print(f"All {checked} live assets match their SRI hashes.")
+          PY
