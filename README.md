@@ -1053,7 +1053,7 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 - ❤️ **Star** this repository
 - 🔗 **Share** CSOH with your network
 - 💬 **Contribute** resources or improvements
-- 💰 **Donate** via [PayPal](https://www.paypal.com/paypalme/cloudsec) (optional, fully community-run)
+- ☕ **Donate** via [Buy Me a Coffee](https://buymeacoffee.com/csoh) (optional, fully community-run)
 
 ### Policies
 - 🤝 **[Code of Conduct](code-of-conduct.html)** - community standards across Friday Zoom, mailing list, and GitHub

@@ -974,11 +974,11 @@ function injectSearchLink() {
 
     li.appendChild(a);
 
-    // Insert before the CTA item (Join Friday Zoom) so it lives in the
-    // primary nav region, not after the call-to-action. Fall back to
-    // appending if the CTA isn't on this page.
-    const cta = navUl.querySelector('.nav-cta-item');
-    if (cta) navUl.insertBefore(li, cta);
+    // Insert before the trailing support/CTA pair (Support, Join Friday Zoom)
+    // so it lives in the primary nav region, not after the call-to-action.
+    // Fall back to appending if neither is on this page.
+    const tail = navUl.querySelector('.nav-coffee-item, .nav-cta-item');
+    if (tail) navUl.insertBefore(li, tail);
     else navUl.appendChild(li);
 }
 
