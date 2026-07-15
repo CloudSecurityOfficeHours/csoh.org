@@ -261,14 +261,19 @@ CANON_NAV = """\
             </nav>"""
 
 # --- Canonical footer (root-relative) ----------------------------------------
-# The CSOH blurb and the legal row. No link columns.
+# The CSOH blurb, the Buy Me a Coffee ask beside it, and the legal row.
 #
-# It used to carry "Explore", "Developer Docs" and "Connect". All three now live
-# in the top nav, which is reachable from every page and does not require
-# scrolling to the bottom: Developer Docs was already duplicated in
+# It used to carry "Explore", "Developer Docs" and "Connect" as link columns.
+# All three now live in the top nav, which is reachable from every page and does
+# not require scrolling to the bottom: Developer Docs was already duplicated in
 # Learn > Build It, 5 of Explore's 7 links were already top-level items, and
 # Connect moved into Community as its own column. Nothing is orphaned - see the
 # inbound-link check in the commit that moved each one.
+#
+# That left the blurb alone on a wide row, so the coffee ask takes the other
+# half. Unlike the nav's deliberately quiet outline link, this one is a filled
+# button: someone who has scrolled to the bottom has read the whole page, and
+# there is no Zoom CTA down here for it to compete with.
 #
 # Keep the 2-space indent; FOOTER_PATTERN consumes the existing indentation.
 CANON_FOOTER = """\
@@ -277,6 +282,11 @@ CANON_FOOTER = """\
       <div class="footer-section footer-about">
         <h3>CSOH</h3>
         <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
       </div>
     </div>
     <div class="footer-bottom">
