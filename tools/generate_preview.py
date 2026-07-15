@@ -103,6 +103,23 @@ def generate_filename_from_url(url):
 # icon - none of which look good at our 400x300 card size.
 MIN_OG_IMAGE_BYTES = 4_000
 
+
+def _is_svg(data, content_type):
+    """Return True if an og:image response is SVG rather than a raster image.
+
+    Pillow can't open SVG, so accepting one writes vector markup to a .jpg
+    path: optimize_image() then fails, the raw bytes stay, and the card
+    renders broken (served as image/jpeg, decoded as XML). The size guard
+    above doesn't catch it - therecord.media's og:image is a 5KB Illustrator
+    logo, comfortably over the minimum. Sniff the bytes as well as the
+    Content-Type, since some CDNs serve SVG as application/octet-stream.
+    """
+    if 'svg' in content_type:
+        return True
+    head = data[:512].lstrip()
+    return head.startswith(b'<?xml') or head.startswith(b'<svg')
+
+
 # A modern desktop UA. Some sites (e.g. *.microsoft.com) return a stripped
 # response or block entirely when they see urllib's default UA.
 _BROWSER_UA = (
@@ -193,6 +210,9 @@ def capture_from_og_image(url, output_path):
                 continue
             if len(data) < MIN_OG_IMAGE_BYTES:
                 print(f"    ↳ candidate {abs_url} too small ({len(data)} bytes)")
+                continue
+            if _is_svg(data, ctype):
+                print(f"    ↳ candidate {abs_url} is SVG - Pillow can't rasterize it")
                 continue
 
             # Pillow handles the format conversion - we write raw bytes
