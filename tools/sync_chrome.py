@@ -222,7 +222,7 @@ CANON_NAV = """\
                     </li>
                     <li class="has-dropdown has-mega">
                       <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
-                      <div class="dropdown-menu mega-menu mega-2col">
+                      <div class="dropdown-menu mega-menu mega-3col">
                         <div class="mega-col">
                           <span class="mega-heading">Live</span>
                           <ul>
@@ -242,6 +242,17 @@ CANON_NAV = """\
                             <li><a href="chat-resources.html">Chat Resources</a></li>
                           </ul>
                         </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="rss.html">RSS Feed</a></li>
+                            <li><a href="contribute.html">Contribute</a></li>
+                            <li><a href="contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
                       </div>
                     </li>
                     <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
@@ -250,15 +261,14 @@ CANON_NAV = """\
             </nav>"""
 
 # --- Canonical footer (root-relative) ----------------------------------------
-# Two link sections only: the CSOH blurb and Connect, plus the legal row.
+# The CSOH blurb and the legal row. No link columns.
 #
-# It used to carry "Explore" and "Developer Docs" as well. Both were redundant
-# with the top nav - all 4 Developer Docs pages live in Learn > Build It, and 5
-# of Explore's 7 links were already top-level items - and the 4th section also
-# wrapped onto its own row, because .footer-content only defines 3 columns.
-# Dropping them fixes the wrap at the source and orphans nothing: Search is
-# reachable via the nav link main.js injects, and about.html is in the legal
-# row below. The only casualty was the index.html#about anchor shortcut.
+# It used to carry "Explore", "Developer Docs" and "Connect". All three now live
+# in the top nav, which is reachable from every page and does not require
+# scrolling to the bottom: Developer Docs was already duplicated in
+# Learn > Build It, 5 of Explore's 7 links were already top-level items, and
+# Connect moved into Community as its own column. Nothing is orphaned - see the
+# inbound-link check in the commit that moved each one.
 #
 # Keep the 2-space indent; FOOTER_PATTERN consumes the existing indentation.
 CANON_FOOTER = """\
@@ -267,17 +277,6 @@ CANON_FOOTER = """\
       <div class="footer-section footer-about">
         <h3>CSOH</h3>
         <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
-      </div>
-      <div class="footer-section">
-        <h3>Connect</h3>
-        <ul>
-          <li><a href="mailto:admin@csoh.org">Contact</a></li>
-          <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
-          <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-          <li><a href="rss.html">RSS Feed</a></li>
-          <li><a href="contribute.html">Contribute</a></li>
-          <li><a href="contribute-resources.html">Add a Resource</a></li>
-        </ul>
       </div>
     </div>
     <div class="footer-bottom">
