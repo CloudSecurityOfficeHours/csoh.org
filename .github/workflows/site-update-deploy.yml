@@ -463,12 +463,23 @@ jobs:
           fi
           rm -f new-previews.txt
 
+      # Give every new preview JPG a WebP sibling BEFORE the HTML sync below.
+      # Cards are served as <picture><source type="image/webp">, and a
+      # WebP-capable browser does not fall back to the <img> when the srcset
+      # 404s - so a JPG without a WebP sibling means --fix-html has to unwrap
+      # the <picture> and we lose WebP delivery for that card. Idempotent:
+      # skips previews whose .webp is already up to date.
+      - name: Generate WebP siblings for previews
+        run: |
+          python3 tools/generate_webp.py img/previews
+
       # Always sync HTML <img src> paths to preview-mapping.json, even
       # when no new previews were generated this run - past contributors
       # (humans or the weekly Update Resources model) often type
       # made-up filenames into the HTML that drift from what the
       # screenshot generator actually writes to disk. This step is the
-      # safety net that keeps them aligned.
+      # safety net that keeps them aligned. It also re-points each card's
+      # <source srcset> at the mapped path's WebP, so the two never drift.
       - name: Sync HTML preview paths to mapping
         run: |
           python3 tools/generate_preview.py --fix-html
@@ -483,6 +494,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # `|| true` lets the step continue if there are no JPGs to add.
           git add img/previews/*.jpg || true
+          # The WebP siblings too - without these the <source srcset> the
+          # sync step just wrote would point at files that aren't published.
+          git add img/previews/*.webp || true
           git add preview-mapping.json || true
           # Also pick up any HTML rewrites from the --fix-html step.
           git add resources.html ctfs.html threat-research.html conferences.html cloud-security-reading-list.html || true

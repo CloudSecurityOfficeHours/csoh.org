@@ -608,6 +608,19 @@ def fix_html_image_paths():
     ]
 
     img_src_re = re.compile(r'(<img\b[^>]*\bsrc=")([^"]+)(")')
+    # The <img> is usually wrapped in <picture> with a WebP <source> (see
+    # tools/wrap_img_webp.py). The <source srcset> must track the <img src>:
+    # a WebP-capable browser fetches the srcset and does NOT fall back to the
+    # <img> if it 404s, so a stale srcset is a *broken* card, not a slow one.
+    source_srcset_re = re.compile(r'(<source\b[^>]*\bsrcset=")([^"]+)(")')
+    picture_re = re.compile(
+        r'<picture\b[^>]*>\s*(?:<source\b[^>]*>\s*)*(?P<img><img\b[^>]*>)\s*</picture>',
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    def unwrap_picture(html: str) -> str:
+        """Reduce <picture><source ...><img ...></picture> to the bare <img>."""
+        return picture_re.sub(lambda m: m.group('img'), html)
 
     total_rewrites = 0
     for page in pages:
@@ -643,7 +656,33 @@ def fix_html_image_paths():
                 rewrites_this_page += 1
                 return f'{m.group(1)}{correct_path}{m.group(3)}'
 
-            return img_src_re.sub(swap_src, full)
+            webp_path = re.sub(r'\.(jpe?g|png)$', '.webp', correct_path, flags=re.I)
+            webp_exists = (
+                webp_path != correct_path and (repo_root / webp_path).is_file()
+            )
+
+            def swap_srcset(m):
+                nonlocal rewrites_this_page
+                old = m.group(2)
+                if 'img/previews/' not in old:
+                    return m.group(0)
+                if old.lstrip('/') == webp_path:
+                    return m.group(0)
+                rewrites_this_page += 1
+                return f'{m.group(1)}{webp_path}{m.group(3)}'
+
+            full = img_src_re.sub(swap_src, full)
+            if webp_exists:
+                full = source_srcset_re.sub(swap_srcset, full)
+            else:
+                # No WebP for the mapped path, so there's nothing valid for a
+                # <source> to point at. Unwrap to a bare <img>; a later
+                # generate_webp.py + wrap_img_webp.py run re-wraps it.
+                unwrapped = unwrap_picture(full)
+                if unwrapped != full:
+                    rewrites_this_page += 1
+                full = unwrapped
+            return full
 
         updated = original
         for pat in card_patterns:
