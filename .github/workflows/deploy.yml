@@ -83,7 +83,8 @@ permissions:
 
 # -----------------------------------------------------------------------------
 # §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
-# One global lock named "deploy"; a newer deploy cancels an older in-flight one.
+# One global lock named "deploy". A newer deploy WAITS for an older one rather
+# than killing it, so a publish is never interrupted half-done.
 # -----------------------------------------------------------------------------
 # `concurrency:` stops overlapping runs from racing each other. Runs that share
 # the same `group` name are serialized.
@@ -93,10 +94,32 @@ concurrency:
   # check workflows use. There is only one production site, so we never want two
   # deploys publishing at once regardless of which ref triggered them.
   group: deploy
-  # If a new deploy starts while an older one is still going, cancel the older
-  # one. The newest commit is what we want live, so finishing a stale deploy
-  # would be wasteful (and could publish older bytes after newer ones).
-  cancel-in-progress: true
+  # This was `true`, which cancels the in-flight run. That can kill a publish
+  # part-way: on 2026-07-15 a push cancelled a run after AWS and Azure had
+  # published but before GCP, which - had that commit touched a published file -
+  # would have left two origins on new content and one on old, with Cloudflare
+  # load-balancing between them. The sharper version: the publish jobs upload
+  # assets first and HTML second, so a cancel between those two passes leaves an
+  # origin serving the new style.css next to HTML naming the old hash, i.e. the
+  # unstyled site again.
+  #
+  # `false` makes a newer run PEND until the current one finishes, so no job is
+  # ever cancelled mid-flight. This does not let stale bytes win: the runs are
+  # serialized, so the older one publishes first and the newer one publishes
+  # after it - the final state is always the newest commit. Publishing older
+  # bytes after newer ones needs two runs publishing AT ONCE, which the lock is
+  # what prevents; cancelling was never what protected us there.
+  #
+  # It also doesn't pile up. GitHub keeps at most one pending run per group and
+  # cancels any previously pending one, so a burst of pushes costs one extra
+  # deploy, not N - and a pending run has touched nothing, so cancelling it is
+  # free. That gives us the "supersede the stale deploy" behaviour we wanted
+  # from `true`, without the half-published origin.
+  #
+  # (A job-level cancel on `build` alone would be dead code: this lock means a
+  # second run never starts while the first is running, so two builds cannot
+  # overlap in the first place.)
+  cancel-in-progress: false
 
 # -----------------------------------------------------------------------------
 # §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
