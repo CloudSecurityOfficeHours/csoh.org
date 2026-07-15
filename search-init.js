@@ -36,6 +36,7 @@
         '  <div class="csoh-search-filters" role="group" aria-label="Filter results by type">',
         '    <button type="button" data-filter="all" class="csoh-filter-chip is-active" aria-pressed="true">All</button>',
         '    <button type="button" data-filter="guide" class="csoh-filter-chip" aria-pressed="false">Guides</button>',
+        '    <button type="button" data-filter="resource" class="csoh-filter-chip" aria-pressed="false">Resources</button>',
         '    <button type="button" data-filter="glossary" class="csoh-filter-chip" aria-pressed="false">Glossary</button>',
         '    <button type="button" data-filter="faq" class="csoh-filter-chip" aria-pressed="false">FAQ</button>',
         '    <button type="button" data-filter="feed" class="csoh-filter-chip" aria-pressed="false">News / Sessions</button>',
@@ -270,8 +271,14 @@
             for (var i = 0; i < shown; i++) {
                 var o = group.others[i];
                 var od = docsById[o.id] || o;
+                // Resource cards share their category anchor, so listing
+                // od.section would repeat the same category name. The card
+                // name is what distinguishes them.
+                var label = od.type === 'resource'
+                    ? (od.heading || od.section)
+                    : (od.section || od.heading);
                 others += '<li><a href="' + escapeHtml(od.url) + '">' +
-                    escapeHtml(od.section || od.heading) + '</a></li>';
+                    escapeHtml(label) + '</a></li>';
             }
             if (group.others.length > shown) {
                 others += '<li class="csoh-result-others-more">+' + (group.others.length - shown) + ' more</li>';
@@ -295,6 +302,7 @@
         switch (t) {
             case 'glossary': return 'Glossary';
             case 'faq': return 'FAQ';
+            case 'resource': return 'Resource';
             case 'feed': return 'News';
             case 'site': return 'Site';
             case 'breach': return 'Breach';

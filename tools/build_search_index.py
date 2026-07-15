@@ -53,8 +53,22 @@ EXCLUDE_FILES: set[str] = {
     "rss.html",             # wrapper around feed.xml; not content
 }
 
+# Card-list pages: every entry is an <a class="card-link"> wrapping a
+# <div class="resource-card">. These pages get a page-level doc *plus* one
+# doc per card, because a single truncated page doc indexed ~3% of
+# resources.html and left 400+ resources unsearchable by name.
+CARD_PAGES: set[str] = {
+    "resources.html",
+    "ctfs.html",
+    "conferences.html",
+    "threat-research.html",
+    "chat-resources.html",
+}
+
 # Pages where we want a single page-level entry rather than per-section docs
 # (their content is dynamic, paginated, or already has its own search UI).
+# Card pages are listed here too: the page-level doc is still emitted, and
+# emit_card_docs() adds the per-card entries on top of it.
 PAGE_LEVEL_ONLY: set[str] = {
     "news.html",
     "meetings.html",
@@ -144,6 +158,31 @@ SECTION_RE = re.compile(
 H2_RE = re.compile(r"<h2\b[^>]*>(.*?)</h2>", re.DOTALL | re.IGNORECASE)
 H3_RE = re.compile(r"<h3\b[^>]*>(.*?)</h3>", re.DOTALL | re.IGNORECASE)
 
+# Card shape on the CARD_PAGES:
+#   <a href="..." class="card-link">
+#     <div class="resource-card" data-tooltip="longer blurb">
+#       <h3>Name</h3><p>description</p>
+#       <div class="resource-tags"><span class="tag">Tag</span>...</div>
+# The tooltip lives in an attribute, so strip_html() would drop it; it is
+# pulled out separately and appended to the card's indexed text.
+CARD_RE = re.compile(
+    r'<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*\bclass=["\'][^"\']*\bcard-link\b[^"\']*["\']'
+    r'[^>]*>(.*?)</a>',
+    re.DOTALL | re.IGNORECASE,
+)
+TOOLTIP_RE = re.compile(r'\bdata-tooltip=["\']([^"\']*)["\']', re.IGNORECASE)
+
+# Anchor candidates that a card can be attributed to, so a result can deep
+# link to the card's category instead of the top of a long page. The card
+# pages each group differently:
+#   resources.html            <div class="category-section" id="ai-security">
+#   ctfs / threat-research    <section class="section" id="aws-ctfs">
+#   conferences.html          <h2 id="cloud"> (cards are siblings, not nested)
+#   chat-resources.html       no grouping anchors; cards link to the page
+ANCHOR_TAG_RE = re.compile(r"<(section|div|h2)\b([^>]*)>", re.IGNORECASE)
+ID_ATTR_RE = re.compile(r'\bid=["\']([^"\']+)["\']', re.IGNORECASE)
+CLASS_ATTR_RE = re.compile(r'\bclass=["\']([^"\']*)["\']', re.IGNORECASE)
+
 # Glossary term shape: <dt id="term-..."><term text></dt> ... <dd>def</dd>.
 # The glossary page is dense enough that we extract each <dt>/<dd> pair as
 # its own indexable doc - search for "NHI" should land directly on the
@@ -213,6 +252,81 @@ def emit_page_level(rel_url: str, raw: str, ptype: str) -> dict | None:
     }
 
 
+def card_anchors(main: str) -> list[tuple[int, str, str]]:
+    """Offsets of the anchors a card can be attributed to, as
+    (offset, id, heading), sorted by offset so a card can scan for the
+    nearest preceding one."""
+    out: list[tuple[int, str, str]] = []
+    for m in ANCHOR_TAG_RE.finditer(main):
+        tag = m.group(1).lower()
+        attrs = m.group(2)
+        id_m = ID_ATTR_RE.search(attrs)
+        if not id_m:
+            continue
+        classes = CLASS_ATTR_RE.search(attrs)
+        classes = classes.group(1).split() if classes else []
+        if tag == "h2":
+            # The h2's own text is the heading.
+            h2 = H2_RE.match(main, m.start())
+            heading = strip_html(h2.group(1)) if h2 else id_m.group(1)
+        elif (tag == "section" and "section" in classes) or (
+            tag == "div" and "category-section" in classes
+        ):
+            # Heading is the first h2 inside the container.
+            h2 = H2_RE.search(main, m.end())
+            heading = strip_html(h2.group(1)) if h2 else id_m.group(1)
+        else:
+            # Some other div that merely happens to carry an id (filter
+            # widgets on chat-resources.html) - not a real card grouping.
+            continue
+        out.append((m.start(), id_m.group(1), heading))
+    out.sort(key=lambda t: t[0])
+    return out
+
+
+def emit_card_docs(filename: str, main: str, page_title_: str) -> Iterable[dict]:
+    """One doc per resource card. Without these, a card page's only entry
+    is a page-level doc truncated to 2400 chars, so a search for a
+    resource by name (e.g. "Tumeryk") finds nothing at all."""
+    anchors = card_anchors(main)
+    for n, m in enumerate(CARD_RE.finditer(main)):
+        href = html.unescape(m.group(1).strip())
+        card_html = m.group(2)
+        h3 = H3_RE.search(card_html)
+        if not h3:
+            # Not a titled card (e.g. a bare "see also" link styled as one).
+            continue
+        name = strip_html(h3.group(1))
+        if not name:
+            continue
+        tooltip = TOOLTIP_RE.search(card_html)
+        tooltip = html.unescape(tooltip.group(1).strip()) if tooltip else ""
+        body_text = strip_html(card_html)
+        # The card's own text, its tooltip blurb, and the destination host
+        # all describe the resource; index them together so "tumeryk.com"
+        # and the tooltip's wording both hit.
+        text = " ".join(x for x in (body_text, tooltip, href) if x)[:2400]
+
+        anchor = ""
+        section = ""
+        for offset, aid, heading in anchors:
+            if offset > m.start():
+                break
+            anchor, section = aid, heading
+
+        url = f"/{filename}#{anchor}" if anchor else f"/{filename}"
+        yield {
+            "id": f"{filename}#card-{n}",
+            "url": url,
+            "page": page_title_,
+            "section": section,
+            "heading": name,
+            "title": f"{name} - {page_title_}",
+            "text": text,
+            "type": "resource",
+        }
+
+
 def emit_docs(filename: str, raw: str) -> Iterable[dict]:
     title = short_page_title(page_title(raw)) or filename
     description = page_description(raw)
@@ -231,6 +345,8 @@ def emit_docs(filename: str, raw: str) -> Iterable[dict]:
             "text": text[:2400],
             "type": ptype,
         }
+        if filename in CARD_PAGES:
+            yield from emit_card_docs(filename, main, title)
         return
 
     if filename == "glossary.html":
