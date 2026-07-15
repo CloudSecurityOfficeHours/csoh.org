@@ -159,6 +159,36 @@ jobs:
           # Log the size in KB for the run output.
           echo "search-index.json built: $((size / 1024)) KB"
 
+      # Re-stamp SRI hashes + ?v= cache-busts before staging, so the HTML we
+      # publish always matches the assets we publish alongside it.
+      #
+      # This used to be left to whoever edited style.css/main.js remembering to
+      # run update_sri.py, with site-update-deploy.yml as the safety net. That
+      # net cannot catch anything: its fix is committed `[skip ci]`, so it lands
+      # in the repo but never reaches production. When an asset edit shipped
+      # without re-stamped hashes, this job published the new asset next to HTML
+      # still naming the old hash - browsers refuse the file on the SRI mismatch
+      # and the site renders unstyled until some unrelated push happens to
+      # trigger another deploy. Of the 46 times housekeeping has auto-fixed SRI,
+      # 30 followed a push that published mismatched HTML.
+      #
+      # Doing it here makes the artifact self-consistent by construction, so the
+      # failure mode is gone rather than merely detected. dist/ does not exist
+      # yet at this point, so the rglob only walks the source tree.
+      # site-update-deploy.yml still stamps the repo, which keeps the committed
+      # HTML tidy; correctness no longer depends on it.
+      - name: Re-stamp SRI hashes (belt and braces)
+        run: |
+          set -euo pipefail
+          out=$(python3 update_sri.py)
+          echo "$out"
+          # "Modified 0 of N files" means the commit already had correct hashes.
+          # Anything else means the push would have shipped a broken site, so
+          # say so loudly in the log - the deploy is still correct either way.
+          if ! echo "$out" | grep -q "Modified 0 of"; then
+            echo "::warning::HTML was committed with stale SRI hashes; this build corrected them. Run update_sri.py before pushing asset changes."
+          fi
+
       # Run the staging script, which copies only the public files into a fresh
       # dist/ directory (see tools/stage_site.sh). dist/ is exactly what gets
       # published to the object-storage origins.
