@@ -573,7 +573,7 @@ csoh.org/
 ├── community.html              # Community & Signal chat
 ├── mentorship.html             # Community mentorship program
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (94+ entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (102 entries, topic-by-topic)
 ├── ctfs.html                   # Dedicated cloud CTF directory (39+ challenges)
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── rss.html                    # Landing page explaining the RSS feed to subscribers
