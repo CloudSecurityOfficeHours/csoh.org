@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Update SRI (Subresource Integrity) hashes in HTML files.
 
-Calculates SHA-384 SRI hashes for the site's shared JS/CSS assets - style.css,
-main.js, chat-resources.js, breach-timeline.css, breach-timeline.js, meetings.js,
-glossary.js, 404.js, and the vendored vendor/goatcounter-count.js - and stamps the
-integrity attribute on every HTML file (rglob, all subdirectories). It also
-appends a ?v=<hash> cache-busting query to each asset URL and strips any stale
-crossorigin attribute.
+Calculates SHA-384 SRI hashes for the shared JS/CSS assets listed in ASSETS
+below and stamps the integrity attribute on every HTML file (rglob, all
+subdirectories). It also appends a ?v=<hash> cache-busting query to each asset
+URL and strips any stale crossorigin attribute.
+
+The ?v= key is not cosmetic: nginx.conf serves every *.css / *.js with
+`expires 1y; Cache-Control: public, immutable`, so an asset referenced without
+one is pinned in browser caches for a year and edits to it never reach
+returning visitors. Any shared asset a page links to belongs in ASSETS.
 """
 
 import hashlib
@@ -14,7 +17,30 @@ import base64
 import re
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
+
+
+# Shared assets to stamp, as (repo-relative path, tag name, URL attribute).
+# The served URL is the path with a leading slash; the SRI/cache-bust keys
+# are the bare filename.
+ASSETS: List[Tuple[str, str, str]] = [
+    ('style.css', 'link', 'href'),
+    ('main.js', 'script', 'src'),
+    ('chat-resources.js', 'script', 'src'),
+    ('breach-timeline.css', 'link', 'href'),
+    ('breach-timeline.js', 'script', 'src'),
+    ('meetings.js', 'script', 'src'),
+    ('glossary.js', 'script', 'src'),
+    ('404.js', 'script', 'src'),
+    # /search.html's UI + lazy-loaded MiniSearch initializer.
+    ('search.css', 'link', 'href'),
+    ('search-init.js', 'script', 'src'),
+    # GoatCounter's analytics loader, vendored from https://gc.zgo.at/count.js
+    # and served first-party (/vendor/) so the strict CSP (script-src 'self')
+    # needs no remote script origin. Re-vendor that file and rerun this
+    # script to pick up upstream updates.
+    ('vendor/goatcounter-count.js', 'script', 'src'),
+]
 
 
 def upsert_attr(tag: str, attr: str, value: str) -> str:
@@ -84,176 +110,33 @@ def update_html_file(html_path: Path, hashes: Dict[str, str],
 
     original_content = content
 
-    if 'style.css' in hashes:
-        link_pattern = re.compile(
-            r'<link\b[^>]*\bhref=(["\'])(?:\.?/)?style\.css(?:\?[^"\']*)?(\1)[^>]*>',
+    for rel_path, tag, attr in ASSETS:
+        name = rel_path.rsplit('/', 1)[-1]
+        if name not in hashes:
+            continue
+
+        # Match the asset however it is referenced today: bare, ./-relative,
+        # or absolute, with or without an existing ?v= key.
+        ref = r'(?:\.?/)?' + re.escape(rel_path)
+        tag_pattern = re.compile(
+            rf'<{tag}\b[^>]*\b{attr}=(["\']){ref}(?:\?[^"\']*)?(\1)[^>]*>',
             re.IGNORECASE,
         )
+        url = '/' + rel_path
 
-        def replace_style_link(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(href=["\'])(?:\.?/)?style\.css(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/style.css?v={cache_busts["style.css"]}\2',
-                tag,
+        def replace(match: re.Match, name=name, attr=attr, ref=ref, url=url) -> str:
+            tag_str = match.group(0)
+            tag_str = re.sub(
+                rf'({attr}=["\']){ref}(?:\?[^"\']*)?(["\'])',
+                rf'\g<1>{url}?v={cache_busts[name]}\2',
+                tag_str,
+                flags=re.IGNORECASE,
             )
-            tag = upsert_attr(tag, 'integrity', hashes['style.css'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
+            tag_str = upsert_attr(tag_str, 'integrity', hashes[name])
+            tag_str = remove_attr(tag_str, 'crossorigin')
+            return tag_str
 
-        content = link_pattern.sub(replace_style_link, content)
-
-    if 'main.js' in hashes:
-        script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?main\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_main_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])(?:\.?/)?main\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/main.js?v={cache_busts["main.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['main.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = script_pattern.sub(replace_main_script, content)
-
-    if 'chat-resources.js' in hashes:
-        chat_script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?chat-resources\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_chat_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])(?:\.?/)?chat-resources\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/chat-resources.js?v={cache_busts["chat-resources.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['chat-resources.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = chat_script_pattern.sub(replace_chat_script, content)
-
-    if 'breach-timeline.css' in hashes:
-        bt_link_pattern = re.compile(
-            r'<link\b[^>]*\bhref=(["\'])(?:\.?/)?breach-timeline\.css(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_bt_style_link(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(href=["\'])(?:\.?/)?breach-timeline\.css(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/breach-timeline.css?v={cache_busts["breach-timeline.css"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['breach-timeline.css'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = bt_link_pattern.sub(replace_bt_style_link, content)
-
-    if 'breach-timeline.js' in hashes:
-        bt_script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?breach-timeline\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_bt_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])(?:\.?/)?breach-timeline\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/breach-timeline.js?v={cache_busts["breach-timeline.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['breach-timeline.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = bt_script_pattern.sub(replace_bt_script, content)
-
-    if 'meetings.js' in hashes:
-        mtg_script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?meetings\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_mtg_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])(?:\.?/)?meetings\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/meetings.js?v={cache_busts["meetings.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['meetings.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = mtg_script_pattern.sub(replace_mtg_script, content)
-
-    if 'glossary.js' in hashes:
-        glossary_script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?glossary\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_glossary_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])(?:\.?/)?glossary\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/glossary.js?v={cache_busts["glossary.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['glossary.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = glossary_script_pattern.sub(replace_glossary_script, content)
-
-    if '404.js' in hashes:
-        notfound_script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])(?:\.?/)?404\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_notfound_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])(?:\.?/)?404\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/404.js?v={cache_busts["404.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['404.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = notfound_script_pattern.sub(replace_notfound_script, content)
-
-    if 'goatcounter-count.js' in hashes:
-        gc_script_pattern = re.compile(
-            r'<script\b[^>]*\bsrc=(["\'])/vendor/goatcounter-count\.js(?:\?[^"\']*)?(\1)[^>]*>',
-            re.IGNORECASE,
-        )
-
-        def replace_gc_script(match: re.Match) -> str:
-            tag = match.group(0)
-            tag = re.sub(
-                r'(src=["\'])/vendor/goatcounter-count\.js(?:\?[^"\']*)?(["\'])',
-                rf'\g<1>/vendor/goatcounter-count.js?v={cache_busts["goatcounter-count.js"]}\2',
-                tag,
-            )
-            tag = upsert_attr(tag, 'integrity', hashes['goatcounter-count.js'])
-            tag = remove_attr(tag, 'crossorigin')
-            return tag
-
-        content = gc_script_pattern.sub(replace_gc_script, content)
+        content = tag_pattern.sub(replace, content)
 
     if content != original_content:
         with open(html_path, 'w', encoding='utf-8') as f:
@@ -267,19 +150,8 @@ def main():
     repo_root = Path(__file__).parent
 
     files_to_hash = {
-        'style.css': repo_root / 'style.css',
-        'main.js': repo_root / 'main.js',
-        'chat-resources.js': repo_root / 'chat-resources.js',
-        'breach-timeline.css': repo_root / 'breach-timeline.css',
-        'breach-timeline.js': repo_root / 'breach-timeline.js',
-        'meetings.js': repo_root / 'meetings.js',
-        'glossary.js': repo_root / 'glossary.js',
-        '404.js': repo_root / '404.js',
-        # GoatCounter's analytics loader, vendored from https://gc.zgo.at/count.js
-        # and served first-party (/vendor/) so the strict CSP (script-src 'self')
-        # needs no remote script origin. Re-vendor that file and rerun this
-        # script to pick up upstream updates.
-        'goatcounter-count.js': repo_root / 'vendor' / 'goatcounter-count.js',
+        rel_path.rsplit('/', 1)[-1]: repo_root / rel_path
+        for rel_path, _tag, _attr in ASSETS
     }
 
     print("Calculating SRI hashes...")

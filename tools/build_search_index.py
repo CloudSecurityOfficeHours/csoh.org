@@ -18,6 +18,10 @@ Design notes:
     instead of just iam.html.
   - Glossary terms (<dt id="term-...">) each become their own doc so
     direct definition lookups work.
+  - Resource cards on the CARD_PAGES each become their own doc, deep
+    linked to their category anchor, so searching a resource by name
+    ("Tumeryk") finds it. A page-level doc alone cannot: it is capped
+    at 2400 chars, which is ~3% of resources.html.
   - News, meetings, presentations, etc. that have their own search
     UX get a single page-level entry (their detail content is indexed
     elsewhere or isn't useful at the section grain).
@@ -57,12 +61,17 @@ EXCLUDE_FILES: set[str] = {
 # <div class="resource-card">. These pages get a page-level doc *plus* one
 # doc per card, because a single truncated page doc indexed ~3% of
 # resources.html and left 400+ resources unsearchable by name.
+#
+# chat-resources.html is deliberately excluded despite having the same
+# markup: its 580 cards are links pasted in chat, auto-titled from their
+# URL slug ("theregister.com - 2017 - 09 - 19 - Viacom Exposure In Aws3
+# Bucket Blunder"). They are the bulk of the index's weight and the least
+# useful thing to match on.
 CARD_PAGES: set[str] = {
     "resources.html",
     "ctfs.html",
     "conferences.html",
     "threat-research.html",
-    "chat-resources.html",
 }
 
 # Pages where we want a single page-level entry rather than per-section docs
