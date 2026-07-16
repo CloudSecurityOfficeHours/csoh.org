@@ -401,8 +401,26 @@ def create_placeholder_image(output_path, message="Preview Not Available"):
     except Exception as e:
         return False, f"Placeholder error: {str(e)}"
 
+def _pillow_available():
+    """Return True if Pillow can be imported.
+
+    Lets callers tell "this capture is garbage" apart from "this machine
+    can't process images at all" - optimize_image() reports both as a
+    plain False, but they call for opposite responses.
+    """
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def optimize_image(image_path):
-    """Optimize and resize image to target dimensions."""
+    """Optimize and resize image to target dimensions.
+
+    Doubles as the decode check for a fresh capture: a file Pillow can't
+    open is not a usable preview, whatever the capture method claimed.
+    """
     try:
         from PIL import Image
 
@@ -533,33 +551,68 @@ def generate_preview(url, output_filename=None, force=False):
         # capture_with_screencapture,  # Skip manual method
     ]
 
+    # Capture into a temp sibling and promote it only once Pillow proves it
+    # decodes. Two reasons this isn't written straight to output_path:
+    # a method that reports success while writing bytes Pillow can't read
+    # would otherwise leave that file on disk as the preview (an SVG og:image
+    # did exactly that), and a failed regeneration would clobber a good
+    # existing preview. The name keeps a .jpg extension because Playwright
+    # picks its output format from the path's suffix.
+    tmp_path = output_path.with_name(output_path.stem + '.capture-tmp.jpg')
+    marker = output_path.parent / '.placeholders' / (output_path.name + '.placeholder')
+
     success = False
-    for method in methods:
-        result, message = method(url, output_path)
-        if result:
+    try:
+        for method in methods:
+            result, message = method(url, tmp_path)
+            if not result:
+                print(f"  ⚠️  {message}")
+                tmp_path.unlink(missing_ok=True)
+                continue
             print(f"  ✅ {message}")
-            success = True
-            break
+
+            # Decode check - see optimize_image's docstring. A capture that
+            # can't be opened doesn't count as one, so fall through to the
+            # next method rather than shipping an unreadable file.
+            optimize_result, optimize_msg = optimize_image(tmp_path)
+            if optimize_result:
+                success = True
+                break
+            print(f"  ⚠️  {optimize_msg}")
+            tmp_path.unlink(missing_ok=True)
+            if not _pillow_available():
+                # Environment problem, not a bad capture. Every remaining
+                # path needs Pillow too, so stop instead of burning a
+                # Playwright launch and a thum.io request to fail the same way.
+                return False, None, "Pillow not installed - cannot generate previews"
+            print("  🗑️  Discarded undecodable capture, trying next method")
+
+        if success:
+            tmp_path.replace(output_path)
+            # Real capture - clear any stale placeholder marker from a prior run.
+            if marker.exists():
+                marker.unlink()
         else:
-            print(f"  ⚠️  {message}")
-
-    if success:
-        # Real capture - clear any stale placeholder marker from a prior run.
-        marker = output_path.parent / '.placeholders' / (output_path.name + '.placeholder')
-        if marker.exists():
-            marker.unlink()
-    else:
-        # All methods failed - fall back to a placeholder image.
-        print("  📝 Creating placeholder image...")
-        result, message = create_placeholder_image(output_path)
-        if not result:
-            return False, None, "Failed to create preview or placeholder"
-        print(f"  ✅ {message}")
-
-    # Optimize image
-    optimize_result, optimize_msg = optimize_image(output_path)
-    if not optimize_result:
-        print(f"  ⚠️  {optimize_msg}")
+            if output_path.exists() and not marker.exists():
+                # Every method failed, but a real preview from an earlier run
+                # is already on disk. Keep it: stamping "Preview Not Available"
+                # over a working screenshot because of one transient failure
+                # is a downgrade, and --batch-auto never reaches here anyway
+                # (it only processes URLs with no good preview).
+                print("  ↩️  All capture methods failed - keeping existing preview")
+            else:
+                print("  📝 Creating placeholder image...")
+                result, message = create_placeholder_image(output_path)
+                if not result:
+                    return False, None, "Failed to create preview or placeholder"
+                print(f"  ✅ {message}")
+                optimize_result, optimize_msg = optimize_image(output_path)
+                if not optimize_result:
+                    print(f"  ⚠️  {optimize_msg}")
+    finally:
+        # Never leave a half-written capture behind for generate_webp.py
+        # or a later run to trip over.
+        tmp_path.unlink(missing_ok=True)
 
     # Update mapping
     update_preview_mapping(url, output_filename)
