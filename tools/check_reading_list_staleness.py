@@ -81,6 +81,10 @@ FEED_OVERRIDES = {
     # cloudsecuritypodcast.tv is a JS-rendered SPA with no feed link in its HTML;
     # this is its audio feed (anchor.fm, links back to the site, author TechRiot.io).
     "https://www.cloudsecuritypodcast.tv/": "https://anchor.fm/s/10fb9928/podcast/rss",
+    # YouTube intermittently serves a consent/redirect wall to non-browser
+    # clients, so the @handle page fetch sporadically yields no <link rel=alternate>
+    # ("no feed discovered"). Pin the channel-id Atom feed directly.
+    "https://www.youtube.com/@fwdcloudsec": "https://www.youtube.com/feeds/videos.xml?channel_id=UCjfghTrOeq5Qu0WdKjxBpBA",
 }
 
 REQUEST_TIMEOUT = 20
