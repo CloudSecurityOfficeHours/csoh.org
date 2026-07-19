@@ -47,9 +47,10 @@ locals {
     # Binary Authorization: a deploy-time gate that can require images to meet
     # policy (e.g. be signed / scanned) before Cloud Run will run them.
     "binaryauthorization.googleapis.com",
-    # Container Scanning: automatically scans pushed images in Artifact Registry
-    # for known vulnerabilities.
-    "containerscanning.googleapis.com",
+    # NOTE: Container Scanning (containerscanning.googleapis.com) is deliberately
+    # NOT enabled. Image vulnerability scanning is done by Trivy in CI
+    # (deploy.yml, publish-gcp job), which gates the push. We do not want GCP's
+    # automatic Artifact Registry scanning turned on - leave it disabled.
     # Secret Manager: secure storage for secrets. Enabled for availability even
     # though the static site itself stores no secrets here.
     "secretmanager.googleapis.com",
