@@ -84,7 +84,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
 | 🎯 [Cloud Pentesting & Red Teaming](https://csoh.org/cloud-pentesting.html) | AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound, MITRE ATT&CK Cloud |
-| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 39+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
+| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 52+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
 
 ### Careers
 
@@ -427,7 +427,7 @@ Topic-by-topic recaps of every weekly session:
 
 ### 🚩 Cloud CTFs (`ctfs.html`)
 Dedicated directory for hands-on cloud CTF challenges:
-- **39+ challenges** across AWS, Azure, GCP, Kubernetes, and AI security
+- **52+ challenges** across AWS, Azure, GCP, Kubernetes, and AI security
 - Includes the full Wiz Cloud Security Championship calendar
 - Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](CONTRIBUTING_CTFS.md)
 
@@ -574,7 +574,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── presentations.html          # Archive of recorded presentations
 ├── meetings.html               # Weekly meeting recaps (102 entries, topic-by-topic)
-├── ctfs.html                   # Dedicated cloud CTF directory (39+ challenges)
+├── ctfs.html                   # Dedicated cloud CTF directory (52+ challenges)
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── rss.html                    # Landing page explaining the RSS feed to subscribers
 ├── glossary.html               # 300+ cloud security terms with live search & cross-links
