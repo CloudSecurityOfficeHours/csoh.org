@@ -18,7 +18,8 @@ the live page (no redirect hop). It:
 Usage:   python3 retire_merged_career_pages.py
 Then review `git diff` and commit. Safe to re-run (idempotent).
 """
-import re, pathlib
+import re
+import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent
 OLD = ["is-cloud-security-a-good-career",
