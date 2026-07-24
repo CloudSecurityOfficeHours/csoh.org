@@ -228,8 +228,16 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
-          token: ${{ secrets.CSOH_PAT }}                 # PR API calls (create/update + labels)
-          branch-token: ${{ steps.app-token.outputs.token }}  # App token for git push + downstream CI
+          # DO NOT switch this to CSOH_PAT. The identity in `token:` becomes the
+          # PR author, and CSOH_PAT is Shawn's own identity - GitHub then rejects
+          # the "Auto approve" step below with "Can not approve your own pull
+          # request", because that step authenticates as CSOH_PAT too. The App
+          # must author the PR so the PAT is a *different* identity that is
+          # allowed to approve it. Using the App token here also lets the PR
+          # trigger downstream CI, which the built-in GITHUB_TOKEN cannot do.
+          # This has now been broken and reverted twice: PR #947 (reverted in
+          # 069e3500) and PR #1286 (reverted in this commit).
+          token: ${{ steps.app-token.outputs.token }}
           commit-message: 'chore: update news feed content'
           title: 'chore: Update news articles'
           # Multi-line PR body. `|` keeps newlines literal.
