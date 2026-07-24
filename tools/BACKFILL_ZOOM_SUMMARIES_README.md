@@ -58,6 +58,45 @@ For each selected date, the script:
 4. Runs `add_meeting.py --tag …` for each inferred tag.
 5. Each new meeting lands in the list, the table of contents picks it up, and the filter-bar month/tag facets auto-populate on next page load.
 
+## What gets stripped before publishing
+
+Zoom's raw `summary_content` contains material that should never reach a public
+page. `build_markdown()` removes three classes of it:
+
+1. **The "Next steps" section and its per-attendee subsections.** Zoom emits
+   `## Next steps` followed by one `### <FirstName>` block per attendee, each
+   holding bullets that link to private `tasks.zoom.us` action-item URLs. These
+   name individuals against to-dos and are meaningless to a reader. The heading
+   strip alone cannot reach the subsections (its match stops at the first `###`),
+   so `_strip_action_item_sections()` removes any subsection whose body contains
+   a `tasks.zoom.us` link. That URL appears nowhere else in a summary, so it is a
+   reliable key.
+2. **Music and "AI gave up" subsections.** When the host screen-shares music or
+   the room is quiet, Zoom's summarizer produces sections describing song lyrics
+   or announcing that no substantive discussion occurred. `NOISE_TITLE_RE` and
+   `NOISE_BODY_RE` match these by heading and body phrasing.
+3. **The redundant `## Summary` divider.**
+
+If a new flavor of noise shows up, add a phrase to the relevant regex rather than
+editing the published HTML, so the fix applies to every future backfill.
+
+## Review checklist after a run
+
+The strippers handle structure. These need a human:
+
+- **Headline.** Without `--headline`, `add_meeting.py` uses the first topic
+  heading, which is often generic ("Cloud Security Office Hours Meeting"). The
+  page `<title>` budget truncates the headline at 52 characters at a word
+  boundary, so write a short, specific one and re-run to replace the page.
+- **Names.** Zoom's transcription mis-hears guest speakers and companies
+  (observed: "Tumeric" for Tumeryk, "Rohit Velia" for Rohit Valia). Verify any
+  guest speaker or vendor name against a public source before publishing.
+- **Sensitive claims.** Summaries state contested things as fact. A recap that
+  says a report "falsely accused" a company, or that an experiment "broke out and
+  hacked" a service, is repeating an allegation. Reframe as allegation, note that
+  claims are untested, and do not attribute critical opinions about a named
+  company to a named community member.
+
 ## Caveats
 
 - **AI transcription quirks.** Summaries are generated from Zoom's transcription, which occasionally mis-hears names (`Axi` → `XZ`, `Cisa` → `CISA`, `Psi Ops` → `Psy Ops`, etc.). Spot-check a few entries after a big backfill and apply targeted fixes with `sed` or an editor pass.

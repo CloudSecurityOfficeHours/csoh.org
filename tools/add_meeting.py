@@ -42,6 +42,7 @@ import argparse
 import datetime as dt
 import html as h
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -625,6 +626,26 @@ def update_search_index(meeting: dict, headline: str) -> None:
     SEARCH_INDEX.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 
 
+def regenerate_recaps_feed() -> None:
+    """Refresh recaps.xml so the RSS feed never lags the recap index.
+
+    Best-effort: a feed that failed to rebuild should not fail the publish, since
+    the recap page itself is already written by this point. The feed can always be
+    regenerated on its own with tools/generate_recaps_rss.py.
+    """
+    script = Path(__file__).parent / "generate_recaps_rss.py"
+    if not script.exists():
+        return
+    result = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        print(f"  {result.stdout.strip()}")
+    else:
+        print(f"  warning: recaps.xml not regenerated ({result.stderr.strip()})",
+              file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Publish a CSOH meeting recap.")
     parser.add_argument("note", type=Path, help="Path to the Apple Notes export (HTML or text)")
@@ -684,6 +705,7 @@ def main(argv: list[str] | None = None) -> int:
     update_sitemap(iso)
     update_search_index(meeting, headline)
     print("  updated meetings.html, sitemap.xml, meetings-search-index.json")
+    regenerate_recaps_feed()
     return 0
 
 

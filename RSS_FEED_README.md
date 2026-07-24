@@ -4,13 +4,27 @@
 
 RSS (Really Simple Syndication) is a way to get updates from websites delivered straight to you - no need to keep checking the site manually. Think of it like subscribing to a newsletter, but instead of email, the updates go to a feed reader app of your choice.
 
-## Our Feed URL
+## Our Feed URLs
+
+CSOH publishes two feeds. Subscribe to either or both.
+
+**Cloud security news:**
 
 ```
 https://csoh.org/feed.xml
 ```
 
-This feed contains the latest cloud security news curated by Cloud Security Office Hours, covering AWS, Azure, GCP, Kubernetes vulnerabilities, breaches, and more. It updates automatically whenever new articles are added to our [news page](https://csoh.org/news.html).
+The latest cloud security news curated by Cloud Security Office Hours, covering AWS, Azure, GCP, Kubernetes vulnerabilities, breaches, and more. It updates automatically whenever new articles are added to our [news page](https://csoh.org/news.html).
+
+**Weekly meeting recaps:**
+
+```
+https://csoh.org/recaps.xml
+```
+
+One item per Friday session: a topic-by-topic summary of what the community actually discussed, linking to the full recap on the site. Each item carries the session's topic tags (AI, Vulnerabilities, Supply Chain, and so on) as RSS categories, so you can filter in your reader. This is the lower-volume feed: roughly one item a week, versus several a day on the news feed.
+
+Everything below applies to both feeds; substitute whichever URL you want.
 
 ## Getting Started (3 Steps)
 

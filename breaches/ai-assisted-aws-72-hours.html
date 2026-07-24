@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Sygnia's 72-hour AWS compromise case study: one actor, no zero-day, four accounts driven in parallel. AI assistance is inferred from attacker artifacts, not proven.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Suspected AI-Assisted AWS Compromise 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, AI-assisted attack, agentic AI threat, AWS multi-account compromise, cloud extortion, Sygnia case study">
+    <title>Suspected AI-Assisted AWS Compromise 2026 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/ai-assisted-aws-72-hours.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/ai-assisted-aws-72-hours.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/ai-assisted-aws-72-hours.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Suspected AI-Assisted AWS Compromise 2026 Breach Kill Chain">
+    <meta property="og:description" content="How one actor went from an internet-facing app weakness to multi-account AWS control and extortion in about 72 hours, with AI assistance inferred from the artifacts.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-06-29">
+    <meta property="article:modified_time" content="2026-07-24">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Suspected AI-Assisted AWS Compromise 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="AI-assisted attack">
+    <meta property="article:tag" content="agentic AI threat">
+    <meta property="article:tag" content="AWS multi-account compromise">
+    <meta property="article:tag" content="cloud extortion">
+    <meta property="article:tag" content="Sygnia case study">
+    <meta property="og:url" content="https://csoh.org/breaches/ai-assisted-aws-72-hours.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/ai-assisted-aws-72-hours.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Suspected AI-Assisted AWS Compromise 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="How one actor went from an internet-facing app weakness to multi-account AWS control and extortion in about 72 hours, with AI assistance inferred from the artifacts.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/ai-assisted-aws-72-hours.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=c2953a2c" as="style"
+        integrity="sha384-M6M1W1e/48Q7TqP59Uswv2ssNlRt2TAXrX9ITJszKAQdD7v+p22ppj09LyKEAkAT">
+    <link rel="stylesheet" href="/style.css?v=c2953a2c"
+        integrity="sha384-M6M1W1e/48Q7TqP59Uswv2ssNlRt2TAXrX9ITJszKAQdD7v+p22ppj09LyKEAkAT">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Suspected AI-Assisted AWS Compromise - App Weakness → Machine-Speed Secrets Sweep → Multi-Account Persistence → CI/CD Abuse → RDS Exfil → Infrastructure Extortion in 72 Hours",
+  "description": "Sygnia's 72-hour AWS compromise case study: one actor, no zero-day, four accounts driven in parallel. AI assistance is inferred from attacker artifacts, not proven.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-06-29",
+  "dateModified": "2026-07-24",
+  "mainEntityOfPage": "https://csoh.org/breaches/ai-assisted-aws-72-hours.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Suspected AI-Assisted 72-Hour AWS Cloud Compromise",
+    "description": "A single financially motivated actor moved from a weakness in an internet-facing application to control of a multi-account AWS estate in roughly 72 hours, then extorted the victim using control of the cloud infrastructure itself. The victim, the incident dates, and the initial-access vulnerability were not disclosed. Sygnia infers AI-assisted or agentic tooling from attacker artifacts and parallelism rather than from direct evidence of a specific model or framework."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Sygnia"
+    },
+    {
+      "@type": "Organization",
+      "name": "Amazon Web Services"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Suspected AI-Assisted AWS Compromise 2026",
+      "item": "https://csoh.org/breaches/ai-assisted-aws-72-hours.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From 22 Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From 27 Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Suspected AI-Assisted AWS Compromise 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Suspected AI-Assisted AWS Compromise 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="ai-assisted-aws-72-hours-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">June 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-aws">AWS</span>
+    </div>
+    <h2 class="inc-title">Suspected AI-Assisted AWS Compromise - App Weakness &rarr; Machine-Speed Secrets Sweep &rarr; Multi-Account Persistence &rarr; CI/CD Abuse &rarr; RDS Exfil &rarr; Infrastructure Extortion in 72 Hours</h2>
+    <p class="inc-summary">Sygnia's incident response team published a case study describing a single financially motivated actor who went from a weakness in an internet-facing application to broad control of a large AWS estate in roughly 72 hours. There was no custom malware and no zero-day: every action mapped to techniques defenders have tracked for years. Rather than encrypting anything, the actor demonstrated control of the cloud infrastructure itself (denying S3 bucket access, scaling <a class="glossary-link" href="../glossary.html#term-ecs">ECS</a> services to zero, adding network <a class="glossary-link" href="../glossary.html#term-acl">ACL</a> deny rules, purging SQS queues) and used that as extortion leverage. <strong>The AI angle here is an inference, not a proven fact.</strong> Sygnia assesses that AI-assisted or agentic workflows played a role based on attacker-created scripts and structured reporting artifacts it describes as "consistent with AI-assisted generation", a self-documenting payload embedded in a malicious commit, and parallelism that is hard to reconcile with a single human operator. No specific model, <a class="glossary-link" href="../glossary.html#term-agent">agent</a> framework, or vendor was identified. The victim organization, the incident dates, and the initial-access vulnerability were all withheld.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>~72 hours</strong> initial access to broad cloud compromise</div>
+      <div class="inc-stat"><strong>4 accounts</strong> keys used in one observed second, same IP and user agent</div>
+      <div class="inc-stat"><strong>Several hundred</strong> unique SQL queries across dozens of databases</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> single unnamed actor, financially motivated (AI assistance inferred)</div>
+    </div>
+    <a class="pm-link" href="https://www.sygnia.co/blog/inside-an-ai-assisted-cloud-attack/" target="_blank" rel="noopener">📄 Sygnia - Inside an AI-Assisted Cloud Attack ↗</a>
+    <a class="pm-link" href="https://www.infosecurity-magazine.com/news/threat-actor-agentic-ai-cloud/" target="_blank" rel="noopener">📄 Infosecurity Magazine - reporting on the Sygnia case study ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - Undisclosed Application Weakness</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">A weakness in an internet-facing application handed the actor an AWS access key</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 - Valid Accounts</a>
+        </div>
+        <p class="step-desc">Sygnia does not name the application, the vendor, or a CVE, and does not name the victim. What the report does say is that the actor obtained an access key to one of the victim's AWS accounts through weaknesses in an internet-facing application, after which the intrusion followed a familiar shape: access, discovery of exposed credentials, expansion into cloud infrastructure. Because the entry credential was a legitimate long-lived AWS access key, every API call from that point forward was made by an authorized principal. The undisclosed entry point is the least interesting part of this chain, and treating it as the story would miss what follows.</p>
+        <div class="step-code">
+          <span class="hl">Entry point:</span> weakness in an internet-facing application (application and CVE not disclosed)<br>
+          <span class="hl">What it yielded:</span> a long-lived AWS access key for one account in the estate<br>
+          <span class="hl">Why it worked:</span> a valid access key makes the attacker a legitimate AWS principal from the first call<br>
+          <span class="hl">Detection gap:</span> no anomaly raised on first use of the key from new infrastructure
+        </div>
+        <div class="step-tags"><span class="stag">Undisclosed CVE</span><span class="stag">AWS Access Key</span><span class="stag">Unnamed Victim</span><span class="stag">T1078</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery - Permission and Trust Mapping at Machine Speed</div>
+    <div class="kc-step step-c">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Permission enumeration, IAM trust-relationship analysis, and a secrets sweep re-ran on every newly obtained key</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+        </div>
+        <p class="step-desc">Discovery was not a phase in this intrusion, it was a subroutine. Each time the actor obtained a new credential they validated it and repeated the same loop from the new permission scope: what can this identity do, what can it reach, and which trust relationships lead somewhere better. Sygnia describes the actor analyzing identity relationships, privilege assignments, and trust relationships to identify multiple paths for <a class="glossary-link" href="../glossary.html#term-privilege-escalation">privilege escalation</a>. The same pass swept for secrets across environment variables on ECS containers and <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> instances, objects in <a class="glossary-link" href="../glossary.html#term-s3">S3</a>, AWS Systems Manager Parameter Store, and AWS <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a>.</p>
+        <div class="step-code">
+          <span class="hl">Enumerated:</span> IAM permissions, role trust policies, reachable resources per credential<br>
+          <span class="hl">Secrets sweep surface:</span> ECS / EC2 environment variables, S3 objects, SSM Parameter Store, AWS Secrets Manager<br>
+          <span class="hl">Loop:</span> new key &rarr; validate &rarr; re-run full enumeration from the new permission scope<br>
+          <span class="hl">Detection gap:</span> high-volume read-only enumeration spread across accounts raised no correlated alert
+        </div>
+        <div class="step-tags"><span class="stag">Cloud Enumeration</span><span class="stag">IAM Trust Analysis</span><span class="stag">T1580</span><span class="stag">T1087</span><span class="stag">T1619</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access - Secrets Sprawl Paid Out</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Plaintext secrets recovered from S3 and Parameter Store, and entries extracted from Secrets Manager</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
+        </div>
+        <p class="step-desc">Sygnia's list of where secrets were found is the whole lesson in one sentence: environment variables from ECS containers and EC2 instances, <a class="glossary-link" href="../glossary.html#term-ci-cd">CI/CD</a> runner environments for both GitHub and Bitbucket, plaintext secrets stored in S3 buckets, API keys in application databases, secrets in AWS Secrets Manager, and parameters in SSM Parameter Store. The same credential material sat in several of those layers at once, so no single control gated it. Rotating an entry in Secrets Manager did nothing about the copy pasted into an S3 object or baked into a container's environment block. Harvested credentials became the connective tissue that let the actor keep restarting the discovery loop with a wider scope each time.</p>
+        <div class="step-code">
+          <span class="hl">Recovered from:</span> S3 objects (plaintext), SSM Parameter Store, AWS Secrets Manager, container and instance env vars, GitHub / Bitbucket runner environments, application database rows<br>
+          <span class="hl">Why it worked:</span> <a class="glossary-link" href="../glossary.html#term-secrets-sprawl">secrets sprawl</a> - identical material duplicated across storage, config, and runtime layers<br>
+          <span class="hl">Effect:</span> every recovered secret fed step 02 again with a wider permission scope<br>
+          <span class="hl">Detection gap:</span> bulk GetParameter / GetSecretValue reads were not baselined per identity
+        </div>
+        <div class="step-tags"><span class="stag">Secrets Sprawl</span><span class="stag">Parameter Store</span><span class="stag">Secrets Manager</span><span class="stag">T1552</span><span class="stag">T1528</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔒 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a> - Multiple Redundant Footholds</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">New IAM users and keys, reverse shells on EC2 and ECS, and deployment files modified so redeploys reintroduced access</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1059/" target="_blank" rel="noopener">T1059 - Command and Scripting Interpreter</a>
+        </div>
+        <p class="step-desc">Persistence here was part of the extortion strategy, not a backup plan. Sygnia is explicit that the more durable and distributed the access became, the more credible the actor's ability to disrupt, damage, or influence recovery. The actor created additional IAM users and access keys, established reverse shells on EC2 instances and ECS containers, modified deployment files so that a redeploy would reintroduce the foothold, and created application users with elevated permissions. None of it needed malware: execution rode cloud-native primitives (scripting, cloud administration commands, container and serverless execution), which is why endpoint tooling had so little to say about it.</p>
+        <div class="step-code">
+          <span class="hl">Identity persistence:</span> additional IAM users and access keys created<br>
+          <span class="hl">Runtime persistence:</span> reverse shells planted on EC2 instances and ECS containers<br>
+          <span class="hl">Redeploy persistence:</span> modified deployment files, so a clean rebuild reinstated access<br>
+          <span class="hl">Application persistence:</span> application-layer user accounts created with elevated permissions
+        </div>
+        <div class="step-tags"><span class="stag">Reverse Shell</span><span class="stag">IAM Backdoor</span><span class="stag">Redeploy Persistence</span><span class="stag">T1059</span><span class="stag">T1609</span><span class="stag">T1648</span><span class="stag">T1651</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">⚙️ Execution - CI/CD Pipeline Abuse and the "Pentest" Cover Story</div>
+    <div class="kc-step step-o">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">GitHub and Bitbucket runner environments abused and repositories modified, creating a code path back into the cloud</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1677/" target="_blank" rel="noopener">T1677 - Poisoned Pipeline Execution</a>
+        </div>
+        <p class="step-desc">The actor used the source-control and CI/CD layer in both directions: runner environments were harvested for secrets, and repositories plus deployment files were modified so the pipeline itself would carry the changes into the cloud. That is the persistence class that survives credential rotation, because reintroduction happens through an approved deployment. Sygnia labels this CI/CD pipeline abuse and maps it to T1677, which MITRE publishes under the name Poisoned Pipeline Execution. This is also where the cover story appears: multiple attacker-created artifacts were framed as a "pentest" or a "<a class="glossary-link" href="../glossary.html#term-red-team">red team</a>" exercise, in branch names and commit messages, including references suggesting approval by a CEO who did not exist. Sygnia offers two readings and commits to neither: the framing may have been meant to mislead investigators, or it may have been meant to influence AI-assisted tooling by presenting the work as an authorized penetration test in order to reduce refusals.</p>
+        <div class="step-code">
+          <span class="hl">Platforms:</span> GitHub and Bitbucket (runner environments and repositories)<br>
+          <span class="hl">Method:</span> repository and deployment-file modification, carried into the cloud by the pipeline<br>
+          <span class="hl">Cover story:</span> branch names and commit messages framed as an authorized "pentest" / "red team", approved by a non-existent CEO<br>
+          <span class="hl">Why it worked:</span> pipeline changes execute with the pipeline's own privileges and outlive key rotation
+        </div>
+        <div class="step-tags"><span class="stag">CI/CD Abuse</span><span class="stag">GitHub</span><span class="stag">Bitbucket</span><span class="stag">Pentest Framing</span><span class="stag">T1677</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🧬 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a> - Four Accounts, One Second</div>
+    <div class="kc-step step-b">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Four access keys belonging to four separate AWS accounts were used in the same second, from one source IP and one user agent</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Cloud Accounts</a>
+        </div>
+        <p class="step-desc">This is the observation the whole case study turns on. Sygnia reports that in one observed second, four different access keys belonging to four separate accounts were used from the same source IP address and the same user agent, and calls that pattern very hard to explain as manual activity. Alongside the raw concurrency, the actor kept operational context across many credentials: which key belonged to which workstream, what each one could reach, where it had already been used, and when to abandon it. That state management is what turned a linear attack path into overlapping waves. Sygnia's own caveat is worth repeating: the pattern points to automated, centrally orchestrated, potentially agent-driven execution, and no more than that.</p>
+        <div class="step-code">
+          <span class="hl">Observation:</span> 4 access keys / 4 AWS accounts / 1 second / 1 source IP / 1 user agent<br>
+          <span class="hl">Implication:</span> parallel workstreams under central orchestration, not one operator at a keyboard<br>
+          <span class="hl">Detection primitive:</span> correlate <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> across accounts on sourceIPAddress plus userAgent, never per account<br>
+          <span class="hl">Why it worked:</span> each account's trail showed only its own slice, so the shared client fingerprint stayed invisible
+        </div>
+        <div class="step-tags"><span class="stag">Parallel Execution</span><span class="stag">Cross-Account</span><span class="stag">CloudTrail Correlation</span><span class="stag">T1078.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 Collection &amp; <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a> - Hundreds of Unique SQL Queries</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Several hundred unique SQL queries across dozens of RDS databases, enumerating schemas and pulling user and transaction records</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
+        </div>
+        <p class="step-desc">RDS databases were queried for user data, transaction information, and other potentially sensitive records, showing the actor wanted data as well as infrastructure control. Sygnia treats the volume and specificity as evidence of rapid environment-specific adaptation: several hundred unique SQL queries across dozens of databases, rapidly enumerating schemas and identifying relevant data. Writing that many targeted queries against unfamiliar schemas is normally slow, careful work. Sygnia is careful here too, calling this not definitive proof of autonomous AI-agent activity but consistent with AI-assisted or orchestrated operations that can process context and customize actions at speed.</p>
+        <div class="step-code">
+          <span class="hl">Volume:</span> several hundred unique SQL queries across dozens of RDS databases<br>
+          <span class="hl">Targeted:</span> user records, transaction data, other sensitive business data<br>
+          <span class="hl">Signal:</span> schema enumeration followed immediately by targeted extraction, database after database<br>
+          <span class="hl">Detection gap:</span> no baseline on query volume or novel query shapes against production RDS
+        </div>
+        <div class="step-tags"><span class="stag">RDS</span><span class="stag">Schema Enumeration</span><span class="stag">Data Exfiltration</span><span class="stag">T1213</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💰 Impact - Extortion by Demonstration, Not Encryption</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">S3 access denied, ECS services scaled to zero, network ACL deny rules added, SQS queues purged</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1578/" target="_blank" rel="noopener">T1578 - Modify Cloud Compute Infrastructure</a>
+        </div>
+        <p class="step-desc">There is no clean cloud equivalent of an on-premises encryptor, so the actor built leverage a different way. Sygnia describes mostly reversible impact actions performed as a demonstration of capability: denying access to S3 buckets, limiting ECS services or containers to a maximum capacity of zero, creating ACL rules to block network access, and purging SQS queues. An HTML file was also dropped into S3 buckets carrying the same "red team" framing seen in the repositories. The unsettling part is that every one of these is a routine cloud administration call. The impact ran through the control plane, with valid credentials, using APIs the platform team uses daily.</p>
+        <div class="step-code">
+          <span class="hl">Impact actions:</span> S3 bucket access denied, ECS capacity limited to zero, network ACL deny rules, SQS queue purges<br>
+          <span class="hl">Also dropped:</span> an HTML file into S3 buckets, framed as "red team" work<br>
+          <span class="hl">Leverage model:</span> control of the infrastructure itself as the extortion lever, no encryption involved<br>
+          <span class="hl">Why it worked:</span> destructive control-plane calls look identical to routine operations without behavioral baselining
+        </div>
+        <div class="step-tags"><span class="stag">Cloud Extortion</span><span class="stag">ECS Scale-to-Zero</span><span class="stag">Network ACL</span><span class="stag">T1578</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Correlate CloudTrail across accounts on source IP and user agent, not one account at a time.</strong> The single finding that defines this case is a cross-account join: four keys, four accounts, one source IP, one user agent, one second. Ship every account's trail into a single organization trail in a dedicated log account and write the detection at the organization level. One client fingerprint driving credentials that belong to different accounts is not a human, and no per-account view will ever surface it.</div>
+        <div class="def-item"><strong>Fix <a class="glossary-link" href="../glossary.html#term-secrets-sprawl">secrets sprawl</a> before you bother rotating anything.</strong> The same credential material sat in ECS and EC2 environment variables, S3 objects, SSM Parameter Store, and Secrets Manager at the same time, so no single control gated it. Consolidate on AWS Secrets Manager with automatic rotation enabled, replace environment-variable injection with runtime retrieval, and run secret scanning over <a class="glossary-link" href="../glossary.html#term-iac">IaC</a> repositories and S3 as a recurring job rather than a one-off cleanup.</div>
+        <div class="def-item"><strong>Retire long-lived access keys entirely.</strong> The whole chain hangs off a static AWS access key. Use IAM Roles Anywhere for workloads outside AWS, <a class="glossary-link" href="../glossary.html#term-oidc-federation">OIDC federation</a> for GitHub Actions and Bitbucket Pipelines so no key is ever stored in CI, and IAM roles for anything running inside AWS. Enforce <a class="glossary-link" href="../glossary.html#term-imds">IMDSv2</a> with HttpTokens set to required, and set the metadata hop limit to 1 on instances that host containers.</div>
+        <div class="def-item"><strong>Enable the <a class="glossary-link" href="../glossary.html#term-guardduty">GuardDuty</a> findings that describe exactly this behavior.</strong> UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.InsideAWS and .OutsideAWS catch instance role credentials used from somewhere they should not be. Discovery:IAMUser/AnomalousBehavior, CredentialAccess:IAMUser/AnomalousBehavior, and Persistence:IAMUser/AnomalousBehavior catch the enumerate, harvest, persist loop that re-ran on every key here. Turn GuardDuty on in every region of every account through the delegated administrator and route findings into Security Hub.</div>
+        <div class="def-item"><strong>Cap the <a class="glossary-link" href="../glossary.html#term-blast-radius">blast radius</a> with <a class="glossary-link" href="../glossary.html#term-scp">SCPs</a> so one key cannot become four accounts.</strong> Service control policies at the OU level should deny the actions used to build durable footholds wherever they are not needed: iam:CreateUser and iam:CreateAccessKey outside a break-glass path, ec2:ModifyInstanceMetadataOptions, and any deletion or reconfiguration of CloudTrail and GuardDuty. An SCP is the one control a compromised account's own administrator cannot switch off.</div>
+        <div class="def-item"><strong>Rebuild the detection budget around hours, not weeks.</strong> Programs sized for multi-week <a class="glossary-link" href="../glossary.html#term-dwell-time">dwell time</a> are obsolete against an actor running parallel workstreams across accounts. Pre-authorize containment (key disablement, session revocation, IP allowlisting on the cloud control plane, pipeline freeze) so the on-call engineer can act before scoping is complete, and rehearse it. Sygnia frames the same shift as moving from a linear response model to a momentum-based one, where investigation and containment run in parallel.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.sygnia.co/blog/inside-an-ai-assisted-cloud-attack/" target="_blank" rel="noopener">Sygnia - Inside an AI-Assisted Cloud Attack</a>
+        <a class="src-link" href="https://www.infosecurity-magazine.com/news/threat-actor-agentic-ai-cloud/" target="_blank" rel="noopener">Infosecurity Magazine - Agentic AI Cloud Compromise</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1677/" target="_blank" rel="noopener">MITRE T1677</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">MITRE T1078.004</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ai-ml-security.html">AI/ML security</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../aws-security.html">AWS security</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="storm-2949-entra-sspr.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=792b7abd" defer integrity="sha384-2UjvVpptg4JlEVgJI2PdscrjOjPcil/4F1ZvIMJ81CShQnEDSlPI+l4PfogvTLYi"></script>
+</body>
+
+</html>

@@ -148,6 +148,7 @@ CANON_NAV = """\
                             <li><a href="ai-learning.html">AI Learning</a></li>
                             <li><a href="ai-ml-security.html">AI/ML Security</a></li>
                             <li><a href="mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From 22 Friday sessions</span></a></li>
                           </ul>
                         </div>
                         <div class="mega-col">
@@ -183,6 +184,7 @@ CANON_NAV = """\
                           <ul>
                             <li><a href="cloud-security-careers.html">Careers Overview</a></li>
                             <li><a href="breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From 27 Friday sessions</span></a></li>
                             <li><a href="learning-path.html">Learning Path</a></li>
                             <li><a href="cloud-security-certifications.html">Certifications</a></li>
                             <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>

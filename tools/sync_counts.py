@@ -330,6 +330,27 @@ def sync_markers(text: str, disp: dict) -> str:
     return MARKER_RE.sub(repl, text)
 
 
+# Count phrases that live where a marker comment cannot: inside `content="..."`
+# attributes (meta / Open Graph) and inside JSON-LD, where an HTML comment would
+# render as literal text or break the JSON. Same idea as the llms.txt rules, but
+# applied to HTML. Patterns are deliberately narrow so they only ever rewrite a
+# resource count that is already spelled out as "<number>+ <phrase>".
+HTML_PROSE_RULES = [
+    (r"\d+\+ vendor-neutral resources", "{resources_floor} vendor-neutral resources"),
+    (r"\d+\+ curated cloud security resources", "{resources_floor} curated cloud security resources"),
+    (r"\d+\+ curated resources", "{resources_floor} curated resources"),
+    (r"\d+\+ entry Resources Directory", "{resources_floor} entry Resources Directory"),
+    (r"broad catalog \(\d+\+\)", "broad catalog ({resources_floor})"),
+    (r"\d+\+ links, vendor-neutral", "{resources_floor} links, vendor-neutral"),
+]
+
+
+def sync_html_prose(text: str, disp: dict) -> str:
+    for pat, rep in HTML_PROSE_RULES:
+        text = re.sub(pat, rep.format(**disp), text)
+    return text
+
+
 def sync_llms(disp: dict, apply: bool) -> tuple[bool, list[str]]:
     """llms.txt is plain text (HTML comments would show), so update its known
     count phrases with targeted regexes instead of markers."""
@@ -411,6 +432,7 @@ def main() -> int:
         txt = f.read_text(encoding="utf-8")
         new_txt = MANAGED[f.name](txt) if f.name in MANAGED else enforce_itemlist_invariant(txt)[0]
         new_txt = sync_markers(new_txt, disp)
+        new_txt = sync_html_prose(new_txt, disp)
         if new_txt != txt:
             drift.append(str(f.relative_to(REPO)))
             if apply:

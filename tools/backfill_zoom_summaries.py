@@ -181,6 +181,7 @@ NOISE_TITLE_RE = re.compile(
     r'|philosophical (?:and )?poetic|poetic musings'
     r'|emotional connection (?:and|&)'
     r'|cybersecurity music video'
+    r'|music performance'
     r')\b',
     re.IGNORECASE,
 )
@@ -236,6 +237,7 @@ NOISE_BODY_RE = re.compile(
     r'|random with recurring phrases'
     r'|song lyrics, greetings, and disconnected phrases'
     r'|lively discussion, filled with music'
+    r'|no substantive discussion, decisions, or action items were captured'
     r')',
     re.IGNORECASE,
 )
@@ -261,6 +263,26 @@ def _strip_noise_sections(markdown: str) -> str:
     return section_re.sub(maybe_strip, markdown)
 
 
+def _strip_action_item_sections(markdown: str) -> str:
+    """Remove the per-attendee subsections Zoom emits under "Next steps".
+
+    Those bodies are bullets linking to private tasks.zoom.us action-item URLs,
+    which are meaningless to a reader and name individuals against a to-do. The
+    "## Next steps" heading strip in build_markdown cannot reach them: its match
+    stops at the first "### " child, orphaning every subsection beneath it. Key
+    off the tasks.zoom.us URL instead, which appears nowhere else in a summary.
+    """
+    section_re = re.compile(
+        r'(?P<full>^### (?P<heading>[^\n]+)\n(?P<body>(?:(?!^### ).*\n?)+))',
+        re.MULTILINE,
+    )
+
+    def maybe_strip(m: re.Match) -> str:
+        return "" if "tasks.zoom.us" in m.group("body") else m.group("full")
+
+    return section_re.sub(maybe_strip, markdown)
+
+
 def build_markdown(summary: dict, pacific_date: str) -> str:
     content = summary.get("summary_content", "").strip()
     if not content:
@@ -279,6 +301,8 @@ def build_markdown(summary: dict, pacific_date: str) -> str:
     # (the empty "## Summary" body is skipped by the parser), but we prepend the
     # required H1 and strip the redundant "## Summary" divider.
     content = re.sub(r"^## Summary\s*\n", "", content, flags=re.MULTILINE)
+    # Strip the per-attendee action-item subsections orphaned by that removal.
+    content = _strip_action_item_sections(content)
     # Strip music chitchat / AI-gave-up subsections (intro music, etc.).
     content = _strip_noise_sections(content)
     return f"# CSOH {pacific_date}\n\n{content.strip()}\n"

@@ -1040,14 +1040,18 @@ function initDropdownNav() {
 }
 
 // Localize the weekly session time. The session is Friday 07:00
-// America/Los_Angeles; show the viewer their local equivalent next to the
-// advertised "7am PT" so members outside Pacific time don't have to do the
-// math. Purely additive: if Intl is unavailable or the viewer is already on
-// Pacific time, the marker span is left empty.
+// America/Los_Angeles. Two consumers:
+//   [data-session-localtime] - inline "(that's X your time)" after an
+//     advertised "7am PT", so members outside Pacific don't do the math.
+//   [data-next-session]      - the homepage next-session banner, which needs
+//     the concrete upcoming date, not just the weekly cadence.
+// Purely additive: without Intl the markup keeps its server-rendered text.
 (function () {
-    var els = document.querySelectorAll('[data-session-localtime]');
-    if (!els.length || typeof Intl === 'undefined' || !Intl.DateTimeFormat) return;
     var TZ = 'America/Los_Angeles';
+    var els = document.querySelectorAll('[data-session-localtime]');
+    var nextEls = document.querySelectorAll('[data-next-session]');
+    if (!els.length && !nextEls.length) return;
+    if (typeof Intl === 'undefined' || !Intl.DateTimeFormat) return;
 
     // Offset (ms) of TZ at a given instant: local wall time minus UTC.
     function tzOffset(instant) {
@@ -1081,8 +1085,22 @@ function initDropdownNav() {
 
     var viewerTZ = '';
     try { viewerTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
-    if (viewerTZ === TZ) return; // already Pacific - nothing to add
+    var isPacific = viewerTZ === TZ;
 
+    // Banner: name the actual upcoming date, then the viewer's local clock time.
+    if (nextEls.length) {
+        var when = new Intl.DateTimeFormat('en-US', {
+            timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric'
+        }).format(target) + ' at 7:00 AM PT';
+        if (!isPacific) {
+            when += ' · ' + new Intl.DateTimeFormat(undefined, {
+                hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+            }).format(target) + ' your time';
+        }
+        for (var k = 0; k < nextEls.length; k++) nextEls[k].textContent = when;
+    }
+
+    if (!els.length || isPacific) return; // already Pacific - nothing to add
     var local = new Intl.DateTimeFormat(undefined, {
         weekday: 'long', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
     }).format(target);
