@@ -93,7 +93,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 |---|---|
 | 🧭 [Cloud Security Careers](https://csoh.org/cloud-security-careers.html) | Roles, salary bands, interview formats, portfolio projects |
 | 🛣️ [Cloud Security Learning Path](https://csoh.org/learning-path.html) | Beginner → working practitioner roadmap with milestones |
-| 🪜 [Help Desk → Cloud Security](https://csoh.org/help-desk-to-cloud-security.html) | The realistic transition from IT support |
+| 🪜 [Help Desk → Cloud Security](https://csoh.org/breaking-into-cloud-security.html) | The realistic transition from IT support |
 | 🎓 [Cloud Security Certifications](https://csoh.org/cloud-security-certifications.html) | CCSK, CCSP, AWS, Azure, GCP, CKS compared side by side |
 | 🎓 [Cloud Security Degree Programs](https://csoh.org/cloud-security-degree-programs.html) | Academic paths, what to look for, named US/international universities |
 | 🧰 [Cloud Security Home Lab](https://csoh.org/cloud-security-home-lab.html) | Free-tier setups, budget guardrails, kill-switches |
@@ -158,7 +158,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 370+ tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 410+ tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -212,7 +212,7 @@ Academic paths for cloud security: when a degree pays off, degree types and what
 Roles and salary bands, what hiring managers actually look for, interview formats, portfolio projects, and how to translate from adjacent roles. FAQ schema. The careers hub fans out to a **role-in-depth series** and a **portfolio-projects hub** (below).
 
 ### 🧑‍💼 Career Roles, In Depth (`cloud-security-*.html`)
-A series of one-page-per-role deep dives covering day-to-day work, the skills that actually matter, salary signals, and how to break in: Cloud Security Engineer, Cloud Security Architect (Staff+ IC), IAM / Identity Architect, Cloud AppSec / IaC Security Engineer, CSPM / CNAPP Analyst, Cloud Detection Engineer, Cloud Incident Responder (DFIR), Cloud Penetration Tester / Red Team, Security SRE / Platform Security Engineer, Cloud GRC / Compliance Engineer, Cloud Security Sales Engineer, and Cloud Security Customer Success Engineer. `help-desk-to-cloud-security.html` is the companion transition guide for people coming from IT support. Each role page carries FAQ schema.
+A series of one-page-per-role deep dives covering day-to-day work, the skills that actually matter, salary signals, and how to break in: Cloud Security Engineer, Cloud Security Architect (Staff+ IC), IAM / Identity Architect, Cloud AppSec / IaC Security Engineer, CSPM / CNAPP Analyst, Cloud Detection Engineer, Cloud Incident Responder (DFIR), Cloud Penetration Tester / Red Team, Security SRE / Platform Security Engineer, Cloud GRC / Compliance Engineer, Cloud Security Sales Engineer, and Cloud Security Customer Success Engineer. Each role page carries FAQ schema.
 
 ### 🛠️ Cloud Security Portfolio Projects (`cloud-security-portfolio-projects.html` + `portfolio/`)
 A hub of build-it-yourself projects that demonstrate real cloud-security skill to hiring managers, each with a full step-by-step walkthrough under `portfolio/`: build a multi-account AWS Org with SCPs, walk every CloudGoat scenario, write a CNAPP comparison, build 5 detections in a lab SIEM, run a Prowler audit and Terraform the fixes, recreate the Capital One breach end to end, and ship a first OSS contribution to a cloud-security project.
@@ -561,7 +561,6 @@ csoh.org/
 │                                      #   detection-engineer, incident-responder, penetration-tester,
 │                                      #   platform-engineer, grc-engineer, sales-engineer,
 │                                      #   customer-success-engineer (FAQ schema)
-├── help-desk-to-cloud-security.html   # Transition guide: IT help desk -> cloud security
 ├── github-actions.html         # Learn GitHub Actions via our heavily-commented workflows
 ├── cloud-deployment.html       # Multi-cloud deploy architecture (the dogfooded stack)
 ├── terraform.html              # Learn Terraform via our own multi-cloud IaC
