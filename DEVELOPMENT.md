@@ -203,7 +203,7 @@ csoh.org/
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
 ├── .github/workflows/      # CI/CD pipelines (15 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
-└── update_news.py          # News aggregation from 50 RSS feeds
+└── update_news.py          # News aggregation from 49 RSS feeds
 ```
 
 ### Workflows at a Glance
@@ -214,7 +214,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 50 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
+| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 49 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
 | [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - auto-approved, human merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
@@ -281,7 +281,7 @@ A few patterns worth knowing before you touch any of these:
 - **You do not need to update SRI hashes manually** -- CI handles it on merge
 
 **News Aggregation**
-- `update_news.py` pulls from 50 RSS/Atom feeds every 3 hours (via GitHub Actions)
+- `update_news.py` pulls from 49 RSS/Atom feeds every 3 hours (via GitHub Actions)
 - Generates `news.html` and `feed.xml`, regenerates the `NewsArticle` JSON-LD block on `news.html`, and refreshes `sitemap.xml` lastmod dates
 - Preserves cards already on `news.html` across runs so today-dated items don't disappear when RSS feeds rotate
 - PRs are auto-created and auto-merged if only `news.html`, `feed.xml`, and `sitemap.xml` changed

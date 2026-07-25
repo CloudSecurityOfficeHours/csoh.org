@@ -5,20 +5,21 @@
 The [News page](https://csoh.org/news.html) is updated **automatically every 3 hours** - no one has to manually add articles. The script also generates an **RSS feed** (`feed.xml`) so subscribers get updates automatically. Here's how it works in plain English:
 
 1. **GitHub Actions** (a free automation service built into GitHub) runs a Python script on a schedule - every 3 hours.
-2. The script visits **50 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries.
+2. The script visits **49 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries. Fetching the feeds and following each article's redirects both run in parallel, which is what keeps a run to about two minutes; done one at a time the same work took over twenty.
 3. The script filters those articles for **cloud security topics** (looking for keywords like "AWS", "Azure", "Kubernetes", "vulnerability", "breach", etc.) and throws out duplicates.
 4. **Existing cards on `news.html` are preserved across runs.** RSS feeds are rolling windows, so today-dated articles from earlier runs would otherwise get dropped when feeds rotate. The script parses the current `news.html`, then merges in whatever new items this run's feeds surfaced, sorted by date and capped at 120 articles.
 5. If after that merge fewer than **10 today-dated articles** are on the page, the script tops up from a **relaxed-filter pool** - today-dated items from the same security feeds that didn't hit the strict keyword filter. The target is tunable with `--today-target`.
-6. It then writes fresh article cards to `news.html` (title, date, summary, source, link), regenerates `feed.xml` (the RSS feed), rebuilds the `CollectionPage`/ItemList JSON-LD block on `news.html` (the top 20 articles as `NewsArticle` items), and refreshes `<lastmod>` dates in `sitemap.xml` (delegated to `tools/update_sitemap.py`, best-effort).
-7. Instead of pushing changes directly, it **creates a Pull Request** (a proposed change) so a maintainer can review it before it goes live.
-8. If the only files changed are `news.html`, `feed.xml`, and `sitemap.xml`, the PR is **automatically merged** - no human review needed for routine news updates.
-9. The merge is a push to `main` touching `*.html`, which independently starts two workflows: **site-update-deploy.yml** (housekeeping - SRI hashes, sitemap dates, previews) and **deploy.yml**, which builds the site once and publishes it active/active to the AWS, GCP, and Azure origins behind Cloudflare, then purges the edge.
+6. No single source may take more than **12 of the 120 cards** (`--per-source-cap`, 0 disables). Some feeds re-publish their whole back catalog under a handful of recent dates, which on a plain newest-first cut hands one vendor a fifth of the page. If the cap can't be met because too few sources are reporting, the over-cap items backfill rather than leaving the page short, so a quiet day still fills. Sources held back are named on stderr - one appearing far over the cap is usually re-stamping old posts rather than genuinely publishing that much.
+7. It then writes fresh article cards to `news.html` (title, date, summary, source, link), regenerates `feed.xml` (the RSS feed), rebuilds the `CollectionPage`/ItemList JSON-LD block on `news.html` (the top 20 articles as `NewsArticle` items), and refreshes `<lastmod>` dates in `sitemap.xml` (delegated to `tools/update_sitemap.py`, best-effort).
+8. Instead of pushing changes directly, it **creates a Pull Request** (a proposed change) so a maintainer can review it before it goes live.
+9. If the only files changed are `news.html`, `feed.xml`, and `sitemap.xml`, the PR is **automatically merged** - no human review needed for routine news updates.
+10. The merge is a push to `main` touching `*.html`, which independently starts two workflows: **site-update-deploy.yml** (housekeeping - SRI hashes, sitemap dates, previews) and **deploy.yml**, which builds the site once and publishes it active/active to the AWS, GCP, and Azure origins behind Cloudflare, then purges the edge.
 
 **The end result:** the News page always has fresh, relevant cloud security articles without anyone lifting a finger.
 
 ---
 
-## News Sources (50 feeds)
+## News Sources (49 feeds)
 
 The script pulls from these trusted, non-paywalled sources:
 
@@ -61,7 +62,6 @@ The script pulls from these trusted, non-paywalled sources:
 | Sysdig Blog | Runtime threat detection, Kubernetes security |
 | Datadog Security Labs | Cloud infrastructure threats, supply chain attacks |
 | Permiso Security | Cloud identity threat detection and IOC research |
-| Mitiga Blog | Cloud and SaaS incident response research |
 
 ### Threat Intelligence / Research
 

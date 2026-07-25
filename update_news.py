@@ -17,6 +17,7 @@ import subprocess
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
@@ -56,7 +57,6 @@ FEEDS = [
     {"name": "Sysdig Blog", "url": "https://sysdig.com/feed/"},
     {"name": "Datadog Security Labs", "url": "https://securitylabs.datadoghq.com/rss/feed.xml"},
     {"name": "Permiso Security", "url": "https://permiso.io/blog/rss.xml"},
-    {"name": "Mitiga Blog", "url": "https://www.mitiga.io/blog/rss.xml"},
     # Threat Intelligence / Research
     {"name": "Google Threat Intelligence", "url": "https://cloudblog.withgoogle.com/topics/threat-intelligence/rss/"},
     {"name": "Cisco Talos", "url": "https://blog.talosintelligence.com/feed/"},
@@ -78,6 +78,12 @@ FEEDS = [
     {"name": "OWASP", "url": "https://owasp.org/feed.xml"},
     {"name": "Cloud Security Alliance", "url": "https://cloudsecurityalliance.org/blog/feed/"},
 ]
+
+# Concurrency for the two network phases. Modest on purpose: the per-run
+# request count is unchanged, so this only affects how fast they are issued,
+# and many candidate URLs share a handful of publisher domains.
+FEED_WORKERS = 12
+RESOLVE_WORKERS = 16
 
 KEYWORDS = {
     "cloud", "aws", "azure", "gcp", "google cloud", "kubernetes", "k8s",
@@ -218,6 +224,18 @@ def resolve_url(url: str, timeout: int = 10) -> str:
     except Exception:
         pass
     return url
+
+
+def resolve_urls(urls: Sequence[str]) -> Dict[str, str]:
+    """Resolve many URLs concurrently. Returns {original: final}.
+
+    resolve_url swallows its own errors and falls back to the input URL, so a
+    dead host costs one timeout on its own thread instead of failing the run.
+    """
+    if not urls:
+        return {}
+    with ThreadPoolExecutor(max_workers=RESOLVE_WORKERS) as pool:
+        return dict(zip(urls, pool.map(resolve_url, urls)))
 
 
 def extract_links(html_text: str) -> List[str]:
@@ -772,12 +790,72 @@ def dedupe_near_entries(entries: List[Dict[str, str]]) -> Tuple[List[Dict[str, s
     return kept, dropped
 
 
+def select_with_source_cap(
+    entries: List[Dict[str, str]],
+    max_articles: int,
+    per_source_cap: int,
+) -> Tuple[List[Dict[str, str]], Dict[str, int]]:
+    """Take the newest max_articles entries, at most per_source_cap per source.
+
+    Guards against a feed that re-stamps its whole back catalog with a handful
+    of recent dates. Mitiga, for one, served 100 items carrying just three
+    publish dates, which took 26 of 120 cards on a straight newest-first cut.
+
+    Expects entries pre-sorted newest-first. If the cap leaves the page short
+    (a quiet news day, or too few sources reporting), the over-cap remainder
+    backfills rather than publishing a half-empty page, so the cap costs
+    nothing when there isn't the diversity to satisfy it.
+
+    Returns (selected, held) where held maps source -> page slots it would have
+    taken without the cap. That is deliberately measured against the uncapped
+    top max_articles rather than against everything over the cap: the archive
+    feeds routinely serve hundreds of old entries that were never in contention
+    for the page, and counting those would bury the one source that matters.
+    """
+    if per_source_cap <= 0:
+        return entries[:max_articles], {}
+
+    counts: Dict[str, int] = {}
+    picked: List[Dict[str, str]] = []
+    overflow: List[Dict[str, str]] = []
+    for entry in entries:
+        source = entry.get("source", "")
+        if counts.get(source, 0) >= per_source_cap:
+            overflow.append(entry)
+            continue
+        counts[source] = counts.get(source, 0) + 1
+        picked.append(entry)
+
+    selected = picked[:max_articles]
+    backfill = overflow[: max(0, max_articles - len(selected))]
+    if backfill:
+        selected = selected + backfill
+        selected.sort(key=_entry_date, reverse=True)
+
+    def by_source(items: List[Dict[str, str]]) -> Dict[str, int]:
+        tally: Dict[str, int] = {}
+        for entry in items:
+            source = entry.get("source", "")
+            tally[source] = tally.get(source, 0) + 1
+        return tally
+
+    uncapped = by_source(entries[:max_articles])
+    final = by_source(selected)
+    held = {
+        source: n - final.get(source, 0)
+        for source, n in uncapped.items()
+        if n - final.get(source, 0) > 0
+    }
+    return selected, held
+
+
 def build_entries(
     news_path: str,
     resources_path: str,
     max_articles: int,
     min_sources: int,
     today_target: int = 10,
+    per_source_cap: int = 12,
 ) -> Tuple[List[Dict[str, str]], str]:
     # Preserve entries already rendered in news.html so rolling RSS windows
     # don't drop them on the next run. Same-day items especially accumulate
@@ -800,32 +878,47 @@ def build_entries(
     collected: List[Dict[str, str]] = []
     today_fallback: List[Dict[str, str]] = []
 
-    for feed in FEEDS:
-        xml_text = fetch_feed(feed["url"])
+    # Both network phases below run concurrently. They used to be serial, which
+    # cost ~22 minutes per run for ~4,800 redirect lookups at ~110s of actual
+    # CPU. The work is identical, just no longer one-at-a-time.
+    with ThreadPoolExecutor(max_workers=FEED_WORKERS) as pool:
+        feed_xml = list(pool.map(lambda f: fetch_feed(f["url"]), FEEDS))
+
+    # Gather candidates in FEEDS order so the run stays deterministic, and
+    # drop anything already published before paying for a redirect lookup.
+    candidates: List[Tuple[str, Dict[str, str]]] = []
+    seen_norm: set = set()
+    for feed, xml_text in zip(FEEDS, feed_xml):
         if not xml_text:
             continue
         for item in parse_rss(xml_text, feed["name"]):
             if not item.get("title") or not item.get("link"):
                 continue
             norm = normalize_url(item["link"])
-            if norm in existing_urls:
+            if norm in existing_urls or norm in seen_norm:
                 continue
-            resolved = normalize_url(resolve_url(norm))
-            if resolved in existing_urls:
-                continue
-            item["link"] = resolved
-            existing_urls.add(resolved)
+            seen_norm.add(norm)
+            candidates.append((norm, item))
 
-            combined = f"{item['title']} {item.get('summary', '')}"
-            if is_relevant(combined):
-                collected.append(item)
-            else:
-                pub_dt = parse_date(item.get("published", ""))
-                if pub_dt and pub_dt.astimezone(dt.timezone.utc).date() == today_date:
-                    # Today-dated item from a security-focused feed that
-                    # didn't hit the strict keyword filter. Held in reserve
-                    # for top-up only if we're short on today items.
-                    today_fallback.append(item)
+    resolved_map = resolve_urls([norm for norm, _ in candidates])
+
+    for norm, item in candidates:
+        resolved = normalize_url(resolved_map.get(norm, norm))
+        if resolved in existing_urls:
+            continue
+        item["link"] = resolved
+        existing_urls.add(resolved)
+
+        combined = f"{item['title']} {item.get('summary', '')}"
+        if is_relevant(combined):
+            collected.append(item)
+        else:
+            pub_dt = parse_date(item.get("published", ""))
+            if pub_dt and pub_dt.astimezone(dt.timezone.utc).date() == today_date:
+                # Today-dated item from a security-focused feed that
+                # didn't hit the strict keyword filter. Held in reserve
+                # for top-up only if we're short on today items.
+                today_fallback.append(item)
 
     all_entries = preserved + collected
     if not all_entries and not today_fallback:
@@ -833,7 +926,7 @@ def build_entries(
 
     all_entries.sort(key=_entry_date, reverse=True)
     all_entries, near_dropped = dedupe_near_entries(all_entries)
-    selected: List[Dict[str, str]] = all_entries[:max_articles]
+    selected, held = select_with_source_cap(all_entries, max_articles, per_source_cap)
 
     today_count = sum(1 for e in selected if _entry_date(e).date() == today_date)
     fallback_used = 0
@@ -851,7 +944,9 @@ def build_entries(
             all_entries.sort(key=_entry_date, reverse=True)
             all_entries, extra_dropped = dedupe_near_entries(all_entries)
             near_dropped += extra_dropped
-            selected = all_entries[:max_articles]
+            selected, held = select_with_source_cap(
+                all_entries, max_articles, per_source_cap
+            )
             fallback_used = len(extras)
             today_count = sum(1 for e in selected if _entry_date(e).date() == today_date)
 
@@ -865,6 +960,15 @@ def build_entries(
         print(
             f"Warning: Only {today_count} today-dated entries (target {today_target}); "
             f"feeds may not have enough published items yet.",
+            file=sys.stderr,
+        )
+    if held:
+        detail = ", ".join(
+            f"{source} (+{n})" for source, n in sorted(held.items(), key=lambda kv: -kv[1])
+        )
+        print(
+            f"Per-source cap of {per_source_cap} held back: {detail}. "
+            f"A source far over the cap may be re-stamping old posts.",
             file=sys.stderr,
         )
 
@@ -894,6 +998,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=10,
         help="Minimum today-dated entries; tops up from relaxed-filter pool if below.",
     )
+    parser.add_argument(
+        "--per-source-cap",
+        type=int,
+        default=12,
+        help="Max articles from any one source; 0 disables. Over-cap items "
+        "backfill the page if there isn't enough from other sources.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -903,6 +1014,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             args.max_articles,
             args.min_sources,
             today_target=args.today_target,
+            per_source_cap=args.per_source_cap,
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
