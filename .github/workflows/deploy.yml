@@ -284,6 +284,22 @@ jobs:
           name: site-dist
           # Which folder to bundle up.
           path: dist/
+          # REQUIRED, and easy to miss. Since v4.4 this action defaults to
+          # `include-hidden-files: false` and silently drops every dot-path from
+          # the artifact - it prints a count, not an error. That quietly broke
+          # /.well-known/security.txt: stage_site.sh staged 2973 files, the
+          # artifact carried 2972, and the missing one was the security.txt at
+          # the RFC 9116 canonical location. AWS and Azure publish FROM this
+          # artifact, so both 404'd on it, while GCP - which builds from a fresh
+          # checkout, not the artifact - served it fine. The result was a path
+          # that worked on roughly one request in three, which is a far more
+          # annoying bug than a clean failure.
+          #
+          # dist/ contains exactly one hidden path (.well-known/) because
+          # tools/site-publish.filter excludes every other dot-path, so turning
+          # this on cannot smuggle in .git, .env, or friends. If you ever widen
+          # the filter, that reasoning has to be rechecked.
+          include-hidden-files: true
           # Auto-delete after 1 day. This artifact is only a hand-off between
           # jobs in the same run, so it doesn't need to linger (and storage
           # isn't free).
