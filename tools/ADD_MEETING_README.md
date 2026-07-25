@@ -17,6 +17,7 @@ The script:
 5. Patches the previously-newest meeting page's pager to add a "Newer meeting →" link to the new page.
 6. Adds a `<url>` entry to `sitemap.xml` and a record to `meetings-search-index.json`.
 7. Fixes broken entities common in Apple Notes exports (`&quot` → `"`, `&amp` → `&`).
+8. Regenerates `recaps.xml` (the recap RSS feed) by shelling out to [`generate_recaps_rss.py`](generate_recaps_rss.py), so the feed never lags the recap index. Best-effort: a feed that fails to rebuild prints a warning but does not fail the publish, since the recap page itself is already written by that point.
 
 Re-running with the same date is idempotent - the existing page is replaced in place.
 
@@ -99,7 +100,14 @@ An empty `<h2>Summary</h2>` placeholder (as produced by some Apple Notes transcr
 
 - **OG card generation.** The new meeting page initially uses `banner.png` as its `og:image` fallback. Run `python3 tools/generate_meeting_og_images.py --pages meetings/YYYY-MM-DD.html` to render a per-meeting 1200×630 card and rewrite the meta tags. See [GENERATE_MEETING_OG_README.md](GENERATE_MEETING_OG_README.md).
 - **Topic-page link injection.** Optional pass to wrap cloud-security keywords in the recap body with links to topic pages (e.g. "disaster recovery" → `../backup-dr.html`). Run `python3 tools/inject_meeting_topic_links.py --pages meetings/YYYY-MM-DD.html`. See [INJECT_MEETING_TOPIC_LINKS_README.md](INJECT_MEETING_TOPIC_LINKS_README.md).
-- **Commits and pushes.** Stage and commit the changes yourself - the script never touches git. Affected files: `meetings/YYYY-MM-DD.html` (new), `meetings.html`, `meetings-search-index.json`, `sitemap.xml`, and the previously-newest meeting page (its pager is patched).
+- **"From the Friday sessions" block refresh.** The reverse of the above: topic pages carry a block listing the most recent recaps that discussed that topic. Those lists are recency-ordered, so a new recap should displace the oldest entry on any topic it covers, and they go stale until refreshed. Run:
+
+  ```bash
+  python3 tools/build_meetings_search_index.py && python3 tools/inject_session_blocks.py
+  ```
+
+  **Why rebuild the index first.** `add_meeting.py` does insert a record for the new recap into `meetings-search-index.json`, so the injector will see it either way. The catch is that the record is built from the *parsed note*, while `build_meetings_search_index.py` rebuilds from the *rendered pages*. Any hand-edit you make to a recap page after publishing (and the review checklist in [BACKFILL_ZOOM_SUMMARIES_README.md](BACKFILL_ZOOM_SUMMARIES_README.md) tells you to make several: headline, mis-transcribed names, sensitive framing) leaves the index holding the pre-edit text. Since scoring runs against that text, a recap can be selected or skipped on wording you already removed. Rebuilding is fast and always safe, so just do it first. See [INJECT_SESSION_BLOCKS_README.md](INJECT_SESSION_BLOCKS_README.md).
+- **Commits and pushes.** Stage and commit the changes yourself - the script never touches git. Affected files: `meetings/YYYY-MM-DD.html` (new), `meetings.html`, `meetings-search-index.json`, `recaps.xml`, `sitemap.xml`, and the previously-newest meeting page (its pager is patched). If you also ran the two optional passes above, add the topic pages they touched.
 - **Removing meetings.** To remove a stale meeting, delete `meetings/YYYY-MM-DD.html`, the matching card in `meetings.html`, the search-index record, and the sitemap entry. Fix the pager on neighboring meeting pages by hand.
 - **Renaming/redating.** If you got the date wrong, delete the old page and re-run the tool with the corrected note.
 
