@@ -24,8 +24,8 @@ BANNER_DIR.mkdir(parents=True, exist_ok=True)
 # Shared domains (The Register × 2, CISA × 3) map to a single slug.
 SOURCES = {
     "aws-security-blog":      "https://aws.amazon.com/blogs/security/",
-    "google-cloud-blog":      "https://cloud.google.com/blog/products/identity-security",
-    "microsoft-msrc":         "https://msrc.microsoft.com/blog/",
+    "google-cloud-blog":      "https://cloud.google.com/blog/products/identity-security/",
+    "microsoft-security-blog": "https://www.microsoft.com/en-us/security/blog/",
     "cloudflare-blog":        "https://blog.cloudflare.com/",
     "sans-isc":               "https://isc.sans.edu/",
     "bleepingcomputer":       "https://www.bleepingcomputer.com/",
@@ -42,27 +42,52 @@ SOURCES = {
     "crowdstrike":            "https://www.crowdstrike.com/blog/",
     "unit42":                 "https://unit42.paloaltonetworks.com/",
     "cisa":                   "https://www.cisa.gov/",
+    "aws-security-bulletins": "https://aws.amazon.com/security/security-bulletins/",
+    "therecord":              "https://therecord.media/",
+    # CyberScoop deliberately absent: it serves an ad interstitial to
+    # headless browsers, so the capture is an ad gate rather than the site.
+    # Its cards render without a banner, which the template handles.
+    "riskybusiness":          "https://news.risky.biz/",
     # Cloud Security Research
     "wiz":                    "https://www.wiz.io/blog",
     "orca-security":          "https://orca.security/resources/blog/",
     "aqua-security":          "https://blog.aquasec.com/",
     "sysdig":                 "https://sysdig.com/blog/",
     "datadog-security-labs":  "https://securitylabs.datadoghq.com/",
+    "permiso":                "https://permiso.io/blog",
     # Threat Intelligence / Research
     "google-threat-intelligence": "https://cloud.google.com/blog/topics/threat-intelligence",
     "cisco-talos":            "https://blog.talosintelligence.com/",
     "sentinellabs":           "https://www.sentinelone.com/labs/",
     "elastic-security-labs":  "https://www.elastic.co/security-labs",
     "fortiguard-labs":        "https://www.fortiguard.com/",
+    "recorded-future":        "https://www.recordedfuture.com/blog",
+    "huntress":               "https://www.huntress.com/blog",
+    "red-canary":             "https://redcanary.com/blog/",
+    "zscaler-threatlabz":     "https://www.zscaler.com/blogs/security-research",
+    "checkpoint-research":    "https://research.checkpoint.com/",
+    "welivesecurity":         "https://www.welivesecurity.com/en/",
+    "malwarebytes":           "https://www.malwarebytes.com/blog",
+    "volexity":               "https://www.volexity.com/blog/",
+    "nviso":                  "https://blog.nviso.eu/",
+    "dfir-report":            "https://thedfirreport.com/",
     # AppSec, Supply Chain & Identity
     "snyk":                   "https://snyk.io/blog/",
     "gitguardian":            "https://blog.gitguardian.com/",
     "chainguard":             "https://www.chainguard.dev/unchained",
+    "stepsecurity":           "https://www.stepsecurity.io/blog",
+    "okta-security":          "https://sec.okta.com/",
+    "reversinglabs":          "https://www.reversinglabs.com/blog",
+    "jfrog":                  "https://jfrog.com/blog/",
     # Vulnerability Research & Guidance
     "project-zero":           "https://googleprojectzero.blogspot.com/",
     "rapid7":                 "https://www.rapid7.com/blog/",
     "owasp":                  "https://owasp.org/",
     "cloud-security-alliance": "https://cloudsecurityalliance.org/blog/",
+    "tenable":                "https://www.tenable.com/blog",
+    "qualys":                 "https://blog.qualys.com/",
+    "trail-of-bits":          "https://blog.trailofbits.com/",
+    "watchtowr":              "https://labs.watchtowr.com/",
 }
 
 VIEWPORT_W = 1280
