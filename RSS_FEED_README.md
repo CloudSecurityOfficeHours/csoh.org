@@ -167,7 +167,7 @@ newsboat
 ## FAQ
 
 ### How often does the feed update?
-The feed updates whenever new articles are added to the CSOH news page. This is typically daily on weekdays.
+`feed.xml` is rebuilt every 3 hours by an automated job that polls 39 cloud-security RSS/Atom sources, so new items usually appear the same day they are published. `recaps.xml` gains one item per Friday session.
 
 ### Is the feed free?
 Yes, completely free. You don't need an account on our site.
@@ -186,4 +186,4 @@ That's normal - feed URLs are meant to be opened in a feed reader, not a browser
 
 ## About Cloud Security Office Hours
 
-[Cloud Security Office Hours](https://csoh.org) is a vendor-neutral community of 2000+ cloud security professionals. We meet weekly on Zoom and maintain a curated collection of 240+ security resources, 120+ news articles, and 554+ community-shared URLs. Join us at [csoh.org](https://csoh.org).
+[Cloud Security Office Hours](https://csoh.org) is a vendor-neutral community of 2000+ cloud security professionals. We meet weekly on Zoom and maintain a curated collection of 410+ security resources, 120+ news articles, and 580+ community-shared URLs. Join us at [csoh.org](https://csoh.org).

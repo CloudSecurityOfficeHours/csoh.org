@@ -2,11 +2,23 @@
 # Site housekeeping - SRI hashes, URL safety, sitemap, preview images
 # -----------------------------------------------------------------------------
 # Runs on every push to main that touches site files. Walks through a
-# sequence of housekeeping steps (SRI hashes, URL safety, URL normalization,
-# presentations schema, meetings search index, sitemap dates, news-banner
-# check, preview screenshots), committing each one back to main if anything
-# changed. The actual deploy to production is done by `deploy.yml` - this
-# workflow only does the housekeeping that belongs upstream of the deploy.
+# sequence of housekeeping steps, committing each one back to main if anything
+# changed. In order:
+#
+#   1. SRI hashes + ?v= cache-bust keys        (update_sri.py)
+#   2. URL safety scan - blocks step 3 if it   (check_all_site_urls.py)
+#      finds anything unsafe
+#   3. URL normalization                       (normalize_urls.py)
+#   4. presentations VideoObject schema        (update_presentations_schema.py)
+#   5. meetings search index                   (build_meetings_search_index.py)
+#   6. sitemap <lastmod> dates                 (update_sitemap.py)
+#   7. news-source banner check                (check_news_banners.py)
+#   8. preview screenshots for new resource    (generate_preview.py), then
+#      cards                                    image optimization, WebP
+#                                               siblings, and a mapping sync
+#
+# The actual deploy to production is done by `deploy.yml` - this workflow only
+# does the housekeeping that belongs upstream of the deploy.
 #
 # Each step that commits-and-pushes uses
 #     git push || (git pull --rebase origin main && git push)
@@ -43,14 +55,25 @@ on:
     branches:
       - main
     paths:
-      - '*.html'
+      # `**.html` not `*.html`: GitHub's `*` does not match `/`, so `*.html`
+      # would be root-level pages only and a commit touching just breaches/,
+      # meetings/, portfolio/, or homelab/ would skip housekeeping entirely -
+      # no SRI stamp, no sitemap refresh. Same fix as in deploy.yml.
+      - '**.html'
       - 'chat-screenshots/**'
       - 'img/**'
+      # Every asset in update_sri.py's ASSETS list belongs here, or an edit to
+      # one ships without its integrity hash and ?v= key being re-stamped.
       - 'style.css'
       - 'main.js'
       - 'chat-resources.js'
       - 'breach-timeline.css'
       - 'breach-timeline.js'
+      - 'meetings.js'
+      - 'glossary.js'
+      - '404.js'
+      - 'search.css'
+      - 'search-init.js'
       - 'vendor/**'
       - 'update_sri.py'
   # Manual trigger from the Actions tab.
@@ -290,7 +313,7 @@ jobs:
           # the exit code of the FIRST command in the pipe (Python), not tee.
           # `--cache` backs redirect resolution with a committed JSON map so
           # only URLs we've never resolved hit the network (the slow part was
-          # re-resolving all ~2,500 every run). The cache auto-does a full
+          # re-resolving all ~2,650 every run). The cache auto-does a full
           # re-resolve once it's older than its TTL, so drift is still caught;
           # safety checks on resolved destinations run every time regardless.
           # The cache is seeded by CI on first run - never commit a local one,
@@ -434,7 +457,7 @@ jobs:
 
       # Squeeze ONLY the JPGs the generate step just produced (strip metadata,
       # recompress at quality 85). jpegoptim is idempotent, so re-running it on
-      # the other ~540 already-optimized previews is pure wasted CI time - that
+      # the other ~630 already-optimized previews is pure wasted CI time - that
       # was the bulk of this step's runtime. New previews show up as untracked
       # files; a regenerated one shows as modified. Nothing else writes to
       # img/previews before this step, so git status is an exact list of what

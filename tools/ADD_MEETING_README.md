@@ -98,7 +98,7 @@ An empty `<h2>Summary</h2>` placeholder (as produced by some Apple Notes transcr
 
 ## What doesn't happen automatically
 
-- **OG card generation.** The new meeting page initially uses `banner.png` as its `og:image` fallback. Run `python3 tools/generate_meeting_og_images.py --pages meetings/YYYY-MM-DD.html` to render a per-meeting 1200×630 card and rewrite the meta tags. See [GENERATE_MEETING_OG_README.md](GENERATE_MEETING_OG_README.md).
+- **OG card generation.** The new meeting page initially uses `banner.png` as its `og:image` fallback. Run `python3 tools/generate_meeting_og_images.py --pages meetings/YYYY-MM-DD.html` to render a per-meeting 1200×630 card and rewrite the meta tags. See [GENERATE_MEETING_OG_IMAGES_README.md](GENERATE_MEETING_OG_IMAGES_README.md).
 - **Topic-page link injection.** Optional pass to wrap cloud-security keywords in the recap body with links to topic pages (e.g. "disaster recovery" → `../backup-dr.html`). Run `python3 tools/inject_meeting_topic_links.py --pages meetings/YYYY-MM-DD.html`. See [INJECT_MEETING_TOPIC_LINKS_README.md](INJECT_MEETING_TOPIC_LINKS_README.md).
 - **"From the Friday sessions" block refresh.** The reverse of the above: topic pages carry a block listing the most recent recaps that discussed that topic. Those lists are recency-ordered, so a new recap should displace the oldest entry on any topic it covers, and they go stale until refreshed. Run:
 

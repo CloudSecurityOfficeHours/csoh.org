@@ -15,7 +15,7 @@ URL safety checks also run as a **blocking gate** inside two other workflows:
 
 ## What It Does
 
-1. **Scans all HTML files** in the site (*.html) using `tools/check_all_site_urls.py`
+1. **Scans every published HTML file** using `tools/check_all_site_urls.py` - the root pages plus the `breaches/`, `meetings/`, `portfolio/`, and `homelab/` subdirectories
 2. **Extracts all URLs** from:
    - `<a href="">` links
    - `<img src="">`, `<script src="">`, and other resource URLs
@@ -68,6 +68,24 @@ python3 tools/check_url_safety.py "https://example.com"
 ```bash
 python3 tools/check_all_site_urls.py > site-wide-url-safety-report.txt 2>&1
 ```
+
+## What "safe" means here
+
+This is **static analysis, not a threat-intel lookup**. There is no malware
+database or reputation API behind it. `tools/check_url_safety.py` flags:
+
+- structural red flags (an `@` in the URL, a raw-IP host, an executable file
+  extension, excessive-dash obfuscation)
+- throwaway TLDs (`.tk`, `.ml`, `.ga`, `.cf`, `.gq`)
+- brand-impersonation and account-panic phrasing in the path
+- URL shorteners and redirectors (`bit.ly`, `t.co`, …), which hide the real
+  destination from review
+- a small hand-maintained `BLOCKLIST` in the same file
+
+It resolves redirects first, so the **final** destination is what gets judged.
+It will not catch a freshly-compromised legitimate domain - nothing static
+would. It exists to catch the realistic failure mode: a link pasted from Zoom
+chat that turns out to be a shortener or a lookalike domain.
 
 ## Customizing the Check
 

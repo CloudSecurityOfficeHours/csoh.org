@@ -1,10 +1,28 @@
 # =============================================================================
 # Check URL Safety
 # -----------------------------------------------------------------------------
-# Scans every external link in the site's HTML files against safety lists
-# (malware databases, known-bad domains, etc.). Stops a PR from merging if any
-# link points somewhere unsafe and posts a summary comment so the contributor
-# knows what to remove.
+# Scans every external link in the site's HTML files with
+# tools/check_all_site_urls.py, which applies the heuristics in
+# tools/check_url_safety.py. This is static analysis, NOT a threat-intel
+# lookup - there is no malware database or reputation API behind it. What it
+# actually checks:
+#
+#   - structural red flags: an `@` in the URL, a raw-IP host, an executable
+#     file extension, excessive-dash obfuscation
+#   - throwaway TLDs (.tk / .ml / .ga / .cf / .gq)
+#   - brand-impersonation and account-panic phrasing in the path
+#   - URL-shortener / redirector domains (bit.ly, t.co, …), which hide the
+#     real destination from review
+#   - redirect resolution, so the FINAL destination is what gets judged
+#   - a small hand-maintained BLOCKLIST in check_url_safety.py
+#
+# That catches the realistic failure mode here - someone pastes a link from
+# Zoom chat that turns out to be a shortener or a lookalike domain - without
+# taking a dependency on an external reputation service. It will not catch a
+# freshly-compromised legitimate domain; nothing static would.
+#
+# Stops a PR from merging if any link trips a check, and posts a summary
+# comment so the contributor knows what to remove.
 # =============================================================================
 
 # This whole file is a "workflow": a GitHub Actions automation that runs in

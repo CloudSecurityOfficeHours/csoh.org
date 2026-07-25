@@ -57,9 +57,19 @@ Exit codes:
 - All top-level `*.html` (excluding `403.html`, `404.html`, the Google site-verification stub, `chat-resources.html` which is noindexed, and `search.html` which is a utility page)
 - All `breaches/*.html`
 - All `portfolio/*.html`
-- All `meetings/*.html` (~100 weekly recaps)
+- All `meetings/*.html` (105 weekly recaps as of 2026-07)
+- All `homelab/*.html`
 
-The script discovers the page set at runtime (top-level + breaches + portfolio + meetings), so the total grows as the site does - it is not a fixed number.
+The script discovers the page set at runtime, so the total grows as the site
+does - it is not a fixed number.
+
+**Adding a new subdirectory of pages?** Add it to `AUDITED_SUBDIRS` in
+[`run_seo_audit.py`](run_seo_audit.py) or it is silently never audited. Because
+the score is an average over the pages that *were* audited, a missing directory
+does not dent the number - so nothing flags the omission. `homelab` was missing
+for exactly that reason until 2026-07. (`crosslink_pages.py` and
+`build_search_index.py` also skip `homelab/`, but there the exclusion **is**
+deliberate.)
 
 ## When to run
 

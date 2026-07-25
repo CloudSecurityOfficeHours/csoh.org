@@ -35,7 +35,9 @@ Whenever someone changes `style.css` or `main.js` and pushes to the `main` branc
 2. Generates a new cache-busting version tag from the file content
 3. Updates every HTML file with the new fingerprint and version tag
 4. Commits and pushes the updated HTML files (if needed)
-5. Deploys the site to the web server (after merge to main)
+
+`deploy.yml` then re-runs the same script on the build output before staging, so
+the published artifact always names hashes that match the assets shipped with it.
 
 ```
 You push a change to style.css or main.js
@@ -53,7 +55,7 @@ You push a change to style.css or main.js
   Changes committed and pushed to main (if needed)
         |
         v
-  Site is deployed after merge
+  deploy.yml re-stamps the build, then publishes to AWS + GCP + Azure
 ```
 
 You never have to manually update fingerprints or worry about visitors seeing stale CSS/JS.
@@ -64,10 +66,11 @@ You never have to manually update fingerprints or worry about visitors seeing st
 
 This Python script does all the work. Note that `style.css` includes a large dark mode section (~500 lines of overrides), so any changes to dark mode styling will trigger SRI hash recalculation. When run, the script:
 
-1. Reads each tracked asset from the repo:
+1. Reads each asset in the `ASSETS` list at the top of the script:
    - `style.css`, `main.js`
    - `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
    - `meetings.js`, `glossary.js`, `404.js`
+   - `search.css`, `search-init.js` (the `/search.html` UI + MiniSearch initializer)
    - `vendor/goatcounter-count.js` (the vendored analytics counter)
 2. Calculates a **SHA-384 hash** (the fingerprint) for each file
 3. Calculates a **short SHA-256 hash** (the cache-bust `?v=` tag) for each file
@@ -76,7 +79,21 @@ This Python script does all the work. Note that `style.css` includes a large dar
 6. Updates the `href`/`src` URL with the new `?v=` tag
 7. Removes any `crossorigin` attribute (not needed for same-origin files - having it caused mobile browsers to block the CSS)
 
-To add a new tracked asset, append a line to the `files_to_hash` map and a corresponding regex block in `update_html_file` - see how `meetings.js` and `glossary.js` are wired up.
+To add a new tracked asset, append one `(path, tag, attr)` tuple to `ASSETS` -
+that is the whole change. There is no per-asset regex to write; the stamping is
+generic over the tuple. For example:
+
+```python
+ASSETS: List[Tuple[str, str, str]] = [
+    ...
+    ('my-new-widget.js', 'script', 'src'),
+]
+```
+
+**Any shared asset a page links to belongs in `ASSETS`.** `nginx.conf` serves
+every `*.css` / `*.js` with `expires 1y; Cache-Control: public, immutable`, so an
+asset referenced without a `?v=` key is pinned in browser caches for a year and
+your edits never reach returning visitors.
 
 ### Running manually
 
@@ -91,11 +108,11 @@ Calculating SRI hashes...
   style.css: sha384-UmMu+V7pI... (v=892ae8aa)
   main.js: sha384-VaUAqRVQ5... (v=f5430db3)
 
-Updating 12 HTML files...
+Updating 233 HTML files...
   - Unchanged: 403.html
   - Unchanged: 404.html
   ...
-Done! Modified 0 of 12 files.
+Done! Modified 0 of 233 files.
 ```
 
 ### Requirements
@@ -111,23 +128,30 @@ SRI and cache-busting are handled as part of the unified workflow, not a separat
 
 ### Triggers
 
-- **On push to main:** Runs automatically when any `*.html` file, `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `update_sri.py`, `.htaccess`, or `chat-screenshots/**` change
+- **On push to main:** Runs automatically when any `*.html` file, `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `update_sri.py`, `img/**`, `vendor/**`, or `chat-screenshots/**` change (the authoritative list is the `paths:` block in the workflow)
+- **Also stamped at build time:** `deploy.yml` re-runs `update_sri.py` before staging `dist/`. That is the load-bearing one - housekeeping commits carry a CI-skip marker, so a fix committed there does not itself reach production. Re-stamping in the build makes the published artifact self-consistent by construction.
 - **Manual:** Can be triggered from the GitHub Actions tab
 
 ### What it does
 
-1. Checks out the latest code
+1. Mints a short-lived `csoh-ci` GitHub App installation token and checks out the repo with it
 2. Runs `python3 update_sri.py` to recalculate SRI hashes and `?v=` cache-busting params
 3. Commits and pushes updated HTML files if hashes changed
-4. Checks URL safety - blocks deploy if unsafe URLs are detected (using `check_all_site_urls.py`)
-5. Normalizes URLs - strips tracking parameters, upgrades HTTP to HTTPS, resolves redirects (using `normalize_urls.py`)
-6. Generates preview images for any new resources in `resources.html`
-7. Checks for broken links (non-blocking warning)
-8. Deploys the site via FTP in smart passes:
-   - **Pass 1:** When deploy is triggered - all HTML/CSS/JS and site files (skips image directories)
-   - **Pass 2:** Only when new previews were generated - uploads `img/previews/`
-   - **Pass 3:** Always syncs news source banner images (`img/news-banners/`)
-   - **Pass 4:** Only when new files exist in `chat-screenshots/` - uploads `chat-screenshots/`
+4. Checks URL safety - **blocks the rest of the run** if unsafe URLs are detected (`check_all_site_urls.py`)
+5. Normalizes URLs - strips tracking parameters, upgrades HTTP to HTTPS, resolves redirects (`normalize_urls.py`)
+6. Refreshes the `VideoObject` JSON-LD on `presentations.html` (`update_presentations_schema.py`)
+7. Rebuilds the meetings search index (`build_meetings_search_index.py`)
+8. Refreshes `<lastmod>` dates in `sitemap.xml` (`update_sitemap.py`)
+9. Verifies every news source has a banner image (`check_news_banners.py`)
+10. Generates preview images for any new resource cards, optimizes them, writes WebP siblings, and syncs the mapping
+
+Each step that changes a file commits and pushes it back to `main` on its own,
+with a CI-skip marker so the commit doesn't re-trigger the workflow.
+
+**This workflow does not deploy.** Publishing is `deploy.yml`'s job - it builds
+once and fans out to AWS, GCP, and Azure. The old FTPS-to-shared-host path
+(the "smart passes" this document used to describe) was retired with the move to
+multi-cloud; see [SECURITY.md → Architecture](../SECURITY.md#architecture).
 
 ---
 
@@ -164,39 +188,23 @@ The workflow now uses a **GitHub App** (`csoh-ci`) rather than a long-lived PAT 
 | `CSOH_CI_CLIENT_ID` | Org-level | GitHub App's Client ID (`Iv23.*`); used to mint short-lived installation tokens |
 | `CSOH_CI_PRIVATE_KEY` | Org-level | GitHub App's RSA private key (PEM); used to sign the JWT for token minting |
 | `CSOH_PAT` | Org-level | Fine-grained PAT scoped to `csoh.org` with `Pull requests: Read & Write` only - used solely to auto-approve App-opened PRs (GitHub blocks self-approval) |
-| `FTP_HOST` | Repo-level | FTP hostname of the web server (must match the host's TLS cert subject) |
-| `FTP_USER` | Repo-level | FTP username |
-| `FTP_PASS` | Repo-level | FTP password |
 
-`PAT_TOKEN` and `APPROVAL_PAT_TOKEN` (the previous two long-lived PATs) have been removed.
-
-### Setting up the FTP credentials
-
-The workflow deploys via FTPS (FTP over TLS) using lftp.
-
-1. Set `FTP_HOST` to your web server's FTP hostname
-2. Set `FTP_USER` to the FTP username
-3. Set `FTP_PASS` to the FTP password
-4. All three should be saved as repository secrets under **Settings > Secrets and variables > Actions**
+`PAT_TOKEN` and `APPROVAL_PAT_TOKEN` (the previous two long-lived PATs) have been removed,
+as have `FTP_HOST` / `FTP_USER` / `FTP_PASS` - this workflow no longer deploys
+anywhere, so it needs no hosting credential at all. Publishing moved to
+`deploy.yml`, which authenticates to AWS, GCP, and Azure with keyless OIDC.
 
 ### Pinned GitHub Actions
 
-All actions in the workflows are pinned to exact commit SHAs (not mutable version tags) as a supply chain security measure. When updating an action to a newer version, look up the commit SHA for the new tag and update it manually:
+All actions in the workflows are pinned to exact commit SHAs (not mutable
+version tags) as a supply-chain measure. Bumps arrive as one grouped weekly
+Dependabot PR (`.github/dependabot.yml`).
+
+The canonical, up-to-date list of pinned SHAs lives in
+[SECURITY.md → Pinned GitHub Actions](../SECURITY.md#pinned-github-actions).
+It is not duplicated here, because a second copy just drifts. To read the live
+values straight from the workflows:
 
 ```bash
-# Example: find the SHA for a specific tag
-curl -s "https://api.github.com/repos/actions/checkout/git/ref/tags/v4.3.1" | grep sha
+grep -ho 'uses: [^ ]*@[0-9a-f]\{40\}  *# .*' .github/workflows/*.yml | sed 's/uses: //' | sort -u
 ```
-
-Current pinned versions:
-
-| Action | SHA | Version |
-|--------|-----|---------|
-| `actions/checkout` | `de0fac2e...` | v6.0.2 |
-| `actions/setup-python` | `a309ff8b...` | v6.2.0 |
-| `actions/upload-artifact` | `bbbca2dd...` | v7.0.0 |
-| `actions/github-script` | `ed597411...` | v8.0.0 |
-| `peter-evans/create-pull-request` | `c0f553fe...` | v8.1.0 |
-| `peter-evans/enable-pull-request-automerge` | `a660677d...` | v3.0.0 |
-| `lycheeverse/lychee-action` | `8646ba30...` | v2.8.0 |
-| `Cyb3r-Jak3/html5validator-action` | `443b108e...` | master (2025-09-19) |

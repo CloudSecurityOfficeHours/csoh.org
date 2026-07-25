@@ -1,10 +1,23 @@
 # =============================================================================
 # Validate HTML
 # -----------------------------------------------------------------------------
-# Runs the W3C HTML5 validator against every .html file in the repo. Catches
-# stuff like unclosed tags, anchors nested inside buttons, or invalid attribute
-# values BEFORE they ship. Fails the PR if anything is broken and posts a
-# comment showing what to fix.
+# The PR gate for markup correctness. Four checks, all blocking:
+#
+#   1. No inline <script> blocks    - the production CSP is `script-src 'self'`,
+#                                     so an inline script is silently dropped in
+#                                     the browser while still passing validation.
+#   2. width/height on every <svg viewBox> - otherwise the browser has no aspect
+#                                     ratio at parse time and the element jumps
+#                                     once CSS lands (Cumulative Layout Shift).
+#   3. Valid JSON in every JSON-LD block   - one trailing comma and a strict
+#                                     schema.org parser drops the whole block,
+#                                     silently shipping no structured data.
+#   4. The W3C HTML5 validator (Nu HTML Checker) over every .html file - catches
+#                                     unclosed tags, anchors nested inside
+#                                     anchors or buttons, invalid attributes.
+#
+# Failing the job posts a PR comment with the last 50 lines of the validator log
+# so the contributor doesn't have to dig through the run output.
 # =============================================================================
 
 name: Validate HTML

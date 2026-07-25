@@ -59,10 +59,21 @@ IMG_RE = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 ALT_RE = re.compile(r'\balt="([^"]*)"', re.IGNORECASE)
 
 
+# Every subdirectory of indexable pages. The audit is only as complete as this
+# tuple: a directory missing here is silently never checked, and since the score
+# is an average over the pages we DID audit, its absence doesn't even dent the
+# number. `homelab` was missing until 2026-07 for exactly that reason - it was
+# added after this tuple was written, and nothing flagged the omission.
+#
+# Adding a new subdirectory of pages? Add it here too. The full list of places a
+# new page directory has to be registered is in DEVELOPMENT.md.
+AUDITED_SUBDIRS = ("breaches", "portfolio", "meetings", "homelab")
+
+
 def discover_pages() -> list[Path]:
-    """All HTML files we audit: top-level + breaches/ + portfolio/ + meetings/."""
+    """All HTML files we audit: top-level + every dir in AUDITED_SUBDIRS."""
     pages = list(REPO_ROOT.glob("*.html"))
-    for sub in ("breaches", "portfolio", "meetings"):
+    for sub in AUDITED_SUBDIRS:
         pages.extend((REPO_ROOT / sub).glob("*.html"))
     return [p for p in pages if p.name not in SKIP]
 

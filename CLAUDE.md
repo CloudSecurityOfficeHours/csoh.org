@@ -59,8 +59,82 @@ in CI rather than in production.
 ## Site chrome is generated, not hand-edited
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped
-onto all ~222 pages by `tools/sync_chrome.py`. Edit the `CANON_*` constants
+onto all ~233 pages by `tools/sync_chrome.py`. Edit the `CANON_*` constants
 there and re-run it — never hand-edit the pages, or they drift. The logo drifted
 into four shapes this way, and 126 pages silently lost their logo mark entirely.
 
 It is idempotent; running it twice changes nothing the second time.
+Full docs: `tools/SYNC_CHROME_README.md`.
+
+## No number on the site should be typed by hand
+
+Counts (resources, recaps, breaches, feeds, glossary terms) appear in JSON-LD
+`numberOfItems`, OG-card subtitles, `llms.txt`, and body prose, and they drift
+the moment content lands. `tools/sync_counts.py` recomputes all of them from
+the real cards and files. When you write a count into a page or a doc, wrap it
+in a marker so the script owns it:
+
+```html
+Access <!--count:resources_floor-->410+<!--/count--> curated resources.
+```
+
+The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so
+`README.md` uses them too. `python3 tools/sync_counts.py --check` is a CI gate.
+Full docs: `tools/SYNC_COUNTS_README.md`.
+
+## `/.well-known/` is deliberately carved out of the dotfile deny
+
+`.well-known` starts with a dot, so the blanket hidden-path rules want to 403 it
+along with `.git` and `.env`. Two places say otherwise, and they must stay in
+step:
+
+- `nginx.conf` — `location ^~ /.well-known/` placed before `location ~ /\.`.
+  The `^~` is what does the work, not the ordering: nginx takes the longest
+  matching *prefix* location, and `^~` tells it to stop there and never
+  evaluate the regex denies.
+- `tools/site-publish.filter` — `+ /.well-known/` before the `- .*` catch-all,
+  or the file is never uploaded to the S3 / Azure origins at all.
+
+This isn't cosmetic. `/security.txt` names `https://csoh.org/.well-known/security.txt`
+in its `Canonical:` field, so RFC 9116 tooling fetches that exact URL; it used
+to 403 and fail validation. If you harden the dotfile rules, re-test with:
+
+```sh
+curl -sI https://csoh.org/.well-known/security.txt | head -1   # want 200
+curl -sI https://csoh.org/.git/config                | head -1   # want 403
+```
+
+## Path filters must cover everything `stage_site.sh` publishes
+
+GitHub's `*` does **not** match `/`, so `'*.html'` in a `paths:` filter means
+*root-level pages only*. `deploy.yml` and `site-update-deploy.yml` both use
+`'**.html'` for this reason — with `'*.html'` a commit touching only
+`breaches/`, `meetings/`, `portfolio/`, or `homelab/` never triggered a deploy.
+Commit `874a813c` is a real instance: it fixed MITRE technique links on
+per-breach pages only, and did not publish.
+
+The failure is silent — no error, no warning, the push just looks fine and the
+change waits for the next unrelated commit. When you add a published file,
+add it to both filters. Re-derive the published set with:
+
+```sh
+./tools/stage_site.sh /tmp/dist && find /tmp/dist -maxdepth 1
+```
+
+Widening a filter is always the safe direction: a superfluous pattern costs one
+redundant deploy of identical bytes; a missing one costs a change that never
+goes live.
+
+## A new page subdirectory has to be registered in several places
+
+`portfolio/` and `homelab/` each needed hand-registration, and `homelab/` was
+missed in `run_seo_audit.py` for months — invisibly, because the SEO score
+averages over the pages it *did* audit, so an absent directory can't drag it
+down. Check all of these when adding one:
+
+`tools/sync_chrome.py` (glob + parent page) · `tools/run_seo_audit.py`
+(`AUDITED_SUBDIRS`) · `tools/check_all_site_urls.py` · `.lychee.toml` ·
+`tools/build_search_index.py` (`SUBDIR_TYPES`) · `tools/crosslink_pages.py`
+(`SUBDIR_PATTERNS`) · `sitemap.xml`. The last three are opt-in judgement calls,
+not automatic — `homelab/` is deliberately excluded from search and
+cross-linking.

@@ -65,10 +65,20 @@ Dockerfile strip list, so all three origins serve byte-identical content).
 `.github/workflows/deploy.yml` builds once, then fans out:
 
 ```
-build (search index + stage dist/) ──► publish-aws    (s3 sync + CF invalidate)
-                                    ├─► publish-azure  (blob sync to $web)
-                                    └─► publish-gcp    (container + Trivy + Cloud Run)
+build (search index + stage dist/) ─┬─► publish-aws    (s3 sync + CF invalidate) ─┐
+                                    ├─► publish-azure  (blob sync to $web)        ├─► purge-cloudflare
+                                    └─► publish-gcp    (container + Trivy + Run)  ┘
 ```
+
+Each publish job uploads **assets first, HTML second**. A single-pass sync can
+land `index.html` (asking for `/style.css?v=NEW`) before `style.css` itself; any
+request in that window makes Cloudflare cache the OLD bytes under the NEW `?v=`
+key, and since assets are served `immutable, max-age=31536000` that wrong answer
+sticks for a year while SRI blocks the file and the site renders unstyled. That
+happened on 2026-07-15. The final `purge-cloudflare` job runs only after all
+three origins are current, purges the edge, then re-derives every versioned
+asset's SHA-384 from what the edge actually serves and fails the deploy on a
+mismatch.
 
 Every cloud authenticates with **keyless OIDC** - no long-lived cloud secrets
 in the repo. Non-secret resource IDs are read from **repo Variables**
@@ -82,6 +92,15 @@ Terraform outputs below:
 | `AWS_CLOUDFRONT_DISTRIBUTION_ID` | `aws  cloudfront_distribution_id` |
 | `AZURE_CLIENT_ID` | `azure github_client_id` |
 | `AZURE_STORAGE_ACCOUNT` | `azure storage_account_name` |
+| `CLOUDFLARE_ZONE_ID` | Cloudflare dashboard → Overview (an identifier, not a secret) |
+
+One **Secret** is also required: `CLOUDFLARE_API_TOKEN`, used only by the
+`purge-cloudflare` job. Cloudflare has no OIDC federation, so this is the one
+stored credential in the deploy path. Create it as a Custom token with the
+single permission **Zone → Cache Purge**, Zone Resources limited to `csoh.org`,
+and nothing else. If either the secret or the variable is missing the deploy
+fails by design - publishing to the origins while silently leaving a stale edge
+is exactly the failure that job exists to stop.
 
 The AWS account ID, Azure subscription ID, and Azure tenant ID are fixed
 accounts hardcoded in the Terraform (`infra/terraform/aws`, `.../azure`) and
@@ -126,6 +145,12 @@ Then run the deploy workflow once (`gh workflow run "Deploy - build once, publis
 so all three origins have content before any DNS points at them.
 
 ## Cutover (safety-gated) & rollback
+
+> **Historical.** This cutover completed in 2026 - csoh.org has served from all
+> three origins behind the Cloudflare Load Balancer since then, and the GCP
+> Global HTTPS LB / Cloud Armor / Cloud CDN are gone. The runbook is kept
+> because it is the procedure to follow if an origin is ever re-provisioned or
+> a fourth is added, and because it documents *why* the current shape exists.
 
 This is production. Cut over in stages and keep the old GCP LB IP as a rollback
 target until you're confident.
@@ -174,7 +199,13 @@ gcloud run services update-traffic csoh-site --region us-central1 \
     --to-revisions <REVISION_NAME>=100
 
 # Purge Cloudflare cache after an out-of-band change
+#   Normally unnecessary - deploy.yml's purge-cloudflare job does this on every
+#   deploy. For a change made outside the pipeline:
 #   Dashboard → Caching → Purge Everything (or scoped purge)
+
+# Check what the edge is actually serving vs. what the HTML asks for
+#   (the same SRI check deploy.yml runs; see CLAUDE.md for the one-liners)
+curl -s https://csoh.org/ | grep -o 'style\.css?v=[0-9a-f]*'
 ```
 
 ## Cost

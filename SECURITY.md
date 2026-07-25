@@ -74,10 +74,26 @@ The `.htaccess` and `nginx.conf` block direct access to sensitive files:
 | `.*-report\.txt$` | 403 | Internal URL safety report files |
 | `\.(bak\|config\|sh\|sql\|log\|ini)$` | 403 | Backups, configs, scripts, logs |
 
-**Exceptions:** three JSON files are explicitly allowlisted because the site needs to fetch them:
+**Exception - `/.well-known/`:** this is a dotted path, so the hidden-file rule
+would 403 it along with `.git` and `.env`. `nginx.conf` carves it out with a
+`location ^~ /.well-known/` block placed before the deny; the `^~` modifier
+makes nginx stop at that prefix match and never evaluate the regex denies.
+`tools/site-publish.filter` has the matching `+ /.well-known/` allow so the
+directory actually reaches the S3 and Azure origins. Both are scoped to
+`/.well-known/` alone - every other dotted path still 403s, including
+directory listing of `/.well-known/` itself and `/.well-known/../.env`.
+
+This matters because `/security.txt` names `https://csoh.org/.well-known/security.txt`
+in its `Canonical:` field, and RFC 9116 tooling follows that URL. It used to
+return 403, which failed validation.
+
+**Exceptions:** four JSON files are explicitly allowlisted because the site needs to fetch them:
 - `preview-mapping.json` - resource preview thumbnails (`main.js`)
 - `manifest.json` - PWA "Add to Home Screen" metadata
 - `meetings-search-index.json` - meetings.html full-text search index (`meetings.js`)
+- `search-index.json` - site-wide search index, lazy-loaded by `search-init.js`
+
+The same four-file allowlist is enforced a second time in `tools/site-publish.filter`, which decides what is uploaded to the object-storage origins at all. Static object hosting has no request-time access rules, so on AWS and Azure the rule is "never upload it" rather than "return 403".
 
 Directory listing is disabled globally (`Options -Indexes` / `autoindex off`).
 
@@ -95,10 +111,10 @@ All first-party CSS and JavaScript files include SRI hashes:
 ```
 
 The `update_sri.py` script:
-1. Calculates SHA-384 hashes for every tracked first-party asset (`style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`)
+1. Calculates SHA-384 hashes for every asset in its `ASSETS` list - currently `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search.css`, `search-init.js`, and the vendored `vendor/goatcounter-count.js`. Any new shared asset must be added to that list or it ships with neither an integrity hash nor a cache-bust key
 2. Updates the `integrity` attribute in all HTML files
 3. Adds cache-busting `?v=` parameters derived from the hash
-4. Runs automatically in CI before every deploy
+4. Runs automatically in CI - `site-update-deploy.yml` stamps the repo, and `deploy.yml` re-stamps the build output before staging, so the published artifact is self-consistent even if a commit landed with stale hashes
 
 This means even if the hosting account were compromised and files were tampered with, browsers would refuse to execute the modified scripts.
 
@@ -156,22 +172,42 @@ All third-party GitHub Actions are pinned to exact commit SHAs rather than mutab
 
 | Action | Pinned SHA | Version |
 |--------|-----------|---------|
-| `actions/checkout` | `de0fac2e4500dabe0009e67214ff5f5447ce83dd` | v6.0.2 |
-| `actions/setup-python` | `a309ff8b426b58ec0e2a45f0f869d46889d02405` | v6.2.0 |
-| `actions/upload-artifact` | `bbbca2ddaa5d8feaa63e36b76fdaad77386f024f` | v7.0.0 |
-| `actions/github-script` | `ed597411d8f924073f98dfc5c65a23a2325f34cd` | v8.0.0 |
-| `actions/cache` | `27d5ce7f107fe9357f9df03efb73ab90386fccae` | v5.0.5 |
-| `actions/create-github-app-token` | `1b10c78c7865c340bc4f6099eb2f838309f1e8c3` | v3.1.1 |
-| `peter-evans/create-pull-request` | `c0f553fe549906ede9cf27b5156039d195d2ece0` | v8.1.0 |
-| `peter-evans/enable-pull-request-automerge` | `a660677d5469627102a1c1e11409dd063606628d` | v3.0.0 |
-| `raven-actions/actionlint` | `205b530c5d9fa8f44ae9ed59f341a0db994aa6f8` | v2.1.2 |
-| `astral-sh/ruff-action` | `0ce1b0bf8b818ef400413f810f8a11cdbda0034b` | v4.0.0 |
-| `lycheeverse/lychee-action` | `8646ba30535128ac92d33dfc9133794bfdd9b411` | v2.8.0 |
 | `Cyb3r-Jak3/html5validator-action` | `443b108eb8e134b63a1f8a8ba0c942d552608ed7` | master 2025-09-19 |
+| `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | v6.1.0 |
+| `actions/checkout` | `9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0` | v7.0.0 |
+| `actions/create-github-app-token` | `bcd2ba49218906704ab6c1aa796996da409d3eb1` | v3.2.0 |
+| `actions/download-artifact` | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` | v8.0.1 |
+| `actions/github-script` | `3a2844b7e9c422d3c10d287c895573f7108da1b3` | v9.0.0 |
+| `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` | v7.0.0 |
+| `actions/upload-artifact` | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | v7.0.1 |
+| `anthropics/claude-code-action` | `af0559ee4f514d1ef21826982bed13f7edc3c35e` | v1.0.178 |
+| `astral-sh/ruff-action` | `278981a28ce3188b1e39527901f38254bf3aac89` | v4.1.0 |
+| `aws-actions/configure-aws-credentials` | `517a711dbcd0e402f90c77e7e2f81e849156e31d` | v6.2.2 |
+| `azure/cli` | `9eb25b8360668fb0ecbafa808d40e2197b2f5f52` | v3.0.0 |
+| `azure/login` | `532459ea530d8321f2fb9bb10d1e0bcf23869a43` | v3.0.0 |
+| `google-github-actions/auth` | `7c6bc770dae815cd3e89ee6cdf493a5fab2cc093` | v3 |
+| `google-github-actions/setup-gcloud` | `aa5489c8933f4cc7a4f7d45035b3b1440c9c10db` | v3.0.1 |
+| `lycheeverse/lychee-action` | `e7477775783ea5526144ba13e8db5eec57747ce8` | v2.9.0 |
+| `peter-evans/create-pull-request` | `5f6978faf089d4d20b00c7766989d076bb2fc7f1` | v8.1.1 |
+| `peter-evans/enable-pull-request-automerge` | `a660677d5469627102a1c1e11409dd063606628d` | v3.0.0 |
+| `raven-actions/actionlint` | `3d39aea434753780c3b3d4a1a31c854b4dbf49d7` | v2.2.0 |
 
-Every third-party action used by the workflows is pinned by SHA - no remaining `@v*` major-tag references. To update a pinned action, look up the commit SHA for the new tag:
+Every third-party action used by the workflows is pinned by SHA - no remaining `@v*` major-tag references.
+
+Bumps are normally automatic: `.github/dependabot.yml` watches the `github-actions`
+ecosystem weekly and opens **one grouped PR** that updates both the SHA and the
+trailing `# vX.Y.Z` comment. Only do it by hand if you are pinning something
+Dependabot doesn't cover:
+
 ```bash
-curl -s "https://api.github.com/repos/actions/checkout/git/ref/tags/v6.0.2" | grep sha
+curl -s "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.0" | grep sha
+```
+
+The table above drifts every time Dependabot lands a bump. Regenerate it from
+the workflows rather than editing rows by hand:
+
+```bash
+grep -ho 'uses: [^ ]*@[0-9a-f]\{40\}  *# .*' .github/workflows/*.yml | sed 's/uses: //' | sort -u
 ```
 
 ### No External Dependencies (Client-Side)
@@ -200,9 +236,10 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 | `normalize-urls.yml` | `csoh-ci` App | n/a | via PR (human reviews + merges) |
 | `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only - deploy is `deploy.yml`) | direct (App is on ruleset bypass) |
 | `update-counts.yml` | `csoh-ci` App | n/a (recomputes counts weekly) | direct (App is on ruleset bypass) |
+| `update-resources.yml` | `csoh-ci` App + `CSOH_PAT` (for auto-approve) + `CLAUDE_CODE_OAUTH_TOKEN` (model auth) | n/a | via PR + auto-merge, only if the diff is `resources.html` alone |
 | `deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **keyless OIDC - no key** (GCP WIF, AWS IAM role, Azure federated cred) | no |
 | `lint.yml`, `validate-html.yml`, `check-broken-links.yml`, `check-url-safety.yml` | auto-injected `GITHUB_TOKEN` | n/a | no |
-| `check-pagespeed.yml`, `run-seo-audit.yml`, `check-reading-list-staleness.yml`, `check-meeting-staleness.yml` | auto-injected `GITHUB_TOKEN` (the two staleness checkers add `issues: write`; PageSpeed/SEO auditors stay `contents: read` and open issues via App/PAT) | n/a | no |
+| `check-pagespeed.yml`, `run-seo-audit.yml`, `check-reading-list-staleness.yml`, `check-meeting-staleness.yml`, `check-conference-staleness.yml` | auto-injected `GITHUB_TOKEN` (the three staleness checkers add `issues: write`; PageSpeed/SEO auditors stay `contents: read` and open issues via App/PAT) | n/a | no |
 
 Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead - keeping the default token strictly minimal. `deploy.yml` adds `id-token: write` for the OIDC tokens GitHub mints for the three clouds' federation exchanges.
 
@@ -244,7 +281,7 @@ Every workflow that needs write access starts with the same step:
 ```yaml
 - name: Mint installation token
   id: app-token
-  uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3  # v3.1.1
+  uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
   with:
     client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
     private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
@@ -276,15 +313,32 @@ GitHub's auto-merge feature evaluates `reviewDecision` independently and does no
 | `CSOH_CI_CLIENT_ID` | GitHub App's Client ID (`Iv23.*`) | identifier (not sensitive on its own) |
 | `CSOH_CI_PRIVATE_KEY` | GitHub App's RSA private key | high-sensitivity |
 | `CSOH_PAT` | Approve App-opened PRs (auto-merge driver) | medium-sensitivity (narrow scope) |
-| `SSH_PRIVATE_KEY` | Reserved for future use | high-sensitivity |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `update-resources.yml` model auth (subscription quota, not API billing) | medium-sensitivity |
+| `PSI_API_KEY` | `check-pagespeed.yml` - Google PageSpeed Insights v5, restricted to that one API | low-sensitivity |
+| `CLOUDFLARE_API_TOKEN` | `deploy.yml` cache purge - scoped to Zone → Cache Purge on `csoh.org` alone | medium-sensitivity |
+| `SSH_PRIVATE_KEY` | **Unused.** No workflow references it - left over from the retired FTPS/shared-host era. A high-sensitivity secret that nothing consumes is pure downside; delete it. | high-sensitivity |
 
-**No cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access, gated by a policy that requires the token's repo claim to equal `CloudSecurityOfficeHours/csoh.org` on `main`:
+Non-secret identifiers live in repo **Variables**, not Secrets, and are populated
+from `terraform output` (see [infra/README.md](infra/README.md)):
+`AWS_PUBLISHER_ROLE_ARN`, `AWS_BUCKET_NAME`, `AWS_CLOUDFRONT_DISTRIBUTION_ID`,
+`AZURE_CLIENT_ID`, `AZURE_STORAGE_ACCOUNT`, `CLOUDFLARE_ZONE_ID`.
+
+**No origin-cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access, gated by a policy that requires the token's repo claim to equal `CloudSecurityOfficeHours/csoh.org` on `main`:
 
 1. **GCP** - Workload Identity Federation exchanges the OIDC token for a token scoped to impersonate `csoh-deployer` (`roles/run.admin`, `roles/artifactregistry.writer`, `iam.serviceAccountUser` on the runtime SA). The runtime SA `csoh-run-runtime` has **zero IAM roles**.
 2. **AWS** - `sts:AssumeRoleWithWebIdentity` returns credentials for the `csoh-site-publisher` role, scoped to write the one S3 bucket and invalidate the one CloudFront distribution.
 3. **Azure** - an Entra app federated credential yields a token whose service principal holds only "Storage Blob Data Contributor" on the one storage account.
 
 Net effect: a leaked workflow log compromises at most three ~1-hour tokens, each scoped to one repo's publish permissions on one resource per cloud. There is no long-lived credential to rotate or revoke for any of them.
+
+**The one exception is Cloudflare.** Cloudflare offers no OIDC federation, so the
+`purge-cloudflare` job in `deploy.yml` uses a stored `CLOUDFLARE_API_TOKEN`. It
+is deliberately the narrowest token the API allows: a single permission,
+Zone → Cache Purge, with Zone Resources limited to `csoh.org`. It cannot read
+DNS, edit rules, view analytics, or touch any other zone - the worst an attacker
+could do with it is repeatedly cold the cache. That is worth documenting rather
+than glossing: it is the only long-lived credential in the deploy path, and the
+only one that needs a manual rotation cadence.
 
 `PAT_TOKEN` (the original CI PAT), `CSOH_CI_APP_ID` (deprecated numeric input, replaced by `CSOH_CI_CLIENT_ID`), and `APPROVAL_PAT_TOKEN` (replaced by `CSOH_PAT`) have all been removed.
 
@@ -298,6 +352,9 @@ Net effect: a leaked workflow log compromises at most three ~1-hour tokens, each
 | App private key | Annually or on suspected compromise | Generate new key in App settings; replace `CSOH_CI_PRIVATE_KEY` secret; revoke old key |
 | `CSOH_PAT` | Every 6-12 months (or before its set expiry) | Generate new fine-grained PAT (resource owner: `CloudSecurityOfficeHours`, repo: `csoh.org`, permission: pull-requests: write only); replace org-level Actions secret |
 | Cloud access tokens (GCP/AWS/Azure) | Automatic, every ~1 hour | None - minted per workflow run via OIDC, no stored credential on any cloud |
+| `CLOUDFLARE_API_TOKEN` | Every 6-12 months, or on suspected compromise | Cloudflare → My Profile → API Tokens → roll; recreate as a Custom token with the single permission Zone → Cache Purge, Zone Resources limited to `csoh.org`; replace the Actions secret |
+| `CLAUDE_CODE_OAUTH_TOKEN` | On suspected compromise, or when it expires | Re-run `claude setup-token` locally and replace the Actions secret |
+| `PSI_API_KEY` | Low urgency - it is rate-limit-scoped, not privileged | Regenerate in Google Cloud console credentials, keep the "PageSpeed Insights API" restriction, replace the Actions secret |
 | GCP runtime SA roles | On every Terraform apply | The runtime SA's IAM bindings live in [`infra/terraform/gcp/service_accounts.tf`](infra/terraform/gcp/service_accounts.tf) - review on every change |
 
 ---
@@ -353,10 +410,25 @@ The following are explicitly excluded from deployment to the web server:
 | `*.md` | Documentation files |
 | `.DS_Store` | macOS metadata |
 | `README.md`, `LICENSE`, `CONTRIBUTING*.md` | Repo docs |
+| `seo-audits/` | Internal audit reports |
+| `dist/`, `.ruff_cache/` | Build and lint artifacts |
+| `Dockerfile`, `docker-compose.yml`, `nginx.conf`, `nginx-security-headers.conf`, `pyproject.toml` | Server/container config - useful to an attacker, useless to a visitor |
+| `*.json` except the four allowlisted above | Internal data files |
+| `*.bak`, `*.log`, `*.ini`, `*.sql`, `*.config`, `*-report.txt` | Backups, logs, configs, internal reports |
+| `*.pem`, `*.key`, `*.crt` | Key material (also a hard build failure - see below) |
+| *(not excluded)* `.well-known/` | Explicitly **allowed** past the `- .*` catch-all - it must be public for RFC 9116. See File Access Controls above. |
+
+`tools/stage_site.sh` does not just trust the filter: after staging it runs a
+belt-and-braces `find` for `.env*`, `*.pem`, `*.key`, `*.crt`, and `*.py` in
+`dist/` and **fails the build** if any are present, plus a sanity floor that
+aborts if fewer than 100 files were staged (a near-empty `dist/` means
+something upstream broke and would publish a hollow site).
 
 ### Docker Security
 
-The `Dockerfile` and `nginx.conf` provide an alternative deployment path with equivalent security:
+The `Dockerfile` + `nginx.conf` pair is not a side path - it **is** the GCP Cloud Run
+origin, one of the three production origins. It is also what `docker-compose.yml`
+runs locally, so the local container behaves like production:
 - All sensitive files are removed during the Docker build (`rm -rf .git, tools, *.py, *.md`, etc.)
 - `nginx.conf` mirrors all `.htaccess` security headers and access controls
 - `server_tokens off` suppresses nginx version disclosure
@@ -368,7 +440,8 @@ The `Dockerfile` and `nginx.conf` provide an alternative deployment path with eq
 If you discover a security vulnerability on csoh.org:
 
 - **Email:** admin@csoh.org
-- **security.txt:** https://csoh.org/.well-known/security.txt (RFC 9116)
+- **security.txt:** https://csoh.org/.well-known/security.txt (RFC 9116
+  canonical location), mirrored at https://csoh.org/security.txt
 - **Community:** Bring it up during our Friday Zoom session
 
 We take security seriously - especially as a cloud security community.
@@ -379,5 +452,4 @@ We take security seriously - especially as a cloud security community.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| `cancel-in-progress: true` on deploy | Accepted trade-off | If a newer deploy is queued while one is running, the older run is cancelled. Each origin (S3, Azure Blob, Cloud Run) is synced independently, so a cancelled run can briefly leave origins at slightly different revisions until the next deploy reconciles them. Avoids stale-content races; worth revisiting if/when we move to a blue-green deploy. |
 | `http://flaws.cloud` link | Intentional | This AWS security training site only serves over HTTP. The link is intentional. |

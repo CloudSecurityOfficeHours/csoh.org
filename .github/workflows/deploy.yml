@@ -5,11 +5,19 @@
 # Balancer. This workflow builds the site a single time, then fans out to
 # publish the identical content to each origin in parallel:
 #
-#   build ──► publish-aws    (S3 sync + CloudFront invalidation)
-#         ├─► publish-azure  (Blob $web sync)
-#         └─► publish-gcp    (container build + Trivy scan + Cloud Run deploy)
+#   build ─┬─► publish-aws    (S3 sync + CloudFront invalidation) ─┐
+#          ├─► publish-azure  (Blob $web sync)                     ├─► purge-cloudflare
+#          └─► publish-gcp    (build + Trivy scan + Cloud Run)     ┘   (purge + verify SRI
+#                                                                       against the live edge)
+#
+# The final job is not optional bookkeeping: it purges the Cloudflare edge only
+# after all three origins are serving the new bytes, then re-derives every
+# versioned asset's SHA-384 from what the edge actually hands back and fails the
+# deploy if it doesn't match the integrity= the live HTML declares.
 #
 # Every cloud uses keyless OIDC auth - no long-lived cloud secrets in the repo.
+# The one stored credential is CLOUDFLARE_API_TOKEN, scoped to Zone → Cache
+# Purge on this zone alone (Cloudflare has no OIDC federation).
 # Non-secret resource IDs come from repo Variables (Settings → Variables),
 # populated from the matching `terraform output` (see infra/README.md).
 #
@@ -39,27 +47,72 @@ on:
     # pattern below. No point redeploying the site if a commit only touched,
     # say, the README or Terraform. Patterns use glob syntax: `*` = any chars
     # in one path segment, `**` = any depth of subdirectories.
+    #
+    # THE RULE: if `tools/stage_site.sh` publishes it, it belongs in this list.
+    # Anything published but missing here can be edited, committed, and merged
+    # without ever reaching production - it silently waits for the next
+    # unrelated push. There is no error and no warning; the push just looks
+    # successful. Re-derive the published set any time with:
+    #     ./tools/stage_site.sh /tmp/dist && find /tmp/dist -maxdepth 1
+    #
+    # NOTE ON `**.html` vs `*.html`: GitHub's `*` does NOT match `/`, so
+    # `'*.html'` means *root-level HTML only*. This list used to say `'*.html'`,
+    # which meant a commit touching only breaches/, meetings/, portfolio/, or
+    # homelab/ pages never triggered a deploy. Commit 874a813c ("point retired
+    # MITRE technique IDs at their current pages") is a real instance: it edited
+    # only per-breach pages, so it did not publish. Usually this was masked -
+    # add_meeting.py edits root meetings.html alongside the new recap - which is
+    # exactly why it went unnoticed. `**.html` matches at any depth.
     paths:
-      - '*.html'
-      - 'chat-screenshots/**'
-      - 'img/**'
+      # --- pages (any depth: root + breaches/ + meetings/ + portfolio/ + homelab/)
+      - '**.html'
+      # --- shared styles and scripts
       - 'style.css'
       - 'main.js'
       - 'chat-resources.js'
       - 'breach-timeline.css'
       - 'breach-timeline.js'
-      - 'Dockerfile'
-      - 'nginx.conf'
-      - 'nginx-security-headers.conf'
-      - 'search.html'
+      - 'meetings.js'
+      - 'glossary.js'
+      - '404.js'
       - 'search.css'
       - 'search-init.js'
       - 'search-synonyms.json'
+      - 'vendor/**'
+      # --- feeds, crawler files, and other machine-readable endpoints
+      - 'feed.xml'
+      - 'recaps.xml'
+      - 'sitemap.xml'
+      - 'robots.txt'
+      - 'llms.txt'
+      - 'humans.txt'
+      - 'manifest.json'
+      - 'csoh.ics'
+      - 'security.txt'
+      - '.well-known/**'
+      - 'preview-mapping.json'
+      # --- images and media
+      - 'img/**'
+      - 'chat-screenshots/**'
+      - 'email-screenshots/**'
+      # --- the Terraform we publish as teaching material for terraform.html
+      - 'infra/**'
+      # --- things that change WHAT or HOW we publish
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - 'nginx-security-headers.conf'
       - 'tools/build_search_index.py'
       - 'tools/site-publish.filter'
       - 'tools/stage_site.sh'
-      - 'vendor/**'
       - '.github/workflows/deploy.yml'
+    #
+    # Deliberately NOT triggers: `search-index.json` and
+    # `meetings-search-index.json`. Both are published, but both are regenerated
+    # during the build itself, so a commit is never the reason they need to ship.
+    #
+    # Widening this list is always the safe direction - a superfluous pattern
+    # costs one extra deploy of identical bytes, while a missing one costs a
+    # change that never goes live.
   # Trigger 2: `workflow_dispatch` adds a "Run workflow" button in the Actions
   # tab so a human can deploy on demand (e.g. to redeploy after a config
   # change that didn't touch any of the paths above).

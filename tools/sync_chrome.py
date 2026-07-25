@@ -3,7 +3,7 @@
 
 Why this exists
 ---------------
-The nav and footer are hand-copied into each of ~175 static pages (no
+The nav and footer are hand-copied into each of ~233 static pages (no
 templating). Over time they drifted: the breaches/ and meetings/ pages still
 carried an older, smaller nav; a couple of root pages had stray extra items;
 the footer's "About CSOH" link was present on some pages and missing on
@@ -12,7 +12,8 @@ theme toggle), and the footer *byte-identical* everywhere, with only two
 legitimate per-page differences preserved (both apply to the nav/footer only;
 the header buttons are the same two lines on every page):
 
-  1. `../` path prefixes on pages inside breaches/ and meetings/.
+  1. `../` path prefixes on pages inside breaches/, meetings/, portfolio/,
+     and homelab/.
   2. The current-page markers (`aria-current="page"` on the active link and
      `active` / `aria-expanded="true"` on its dropdown toggle).
 
@@ -34,7 +35,9 @@ REPO = Path(__file__).resolve().parent.parent
 
 # --- Canonical logo block (first child of .header-content) -------------------
 # The logo was the last piece of the header nothing stamped, and it had drifted
-# into four shapes across 222 pages:
+# into four shapes. Snapshot of the damage at the time this was written, when
+# the site was 222 pages (it is ~233 now - the shape of the problem is the
+# point, not the exact counts):
 #
 #   126 pages (breaches/, meetings/)  <a href="../index.html"> with NO logo mark
 #    87 pages                         <a href="index.html"> wrapping svg + .logo

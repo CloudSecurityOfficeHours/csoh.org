@@ -292,7 +292,7 @@ Potential improvements:
 
 - [Interactive Submission Tool](SUBMIT_RESOURCE_README.md) - Uses preview generation
 - [URL Safety Checker](CHECK_URL_SAFETY_README.md) - Validates URLs
-- [GitHub Workflows](.github/workflows/) - Automation configuration
+- [GitHub Workflows](../.github/workflows/) - Automation configuration
 
 ---
 

@@ -12,6 +12,8 @@ Welcome! This guide covers **any change you want to suggest** to the CSOH websit
 > | **Report a bug** | [Open a Bug Report issue](https://github.com/CloudSecurityOfficeHours/csoh.org/issues/new?template=bug_report.yml) (just fill out a form) | 2 min |
 > | **Suggest a feature** | [Open a Feature Request issue](https://github.com/CloudSecurityOfficeHours/csoh.org/issues/new?template=feature_request.yml) (just fill out a form) | 2 min |
 > | **Add a resource yourself** | Run `python3 tools/submit_resource.py` ([guide](tools/SUBMIT_RESOURCE_README.md)) | 10 min |
+> | **Add a cloud CTF** | Run `python3 tools/submit_ctf.py` ([guide](tools/SUBMIT_CTF_README.md)) | 10 min |
+> | **Suggest a breach kill chain** | [Open a Kill Chain Request issue](https://github.com/CloudSecurityOfficeHours/csoh.org/issues/new?template=kill_chain_request.yml) | 5 min |
 > | **Fix a typo or content** | Edit the file on GitHub ([walkthrough below](#editing-content--descriptions)) | 5 min |
 > | **Set up local development** | Follow the [Local Development Guide](DEVELOPMENT.md) | 10-15 min |
 >
@@ -237,7 +239,7 @@ FEEDS = [
 
 1. Scroll down and click **"Commit changes"**
 2. Write a message: `"Add [Source Name] to news feeds"`
-3. Create a pull request (see [Creating a Pull Request](#creating-a-pull-request) below)
+3. Create a pull request (see [Creating a Pull Request](#-creating-a-pull-request) below)
 
 **Tips:**
 - Many websites have **RSS feeds** (look for an RSS icon 🔘)
@@ -279,7 +281,7 @@ Whether you're fixing a typo or rewriting a section, the process is the same.
 - [cloud-security-best-practices.html](cloud-security-best-practices.html) - Practitioner controls checklist
 - [shared-responsibility-model.html](shared-responsibility-model.html) - Provider vs. customer split
 - [cspm-vs-cnapp.html](cspm-vs-cnapp.html) - Tool category comparison
-- [vendor-landscape.html](vendor-landscape.html) - 350+ vendors across 30 categories
+- [vendor-landscape.html](vendor-landscape.html) - 360+ vendors across 30 categories
 - [landing-zones.html](landing-zones.html) - Cloud foundations (AWS / Azure / GCP reference designs)
 - [containers.html](containers.html) - Container security: boundary, escapes, IMDS, supply chain
 - [kubernetes.html](kubernetes.html) - Kubernetes & managed K8s (EKS / AKS / GKE) security
@@ -309,7 +311,7 @@ Whether you're fixing a typo or rewriting a section, the process is the same.
 - [cloud-security-certifications.html](cloud-security-certifications.html) - CCSK / CCSP / AWS / Azure / GCP / CKS comparison
 - [conferences.html](conferences.html) - Security and hacker conference directory
 - [ctfs.html](ctfs.html) - Cloud CTF directory
-- [glossary.html](glossary.html) - 300+ terms with cross-links
+- [glossary.html](glossary.html) - 310 terms with cross-links
 - [faq.html](faq.html) - Frequently asked questions
 - [github-actions.html](github-actions.html) - GitHub Actions explainer
 - [cloud-deployment.html](cloud-deployment.html) - How csoh.org itself deploys to AWS, GCP, and Azure
@@ -386,7 +388,7 @@ If it's a simple change (moving a resource, fixing a tag):
 
 If you're not sure exactly how to do it:
 
-1. Fork the repo (see [Creating a Pull Request](#creating-a-pull-request))
+1. Fork the repo (see [Creating a Pull Request](#-creating-a-pull-request))
 2. Make the changes as described above
 3. In your pull request description, explain your reasoning:
 
@@ -594,7 +596,16 @@ Before you submit, make sure:
 - ✅ **Light & dark mode** - Verify your changes look good in both themes (use the 🌙 toggle)
 - ✅ **Commit message is helpful** - Clearly describe what you did
 - ✅ **You're not changing too much** - Keep each PR focused on one thing
-- ✅ **CI is green** - The `lint.yml` workflow runs `actionlint`, `ruff`, and `yamllint` on every PR; the `validate-html.yml` workflow runs the W3C validator on HTML changes. See [DEVELOPMENT.md#linting](DEVELOPMENT.md#linting-run-by-lintyml-on-every-pushpr) for the local commands.
+- ✅ **CI is green** - Four workflows run on a PR:
+
+  | Workflow | What it checks | Blocks the merge? |
+  |---|---|---|
+  | `lint.yml` | `actionlint` + `ruff` + `yamllint` | Yes |
+  | `validate-html.yml` | W3C HTML5 validator, plus: no inline `<script>`, `width`/`height` on every `<svg viewBox>`, valid JSON in every JSON-LD block | Yes, with a PR comment |
+  | `check-url-safety.yml` | Shortener domains, lookalike hostnames, throwaway TLDs, raw-IP hosts (redirects resolved first) | Yes |
+  | `check-broken-links.yml` | lychee crawl of every link | No - it comments, but link rot never blocks a merge |
+
+  See [DEVELOPMENT.md#linting](DEVELOPMENT.md#linting-run-by-lintyml-on-every-pushpr) for the local commands.
 
 
 ### What happens after your PR merges
@@ -678,6 +689,9 @@ A: If it would help a cloud security professional learn or advance, it's worth s
 - **Common questions** → See [faq.html](faq.html)
 - **Want to contribute resources?** → Check [CONTRIBUTING_RESOURCES.md](CONTRIBUTING_RESOURCES.md)
 - **Want to add a CTF?** → Check [CONTRIBUTING_CTFS.md](CONTRIBUTING_CTFS.md)
+- **Want to write a breach kill chain?** → Check [CONTRIBUTING_KILL_CHAINS.md](CONTRIBUTING_KILL_CHAINS.md) (high bar - read the standard first)
+- **Setting up locally?** → [DEVELOPMENT.md](DEVELOPMENT.md)
+- **Found a security issue?** → [SECURITY.md](SECURITY.md) - please don't open a public issue
 - **Want to add a glossary term?** → Check [tools/CROSSLINK_GLOSSARY_README.md](tools/CROSSLINK_GLOSSARY_README.md)
 - **Want to set up local development?** → Check [DEVELOPMENT.md](DEVELOPMENT.md)
 

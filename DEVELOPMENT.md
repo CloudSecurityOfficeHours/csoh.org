@@ -79,8 +79,10 @@ csoh.org/
 ├── what-is-cloud-security.html      # Pillar: vendor-neutral cloud security overview
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cspm-vs-cnapp.html               # Tool-category comparison (CSPM/CNAPP/CWPP/CIEM/DSPM)
-├── vendor-landscape.html            # 350+ cloud-security vendors across 30 categories
-├── glossary.html                    # 300+ cloud-security terms with live search + cross-links
+├── cspm-vs-cwpp.html                # Posture vs workload protection, head to head
+├── cnapp-vs-xdr.html                # Where CNAPP ends and XDR/CDR begins
+├── vendor-landscape.html            # 360+ cloud-security vendors across 30 categories
+├── glossary.html                    # 310 cloud-security terms with live search + cross-links
 ├── faq.html                         # Frequently asked questions
 │
 │  ── Platform topics ──
@@ -93,6 +95,7 @@ csoh.org/
 │
 │  ── Discipline topics ──
 ├── iam.html                         # IAM & cloud identity, RBAC/ABAC, workload identity, priv-esc paths
+├── non-human-identity.html          # NHI: service accounts, keys, tokens, AI agents
 ├── zero-trust.html                  # NIST SP 800-207, BeyondCorp, CISA Maturity Model
 ├── network-security.html            # VPC, private endpoints, egress controls, WAF/DDoS, SASE/ZTNA
 ├── data-security.html               # KMS, envelope encryption, BYOK/HSM, secrets, key rotation
@@ -110,6 +113,9 @@ csoh.org/
 ├── cloud-pentesting.html            # AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound
 ├── threat-research.html             # Curated cloud threat research directory (incl. supply chain)
 ├── breach-timeline.html             # Cloud breach kill chain index → `breaches/`
+├── breach-lessons.html              # Cross-incident synthesis of recurring root causes
+├── cloud-breach-year-in-review-2025.html # The breaches that defined 2025
+├── kevin-mitnick.html               # Special resource page
 ├── ctfs.html                        # Cloud CTF directory
 │
 │  ── Governance + AI ──
@@ -117,6 +123,7 @@ csoh.org/
 ├── compliance-frameworks.html       # SOC2 / ISO / PCI / HIPAA / FedRAMP / CMMC / GDPR deep dives
 ├── ai-learning.html                 # Using AI to LEARN cloud security
 ├── ai-ml-security.html              # Securing AI workloads (OWASP LLM Top 10, ATLAS)
+├── mcp-security.html                # Securing the Model Context Protocol
 │
 │  ── Per-cloud SEO hubs ──
 ├── aws-security.html                # AWS security hub (high-volume search target)
@@ -128,25 +135,38 @@ csoh.org/
 ├── learning-path.html               # Beginner→advanced learning roadmap (HowTo schema)
 ├── cloud-security-degree-programs.html # Academic paths + university programs
 ├── cloud-security-careers.html      # Roles, salaries, interviews, portfolio
+├── cloud-security-<role>.html       # 12 role-in-depth pages (engineer, architect, iam-architect,
+│                                    #   appsec, cnapp-analyst, detection, IR, pentest, platform,
+│                                    #   grc, sales-engineer, customer-success-engineer)
+├── breaking-into-cloud-security.html # Help desk → cloud security, the realistic version
+├── cloud-security-interview-questions.html # Interview questions with model answers
+├── cloud-security-resume-guide.html # Resume structure and phrasing
 ├── cloud-security-home-lab.html     # Free-tier setups, budget guardrails, kill-switches
 ├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
 ├── cloud-security-portfolio-projects.html # Hub for 7 portfolio walkthroughs (in `portfolio/`)
+├── mentorship.html                  # Community mentorship program
 ├── cloud-security-reading-list.html # Curated books / blogs / people-to-follow
 ├── community.html                   # Community & Signal chat
 ├── conferences.html                 # Security & hacker conferences directory
 │
 │  ── Sessions / news / archives ──
 ├── sessions.html                    # Weekly Zoom session info
+├── speakers.html                    # Guest speaker archive
+├── present.html                     # How to pitch a talk
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 410+ curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # 415 curated resources (largest page; auto-refreshed weekly)
 ├── news.html                        # Auto-generated news articles
-├── rss.html                         # RSS subscription landing page
+├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
+├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests
 │
 │  ── Behind the scenes ──
 ├── github-actions.html              # Learn-by-example GitHub Actions explainer
 ├── cloud-deployment.html            # How CSOH deploys across AWS + GCP + Azure (3 origins, Cloudflare edge, keyless OIDC)
+├── terraform.html                   # Learn-by-example Terraform explainer (infra/terraform/)
+├── version-control.html             # Git & version-control fundamentals via this repo
+├── how-csoh-org-is-secured.html     # The site's own security model, end to end
 ├── contribute.html                  # How to contribute
 ├── contribute-resources.html        # Resource submission form
 │
@@ -160,15 +180,18 @@ csoh.org/
 ├── tools/build_search_index.py      # Builds search-index.json from all .html files
 │
 │  ── Policy / about ──
+├── about.html                       # About CSOH: mission and ethos
 ├── about-shawn-nunley.html          # Author/E-E-A-T page
 ├── code-of-conduct.html
 ├── privacy.html
 ├── security-policy.html
+├── 403.html / 404.html              # Custom error pages (404.js powers "did you mean")
 │
 │  ── Per-breach pages and meeting recaps ──
-├── breaches/                        # 13 per-breach kill chain pages (split from breach-timeline.html)
-├── meetings/                        # 102 per-meeting recap pages (split from meetings.html)
+├── breaches/                        # 20 per-breach kill chain pages (split from breach-timeline.html)
+├── meetings/                        # 105 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
+├── homelab/                         # 4 command-line home-lab walkthroughs (not search-indexed)
 │
 │  ── Shared assets ──
 ├── style.css                        # All site styles (includes dark mode)
@@ -179,8 +202,8 @@ csoh.org/
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
-├── .github/workflows/      # CI/CD pipelines (14 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
-└── update_news.py          # News aggregation from 39 RSS feeds
+├── .github/workflows/      # CI/CD pipelines (15 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
+└── update_news.py          # News aggregation from 50 RSS feeds
 ```
 
 ### Workflows at a Glance
@@ -191,7 +214,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 39 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
+| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 50 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
 | [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - auto-approved, human merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
@@ -220,6 +243,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across every indexable page (counted at runtime) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
 | [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | RSS-feed staleness check on `cloud-security-reading-list.html` | Opens or refreshes a sticky issue labeled `reading-list-staleness` |
 | [`check-meeting-staleness.yml`](.github/workflows/check-meeting-staleness.yml) | Mon 15:00 | Checks the newest meeting recap isn't older than the threshold | Opens or refreshes a sticky issue labeled `meeting-staleness` |
+| [`check-conference-staleness.yml`](.github/workflows/check-conference-staleness.yml) | 1st of month, 14:00 | Flags "Next:" dates on `conferences.html` that have already passed | Opens or refreshes a sticky issue labeled `conference-staleness` |
 
 A few patterns worth knowing before you touch any of these:
 
@@ -257,7 +281,7 @@ A few patterns worth knowing before you touch any of these:
 - **You do not need to update SRI hashes manually** -- CI handles it on merge
 
 **News Aggregation**
-- `update_news.py` pulls from 39 RSS/Atom feeds every 3 hours (via GitHub Actions)
+- `update_news.py` pulls from 50 RSS/Atom feeds every 3 hours (via GitHub Actions)
 - Generates `news.html` and `feed.xml`, regenerates the `NewsArticle` JSON-LD block on `news.html`, and refreshes `sitemap.xml` lastmod dates
 - Preserves cards already on `news.html` across runs so today-dated items don't disappear when RSS feeds rotate
 - PRs are auto-created and auto-merged if only `news.html`, `feed.xml`, and `sitemap.xml` changed
@@ -276,7 +300,7 @@ A few patterns worth knowing before you touch any of these:
 - Preview images for newly-added cards are generated post-merge by `site-update-deploy.yml`
 
 **Site-wide Search** (`search.html`, MiniSearch)
-- `tools/build_search_index.py` walks every `.html` file at repo root at deploy time and emits one entry per `<section id="…">` plus one per glossary `<dt id="term-…">` to `search-index.json` (~1.6MB raw, ~530KB gzipped)
+- `tools/build_search_index.py` walks every `.html` file at repo root at deploy time and emits one entry per `<section id="…">` plus one per glossary `<dt id="term-…">` to `search-index.json` (~3.4MB raw, ~1.0MB gzipped)
 - The index ships with the static site; `search-init.js` lazy-loads it on first keystroke and feeds it into [MiniSearch](https://lucaong.github.io/minisearch/) (self-hosted at `vendor/minisearch-*.min.js` with SRI)
 - `search-synonyms.json` provides acronym ↔ expansion mappings (`NHI ↔ non-human identity`, `CIEM ↔ cloud infrastructure entitlement management`, etc.) - expanded at both index-time and query-time so `NHI` matches docs that only spell out "non-human identity" and vice versa
 - Results return with section anchors (`iam.html#nhi`), grouped by URL, with a "+ N more sections on this page" sublist when multiple sections of one page match
@@ -353,6 +377,23 @@ python3 tools/normalize_urls.py --apply
 # CI adds `--cache tools/url_resolution_cache.json` so it only re-resolves new
 # URLs. Don't pass --cache locally or commit the cache - it's CI-seeded and
 # redirect resolution is IP-dependent.
+```
+
+The three structural gates below run inside `validate-html.yml` alongside the W3C
+validator and **fail** the PR. They are stdlib-only and take about a second each:
+
+```bash
+python3 tools/check_no_inline_scripts.py  # the strict CSP forbids inline <script>
+python3 tools/check_svg_dimensions.py     # width/height on every <svg> with a viewBox
+python3 tools/check_jsonld.py             # every ld+json block must parse
+```
+
+Two more checks run post-merge rather than on the PR, but are worth running
+locally if you touched what they cover:
+
+```bash
+python3 tools/check_news_banners.py   # site-update-deploy.yml: every news source has a banner
+python3 tools/sync_counts.py --check  # update-counts.yml: no count on the site may lie
 ```
 
 ### Linting (run by `lint.yml` on every push/PR)
@@ -480,25 +521,49 @@ When you add a new HTML page, do all of the following - none are automated:
 7. **Add the page to `sitemap.xml`** (a new `<url>` block). `update_sitemap.py` only refreshes `<lastmod>` for entries already in the sitemap - it does not auto-discover new pages.
 8. **Add the page to the nav** (`<ul class="dropdown-menu">` or mega-menu column) **on every existing HTML page**. The nav is duplicated per page, not shared - there is no shared template. Pick the right slot:
 
-   - **Learn → Foundations** (mega-menu col) - orientation pages (what-is, shared responsibility, glossary, FAQ, vendor landscape)
-   - **Learn → Topics** (mega-menu col) - discipline / platform reference pages (IAM, networking, K8s, etc.)
-   - **Learn → Career & Growth** (mega-menu col) - careers, certs, learning path, home lab
+   - **Learn** (6-column mega-menu):
+     - **Foundations** - orientation pages (what-is, shared responsibility, CSPM vs CNAPP, best practices, vendor landscape, glossary, FAQ)
+     - **By Cloud** - AWS / Azure / GCP hubs and the AWS-vs-Azure-vs-GCP comparison
+     - **Workloads & Platform** - containers, Kubernetes, serverless, service mesh, CI/CD, landing zones
+     - **Security Domains** - IAM, NHI, zero trust, network, data, vuln mgmt, API, SaaS
+     - **Governance & AI** - backup/DR, threat modeling, GRC, compliance, AI learning, AI/ML security, MCP security
+     - **Build It** - the dogfooded ops pages (Multi-Cloud Deploy, GitHub Actions, Terraform, Git & Version Control)
    - **Resources** (top-level link) - the catalog
-   - **By Cloud** (dropdown) - AWS / Azure / GCP / comparison hubs
    - **Threat Intel** (dropdown) - news, threat research, kill chains, SOC, detection engineering, IR, pentesting, CTFs
-   - **Community** (mega-menu) - sessions, conferences, recaps, presentations, chat resources
-   - **Behind the Scenes** (dropdown) - the dogfooded ops pages (Multi-Cloud Deploy, GitHub Actions, Terraform, Git & Version Control) plus Contribute / Add a Resource
+   - **Careers** (3-column mega-menu) - Getting Started / Engineering Roles / Specialist & Field Roles
+   - **Community** (3-column mega-menu) - Live (sessions, Signal, mentorship, conferences, present) / Archive (recaps, session digests, presentations, speakers, chat resources) / Connect (contact, mailing list, GitHub, RSS, contribute)
 
-   The canonical nav **and** footer are generated by `tools/sync_chrome.py` - edit `CANON_NAV` / `CANON_FOOTER` there, then run `python3 tools/sync_chrome.py` from the repo root. It regenerates `<nav>` and `<footer>` on all ~175 pages (root + `breaches/` + `meetings/`), handles `../` prefixes for subdirectories, re-applies `aria-current="page"` + active dropdown state per file, and is idempotent (confirm exactly one nav + one footer variant afterward). Editing by hand is bug-prone (you'll drift on indent or aria attributes), so always use the script - and never run the removed `sync_navs.py` / `redesign_nav.py` / `unify_footer.py`, which encoded an older nav and would clobber the current one.
+   Session-digest pages (`what-practitioners-think-*.html`) sit as `mega-featured` entries inside the column of the topic they belong to, not in a section of their own.
+
+   The canonical nav **and** footer are generated by `tools/sync_chrome.py` - edit `CANON_NAV` / `CANON_FOOTER` there, then run `python3 tools/sync_chrome.py` from the repo root. It regenerates `<nav>` and `<footer>` on all ~233 pages (root + `breaches/` + `meetings/` + `portfolio/` + `homelab/`), handles `../` prefixes for subdirectories, re-applies `aria-current="page"` + active dropdown state per file, and is idempotent (confirm exactly one nav + one footer variant afterward). Editing by hand is bug-prone (you'll drift on indent or aria attributes), so always use the script - and never run the removed `sync_navs.py` / `redesign_nav.py` / `unify_footer.py`, which encoded an older nav and would clobber the current one.
 9. **Add the page to `TARGET_PAGES` in `tools/crosslink_pages.py`** so glossary terms get auto-linked across the new page. Then run:
    ```bash
    python3 tools/crosslink_pages.py
    ```
+   Only root-level pages are listed explicitly; `breaches/*.html` and `meetings/*.html` are auto-discovered via `SUBDIR_PATTERNS`. `portfolio/` and `homelab/` are deliberately **not** cross-linked - if you add a third subdirectory that should be, add its glob there.
 10. **If your new page has external `card-link` URLs** (resource cards with screenshots), add it to the `pages` list near the bottom of `tools/generate_preview.py` so the deploy workflow auto-generates preview images for those URLs.
 11. **Add the page to the `PAGES` list in `tools/generate_og_images.py`** with a short title, subtitle, and badge, then run `python3 tools/generate_og_images.py --pages yourpage.html`. This produces a 1200×630 social-card JPG at `img/og/yourpage.jpg` and rewrites the page's `og:image`/`twitter:image` meta tags. Without this step the page falls back to `banner.png` (1200×400, wrong aspect ratio).
-12. Update the file structure trees in `README.md` and `DEVELOPMENT.md`, and (if it's an educational/feature page) add a per-page section to `README.md` describing it.
-13. Let CI regenerate SRI hashes (`update_sri.py` runs on deploy) or run it locally.
-14. **Verify structural SEO**: run `python3 tools/run_seo_audit.py --dry-run` and check the new page doesn't introduce critical issues or warnings. The weekly cron will catch any regression on Monday and open a tracking issue, but local verification on your PR is faster.
+12. **Rebuild the search index** so the page is findable at `/search.html`:
+    ```bash
+    python3 tools/build_search_index.py
+    ```
+    Root-level pages are picked up automatically (minus `EXCLUDE_FILES`); `breaches/` and `meetings/` are indexed page-level via `SUBDIR_TYPES`. `portfolio/` and `homelab/` are intentionally excluded.
+13. **Re-sync the site chrome and counts**:
+    ```bash
+    python3 tools/sync_chrome.py     # nav + header buttons + footer
+    python3 tools/sync_counts.py     # numberOfItems, count markers, OG subtitles
+    ```
+    `sync_counts.py --check` is what CI runs; a mismatch fails the build.
+14. Update the file structure trees in `README.md` and `DEVELOPMENT.md`, and (if it's an educational/feature page) add a per-page section to `README.md` describing it.
+15. Let CI regenerate SRI hashes (`update_sri.py` runs on deploy) or run it locally.
+16. **Run the local CI gates** before you push - these all block the PR:
+    ```bash
+    python3 tools/check_jsonld.py            # every JSON-LD block must parse
+    python3 tools/check_no_inline_scripts.py # the CSP forbids inline <script>
+    python3 tools/check_svg_dimensions.py    # width/height on every <svg> with a viewBox
+    python3 tools/check_all_site_urls.py     # URL safety
+    ```
+17. **Verify structural SEO**: run `python3 tools/run_seo_audit.py --dry-run` and check the new page doesn't introduce critical issues or warnings. The weekly cron will catch any regression on Monday and open a tracking issue, but local verification on your PR is faster.
 
 ### Cross-linking
 
@@ -582,17 +647,17 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `feed.xml` | RSS feed | **Don't edit** -- auto-generated |
 | `update_news.py` | News feed aggregation script | Adding/removing RSS sources |
 | `tools/normalize_urls.py` | URL normalizer (tracking params, HTTPS upgrade, redirects) | **Don't edit** -- runs in CI |
-| `tools/url_resolution_cache.json` | Cached redirect resolutions so the per-push CI run only re-resolves *new* URLs (kept the Normalize step from re-checking ~2,500 links every run) | **Don't edit** -- CI-seeded; never commit a local copy (redirect resolution is IP-dependent, so a workstation seed can differ from CI and falsely block deploys) |
+| `tools/url_resolution_cache.json` | Cached redirect resolutions so the per-push CI run only re-resolves *new* URLs (kept the Normalize step from re-checking ~2,650 links every run) | **Don't edit** -- CI-seeded; never commit a local copy (redirect resolution is IP-dependent, so a workstation seed can differ from CI and falsely block deploys) |
 | `tools/check_all_site_urls.py` | Site-wide URL safety scanner | Running local safety audits |
 | `tools/update_sitemap.py` | Refreshes `<lastmod>` dates in `sitemap.xml` from git history | **Don't edit** -- runs in CI and alongside `update_news.py` |
 | `tools/update_presentations_schema.py` | Regenerates `VideoObject` JSON-LD on `presentations.html` | **Don't edit** -- runs in CI on every deploy |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
-| `glossary.html` | Cloud-security glossary (300+ terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
+| `glossary.html` | Cloud-security glossary (310 terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |
 | `sitemap.xml` | XML sitemap for search engines | **Don't edit** -- lastmod refreshed automatically |
-| `update_sri.py` | SRI hash generator (handles main.js, style.css, chat-resources.js, breach-timeline.css, breach-timeline.js, meetings.js, glossary.js) | **Don't edit** -- runs in CI |
+| `update_sri.py` | SRI hash generator. The `ASSETS` list is the source of truth: `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search.css`, `search-init.js`, `vendor/goatcounter-count.js`. Any new shared asset must be added there or it ships uncached-busted and unhashed | Adding a shared CSS/JS asset; otherwise **don't edit** -- runs in CI |
 | `.htaccess` | Apache server config (security headers, caching, compression) | Server configuration changes |
 | `nginx.conf` | Nginx server config (Docker deployments) | Server configuration changes |
 

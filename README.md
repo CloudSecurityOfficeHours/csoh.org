@@ -23,8 +23,8 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 | ⚖️ [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html) | What the cloud provider secures vs. what you secure (AWS / Azure / GCP) |
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
-| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 350+ cloud-security vendors across 30 categories. No rankings, just orientation |
-| 📖 [Glossary](https://csoh.org/glossary.html) | 300+ cloud-security terms, plain-English, every cross-reference hyperlinked |
+| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 360+ cloud-security vendors across 30 categories. No rankings, just orientation |
+| 📖 [Glossary](https://csoh.org/glossary.html) | 310 cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
 #### Workloads & Platform
@@ -77,9 +77,9 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 ### Threat Intel
 | Guide | What it covers |
 |---|---|
-| 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 39 sources |
+| 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 50 sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->16<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->20<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
@@ -143,7 +143,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 | 📅 [Friday Zoom Sessions](https://csoh.org/sessions.html) | Every Friday 7am PT - format, speakers, and how to join |
 | 💬 [Community & Signal](https://csoh.org/community.html) | The Signal chat and how to join the conversation between Fridays |
 | 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
-| 🏟️ [Conferences](https://csoh.org/conferences.html) | 27 security & hacker conferences, with pros & cons |
+| 🏟️ [Conferences](https://csoh.org/conferences.html) | 26 security & hacker conferences, with pros & cons |
 
 #### Archive
 | Resource | What it covers |
@@ -158,7 +158,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | 410+ tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->410+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -180,7 +180,7 @@ Our recommended learning sequence:
 1. **Get the Lay of the Land**: [What is Cloud Security?](https://csoh.org/what-is-cloud-security.html) - vendor-neutral pillar overview of the field
 2. **Follow the Roadmap**: [Cloud Security Learning Path](https://csoh.org/learning-path.html) - beginner → advanced with milestones, free labs, study targets
 3. **Master the Fundamentals**: [Best Practices](https://csoh.org/cloud-security-best-practices.html) and the [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html)
-4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - 300+ terms, every cross-reference hyperlinked
+4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - 310 terms, every cross-reference hyperlinked
 5. **Get Hands-On**: [CTF Challenges](https://csoh.org/ctfs.html) and [Resources](https://csoh.org/resources.html) for practice
 6. **Choose a Certification**: [Cloud Security Certifications guide](https://csoh.org/cloud-security-certifications.html) - CCSK, CCSP, AWS, Azure, GCP, CKS
 7. **Read Real Breaches**: [Breach Kill Chains](https://csoh.org/breach-timeline.html) - see how attacks actually happen
@@ -217,6 +217,15 @@ A series of one-page-per-role deep dives covering day-to-day work, the skills th
 ### 🛠️ Cloud Security Portfolio Projects (`cloud-security-portfolio-projects.html` + `portfolio/`)
 A hub of build-it-yourself projects that demonstrate real cloud-security skill to hiring managers, each with a full step-by-step walkthrough under `portfolio/`: build a multi-account AWS Org with SCPs, walk every CloudGoat scenario, write a CNAPP comparison, build 5 detections in a lab SIEM, run a Prowler audit and Terraform the fixes, recreate the Capital One breach end to end, and ship a first OSS contribution to a cloud-security project.
 
+### 🪜 Breaking Into Cloud Security (`breaking-into-cloud-security.html`)
+The realistic transition from IT support / help desk into cloud security: what actually transfers, what you have to build from scratch, and the sequence that works. This page absorbed three earlier entry-path pages (`is-cloud-security-a-good-career.html`, `get-into-cloud-security-no-experience.html`, `help-desk-to-cloud-security.html`); the old URLs 301 in `.htaccess` and `retire_merged_career_pages.py` repointed every in-site link so there is no redirect hop.
+
+### 🧪 Cloud Security Home Lab Walk-throughs (`homelab/`)
+Deep, command-line-level lab walkthroughs that go further than the home-lab overview page: break-and-detect on AWS, a CloudTrail → SIEM detection pipeline, a Kubernetes security lab, and a LocalStack AWS lab. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; deliberately **not** in the site search index.
+
+### 🎤 Interview Prep (`cloud-security-interview-questions.html`, `cloud-security-resume-guide.html`)
+Two companion pages to the careers hub: interview questions with model answers (what a good answer sounds like, not just the question list), and a resume guide covering structure, phrasing, and what hiring managers actually scan for.
+
 ### 📖 Cloud Security Reading List (`cloud-security-reading-list.html`)
 A hand-curated, opinionated list of books, blogs, podcasts, newsletters, and people to follow. A monthly GitHub Actions workflow (`check-reading-list-staleness.yml`) discovers each source's feed and flags anything that has gone quiet - it never edits the page, only files a tracking issue for a human to review.
 
@@ -241,6 +250,9 @@ What the cloud provider secures vs. what you secure across IaaS, PaaS, SaaS, and
 ### 🛠️ CSPM vs CNAPP vs CWPP vs CIEM vs DSPM (`cspm-vs-cnapp.html`)
 The acronym soup decoded. Side-by-side comparison of cloud-security tool categories with explicit "when do I need each" guidance, an open-source-only reference stack, and an FAQ on whether CNAPP is "just marketing" (mostly: no).
 
+### 🔍 Focused Category Comparisons (`cspm-vs-cwpp.html`, `cnapp-vs-xdr.html`)
+Two narrower head-to-heads for the questions the big comparison page gets asked repeatedly: posture vs. workload protection (CSPM vs CWPP), and where CNAPP ends and XDR/CDR begins.
+
 ### 📦 Containers & Cloud Security (`containers.html`)
 Vendor-neutral guide to containers in the cloud - what they actually are, why the boundary is process-isolation rather than tenant-isolation, the real escape paths (privileged flags, kernel CVEs, hostPath, docker.sock), identity chaining via the instance metadata service, flat networking, supply chain, minimal/hardened base images (Chainguard, Minimus, Wiz, Distroless), runtime detection, and an AWS/Azure/GCP service comparison.
 
@@ -258,6 +270,9 @@ Cloud-side detection and response - how cloud SOC differs from packet-driven tra
 
 ### 🔐 IAM & Cloud Identity (`iam.html`)
 Cloud identity is the #1 root-cause category in breach reports. This page covers federation (SAML/OIDC/SCIM), RBAC vs ABAC vs ReBAC, JIT access and PAM, workload identity (IRSA / Workload Identity Federation / Managed Identities), and the per-cloud privilege-escalation paths (`iam:PassRole`, AssumeRole chains, GCP service-account impersonation, Azure managed-identity abuse). FAQ schema.
+
+### 🤖 Non-Human Identity (`non-human-identity.html`)
+The identity class that now outnumbers humans by an order of magnitude: service accounts, workload identities, API keys, tokens, and increasingly AI agents. Discovery, ownership, lifecycle, rotation, and why the usual IAM playbook doesn't transfer cleanly.
 
 ### 🛡️ Zero Trust Architecture (`zero-trust.html`)
 NIST SP 800-207 explained, the BeyondCorp origin story, the seven tenets, PDP/PEP/Policy Engine, ZTNA vs VPN, microsegmentation (host-based vs network-based vs service-mesh), continuous verification, CISA Zero Trust Maturity Model, and per-cloud patterns for AWS / Azure / GCP. Explicitly debunks "Zero Trust as a product."
@@ -301,6 +316,9 @@ The deep-dive companion to GRC: framework-by-framework breakdowns (SOC 2 Type I/
 ### 🤖 AI/ML & LLM Security (`ai-ml-security.html`)
 Securing AI workloads (distinct from `ai-learning.html`, which is about using AI to learn cloud security). OWASP LLM Top 10 walked item by item, OWASP ML Top 10, prompt-injection defenses, agentic AI risks, model supply chain, training-data security, vector DB and RAG security, AI governance frameworks (NIST AI RMF, EU AI Act, ISO/IEC 42001, MITRE ATLAS), and per-cloud AI service controls.
 
+### 🔌 MCP Security (`mcp-security.html`)
+Securing the Model Context Protocol - the tool-calling layer AI assistants now use to reach real systems. Trust boundaries between model, client, and server; prompt-injection reaching a tool call; credential and scope handling; and what to check before you connect an MCP server to anything that matters.
+
 ### 🕸️ Service Mesh Security (`service-mesh-security.html`)
 Securing east-west traffic. Istio / Linkerd / Cilium / Consul Connect, mTLS, authentication (SPIFFE/SPIRE workload identity), authorization policy, observability (Hubble, Kiali), sidecar vs sidecarless (ambient mode, eBPF), multi-cluster meshes, mesh attack surface, AWS App Mesh / Anthos Service Mesh / AKS Istio add-on.
 
@@ -320,7 +338,7 @@ Same SEO play for Google Cloud. Encryption-by-default story, Security Command Ce
 The definitive vendor-neutral comparison. Ten side-by-side `.comparison-table` blocks (identity, detection, data, network, compliance, pricing, customer identity, compute, container, serverless), conceptual differences that bite you (IAM-policy languages, org-boundary models, log pricing, VPC SC), a "which cloud for which job" guidance section, and a 20-row score-card summary.
 
 ### 🗺️ Vendor Landscape (`vendor-landscape.html`)
-A directory of **350+ cloud-security vendors** across 30 categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. Vendor-neutral one-liners, no rankings. Wiz affiliation disclosed.
+A directory of **360+ cloud-security vendors** across 30 categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. Vendor-neutral one-liners, no rankings. Wiz affiliation disclosed.
 
 ### 🔍 Site Search (`search.html`)
 [MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict - `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
@@ -336,6 +354,9 @@ Learn-by-example IaC explainer, using the Terraform that provisions CSOH's own m
 
 ### 🔀 Git & Version Control (`version-control.html`)
 Version-control fundamentals - branching, commits, pull requests, and history hygiene - taught through this repository's own workflow.
+
+### 🔐 How csoh.org Is Secured (`how-csoh-org-is-secured.html`)
+The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources (`resources.html`)
 Comprehensive catalog of **<!--count:resources_floor-->410+<!--/count--> cloud security resources** organized by 6 categories:
@@ -408,6 +429,9 @@ Information about weekly community gatherings:
 - **Registration Link:** https://csoh.kit.com/39feb4f397
 - Format details and speaker information
 
+### 🎤 Speakers & Pitching a Talk (`speakers.html`, `present.html`)
+`speakers.html` is the archive of guest speakers who have presented at a Friday session. `present.html` is the other side of it: what a CSOH talk looks like, what we're looking for, and how to pitch one (no vendor pitches).
+
 ### 🏟️ Conferences (`conferences.html`)
 A practitioner's directory of security and hacker conferences worldwide - RSA, DEF CON, Black Hat, fwd:cloudsec, KubeCon, CCC, Troopers, OffensiveCon, HITB, NULLCON, BSides, ShmooCon, Pwn2Own, and the rest. Each entry covers what makes the event unique plus its honest pros and cons.
 
@@ -425,6 +449,9 @@ Topic-by-topic recaps of every weekly session:
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
 
+### 🗣️ What Practitioners Think (`what-practitioners-think.html` + digests)
+A hub for the session-digest series: what the room actually said about a topic across many Fridays, synthesized from the recaps rather than written top-down. Current digests cover [AI security](what-practitioners-think-about-ai-security.html), [security regulation](what-practitioners-think-about-security-regulation.html), [supply-chain security](what-practitioners-think-about-supply-chain-security.html), [vulnerability management](what-practitioners-think-about-vulnerability-management.html), and [what breaking into cloud security really takes](what-breaking-into-cloud-security-really-takes.html).
+
 ### 🚩 Cloud CTFs (`ctfs.html`)
 Dedicated directory for hands-on cloud CTF challenges:
 - **52+ challenges** across AWS, Azure, GCP, Kubernetes, and AI security
@@ -432,11 +459,11 @@ Dedicated directory for hands-on cloud CTF challenges:
 - Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](CONTRIBUTING_CTFS.md)
 
 ### 📡 RSS Subscribe (`rss.html`)
-Plain-English landing page for the `feed.xml` feed: explains what RSS is, recommends readers (Feedly, Inoreader, NetNewsWire, Thunderbird), and gives one-click subscribe instructions.
+Plain-English landing page for both feeds - `feed.xml` (cloud-security news, refreshed every 3 hours) and `recaps.xml` (one item per Friday-session recap). Explains what RSS is, recommends readers (Feedly, Inoreader, NetNewsWire, Thunderbird), and gives one-click subscribe instructions. See [RSS_FEED_README.md](RSS_FEED_README.md).
 
 ### 📖 Glossary (`glossary.html`)
 A plain-English glossary of cloud-security acronyms and concepts:
-- **300+ terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
+- **310 terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
 - **Live search** filters terms and definitions as you type, hiding sections with no matches
 - **Cross-linked**: every glossary term mentioned in any other definition is automatically hyperlinked to its entry - see `tools/crosslink_glossary.py`
 - Targeted terms (arrived via `#term-...` anchor) get a yellow highlight so the reader can immediately spot them
@@ -454,7 +481,7 @@ Community standards for every CSOH-organized space - Friday Zoom session, mailin
 Plain-English privacy policy. Short version: no cookies, no marketing or cross-site trackers, only cookieless page-view analytics (GoatCounter), never sell or share data. The only personal data we hold is your mailing-list email. External links are scrubbed of tracking parameters before publication.
 
 ### 🔒 Security Policy (`security-policy.html`)
-RFC 9116-compliant vulnerability disclosure policy. Mirrored at `/.well-known/security.txt`.
+RFC 9116-compliant vulnerability disclosure policy. The machine-readable copy is served from both `/.well-known/security.txt` (the RFC canonical location) and `/security.txt`.
 
 ### 🔬 Threat Research (`threat-research.html`)
 Curated directory of primary sources for cloud-focused threat intel - vendor research teams, annual threat reports, IOC feeds, attack frameworks, and government advisories. Companion to `breach-timeline.html`: kill chains cover specific historical incidents, threat-research is the living index of where defenders go for ongoing intel. See the full section below.
@@ -482,6 +509,13 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 | Codefinger / S3 | 2025 | AWS S3 | T1552, T1078.004, T1486, T1657 |
 | tj-actions/changed-files | 2025 | GitHub Actions | T1195.001, T1552.001, T1078 |
 | Salesloft Drift / UNC6395 | 2025 | Salesforce / SaaS | T1528, T1078.004, T1213, T1530 |
+| Storm-2949 / Entra ID SSPR | 2026 | Azure / Entra ID | T1621, T1098.005, T1556.006, T1530 |
+| Mini Shai-Hulud / TanStack npm | 2026 | npm / GitHub Actions | T1195.002, T1552.001, T1550.001, T1567.001 |
+| Suspected AI-Assisted AWS Compromise | 2026 | AWS | T1078.004, T1580, T1619, T1648 |
+| LiteLLM / PyPI (TeamPCP) | 2026 | PyPI / CI | T1195.001, T1552, T1546, T1613 |
+| Vercel / Context.ai OAuth | 2026 | Google Workspace / SaaS | T1528, T1199, T1078, T1580 |
+| Vimeo / Anodot (ShinyHunters) | 2026 | Snowflake / BigQuery | T1199, T1078.004, T1213, T1657 |
+| Megalodon / GitHub Actions | 2026 | GitHub Actions | T1552.005, T1078, T1053, T1041 |
 
 The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined this past year are collected in the **[2025 Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review-2025.html)**.
 
@@ -547,64 +581,136 @@ Edit `threat-research.html` directly - each link is a standard `.resource-card` 
 
 ```
 csoh.org/
+│
+│  ── Entry points ──
 ├── index.html                  # Homepage with hero section & category overview
-├── what-is-cloud-security.html # Pillar: vendor-neutral cloud-security overview (FAQ schema)
-├── learning-path.html          # Beginner→advanced roadmap (HowTo schema)
-├── cloud-security-degree-programs.html # Academic paths and university programs (FAQ schema)
-├── cloud-security-careers.html        # Roles, salaries, interviews, portfolio (FAQ schema)
-├── cloud-security-home-lab.html       # Free-tier setups, budget guardrails, kill-switches
-├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
-├── cloud-security-reading-list.html   # Curated reading list (staleness-checked monthly)
-├── cloud-security-portfolio-projects.html # Portfolio projects hub (walkthroughs in portfolio/)
-├── cloud-security-<role>.html         # Career role-in-depth series: engineer, architect,
-│                                      #   iam-architect, appsec-engineer, cnapp-analyst,
-│                                      #   detection-engineer, incident-responder, penetration-tester,
-│                                      #   platform-engineer, grc-engineer, sales-engineer,
-│                                      #   customer-success-engineer (FAQ schema)
-├── github-actions.html         # Learn GitHub Actions via our heavily-commented workflows
-├── cloud-deployment.html       # Multi-cloud deploy architecture (the dogfooded stack)
-├── terraform.html              # Learn Terraform via our own multi-cloud IaC
-├── version-control.html        # Git & version-control fundamentals via this repo
-├── resources.html              # Main resource directory (380+ resources in 6 categories)
-├── news.html                   # Cloud security news (120+ articles)
-├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
-├── sessions.html               # Weekly Zoom session information
-├── community.html              # Community & Signal chat
-├── mentorship.html             # Community mentorship program
-├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (102 entries, topic-by-topic)
-├── ctfs.html                   # Dedicated cloud CTF directory (52+ challenges)
-├── conferences.html            # Security & hacker conferences directory with pros/cons
-├── rss.html                    # Landing page explaining the RSS feed to subscribers
-├── glossary.html               # 300+ cloud security terms with live search & cross-links
-├── faq.html                    # Frequently asked questions (FAQPage schema)
-├── code-of-conduct.html        # Community Code of Conduct
-├── privacy.html                # Privacy Policy (no cookies, no cross-site trackers, no on-site ads)
-├── about.html                  # About CSOH: mission and ethos
-├── about-shawn-nunley.html     # Founder bio (Person / ProfilePage schema, E-E-A-T)
-├── breach-timeline.html        # Index of breach kill chains (per-breach pages live in /breaches/)
-├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 13 chains
-├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
-├── breaches/                   # 13 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 102 per-meeting recap pages (split from meetings.html)
-├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
-├── cloud-security-best-practices.html  # Practitioner's controls checklist
-├── shared-responsibility-model.html    # Provider vs. customer security split
-├── cspm-vs-cnapp.html                  # Tool-category comparison
-├── landing-zones.html                  # Cloud foundations (AWS / Azure / GCP reference designs)
-├── containers.html                     # Container security: boundary, escapes, IMDS, supply chain
-├── kubernetes.html                     # Kubernetes & managed K8s (EKS / AKS / GKE) security
-├── serverless.html                     # Lambda / Functions security - event injection, IAM, denial of wallet
-├── ci-cd.html                          # CI/CD pipelines for cloud, OIDC federation, deploy strategies
-├── cloud-soc.html                      # Cloud threat monitoring, SIEM, detection engineering, IR
-├── threat-research.html        # Curated cloud threat research directory
-├── contribute.html             # General contributions guide
-├── contribute-resources.html   # Resource submission web form / guide
-├── security-policy.html        # Security disclosure policy page
-├── kevin-mitnick.html          # Special resource page
+├── search.html                 # Site-wide MiniSearch full-text search
 ├── 403.html                    # Custom 403 (Forbidden) error page
 ├── 404.html                    # Custom 404 (Not Found) error page
 │
+│  ── Foundations ──
+├── what-is-cloud-security.html # Pillar: vendor-neutral cloud-security overview (FAQ schema)
+├── shared-responsibility-model.html # Provider vs. customer security split
+├── cloud-security-best-practices.html # Practitioner's controls checklist
+├── vendor-landscape.html       # 360+ cloud-security vendors across 30 categories
+├── glossary.html               # 310 cloud security terms with live search & cross-links
+├── faq.html                    # Frequently asked questions (FAQPage schema)
+│
+│  ── Tool-category comparisons ──
+├── cspm-vs-cnapp.html          # CSPM vs CNAPP vs CWPP vs CIEM vs DSPM
+├── cspm-vs-cwpp.html           # Posture vs workload protection, head to head
+├── cnapp-vs-xdr.html           # CNAPP vs XDR (and CDR)
+│
+│  ── Platform topics ──
+├── containers.html             # Container security: boundary, escapes, IMDS, supply chain
+├── kubernetes.html             # Kubernetes & managed K8s (EKS / AKS / GKE) security
+├── serverless.html             # Lambda / Functions security - event injection, IAM, denial of wallet
+├── service-mesh-security.html  # Istio / Linkerd / Cilium / Consul, mTLS, SPIFFE/SPIRE
+├── ci-cd.html                  # CI/CD pipelines for cloud, OIDC federation, deploy strategies
+├── landing-zones.html          # Cloud foundations (AWS / Azure / GCP reference designs)
+│
+│  ── Security domains ──
+├── iam.html                    # IAM & cloud identity, RBAC/ABAC, workload identity, priv-esc
+├── non-human-identity.html     # Non-human identity (NHI): service accounts, keys, agents
+├── zero-trust.html             # NIST SP 800-207, BeyondCorp, CISA Maturity Model, ZTNA
+├── network-security.html       # VPC design, private endpoints, egress, WAF, DDoS, SASE/ZTNA
+├── data-security.html          # Envelope encryption, BYOK/HSM, secrets management, rotation
+├── vulnerability-management.html # CVSS/EPSS/KEV, reachability, SAST/SCA/DAST, SBOM/VEX, ASPM
+├── api-security.html           # OWASP API Top 10, BOLA, JWT pitfalls, GraphQL/gRPC
+├── saas-security.html          # SSPM, OAuth app risk, M365 / Workspace / Salesforce / GitHub
+├── backup-dr.html              # 3-2-1-1-0, immutability per cloud, ransomware kill chain
+├── threat-modeling.html        # STRIDE/PASTA/LINDDUN, attack trees, ATT&CK Cloud
+│
+│  ── Detection / response / offense ──
+├── cloud-soc.html              # Cloud threat monitoring, SIEM, detection engineering, IR
+├── detection-engineering.html  # Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR
+├── incident-response.html      # IR lifecycle, EC2/EKS/Lambda evidence, memory forensics
+├── cloud-pentesting.html       # AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound
+├── threat-research.html        # Curated cloud threat research directory
+├── ctfs.html                   # Dedicated cloud CTF directory (52+ challenges)
+│
+│  ── Breach kill chains ──
+├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 20 chains
+├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
+├── kevin-mitnick.html          # Special resource page
+│
+│  ── Governance + AI ──
+├── grc.html                    # Governance, Risk, Compliance - frameworks, policy-as-code
+├── compliance-frameworks.html  # SOC 2, ISO 27001, PCI DSS, HIPAA, FedRAMP, CMMC, NIST CSF, GDPR
+├── ai-learning.html            # Using AI assistants to LEARN cloud security faster
+├── ai-ml-security.html         # Securing AI workloads - OWASP LLM Top 10, agentic AI, ATLAS
+├── mcp-security.html           # Securing the Model Context Protocol
+│
+│  ── Per-cloud hubs ──
+├── aws-security.html           # AWS security hub
+├── azure-security.html         # Azure security hub
+├── gcp-security.html           # GCP security hub
+├── cloud-security-comparison.html # AWS vs Azure vs GCP - 10 tables + a 20-row scorecard
+│
+│  ── Careers ──
+├── cloud-security-careers.html # Roles, salaries, interviews, portfolio (FAQ schema)
+├── learning-path.html          # Beginner→advanced roadmap (HowTo schema)
+├── breaking-into-cloud-security.html # The realistic transition from IT support
+├── what-breaking-into-cloud-security-really-takes.html # Session digest: the unvarnished version
+├── cloud-security-degree-programs.html # Academic paths and university programs (FAQ schema)
+├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
+├── cloud-security-home-lab.html # Free-tier setups, budget guardrails, kill-switches
+├── cloud-security-interview-questions.html # Interview questions with model answers
+├── cloud-security-resume-guide.html # Resume structure, phrasing, and what hiring managers scan for
+├── cloud-security-reading-list.html # Curated reading list (staleness-checked monthly)
+├── cloud-security-portfolio-projects.html # Portfolio projects hub (walkthroughs in portfolio/)
+├── cloud-security-<role>.html  # Career role-in-depth series: engineer, architect,
+│                               #   iam-architect, appsec-engineer, cnapp-analyst,
+│                               #   detection-engineer, incident-responder, penetration-tester,
+│                               #   platform-engineer, grc-engineer, sales-engineer,
+│                               #   customer-success-engineer (FAQ schema)
+│
+│  ── Community ──
+├── sessions.html               # Weekly Zoom session information
+├── speakers.html               # Guest speaker archive
+├── present.html                # How to pitch a talk for a Friday session
+├── community.html              # Community & Signal chat
+├── mentorship.html             # Community mentorship program
+├── conferences.html            # Security & hacker conferences directory with pros/cons
+├── presentations.html          # Archive of recorded presentations
+├── meetings.html               # Weekly meeting recaps (105 entries, topic-by-topic)
+├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
+├── what-practitioners-think.html # Hub for the session-digest series below
+├── what-practitioners-think-about-ai-security.html
+├── what-practitioners-think-about-security-regulation.html
+├── what-practitioners-think-about-supply-chain-security.html
+├── what-practitioners-think-about-vulnerability-management.html
+│
+│  ── Catalogs & feeds ──
+├── resources.html              # Main resource directory (410+ resources in 6 categories)
+├── news.html                   # Cloud security news (120+ articles)
+├── rss.html                    # Landing page explaining the RSS feeds to subscribers
+│
+│  ── Behind the scenes (the dogfooded stack) ──
+├── cloud-deployment.html       # Multi-cloud deploy architecture
+├── github-actions.html         # Learn GitHub Actions via our heavily-commented workflows
+├── terraform.html              # Learn Terraform via our own multi-cloud IaC
+├── version-control.html        # Git & version-control fundamentals via this repo
+├── how-csoh-org-is-secured.html # The site's own security model, end to end
+├── contribute.html             # General contributions guide
+├── contribute-resources.html   # Resource submission web form / guide
+│
+│  ── About & policy ──
+├── about.html                  # About CSOH: mission and ethos
+├── about-shawn-nunley.html     # Founder bio (Person / ProfilePage schema, E-E-A-T)
+├── code-of-conduct.html        # Community Code of Conduct
+├── privacy.html                # Privacy Policy (no cookies, no cross-site trackers, no on-site ads)
+├── security-policy.html        # Security disclosure policy page
+├── google66d489593949bd4c.html # Google Search Console verification token
+│
+│  ── Subdirectory page sets ──
+├── breaches/                   # 20 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── meetings/                   # 105 per-meeting recap pages (split from meetings.html)
+├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
+├── homelab/                    # 4 deep command-line home-lab walkthroughs
+│
+│  ── Shared assets ──
 ├── style.css                   # Main stylesheet (responsive design + dark mode)
 ├── main.js                     # Shared interactive features (search, filter, sort, dark mode)
 ├── chat-resources.js           # chat-resources.html-specific filtering/search
@@ -612,100 +718,66 @@ csoh.org/
 ├── glossary.js                 # glossary.html-specific search/filter
 ├── breach-timeline.css         # breach-timeline.html-specific styles
 ├── breach-timeline.js          # breach-timeline.html-specific tab/panel logic
-├── feed.xml                    # RSS feed (auto-generated by update_news.py)
+├── 404.js                      # 404-page "did you mean" suggestions
+├── search.css                  # search.html styles (external, for the strict CSP)
+├── search-init.js              # search.html: index load, MiniSearch wiring, result render
+├── search-index.json           # Site-wide search index (auto-generated at deploy time)
+├── search-synonyms.json        # Acronym ↔ expansion map fed into the search index
 ├── meetings-search-index.json  # Search index for meeting recaps (auto-generated)
+├── vendor/                     # Self-hosted third-party JS (SRI-pinned, first-party origin)
+│   ├── minisearch-7.1.2.min.js # Search library used by search-init.js
+│   └── goatcounter-count.js    # Cookieless page-view counter loader
 │
+│  ── Feeds & machine-readable files ──
+├── feed.xml                    # News RSS feed (auto-generated by update_news.py)
+├── recaps.xml                  # Meeting-recap RSS feed (tools/generate_recaps_rss.py)
 ├── sitemap.xml                 # XML sitemap for search engines
-├── robots.txt                  # Search engine crawling rules
-├── security.txt                # Security.txt (root copy)
-├── .well-known/                # Well-known endpoints
-│   └── security.txt            # Security.txt (RFC 9116 location)
+├── robots.txt                  # Crawling rules (all major crawlers + 21 AI/LLM bots)
+├── llms.txt                    # Site summary for LLM crawlers
+├── humans.txt                  # Human-readable credits, linked via <link rel="author">
+├── manifest.json               # PWA manifest (Add to Home Screen)
+├── csoh.ics                    # Calendar file for the recurring Friday session
+├── security.txt                # Security contact (root mirror)
+├── .well-known/                # Well-known endpoints (carved out of the dotfile deny)
+│   └── security.txt            # Security.txt at the RFC 9116 canonical location
 │
+│  ── Images ──
 ├── img/                        # Images and preview thumbnails
-│   └── previews/               # Resource preview images
+│   ├── og/                     # 1200×630 social cards (+ breaches/, portfolio/, meetings/)
+│   ├── previews/               # Resource preview screenshots
+│   ├── news-banners/           # Per-source banner images for news.html
+│   ├── authors/                # Author / speaker photos
+│   ├── icons/                  # Favicons and PWA icons
+│   └── photos/                 # Miscellaneous site photography
 ├── chat-screenshots/           # Per-URL screenshots shown in chat-resources.html
+├── email-screenshots/          # Newsletter screenshots referenced from community pages
 │
-├── tools/                      # Automation and maintenance scripts
-│   ├── submit_resource.py                  # Interactive tool for submitting new resources
-│   ├── submit_news_source.py               # Interactive tool for submitting news sources
-│   ├── submit_ctf.py                       # Interactive tool for submitting cloud CTFs
-│   ├── add_meeting.py                      # Append a new meeting recap from an Apple Notes HTML export
-│   ├── fetch_zoom_transcript.py            # Pull a VTT transcript from a Zoom cloud recording (OAuth)
-│   ├── backfill_zoom_summaries.py          # Bulk-import Zoom AI Companion meeting summaries
-│   ├── generate_preview.py                 # Generate preview screenshots for resources
-│   ├── generate_rss.py                     # Regenerate feed.xml from news.html
-│   ├── normalize_urls.py                   # URL normalizer (tracking params, HTTPS, redirects)
-│   ├── check_url_safety.py                 # Core URL safety validator with pattern matching
-│   ├── check_all_site_urls.py              # Comprehensive site-wide URL scanner
-│   ├── update_sitemap.py                   # Refresh sitemap.xml <lastmod> dates from git history
-│   ├── update_presentations_schema.py      # Regenerate VideoObject JSON-LD on presentations.html
-│   ├── crosslink_glossary.py               # Auto-link every glossary term mention to its <dt> entry
-│   ├── crosslink_pages.py                  # Auto-link glossary terms across the rest of the site
-│   ├── build_meetings_search_index.py      # Build meetings-search-index.json from meetings.html
-│   ├── build_search_index.py               # Build site-wide search-index.json (sections + glossary)
-│   ├── sync_chrome.py                      # Stamp ONE canonical nav + footer onto every page
-│   ├── inject_meeting_topic_links.py       # Inject contextual topic-page links into recaps
-│   ├── generate_og_images.py               # Generate 1200x630 OG social images (top-level pages)
-│   ├── generate_meeting_og_images.py       # Generate OG images for meeting recaps
-│   ├── generate_news_banners.py            # Generate banner images for news sources
-│   ├── generate_webp.py                    # Generate .webp siblings for raster images
-│   ├── wrap_img_webp.py                    # Wrap <img> in <picture> with a WebP <source>
-│   ├── run_seo_audit.py                    # Deterministic structural SEO audit -> SCORECARD
-│   ├── check_pagespeed.py                  # Google PageSpeed Insights run -> SCORECARD
-│   ├── check_lighthouse.py                 # Lighthouse SEO / a11y / perf threshold check
-│   ├── check_mobile_layout.py              # Mobile layout regression check
-│   ├── check_news_banners.py               # Verify every news source has a banner image
-│   ├── check_no_inline_scripts.py          # CI gate: no inline <script> blocks in HTML
-│   ├── check_svg_dimensions.py             # CI gate: width/height on every <svg> with viewBox
-│   ├── check_reading_list_staleness.py     # Flag stale reading-list sources (monthly)
-│   ├── SUBMIT_RESOURCE_README.md           # Interactive resource submission docs
-│   ├── SUBMIT_RESOURCE_EXAMPLE.md          # Walkthrough example for the resource tool
-│   ├── SUBMIT_NEWS_SOURCE_README.md        # News source submission docs
-│   ├── SUBMIT_CTF_README.md                # CTF submission docs
-│   ├── ADD_MEETING_README.md               # Meeting recap ingest docs
-│   ├── FETCH_ZOOM_TRANSCRIPT_README.md     # Zoom transcript fetch docs (OAuth setup)
-│   ├── BACKFILL_ZOOM_SUMMARIES_README.md   # Bulk Zoom AI Companion backfill docs
-│   ├── GENERATE_PREVIEW_README.md          # Preview image generation docs
-│   ├── CHECK_URL_SAFETY_README.md          # URL safety checker docs
-│   ├── UPDATE_NEWS_README.md               # News aggregation pipeline docs
-│   ├── UPDATE_SRI_README.md                # SRI hash generator docs
-│   ├── UPDATE_SITEMAP_README.md            # Sitemap refresher docs
-│   ├── UPDATE_PRESENTATIONS_SCHEMA_README.md # Presentations VideoObject schema docs
-│   ├── CROSSLINK_GLOSSARY_README.md        # Glossary cross-linking docs
-│   └── CROSSLINK_PAGES_README.md          # Cross-page glossary term linking docs
+├── tools/                      # Automation and maintenance scripts (see table below)
 │
-├── update_news.py              # News aggregation script (39 RSS feeds, runs every 3 hours)
+├── update_news.py              # News aggregation script (50 RSS feeds, runs every 3 hours)
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
+├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
-├── .github/workflows/
-│   ├── update-news.yml              # Automated news + RSS feed updates (every 3 hours)
-│   ├── update-resources.yml         # Weekly auto-generation of resource previews
-│   ├── site-update-deploy.yml       # Unified workflow: SRI, URL normalization, previews, presentations schema, sitemap, deploy
-│   ├── check-url-safety.yml         # URL safety validation on PRs + weekly
-│   ├── normalize-urls.yml           # Monthly URL normalization (tracking params, redirects)
-│   ├── validate-html.yml            # HTML5 validation on PRs + weekly
-│   ├── lint.yml                     # actionlint + ruff + yamllint on every push/PR
-│   ├── check-broken-links.yml       # Broken link checker (PRs + weekly)
-│   ├── check-reading-list-staleness.yml # Monthly reading-list feed staleness -> tracking issue
-│   ├── check-meeting-staleness.yml   # Weekly check that the newest recap isn't stale -> sticky issue
-│   ├── update-counts.yml            # Weekly: recompute site counts + refresh count share-cards
-│   ├── check-pagespeed.yml          # Weekly Google PageSpeed Insights run → SCORECARD row + regression issue (Mon 14:00 UTC)
-│   ├── run-seo-audit.yml            # Weekly deterministic structural SEO audit → SCORECARD row + regression issue (Mon 14:15 UTC)
-│   ├── deploy.yml                   # Build once, publish to AWS + GCP + Azure (keyless OIDC)
-│   └── CHECK_URL_SAFETY_WORKFLOW.md # Workflow configuration notes
+├── .github/workflows/          # 15 CI/CD workflows (see "How Automation Works" below)
 │
+├── seo-audits/                 # SEO audit reports + SCORECARD.md (excluded from deploy filters)
 ├── preview-mapping.json        # Metadata for resource previews
+├── dist/                       # Build output from tools/stage_site.sh (gitignored)
 │
+│  ── Server & container config ──
 ├── .htaccess                   # Apache server config (security headers, caching, compression)
-├── nginx.conf                  # Nginx server config (Docker deployments)
-├── Dockerfile                  # Container build for local/Docker deployments
-├── docker-compose.yml          # Compose config for the Dockerized site
-├── .env.example                # Template for Zoom OAuth + other secrets (.env is gitignored)
+├── nginx.conf                  # Nginx server config (Docker / Cloud Run deployments)
+├── nginx-security-headers.conf # Security-header snippet included by nginx.conf
+├── Dockerfile                  # Container build for the GCP Cloud Run origin
+├── docker-compose.yml          # Compose config for running the site locally in Docker
+├── .dockerignore               # Files excluded from the Docker build context
+│
+│  ── Tooling config ──
 ├── .lychee.toml                # Config for the broken-link-checker workflow
 ├── .yamllint.yml               # Config for the yamllint job in lint.yml
 ├── pyproject.toml              # Config for the ruff job in lint.yml (Python lint)
+├── .trivyignore.yaml           # Time-boxed Trivy CVE suppressions for the Cloud Run image
 ├── .editorconfig               # Editor consistency rules
-├── .dockerignore               # Files excluded from the Docker build context
 │
 ├── infra/                      # Infrastructure-as-code for the multi-cloud deploy
 │   ├── README.md               # Architecture, cost, and cutover runbook
@@ -716,6 +788,7 @@ csoh.org/
 │       ├── azure/              # Blob static-website origin, federated identity
 │       └── cloudflare/         # Edge: zone, rules, active/active load balancer + health checks
 │
+├── CLAUDE.md                   # Repo gotchas for humans and agents working here
 ├── CONTRIBUTING.md             # Umbrella contributing guide
 ├── CONTRIBUTING_RESOURCES.md   # Contributing resources specifically
 ├── CONTRIBUTING_CTFS.md        # Contributing CTFs specifically
@@ -727,6 +800,80 @@ csoh.org/
 ├── README.md                   # This file
 └── LICENSE                     # Open content license
 ```
+
+### The `tools/` directory
+
+Every script is stdlib-first, idempotent, and only writes when content actually changes (see [DEVELOPMENT.md → Scripts must only write when content actually changes](DEVELOPMENT.md#scripts-must-only-write-when-content-actually-changes)). Scripts with a `_README.md` beside them have long-form docs; the rest are documented by their module docstring.
+
+**Content ingest (interactive or credentialed)**
+
+| Script | What it does | Docs |
+|---|---|---|
+| `submit_resource.py` | Interactive resource submission with URL validation + PR creation | [README](tools/SUBMIT_RESOURCE_README.md) · [example](tools/SUBMIT_RESOURCE_EXAMPLE.md) |
+| `submit_news_source.py` | Interactive news-source (RSS/Atom feed) submission | [README](tools/SUBMIT_NEWS_SOURCE_README.md) |
+| `submit_ctf.py` | Interactive cloud-CTF submission for `ctfs.html` | [README](tools/SUBMIT_CTF_README.md) |
+| `add_meeting.py` | Publish a new meeting recap (page + `meetings.html` entry + feeds) | [README](tools/ADD_MEETING_README.md) |
+| `fetch_zoom_transcript.py` | Pull a VTT transcript from a Zoom cloud recording (Server-to-Server OAuth) | [README](tools/FETCH_ZOOM_TRANSCRIPT_README.md) |
+| `backfill_zoom_summaries.py` | Bulk-import every Zoom AI Companion summary on the account | [README](tools/BACKFILL_ZOOM_SUMMARIES_README.md) |
+
+**Site-wide stamping (run after content changes)**
+
+| Script | What it does | Docs |
+|---|---|---|
+| `sync_chrome.py` | Stamps ONE canonical nav, header buttons, and footer onto every page | [README](tools/SYNC_CHROME_README.md) |
+| `sync_counts.py` | Recomputes every count on the site (JSON-LD `numberOfItems`, `<!--count:-->` markers, OG subtitles) from the real cards | [README](tools/SYNC_COUNTS_README.md) |
+| `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](tools/CROSSLINK_GLOSSARY_README.md) |
+| `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](tools/CROSSLINK_PAGES_README.md) |
+| `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
+| `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](tools/INJECT_SESSION_BLOCKS_README.md) |
+| `inject_goatcounter.py` | Stamps the GoatCounter analytics tag onto every page | docstring |
+| `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
+| `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](tools/UPDATE_SITEMAP_README.md) |
+| `normalize_urls.py` | Strips tracking params, upgrades http→https, resolves redirects | docstring |
+| `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](tools/UPDATE_SRI_README.md) |
+| `../update_news.py` | Pulls 50 RSS feeds → `news.html`, `feed.xml`, sitemap lastmod | [README](tools/UPDATE_NEWS_README.md) |
+
+**Generated artifacts (indexes, feeds, images)**
+
+| Script | What it does | Docs |
+|---|---|---|
+| `build_search_index.py` | Builds `search-index.json` (one entry per `<section id>` + glossary term) | docstring |
+| `build_meetings_search_index.py` | Builds `meetings-search-index.json` over full recap text | docstring |
+| `generate_rss.py` | Rebuilds `feed.xml` from `news.html` | docstring |
+| `generate_recaps_rss.py` | Builds `recaps.xml`, the meeting-recap RSS feed | docstring |
+| `generate_og_images.py` | 1200×630 social cards for top-level pages | docstring |
+| `generate_meeting_og_images.py` | 1200×630 social cards for meeting recaps | [README](tools/GENERATE_MEETING_OG_IMAGES_README.md) |
+| `generate_news_banners.py` | Banner images for news sources | docstring |
+| `generate_preview.py` | Screenshot previews for resource cards | [README](tools/GENERATE_PREVIEW_README.md) |
+| `generate_webp.py` | `.webp` siblings for every raster image | docstring |
+| `wrap_img_webp.py` | Wraps `<img>` in `<picture>` with a WebP `<source>` | docstring |
+
+**CI gates and audits (report or fail, never edit content)**
+
+| Script | What it does | Docs |
+|---|---|---|
+| `check_all_site_urls.py` | Site-wide URL safety scan (phishing patterns, suspicious TLDs, shorteners) | [README](tools/CHECK_URL_SAFETY_README.md) |
+| `check_url_safety.py` | The single-URL validator `check_all_site_urls.py` is built on | [README](tools/CHECK_URL_SAFETY_README.md) |
+| `check_jsonld.py` | Every JSON-LD block on the site must be valid JSON | docstring |
+| `check_no_inline_scripts.py` | No inline `<script>` blocks (the CSP forbids them) | docstring |
+| `check_svg_dimensions.py` | `width`/`height` on every `<svg>` that has a `viewBox` | docstring |
+| `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
+| `check_mobile_layout.py` | Mobile layout regression check | docstring |
+| `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](tools/RUN_SEO_AUDIT_README.md) |
+| `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](tools/CHECK_PAGESPEED_README.md) |
+| `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](tools/CHECK_LIGHTHOUSE_README.md) |
+| `check_reading_list_staleness.py` | Flags reading-list sources that stopped publishing | [README](tools/CHECK_READING_LIST_STALENESS_README.md) |
+| `check_meeting_staleness.py` | Flags a stalled meeting-recap cadence | docstring |
+| `check_conference_staleness.py` | Flags conference "Next:" dates that have gone stale | docstring |
+
+**Build / packaging**
+
+| File | What it does |
+|---|---|
+| `stage_site.sh` | Produces `dist/` - the exact public file set every origin serves |
+| `site-publish.filter` | rsync filter listing what `stage_site.sh` includes and excludes |
+| `url_resolution_cache.json` | CI-seeded redirect cache for `normalize_urls.py` (never commit a local copy) |
+| `awesome-list-submissions.md` | Tracking notes for awesome-list outreach |
 
 ---
 
@@ -762,7 +909,7 @@ csoh.org/
 
 ### Adding a New Article to News
 
-News articles are **updated automatically** - you don't need to add them by hand. A GitHub Actions workflow runs every 3 hours, pulls articles from 39 cloud security RSS feeds, and creates a pull request with the new content. See the [How Automation Works](#-how-automation-works) section below for details, or read the full docs in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md).
+News articles are **updated automatically** - you don't need to add them by hand. A GitHub Actions workflow runs every 3 hours, pulls articles from 50 cloud security RSS feeds, and creates a pull request with the new content. See the [How Automation Works](#-how-automation-works) section below for details, or read the full docs in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md).
 
 To **add a new news source**, either:
 
@@ -818,8 +965,44 @@ Edit the "Resource Categories" section in `index.html` to:
 
 ## 🤖 How Automation Works
 
+This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-This site uses **GitHub Actions workflows** to automate all major site updates. Most automation is now handled by a **unified workflow** that runs all key steps in sequence, only when needed.
+All 15 workflows, grouped by what they do. Times are UTC.
+
+**Content automation (writes to the site)**
+
+| Workflow | When | What it does |
+|---|---|---|
+| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 50 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
+| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
+| [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
+| [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens an auto-approved PR for a human to merge |
+| [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI, URL safety, normalization, schema, sitemap, previews |
+
+**Deploy**
+
+| Workflow | When | What it does |
+|---|---|---|
+| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, publishes active/active to AWS + GCP + Azure behind Cloudflare, keyless OIDC per cloud |
+
+**PR quality gates**
+
+| Workflow | When | Blocks the PR? |
+|---|---|---|
+| [`lint.yml`](.github/workflows/lint.yml) | every push + PR | Yes - `actionlint` + `ruff` + `yamllint` |
+| [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | Yes, with a PR comment - W3C HTML5 validator |
+| [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Yes - phishing patterns, suspicious TLDs, shortener domains |
+| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | No - lychee crawl, PR comment only (link rot is everywhere) |
+
+**Periodic audits (report-only, never edit the site)**
+
+| Workflow | When | Where the report lands |
+|---|---|---|
+| [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Row in `seo-audits/SCORECARD.md`; issue on regression |
+| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Row in `seo-audits/SCORECARD.md` + `seo-audits/YYYY-MM-DD.md`; issue on regression |
+| [`check-meeting-staleness.yml`](.github/workflows/check-meeting-staleness.yml) | Mon 15:00 | Sticky issue labeled `meeting-staleness` |
+| [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | Sticky issue labeled `reading-list-staleness` |
+| [`check-conference-staleness.yml`](.github/workflows/check-conference-staleness.yml) | 1st of month, 14:00 | Sticky issue labeled `conference-staleness` for stale "Next:" dates on `conferences.html` |
 
 ### Site Housekeeping Workflow
 
@@ -916,6 +1099,15 @@ Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog
 
 **Full docs:** [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md).
 
+### The other two staleness checks
+
+Same shape, different content, and neither one edits the site either - each opens or refreshes exactly one sticky issue:
+
+- **`check-meeting-staleness.yml`** (Mondays 15:00 UTC) runs `tools/check_meeting_staleness.py` and files an issue labeled `meeting-staleness` when the newest recap on `meetings.html` is older than the expected weekly cadence. It catches an ingest that quietly stopped working, which no other check would notice.
+- **`check-conference-staleness.yml`** (1st of the month, 14:00 UTC) runs `tools/check_conference_staleness.py` over the "Next:" dates on `conferences.html` and files an issue labeled `conference-staleness` for any that have passed. Conference dates rot in place: the link still resolves, so lychee stays quiet, but the page is advertising an event that already happened.
+
+Both are deliberately `paths:`-filtered so that editing the content they watch does *not* re-trigger them - only the script and the workflow file do.
+
 ---
 
 ## 🔍 SEO & Search Optimization
@@ -928,11 +1120,11 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - 60 pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - 63 pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
-- ✅ **DefinedTermSet** - the glossary, with 300+ individual terms
+- ✅ **DefinedTermSet** - the glossary, with 310 individual terms
 
 **Entity schema** - who/what is responsible for the content:
 - ✅ **Organization** - CSOH itself, with founding date, contact point, sameAs links, search action
@@ -944,25 +1136,25 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (65 pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (85 pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - 218 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - 228 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
-- ✅ **`security.txt`** at the well-known location for vulnerability disclosure
+- ✅ **`security.txt`** (RFC 9116) for vulnerability disclosure, at both `/.well-known/security.txt` and `/security.txt`
 - ✅ Site-wide **canonical URLs** to consolidate ranking signals
-- ✅ **Glossary cross-linking** - first occurrence of each of 300+ terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](tools/crosslink_pages.py))
+- ✅ **Glossary cross-linking** - first occurrence of each of 310 terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](tools/crosslink_pages.py))
 
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - 170+ unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), 102 meeting recaps via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - 208 unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and 102 meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
