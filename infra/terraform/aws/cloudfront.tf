@@ -96,6 +96,11 @@ resource "aws_cloudfront_distribution" "site" {
     # at the public edge; CloudFront is a second-tier cache that simply honors
     # origin/forwarded behavior.
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    # Emit the security headers from THIS origin rather than relying on the
+    # Cloudflare edge ruleset to add them on the way out. See the policy
+    # definition below for why that matters.
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
   # Each custom_error_response block tells CloudFront: when the origin returns
@@ -153,5 +158,85 @@ resource "aws_cloudfront_distribution" "site" {
     cloudfront_default_certificate = true
     # Refuse outdated, insecure TLS versions; require modern TLS 1.2+.
     minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+# =============================================================================
+# Response headers policy - security headers set by CloudFront itself
+# -----------------------------------------------------------------------------
+# The site's security headers are declared once at Cloudflare, in
+# ../cloudflare/rules.tf, and applied to every response regardless of which
+# origin served it. That works, but it made the AWS origin entirely dependent
+# on the edge: a request that reached this distribution directly (its
+# *.cloudfront.net hostname is public) got a fully functional copy of the site
+# with no CSP, no HSTS, and no X-Frame-Options at all.
+#
+# The GCP origin never had that problem - the nginx image sets the same headers
+# itself via nginx-security-headers.conf. This policy gives the AWS origin the
+# same independence, so the headers survive an edge misconfiguration and the
+# bare distribution is not a header-free mirror of the site.
+#
+# Azure Blob static websites cannot emit custom response headers at all, so
+# that origin still depends on the edge; see the note in ../cloudflare/rules.tf.
+#
+# KEEP IN STEP: these values must match the ones in ../cloudflare/rules.tf and
+# ../../../nginx-security-headers.conf. tools/check_edge_headers.py asserts the
+# public edge against rules.tf on every deploy; if you change a header, change
+# it in all three places.
+# =============================================================================
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name    = "csoh-security-headers"
+  comment = "Matches the Cloudflare edge ruleset and nginx-security-headers.conf"
+
+  security_headers_config {
+    # HSTS: only ever reach this site over HTTPS, for a year, including
+    # subdomains, and opt into the browsers' built-in preload lists.
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    # Stop browsers guessing a file's type and running, say, a text file as JS.
+    content_type_options {
+      override = true
+    }
+    # Forbid embedding in an <iframe> (clickjacking). frame-ancestors in the
+    # CSP below is the modern equivalent; this covers older browsers.
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    # Full URL as Referer for same-origin links, origin only for other sites.
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+    # The CSP. Byte-for-byte identical to the value in ../cloudflare/rules.tf.
+    content_security_policy {
+      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://csoh.org https://img.youtube.com https://i.ytimg.com https://csoh.goatcounter.com data:; font-src 'self'; connect-src 'self' https://csoh.goatcounter.com; frame-src https://www.youtube.com https://web.archive.org https://docs.google.com https://drive.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+      override                = true
+    }
+  }
+
+  # Permissions-Policy, COOP and CORP have no first-class argument in this
+  # resource, so they go through custom_headers_config. Same values as the
+  # edge ruleset.
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+      override = true
+    }
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
+      override = true
+    }
+    items {
+      header   = "Cross-Origin-Resource-Policy"
+      value    = "same-origin"
+      override = true
+    }
   }
 }

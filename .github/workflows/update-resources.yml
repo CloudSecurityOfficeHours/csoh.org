@@ -140,6 +140,13 @@ jobs:
           # with the App token CAN trigger downstream workflows; the default
           # token deliberately cannot, to prevent infinite CI loops.
           token: ${{ steps.app-token.outputs.token }}
+          # Do NOT leave that token behind in .git/config. By default checkout
+          # persists the credential as an http.extraheader for the rest of the
+          # job, where any later step - including the Claude Code step below,
+          # which reads web pages it does not control - could read it back out
+          # with a plain file read and exfiltrate it. Nothing here needs it:
+          # the create-pull-request step is handed the token explicitly.
+          persist-credentials: false
           # `fetch-depth: 0` clones the FULL git history (not just the latest
           # commit). The create-PR action needs full history to build a clean
           # branch and diff. (0 means "no depth limit / everything".)
@@ -163,7 +170,17 @@ jobs:
           # picks which model to use. `--allowedTools` is an allowlist of the
           # ONLY tools Claude may use this run; `Bash(grep:*)` means it may run
           # grep but not arbitrary shell - a guardrail so it can't, say, push.
-          claude_args: '--model claude-opus-4-8 --allowedTools "Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),Bash(python3:*),WebSearch,WebFetch"'
+          #
+          # `Bash(python3:*)` used to be on this list and is deliberately gone.
+          # It matched `python3 -c '<anything>'`, i.e. a full interpreter, which
+          # made the rest of the allowlist meaningless: this step reads
+          # attacker-controllable web pages via WebFetch/WebSearch, and a prompt
+          # injection that reached an interpreter could read secrets out of the
+          # process environment or trade this job's OIDC token for cloud
+          # credentials. If a future prompt genuinely needs Python, add a
+          # checked-in script and allowlist that exact path - never the bare
+          # interpreter.
+          claude_args: '--model claude-opus-4-8 --allowedTools "Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),WebSearch,WebFetch"'
           # `prompt:` is the instructions handed to Claude. The `|` is YAML's
           # "literal block scalar": every indented line below is kept verbatim
           # (newlines preserved) and passed through as one multi-line string.

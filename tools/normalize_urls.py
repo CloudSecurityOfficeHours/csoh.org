@@ -395,6 +395,36 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
                 # Strip tracking params from the resolved URL too
                 resolved = strip_tracking_params(resolved)
 
+                # Reject a destination that is not safe to embed in HTML before
+                # anything else looks at it.
+                #
+                # `resolved` can come straight from an external site's 308
+                # Location header (see resolve_url in check_url_safety.py), and
+                # a few lines below it is substituted into page text with a
+                # plain str.replace - i.e. straight inside href="...". A server
+                # that answers with
+                #     Location: https://ok.example/a"><script src=...></script>
+                # would have that markup written into every page linking to it,
+                # committed by site-update-deploy.yml, and deployed. The most
+                # realistic route in is a link whose domain expired and was
+                # re-registered, which this repo already tracks as a recurring
+                # class of dead link.
+                #
+                # A real URL never contains these characters unescaped, so
+                # refusing them costs nothing and closes the injection.
+                unsafe_chars = [c for c in '"\'<>`\\ \t\r\n' if c in resolved]
+                if unsafe_chars or not resolved.startswith(('http://', 'https://')):
+                    reason = (
+                        f"illegal characters in redirect destination: "
+                        f"{unsafe_chars!r}" if unsafe_chars
+                        else "redirect destination is not an http(s) URL"
+                    )
+                    categories['skipped_unsafe_destination'].append(
+                        (original_url, cleaned_url, resolved, [reason], []))
+                    if cleaned_url != original_url:
+                        replacements[original_url] = cleaned_url
+                    continue
+
                 # Safety-check the resolved destination before writing it.
                 # A URL that was safe at check-time can redirect to an
                 # unsafe destination (shortener flip, stale redirect, etc.).

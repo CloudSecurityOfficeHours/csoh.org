@@ -200,8 +200,11 @@ csoh.org/
 ├── meetings.js                      # Meeting recaps filtering + speaker filter
 ├── glossary.js                      # Glossary page live search
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
+├── vendor/                          # Self-hosted third-party JS (MiniSearch, GoatCounter),
+│                                    #   SRI-pinned; goatcounter-count.js is locally patched
+│                                    #   - read vendor/README.md before re-vendoring
 │
-├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection)
+├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection, live edge-header verification)
 ├── .github/workflows/      # CI/CD pipelines (15 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy)
 └── update_news.py          # News aggregation from 62 RSS feeds
 ```
@@ -215,7 +218,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
 | [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
-| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR | Yes, if diff is `resources.html` only |
+| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is `resources.html` only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - auto-approved, human merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
 | [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every site count (JSON-LD `numberOfItems`, OG-card subtitles) from the real cards and refreshes the count share-cards | N/A - commits directly |
@@ -224,7 +227,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud | N/A - direct deploy |
+| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud. The final `purge-cloudflare` job clears the edge, then asserts the live site against the repo: SRI hashes, and (via `tools/check_edge_headers.py`) the security headers | N/A - direct deploy |
 
 **PR quality gates (block or warn)**
 
@@ -250,6 +253,8 @@ A few patterns worth knowing before you touch any of these:
 - **App token vs PAT.** Writes (push, PR, approve, merge) use a `csoh-ci` GitHub App installation token, not the auto-injected `GITHUB_TOKEN` - App tokens can trigger downstream workflows on the PRs they create. `CSOH_PAT` is a separate fine-grained PAT used *only* to approve the bot's own PRs, since GitHub blocks self-approval and auto-merge doesn't honor the ruleset bypass list for the approval requirement. See the comments in `update-news.yml` for the full story.
 - **Auto-merge safety valve.** Workflows that auto-merge always check that the diff is restricted to a known set of files. If the bot touches anything outside that set, the PR stays open for a human.
 - **Pinned action SHAs.** All `uses:` references pin to a full commit SHA with the version as a trailing comment (`@de0fac…  # v6.0.2`). Don't replace these with tag refs.
+- **`permissions:` is `contents: read` unless a step really uses the ambient token.** Every write here (push, PR, approve, merge) goes through the App token or `CSOH_PAT`, both passed explicitly to the step that needs them, so the auto-injected `GITHUB_TOKEN` almost never needs a write scope. `normalize-urls.yml` carried `contents: write` + `pull-requests: write` that no step ever used; it is `contents: read` now, matching every other workflow in the repo. The extra scopes on `check-broken-links.yml`, `check-url-safety.yml`, and `validate-html.yml` (`pull-requests: write`) and on the three staleness workflows (`issues: write`) are real - those steps comment on PRs and manage sticky issues with the default token.
+- **`persist-credentials: false` on any checkout handed a write-scoped token.** `actions/checkout` defaults to leaving the token it was given in `.git/config` as an `http.extraheader`, readable by every later step in the job with a plain file read. Set `persist-credentials: false` whenever nothing after the clone talks to git over the network - which is the normal case here, since `peter-evans/create-pull-request` is passed the token directly. It is already set in `update-resources.yml` (the job that runs a model over fetched web pages) and in `deploy.yml`'s `purge-cloudflare` checkout.
 
 ### How Key Features Work
 
@@ -279,6 +284,7 @@ A few patterns worth knowing before you touch any of these:
 - Query params like `?v=d2217342` bust browser caches on file changes
 - Both are auto-generated by `update_sri.py` and committed via GitHub Actions
 - **You do not need to update SRI hashes manually** -- CI handles it on merge
+- The self-hosted third-party files in `vendor/` are SRI-hashed too, but not identically: `vendor/goatcounter-count.js` is in `update_sri.py`'s `ASSETS` list and is re-stamped automatically, while `vendor/minisearch-7.1.2.min.js` carries a hand-stamped `integrity` in `search.html` and no `?v=` cache-bust (the file is pinned to a version and never regenerated). `goatcounter-count.js` is also **not** a pristine upstream copy - it carries two local patches. See [vendor/README.md](vendor/README.md) before you touch or re-vendor anything in that directory
 
 **News Aggregation**
 - `update_news.py` pulls from 62 RSS/Atom feeds every 3 hours (via GitHub Actions)
@@ -297,6 +303,8 @@ A few patterns worth knowing before you touch any of these:
 - Auth: `CLAUDE_CODE_OAUTH_TOKEN` (subscription quota, not API billing) + the `csoh-ci` GitHub App for write-scoped PRs + `CSOH_PAT` to approve the bot's own PR so auto-merge can satisfy the "1 required approval" rule
 - The model checks for duplicates by grepping for URL + name before adding, follows the existing resource-card HTML pattern, and bumps the `<span id="visibleCount">` counter
 - **Auto-merge only fires when the diff is purely `resources.html`.** If Claude touches anything else, the PR stays open with a banner asking for human review - important safety valve
+- **The `--allowedTools` list must not contain a bare interpreter.** It is currently `Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),WebSearch,WebFetch`. `Bash(python3:*)` used to be on it and was removed: that pattern matches `python3 -c '<anything>'`, which is arbitrary code execution and makes the rest of the allowlist decorative. This step reads pages it does not control (`WebFetch` / `WebSearch`) in a job that also holds `id-token: write` and the `csoh-ci` App token, so a prompt injection in a fetched page is a realistic path to those credentials. If a future prompt genuinely needs Python, add a checked-in script to `tools/` and allowlist that exact path - never the interpreter
+- **The job's `actions/checkout` sets `persist-credentials: false`** so the App token isn't left in `.git/config` for the model's step to read. This is safe because `peter-evans/create-pull-request` is handed the token explicitly. Don't drop it while re-arranging the job
 - Preview images for newly-added cards are generated post-merge by `site-update-deploy.yml`
 
 **Site-wide Search** (`search.html`, MiniSearch)
@@ -388,13 +396,20 @@ python3 tools/check_svg_dimensions.py     # width/height on every <svg> with a v
 python3 tools/check_jsonld.py             # every ld+json block must parse
 ```
 
-Two more checks run post-merge rather than on the PR, but are worth running
+Three more checks run post-merge rather than on the PR, but are worth running
 locally if you touched what they cover:
 
 ```bash
-python3 tools/check_news_banners.py   # site-update-deploy.yml: every news source has a banner
-python3 tools/sync_counts.py --check  # update-counts.yml: no count on the site may lie
+python3 tools/check_news_banners.py    # site-update-deploy.yml: every news source has a banner
+python3 tools/sync_counts.py --check   # update-counts.yml: no count on the site may lie
+python3 tools/check_edge_headers.py    # deploy.yml: the live security headers match rules.tf
 ```
+
+The last one asserts against the **live site**, not the working tree, so it will
+report whatever is deployed right now. That is the point: the Cloudflare ruleset
+it checks is pinned with `ignore_changes = [rules]`, so a header edited in Git
+can pass `terraform apply` without ever reaching the edge. See the `File
+Reference` entry below.
 
 ### Linting (run by `lint.yml` on every push/PR)
 
@@ -449,6 +464,27 @@ See [SUBMIT_NEWS_SOURCE_README.md](tools/SUBMIT_NEWS_SOURCE_README.md) for detai
 2. Check both light and dark mode
 3. Check at mobile, tablet, and desktop widths
 4. The CI will auto-update SRI hashes on merge -- do not update them yourself
+
+### Updating a Vendored Library (`vendor/`)
+
+Read [vendor/README.md](vendor/README.md) first. Two things there are easy to
+undo by accident:
+
+1. **`vendor/goatcounter-count.js` is patched.** Two lines are changed from
+   upstream so the analytics beacon stops transmitting the query string
+   (`q: location.search` → `q: ''`, and `get_path()` returns `loc.pathname`
+   instead of `loc.pathname + loc.search`). Without them, a shared
+   `/search.html?q=<term>` URL sends the visitor's search term to
+   `csoh.goatcounter.com`, which contradicts what `privacy.html` and `llms.txt`
+   promise. Both edits are marked in the source with a `CSOH LOCAL MODIFICATION`
+   comment. **Dropping a newer upstream release over the file silently reverts
+   them** - re-apply the modifications as part of the same commit.
+2. **Re-run the SRI stamper afterward**, or every page will ask for a hash the
+   file no longer has and the browser will refuse to execute it:
+
+   ```bash
+   python3 update_sri.py
+   ```
 
 ### Adding a Kill Chain
 
@@ -658,6 +694,9 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |
 | `sitemap.xml` | XML sitemap for search engines | **Don't edit** -- lastmod refreshed automatically |
 | `update_sri.py` | SRI hash generator. The `ASSETS` list is the source of truth: `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search.css`, `search-init.js`, `vendor/goatcounter-count.js`. Any new shared asset must be added there or it ships uncached-busted and unhashed | Adding a shared CSS/JS asset; otherwise **don't edit** -- runs in CI |
+| `tools/check_edge_headers.py` | Edge security-header drift gate. Parses the header name/value pairs out of the `set_security_headers` rule in `infra/terraform/cloudflare/rules.tf` and asserts each one against what the live site actually returns, failing on anything missing or changed. It exists because that ruleset carries `lifecycle { ignore_changes = [rules] }` (a cloudflare v4 provider workaround), which makes the resource inert: you can tighten the CSP in Git, get a clean `terraform apply`, and ship nothing. Those headers are also the only source of CSP/HSTS for the Azure origin, which cannot set response headers itself | Run it (`python3 tools/check_edge_headers.py`, or `--url <origin>` for one origin) after any edge-header change, since `terraform apply` will not tell you. It is a **CI gate in the `purge-cloudflare` job of `deploy.yml`**, so drift fails the deploy. Delete the whole script once the cloudflare v5 provider upgrade lets `ignore_changes` go |
+| `tools/add_meeting.py` | Publishes a meeting recap from a note export: writes `meetings/YYYY-MM-DD.html`, inserts the card on `meetings.html`, rewires the pager links on both chronological neighbors, and updates `sitemap.xml` + `meetings-search-index.json` | Changing recap structure. Note the `scrub_emails()` guard in `clean_text()` (the shared funnel for both the HTML and Markdown parsers): Zoom summaries name people by display name, and some people's display name is their work email address, so any address in recap prose is replaced with "one attendee" (`@csoh.org` is exempt). It **warns and continues** rather than failing, so a publish is never blocked -- read the warning and substitute a first name if one is appropriate |
+| `vendor/` | Self-hosted third-party browser libraries (MiniSearch, GoatCounter), SRI-pinned because the CSP is `script-src 'self'`. `goatcounter-count.js` is deliberately patched, not pristine | **Read [vendor/README.md](vendor/README.md) first.** A re-vendor must re-apply the local modifications and re-run `update_sri.py` |
 | `.htaccess` | Apache server config (security headers, caching, compression) | Server configuration changes |
 | `nginx.conf` | Nginx server config (Docker deployments) | Server configuration changes |
 

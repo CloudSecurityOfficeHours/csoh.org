@@ -45,7 +45,7 @@ leg runs at **Full (strict)**:
 
 ```
 infra/terraform/
-  aws/          S3 (private) + CloudFront/OAC + GitHub OIDC role
+  aws/          S3 (private) + CloudFront/OAC + response-headers policy + OIDC role
   azure/        Storage account + $web static website + Entra federated cred
   gcp/          Cloud Run + Artifact Registry + WIF (LB/Armor/CDN removed)
   cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules
@@ -107,6 +107,106 @@ accounts hardcoded in the Terraform (`infra/terraform/aws`, `.../azure`) and
 the deploy workflow - they're identifiers, not secrets, so they're committed
 rather than configured as Variables.
 
+## OIDC trust: all three clouds pin the same subject
+
+Keyless is not the same as scoped. What each cloud *trusts* is a claim inside
+the GitHub OIDC token, and the design rule is that all three pin the identical
+subject:
+
+```
+repo:CloudSecurityOfficeHours/csoh.org:environment:production
+```
+
+| Cloud | Where | How it's expressed |
+|---|---|---|
+| AWS | `aws/oidc.tf` | `StringEquals` on `token.actions.githubusercontent.com:sub` |
+| Azure | `azure/identity.tf` | `subject = "repo:.../csoh.org:environment:production"` |
+| GCP | `gcp/wif.tf` | `attribute_condition` on `assertion.sub` + a `principal://` IAM member |
+
+**GCP used to be the outlier.** Its `attribute_condition` gated only on
+`assertion.repository`, and the IAM member was
+`principalSet://.../attribute.repository/<owner>/<repo>`. Together that trusted
+*every* workflow in the repo, on any branch, in any (or no) environment, to
+impersonate `csoh-deployer` (`roles/run.admin` + `roles/artifactregistry.writer`).
+That includes scheduled jobs that read untrusted web pages and never enter an
+environment at all. `var.github_branch` was declared but referenced nowhere, so
+the config read as though branch enforcement existed when it did not.
+
+`wif.tf` now requires both claims in the `attribute_condition`, and the IAM
+member is a single `principal://.../subject/repo:<owner>/<repo>:environment:production`
+(valid because `google.subject` is mapped from `assertion.sub`). The condition
+is the hard gate; the narrowed member is defense in depth. `variables.tf`
+documents that `github_branch` is deliberately *not* referenced by the trust.
+
+**Why pin the environment rather than the ref.** A `ref:refs/heads/main` check
+only proves which branch the workflow file came from - any workflow can run on
+`main`. Pinning `environment:production` proves the job declared
+`environment: production` and therefore passed whatever gates that environment
+carries, and the `production` environment's own deployment branch policy
+(exactly one entry: `main`) enforces the branch transitively. So the
+environment pin is a superset of the ref pin, not an alternative to it.
+
+Only `deploy.yml`'s `publish-gcp` job uses GCP auth, and it declares
+`environment: production`. If you add a job that needs cloud credentials, it
+must declare that environment or it will be rejected at the token exchange.
+
+**This needs a `terraform apply` in `infra/terraform/gcp/` to take effect.**
+
+## Security headers are declared in three places
+
+Header values now live in three files, and they must stay in step:
+
+| File | Applies to | Notes |
+|---|---|---|
+| `infra/terraform/cloudflare/rules.tf` | every response, all origins | the `csoh-security-headers` ruleset |
+| `infra/terraform/aws/cloudfront.tf` | the CloudFront origin | `aws_cloudfront_response_headers_policy.security` |
+| `nginx-security-headers.conf` | the GCP Cloud Run origin | baked into the container image |
+
+**Azure has no fourth entry, and cannot.** Azure Blob static websites cannot
+emit custom response headers at all, so that origin depends entirely on the
+Cloudflare edge. That is a known, accepted gap - reaching the Azure origin
+directly gets you the site with no CSP and no HSTS.
+
+AWS used to have the same gap: there was no `response_headers_policy_id`
+anywhere in the AWS config, so the distribution's public `*.cloudfront.net`
+hostname served a fully functional copy of the site with no CSP, no HSTS, and
+no `X-Frame-Options`. The new policy carries the same eight headers as the edge
+ruleset - HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
+and the CSP through `security_headers_config`, plus `Permissions-Policy`,
+`Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` through
+`custom_headers_config` (those three have no first-class argument in the
+resource). **This needs a `terraform apply` in `infra/terraform/aws/`.**
+
+### The `ignore_changes` trap, and the CI gate that compensates
+
+`cloudflare_ruleset.security_headers` carries `lifecycle { ignore_changes = [rules] }`,
+a deliberate workaround for a cloudflare v4 provider bug that returns the
+multi-header block in a non-deterministic order. `rules` is the *only*
+meaningful attribute of a `cloudflare_ruleset`, so the workaround makes the
+resource inert after creation: tighten the CSP in Git, run `terraform apply`,
+get a clean plan, and ship nothing. The repo, the diff, and the reviewer all
+believe the header changed.
+
+Terraform cannot catch that, so CI asserts it from the outside instead.
+`tools/check_edge_headers.py` parses the eight header name/value pairs out of
+`rules.tf` and compares them against what the live site actually serves:
+
+```bash
+python3 tools/check_edge_headers.py                        # defaults to https://csoh.org/
+python3 tools/check_edge_headers.py --url <origin-url>     # check one origin directly
+```
+
+It exits non-zero on any missing or drifted header, and `deploy.yml`'s
+`purge-cloudflare` job runs it right after the existing SRI verification, so
+**a deploy now fails on header drift** - whether the cause is a forgotten
+apply, a dashboard edit, or someone using the Cloudflare API token to weaken a
+header. Because `ignore_changes` is still there, fixing a reported drift means
+editing the header in the Cloudflare dashboard to match the repo, or dropping
+the `lifecycle` block for one apply.
+
+Delete the checker when the cloudflare v5 provider upgrade lets
+`ignore_changes` go away.
+
 ## One-time bootstrap
 
 Each cloud needs an authenticated admin session for the first `apply`; after
@@ -143,6 +243,62 @@ terraform -chdir=infra/terraform/cloudflare apply \
 
 Then run the deploy workflow once (`gh workflow run "Deploy - build once, publish to AWS + GCP + Azure"`)
 so all three origins have content before any DNS points at them.
+
+## Pending applies - 2026-07 security remediation
+
+Three Terraform changes are committed but **not yet live**. They are
+independent of each other: each touches a different provider and a different
+state prefix, so they can be applied in any order, one at a time, and a failure
+in one does not block the others. All three need the usual admin session for
+that cloud plus GCS application-default credentials for the state backend.
+
+**1. GCP - narrow the WIF trust to the production environment**
+(`gcp/wif.tf`, `gcp/variables.tf`; see *OIDC trust* above)
+
+```bash
+terraform -chdir=infra/terraform/gcp plan     # expect: provider + IAM member changes only
+terraform -chdir=infra/terraform/gcp apply
+```
+
+Verify by running the deploy workflow and confirming `publish-gcp` still
+authenticates. If it fails at the `google-github-actions/auth` step, the job
+is not entering the `production` environment - fix the workflow, do not widen
+the trust back to `attribute.repository`.
+
+**2. Cloudflare - fix the `www` redirect loop** (`cloudflare/rules.tf`)
+
+The redirect's `target_url` was
+`wildcard_replace(http.request.full_uri, "https://www.*", "https://$${1}")`.
+The rule expression (`http.host eq "www.csoh.org"`) matches plaintext HTTP too,
+and the dynamic-redirect phase runs *before* "Always Use HTTPS". On an `http://`
+request the `https://www.*` pattern did not match, `wildcard_replace` returned
+its input unchanged, and Cloudflare 301'd the request to itself forever, in
+cleartext - so the browser never reached a response carrying HSTS for the `www`
+host. It is now `concat("https://csoh.org", http.request.uri.path)`: scheme and
+host hardcoded, never derived from the request, with `preserve_query_string`
+carrying the query.
+
+```bash
+terraform -chdir=infra/terraform/cloudflare apply   # plus the -var flags from bootstrap above
+curl -sI http://www.csoh.org/about.html | grep -i -E 'HTTP/|location'
+#   want: 301 with `location: https://csoh.org/about.html`
+#   bug:  301 with `Location: http://www.csoh.org/about.html` (points at itself)
+```
+
+**3. AWS - CloudFront emits its own security headers** (`aws/cloudfront.tf`;
+see *Security headers are declared in three places* above)
+
+```bash
+terraform -chdir=infra/terraform/aws apply
+# then check the origin directly, bypassing the Cloudflare edge:
+python3 tools/check_edge_headers.py \
+  --url "https://$(terraform -chdir=infra/terraform/aws output -raw cloudfront_domain)/"
+```
+
+Before the apply that command reports the headers as missing, which is exactly
+the gap being closed. Pointed at the Azure origin it will keep reporting them
+missing forever - Azure Blob cannot set them, and the edge is the only thing
+that adds them there.
 
 ## Cutover (safety-gated) & rollback
 
@@ -206,6 +362,12 @@ gcloud run services update-traffic csoh-site --region us-central1 \
 # Check what the edge is actually serving vs. what the HTML asks for
 #   (the same SRI check deploy.yml runs; see CLAUDE.md for the one-liners)
 curl -s https://csoh.org/ | grep -o 'style\.css?v=[0-9a-f]*'
+
+# Check the live security headers against infra/terraform/cloudflare/rules.tf
+#   Terraform cannot enforce that ruleset (ignore_changes = [rules]), so this
+#   is the only thing that catches drift. deploy.yml runs it on every deploy.
+python3 tools/check_edge_headers.py
+python3 tools/check_edge_headers.py --url https://csoh.org/about.html
 ```
 
 ## Cost

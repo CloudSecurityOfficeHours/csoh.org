@@ -96,11 +96,25 @@ variable "github_repo" {
 }
 
 # The single git branch (here `main`) that is meant to perform real deploys,
-# so a push to a random feature branch can't ship to production. The branch
-# name a workflow runs on is one of the token claims WIF maps in wif.tf, which
-# is what makes restricting deploys to this branch possible.
+# so a push to a random feature branch can't ship to production.
+#
+# NOT REFERENCED BY THE WIF TRUST - and deliberately so. This variable was
+# declared but never used, which read as though branch enforcement existed on
+# the GCP leg when it did not: wif.tf gated only on `assertion.repository`, so
+# any workflow on any branch could mint deployer credentials. That is fixed in
+# wif.tf by pinning `assertion.sub` to
+# `repo:<owner>/<repo>:environment:production`, matching aws/oidc.tf and
+# azure/identity.tf.
+#
+# Enforcing the ENVIRONMENT rather than the ref is the stronger choice: the
+# `production` GitHub Environment is itself restricted to `main` by a
+# deployment branch policy, so the environment pin transitively enforces this
+# branch AND adds a gate that a ref check alone would not (a workflow can lie
+# about nothing here, but it can trivially run on `main` without entering the
+# environment). The variable is kept because it documents the intended branch
+# and is consumed by the equivalent variables files in aws/ and azure/.
 variable "github_branch" {
-  description = "Branch authorized to deploy via WIF"
+  description = "Branch authorized to deploy (enforced via the production environment's branch policy, not directly in wif.tf)"
   type        = string
   default     = "main"
 }

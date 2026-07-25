@@ -92,13 +92,25 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   }
 
   # ATTRIBUTE CONDITION - a hard gate evaluated when a token is presented.
-  # GCP rejects the token unless this expression is true. Here it requires the
-  # token's repository claim to equal "<github_owner>/<github_repo>" (the two
-  # values come from variables.tf, e.g. "CloudSecurityOfficeHours/csoh.org").
-  # This is the critical security control: without it, ANY GitHub workflow in
-  # any repo on the whole platform could mint/obtain a token from this pool.
-  # With it, only this project's repo is accepted.
-  attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}'"
+  # GCP rejects the token unless this expression is true. This is the critical
+  # security control: without it, ANY GitHub workflow in any repo on the whole
+  # platform could mint a token from this pool.
+  #
+  # Two claims are required, not one:
+  #   * repository - the run came from this exact repo (values from variables.tf,
+  #     e.g. "CloudSecurityOfficeHours/csoh.org").
+  #   * sub - the run was executing in the `production` GitHub Environment.
+  #
+  # The second half is what makes this equivalent to the other two clouds.
+  # Checking only `repository` trusted EVERY workflow in the repo, on every
+  # branch - including scheduled jobs that read untrusted web content and never
+  # enter an environment - to mint credentials for the deployer SA. AWS
+  # (aws/oidc.tf) and Azure (azure/identity.tf) both pin the full subject
+  # `repo:<owner>/<repo>:environment:production`, and only deploy.yml's
+  # `publish-gcp` job (which declares `environment: production`) needs to pass.
+  # The `production` environment is itself restricted to the `main` branch, so
+  # this transitively enforces the branch rule that var.github_branch describes.
+  attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' && assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production'"
 
   # OIDC settings: tell GCP who issues the tokens we trust. The issuer_uri is
   # GitHub Actions' well-known, fixed OIDC issuer URL - GCP fetches GitHub's
@@ -126,15 +138,19 @@ resource "google_service_account_iam_member" "deployer_wif_binding" {
   # service account - i.e. it is what turns "trusted token" into "can act as
   # the deployer."
   role = "roles/iam.workloadIdentityUser"
-  # WHO receives the role - the "member." A `principalSet://` member matches a
-  # GROUP of federated identities by a mapped attribute rather than a single
-  # named user. Reading the URL: it points at this project (by numeric
-  # project_number from variables.tf), into the global "github-pool" (its ID
-  # pulled from the pool resource), then filters by
-  # `.../attribute.repository/<owner>/<repo>`. Because of the attribute_mapping
-  # above, that attribute equals the token's repository claim - so this grants
-  # impersonation to ANY workflow run from this exact repo. (Note: this is
-  # scoped by repository, not branch, so branch enforcement - if desired - is
-  # handled in the workflow/environment rules, not here.)
-  member = "principalSet://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github.workload_identity_pool_id}/attribute.repository/${var.github_owner}/${var.github_repo}"
+  # WHO receives the role - the "member." A `principal://` member names ONE
+  # federated identity by its subject, where the subject is whatever
+  # `google.subject` was mapped from above (here GitHub's `sub` claim).
+  # Reading the URL: it points at this project (by numeric project_number from
+  # variables.tf), into the global "github-pool" (its ID pulled from the pool
+  # resource), then names the exact subject
+  # `repo:<owner>/<repo>:environment:production`.
+  #
+  # This previously used `principalSet://.../attribute.repository/<owner>/<repo>`,
+  # which granted impersonation to ANY workflow run from the repo, on any
+  # branch, in any (or no) environment. The attribute_condition above is the
+  # hard gate and already rejects those tokens; pinning the member to the same
+  # subject is defense in depth, and mirrors the StringEquals-on-sub condition
+  # in aws/oidc.tf and the `subject =` line in azure/identity.tf.
+  member = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github.workload_identity_pool_id}/subject/repo:${var.github_owner}/${var.github_repo}:environment:production"
 }

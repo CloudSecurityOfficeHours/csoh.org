@@ -105,10 +105,24 @@ on:
       - 'tools/site-publish.filter'
       - 'tools/stage_site.sh'
       - '.github/workflows/deploy.yml'
+      # `meetings-search-index.json` IS a trigger, unlike its sibling below.
+      # See the note - it is not rebuilt by this workflow, so a commit really is
+      # the only way a change to it reaches production.
+      - 'meetings-search-index.json'
     #
-    # Deliberately NOT triggers: `search-index.json` and
-    # `meetings-search-index.json`. Both are published, but both are regenerated
-    # during the build itself, so a commit is never the reason they need to ship.
+    # Deliberately NOT a trigger: `search-index.json`. It is published, but the
+    # build job regenerates it from the site content on every run (see
+    # `python3 tools/build_search_index.py` below), so a commit is never the
+    # reason it needs to ship.
+    #
+    # `meetings-search-index.json` is DIFFERENT and this list used to get it
+    # wrong. It is built by `tools/build_meetings_search_index.py`, which this
+    # workflow never runs - only the housekeeping workflow
+    # (site-update-deploy.yml) does. So a stale entry in that index sits live
+    # until something else happens to ship it. That is not hypothetical: a
+    # participant's email address removed from two recap pages stayed readable
+    # in the published index afterwards, because fixing the HTML did not
+    # rebuild or redeploy the index. It is a trigger path now.
     #
     # Widening this list is always the safe direction - a superfluous pattern
     # costs one extra deploy of identical bytes, while a missing one costs a
@@ -784,3 +798,29 @@ jobs:
               sys.exit(1)
           print(f"All {checked} live assets match their SRI hashes.")
           PY
+
+      # Same idea as the SRI check above, for the security headers.
+      #
+      # The csoh-security-headers ruleset in infra/terraform/cloudflare/rules.tf
+      # carries `ignore_changes = [rules]` to work around a cloudflare v4
+      # provider ordering bug. `rules` is the only meaningful attribute of a
+      # ruleset, so that makes the resource inert: a CSP tightened in Git
+      # produces a clean `terraform apply` and reaches nothing. Those headers
+      # are also the ONLY source of CSP/HSTS for the Azure origin, which cannot
+      # set response headers itself (GCP has nginx-security-headers.conf; AWS
+      # has a CloudFront response headers policy once aws/ is applied).
+      #
+      # So assert from the outside instead: fail the deploy if what the edge
+      # serves has drifted from what this repo declares. Delete this step when
+      # the v5 provider upgrade lets the ignore_changes workaround go away.
+      # This job has no checkout of its own (the SRI step above is written as an
+      # inline heredoc for that reason), so fetch the repo to get the checker.
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # Nothing here talks to git after the clone, so don't leave the
+          # credential sitting in .git/config for later steps to find.
+          persist-credentials: false
+
+      - name: Verify live security headers match the repo
+        run: python3 tools/check_edge_headers.py --url https://csoh.org/

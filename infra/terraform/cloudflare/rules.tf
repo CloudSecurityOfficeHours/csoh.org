@@ -130,6 +130,25 @@ resource "cloudflare_ruleset" "security_headers" {
     # result after apply" on re-apply. The headers ARE applied correctly at the edge
     # (verified via curl); ignore rule drift so `terraform apply` stays clean.
     # Revisit when upgrading to the cloudflare v5 provider, which fixes the ordering.
+    #
+    # KNOW WHAT THIS COSTS: `rules` is the only meaningful attribute of a
+    # cloudflare_ruleset, so ignoring it makes this resource inert after
+    # creation. Editing any header value above and running `terraform apply`
+    # gives a clean plan and changes NOTHING at the edge. That matters more
+    # here than it looks, because this ruleset is the only source of these
+    # headers for the Azure origin - Azure Blob static websites cannot set
+    # response headers at all. The GCP/nginx origin sets them independently via
+    # nginx-security-headers.conf, and the AWS origin does too via
+    # aws_cloudfront_response_headers_policy.security in aws/cloudfront.tf,
+    # but only once that config is applied - until then AWS depends on the edge
+    # as well. Keep all three copies of the values in step.
+    #
+    # Because Terraform cannot enforce this, CI asserts it from the outside
+    # instead: tools/check_edge_headers.py parses the header values out of THIS
+    # file and compares them against what csoh.org actually serves, and the
+    # purge-cloudflare job in deploy.yml fails the deploy on any drift. So an
+    # edit here still gets caught - it just has to be applied by hand in the
+    # Cloudflare dashboard (or by dropping this block for one apply) first.
     ignore_changes = [rules]
   }
 }
@@ -173,12 +192,24 @@ resource "cloudflare_ruleset" "redirects" {
         preserve_query_string = true
         # The destination URL, computed by an expression rather than hardcoded.
         target_url {
-          # wildcard_replace(input, pattern, replacement): take the full request
-          # URL, match "https://www.<anything>", and rebuild it without the
-          # "www." - "$${1}" inserts whatever the "*" matched. (The doubled $$ is
-          # Terraform escaping so it passes a literal "${1}" through to Cloudflare
-          # instead of trying to interpolate it itself.)
-          expression = "wildcard_replace(http.request.full_uri, \"https://www.*\", \"https://$${1}\")"
+          # Build the destination from the PATH only, and hardcode the scheme
+          # and host. Never derive it from the request's own scheme.
+          #
+          # This used to be:
+          #   wildcard_replace(http.request.full_uri, "https://www.*", "https://$${1}")
+          # which was an infinite redirect loop on plaintext HTTP. The rule's
+          # expression (`http.host eq "www.csoh.org"`) matches http:// requests
+          # too, and this dynamic-redirect phase runs BEFORE "Always Use HTTPS"
+          # (zone.tf). On an http:// request the full_uri is
+          # "http://www.csoh.org/..." , the "https://www.*" pattern does not
+          # match, wildcard_replace returns the input unchanged, and Cloudflare
+          # 301s the request to itself - forever, in cleartext, so the browser
+          # never reaches a response that could carry the HSTS header.
+          # Verified live before the fix: `curl -I http://www.csoh.org/about.html`
+          # returned `Location: http://www.csoh.org/about.html`.
+          #
+          # preserve_query_string above carries any "?query=string".
+          expression = "concat(\"https://csoh.org\", http.request.uri.path)"
         }
       }
     }

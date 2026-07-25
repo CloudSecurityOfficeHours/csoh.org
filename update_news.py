@@ -667,8 +667,29 @@ def build_collection_schema(entries: List[Dict[str, str]], newest_iso: str, limi
             "hasPart": articles,
         },
     }
-    # Escape `</` so a stray `</script>` in content can't terminate the inline script block.
-    return json.dumps(schema, indent=2, ensure_ascii=False).replace("</", "<\\/")
+    # Escape every HTML-significant character before this JSON goes inside a
+    # <script type="application/ld+json"> block on news.html.
+    #
+    # This used to escape only `</`, which stops a literal `</script>` from
+    # terminating the block but not much else. An HTML parser also ends the
+    # block's contents at a `<!--` comment opener, so feed-controlled text
+    # containing `<!--` followed by `<script` anywhere later in the same block
+    # is enough to swallow the rest of the page. Feed titles and summaries are
+    # attacker-influenceable (a compromised vendor blog, a hijacked feed host,
+    # an expired-and-re-registered feed domain) and, because these are security
+    # news feeds, a legitimate post about an XSS payload can produce the same
+    # bytes by accident.
+    #
+    # `\uXXXX` is a valid JSON string escape, so consumers (Google, schema.org
+    # validators, anything doing json.loads) still see the original characters -
+    # the structured data is unchanged. Only the HTML parser is affected, and it
+    # now sees nothing it can act on.
+    out = json.dumps(schema, indent=2, ensure_ascii=False)
+    return (
+        out.replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 def replace_collection_schema(html_text: str, schema_json: str) -> str:

@@ -138,3 +138,98 @@ down. Check all of these when adding one:
 (`SUBDIR_PATTERNS`) · `sitemap.xml`. The last three are opt-in judgement calls,
 not automatic — `homelab/` is deliberately excluded from search and
 cross-linking.
+
+## Never allowlist a bare interpreter in a job that reads the web
+
+`update-resources.yml` runs `anthropics/claude-code-action` behind an
+`--allowedTools` list, and the comment beside it calls that list a guardrail
+"so it can't, say, push." `Bash(python3:*)` used to be on it. That pattern
+matches `python3 -c '<anything>'`, i.e. a whole interpreter, which voids every
+other entry: once one tool runs arbitrary code, the rest of the allowlist is
+decoration. The step reads pages it does not control via `WebFetch`/`WebSearch`,
+and the same job holds the `csoh-ci` App token and `id-token: write`, and
+`csoh-ci` is on the `Main` ruleset's `bypass_actors`. Injected page text ->
+interpreter -> credential -> push to `main`, with nothing in between.
+
+That job's `actions/checkout` now also sets `persist-credentials: false`. By
+default checkout stores the token in `.git/config` as an `http.extraheader` and
+leaves it there for the whole run, which turns "can read a file" into "has the
+App token" with no shell required. It is safe to drop here because nothing
+after the clone talks to git: `peter-evans/create-pull-request` is passed the
+token explicitly.
+
+Two rules. Never allowlist a bare interpreter (`Bash(python3:*)` and friends)
+in a job that reads untrusted input; if a prompt genuinely needs Python, check
+in a script and allowlist that exact path. And set `persist-credentials: false`
+on any checkout in such a job.
+
+## The Cloudflare security-header ruleset does not apply your changes
+
+`cloudflare_ruleset.security_headers` in `infra/terraform/cloudflare/rules.tf`
+carries `lifecycle { ignore_changes = [rules] }`, a deliberate workaround for a
+v4-provider ordering bug. `rules` is the only meaningful attribute of a
+`cloudflare_ruleset`, so that makes the resource inert after creation: tighten
+the CSP in Git, run `terraform apply`, get a clean plan, and ship nothing. The
+repo, the diff, and the reviewer all believe the header changed. Same silent
+shape as the path-filter trap above.
+
+Terraform cannot catch this, so CI asserts it from the outside.
+`tools/check_edge_headers.py` parses the 8 header name/value pairs out of
+`rules.tf` and compares them against what the live site actually serves; the
+`purge-cloudflare` job in `deploy.yml` runs it and fails the deploy on any
+drift, whether from a forgotten apply, a dashboard edit, or a weakened header.
+Run it yourself with `python3 tools/check_edge_headers.py` (defaults to
+`https://csoh.org/`, or `--url <origin>` for one origin). Applying a header
+edit still has to be done by hand in the dashboard, or by dropping the
+`lifecycle` block for a single apply. Delete the checker when the v5 provider
+upgrade retires `ignore_changes`.
+
+Header values now live in **three** places that must stay in step:
+
+- `infra/terraform/cloudflare/rules.tf`: the edge, in front of all origins.
+- `infra/terraform/aws/cloudfront.tf`:
+  `aws_cloudfront_response_headers_policy.security`, wired into
+  `default_cache_behavior`. This is new. The distribution's `*.cloudfront.net`
+  hostname is public, and without it a direct request got a fully working copy
+  of the site with no CSP, no HSTS, and no X-Frame-Options.
+- `nginx-security-headers.conf`: the GCP origin, which always set its own.
+
+Azure Blob static websites cannot emit custom response headers at all, so that
+origin still depends entirely on the edge. That gap is known and cannot be
+closed from this repo.
+
+## `vendor/` files are patched, and a re-vendor silently reverts the patch
+
+`vendor/goatcounter-count.js` is not a pristine upstream copy. Two lines are
+changed so the analytics beacon stops transmitting the query string:
+`q: location.search` becomes `q: ''`, and `get_path()` returns `loc.pathname`
+instead of `loc.pathname + loc.search`. It matters because `/search.html?q=<term>`
+is deep-linkable here, so the query string carried visitors' search terms, and
+`privacy.html` and `llms.txt` both promise it is not collected. Dropping a
+newer upstream release over the top reverts both edits and quietly resumes
+collecting the thing the site says it does not, with the docs still claiming
+otherwise.
+
+Each edit is marked in the source with a `CSOH LOCAL MODIFICATION` comment and
+listed in `vendor/README.md`. Everything in `vendor/` is SRI-stamped, so re-run
+`python3 update_sri.py` after any edit there or browsers refuse the file.
+
+## A workflow that needs cloud credentials must declare `environment: production`
+
+All three clouds pin their OIDC trust to the same subject,
+`repo:<owner>/<repo>:environment:production`: `infra/terraform/aws/oidc.tf`
+(`StringEquals` on the `sub` claim), `infra/terraform/azure/identity.tf`
+(`subject =`), and `infra/terraform/gcp/wif.tf` (both the `attribute_condition`
+and the `principal://.../subject/...` IAM member). GCP was the outlier: it
+gated on `assertion.repository` alone, which trusted every workflow in the
+repo, on any branch, in any environment or none, to impersonate the deployer
+service account.
+
+This is a deliberate gate, not boilerplate. A new job that calls
+`google-github-actions/auth` or `aws-actions/configure-aws-credentials` without
+`environment: production` will fail to authenticate, and the error will not
+explain why. `id-token: write` alone is not enough. The `production`
+environment is itself restricted to `main` by a deployment branch policy, so
+the environment pin enforces the branch transitively;
+`var.github_branch` in `infra/terraform/gcp/variables.tf` documents that intent
+but is not referenced by the trust.

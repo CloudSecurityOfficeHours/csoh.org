@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-29">
-    <meta property="article:modified_time" content="2026-05-29">
+    <meta property="article:modified_time" content="2026-07-25">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="DevSecOps">
     <meta property="article:tag" content="Terraform">
@@ -81,7 +81,7 @@
         }
       },
       "datePublished": "2026-05-29",
-      "dateModified": "2026-05-29",
+      "dateModified": "2026-07-25",
       "mainEntityOfPage": "https://csoh.org/terraform.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -329,7 +329,7 @@
     </section>
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-29">Last updated <strong>2026-05-29</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/terraform.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-07-25">Last updated <strong>2026-07-25</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/terraform.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
         <div class="info-box--blue">
             <p><strong>The honest version:</strong> Terraform is how you describe cloud infrastructure as text files instead of clicking around a console. You write what you <em>want</em> to exist - a bucket, a DNS record, an <a class="glossary-link" href="glossary.html#term-iam">IAM</a> role - and Terraform figures out the API calls to make reality match. Re-run it and it only changes what drifted. The mental model is small; the surface area is large. The fastest way to actually <em>get</em> it is to read a real, working configuration and trace what each block does - which is exactly what this page is. Every concept points at a specific file in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer">our repo</a>.</p>
             <p style="margin-top:0.75rem;"><strong>What you'll need:</strong> the <a href="https://developer.hashicorp.com/terraform/install" target="_blank" rel="noopener noreferrer">Terraform CLI</a> (or <a href="https://opentofu.org/" target="_blank" rel="noopener noreferrer">OpenTofu</a> - see below), one cloud account, and comfort reading config files. No prior Terraform experience required.</p>
@@ -527,6 +527,17 @@ resource "aws_s3_bucket" "example" {
 }</pre></div>
             <p>Read that condition out loud: <em>only</em> a workflow in <em>this</em> repo, running in the <em>production</em> environment, may assume the deploy role. A token from any other repo, any fork, or any other environment is rejected. The role's <em>permissions</em> are equally tight - write to one bucket and invalidate one CloudFront distribution, nothing else. So even if a token leaked, it could touch exactly one site's files and nothing else in the account. GCP does the same thing with <a class="glossary-link" href="glossary.html#term-wif">Workload Identity Federation</a> in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/gcp/wif.tf" target="_blank" rel="noopener noreferrer"><code>gcp/wif.tf</code></a>; Azure with a federated credential in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/azure/identity.tf" target="_blank" rel="noopener noreferrer"><code>azure/identity.tf</code></a>.</p>
 
+            <h3>Mapping a claim is not the same as checking it</h3>
+            <p>All three clouds pin that <em>same</em> subject string, and the reason is worth saying out loud: trusting the repository alone would let any workflow in the repo mint deploy credentials - including scheduled jobs that read untrusted web pages and never go near the production environment. "Only this repo" is not the same statement as "only this deploy job." GCP's attribute condition therefore requires two claims, not one:</p>
+            <div class="code-block"><pre>attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' &amp;&amp; assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production'"</pre></div>
+            <p>and the IAM binding underneath it names that one identity - <code>principal://.../subject/repo:&lt;owner&gt;/&lt;repo&gt;:environment:production</code> - instead of matching a group with <code>principalSet://.../attribute.repository/&lt;owner&gt;/&lt;repo&gt;</code>. The difference is the whole point of the two URL forms: <code>principalSet://</code> matches every federated identity sharing a mapped attribute, <code>principal://</code> names exactly one subject. The attribute condition is the hard gate that rejects a bad token outright, so the member is defense in depth - but having both say the same thing is what makes the file honest to read.</p>
+            <p>Two lessons here generalize well past this one file, and Terraform will warn you about neither:</p>
+            <ul>
+                <li><strong>Mapping an attribute does nothing on its own.</strong> The <code>attribute_mapping</code> block a few lines above maps <code>attribute.ref</code> from the token's <code>ref</code> claim, right next to <code>repository</code> and <code>workflow</code>. Mapping makes a claim <em>available</em> to match on later; it is not a check. A condition that never mentions <code>assertion.ref</code> restricts nothing about the branch, however prominently the mapping sits above it.</li>
+                <li><strong>A declared-but-unused variable reads like a control.</strong> <code>var.github_branch</code> lives in <code>gcp/variables.tf</code> and is referenced nowhere in the trust. Terraform does not flag an unused variable, so no <code>plan</code>, no lint, and no diff points at it - it simply makes the config <em>look</em> like branch enforcement exists. The variable stays, because it does document the intended branch, but its comment now states plainly that the WIF trust does not read it.</li>
+            </ul>
+            <p>So why pin the environment rather than the branch? Because the GitHub <code>production</code> environment is itself restricted to <code>main</code> by a deployment branch policy. Pinning the environment enforces the branch transitively <em>and</em> adds a gate a ref check alone would miss: a workflow can run on <code>main</code> without ever entering the environment. One string, two controls. As with any change to a stack, it reaches the cloud when someone runs <code>terraform -chdir=infra/terraform/gcp apply</code>, not when the file is merged.</p>
+
             <h3>A resource, start to finish</h3>
             <p>From <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/s3.tf" target="_blank" rel="noopener noreferrer"><code>aws/s3.tf</code></a>, the private origin bucket and one of its settings:</p>
             <div class="code-block"><pre>resource "aws_s3_bucket" "site" {
@@ -540,6 +551,47 @@ resource "aws_s3_bucket_versioning" "site" {
   }
 }</pre></div>
             <p>Two idioms worth internalizing. First, AWS bucket settings are split across several small resources (versioning, encryption, public-access block, policy) that each point back at the one bucket via <code>bucket = aws_s3_bucket.site.id</code> - that reference both targets the bucket and orders the work. Second, <code>versioning</code> here is a deliberate security choice: a bad publish can be rolled back object-by-object, and accidental deletes are recoverable.</p>
+
+            <h3>Headers at the origin, not only at the edge</h3>
+            <p>The site's security headers - <a class="glossary-link" href="glossary.html#term-csp">CSP</a>, HSTS, <code>X-Frame-Options</code> and the rest - are declared once at Cloudflare in <code>cloudflare/rules.tf</code> and added to every response on the way out. That covers normal traffic. It leaves a different question open: what does an origin serve when it is reached <em>directly</em>? That is a real path, not a hypothetical, because a CloudFront distribution has its own public <code>*.cloudfront.net</code> hostname.</p>
+            <p><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/cloudfront.tf" target="_blank" rel="noopener noreferrer"><code>aws/cloudfront.tf</code></a> answers it with an <code>aws_cloudfront_response_headers_policy</code>, referenced from the distribution's <code>default_cache_behavior</code> so the origin sets its own headers:</p>
+            <div class="code-block"><pre>resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "csoh-security-headers"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    # plus content_type_options, referrer_policy,
+    # and content_security_policy
+  }
+
+  # Permissions-Policy, COOP and CORP have no first-class
+  # argument in this resource, so they go through here.
+  custom_headers_config {
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
+      override = true
+    }
+    # plus Permissions-Policy and Cross-Origin-Resource-Policy
+  }
+}</pre></div>
+            <p>The GCP origin never needed this: its nginx image already sets the same headers itself from <code>nginx-security-headers.conf</code>. Azure is the honest gap - Blob static websites cannot emit custom response headers at all, so that origin depends on the edge and no amount of Terraform changes it. The cost of the pattern is duplication: the same values now live in three files (<code>cloudflare/rules.tf</code>, <code>aws/cloudfront.tf</code>, <code>nginx-security-headers.conf</code>) and have to move together. That is the usual defense-in-depth trade - maintenance you take on in exchange for a control that survives any one layer being wrong. Like the WIF change above, it is live on AWS once <code>terraform -chdir=infra/terraform/aws apply</code> runs.</p>
+
+            <h3>The edge stack: build redirect targets, don't rewrite them</h3>
+            <p>The Cloudflare stack is the odd one out - no servers, just rules - and <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloudflare/rules.tf" target="_blank" rel="noopener noreferrer"><code>cloudflare/rules.tf</code></a> holds the one that sends <code>www.csoh.org</code> to the apex domain. The destination is computed, and what it is computed <em>from</em> is the entire lesson:</p>
+            <div class="code-block"><pre>target_url {
+  expression = "concat(\"https://csoh.org\", http.request.uri.path)"
+}</pre></div>
+            <p>Scheme and host are constants. Only the path comes from the request, and <code>preserve_query_string = true</code> just above carries any <code>?query=string</code> across. The tidier-looking alternative - take the inbound URL and pattern-replace the <code>www.</code> out of it - is a trap, because the destination then inherits whatever the client supplied, including the scheme. Redirect rules run in the dynamic-redirect phase, <em>before</em> "Always Use HTTPS" gets a say, and the matching expression (<code>http.host eq "www.csoh.org"</code>) matches plaintext HTTP exactly as happily as HTTPS. A replacement pattern anchored on <code>https://</code> would not match an <code>http://</code> request at all, and a replace that matches nothing returns its input unchanged - which is a 301 pointing at the request's own URL. Assembling the target from constants plus one specific field cannot produce that class of bug. This one lands at the edge after <code>terraform -chdir=infra/terraform/cloudflare apply</code>.</p>
         </section>
 
         <section id="concepts">
@@ -568,6 +620,11 @@ resource "aws_s3_bucket_versioning" "site" {
 
             <h3>8. <code>import</code> existing resources instead of recreating them</h3>
             <p>Already built something by hand and want Terraform to manage it? <code>terraform import</code> (or an <code>import {}</code> block) brings an existing cloud object under management without destroying it. The alternative - letting Terraform create a duplicate - is how people accidentally end up with two load balancers.</p>
+
+            <h3>9. <code>lifecycle { ignore_changes }</code> can quietly unmanage a resource</h3>
+            <p><code>ignore_changes</code> tells Terraform to stop diffing specific attributes. It is the standard escape hatch for a value something else legitimately owns - an autoscaler's instance count, a tag another tool writes, an argument a provider bug reports back wrong. Used narrowly it is fine. The sharp edge shows up when the attribute you ignore is the <em>only</em> one that matters.</p>
+            <p>Our Cloudflare security-header ruleset carries <code>ignore_changes = [rules]</code>, a deliberate workaround for a provider bug that returns the multi-header block in non-deterministic order and so produces a permanent phantom diff. But <code>rules</code> is the only meaningful attribute of a <code>cloudflare_ruleset</code> - everything else is a name, a phase, and a zone. Ignoring it makes the resource inert after creation. You tighten the CSP in Git, run <code>apply</code>, get a clean plan, and ship nothing. Terraform reports success. The commit looks right, the reviewer has no signal, and the edge keeps serving the old policy.</p>
+            <p>Generalize it: <strong><code>ignore_changes</code> on a resource's only meaningful attribute is equivalent to deleting the resource from your config</strong>, except the config is still sitting there describing it convincingly. So when you have to reach for it, pair it with a check that asserts reality from <em>outside</em> Terraform. Ours is <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/check_edge_headers.py" target="_blank" rel="noopener noreferrer"><code>tools/check_edge_headers.py</code></a>: it parses the header name/value pairs back out of <code>rules.tf</code>, requests the live site, and exits non-zero if any header is missing or has drifted. The deploy workflow runs it and fails the build on a mismatch, right alongside the equivalent check for our subresource-integrity hashes. Same shape in both cases: the repo states a claim, and CI verifies it against production rather than against the plan. The check gets deleted when the provider upgrade lets the <code>ignore_changes</code> go.</p>
         </section>
 
         <blockquote class="pull-quote">
@@ -582,6 +639,8 @@ resource "aws_s3_bucket_versioning" "site" {
                 <li><strong>Remote, encrypted, versioned, access-controlled state.</strong> No local state for anything real. Lock it. Assume it contains secrets, because it can.</li>
                 <li><strong>No secrets in <code>.tf</code> or <code>.tfvars</code> files.</strong> Pull credentials from the environment, a <a class="glossary-link" href="glossary.html#term-secrets-manager">secrets manager</a>, or - best of all - don't use long-lived credentials at all. Add <code>*.tfvars</code> and <code>.terraform/</code> to <a href="version-control.html">.gitignore</a>.</li>
                 <li><strong>Prefer keyless / OIDC for CI.</strong> Our deploys carry zero static cloud keys; GitHub federates short-lived tokens to each cloud. If you take one idea from this page, take this one. See <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/oidc.tf" target="_blank" rel="noopener noreferrer">oidc.tf</a>.</li>
+                <li><strong>Pin the OIDC subject, not just the repository.</strong> All three of our clouds require the full subject <code>repo:&lt;owner&gt;/&lt;repo&gt;:environment:production</code>, because trusting the repository alone lets <em>any</em> workflow in it - a scheduled job, a job that reads untrusted input, a job on someone's branch - obtain deploy credentials. And remember that mapping a claim is not checking it: only the condition you actually write is enforced.</li>
+                <li><strong>Verify the control from outside Terraform when Terraform can't.</strong> Anything you exclude from management (<code>ignore_changes</code>, a resource applied by hand, a setting the provider does not model) needs a check that reads the live system and fails a build on drift. A clean plan is evidence about your config, not about production.</li>
                 <li><strong>Least-privilege everything.</strong> The deploy role can write one bucket and invalidate one <a class="glossary-link" href="glossary.html#term-cdn">CDN</a> - not "PowerUserAccess." Scope provider credentials and resource permissions to exactly the job.</li>
                 <li><strong>Pin provider versions and commit <code>.terraform.lock.hcl</code>.</strong> Supply-chain hygiene; checksums catch tampering.</li>
                 <li><strong>Scan your IaC.</strong> Static analyzers - <a href="https://github.com/aquasecurity/trivy" target="_blank" rel="noopener noreferrer">Trivy</a>, <a href="https://github.com/bridgecrewio/checkov" target="_blank" rel="noopener noreferrer">Checkov</a>, <a class="glossary-link" href="glossary.html#term-iac-scanners">tfsec</a> - catch "this bucket is public" or "this SG is 0.0.0.0/0" before apply. Our deploy pipeline already runs Trivy on the GCP container image; IaC scanning is the same idea, one step earlier.</li>
@@ -649,7 +708,7 @@ resource "aws_s3_bucket_versioning" "site" {
 
     <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
         defer></script>
-  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=792b7abd" defer integrity="sha384-2UjvVpptg4JlEVgJI2PdscrjOjPcil/4F1ZvIMJ81CShQnEDSlPI+l4PfogvTLYi"></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>
 
 </html>

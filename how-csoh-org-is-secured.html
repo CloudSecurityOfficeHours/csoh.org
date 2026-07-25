@@ -360,6 +360,8 @@
                 <li><strong>Permissions-Policy</strong> - explicitly disables camera, microphone, geolocation, payment, USB, and the motion sensors. A static site needs none of them, so we turn them all off.</li>
                 <li><strong>Cross-Origin-Opener-Policy: same-origin</strong> and <strong>Cross-Origin-Resource-Policy: same-origin</strong> - isolate our browsing context and resources from other origins, shrinking the surface for cross-origin side-channel attacks.</li>
             </ul>
+            <p><strong>Where the headers come from matters as much as what they say.</strong> The site is served active/active from three origins behind one edge. The Cloudflare edge sets this whole set on every response, whichever origin answered, and two of the three origins also set them for themselves: the GCP origin's nginx image carries them in <code>nginx-security-headers.conf</code>, and the AWS origin attaches a CloudFront response headers policy to its default cache behavior. So a request that reaches either of those distributions directly, bypassing the edge, still gets the full CSP, HSTS, and X-Frame-Options rather than an unprotected copy of the site. Azure Blob static websites cannot emit custom response headers at all, so that origin genuinely does depend on the edge - a gap we would rather document than pretend away.</p>
+            <p>The cost of that redundancy is three files that have to agree (the Cloudflare ruleset, the CloudFront policy, and the nginx config), which is exactly the sort of thing that drifts quietly. A CI gate (below) checks the live site against what the repository declares, so it can't.</p>
             <p>These are the same headers a scanner grades - see the <a href="#verify">verify-it-yourself</a> section to run one.</p>
         </section>
 
@@ -372,18 +374,23 @@
         <section id="analytics">
             <h2>Analytics without tracking</h2>
             <p>There is exactly one third-party script on the site: a cookieless analytics counter (GoatCounter). It sets no cookies, collects no personal data, and is the only host the CSP's <code>connect-src</code> allows besides ourselves. Before it can even load, our own <code>main.js</code> checks for a Do Not Track or Global Privacy Control signal and opts the visitor out entirely if one is set. No ad networks, no tag managers, no session recorders - none of the usual third-party JavaScript that turns a "simple" site into a supply-chain liability.</p>
+            <p>That counter is also a <strong>local fork, not the stock upstream file</strong>. Upstream sends the visitor's full query string along with each page view, both as its own field and appended to the recorded path. On this site <code>/search.html?q=...</code> is a real, deep-linkable URL, so that would mean a shared or bookmarked search link handing over whatever someone typed into the site search. Our copy sends an empty query field and records the path only, so search terms never reach the analytics host. Both edits are labeled <code>CSOH LOCAL MODIFICATION</code> in <code>vendor/goatcounter-count.js</code>, and <code>vendor/README.md</code> warns that re-vendoring the upstream file would silently undo them. Our <a href="privacy.html">privacy policy</a> spells out exactly what is recorded, and the point of stripping the query string is that the policy stays true.</p>
         </section>
 
         <section id="supply-chain">
             <h2>Supply chain: dependencies and the build</h2>
             <p><strong>The attack this stops:</strong> a compromised dependency or build step slipping malicious code into what we publish.</p>
             <p>The runtime dependency surface is close to zero - the site ships hand-written HTML, one stylesheet, and one script, with no client-side framework and no npm build. The automation that maintains the site (link checking, news updates, SEO audits) runs as GitHub Actions, and every third-party action is <strong>pinned to a full commit SHA</strong>, not a moving tag, so a hijacked tag can't swap in new code. The one place we build a container image (for the GCP origin) runs a Trivy vulnerability scan as a gate - the deploy to that cloud does not proceed if the scan finds an unacceptable issue.</p>
+            <p><strong>Some of that automation reads the open web, and is scoped accordingly.</strong> A scheduled job drafts candidate links for the resources page, which means it consumes pages nobody here controls. Untrusted input plus a broad set of capabilities is how a content job turns into a code-execution job, so the run is given an explicit allowlist of tools - read, edit, file search, and two narrowly bounded shell commands (<code>grep</code> and <code>wc</code>) - with <strong>no general-purpose interpreter on the list</strong>. That last part is the whole point: an allowlist that includes an interpreter is not an allowlist, because the interpreter can do everything the other entries were meant to exclude. If a future version of that job genuinely needs Python, it gets a checked-in script allowlisted by exact path, not the bare interpreter.</p>
+            <p>The same job checks out the repository with <code>persist-credentials: false</code>, so the token used to open its pull request is not left sitting in <code>.git/config</code> where a later step could read it back out. And it only ever proposes: its output is a pull request against the repo, not a push to the live site.</p>
         </section>
 
         <section id="deploy">
             <h2>Keyless deploys: no stored cloud secrets</h2>
             <p><strong>The attack this stops:</strong> theft of long-lived cloud credentials from the repo or CI - the root cause of a long line of real breaches.</p>
-            <p>csoh.org is served active/active from AWS, GCP, and Azure, and the pipeline deploys to all three <strong>without storing a single cloud password</strong>. Each deploy uses <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a>: GitHub mints a short-lived, signed token that proves "this is the csoh.org repo's <code>main</code> branch," and each cloud is configured to trust that token for a narrowly-scoped role. There are no access keys, service-account JSON files, or client secrets in the repository or in CI, so a leaked repo yields no cloud access. The full architecture is its own write-up: <a href="cloud-deployment.html">How We Deploy Across AWS, GCP &amp; Azure</a>.</p>
+            <p>csoh.org is served active/active from AWS, GCP, and Azure, and the pipeline deploys to all three <strong>without storing a single cloud password</strong>. Each deploy uses <a class="glossary-link" href="glossary.html#term-oidc">OIDC</a>: GitHub mints a short-lived, signed token describing the run that asked for it, and each cloud is configured to trust that token for a narrowly-scoped role. There are no access keys, service-account JSON files, or client secrets in the repository or in CI, so a leaked repo yields no cloud access.</p>
+            <p><strong>What each cloud trusts is deliberately narrow, and identical across all three.</strong> Every one of them pins the token's <code>sub</code> claim to a single exact string: this repository, running in the <code>production</code> GitHub environment. AWS enforces it with a <code>StringEquals</code> condition on the OIDC role's trust policy, Azure with the federated credential's subject, and GCP with both a workload-identity attribute condition and an IAM member naming that one subject.</p>
+            <p>Trusting only the repository would not be enough, and the difference is the interesting part. A repo-wide trust means <em>every</em> workflow in the repo, on any branch, can obtain deploy credentials - including scheduled jobs that read untrusted web pages and have no business anywhere near a cloud account. Pinning the environment inverts that: a workflow that does not enter <code>production</code> gets nothing, no matter what it asks for. Branch enforcement then comes along for free, because the <code>production</code> environment is itself restricted to <code>main</code>. The full architecture is its own write-up: <a href="cloud-deployment.html">How We Deploy Across AWS, GCP &amp; Azure</a>.</p>
         </section>
 
         <section id="ci">
@@ -394,8 +401,10 @@
                 <li><strong>URL safety</strong> - every outbound link is checked so we don't ship a link to a hijacked or malicious domain.</li>
                 <li><strong>HTML validation</strong> - the W3C validator plus checks for structured-data (JSON-LD) validity and image dimensions.</li>
                 <li><strong>Workflow, YAML, and Python lint</strong> - actionlint (with shellcheck), yamllint, and ruff catch mistakes in the automation itself before it runs.</li>
+                <li><strong>Live security-header drift</strong> - after each publish, a checker reads the header values out of the Terraform in this repo and compares them against what csoh.org actually serves. A control declared in Git but not present at the edge is worth nothing, so any missing or altered header fails the deploy rather than sitting there unnoticed.</li>
+                <li><strong>Live asset integrity</strong> - the same job re-derives every published asset's SHA-384 hash from what the edge actually returns and compares it with the <code>integrity</code> attribute the pages declare, so a stale cache or a bad publish is caught in CI instead of in someone's browser.</li>
             </ul>
-            <p>All of these run read-only against the code; none can modify the site or post on our behalf. The workflows are in the public repo if you want to read them.</p>
+            <p>All of these are read-only: they inspect the source and the published site, and none of them can modify the site or post on our behalf. The workflows are in the public repo if you want to read them.</p>
         </section>
 
         <section id="disclosure">
@@ -411,6 +420,7 @@
                 <li><strong>Read the headers directly:</strong> <code>curl -sI https://csoh.org</code> and look for the CSP, HSTS, X-Frame-Options, Permissions-Policy, and Cross-Origin lines.</li>
                 <li><strong>Confirm the CSP blocks inline script:</strong> open the browser console on any page and try to inject a <code>&lt;script&gt;</code> - you get a CSP violation instead of execution.</li>
                 <li><strong>Check SRI:</strong> view source and confirm every shared-asset <code>&lt;link&gt;</code>/<code>&lt;script&gt;</code> carries an <code>integrity="sha384-..."</code> attribute.</li>
+                <li><strong>Check the live headers against the repo:</strong> clone the repository and run <code>python3 tools/check_edge_headers.py</code>. It parses the header names and values out of the Terraform and asserts them against what csoh.org returns, exiting non-zero on any mismatch. Point it elsewhere with <code>--url</code> if you want to test a single origin. This is the same check our deploy pipeline runs, so you are grading us with our own instrument.</li>
                 <li><strong>Check HSTS preload status:</strong> look up csoh.org on <a href="https://hstspreload.org/?domain=csoh.org" target="_blank" rel="noopener noreferrer">hstspreload.org</a>.</li>
                 <li><strong>Read the config:</strong> the headers, the deploy workflow, and the CI gates are all in the <a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">public repository</a>.</li>
             </ul>
@@ -450,7 +460,7 @@
 
     <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
         defer></script>
-  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=792b7abd" defer integrity="sha384-2UjvVpptg4JlEVgJI2PdscrjOjPcil/4F1ZvIMJ81CShQnEDSlPI+l4PfogvTLYi"></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>
 
 </html>

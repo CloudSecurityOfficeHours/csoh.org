@@ -66,10 +66,46 @@ ENTITY_FIXES = [
 ]
 
 
+# Zoom's AI summaries refer to a participant by their DISPLAY NAME, and some
+# people's display name is their work email address. Left alone, that address
+# gets published verbatim in a recap paragraph and swept into the public search
+# index - which happened twice before this guard existed. Recap prose should
+# never contain an email address; the only one that legitimately belongs on the
+# site is the project's own contact, which is stamped into page chrome by
+# sync_chrome.py rather than typed into a recap.
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+EMAIL_PLACEHOLDER = "one attendee"
+
+
+def scrub_emails(s: str) -> str:
+    """Replace any email address in recap prose with a neutral placeholder.
+
+    Warns loudly rather than failing, so a late-Friday publish is never blocked -
+    but the address never reaches the page either. Review the warning and give
+    the person a first name if one is appropriate.
+    """
+    found = EMAIL_RE.findall(s)
+    if not found:
+        return s
+    for addr in dict.fromkeys(found):
+        if addr.lower().endswith("@csoh.org"):
+            continue
+        print(
+            f"  ! scrubbed an email address from recap text: {addr} "
+            f"-> '{EMAIL_PLACEHOLDER}' (Zoom display name; edit the page if a "
+            f"first name reads better)"
+        )
+    return EMAIL_RE.sub(
+        lambda m: m.group(0) if m.group(0).lower().endswith("@csoh.org") else EMAIL_PLACEHOLDER,
+        s,
+    )
+
+
 def clean_text(s: str) -> str:
     for before, after in ENTITY_FIXES:
         s = s.replace(before, after)
     s = re.sub(r"\s+", " ", s).strip()
+    s = scrub_emails(s)
     return s
 
 

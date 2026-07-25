@@ -40,7 +40,7 @@ on:
 
 # -----------------------------------------------------------------------------
 # §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
-# Grant just enough to commit a branch and open a PR - nothing more.
+# Grant read-only - the branch and PR are the App token's job, not this one's.
 # -----------------------------------------------------------------------------
 # `permissions` controls what the auto-generated GITHUB_TOKEN (a temporary
 # credential GitHub injects into every run) is allowed to do against THIS
@@ -49,11 +49,14 @@ on:
 # below use a separate GitHub App token, minted in §4; these scopes still bound
 # what any step in this job can do.)
 permissions:
-  # `contents: write` lets a step commit and push a branch (the create-PR
-  # action needs this to publish its normalize-urls branch).
-  contents: write
-  # `pull-requests: write` lets a step open, label, and edit the PR.
-  pull-requests: write
+  # `contents: read` is all the default GITHUB_TOKEN needs here. Every write in
+  # this job - the branch push and the PR - is performed by the separate GitHub
+  # App token minted in §4 and passed explicitly to actions/checkout and
+  # peter-evans/create-pull-request, so the ambient token never pushes anything.
+  # This used to be `contents: write` / `pull-requests: write`, which no step
+  # ever used; dropping to read matches the five sibling workflows and keeps
+  # the ambient credential from being more powerful than the job requires.
+  contents: read
 
 
 # -----------------------------------------------------------------------------

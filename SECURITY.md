@@ -16,7 +16,32 @@ The site previously deployed via FTPS to a LiteSpeed shared host. That path was 
 
 ## HTTP Security Headers
 
-All responses from csoh.org include these security headers, configured in both `.htaccess` (production) and `nginx.conf` (Docker/local):
+All responses from csoh.org include these security headers. They are declared in
+**three** places, and all three have to stay in step:
+
+| Where | Covers | File |
+|-------|--------|------|
+| Cloudflare edge ruleset (`csoh-security-headers`) | every response, whichever origin served it | [`infra/terraform/cloudflare/rules.tf`](infra/terraform/cloudflare/rules.tf) |
+| GCP origin (nginx on Cloud Run) | responses served by that origin directly | [`nginx-security-headers.conf`](nginx-security-headers.conf), `include`d into every `location` block of `nginx.conf` |
+| AWS origin (CloudFront response headers policy) | responses served by that distribution directly | [`infra/terraform/aws/cloudfront.tf`](infra/terraform/aws/cloudfront.tf) |
+
+The origin-level copies are not redundancy for its own sake. Each origin
+hostname is reachable on its own (CloudFront's `*.cloudfront.net` name is
+public), so an origin without its own headers is a fully functional, header-free
+mirror of the site for anyone who finds it, and it has no defense of its own if
+the edge is misconfigured. The AWS distribution was in exactly that state until
+2026-07-25; see [Security Remediation - 2026-07-25](#security-remediation---2026-07-25).
+
+**Azure Blob static websites cannot emit custom response headers at all**, so
+that origin has no independent copy and depends entirely on the edge. That is a
+known, accepted gap rather than an oversight.
+
+`.htaccess` is **not** a fourth source. It is a vestige of the retired LiteSpeed
+shared host - the Docker build deletes it from the image and the publish filter
+never uploads it to the object-storage origins. Do not edit it expecting a
+production effect.
+
+The header values themselves:
 
 | Header | Value | Purpose |
 |--------|-------|---------|
@@ -53,18 +78,52 @@ Key points:
 - Only YouTube and Web Archive are allowed as iframe sources
 - Only YouTube thumbnail domains are allowed as external image sources
 - `csoh.goatcounter.com` is allowed in `img-src` + `connect-src` for cookieless, privacy-friendly analytics; the loader is self-hosted at `/vendor/goatcounter-count.js`, so `script-src` stays `'self'`
-- The `.htaccess` and `nginx.conf` CSPs are byte-identical (no drift)
+- The CSP string is byte-identical in all three sources listed above (`rules.tf`, `nginx-security-headers.conf`, `cloudfront.tf`). Drift between the repo and the live edge is a CI failure, not a silent regression - see [Edge header drift is a CI gate](#edge-header-drift-is-a-ci-gate)
 
 In addition to CSP, the following cross-origin isolation headers are set:
 
 - `Cross-Origin-Opener-Policy: same-origin` - only same-origin windows can hold a reference to ours; defends against cross-origin info leaks via `window.opener` and Spectre-class side channels.
 - `Cross-Origin-Resource-Policy: same-origin` - resources from this origin can only be loaded by same-origin contexts; stops arbitrary sites from embedding our images/scripts/etc.
 
+### Edge header drift is a CI gate
+
+The `csoh-security-headers` ruleset in `rules.tf` carries
+`lifecycle { ignore_changes = [rules] }`, a deliberate workaround for a
+cloudflare v4 provider bug that returns the multi-header block in a
+non-deterministic order. **Know what that workaround costs:** `rules` is the
+only meaningful attribute of a `cloudflare_ruleset`, so ignoring it leaves the
+resource inert after creation. You can tighten the CSP in Git, run
+`terraform apply`, get a clean plan, and ship nothing - while the diff, the
+commit, and any reviewer all believe the change went live.
+
+Terraform cannot police that, so CI asserts it from the outside.
+[`tools/check_edge_headers.py`](tools/check_edge_headers.py) parses the eight
+header name/value pairs out of `rules.tf` and compares them against what the
+live site actually returns:
+
+```bash
+python3 tools/check_edge_headers.py                    # checks https://csoh.org/
+python3 tools/check_edge_headers.py --url <origin>     # check one origin directly
+```
+
+The `purge-cloudflare` job in `deploy.yml` runs it after the existing SRI
+verification and **fails the deploy on any drift** - a forgotten apply, a
+dashboard edit, or someone with the Cloudflare API token weakening a header.
+That job had no checkout of its own, so an `actions/checkout` step (with
+`persist-credentials: false`) was added just to fetch the checker.
+
+Delete the script and that step when the cloudflare v5 provider upgrade lets
+`ignore_changes` go away and Terraform manages the ruleset for real again.
+
 ---
 
 ## File Access Controls
 
-The `.htaccess` and `nginx.conf` block direct access to sensitive files:
+`nginx.conf` (the GCP origin, and the local Docker container) blocks direct
+access to sensitive files. `.htaccess` still carries the equivalent Apache rules
+but is inert - see the note under HTTP Security Headers. On the two
+object-storage origins there is no request-time rule to apply, so the equivalent
+control is "never upload it": see `tools/site-publish.filter` below.
 
 | Pattern | Status | What's blocked |
 |---------|--------|----------------|
@@ -118,6 +177,15 @@ The `update_sri.py` script:
 
 This means even if the hosting account were compromised and files were tampered with, browsers would refuse to execute the modified scripts.
 
+**The vendored files are not pristine upstream copies.**
+`vendor/goatcounter-count.js` carries two local modifications, each marked in
+the source with a `CSOH LOCAL MODIFICATION` comment.
+[`vendor/README.md`](vendor/README.md) documents both vendored libraries, their
+licenses, and those edits. Re-vendoring a newer upstream release overwrites them
+silently, which in the GoatCounter case would quietly resume sending data
+`privacy.html` promises we do not collect. Re-apply the modifications and re-run
+`python3 update_sri.py` after any re-vendor.
+
 ---
 
 ## JavaScript Security
@@ -133,6 +201,7 @@ This means even if the hosting account were compromised and files were tampered 
 
 **No Third-Party JavaScript:**
 - No third-party scripts - the only analytics is GoatCounter (cookieless, no IP storage, no cross-site tracking), and its loader is self-hosted at `/vendor/goatcounter-count.js` so `script-src` stays `'self'`; no tracking pixels, no CDN-hosted libraries
+- **The query string is stripped from what the beacon sends.** Upstream GoatCounter transmits `location.search` twice - as a dedicated `q` field and appended to the `p` (path) field. On this site that leaked visitor search terms, because `/search.html?q=<term>` is a deep-linkable URL (`search-init.js` reads `params.get('q')`). Both are patched out locally (`q: ''`, and `get_path` returns `loc.pathname` alone), so the beacon matches what `privacy.html` promises: page path only. See [`vendor/README.md`](vendor/README.md)
 - All JavaScript is first-party, self-hosted, and SRI-hashed
 
 **No Cookies or Tracking:**
@@ -161,6 +230,43 @@ An automated URL safety checker runs in CI on every HTML change:
 5. **Whitelisted domains:** github.com, youtube.com, aws.amazon.com, owasp.org, cisa.gov, nist.gov, csoh.org, microsoft.com, google.com, cloudflare.com, wikipedia.org
 
 See `tools/CHECK_URL_SAFETY_README.md` for full details.
+
+### Redirect destinations are not trusted markup
+
+`tools/normalize_urls.py` follows redirects and rewrites links to their final
+destination. That destination comes verbatim from an external site's `Location`
+header (via `resolve_url` in `check_url_safety.py`) and is substituted into page
+HTML with a plain `str.replace`, i.e. straight inside `href="..."`. Because
+`site-update-deploy.yml` runs `normalize_urls.py --apply` on every push to `main`
+that touches HTML - holding a repo-write App token - a host answering with
+
+```
+Location: https://ok.example/a"><script src=...></script>
+```
+
+would have gotten that markup written into every page linking to it, committed,
+and deployed. The realistic route in is a linked domain that expired and was
+re-registered, which this repo already tracks as a recurring class of dead link.
+
+Before the reputation check runs, any resolved URL containing `"`, `'`, `<`,
+`>`, a backtick, a backslash, or whitespace - or not starting with `http://` or
+`https://` - is now rejected into the existing `skipped_unsafe_destination`
+category, and the pre-resolution URL is kept instead. A real URL never contains
+those characters unescaped, so the check costs nothing.
+
+### Feed text inside JSON-LD
+
+`update_news.py` writes a `<script type="application/ld+json">` block into
+`news.html` from RSS feed titles and summaries, which are attacker-influenceable
+(compromised vendor blog, hijacked feed host, expired-and-re-registered feed
+domain) - and, since these are security news feeds, a legitimate post about an
+XSS payload can produce the same bytes by accident. It used to escape only `</`,
+which stops a literal `</script>` but nothing else: an HTML parser also ends a
+script block's contents at a `<!--` comment opener. It now rewrites every `<`,
+`>`, and `&` to `\u003c`, `\u003e`, and `\u0026` after `json.dumps`. Those are
+valid JSON string escapes, so Google, schema.org validators, and anything doing
+`json.loads` still see the original characters - the structured data is
+unchanged, and only the HTML parser is affected.
 
 ---
 
@@ -236,12 +342,46 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 | `normalize-urls.yml` | `csoh-ci` App | n/a | via PR (human reviews + merges) |
 | `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only - deploy is `deploy.yml`) | direct (App is on ruleset bypass) |
 | `update-counts.yml` | `csoh-ci` App | n/a (recomputes counts weekly) | direct (App is on ruleset bypass) |
-| `update-resources.yml` | `csoh-ci` App + `CSOH_PAT` (for auto-approve) + `CLAUDE_CODE_OAUTH_TOKEN` (model auth) | n/a | via PR + auto-merge, only if the diff is `resources.html` alone |
+| `update-resources.yml` | `csoh-ci` App (checked out with `persist-credentials: false`) + `CSOH_PAT` (for auto-approve) + `CLAUDE_CODE_OAUTH_TOKEN` (model auth) | n/a | via PR + auto-merge, only if the diff is `resources.html` alone |
 | `deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **keyless OIDC - no key** (GCP WIF, AWS IAM role, Azure federated cred) | no |
 | `lint.yml`, `validate-html.yml`, `check-broken-links.yml`, `check-url-safety.yml` | auto-injected `GITHUB_TOKEN` | n/a | no |
 | `check-pagespeed.yml`, `run-seo-audit.yml`, `check-reading-list-staleness.yml`, `check-meeting-staleness.yml`, `check-conference-staleness.yml` | auto-injected `GITHUB_TOKEN` (the three staleness checkers add `issues: write`; PageSpeed/SEO auditors stay `contents: read` and open issues via App/PAT) | n/a | no |
 
 Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead - keeping the default token strictly minimal. `deploy.yml` adds `id-token: write` for the OIDC tokens GitHub mints for the three clouds' federation exchanges.
+
+`normalize-urls.yml` was the exception until 2026-07-25: it granted the ambient
+token `contents: write` + `pull-requests: write` even though no step used
+either - both `actions/checkout` and `peter-evans/create-pull-request` are
+handed the App token explicitly, and nothing in the job calls `gh` or reads
+`GITHUB_TOKEN`. It is now `contents: read`, which every other workflow in the
+repo already declared. When you
+copy a workflow as a starting point, re-derive its `permissions:` from what its
+steps actually do rather than inheriting the block.
+
+### Untrusted input meets a credential: `update-resources.yml`
+
+This is the one workflow where a model reads attacker-influenceable content
+(`WebFetch`/`WebSearch` over the open web) inside a job that holds real
+credentials: the `csoh-ci` installation token, `CLAUDE_CODE_OAUTH_TOKEN`, and
+`id-token: write` at workflow scope. Two properties keep that from being an
+arbitrary-code-execution path, and **neither may be relaxed**:
+
+1. **No bare interpreter in `--allowedTools`.** The allowlist is
+   `Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),WebSearch,WebFetch`.
+   `Bash(python3:*)` used to be on it, which made the rest of the list
+   decorative: the pattern matches `python3 -c '<anything>'`, i.e. a full
+   interpreter reachable by prompt injection in a fetched page. If a future
+   prompt genuinely needs Python, add a checked-in script and allowlist that
+   exact path - never the interpreter itself.
+2. **`persist-credentials: false` on that job's `actions/checkout`.** By default
+   checkout leaves the App token in `.git/config` as an `http.extraheader` for
+   the remainder of the job, where any later step could read it back out with a
+   plain file read. Nothing after the clone talks to git; the
+   `create-pull-request` step is passed the token explicitly.
+
+The second matters more than it looks because `csoh-ci` is on the `Main`
+ruleset's bypass list with mode "Always" (see [App configuration](#app-configuration)),
+so a leaked installation token is a direct push to `main`, not just a PR.
 
 ### Why we migrated from PATs to a GitHub App
 
@@ -323,11 +463,13 @@ from `terraform output` (see [infra/README.md](infra/README.md)):
 `AWS_PUBLISHER_ROLE_ARN`, `AWS_BUCKET_NAME`, `AWS_CLOUDFRONT_DISTRIBUTION_ID`,
 `AZURE_CLIENT_ID`, `AZURE_STORAGE_ACCOUNT`, `CLOUDFLARE_ZONE_ID`.
 
-**No origin-cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access, gated by a policy that requires the token's repo claim to equal `CloudSecurityOfficeHours/csoh.org` on `main`:
+**No origin-cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access. **All three now pin the same OIDC subject:** `repo:CloudSecurityOfficeHours/csoh.org:environment:production`. Repo alone is not enough - it would trust every workflow in the repo on every branch, including the scheduled jobs that read untrusted web content. Pinning the *environment* is stronger than pinning the ref, because the `production` GitHub Environment is itself restricted to `main` by a deployment branch policy, so the environment pin enforces the branch transitively **and** requires the job to actually declare `environment: production`.
 
-1. **GCP** - Workload Identity Federation exchanges the OIDC token for a token scoped to impersonate `csoh-deployer` (`roles/run.admin`, `roles/artifactregistry.writer`, `iam.serviceAccountUser` on the runtime SA). The runtime SA `csoh-run-runtime` has **zero IAM roles**.
-2. **AWS** - `sts:AssumeRoleWithWebIdentity` returns credentials for the `csoh-site-publisher` role, scoped to write the one S3 bucket and invalidate the one CloudFront distribution.
-3. **Azure** - an Entra app federated credential yields a token whose service principal holds only "Storage Blob Data Contributor" on the one storage account.
+1. **GCP** - Workload Identity Federation exchanges the OIDC token for a token scoped to impersonate `csoh-deployer` (`roles/run.admin`, `roles/artifactregistry.writer`, `iam.serviceAccountUser` on the runtime SA). The trust is pinned in two places in [`wif.tf`](infra/terraform/gcp/wif.tf): the provider's `attribute_condition` requires both `assertion.repository` and `assertion.sub == 'repo:<owner>/<repo>:environment:production'`, and the IAM member is a `principal://.../subject/repo:<owner>/<repo>:environment:production` rather than a repo-wide `principalSet://`. The runtime SA `csoh-run-runtime` has **zero IAM roles**.
+2. **AWS** - `sts:AssumeRoleWithWebIdentity` returns credentials for the `csoh-site-publisher` role, scoped to write the one S3 bucket and invalidate the one CloudFront distribution. `oidc.tf` pins `sub` with `StringEquals` to the same subject string.
+3. **Azure** - an Entra app federated credential yields a token whose service principal holds only "Storage Blob Data Contributor" on the one storage account. `identity.tf` sets `subject` to the same string.
+
+`var.github_branch` in [`infra/terraform/gcp/variables.tf`](infra/terraform/gcp/variables.tf) is **not** referenced by the WIF trust and never was. It is kept because it documents the intended branch and is consumed by the equivalent variables files in `aws/` and `azure/`; its comment now says so explicitly, so nobody reads it as evidence that branch enforcement lives in `wif.tf`.
 
 Net effect: a leaked workflow log compromises at most three ~1-hour tokens, each scoped to one repo's publish permissions on one resource per cloud. There is no long-lived credential to rotate or revoke for any of them.
 
@@ -366,7 +508,7 @@ only one that needs a manual rotation cadence.
 `deploy.yml` builds the site once and publishes it active/active to three cloud origins on every push to `main` that touches site files.
 
 **Authentication - keyless OIDC to every cloud, no stored credential:**
-- GitHub Actions mints an OIDC token for the run; each cloud exchanges it for short-lived (~1 hour) access, gated by a policy that requires the token's repo claim to equal `CloudSecurityOfficeHours/csoh.org` on branch `main`:
+- GitHub Actions mints an OIDC token for the run; each cloud exchanges it for short-lived (~1 hour) access, gated by a policy that requires the token's subject to equal `repo:CloudSecurityOfficeHours/csoh.org:environment:production` - so only a job that declares `environment: production` (and therefore only on `main`, per that environment's branch policy) can trade the token in, on any of the three clouds:
   - **GCP** - Workload Identity Federation impersonates the `csoh-deployer` SA, scoped to push images + deploy Cloud Run revisions ([`infra/terraform/gcp/wif.tf`](infra/terraform/gcp/wif.tf)).
   - **AWS** - `sts:AssumeRoleWithWebIdentity` into the `csoh-site-publisher` IAM role, scoped to write the one bucket + invalidate the one CloudFront distribution ([`infra/terraform/aws/oidc.tf`](infra/terraform/aws/oidc.tf)).
   - **Azure** - an Entra app federated credential, scoped to "Storage Blob Data Contributor" on the one storage account ([`infra/terraform/azure/identity.tf`](infra/terraform/azure/identity.tf)).
@@ -430,8 +572,84 @@ The `Dockerfile` + `nginx.conf` pair is not a side path - it **is** the GCP Clou
 origin, one of the three production origins. It is also what `docker-compose.yml`
 runs locally, so the local container behaves like production:
 - All sensitive files are removed during the Docker build (`rm -rf .git, tools, *.py, *.md`, etc.)
-- `nginx.conf` mirrors all `.htaccess` security headers and access controls
+- `nginx.conf` carries the same access controls, and `include`s `nginx-security-headers.conf` in every `location` block so no location can silently drop the headers (nginx *replaces* rather than inherits `add_header` when a location sets one of its own)
 - `server_tokens off` suppresses nginx version disclosure
+
+---
+
+## Security Remediation - 2026-07-25
+
+A full security review of the repo, the workflows, the Terraform, and the live
+site landed ten changes on 2026-07-25. The sections above already describe the
+end state; this section is the record of what moved and, more importantly, the
+invariants a future change must not quietly undo. Each finding is written up in
+detail in a comment at the code it touches, so start there.
+
+### What changed
+
+| # | Area | File(s) | Change |
+|---|------|---------|--------|
+| 1 | Arbitrary code execution in CI | `.github/workflows/update-resources.yml` | Dropped `Bash(python3:*)` from `--allowedTools`; added `persist-credentials: false` to that job's `actions/checkout` |
+| 2 | Cloud trust boundary | `infra/terraform/gcp/wif.tf`, `gcp/variables.tf` | WIF `attribute_condition` and IAM member both pinned to `repo:<owner>/<repo>:environment:production`, matching AWS and Azure |
+| 3 | Third-party PII on live pages | `meetings/2024-07-19.html`, `meetings/2024-08-30.html`, both search indexes, `tools/add_meeting.py` | Removed a participant's corporate email address from two recaps; added `scrub_emails()` so it cannot recur |
+| 4 | Redirect loop on `www` over HTTP | `infra/terraform/cloudflare/rules.tf` | `target_url` now `concat("https://csoh.org", http.request.uri.path)` instead of a `wildcard_replace` on `full_uri` |
+| 5 | Header drift undetectable | new `tools/check_edge_headers.py`, `.github/workflows/deploy.yml`, `cloudflare/rules.tf` | CI now asserts the live headers against `rules.tf` and fails the deploy on drift |
+| 6 | AWS origin had no headers | `infra/terraform/aws/cloudfront.tf` | New `aws_cloudfront_response_headers_policy.security`, wired into `default_cache_behavior` |
+| 7 | JSON-LD escaping | `update_news.py` | Escapes `<`, `>`, `&` rather than only `</` |
+| 8 | Redirect-header injection | `tools/normalize_urls.py` | Rejects resolved destinations containing markup characters or a non-http(s) scheme |
+| 9 | Analytics wider than the policy | `vendor/goatcounter-count.js`, new `vendor/README.md`, `privacy.html`, `llms.txt` | Query string stripped from the beacon; local modifications documented; `llms.txt` no longer claims "no analytics" |
+| 10 | Least privilege | `.github/workflows/normalize-urls.yml` | `permissions:` dropped from `contents: write` + `pull-requests: write` to `contents: read` |
+
+`update_sri.py` was re-run as part of #9, which is why that commit re-stamps the
+`?v=` key and `integrity` attribute for `vendor/goatcounter-count.js` on every
+page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
+
+### Invariants - do not undo these
+
+1. **No bare interpreter in an allowlist for a job that reads untrusted input.**
+   `update-resources.yml` reads the open web with `WebFetch`/`WebSearch` while
+   holding the `csoh-ci` token, `CLAUDE_CODE_OAUTH_TOKEN`, and `id-token: write`.
+   `Bash(python3:*)` matches `python3 -c '<anything>'`, which makes every other
+   entry on the list decorative. If a prompt needs Python, check in a script and
+   allowlist that exact path. The same reasoning applies to any future
+   `Bash(sh:*)`, `Bash(node:*)`, `Bash(perl:*)`, or similar.
+2. **`persist-credentials: false` on that checkout stays.** Otherwise the App
+   token sits in `.git/config` as an `http.extraheader` for the rest of the job,
+   readable by a plain file read from any later step. `csoh-ci` is on the `Main`
+   ruleset bypass list, so that token is a direct push to `main`.
+3. **The WIF subject pin stays.** GCP must require
+   `assertion.sub == 'repo:<owner>/<repo>:environment:production'`, not just
+   `assertion.repository`. Repo-only trust lets every workflow in the repo, on
+   every branch, mint `csoh-deployer` credentials. If you ever need a second job
+   to authenticate to GCP, give it `environment: production` rather than
+   loosening the condition.
+4. **The three header locations stay in step.**
+   `infra/terraform/cloudflare/rules.tf`, `infra/terraform/aws/cloudfront.tf`,
+   and `nginx-security-headers.conf`. Change a header in one, change it in all
+   three. `tools/check_edge_headers.py` catches edge-versus-repo drift but does
+   not compare the three files to each other.
+5. **`tools/add_meeting.py` keeps scrubbing emails.** Zoom AI summaries name
+   people by display name, and some display names are work email addresses. The
+   scrub lives in `clean_text()`, which is the shared funnel for both the HTML
+   and Markdown note parsers, so both paths are covered. It warns rather than
+   fails, so a late-Friday publish is never blocked. **Read the warning** and
+   give the person a first name if one reads better. `@csoh.org` is exempt.
+
+### Still requires the operator
+
+Three of the changes (#2, #4, #6) are Terraform and are inert until applied.
+Until then the repo is ahead of the deployed state:
+
+```bash
+terraform -chdir=infra/terraform/gcp        apply    # WIF subject pin
+terraform -chdir=infra/terraform/aws        apply    # CloudFront headers policy
+terraform -chdir=infra/terraform/cloudflare apply    # www redirect target
+```
+
+The Cloudflare header ruleset is the exception: `ignore_changes = [rules]` means
+`apply` will not push header edits, and any change to those values has to go in
+by hand in the dashboard (or by dropping the `lifecycle` block for one apply).
+See [Edge header drift is a CI gate](#edge-header-drift-is-a-ci-gate).
 
 ---
 
@@ -453,3 +671,5 @@ We take security seriously - especially as a cloud security community.
 | Item | Status | Notes |
 |------|--------|-------|
 | `http://flaws.cloud` link | Intentional | This AWS security training site only serves over HTTP. The link is intentional. |
+| Azure origin sets no security headers | Accepted | Azure Blob static websites cannot emit custom response headers. That origin relies entirely on the Cloudflare edge ruleset; the other two set their own. Revisit if the origin is ever fronted by Azure Front Door or a Function. |
+| Cloudflare header ruleset is inert to `terraform apply` | Workaround | `lifecycle { ignore_changes = [rules] }` in `infra/terraform/cloudflare/rules.tf`, for a cloudflare v4 provider ordering bug. `tools/check_edge_headers.py` compensates by failing the deploy on live drift. Remove both on the v5 provider upgrade. |

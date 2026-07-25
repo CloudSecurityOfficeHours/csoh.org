@@ -27,7 +27,14 @@
 			e: !!(vars.event || goatcounter.event),
 			s: window.screen.width,
 			b: is_bot(),
-			q: location.search,
+			// CSOH LOCAL MODIFICATION (see vendor/README.md): upstream sends
+			// `q: location.search`. Dropped, because /search.html?q=<term> is a
+			// deep-linkable URL on this site, so the query string carries
+			// visitor search terms - and privacy.html promises only the page
+			// path is recorded. Send an empty string rather than deleting the
+			// field so the beacon's shape is unchanged.
+			// RE-CHECK THIS AFTER ANY RE-VENDOR of count.js.
+			q: '',
 		}
 
 		var rcb, pcb, tcb  // Save callbacks to apply later.
@@ -96,7 +103,11 @@
 			if (a.hostname.replace(/^www\./, '') === location.hostname.replace(/^www\./, ''))
 				loc = a
 		}
-		return (loc.pathname + loc.search) || '/'
+		// CSOH LOCAL MODIFICATION (see vendor/README.md): upstream returns
+		// `loc.pathname + loc.search`, which put the visitor's search terms in
+		// the `p` (path) field as well as in `q`. Record the path only.
+		// RE-CHECK THIS AFTER ANY RE-VENDOR of count.js.
+		return loc.pathname || '/'
 	}
 
 	// Run function after DOM is loaded.
