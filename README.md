@@ -77,7 +77,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 ### Threat Intel
 | Guide | What it covers |
 |---|---|
-| 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 49 sources |
+| 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 62 sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
 | 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->20<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
@@ -754,7 +754,7 @@ csoh.org/
 │
 ├── tools/                      # Automation and maintenance scripts (see table below)
 │
-├── update_news.py              # News aggregation script (49 RSS feeds, runs every 3 hours)
+├── update_news.py              # News aggregation script (62 RSS feeds, runs every 3 hours)
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
 ├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
@@ -831,7 +831,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](tools/UPDATE_SITEMAP_README.md) |
 | `normalize_urls.py` | Strips tracking params, upgrades http→https, resolves redirects | docstring |
 | `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](tools/UPDATE_SRI_README.md) |
-| `../update_news.py` | Pulls 49 RSS feeds → `news.html`, `feed.xml`, sitemap lastmod | [README](tools/UPDATE_NEWS_README.md) |
+| `../update_news.py` | Pulls 62 RSS feeds → `news.html`, `feed.xml`, sitemap lastmod | [README](tools/UPDATE_NEWS_README.md) |
 
 **Generated artifacts (indexes, feeds, images)**
 
@@ -909,7 +909,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 
 ### Adding a New Article to News
 
-News articles are **updated automatically** - you don't need to add them by hand. A GitHub Actions workflow runs every 3 hours, pulls articles from 49 cloud security RSS feeds, and creates a pull request with the new content. See the [How Automation Works](#-how-automation-works) section below for details, or read the full docs in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md).
+News articles are **updated automatically** - you don't need to add them by hand. A GitHub Actions workflow runs every 3 hours, pulls articles from 62 cloud security RSS feeds, and creates a pull request with the new content. See the [How Automation Works](#-how-automation-works) section below for details, or read the full docs in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md).
 
 To **add a new news source**, either:
 
@@ -973,7 +973,7 @@ All 15 workflows, grouped by what they do. Times are UTC.
 
 | Workflow | When | What it does |
 |---|---|---|
-| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 49 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
+| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
 | [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
 | [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens an auto-approved PR for a human to merge |

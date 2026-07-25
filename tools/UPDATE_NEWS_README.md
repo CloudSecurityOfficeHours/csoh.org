@@ -5,7 +5,7 @@
 The [News page](https://csoh.org/news.html) is updated **automatically every 3 hours** - no one has to manually add articles. The script also generates an **RSS feed** (`feed.xml`) so subscribers get updates automatically. Here's how it works in plain English:
 
 1. **GitHub Actions** (a free automation service built into GitHub) runs a Python script on a schedule - every 3 hours.
-2. The script visits **49 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries. Fetching the feeds and following each article's redirects both run in parallel, which is what keeps a run to about two minutes; done one at a time the same work took over twenty.
+2. The script visits **62 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries. Fetching the feeds and following each article's redirects both run in parallel, which is what keeps a run to about two minutes; done one at a time the same work took over twenty.
 3. The script filters those articles for **cloud security topics** (looking for keywords like "AWS", "Azure", "Kubernetes", "vulnerability", "breach", etc.) and throws out duplicates.
 4. **Existing cards on `news.html` are preserved across runs.** RSS feeds are rolling windows, so today-dated articles from earlier runs would otherwise get dropped when feeds rotate. The script parses the current `news.html`, then merges in whatever new items this run's feeds surfaced, sorted by date and capped at 120 articles.
 5. If after that merge fewer than **10 today-dated articles** are on the page, the script tops up from a **relaxed-filter pool** - today-dated items from the same security feeds that didn't hit the strict keyword filter. The target is tunable with `--today-target`.
@@ -19,7 +19,7 @@ The [News page](https://csoh.org/news.html) is updated **automatically every 3 h
 
 ---
 
-## News Sources (49 feeds)
+## News Sources (62 feeds)
 
 The script pulls from these trusted, non-paywalled sources:
 
@@ -77,6 +77,13 @@ The script pulls from these trusted, non-paywalled sources:
 | Recorded Future | Threat intelligence and adversary infrastructure |
 | Huntress Blog | Hands-on-keyboard intrusion analysis |
 | Red Canary Blog | Detection research and threat-technique trend reports |
+| Zscaler ThreatLabz | Malware families, encrypted-traffic threat research |
+| Check Point Research | Vulnerability and campaign research |
+| ESET WeLiveSecurity | APT reporting and malware analysis |
+| Malwarebytes Labs | Consumer and enterprise threat reporting |
+| Volexity | Targeted-intrusion and memory-forensics research |
+| NVISO Labs | Detection engineering and incident response notes |
+| The DFIR Report | Full intrusion walk-throughs with timelines and IOCs |
 
 ### Supply Chain, AppSec & Standards Bodies
 
@@ -91,6 +98,12 @@ The script pulls from these trusted, non-paywalled sources:
 | Cloud Security Alliance | Cloud security research, CCM/CCSK guidance |
 | StepSecurity Blog | CI/CD and GitHub Actions supply-chain security |
 | Okta Security Blog | Identity provider security research and advisories |
+| ReversingLabs Blog | Binary analysis, malicious packages in public registries |
+| JFrog Security Research | Artifact and package-registry vulnerability research |
+| Tenable Blog | Vulnerability disclosures and exposure management |
+| Qualys Blog | Vulnerability research and patch guidance |
+| Trail of Bits Blog | Applied cryptography and security engineering research |
+| watchTowr Labs | Edge-device and enterprise-appliance exploit research |
 
 Want to **add a new source**? You have two options:
 

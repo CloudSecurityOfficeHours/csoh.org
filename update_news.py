@@ -66,17 +66,30 @@ FEEDS = [
     {"name": "Recorded Future", "url": "https://www.recordedfuture.com/feed"},
     {"name": "Huntress Blog", "url": "https://www.huntress.com/blog/rss.xml"},
     {"name": "Red Canary Blog", "url": "https://redcanary.com/feed/"},
+    {"name": "Zscaler ThreatLabz", "url": "https://www.zscaler.com/blogs/feeds/security-research"},
+    {"name": "Check Point Research", "url": "https://research.checkpoint.com/feed/"},
+    {"name": "ESET WeLiveSecurity", "url": "https://www.welivesecurity.com/en/rss/feed/"},
+    {"name": "Malwarebytes Labs", "url": "https://www.malwarebytes.com/blog/feed/index.xml"},
+    {"name": "Volexity", "url": "https://www.volexity.com/feed/"},
+    {"name": "NVISO Labs", "url": "https://blog.nviso.eu/feed/"},
+    {"name": "The DFIR Report", "url": "https://thedfirreport.com/feed/"},
     # AppSec, Supply Chain & Identity
     {"name": "Snyk Blog", "url": "https://snyk.io/blog/feed/"},
     {"name": "GitGuardian Blog", "url": "https://blog.gitguardian.com/rss/"},
     {"name": "Chainguard Unchained", "url": "https://www.chainguard.dev/unchained/rss.xml"},
     {"name": "StepSecurity Blog", "url": "https://www.stepsecurity.io/blog/rss.xml"},
     {"name": "Okta Security Blog", "url": "https://sec.okta.com/rss.xml"},
+    {"name": "ReversingLabs Blog", "url": "https://www.reversinglabs.com/blog/rss.xml"},
+    {"name": "JFrog Security Research", "url": "https://jfrog.com/blog/feed/"},
     # Vulnerability Research & Guidance
     {"name": "Project Zero", "url": "https://projectzero.google/feed.xml"},
     {"name": "Rapid7 Blog", "url": "https://www.rapid7.com/blog/rss/"},
     {"name": "OWASP", "url": "https://owasp.org/feed.xml"},
     {"name": "Cloud Security Alliance", "url": "https://cloudsecurityalliance.org/blog/feed/"},
+    {"name": "Tenable Blog", "url": "https://www.tenable.com/blog/feed"},
+    {"name": "Qualys Blog", "url": "https://blog.qualys.com/feed"},
+    {"name": "Trail of Bits Blog", "url": "https://blog.trailofbits.com/feed/"},
+    {"name": "watchTowr Labs", "url": "https://labs.watchtowr.com/rss/"},
 ]
 
 # Concurrency for the two network phases. Modest on purpose: the per-run
