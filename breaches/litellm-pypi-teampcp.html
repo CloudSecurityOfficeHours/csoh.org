@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="A poisoned Trivy scanner in LiteLLM's own CI leaked the project's PyPI token, and two malicious releases swept cloud credentials from every Python process that started.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="LiteLLM 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, PyPI supply chain attack, TeamPCP, Trivy compromise, .pth file autorun, AI gateway security, Kubernetes service account token">
+    <title>LiteLLM / PyPI 2026 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/litellm-pypi-teampcp.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/litellm-pypi-teampcp.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/litellm-pypi-teampcp.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="LiteLLM / PyPI 2026 Breach Kill Chain">
+    <meta property="og:description" content="How a compromised security scanner in CI became two malicious LiteLLM releases on PyPI that ran before your code did - a full MITRE ATT&amp;CK kill chain.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-03-26">
+    <meta property="article:modified_time" content="2026-07-24">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="LiteLLM 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="PyPI supply chain attack">
+    <meta property="article:tag" content="TeamPCP">
+    <meta property="article:tag" content="Trivy compromise">
+    <meta property="article:tag" content="AI gateway security">
+    <meta property="article:tag" content="Kubernetes credential theft">
+    <meta property="og:url" content="https://csoh.org/breaches/litellm-pypi-teampcp.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/litellm-pypi-teampcp.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LiteLLM / PyPI 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="How a compromised security scanner in CI became two malicious LiteLLM releases on PyPI that ran before your code did - a full MITRE ATT&amp;CK kill chain.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/litellm-pypi-teampcp.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=dd0f54c0" as="style"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/style.css?v=dd0f54c0"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "LiteLLM / TeamPCP - Poisoned Security Scanner → Stolen PyPI Token → .pth Autorun → Cloud Credential Sweep → Kubernetes Lateral Movement",
+  "description": "A poisoned Trivy scanner in LiteLLM's own CI leaked the project's PyPI token, and two malicious releases swept cloud credentials from every Python process that started.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-03-26",
+  "dateModified": "2026-07-24",
+  "mainEntityOfPage": "https://csoh.org/breaches/litellm-pypi-teampcp.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "LiteLLM PyPI Supply Chain Compromise",
+    "startDate": "2026-03-24",
+    "description": "TeamPCP compromised the Trivy scanner running in LiteLLM's CI pipeline, stole the project's PyPI publishing token, and published two malicious releases that harvested cloud credentials, probed Kubernetes, and installed a systemd backdoor."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "LiteLLM"
+    },
+    {
+      "@type": "Organization",
+      "name": "TeamPCP"
+    },
+    {
+      "@type": "Organization",
+      "name": "Python Package Index"
+    },
+    {
+      "@type": "Thing",
+      "name": "Trivy"
+    },
+    {
+      "@type": "Thing",
+      "name": "Kubernetes"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "LiteLLM / PyPI 2026",
+      "item": "https://csoh.org/breaches/litellm-pypi-teampcp.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All five session digests</span></a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">LiteLLM / PyPI 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>LiteLLM / PyPI 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="litellm-pypi-teampcp-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">March 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-purple">PyPI / AI Infra</span>
+    </div>
+    <h2 class="inc-title">LiteLLM / TeamPCP - Poisoned Security Scanner → Stolen PyPI Token → .pth Autorun → Cloud Credential Sweep → Kubernetes Lateral Movement</h2>
+    <p class="inc-summary">On March 24, 2026 two malicious releases of <code>litellm</code>, versions 1.82.7 and 1.82.8, appeared on <a class="glossary-link" href="../glossary.html#term-pypi">PyPI</a>. LiteLLM is the open-source <a class="glossary-link" href="../glossary.html#term-llm">LLM</a> gateway that sits in front of model providers for a very large number of AI applications, and it draws on the order of 95 million downloads a month, so the blast pattern was wide by construction. The releases were live for roughly forty minutes before PyPI quarantined the project, and they still collected tens of thousands of downloads. The interesting part is upstream of the package: the maintainers traced the compromise to Trivy, the vulnerability scanner running inside LiteLLM's own <a class="glossary-link" href="../glossary.html#term-ci-cd">CI/CD</a> pipeline. A threat actor group tracked as TeamPCP had poisoned that scanner, and the scanner step read the pipeline's secrets, which handed over the project's PyPI publishing token. Neither malicious version has a matching tag or release in the LiteLLM GitHub repository: the attacker uploaded straight to PyPI and skipped the release workflow entirely. Installed, the package planted a <code>.pth</code> file that runs on every Python interpreter start, harvested cloud and AI provider credentials, probed <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> for lateral movement, and installed a systemd unit that beaconed for further payloads.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>~40 minutes</strong> live on PyPI before quarantine</div>
+      <div class="inc-stat"><strong>Tens of thousands</strong> of downloads in that window</div>
+      <div class="inc-stat"><strong>Two versions:</strong> 1.82.7 and 1.82.8, neither with a matching git tag</div>
+      <div class="inc-stat"><strong>Root cause:</strong> the security scanner in CI, not the maintainers' laptops</div>
+    </div>
+    <a class="pm-link" href="https://docs.litellm.ai/blog/security-update-march-2026" target="_blank" rel="noopener">📄 LiteLLM - Security Update: Suspected Supply Chain Incident ↗</a>
+    <a class="pm-link" href="https://cycode.com/blog/lite-llm-supply-chain-attack/" target="_blank" rel="noopener">📄 Cycode - LiteLLM Supply Chain Attack: What Happened and How to Respond ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🧰 Resource Development - Poisoning the Scanner That Everyone Trusts</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">TeamPCP compromised Trivy, the vulnerability scanner that LiteLLM and thousands of other projects run as a build step</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/001/" target="_blank" rel="noopener">T1195.001 - Compromise Software Dependencies and Development Tools</a>
+        </div>
+        <p class="step-desc">The entry point was not a typosquatted package or a phished maintainer. It was a security tool. Trivy is a scanner teams add to CI precisely to reduce <a class="glossary-link" href="../glossary.html#term-supply-chain">supply chain</a> risk, which means it is installed early in the job, runs with the pipeline's permissions, and is rarely pinned or reviewed with the suspicion applied to application dependencies. Researchers place the scanner compromise in the days immediately before the malicious publish, roughly March 19 to 23, 2026. LiteLLM's own advisory states that the incident appears linked to the broader Trivy compromise. Nothing about the LiteLLM codebase had to be touched for this to work: the attacker only had to be present in a step that the pipeline ran on the maintainers' behalf.</p>
+        <div class="step-code">
+          <span class="hl">Compromised component:</span> Trivy, a vulnerability scanner invoked as a CI step<br>
+          <span class="hl">Approximate window:</span> March 19 to 23, 2026, ahead of the March 24 publish<br>
+          <span class="hl">Why this target:</span> Security tooling runs early, with pipeline credentials, and is trusted by definition<br>
+          <span class="hl">Structural problem:</span> The tools that scan the supply chain are themselves part of the supply chain
+        </div>
+        <div class="step-tags"><span class="stag">Trivy</span><span class="stag">TeamPCP</span><span class="stag">Scanner Compromise</span><span class="stag">T1195.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access - The Pipeline Handed Over Its Publishing Token</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Running inside LiteLLM's CI, the poisoned scanner read the job environment and exfiltrated the project's PyPI publishing token</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/007/" target="_blank" rel="noopener">T1552.007 - Unsecured Credentials: Container API</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1555/" target="_blank" rel="noopener">T1555 - Credentials from Password Stores</a>
+        </div>
+        <p class="step-desc">A CI job is a shared credential space. Every step in it can read the environment, the mounted secret files, and in most configurations the tokens injected for later publish steps. One LiteLLM maintainer stated plainly that the breach originated from Trivy used in their CI/CD pipelines. The scanner step did not need to escalate anything: it simply read what the runner already held and shipped the PyPI publishing token out. This is the same lesson that <a href="tj-actions-changed-files.html">tj-actions/changed-files</a> taught a year earlier and that <a href="mini-shai-hulud-tanstack.html">Mini Shai-Hulud</a> taught two months later, arriving each time by a different door: a build step is a principal, and its <a class="glossary-link" href="../glossary.html#term-blast-radius">blast radius</a> is every secret in the job.</p>
+        <div class="step-code">
+          <span class="hl">Stolen credential:</span> The LiteLLM project's PyPI publishing token<br>
+          <span class="hl">Mechanism:</span> A trusted CI step reading the job's own environment and secret mounts<br>
+          <span class="hl">No escalation needed:</span> The runner already held the token for the release job<br>
+          <span class="hl">Defense gap:</span> Long-lived publishing tokens present in jobs that also run third-party tooling
+        </div>
+        <div class="step-tags"><span class="stag">CI Secrets</span><span class="stag">PyPI Token</span><span class="stag">Token Theft</span><span class="stag">T1552.007</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - Two Releases That Never Existed in Git</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Versions 1.82.7 and 1.82.8 were uploaded directly to PyPI thirteen minutes apart, bypassing the release workflow, with no corresponding tag on GitHub</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
+        </div>
+        <p class="step-desc">At 10:39 UTC on March 24, 2026 version 1.82.7 went up carrying an obfuscated payload inside <code>proxy_server.py</code>. At 10:52 UTC version 1.82.8 followed with a cleaner delivery mechanism, the <code>.pth</code> file described in the next step. PyPI administrators quarantined the project the same day. Because the upload went straight to the index, the repository never showed a matching tag or release, which is the single cheapest detection available here and the one most consumers never check: the artifact and the source of truth disagreed for the entire window. The official LiteLLM Proxy Docker image was not affected, because its dependencies were pinned. Everyone who ran an unpinned <code>pip install</code> or built an image with a floating requirement during those minutes was.</p>
+        <div class="step-code">
+          <span class="hl">10:39 UTC:</span> 1.82.7 published, obfuscated payload inside <code>proxy_server.py</code><br>
+          <span class="hl">10:52 UTC:</span> 1.82.8 published, adding the <code>litellm_init.pth</code> autorun mechanism<br>
+          <span class="hl">Same day:</span> PyPI administrators quarantine the project<br>
+          <span class="hl">Tell:</span> No matching git tag or GitHub release for either version<br>
+          <span class="hl">Not affected:</span> The official LiteLLM Proxy Docker image, which pins its dependencies
+        </div>
+        <div class="step-tags"><span class="stag">Direct Upload</span><span class="stag">No Git Tag</span><span class="stag">Unpinned Install</span><span class="stag">T1195.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">💻 Execution - A .pth File Runs Before Your Code Does</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title"><code>litellm_init.pth</code> in site-packages executed on every Python interpreter start, whether or not the application ever imported litellm</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1546/" target="_blank" rel="noopener">T1546 - Event Triggered Execution</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1027/" target="_blank" rel="noopener">T1027 - Obfuscated Files or Information</a>
+        </div>
+        <p class="step-desc">This is the detail worth carrying away from the whole incident. A <code>.pth</code> file in <code>site-packages</code> is processed by Python's <code>site</code> module at interpreter startup, and lines beginning with <code>import</code> are executed. So the payload ran before any application code, before any import guard, and in every Python process on the machine, including ones that had nothing to do with LLM traffic. A developer who installed the package once and never called it was still executing the payload on every <code>python</code> invocation. One accidental side effect became a useful behavioral indicator: some hosts saw a fork bomb pattern producing extreme lag or memory exhaustion, which is how a number of teams noticed anything at all.</p>
+        <div class="step-code">
+          <span class="hl">Artifact:</span> <code>litellm_init.pth</code> in the environment's <code>site-packages</code><br>
+          <span class="hl">Trigger:</span> Python's <code>site</code> module at interpreter startup, before application code<br>
+          <span class="hl">Scope:</span> Every Python process in that environment, imported or not<br>
+          <span class="hl">Accidental tell:</span> A fork bomb pattern causing severe system lag or memory exhaustion<br>
+          <span class="hl">Hunt command:</span> <code>find / -name 'litellm_init.pth' 2&gt;/dev/null</code>
+        </div>
+        <div class="step-tags"><span class="stag">.pth Autorun</span><span class="stag">site-packages</span><span class="stag">Pre-Import Execution</span><span class="stag">T1546</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access - Sweeping Cloud, AI and Cluster Secrets</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Stage one scanned environment variables and local files for AWS, GCP and Azure credentials, model provider API keys, SSH keys, kubeconfigs and database passwords</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Credentials In Files</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/004/" target="_blank" rel="noopener">T1552.004 - Private Keys</a>
+        </div>
+        <p class="step-desc">An LLM gateway is an unusually rich place to land. By design it holds provider API keys for OpenAI, Anthropic, Azure OpenAI and others, and it usually runs somewhere that also carries cloud credentials so it can reach logging, caching and storage. The payload collected exactly that: environment variables, cloud provider credentials across all three major clouds, model provider keys, SSH private keys, Kubernetes configuration files, and database passwords. Harvested material was encrypted and posted to <code>models.litellm.cloud</code>, a domain chosen to read as project infrastructure in any egress log skimmed by a human.</p>
+        <div class="step-code">
+          <span class="hl">Targets:</span> Environment variables, AWS/GCP/Azure credentials, LLM provider API keys, SSH private keys, kubeconfigs, database passwords<br>
+          <span class="hl">Exfiltration:</span> Encrypted <code>POST</code> to <code>models.litellm.cloud</code><br>
+          <span class="hl">Second C2 domain:</span> <code>checkmarx.zone</code>, also named after a security vendor<br>
+          <span class="hl">Why the gateway hurts:</span> One host holds provider keys and cloud credentials together
+        </div>
+        <div class="step-tags"><span class="stag">Credential Sweep</span><span class="stag">LLM API Keys</span><span class="stag">Lookalike C2 Domain</span><span class="stag">T1552.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a> - Service Account Tokens Inside the Cluster</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Stage two used mounted Kubernetes service account tokens to probe the internal API and look for privilege escalation paths</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1613/" target="_blank" rel="noopener">T1613 - Container and Resource Discovery</a>
+        </div>
+        <p class="step-desc">Where the package landed in a container, the payload reached for the <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> token that Kubernetes mounts into pods by default and used it to query the API server for what that identity could reach. That default mount is the point: a pod running an LLM proxy has no business enumerating cluster resources, but unless <code>automountServiceAccountToken</code> is disabled the token is sitting on the filesystem waiting to be used. Responders were told to look for pods named <code>node-setup-*</code> in the <code>kube-system</code> namespace, a name chosen to blend into cluster housekeeping.</p>
+        <div class="step-code">
+          <span class="hl">Credential used:</span> The pod's mounted Kubernetes service account token<br>
+          <span class="hl">Activity:</span> Internal API probing to map reachable resources and escalation paths<br>
+          <span class="hl">Cluster IoC:</span> Pods named <code>node-setup-*</code> in the <code>kube-system</code> namespace<br>
+          <span class="hl">Cheap control:</span> <code>automountServiceAccountToken: false</code> on workloads that never call the API
+        </div>
+        <div class="step-tags"><span class="stag">Kubernetes</span><span class="stag">Service Account Token</span><span class="stag">kube-system</span><span class="stag">T1613</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a> - A systemd Unit Named After a Monitoring Tool</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Stage three installed a systemd service masquerading as sysmon and beaconed to command and control for follow-on payloads</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1543/002/" target="_blank" rel="noopener">T1543.002 - Create or Modify System Process: Systemd Service</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1036/005/" target="_blank" rel="noopener">T1036.005 - Match Legitimate Name or Location</a>
+        </div>
+        <p class="step-desc">The last stage made removal of the package insufficient. A systemd unit was written alongside a payload at <code>~/.config/sysmon/sysmon.py</code>, named to resemble a system monitoring agent, and it polled attacker infrastructure for additional code. Anyone who responded by downgrading <code>litellm</code> and moving on left a live <a class="glossary-link" href="../glossary.html#term-c2">C2</a> channel running on the host. Full recovery meant hunting the unit and the config directory, rotating everything the host could reach, and rebuilding self-hosted runner images and CI caches, because a poisoned cache reintroduces the artifact on the next build.</p>
+        <div class="step-code">
+          <span class="hl">Persistence artifacts:</span> <code>~/.config/sysmon/sysmon.py</code> and a matching <code>sysmon.service</code> systemd unit<br>
+          <span class="hl">Behavior:</span> Beacon to C2 and poll for additional payloads<br>
+          <span class="hl">C2 domains:</span> <code>models.litellm.cloud</code>, <code>checkmarx.zone</code><br>
+          <span class="hl">Why downgrading is not enough:</span> The unit survives package removal, and CI caches re-serve the artifact
+        </div>
+        <div class="step-tags"><span class="stag">systemd</span><span class="stag">Masquerading</span><span class="stag">C2 Beacon</span><span class="stag">T1543.002</span><span class="stag">T1036.005</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Pin dependencies with hashes, and treat an unpinned <code>pip install</code> in a build as a control failure.</strong> The single reason the official LiteLLM Proxy image escaped is that it pinned its dependencies. Use a lockfile with hashes (<code>pip install --require-hashes</code>, <code>uv.lock</code>, or Poetry's lock) so a version published in a forty-minute window cannot enter your builds at all. Floating requirements turn every minute of every registry's uptime into your exposure window.</div>
+        <div class="def-item"><strong>Compare the artifact against the source of truth before you trust it.</strong> Neither malicious version had a matching tag or release on GitHub. A release-integrity check that fails the build when a package version has no corresponding signed tag, or that requires <a class="glossary-link" href="../glossary.html#term-provenance">provenance</a> attestation, catches this class of direct-to-index upload without needing to understand the payload. Prefer <a class="glossary-link" href="../glossary.html#term-slsa">SLSA</a> provenance and PyPI Trusted Publishing over long-lived API tokens on the publishing side.</div>
+        <div class="def-item"><strong>Stop keeping publishing tokens in jobs that run third-party tooling.</strong> The scanner read the token because the token was there. Split scanning and publishing into separate jobs with separate permissions, mint publishing credentials through OIDC-based Trusted Publishing rather than storing a static token, and scope every remaining CI secret to the single job that needs it. Purge build caches and rebuild self-hosted runner images after any pipeline compromise, or you will restore the payload yourself.</div>
+        <div class="def-item"><strong>Scan for the artifacts, not just the version number.</strong> Search hosts and images for <code>litellm_init.pth</code> in <code>site-packages</code>, for <code>~/.config/sysmon/sysmon.py</code> and its systemd unit, and for pods named <code>node-setup-*</code> in <code>kube-system</code>. Downgrading to 1.82.6 removes the package; it does not remove the persistence the package installed.</div>
+        <div class="def-item"><strong>Give the AI gateway its own blast radius.</strong> A component holding model provider keys should not also hold cloud administrator credentials, and its pods should not automount a Kubernetes service account token they never use. Set <code>automountServiceAccountToken: false</code>, scope the workload identity to <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a>, and put provider keys in a secrets manager with short-lived retrieval rather than in the process environment.</div>
+        <div class="def-item"><strong>Filter egress and hunt the lookalike domains.</strong> Both C2 domains were named to pass a skim: <code>models.litellm.cloud</code> reads as project infrastructure, <code>checkmarx.zone</code> as a security vendor. Default-deny egress from build runners and AI workloads, allow-list the provider endpoints you actually call, and sweep EDR and DNS logs for both domains across the March 2026 window.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://docs.litellm.ai/blog/security-update-march-2026" target="_blank" rel="noopener">LiteLLM - Security update, March 2026</a>
+        <a class="src-link" href="https://cycode.com/blog/lite-llm-supply-chain-attack/" target="_blank" rel="noopener">Cycode - LiteLLM supply chain attack</a>
+        <a class="src-link" href="https://www.trendmicro.com/en_us/research/26/c/inside-litellm-supply-chain-compromise.html" target="_blank" rel="noopener">Trend Micro - Inside the LiteLLM compromise</a>
+        <a class="src-link" href="https://www.herodevs.com/blog-posts/the-litellm-supply-chain-attack-what-happened-why-it-matters-and-what-to-do-next" target="_blank" rel="noopener">HeroDevs - What happened and what to do next</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1195/001/" target="_blank" rel="noopener">MITRE T1195.001</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ci-cd.html">CI/CD security</a>
+    <a class="src-link" href="../ai-ml-security.html">AI/ML security</a>
+    <a class="src-link" href="../kubernetes.html">Kubernetes security</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+  </div>
+</div>
+
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="salesloft-drift-unc6395.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="vercel-context-ai-oauth.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=792b7abd" defer integrity="sha384-2UjvVpptg4JlEVgJI2PdscrjOjPcil/4F1ZvIMJ81CShQnEDSlPI+l4PfogvTLYi"></script>
+</body>
+
+</html>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="ShinyHunters stole an analytics vendor's tokens and queried Vimeo's Snowflake and BigQuery directly, exposing 119,000 records without ever touching Vimeo's perimeter.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Vimeo breach 2026, Anodot, ShinyHunters, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, third-party integration risk, Snowflake data exfiltration, BigQuery security, non-human identity, extortion">
+    <title>Vimeo / Anodot 2026 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/vimeo-anodot-shinyhunters.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/vimeo-anodot-shinyhunters.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/vimeo-anodot-shinyhunters.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Vimeo / Anodot 2026 Breach Kill Chain">
+    <meta property="og:description" content="How stolen third-party analytics tokens became direct Snowflake and BigQuery access at Vimeo, with no privilege escalation needed - a full MITRE ATT&amp;CK kill chain.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-04-29">
+    <meta property="article:modified_time" content="2026-07-24">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Vimeo breach 2026">
+    <meta property="article:tag" content="Anodot">
+    <meta property="article:tag" content="ShinyHunters">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="third-party integration risk">
+    <meta property="article:tag" content="Snowflake data exfiltration">
+    <meta property="article:tag" content="non-human identity">
+    <meta property="og:url" content="https://csoh.org/breaches/vimeo-anodot-shinyhunters.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/vimeo-anodot-shinyhunters.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Vimeo / Anodot 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="How stolen third-party analytics tokens became direct Snowflake and BigQuery access at Vimeo, with no privilege escalation needed - a full MITRE ATT&amp;CK kill chain.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/vimeo-anodot-shinyhunters.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=dd0f54c0" as="style"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/style.css?v=dd0f54c0"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Vimeo / Anodot - Stolen Analytics Vendor Tokens → Direct Snowflake and BigQuery Access → 119,000 Records Exfiltrated → Extortion",
+  "description": "ShinyHunters stole an analytics vendor's tokens and queried Vimeo's Snowflake and BigQuery directly, exposing 119,000 records without ever touching Vimeo's perimeter.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-04-29",
+  "dateModified": "2026-07-24",
+  "mainEntityOfPage": "https://csoh.org/breaches/vimeo-anodot-shinyhunters.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Vimeo Data Breach via Anodot",
+    "startDate": "2026-04-28",
+    "description": "ShinyHunters obtained authentication tokens held by analytics vendor Anodot and used them to authenticate directly to Vimeo's Snowflake and BigQuery instances, exfiltrating roughly 119,000 user records before issuing an extortion deadline."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Vimeo"
+    },
+    {
+      "@type": "Organization",
+      "name": "Anodot"
+    },
+    {
+      "@type": "Organization",
+      "name": "ShinyHunters"
+    },
+    {
+      "@type": "Thing",
+      "name": "Snowflake"
+    },
+    {
+      "@type": "Thing",
+      "name": "Google BigQuery"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Vimeo / Anodot 2026",
+      "item": "https://csoh.org/breaches/vimeo-anodot-shinyhunters.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All five session digests</span></a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Vimeo / Anodot 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Vimeo / Anodot 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="vimeo-anodot-shinyhunters-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">April 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-blue">Snowflake / BigQuery</span>
+    </div>
+    <h2 class="inc-title">Vimeo / Anodot - Stolen Analytics Vendor Tokens → Direct Snowflake and BigQuery Access → 119,000 Records Exfiltrated → Extortion</h2>
+    <p class="inc-summary">On April 28, 2026 Vimeo confirmed a data breach affecting roughly 119,000 users and customers. Vimeo's own systems were not broken into. The compromise happened at Anodot, an analytics vendor that held authentication tokens on Vimeo's behalf, giving it legitimate and persistent access to Vimeo's cloud data environments. The extortion group ShinyHunters obtained those tokens and used them to authenticate directly to Vimeo's Snowflake and BigQuery instances, query what the integration was permitted to see, and pull it out. The access never exceeded the permissions granted to Anodot's integration, which is precisely why it looked like normal analytics traffic. Email addresses, video titles and technical metadata were taken; uploaded video content, account credentials and payment card data were not. ShinyHunters claimed responsibility on April 29 and set a leak deadline for April 30. Vimeo disabled all Anodot credentials, removed the integration, and engaged outside experts and law enforcement.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>~119,000</strong> unique email addresses exposed, some with names</div>
+      <div class="inc-stat"><strong>Two warehouses:</strong> Snowflake and BigQuery, reached with one vendor's tokens</div>
+      <div class="inc-stat"><strong>Zero privilege escalation</strong> - the integration's own scope was enough</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> ShinyHunters, an extortion-focused group</div>
+    </div>
+    <a class="pm-link" href="https://www.cpomagazine.com/cyber-security/vimeo-confirms-data-breach-impacting-119000-users-and-customers/" target="_blank" rel="noopener">📄 CPO Magazine - Vimeo confirms breach impacting 119,000 users ↗</a>
+    <a class="pm-link" href="https://securityaffairs.com/191448/security/shinyhunters-exploit-anodot-incident-to-target-vimeo.html" target="_blank" rel="noopener">📄 Security Affairs - ShinyHunters exploit the Anodot incident to target Vimeo ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - The Breach Happened Somewhere Else</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Anodot, a third-party analytics provider, was compromised and the authentication tokens it held for customer cloud environments were stolen</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">T1199 - Trusted Relationship</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener">T1528 - Steal Application Access Token</a>
+        </div>
+        <p class="step-desc">Vimeo's incident began on someone else's infrastructure. Anodot is an analytics platform, and like most analytics platforms it works by holding durable credentials into its customers' data estates so it can read from them on a schedule. Public reporting has not established how Anodot itself was compromised; researchers describe it as likely either an <a class="glossary-link" href="../glossary.html#term-infostealer">infostealer</a> infection or a direct compromise of Anodot's systems, and that distinction remains unresolved. What is not in question is what the attacker walked away with: a set of working tokens into multiple customers' cloud data platforms, held in one place, by a company those customers' security teams did not monitor.</p>
+        <div class="step-code">
+          <span class="hl">Compromised party:</span> Anodot, a third-party analytics vendor<br>
+          <span class="hl">Method:</span> Not publicly established; researchers cite infostealer infection or direct system compromise<br>
+          <span class="hl">Taken:</span> Authentication tokens held on behalf of customers for their cloud data environments<br>
+          <span class="hl">Structural issue:</span> A vendor's token store aggregates standing access across all of its customers
+        </div>
+        <div class="step-tags"><span class="stag">Vendor Compromise</span><span class="stag">Token Theft</span><span class="stag">Fourth Party Risk</span><span class="stag">T1199</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a> - Tokens That Were Built Never to Expire</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stolen tokens were service-to-service credentials with standing access, requiring no password, no interactive login and no MFA</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">Analytics integrations exist to run unattended, so their credentials are deliberately long-lived: they authenticate machine to machine, they do not prompt anyone, and they survive every human-facing control an organization deploys. A stolen token of this kind is not defeated by password rotation, by an <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> requirement, or by disabling an employee account, because none of those things apply to it. This is <a class="glossary-link" href="../glossary.html#term-nhi">non-human identity</a> risk in its purest form, and it is the reason the same pattern keeps producing large breaches from small vendors.</p>
+        <div class="step-code">
+          <span class="hl">Credential type:</span> Long-lived service-to-service authentication tokens<br>
+          <span class="hl">Bypassed by design:</span> Passwords, interactive sign-in, MFA, session expiry<br>
+          <span class="hl">Not revoked by:</span> Employee offboarding or user credential rotation<br>
+          <span class="hl">Only real kill switch:</span> Revoking the integration's credential at the data platform
+        </div>
+        <div class="step-tags"><span class="stag">Non-Human Identity</span><span class="stag">Long-Lived Tokens</span><span class="stag">No MFA Path</span><span class="stag">T1078.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a> - Straight Into Snowflake and BigQuery</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">ShinyHunters authenticated to Vimeo's Snowflake and BigQuery instances using Anodot's tokens, without ever touching Vimeo's own perimeter</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">T1199 - Trusted Relationship</a>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">The tokens worked exactly as intended, which is the whole problem. Vimeo's firewalls, its identity provider, its endpoint controls and its employee MFA posture were all irrelevant, because the attacker arrived through an authorized integration on a path the company had deliberately opened. Notice that the same tokens reached across two different clouds' analytics platforms: consolidating vendor access into one credential store means one theft crosses provider boundaries. Reporting also indicates Anodot's tokens covered access to S3 and Amazon Kinesis for its customer base, so the reachable surface was broader than the two warehouses that were used here.</p>
+        <div class="step-code">
+          <span class="hl">Platforms accessed:</span> Vimeo's Snowflake and BigQuery instances<br>
+          <span class="hl">Vendor's broader token scope:</span> Reporting also cites S3 and Amazon Kinesis access across its customer base<br>
+          <span class="hl">Perimeter relevance:</span> None. The path was authorized and expected<br>
+          <span class="hl">Cross-cloud effect:</span> One vendor credential store spans AWS and Google Cloud data services
+        </div>
+        <div class="step-tags"><span class="stag">Snowflake</span><span class="stag">BigQuery</span><span class="stag">Authorized Path</span><span class="stag">T1199</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery - Working Inside the Integration's Own Scope</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The attacker's access was bounded by the permissions granted to Anodot's integration, so nothing had to be escalated and nothing looked anomalous</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener">T1087.004 - Account Discovery: Cloud Account</a>
+        </div>
+        <p class="step-desc">Reporting is consistent that the intrusion never exceeded what the integration was already permitted to do. Read that as the finding it is, not as mitigation. It means the analytics grant by itself was sufficient to expose 119,000 user records, and it means no privilege escalation alert could have fired, because none was needed. The defensive question is not "how did they escalate" but "why did the analytics integration have read access to customer email addresses at all?" Least privilege for a vendor integration means granting the aggregated or pseudonymized views the vendor's job requires, not table-level reads on production identity data.</p>
+        <div class="step-code">
+          <span class="hl">Access ceiling:</span> Exactly the permissions granted to the Anodot integration<br>
+          <span class="hl">Escalation observed:</span> None, and none required<br>
+          <span class="hl">Consequence:</span> No privilege escalation detection could have triggered<br>
+          <span class="hl">Real question:</span> Why an analytics grant could read customer email addresses at all
+        </div>
+        <div class="step-tags"><span class="stag">Scoped Access</span><span class="stag">No Escalation</span><span class="stag">Over-Broad Grant</span><span class="stag">T1580</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 Collection &amp; <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a> - Ordinary Database Tooling</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Bulk queries were run with commodity database clients and custom scripts, and results were compressed before being pulled out over the same authorized channel</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1560/001/" target="_blank" rel="noopener">T1560.001 - Archive via Utility</a>
+        </div>
+        <p class="step-desc">There was no bespoke tradecraft. Researchers describe the use of a mainstream database client, DBeaver, alongside custom scripts, with results compressed using standard utilities such as gzip before exfiltration. That is the same profile as <a href="snowflake-unc5537.html">UNC5537 / Snowflake</a> two years earlier, and it is why detection has to be volumetric rather than signature-based: the queries are valid, the client is legitimate, the credential is authorized, and the only thing out of place is how much data moved and when. What left was email addresses of users and customers, video titles, and technical metadata. Uploaded video content, account passwords and payment card data were not accessed.</p>
+        <div class="step-code">
+          <span class="hl">Tooling:</span> DBeaver plus custom scripts, all ordinary database access<br>
+          <span class="hl">Staging:</span> Results compressed with standard utilities such as gzip before transfer<br>
+          <span class="hl">Taken:</span> Email addresses, video titles, technical metadata (~119,000 unique addresses, some with names)<br>
+          <span class="hl">Not taken:</span> Uploaded video content, account passwords, payment card data<br>
+          <span class="hl">Only anomaly available:</span> Query volume and rows scanned, not the tooling or the credential
+        </div>
+        <div class="step-tags"><span class="stag">DBeaver</span><span class="stag">Bulk Query</span><span class="stag">Volumetric Detection</span><span class="stag">T1213</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact - Disclosure, Extortion Deadline, Integration Removed</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Vimeo disclosed on April 28, ShinyHunters claimed the breach on April 29 with a leak deadline of April 30, and Vimeo killed the integration</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1657/" target="_blank" rel="noopener">T1657 - Financial Theft</a>
+        </div>
+        <p class="step-desc">ShinyHunters is an extortion group rather than a ransomware crew: the business model is stealing data and threatening publication, and in the same period it ran the same play against Instructure's Canvas learning platform, affecting data on tens of millions of students and staff. Vimeo's response was the right shape and fast: disable all Anodot credentials, remove the integration entirely, bring in external security experts, notify law enforcement. Worth noting what that response depended on, though. Executing it in hours requires already knowing which integrations exist, which credentials each holds, and where the revocation switch is. Organizations that have to discover that during an incident lose days they do not have against a deadline measured in them.</p>
+        <div class="step-code">
+          <span class="hl">April 28:</span> Vimeo publicly discloses the incident<br>
+          <span class="hl">April 29:</span> ShinyHunters publicly claims responsibility<br>
+          <span class="hl">April 30:</span> Extortion deadline for publication of the stolen data<br>
+          <span class="hl">Response:</span> All Anodot credentials disabled, integration removed, external experts and law enforcement engaged<br>
+          <span class="hl">Same actor, same period:</span> Instructure Canvas, affecting tens of millions of students and staff
+        </div>
+        <div class="step-tags"><span class="stag">ShinyHunters</span><span class="stag">Extortion</span><span class="stag">Integration Revoked</span><span class="stag">T1657</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Keep a live inventory of every non-human identity that can read your data warehouse.</strong> You cannot revoke what you have not written down. For each integration record the credential, its scope, its owner, its expiry, and the exact command that revokes it. Vimeo's fast containment worked because the integration was identifiable and killable; that is an inventory property, not a luck property. Review the list quarterly and delete the integrations nobody remembers enabling.</div>
+        <div class="def-item"><strong>Scope analytics grants to what analytics actually needs.</strong> The attacker never escalated because the integration's own permissions were enough to expose 119,000 records. Give vendors purpose-built views: aggregated, pseudonymized, or column-masked, with direct email and identity columns excluded. Snowflake dynamic data masking and row access policies, and BigQuery authorized views with column-level access control, all exist for this and cost nothing to apply.</div>
+        <div class="def-item"><strong>Replace standing tokens with short-lived, source-bound credentials.</strong> Long-lived service tokens are the asset every one of these campaigns is actually stealing. Prefer <a class="glossary-link" href="../glossary.html#term-oidc-federation">OIDC federation</a> or workload identity federation over static keys, cap token lifetimes, and bind them to a network location: Snowflake network policies and BigQuery VPC Service Controls both let a stolen credential fail from an unexpected source address. Rotate on a schedule you actually execute.</div>
+        <div class="def-item"><strong>Alert on data volume, because everything else looks legitimate.</strong> Valid credential, valid client, valid query. The only signal available is behavioral: rows scanned, bytes returned, query patterns and access times that deviate from what a scheduled analytics job does. Baseline each integration's normal profile in Snowflake's <code>ACCESS_HISTORY</code> and <code>QUERY_HISTORY</code> and in BigQuery's audit logs and <code>INFORMATION_SCHEMA.JOBS</code>, then page on deviation rather than on failed logins that will never happen.</div>
+        <div class="def-item"><strong>Extend vendor risk to the fourth party and make revocation a drill.</strong> Ask vendors what credentials of yours they hold, how those are stored and rotated, what their endpoint controls look like, and how fast they will notify you. Then rehearse your side: a tabletop where the scenario is "a vendor tells us our tokens are stolen" and the success criterion is total revocation within an hour. Pair it with an <a class="glossary-link" href="../glossary.html#term-incident-response">incident response</a> plan that treats third-party notification as a trigger, not an FYI.</div>
+        <div class="def-item"><strong>Assume the extortion clock starts before you hear about it.</strong> ShinyHunters claimed this breach one day after disclosure and set a leak deadline the day after that. Legal, communications and customer notification workflows need to be pre-staged, and the decision framework for how you handle an extortion demand should be settled long before a deadline is in front of you.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.cpomagazine.com/cyber-security/vimeo-confirms-data-breach-impacting-119000-users-and-customers/" target="_blank" rel="noopener">CPO Magazine - Vimeo confirms the breach</a>
+        <a class="src-link" href="https://securityaffairs.com/191448/security/shinyhunters-exploit-anodot-incident-to-target-vimeo.html" target="_blank" rel="noopener">Security Affairs - ShinyHunters exploit the Anodot incident</a>
+        <a class="src-link" href="https://www.scworld.com/brief/vimeo-confirms-customer-data-accessed-following-anodot-breach" target="_blank" rel="noopener">SC Media - Customer data accessed following the Anodot breach</a>
+        <a class="src-link" href="https://haveibeenpwned.com/Breach/Vimeo" target="_blank" rel="noopener">Have I Been Pwned - Vimeo breach record</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">MITRE T1199</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../data-security.html">Data security &amp; KMS</a>
+    <a class="src-link" href="../saas-security.html">SaaS security (SSPM)</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+  </div>
+</div>
+
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="vercel-context-ai-oauth.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="mini-shai-hulud-tanstack.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=792b7abd" defer integrity="sha384-2UjvVpptg4JlEVgJI2PdscrjOjPcil/4F1ZvIMJ81CShQnEDSlPI+l4PfogvTLYi"></script>
+</body>
+
+</html>
