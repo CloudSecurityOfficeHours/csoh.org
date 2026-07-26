@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="A service account credential synced to an employee's personal Google profile gave attackers Okta's support system, where customer HAR files held live session tokens.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Okta breach 2023, HAR files, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2023, session token theft, support system compromise, 1Password, BeyondTrust, Cloudflare, browser profile sync">
+    <title>Okta Support System 2023 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/okta-support-har.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/okta-support-har.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/okta-support-har.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Okta Support System 2023 Breach Kill Chain">
+    <meta property="og:description" content="Your vendor's support system holds your session tokens - and three customers found this breach before the identity provider did.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2023-11-03">
+    <meta property="article:modified_time" content="2026-07-26">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Okta breach 2023">
+    <meta property="article:tag" content="HAR files">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2023">
+    <meta property="article:tag" content="session token theft">
+    <meta property="article:tag" content="support system compromise">
+    <meta property="article:tag" content="identity provider">
+    <meta property="og:url" content="https://csoh.org/breaches/okta-support-har.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/okta-support-har.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Okta Support System 2023 Breach Kill Chain">
+    <meta name="twitter:description" content="Your vendor's support system holds your session tokens - and three customers found this breach before the identity provider did.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/okta-support-har.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=dd0f54c0" as="style"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/style.css?v=dd0f54c0"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Okta Support System - Credential Saved to a Personal Google Profile → Support Case System → HAR Files Full of Session Tokens → Customer Sessions Hijacked",
+  "description": "A service account credential synced to an employee's personal Google profile gave attackers Okta's support system, where customer HAR files held live session tokens.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2023-11-03",
+  "dateModified": "2026-07-26",
+  "mainEntityOfPage": "https://csoh.org/breaches/okta-support-har.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Okta Customer Support System Compromise",
+    "startDate": "2023-09-28",
+    "description": "An Okta service account credential saved to an employee's personal Google profile gave a threat actor access to the customer support case management system, where HAR files uploaded by customers contained live session tokens used to hijack sessions at five customers."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Okta"
+    },
+    {
+      "@type": "Organization",
+      "name": "Cloudflare"
+    },
+    {
+      "@type": "Organization",
+      "name": "1Password"
+    },
+    {
+      "@type": "Organization",
+      "name": "BeyondTrust"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Okta Support System 2023",
+      "item": "https://csoh.org/breaches/okta-support-har.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All five session digests</span></a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Okta Support System 2023</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Okta Support System 2023</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="okta-support-har-2023">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">September-October 2023</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-blue">Identity Provider</span>
+    </div>
+    <h2 class="inc-title">Okta Support System - Credential Saved to a Personal Google Profile → Support Case System → HAR Files Full of Session Tokens → Customer Sessions Hijacked</h2>
+    <p class="inc-summary">Between September 28 and October 17, 2023 an attacker had access to Okta's customer support case management system. The root cause Okta published is uncomfortably ordinary: an employee signed into their personal Google profile in Chrome on an Okta-managed laptop, Chrome saved a service account's username and password into that personal Google account, and the attacker obtained them when the personal account or device was compromised. The support system held HAR files - browser network traces that customers upload for troubleshooting, and which routinely contain live session tokens. The actor used those tokens to hijack legitimate Okta sessions at five customers. Files belonging to 134 customers were accessed. <strong>Detection came entirely from the customers.</strong> 1Password reported suspicious activity on September 29, BeyondTrust supplied the attacker IP on October 13, and Cloudflare detected and disclosed independently - while Okta's own investigation was blinded for fourteen days by a logging gap it later documented in detail.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>19 days</strong> of access: September 28 to October 17, 2023</div>
+      <div class="inc-stat"><strong>134 customers</strong> had files accessed; 5 had sessions hijacked</div>
+      <div class="inc-stat"><strong>14 days</strong> lost to a logging gap during Okta's own investigation</div>
+      <div class="inc-stat"><strong>Detected by:</strong> customers, not by Okta</div>
+    </div>
+    <a class="pm-link" href="https://sec.okta.com/articles/2023/11/unauthorized-access-oktas-support-case-management-system-root-cause/" target="_blank" rel="noopener">📄 Okta Security - Root cause and remediation ↗</a>
+    <a class="pm-link" href="https://blog.cloudflare.com/how-cloudflare-mitigated-yet-another-okta-compromise/" target="_blank" rel="noopener">📄 Cloudflare - How we mitigated another Okta compromise ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - Chrome Saved a Service Account to a Personal Google Profile</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">An employee signed into a personal Google profile in Chrome on a managed laptop, and the browser synced a saved service account credential into that personal account</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1555/003/" target="_blank" rel="noopener">T1555.003 - Credentials from Web Browsers</a>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 - Valid Accounts</a>
+        </div>
+        <p class="step-desc">Nobody did anything that felt wrong. The laptop was managed. The employee signed into their personal Google profile in Chrome, which is a thing hundreds of millions of people do daily. Chrome offered to save a password, as it always does, and synced it to the profile that was signed in - the personal one. From that moment a service account credential belonging to Okta lived in a consumer Google account outside Okta's control, subject to whatever security that individual's personal account and personal devices happened to have. Okta's own assessment is that the most likely exposure route was compromise of that personal account or device. This is <a class="glossary-link" href="../glossary.html#term-shadow-it">shadow IT</a> in miniature: the boundary was not crossed by a policy violation but by a browser feature doing exactly what it is designed to do.</p>
+        <div class="step-code">
+          <span class="hl">Device:</span> An Okta-managed laptop - not an unmanaged personal machine<br>
+          <span class="hl">Action:</span> Employee signs into a personal Google profile in Chrome<br>
+          <span class="hl">Mechanism:</span> Chrome saves and syncs the service account credential to the personal account<br>
+          <span class="hl">Okta's assessment:</span> Most likely exposure was compromise of that personal account or device<br>
+          <span class="hl">Notable:</span> No policy was knowingly broken; a browser feature worked as designed
+        </div>
+        <div class="step-tags"><span class="stag">Browser Sync</span><span class="stag">Personal Profile</span><span class="stag">Service Account</span><span class="stag">T1555.003</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🗂 Collection - A Support System Full of Other People's Session Tokens</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The compromised service account could read the customer support case management system, where customers upload HAR files that routinely embed live session tokens</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1539/" target="_blank" rel="noopener">T1539 - Steal Web Session Cookie</a>
+        </div>
+        <p class="step-desc">A HAR file is a complete recording of a browser's network activity - every request, every response, every header. Support engineers ask for them because they are the fastest way to diagnose a login or federation problem, and customers produce them willingly. They also, by construction, contain whatever was in those headers, which for an authenticated troubleshooting session means live session tokens. So the support system of an identity provider quietly became an aggregation point for working credentials belonging to its customers, with none of the protection those customers applied to credentials they knew they had. Almost nobody on either side of a support ticket thinks of an attachment as a credential store, and that is precisely the gap.</p>
+        <div class="step-code">
+          <span class="hl">Artifact:</span> HAR files - full browser network traces uploaded for troubleshooting<br>
+          <span class="hl">Contents:</span> Every request and response header, including live session tokens<br>
+          <span class="hl">Why they exist:</span> The fastest way to diagnose a login or federation problem<br>
+          <span class="hl">Effect:</span> A support system becomes an aggregation point for customers' working credentials<br>
+          <span class="hl">Blind spot:</span> Nobody treats a support attachment as a credential store
+        </div>
+        <div class="step-tags"><span class="stag">HAR Files</span><span class="stag">Session Tokens</span><span class="stag">Support Tooling</span><span class="stag">T1539</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🎫 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a> - Replaying Tokens Into Customer Tenants</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Session tokens extracted from the HAR files were replayed to hijack legitimate Okta sessions at five customers, bypassing authentication entirely</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1550/004/" target="_blank" rel="noopener">T1550.004 - Use Alternate Authentication Material: Web Session Cookie</a>
+        </div>
+        <p class="step-desc">A session token is proof that authentication already happened, so replaying one skips the entire login path. No password, no MFA prompt, no sign-in event that looks like an attack - the session simply continues, and from the application's perspective the legitimate user is still working. This is the same property that made <a href="storm-0558.html">Storm-0558</a> and the <a href="entra-id-actor-token.html">Entra ID Actor token</a> flaw so hard to detect, arriving here without any cryptography being broken: the tokens were simply lying in files people had uploaded voluntarily. Files belonging to 134 customers were accessed, and five had sessions hijacked - a conversion rate that reflects token lifetime more than anything else, since only tokens still valid when the attacker got to them were useful.</p>
+        <div class="step-code">
+          <span class="hl">Technique:</span> Replay a stolen session token; authentication has already happened<br>
+          <span class="hl">Bypassed:</span> Password, MFA, and any sign-in-based detection<br>
+          <span class="hl">Files accessed:</span> Belonging to 134 customers (under 1% of Okta's base)<br>
+          <span class="hl">Sessions hijacked:</span> 5 customers<br>
+          <span class="hl">What limited it:</span> Token lifetime - only still-valid tokens were useful
+        </div>
+        <div class="step-tags"><span class="stag">Token Replay</span><span class="stag">MFA Bypass</span><span class="stag">Session Hijack</span><span class="stag">T1550.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🕳 Defense Evasion - A Logging Gap That Hid Fourteen Days</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Okta's investigation was blinded for two weeks because opening a file from the Files tab generated a different log event than opening it from within a case</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1562/008/" target="_blank" rel="noopener">T1562.008 - Impair Defenses: Disable or Modify Cloud Logs</a>
+        </div>
+        <p class="step-desc">This is the most transferable detail in the whole incident, and Okta deserves credit for publishing it. Their support system logged file access differently depending on how a user reached the file: opening an attachment from within a support case produced one event type, while navigating directly to the Files tab produced an entirely different one. Okta's investigation queried case access, so the attacker's direct file downloads simply were not in the results, and for fourteen days the reasonable conclusion from the available evidence was that nothing had happened. The gap closed only when BeyondTrust handed over a suspicious IP address on October 13 that could be searched for directly. The general lesson is that "we have logs" and "our queries would surface this behaviour" are different claims, and the difference is usually only discovered during an incident.</p>
+        <div class="step-code">
+          <span class="hl">The gap:</span> File opened from within a case logs a different event than the same file from the Files tab<br>
+          <span class="hl">Consequence:</span> Investigation queried case access; direct downloads did not appear<br>
+          <span class="hl">Cost:</span> 14 days during which the evidence supported "nothing happened"<br>
+          <span class="hl">What broke it:</span> A suspicious IP address supplied by BeyondTrust on October 13<br>
+          <span class="hl">Lesson:</span> "We have logs" and "our queries would find this" are different claims
+        </div>
+        <div class="step-tags"><span class="stag">Logging Gap</span><span class="stag">Event Type Mismatch</span><span class="stag">Investigation Blind Spot</span><span class="stag">T1562.008</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">📣 Detection - Three Customers Found It Before the Vendor Did</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">1Password reported suspicious activity on September 29, BeyondTrust supplied the attacker IP on October 13, and Cloudflare detected and published independently</div>
+        </div>
+        <p class="step-desc">The sequence matters. 1Password saw something wrong the day after access began and told Okta. BeyondTrust detected the token replay against its own tenant, escalated, and eventually provided the IP address that unblocked the investigation. Cloudflare detected it independently and published its own account. In each case a customer's monitoring of its own identity provider caught what the identity provider did not, which is an uncomfortable but genuinely actionable finding: your vendor's detection capability is not a substitute for your own, particularly for the vendor that sits at the centre of your access model. All three companies also published detailed public write-ups, and that transparency is why this incident is teachable at all.</p>
+        <div class="step-code">
+          <span class="hl">September 29:</span> 1Password reports suspicious activity - one day after access began<br>
+          <span class="hl">October 13:</span> BeyondTrust provides the attacker IP that unblocks Okta's investigation<br>
+          <span class="hl">Independently:</span> Cloudflare detects and publishes its own account<br>
+          <span class="hl">Pattern:</span> Customers monitoring their own IdP caught what the IdP did not<br>
+          <span class="hl">Why we can learn from it:</span> All three published detailed public write-ups
+        </div>
+        <div class="step-tags"><span class="stag">Customer Detection</span><span class="stag">1Password</span><span class="stag">BeyondTrust</span><span class="stag">Cloudflare</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🛠 Response - Kill the Account, Kill the Browser Profile</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Okta disabled the service account, blocked personal Google profiles in Chrome Enterprise on managed laptops, added support-system monitoring, and shipped network-based session token binding as a product feature</div>
+        </div>
+        <p class="step-desc">The remediation list is worth reading as a template because it addresses four different layers rather than just the immediate hole. The compromised service account was disabled. Personal Google profile sign-in was blocked via Chrome Enterprise policy on managed laptops, which closes the root cause structurally rather than by asking people to be careful. Detection and monitoring for the support system were improved, addressing the logging gap. And session token binding to network location was released as a product feature, which attacks the underlying problem: a bound token cannot be replayed from the attacker's network even if it leaks. That last one is the durable fix, because HAR files will keep containing tokens no matter what anyone asks customers to do.</p>
+        <div class="step-code">
+          <span class="hl">Immediate:</span> Disable the compromised service account<br>
+          <span class="hl">Root cause:</span> Block personal Google profile sign-in via Chrome Enterprise policy on managed devices<br>
+          <span class="hl">Visibility:</span> Enhanced detection and monitoring for the support system<br>
+          <span class="hl">Durable:</span> Session token binding to network location, shipped as a product feature<br>
+          <span class="hl">Why the last one matters most:</span> A bound token is useless from the attacker's network
+        </div>
+        <div class="step-tags"><span class="stag">Chrome Enterprise Policy</span><span class="stag">Token Binding</span><span class="stag">Structural Fix</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Sanitize HAR files before you upload them, and assume nobody else will.</strong> If your vendor asks for a browser trace, strip the tokens first - there are open-source HAR sanitizers, and the browser's own export includes everything by default. Then invalidate the session you captured it from. Treat any file containing full request headers as a credential dump for handling purposes, because that is exactly what it is.</div>
+        <div class="def-item"><strong>Bind session tokens so a stolen one is useless elsewhere.</strong> The token replay only worked because a session token was portable. Where your identity provider offers it, enable binding to network location or device, and shorten session lifetimes for privileged roles so leaked tokens expire before they can be used. Okta shipped exactly this feature in response; the general principle applies to every session-issuing system you run.</div>
+        <div class="def-item"><strong>Block personal browser profiles on managed devices with policy, not with training.</strong> The root cause was Chrome syncing a saved credential into a personal Google account. Chrome Enterprise policy can restrict sign-in to your organization's accounts, and equivalent controls exist for other browsers. Pair it with disabling the browser password manager for corporate credentials entirely and requiring an enterprise password manager - the failure here was a default behaviour, so the fix has to be a configuration rather than a request.</div>
+        <div class="def-item"><strong>Monitor your identity provider yourself; your vendor's detection is not yours.</strong> Three customers found this before Okta did. Ingest your IdP's system logs into your own <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a>, alert on administrative actions, impossible-travel sessions, and privileged sessions from unfamiliar addresses, and specifically alert on sessions that appear without a corresponding authentication event - the signature of exactly this attack.</div>
+        <div class="def-item"><strong>Test whether your logs actually answer the questions an investigation will ask.</strong> The fourteen-day gap came from two paths to the same file generating different event types. Before an incident, take real questions - who accessed this file, who read this record, who exported this data - and confirm your telemetry answers them regardless of which interface was used. Run that as a tabletop against your own logs; the gaps are rarely where you expect.</div>
+        <div class="def-item"><strong>Treat vendor support systems as part of your attack surface.</strong> This one held live session tokens for hundreds of customers. Ask vendors what support artifacts they retain, for how long, who can read them, and how access is logged - then minimize what you send. The support ticket is a channel through which your credentials leave your control, and almost nobody governs it.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://sec.okta.com/articles/2023/11/unauthorized-access-oktas-support-case-management-system-root-cause/" target="_blank" rel="noopener">Okta Security - Root cause and remediation</a>
+        <a class="src-link" href="https://blog.cloudflare.com/how-cloudflare-mitigated-yet-another-okta-compromise/" target="_blank" rel="noopener">Cloudflare - How we mitigated it</a>
+        <a class="src-link" href="https://blog.1password.com/okta-incident/" target="_blank" rel="noopener">1Password - Our response to the Okta incident</a>
+        <a class="src-link" href="https://www.beyondtrust.com/blog/entry/okta-support-unit-breach" target="_blank" rel="noopener">BeyondTrust - Okta support unit breach</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1550/004/" target="_blank" rel="noopener">MITRE T1550.004</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../saas-security.html">SaaS security (SSPM)</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../zero-trust.html">Zero trust</a>
+  </div>
+</div>
+
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="scattered-spider-mgm.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="promptware.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
