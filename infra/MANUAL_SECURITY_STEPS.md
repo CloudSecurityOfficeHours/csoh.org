@@ -346,26 +346,63 @@ domain. CAA turns that into a two-CA surface and, with `iodef`, alerts you on at
 mis-issuance. HSTS preload does not help here: a preloaded domain still trusts any
 publicly trusted chain.
 
-In the Cloudflare dashboard: **DNS → Records → Add record**, type **CAA**, four records
-on the apex `csoh.org`:
+The records are defined in Terraform, in
+[`terraform/cloudflare/dns_caa.tf`](terraform/cloudflare/dns_caa.tf), with the reasoning
+inline. Four records on the apex:
 
 | Tag | Value | Why |
 | --- | --- | --- |
-| `issue` | `letsencrypt.org` | Cloudflare Universal SSL issues from Let's Encrypt |
-| `issue` | `pki.goog` | ...and from Google Trust Services |
-| `issuewild` | `;` | Deny all wildcard issuance (nothing here needs one) |
-| `iodef` | `mailto:admin@csoh.org` | Get notified on a violation |
+| `issue` | `letsencrypt.org` | issuer of the certificate currently served |
+| `issue` | `pki.goog` | Google Trust Services, Cloudflare's other primary CA |
+| `issue` | `ssl.com` | also in Cloudflare's rotation; headroom so a rotation cannot fail issuance |
+| `iodef` | `mailto:admin@csoh.org` | be told when a CA refuses a request that violates the above |
 
-> Add both `issue` values. Cloudflare rotates between these two CAs, and pinning only one
-> can break certificate renewal.
+These are new records, so unlike the DMARC change there is **nothing to import** - a plain
+apply creates them.
 
-**Verify:**
+> ### Do NOT add `issuewild ";"`
+>
+> An earlier draft of this file listed exactly that, on the reasoning that nothing here
+> needs a wildcard. It would have broken certificate renewal and eventually taken TLS down.
+>
+> Cloudflare Universal SSL issues a **wildcard** certificate for this domain. Check for
+> yourself:
+>
+> ```bash
+> openssl s_client -connect csoh.org:443 -servername csoh.org </dev/null 2>/dev/null | openssl x509 -noout -text | grep -A2 "Subject Alternative Name"
+> ```
+>
+> It returns `DNS:*.csoh.org, DNS:csoh.org`. Denying wildcard issuance forbids the very
+> certificate the site runs on, and nothing breaks until a renewal is silently refused
+> weeks later.
+>
+> Under RFC 8659, with no `issuewild` record present the `issue` records govern wildcards
+> too. Omitting it is both correct and safe.
+
+**Do not narrow the CA list to just the current issuer.** Cloudflare picks and rotates the
+CA itself, and on the Free plan there is no setting to fix it (that is an Advanced
+Certificate Manager feature). Pinning one CA works until the day Cloudflare renews with a
+different one. Three CAs instead of ~50 is where nearly all the benefit is.
+
+**Verify after apply:**
 
 ```bash
 dig +short CAA csoh.org
 ```
 
-Expected: four lines. Currently returns nothing.
+Expected: four lines. Before the apply it returns nothing.
+
+**Then verify again after the next renewal.** The certificate live at the time of writing
+expires 2026-09-29, so renewal is due around late August. CAA is enforced at issuance, so
+a mistake here surfaces then, not now:
+
+```bash
+openssl s_client -connect csoh.org:443 -servername csoh.org </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates
+```
+
+A `notAfter` that has moved forward means renewal succeeded under the new CAA policy. If
+it has not moved as expiry approaches, suspect these records first and check the issuer
+against the list above.
 
 ---
 
