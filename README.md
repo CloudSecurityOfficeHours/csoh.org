@@ -496,7 +496,7 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 
 | Incident | Year | Provider | Key Techniques |
 |---|---|---|---|
-| Mitnick / Novell | 1994 | On-Prem | Social engineering, pretexting, credential theft |
+| Mitnick / Novell | 1994 | On-Prem | Social engineering, pretexting, defender's voicemail trap |
 | Capital One | 2019 | AWS | T1190, T1552.005, T1619, T1530 |
 | SolarWinds | 2020 | Azure AD / AWS | T1195.002, T1071.004, T1606.002, T1114.002 |
 | Uber | 2022 | AWS / GCP | T1078, T1621, T1552.001, T1078.004 |
