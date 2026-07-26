@@ -5,45 +5,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
-    <meta name="description" content="A two-stage attack first compromised LastPass's development environment, then used the stolen technical knowledge to target a specific DevOps engineer -…">
+    <meta name="description" content="Malware stole a live 2FA-backed SSO session cookie from a CircleCI engineer's laptop, reaching production systems holding every customer's environment variables and tokens.">
     <meta name="author" content="Cloud Security Office Hours">
-    <meta name="keywords" content="LastPass 2022-23, breach analysis, kill chain, MITRE ATT&CK, cloud security incident, post-mortem, 2022">
-    <title>LastPass 2022-23 Breach Kill Chain - CSOH</title>
+    <meta name="keywords" content="CircleCI breach 2023, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2023, session cookie theft, CI/CD security, infostealer, secret rotation, SSO session hijack, OAuth tokens">
+    <title>CircleCI 2023 Breach Kill Chain - CSOH</title>
 
-    <link rel="canonical" href="https://csoh.org/breaches/lastpass.html">
-    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/lastpass.html">
-    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/lastpass.html">
+    <link rel="canonical" href="https://csoh.org/breaches/circleci-session-theft.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/circleci-session-theft.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/circleci-session-theft.html">
     <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
     <link rel="icon" type="image/png" href="/favicon.png">
     <meta name="theme-color" content="#2c3e50">
     <meta name="apple-mobile-web-app-title" content="CSOH">
 
-    <meta property="og:title" content="LastPass 2022-23 Breach Kill Chain">
-    <meta property="og:description" content="A two-stage attack first compromised LastPass's development environment, then used the stolen technical knowledge to target a specific DevOps engineer -…">
+    <meta property="og:title" content="CircleCI 2023 Breach Kill Chain">
+    <meta property="og:description" content="MFA at login does nothing about a session stolen after login - and the response was 'rotate every secret you have given us'.">
     <meta property="og:site_name" content="Cloud Security Office Hours">
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
-    <meta property="article:published_time" content="2022-01-01">
-    <meta property="article:modified_time" content="2026-04-30">
+    <meta property="article:published_time" content="2023-01-14">
+    <meta property="article:modified_time" content="2026-07-26">
     <meta property="article:author" content="Cloud Security Office Hours">
     <meta property="article:section" content="Breach Kill Chains">
-    <meta property="article:tag" content="LastPass 2022-23">
+    <meta property="article:tag" content="CircleCI breach 2023">
     <meta property="article:tag" content="breach analysis">
     <meta property="article:tag" content="kill chain">
-    <meta property="article:tag" content="MITRE ATT&CK">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
     <meta property="article:tag" content="cloud security incident">
     <meta property="article:tag" content="post-mortem">
-    <meta property="article:tag" content="2022">
-    <meta property="og:url" content="https://csoh.org/breaches/lastpass.html">
-    <meta property="og:image" content="https://csoh.org/img/og/breaches/lastpass.jpg">
+    <meta property="article:tag" content="2023">
+    <meta property="article:tag" content="session cookie theft">
+    <meta property="article:tag" content="CI/CD security">
+    <meta property="article:tag" content="infostealer">
+    <meta property="article:tag" content="secret rotation">
+    <meta property="og:url" content="https://csoh.org/breaches/circleci-session-theft.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/circleci-session-theft.jpg">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="LastPass 2022-23 Breach Kill Chain">
-    <meta name="twitter:description" content="A two-stage attack first compromised LastPass's development environment, then used the stolen technical knowledge to target a specific DevOps engineer -…">
-    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/lastpass.jpg">
-    <!-- Resource hints: warm up TCP+TLS to high-traffic external origins
-         (the Zoom signup, GitHub, sponsor link, and YouTube image CDN
-         that hosts the presentation card thumbnails). Saves 100-300ms
-         on the first navigation/hover-to-fetch to each. -->
+    <meta name="twitter:title" content="CircleCI 2023 Breach Kill Chain">
+    <meta name="twitter:description" content="MFA at login does nothing about a session stolen after login - and the response was 'rotate every secret you have given us'.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/circleci-session-theft.jpg">
+
     <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
     <link rel="preconnect" href="https://github.com" crossorigin>
     <link rel="dns-prefetch" href="https://github.com">
@@ -57,85 +58,87 @@
     <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
 
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "NewsArticle",
-      "headline": "LastPass - Dev Env Breach → Source Code Recon → DevOps Home PC (Plex Exploit) → Keylogger → AWS S3 Vault Backup Exfil",
-      "description": "A two-stage attack first compromised LastPass's development environment, then used the stolen technical knowledge to target a specific DevOps engineer -…",
-      "author": {
-        "@type": "Organization",
-        "name": "Cloud Security Office Hours",
-        "url": "https://csoh.org/"
-      },
-      "publisher": {
-        "@type": "Organization",
-        "name": "Cloud Security Office Hours",
-        "logo": {
-          "@type": "ImageObject",
-          "url": "https://csoh.org/banner.png"
-        }
-      },
-      "datePublished": "2022-01-01",
-      "dateModified": "2026-04-30",
-      "mainEntityOfPage": "https://csoh.org/breaches/lastpass.html",
-      "speakable": {
-        "@type": "SpeakableSpecification",
-        "cssSelector": ["h1", "main p:first-of-type"]
-      },
-      "image": "https://csoh.org/banner.png",
-      "articleSection": "Cloud Security Breach Analysis",
-      "about": {
-        "@type": "Event",
-        "name": "LastPass 2022-23 Breach",
-        "startDate": "2022-08",
-        "description": "Dev environment compromise, then DevOps engineer endpoint via Plex exploit, leading to encrypted vault backup exfiltration."
-      },
-      "mentions": [
-        {
-          "@type": "Organization",
-          "name": "LastPass",
-          "sameAs": "https://en.wikipedia.org/wiki/LastPass"
-        },
-        {
-          "@type": "Organization",
-          "name": "GoTo (LogMeIn)"
-        },
-        {
-          "@type": "SoftwareApplication",
-          "name": "Plex Media Server"
-        },
-        {
-          "@type": "SoftwareApplication",
-          "name": "Amazon S3"
-        }
-      ]
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "CircleCI - Malware on an Engineer's Laptop → A Live 2FA-Backed SSO Session Stolen → Production Access → Every Customer Secret Assumed Compromised",
+  "description": "Malware stole a live 2FA-backed SSO session cookie from a CircleCI engineer's laptop, reaching production systems holding every customer's environment variables and tokens.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
     }
+  },
+  "datePublished": "2023-01-14",
+  "dateModified": "2026-07-26",
+  "mainEntityOfPage": "https://csoh.org/breaches/circleci-session-theft.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "CircleCI Security Incident",
+    "startDate": "2022-12-16",
+    "description": "Malware on a CircleCI engineer's laptop stole a live 2FA-backed SSO session cookie, letting an actor impersonate the engineer and reach production systems holding customers' environment variables, API keys and tokens; CircleCI advised all customers to rotate every stored secret."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "CircleCI"
+    },
+    {
+      "@type": "Organization",
+      "name": "GitHub"
+    },
+    {
+      "@type": "Thing",
+      "name": "Continuous Integration"
+    },
+    {
+      "@type": "Thing",
+      "name": "Single Sign-On"
+    }
+  ]
+}
     </script>
     <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
     {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "Home",
-          "item": "https://csoh.org/"
-        },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "Breach Kill Chains",
-          "item": "https://csoh.org/breach-timeline.html"
-        },
-        {
-          "@type": "ListItem",
-          "position": 3,
-          "name": "LastPass 2022-23",
-          "item": "https://csoh.org/breaches/lastpass.html"
-        }
-      ]
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "CircleCI 2023",
+      "item": "https://csoh.org/breaches/circleci-session-theft.html"
     }
+  ]
+}
     </script>
   <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
 </head>
@@ -336,192 +339,173 @@
         <ol>
             <li><a href="../index.html">Home</a></li>
             <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
-            <li><span aria-current="page">LastPass 2022-23</span></li>
+            <li><span aria-current="page">CircleCI 2023</span></li>
         </ol>
     </nav>
 
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
-        <h1>LastPass 2022-23</h1>
+        <h1>CircleCI 2023</h1>
         <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
     </section>
 
     <main class="kc-main kc-page" id="main-content">
-        <div class="incident-panel active" role="article" id="lastpass-2022">
-
+<div class="incident-panel active" role="article" id="circleci-session-theft-2023">
   <div class="inc-header">
     <div class="inc-meta">
-      <span class="inc-year">Aug 2022 - Jan 2023</span>
+      <span class="inc-year">December 2022 - January 2023</span>
       <span class="sev-badge sev-critical">Critical</span>
-      <span class="prov-tag prov-aws">AWS <a class="glossary-link" href="../glossary.html#term-s3">S3</a></span>
+      <span class="prov-tag prov-green">CI/CD Platform</span>
     </div>
-    <h2 class="inc-title">LastPass - Dev Env Breach → Source Code Recon → DevOps Home PC (Plex Exploit) → Keylogger → AWS S3 Vault Backup Exfil</h2>
-    <p class="inc-summary">A two-stage attack first compromised LastPass's development environment, then used the stolen technical knowledge to target a specific DevOps engineer - one of only four people with access to production decryption keys. The attacker exploited a years-old unpatched vulnerability in Plex Media Server on the engineer's personal home computer to install a keylogger, captured the master password, unlocked the engineer's personal LastPass vault, and used the cloud credentials inside to exfiltrate encrypted customer vault backups from AWS S3. The entire chain required no zero-days in LastPass's production infrastructure.</p>
+    <h2 class="inc-title">CircleCI - Malware on an Engineer's Laptop → A Live 2FA-Backed SSO Session Stolen → Production Access → Every Customer Secret Assumed Compromised</h2>
+    <p class="inc-summary">On December 16, 2022 malware was deployed on the laptop of a CircleCI engineer. It was not detected by the company's antivirus. What it stole was not a password but a <em>live SSO session cookie</em> - already authenticated, already backed by two-factor authentication - which let the actor impersonate that engineer remotely and escalate into a subset of production systems. CircleCI is a CI/CD platform, so those systems held customers' environment variables, API keys and tokens. A customer flagged suspicious GitHub OAuth activity on December 29; CircleCI began rotating all GitHub OAuth tokens on customers' behalf on December 31, and on January 4, 2023 published an advisory telling every customer to rotate every secret they had stored on the platform. <strong>The instruction is what makes this chain worth reading:</strong> not "we were breached" but "assume everything you gave us is compromised, and act today."</p>
     <div class="inc-stats">
-      <div class="inc-stat"><strong>33M</strong> customers notified</div>
-      <div class="inc-stat"><strong>Encrypted vaults</strong> of all customers exfiltrated</div>
-      <div class="inc-stat"><strong>2 stages</strong> across 5 months</div>
-      <div class="inc-stat"><strong>Threat actor:</strong> Sophisticated, likely financially motivated or state-adjacent</div>
+      <div class="inc-stat"><strong>A session cookie</strong>, not a password - 2FA was satisfied and irrelevant</div>
+      <div class="inc-stat"><strong>Undetected</strong> by the endpoint antivirus in place</div>
+      <div class="inc-stat"><strong>Every customer secret</strong> on the platform declared compromised</div>
+      <div class="inc-stat"><strong>Found by a customer</strong> noticing odd GitHub OAuth activity</div>
     </div>
-    <a class="pm-link" href="https://blog.lastpass.com/posts/2023/03/security-incident-update-recommended-actions" target="_blank" rel="noopener">📄 LastPass March 2023 disclosure ↗</a>
-    <a class="pm-link" href="https://support.lastpass.com/s/document-item?language=en_US&bundleId=lastpass&topicId=LastPassArticleDetail&urlName=incident-2-details" target="_blank" rel="noopener">📄 LastPass Incident 2 technical detail ↗</a>
+    <a class="pm-link" href="https://circleci.com/blog/jan-4-2023-incident-report/" target="_blank" rel="noopener">📄 CircleCI - Incident report for January 4, 2023 ↗</a>
+    <a class="pm-link" href="https://circleci.com/blog/january-4-2023-security-alert/" target="_blank" rel="noopener">📄 CircleCI - Security alert and customer guidance ↗</a>
   </div>
   <div class="kill-chain">
 
-    <div class="phase-lbl ph-init">⚡ Stage 1 - Development Environment Breach (August 2022)</div>
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - Malware the Antivirus Did Not See</div>
     <div class="kc-step step-r">
       <div class="step-num">01</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Developer endpoint compromised - source code, technical documentation, and build secrets exfiltrated</div>
-          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
+          <div class="step-title">On December 16, 2022 information-stealing malware was deployed to an engineer's laptop and went undetected by CircleCI's antivirus software</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1204/002/" target="_blank" rel="noopener">T1204.002 - User Execution: Malicious File</a>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1027/" target="_blank" rel="noopener">T1027 - Obfuscated Files or Information</a>
         </div>
-        <p class="step-desc">A LastPass software developer's endpoint was compromised via a third-party software package. The attacker used this foothold to access the developer's credentials and the shared development environment, exfiltrating source code, technical documentation, internal secrets, and some customer metadata. LastPass disclosed this breach in August 2022, describing it as a development environment incident with no customer data or vault content accessed. What wasn't known at the time: the stolen technical documentation would be used to plan Stage 2.</p>
+        <p class="step-desc">CircleCI's report is direct about the detection failure: the malware was not caught by the antivirus deployed on the machine. That is worth stating plainly rather than treating as an aside, because signature-based endpoint protection routinely misses current infostealers - the family is cheap, widely available, and repacked constantly to defeat exactly that. It is the same class of tooling that opened <a href="snowflake-unc5537.html">Snowflake</a>, <a href="vercel-context-ai-oauth.html">Vercel / Context.ai</a> and <a href="megalodon-github-actions.html">Megalodon</a>. Here the machine belonged to an engineer at a company whose product holds other companies' deployment credentials.</p>
         <div class="step-code">
-          <span class="hl">Exfiltrated in Stage 1:</span> Source code repositories, internal technical documentation, build environment secrets<br>
-          <span class="hl">Customer impact at Stage 1:</span> None disclosed - no production access, no vault data<br>
-          <span class="hl">Strategic value to attacker:</span> Infrastructure topology, S3 bucket names, backup key architecture, target identity (DevOps engineer)
+          <span class="hl">Date:</span> December 16, 2022<br>
+          <span class="hl">Target:</span> The laptop of a CircleCI engineer<br>
+          <span class="hl">Detection:</span> None - the deployed antivirus did not flag it<br>
+          <span class="hl">Malware class:</span> Information stealer, the same family behind several other chains here<br>
+          <span class="hl">Why it matters here:</span> That engineer's access reached customers' deployment credentials
         </div>
-        <div class="step-tags"><span class="stag">Dev Environment</span><span class="stag">Source Code</span><span class="stag">T1195.002</span><span class="stag">Stage 1</span></div>
+        <div class="step-tags"><span class="stag">Infostealer</span><span class="stag">AV Bypass</span><span class="stag">Engineer Endpoint</span><span class="stag">T1204.002</span></div>
       </div>
     </div>
 
-    <div class="phase-lbl ph-recon">🔍 Reconnaissance - Target Selection from Stolen Docs</div>
+    <div class="phase-lbl ph-cred">🍪 Credential Access - Stealing the Session, Not the Password</div>
     <div class="kc-step step-o">
       <div class="step-num">02</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Stolen technical documentation used to identify the four DevOps engineers with production backup key access</div>
-          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1591/" target="_blank" rel="noopener">T1591 - Gather Victim Org Information</a>
+          <div class="step-title">The malware stole a valid, 2FA-backed SSO session cookie, letting the actor impersonate the engineer without ever knowing a password or facing a second factor</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1539/" target="_blank" rel="noopener">T1539 - Steal Web Session Cookie</a>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1550/004/" target="_blank" rel="noopener">T1550.004 - Web Session Cookie</a>
         </div>
-        <p class="step-desc">Using the documentation stolen in Stage 1, the attacker understood exactly how LastPass's production backup encryption worked: a small set of DevOps engineers held decryption keys for the production S3 backup environment. Only four employees had access. The attacker identified one of these four as the target for Stage 2 - choosing home infrastructure as the <a class="glossary-link" href="../glossary.html#term-attack-surface">attack surface</a> because personal endpoints are outside corporate MDM and <a class="glossary-link" href="../glossary.html#term-edr">EDR</a> coverage.</p>
+        <p class="step-desc">This is the mechanism that makes the chain instructive. A session cookie is the artifact issued <em>after</em> authentication succeeds - it is the system's own record that the user proved who they were, including the second factor. Steal it and replay it, and you inherit that proof without repeating any of it. There is no password prompt, no MFA challenge, and no failed login for anyone to alert on. This is the same property that made the <a href="okta-support-har.html">Okta HAR file</a> tokens dangerous ten months later, arriving here from an endpoint rather than a support ticket, and it is why "we enforce MFA" and "our sessions cannot be stolen" are unrelated claims.</p>
         <div class="step-code">
-          <span class="hl">Target profile:</span> DevOps engineer - one of four employees with access to production backup decryption keys<br>
-          <span class="hl">Attack surface chosen:</span> Personal home computer - outside corporate MDM, EDR, and monitoring<br>
-          <span class="hl">Intelligence source:</span> Stage 1 stolen technical documentation and internal runbooks
+          <span class="hl">Stolen:</span> A live SSO session cookie, already backed by 2FA<br>
+          <span class="hl">What it proves:</span> That authentication already succeeded - including the second factor<br>
+          <span class="hl">Bypassed:</span> Password entry, MFA challenge, and any sign-in-based detection<br>
+          <span class="hl">Result:</span> Remote impersonation of the engineer<br>
+          <span class="hl">Same property abused in:</span> The Okta support HAR files, ten months later
         </div>
-        <div class="step-tags"><span class="stag">Target Selection</span><span class="stag">OSINT</span><span class="stag">Home PC Vector</span><span class="stag">T1591</span></div>
+        <div class="step-tags"><span class="stag">Session Cookie Theft</span><span class="stag">2FA Irrelevant</span><span class="stag">Token Replay</span><span class="stag">T1539</span></div>
       </div>
     </div>
 
-    <div class="phase-lbl ph-exec">💥 Stage 2 - Home Computer Exploitation (November 2022)</div>
-    <div class="kc-step step-p">
+    <div class="phase-lbl ph-priv">⬆️ <a class="glossary-link" href="../glossary.html#term-privilege-escalation">Privilege Escalation</a> - Into Production, and Into Everyone's Secrets</div>
+    <div class="kc-step step-y">
       <div class="step-num">03</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Unpatched Plex Media Server vulnerability exploited on DevOps engineer's home PC - <a class="glossary-link" href="../glossary.html#term-rce">remote code execution</a></div>
-          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1203/" target="_blank" rel="noopener">T1203 - Exploitation for Client Execution</a>
+          <div class="step-title">The impersonated engineer had access to a subset of production systems, where customers' environment variables, API keys and tokens were held</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/007/" target="_blank" rel="noopener">T1552.007 - Unsecured Credentials: Container API</a>
         </div>
-        <p class="step-desc">The targeted DevOps engineer ran Plex Media Server on their personal home computer. The attacker exploited a known vulnerability in Plex that had been publicly disclosed years prior and had a patch available - but the engineer's home installation was unpatched. Plex itself disclosed separately that it had been notified of this exploitation and confirmed the <a class="glossary-link" href="../glossary.html#term-cve">CVE</a> was over two years old with a patch available. The exploit provided remote code execution on the home machine.</p>
+        <p class="step-desc">A CI/CD platform is a custodian of other organizations' most sensitive credentials by function: to build and deploy on a customer's behalf it must hold that customer's cloud keys, registry tokens and repository credentials. So an engineer with production access at such a company is, transitively, an engineer with access to thousands of other companies' production environments. CircleCI reported that fewer than five customers experienced confirmed unauthorized access to third-party systems - but the exposure was necessarily assumed across the whole customer base, because the compromised systems held all of it. That gap between "confirmed abused" and "must be assumed compromised" is where the real cost of this incident landed.</p>
         <div class="step-code">
-          <span class="hl">Vulnerable software:</span> Plex Media Server - personal home installation, unpatched<br>
-          <span class="hl">Vulnerability age:</span> Over 2 years old with patch available at time of exploitation<br>
-          <span class="hl">Attack surface:</span> Personal home computer - no corporate EDR, no MDM, no monitoring<br>
-          <span class="hl">Result:</span> Remote code execution on the DevOps engineer's home machine
+          <span class="hl">Reached:</span> A subset of CircleCI production systems<br>
+          <span class="hl">Held there:</span> Customer environment variables, API keys, and access tokens<br>
+          <span class="hl">Structural point:</span> A CI platform must hold customers' deployment credentials to function<br>
+          <span class="hl">Confirmed downstream abuse:</span> Fewer than five customers<br>
+          <span class="hl">Assumed exposure:</span> The entire customer base
         </div>
-        <div class="step-tags"><span class="stag">Plex Exploit</span><span class="stag">Unpatched Home PC</span><span class="stag">RCE</span><span class="stag">T1203</span></div>
+        <div class="step-tags"><span class="stag">CI/CD Custodian</span><span class="stag">Customer Secrets</span><span class="stag">Transitive Access</span><span class="stag">T1552.007</span></div>
       </div>
     </div>
 
-    <div class="phase-lbl ph-cred">🔑 Keylogger → Master Password Capture</div>
-    <div class="kc-step step-y">
+    <div class="phase-lbl ph-disco">🔍 Detection - A Customer Noticed First</div>
+    <div class="kc-step step-p">
       <div class="step-num">04</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Keylogger installed on home PC - DevOps engineer's LastPass master password captured</div>
-          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1056/001/" target="_blank" rel="noopener">T1056.001 - Keylogging</a>
+          <div class="step-title">On December 29 a customer alerted CircleCI to suspicious GitHub OAuth activity; CircleCI began rotating all customer GitHub OAuth tokens on December 31</div>
         </div>
-        <p class="step-desc">Using the RCE foothold, the attacker installed a keylogger on the DevOps engineer's home PC. When the engineer next unlocked their personal LastPass vault, the master password was captured in plaintext. LastPass confirmed the keylogger captured the master password while the <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> was bypassed - the engineer's vault was on a personal device where MFA state was already trusted, meaning only the master password was needed to decrypt the local vault.</p>
+        <p class="step-desc">Thirteen days elapsed between the malware landing and anyone noticing, and the notice came from outside. That is the same pattern as <a href="okta-support-har.html">Okta</a>, where three customers found the intrusion before the vendor, and it is a consistent enough shape across this library to be worth naming as an expectation rather than an anomaly: your monitoring of a vendor's behaviour in your environment is sometimes better than their monitoring of themselves, because you are watching a smaller surface with more context. The response from December 31 onwards was fast and unusually decisive - rotating tokens on customers' behalf rather than waiting for them to act.</p>
         <div class="step-code">
-          <span class="hl">Technique:</span> Keylogger capturing master password at vault unlock<br>
-          <span class="hl">MFA bypass:</span> Personal device was a trusted device - MFA not re-prompted at each vault unlock<br>
-          <span class="hl">What was captured:</span> Master password for the DevOps engineer's personal LastPass vault
+          <span class="hl">December 16:</span> Malware deployed<br>
+          <span class="hl">December 29:</span> A customer reports suspicious GitHub OAuth activity<br>
+          <span class="hl">December 31:</span> CircleCI begins rotating all customer GitHub OAuth tokens itself<br>
+          <span class="hl">January 4:</span> Public security alert and customer guidance<br>
+          <span class="hl">Pattern:</span> Customer-side detection beating vendor-side, again
         </div>
-        <div class="step-tags"><span class="stag">Keylogger</span><span class="stag">Master Password</span><span class="stag">T1056.001</span><span class="stag">Trusted Device Bypass</span></div>
+        <div class="step-tags"><span class="stag">Customer Detection</span><span class="stag">13 Days</span><span class="stag">Proactive Rotation</span></div>
       </div>
     </div>
 
-    <div class="phase-lbl ph-priv">🔓 Vault Decryption → AWS Credential Extraction</div>
-    <div class="kc-step step-p">
+    <div class="phase-lbl ph-impact">🔄 Response - "Rotate Everything," and Whether You Could</div>
+    <div class="kc-step step-b">
       <div class="step-num">05</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Engineer's LastPass vault decrypted - AWS S3 production backup credentials and decryption keys extracted</div>
-          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1555/" target="_blank" rel="noopener">T1555 - Credentials from Password Stores</a>
+          <div class="step-title">CircleCI told every customer to rotate every secret stored on the platform - and for many organizations that instruction was the hard part</div>
         </div>
-        <p class="step-desc">The attacker used the captured master password to decrypt the DevOps engineer's LastPass vault. Inside were the credentials the engineer used day-to-day: AWS <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> access keys, cloud infrastructure credentials, and the decryption keys for the LastPass production backup environment stored in S3. The vault effectively contained the keys to the kingdom - by targeting the one person whose vault was both accessible from a personal device and contained production credentials, the attacker bypassed all of LastPass's production security controls in a single step.</p>
+        <p class="step-desc">The advisory was the right call and it landed on organizations in wildly different states of readiness. Rotating every secret in a CI platform means knowing what they all are, what each one authorizes, what breaks when it changes, and having a path to replace it - and most teams discovered they had none of that. Some rotated in hours. Others spent weeks, or quietly did not finish. CircleCI's own remediation was substantial: restricting production access to a smaller group, adding authentication requirements, and deploying MDM and endpoint tooling targeting the specific behaviours used. But the transferable question is the one pointed at the customer, and it is worth answering before it is asked: if a platform you depend on told you today to rotate every secret you have given it, how long would that take?</p>
         <div class="step-code">
-          <span class="hl">Vault contents obtained:</span> AWS IAM credentials · S3 backup bucket access keys · Production decryption keys · MFA seeds<br>
-          <span class="hl">Irony:</span> A password manager's own vault was the attack vector against its production infrastructure<br>
-          <span class="hl">Architectural failure:</span> Production credentials stored in a personal vault on an unmanaged device
+          <span class="hl">Instruction:</span> Rotate every secret stored on the platform<br>
+          <span class="hl">Prerequisite most lacked:</span> An inventory of what those secrets were and what they authorized<br>
+          <span class="hl">CircleCI remediation:</span> Narrowed production access, added authentication requirements, deployed MDM and endpoint detection<br>
+          <span class="hl">The question to answer in advance:</span> How long would a full rotation take you?
         </div>
-        <div class="step-tags"><span class="stag">Vault Decryption</span><span class="stag">AWS Keys</span><span class="stag">T1555</span><span class="stag">Production Credentials</span></div>
-      </div>
-    </div>
-
-    <div class="phase-lbl ph-exfil">📤 <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a> - Customer Vault Backups from AWS S3</div>
-    <div class="kc-step step-c">
-      <div class="step-num">06</div>
-      <div class="step-body">
-        <div class="step-hdr">
-          <div class="step-title">Encrypted customer vault backups exfiltrated from AWS S3 - 33M customers affected</div>
-          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 - Data from Cloud Storage</a>
-        </div>
-        <p class="step-desc">Using the AWS credentials from the decrypted vault, the attacker accessed LastPass's production S3 backup buckets and exfiltrated a copy of all encrypted customer vault backups. The backup files also contained unencrypted metadata: website URLs, usernames, billing information, IP addresses, and MFA seeds for some accounts. The encrypted vault data itself is protected by each customer's master password - but weak master passwords remain vulnerable to offline brute-force attacks against the exfiltrated data.</p>
-        <div class="step-code">
-          <span class="hl">Data exfiltrated:</span> Encrypted customer password vaults (AES-256 PBKDF2) for 33M customers<br>
-          <span class="hl">Unencrypted metadata also taken:</span> Website URLs, usernames, billing data, IP history, MFA seeds<br>
-          <span class="hl">Ongoing risk:</span> Offline brute-force attacks against encrypted vaults using weak master passwords<br>
-          <span class="hl">Also taken:</span> API integration secrets, multi-factor authentication seeds, customer keys
-        </div>
-        <div class="step-tags"><span class="stag">S3 Exfil</span><span class="stag">Encrypted Vaults</span><span class="stag">33M Customers</span><span class="stag">T1530</span></div>
+        <div class="step-tags"><span class="stag">Mass Rotation</span><span class="stag">Secret Inventory</span><span class="stag">Readiness</span></div>
       </div>
     </div>
 
     <div class="def-box">
       <h3>🛡 How to Defend Against This Chain</h3>
       <div class="def-items">
-        <div class="def-item"><strong>Never store production credentials in personal vaults on unmanaged devices.</strong> Production AWS keys, infrastructure credentials, and decryption keys must live in corporate-managed secrets stores (AWS <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a>, HashiCorp Vault) accessed only from managed, MDM-enrolled, EDR-monitored devices. A personal laptop running home media software is not an appropriate platform for production credential access.</div>
-        <div class="def-item"><strong>Apply patch management to home machines used for work - or prohibit personal device production access entirely.</strong> The Plex vulnerability was over two years old with a patch available. If employees access production systems from home machines, those machines must meet a minimum security baseline: OS patches current, no unnecessary server software, corporate EDR installed. Better still: use a dedicated corporate-issued workstation for production access.</div>
-        <div class="def-item"><strong>Segment production access behind hardware MFA that doesn't trust device state.</strong> Require a fresh <a class="glossary-link" href="../glossary.html#term-fido2">FIDO2</a> hardware key challenge for every production credential retrieval - regardless of whether the device is "trusted." This would have broken the chain at Step 4: even with the master password, the attacker would have needed the physical hardware key.</div>
-        <div class="def-item"><strong>Limit the <a class="glossary-link" href="../glossary.html#term-blast-radius">blast radius</a> of any single employee's credential access.</strong> Only four employees needed production backup key access. For each, access should require dual authorisation (two-person integrity), be time-limited with break-glass logging, and use separate credentials that cannot be stored alongside day-to-day vault contents.</div>
-        <div class="def-item"><strong>Alert on anomalous S3 access patterns from production credential use.</strong> An AWS access key that normally accesses a small set of S3 paths should trigger an alert if it suddenly issues GetObject calls across entire bucket prefixes. <a class="glossary-link" href="../glossary.html#term-guardduty">GuardDuty</a>'s S3 anomaly detection and <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> + <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> rules can catch bulk exfiltration even when credentials are legitimate.</div>
+        <div class="def-item"><strong>Bind sessions to a device, so a stolen cookie is useless elsewhere.</strong> The whole intrusion rests on a portable session. Where your identity provider supports it, bind tokens to device or network context, shorten session lifetimes sharply for privileged roles, and require re-authentication for sensitive actions. MFA at login does nothing about a session stolen after login, which is the specific gap this chain demonstrates.</div>
+        <div class="def-item"><strong>Assume endpoint antivirus will miss the stealer, and layer accordingly.</strong> It did here. Use EDR with behavioural detection rather than signatures alone, restrict which machines can reach production at all, and treat any engineer endpoint with production access as a system requiring the same hardening as a server - because functionally it is one.</div>
+        <div class="def-item"><strong>Build the secret inventory before someone tells you to rotate.</strong> Know every secret held by every third-party platform, what it authorizes, who owns it, and the command that rotates it. Then rehearse a full rotation. This is the single control that separated the organizations that handled this in an afternoon from the ones that took weeks, and it is entirely within your gift.</div>
+        <div class="def-item"><strong>Use short-lived, federated credentials in CI instead of stored static secrets.</strong> The stolen material was valuable because it was long-lived and stored. <a class="glossary-link" href="../glossary.html#term-oidc-federation">OIDC federation</a> between your CI provider and your cloud accounts means no durable cloud credential sits on the platform at all - the job mints one per run, scoped and expiring in minutes. That converts "rotate everything" into a non-event.</div>
+        <div class="def-item"><strong>Monitor what your vendors do inside your environment.</strong> A customer caught this by noticing unusual GitHub OAuth activity attributable to CircleCI. Alert on third-party integration behaviour in your own logs - unusual repository access, token use from new locations, activity outside normal build windows - because you may well see it before the vendor does.</div>
+        <div class="def-item"><strong>Scope the CI platform's access to the minimum, per project.</strong> Broad organization-wide OAuth grants to a CI provider mean one compromise reaches everything. Grant repository access per project, restrict which secrets each pipeline can read, and separate production deployment credentials from build credentials so a single custodian never holds the whole set.</div>
       </div>
     </div>
 
     <div class="src-box">
       <h4>Primary Sources</h4>
       <div class="src-links">
-        <a class="src-link" href="https://blog.lastpass.com/posts/2023/03/security-incident-update-recommended-actions" target="_blank" rel="noopener">LastPass March 2023 Disclosure</a>
-        <a class="src-link" href="https://support.lastpass.com/s/document-item?language=en_US&bundleId=lastpass&topicId=LastPassArticleDetail&urlName=incident-2-details" target="_blank" rel="noopener">LastPass Incident 2 Detail</a>
-        <a class="src-link" href="https://attack.mitre.org/techniques/T1056/001/" target="_blank" rel="noopener">MITRE T1056.001</a>
-        <a class="src-link" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">MITRE T1530</a>
+        <a class="src-link" href="https://circleci.com/blog/jan-4-2023-incident-report/" target="_blank" rel="noopener">CircleCI - Full incident report</a>
+        <a class="src-link" href="https://www.helpnetsecurity.com/2023/01/16/circleci-breach/" target="_blank" rel="noopener">Help Net Security - Post-mortem analysis</a>
+        <a class="src-link" href="https://thehackernews.com/2023/01/malware-attack-on-circleci-engineers.html" target="_blank" rel="noopener">The Hacker News - Malware on the engineer's laptop</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1539/" target="_blank" rel="noopener">MITRE T1539</a>
       </div>
     </div>
-
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ci-cd.html">CI/CD security</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../zero-trust.html">Zero trust</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
   </div>
 </div>
 
-<!-- Contribute CTA -->
-<div class="contribute-cta">
-  <h3>// Know a breach with a detailed post-mortem?</h3>
-  <p>This is a community resource. Submit a PR to add a new kill chain - include MITRE technique IDs and link to primary sources.</p>
-  <a class="btn-mono" href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener">→ Contribute on GitHub</a>
-        </div>
-
-    <div class="src-box defense-topics-box">
-      <h4>Related defense topics</h4>
-      <div class="src-links">
-        <a class="src-link" href="../iam.html">IAM & secrets management</a>
-        <a class="src-link" href="../data-security.html">Cloud data security</a>
-        <a class="src-link" href="../incident-response.html">Cloud incident response</a>
-        <a class="src-link" href="../threat-research.html">Cloud threat research</a>
-      </div>
-    </div>
         <nav class="incident-pager" aria-label="Other breach kill chains">
-            <a class="pager-link pager-prev" href="circleci-session-theft.html">← Previous breach</a>
+            <a class="pager-link pager-prev" href="3cx-x-trader.html">← Previous breach</a>
             <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
-            <a class="pager-link pager-next" href="uber.html">Next breach →</a>
+            <a class="pager-link pager-next" href="lastpass.html">Next breach →</a>
         </nav>
     </main>
 
