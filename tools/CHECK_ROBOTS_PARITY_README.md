@@ -3,9 +3,9 @@
 Asserts that the `robots.txt` csoh.org actually serves is the one in
 [`robots.txt`](../robots.txt) in this repo.
 
-Exits non-zero on any difference. It is a CI gate in waiting - **not yet wired into
-`deploy.yml`**, because it fails today. See
-[Not in CI yet, on purpose](#not-in-ci-yet-on-purpose).
+Exits non-zero on any difference. It **is a CI gate**: the `purge-cloudflare` job in
+[`deploy.yml`](../.github/workflows/deploy.yml) runs it on every deploy, so a regression
+fails the build. See [How it got here](#how-it-got-here).
 
 ## Quick Start
 
@@ -163,41 +163,43 @@ and an unreachable host (`error: could not fetch <url>: ...`). Unlike
 `check_edge_headers.py`, an error page is **not** something to assert against here - this
 script compares a body, and a 404 body is not a robots.txt.
 
-## Not in CI yet, on purpose
+## How it got here
 
-**Do not add this to `deploy.yml` today.** The Cloudflare injection is still enabled, so
-the check fails against production right now, and adding it as a gate would break every
-deploy. Follow this order:
+Cloudflare's AI Crawl Control prepends a managed block to `/robots.txt` at the edge,
+Disallowing crawlers this repo's `robots.txt` deliberately Allows and `llms.txt`
+advertises. On csoh.org it was injecting 60 lines ahead of ours and Disallowing seven
+crawlers we welcome.
 
-1. **Turn the feature off.** Cloudflare dashboard -> Security -> Bots -> AI Crawl Control
-   -> managed robots.txt. It is a zone-level toggle and is not declared in
-   `infra/terraform/cloudflare/`, so there is nothing to `terraform apply`.
-2. **Confirm the edge caught up.** The edge caches robots.txt; a deploy's
-   `purge-cloudflare` job clears it, or purge by hand.
-   ```sh
-   curl -s https://csoh.org/robots.txt | grep -c 'Cloudflare Managed'   # want 0
-   python3 tools/check_robots_parity.py                                 # want exit 0
-   ```
-3. **Only then, add the CI step.** Append it to the `purge-cloudflare` job in
-   [`deploy.yml`](../.github/workflows/deploy.yml), immediately after
-   `Verify live security headers match the repo`. That job already `needs:` all three
-   publishers and already checks out the repo (with `persist-credentials: false`) to get
-   `check_edge_headers.py`, so this needs no new checkout - just the step:
+**The toggle was turned off on 2026-07-26**, and this checker was wired into `deploy.yml`
+in the same change, immediately after `Verify live security headers match the repo` in the
+`purge-cloudflare` job. That job already `needs:` all three publishers and already checks
+out the repo (with `persist-credentials: false`) for `check_edge_headers.py`, so the gate
+was a single step with no new checkout.
 
-   ```yaml
-         # Cloudflare's AI Crawl Control can prepend a managed block to
-         # /robots.txt at the edge, Disallowing the AI crawlers this repo's
-         # robots.txt deliberately Allows and llms.txt advertises. Nothing in
-         # infra/terraform/cloudflare/ declares that toggle, so terraform can
-         # neither report nor fix it - assert the served file from outside.
-         - name: Verify live robots.txt matches the repo
-           run: python3 tools/check_robots_parity.py --url https://csoh.org/
-   ```
+The ordering mattered and is worth remembering for the next checker of this shape: while
+the injection was live the check failed against production, so adding it as a gate first
+would have broken every deploy. Turn the drift off, confirm the checker passes, then gate
+it. A gate that has never passed is not a gate, it is an outage.
 
-   Nothing else needs changing: `robots.txt` is already in `deploy.yml`'s `paths:` filter
-   and in the published file set, and the script is standard library only.
+### If it starts failing
 
-Until step 3 lands, run it by hand after any `robots.txt` edit.
+The toggle is zone-level and nothing in `infra/terraform/cloudflare/` declares it, so
+`terraform apply` will neither report nor fix a regression - somebody re-enabled it in the
+dashboard, or Cloudflare turned it back on. Check:
+
+```sh
+curl -s https://csoh.org/robots.txt | grep -c 'Cloudflare Managed'   # want 0
+```
+
+Turn it off again at Cloudflare dashboard -> Security -> Bots -> AI Crawl Control ->
+managed robots.txt, then purge the edge cache for `/robots.txt` (a deploy's
+`purge-cloudflare` job does this, or purge by hand).
+
+If the failure is instead a genuine repo edit that has not deployed yet, the fix is to
+deploy - `robots.txt` is in `deploy.yml`'s `paths:` filter, so a commit touching it
+triggers one.
+
+
 
 ## Delete this script when...
 
