@@ -79,7 +79,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 |---|---|
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 62 sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->33<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->37<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
