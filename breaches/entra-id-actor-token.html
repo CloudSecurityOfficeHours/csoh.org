@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="CVE-2025-55241: an undocumented Actor token plus a legacy Graph API that never checked the tenant meant Global Admin in any Entra ID tenant, with no customer-side mitigation.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="CVE-2025-55241, Entra ID Actor token, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2025, cross-tenant impersonation, Azure AD Graph, Dirk-jan Mollema, Global Administrator, token forgery">
+    <title>Entra ID Actor Token 2025 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/entra-id-actor-token.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/entra-id-actor-token.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/entra-id-actor-token.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Entra ID Actor Token 2025 Breach Kill Chain">
+    <meta property="og:description" content="How one missing tenant check in a deprecated API put Global Admin in every Entra ID tenant within reach - and why no customer setting could have stopped it.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2025-09-17">
+    <meta property="article:modified_time" content="2026-07-24">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="CVE-2025-55241">
+    <meta property="article:tag" content="Entra ID Actor token">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2025">
+    <meta property="article:tag" content="cross-tenant impersonation">
+    <meta property="article:tag" content="Azure AD Graph">
+    <meta property="article:tag" content="token forgery">
+    <meta property="article:tag" content="identity security">
+    <meta property="og:url" content="https://csoh.org/breaches/entra-id-actor-token.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/entra-id-actor-token.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Entra ID Actor Token 2025 Breach Kill Chain">
+    <meta name="twitter:description" content="How one missing tenant check in a deprecated API put Global Admin in every Entra ID tenant within reach - and why no customer setting could have stopped it.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/entra-id-actor-token.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=dd0f54c0" as="style"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/style.css?v=dd0f54c0"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Entra ID Actor Token - Undocumented S2S Token → Unsigned Impersonation JWT → Legacy Graph Skips the Tenant Check → Global Admin in Any Tenant",
+  "description": "CVE-2025-55241: an undocumented Actor token plus a legacy Graph API that never checked the tenant meant Global Admin in any Entra ID tenant, with no customer-side mitigation.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2025-09-17",
+  "dateModified": "2026-07-24",
+  "mainEntityOfPage": "https://csoh.org/breaches/entra-id-actor-token.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Entra ID Actor Token Cross-Tenant Impersonation (CVE-2025-55241)",
+    "startDate": "2025-07-14",
+    "description": "Security researcher Dirk-jan Mollema found that Actor tokens requested from an attacker-controlled tenant were accepted cross-tenant by the legacy Azure AD Graph API, enabling impersonation of any user including Global Administrators. Reported July 14, 2025 and fixed globally July 17; no exploitation was observed."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Person",
+      "name": "Dirk-jan Mollema"
+    },
+    {
+      "@type": "Organization",
+      "name": "Outsider Security"
+    },
+    {
+      "@type": "Thing",
+      "name": "Microsoft Entra ID"
+    },
+    {
+      "@type": "Thing",
+      "name": "Azure AD Graph"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Entra ID Actor Token 2025",
+      "item": "https://csoh.org/breaches/entra-id-actor-token.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All five session digests</span></a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Entra ID Actor Token 2025</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Entra ID Actor Token 2025</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="entra-id-actor-token-2025">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">July 2025</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure">Entra ID</span>
+    </div>
+    <h2 class="inc-title">Entra ID Actor Token - Undocumented S2S Token → Unsigned Impersonation JWT → Legacy Graph Skips the Tenant Check → Global Admin in Any Tenant</h2>
+    <p class="inc-summary">In July 2025 the security researcher Dirk-jan Mollema found that an undocumented Microsoft service-to-service credential called an Actor token, requested from a tenant he controlled, would be accepted by the legacy Azure AD Graph API in <em>any other tenant</em>, because that API never checked which tenant the token came from. The result was impersonation of any user in any <a class="glossary-link" href="../glossary.html#term-entra-id">Entra ID</a> tenant on Earth, up to and including Global Administrator. CVE-2025-55241 was scored CVSS 10.0. <strong>This one belongs on this page for a different reason than the rest: it is not a breach.</strong> It was responsibly disclosed, Microsoft shipped a global fix three days after the report, and Microsoft's telemetry found no evidence anyone exploited it beforehand. It earns its place because of what it demonstrates. Every control this site recommends - <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>, <a class="glossary-link" href="../glossary.html#term-conditional-access">Conditional Access</a>, device compliance, <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a> - sat entirely outside this path, and so did nearly all of the logging. There was no customer-side configuration that mitigated it, in any tenant, at any price tier.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>CVSS 10.0</strong> - impersonate any user in any tenant, including Global Admin</div>
+      <div class="inc-stat"><strong>3 days</strong> from report to global fix (July 14 to July 17, 2025)</div>
+      <div class="inc-stat"><strong>Zero</strong> customer-side mitigations available while it was live</div>
+      <div class="inc-stat"><strong>Not exploited:</strong> Microsoft found no evidence of prior abuse</div>
+    </div>
+    <a class="pm-link" href="https://dirkjanm.io/obtaining-global-admin-in-every-entra-id-tenant-with-actor-tokens/" target="_blank" rel="noopener">📄 Dirk-jan Mollema - One Token to rule them all ↗</a>
+    <a class="pm-link" href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-55241" target="_blank" rel="noopener">📄 MSRC - CVE-2025-55241 ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🔬 Discovery - An Undocumented Token Class Nobody Was Watching</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Actor tokens are service-to-service credentials issued by the Access Control Service, valid 24 hours, un-revocable, and issued without generating a single log entry</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+        </div>
+        <p class="step-desc">The research started somewhere unglamorous: hybrid Exchange. Microsoft's own back-end services need to act on a user's behalf when talking to Azure AD Graph, SharePoint, and Exchange Online, and the mechanism they use is an Actor token issued by the Access Control Service. Read the properties together and the risk is obvious in hindsight. Twenty-four hour validity. A <code>trustedfordelegation</code> claim marking the holder as allowed to act as anyone. No audit log when one is issued. No way to revoke one inside its validity window. And explicitly outside Conditional Access, because Conditional Access evaluates user sign-ins and this is not one. Each property is defensible in isolation as an internal service mechanism. Together they describe a bearer credential with no issuance record, no revocation, and no policy engine in front of it.</p>
+        <div class="step-code">
+          <span class="hl">Issuer:</span> Microsoft Access Control Service (ACS)<br>
+          <span class="hl">Purpose:</span> Service-to-service calls where one Microsoft service acts on a user's behalf<br>
+          <span class="hl">Validity:</span> 24 hours, and not revocable within that window<br>
+          <span class="hl">Key claim:</span> <code>trustedfordelegation</code>, set true for Microsoft first-party apps<br>
+          <span class="hl">Telemetry on issuance:</span> None
+        </div>
+        <div class="step-tags"><span class="stag">Actor Token</span><span class="stag">ACS</span><span class="stag">Undocumented</span><span class="stag">No Logging</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access - Requesting One From Your Own Tenant</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">An Actor token could be requested from a tenant the researcher fully controlled, including a free trial tenant, with no relationship to any target</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener">T1528 - Steal Application Access Token</a>
+        </div>
+        <p class="step-desc">This is the step that sets the severity. The attacker does not need a foothold anywhere near the target. They need a tenant, and anyone can create one in minutes for nothing. The token is requested legitimately in the requester's own tenant, where they are already the administrator and entitled to it, and no unusual event is generated on either side because nothing unusual has happened yet. Everything that follows is a matter of what the requester then puts <em>inside</em> the next token, and which API is willing to read it without asking where it came from.</p>
+        <div class="step-code">
+          <span class="hl">Prerequisite:</span> Any Entra ID tenant the attacker controls, trial tenants included<br>
+          <span class="hl">Relationship to target:</span> None required - no guest account, no federation, no prior access<br>
+          <span class="hl">Cost:</span> Effectively zero<br>
+          <span class="hl">Signal generated in the attacker's tenant:</span> A legitimate token request by its own administrator
+        </div>
+        <div class="step-tags"><span class="stag">Free Trial Tenant</span><span class="stag">No Foothold Needed</span><span class="stag">T1528</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">⬆️ <a class="glossary-link" href="../glossary.html#term-privilege-escalation">Privilege Escalation</a> - The Impersonation Token Is Unsigned</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The impersonation JWT wrapping the Actor token carries no signature, so its tenant ID and target user could simply be edited</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1606/" target="_blank" rel="noopener">T1606 - Forge Web Credentials</a>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1550/001/" target="_blank" rel="noopener">T1550.001 - Application Access Token</a>
+        </div>
+        <p class="step-desc">To impersonate a user, a Microsoft service builds a second JWT that contains the Actor token, the target tenant ID, and the target user's identifier, and it does not sign that outer token. The trust is meant to come from the embedded Actor token rather than from a signature over the whole thing. So the researcher edited it. Changing the tenant GUID to a different organization and the <code>nameid</code> to a different user produced a token he expected to be rejected instantly for the obvious tenant mismatch. Sending it to <code>graph.windows.net</code> returned a valid session instead. The UPN fields in the token turned out to be decorative; Azure AD Graph ignored them and keyed entirely off <code>nameid</code>.</p>
+        <div class="step-code">
+          <span class="hl">Structure:</span> Unsigned outer JWT containing the Actor token in an <code>actortoken</code> field<br>
+          <span class="hl">Attacker-editable fields:</span> Target tenant GUID, target user <code>nameid</code><br>
+          <span class="hl">Ignored by the API:</span> UPN values, which could be dummies<br>
+          <span class="hl">Expected result:</span> Access denied on tenant mismatch<br>
+          <span class="hl">Actual result:</span> A working session as the impersonated user
+        </div>
+        <div class="step-tags"><span class="stag">Unsigned JWT</span><span class="stag">Tenant GUID Swap</span><span class="stag">nameid</span><span class="stag">T1606</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - A Legacy API That Never Checked the Tenant</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The legacy Azure AD Graph API validated the user identifier but never confirmed that the token originated in the tenant it was being used against</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">The whole vulnerability reduces to one missing comparison. <code>graph.windows.net</code>, the deprecated predecessor to Microsoft Graph, checked that the <code>nameid</code> corresponded to a real user and then served the request. It never asked whether the Actor token authorizing that impersonation had been issued in the same tenant as the user being impersonated. A single boundary check, absent from an API old enough that most of its consumers had already been migrated away, converted a legitimate internal delegation mechanism into cross-tenant impersonation for the entire service. Legacy surfaces are dangerous precisely because they are quiet: nobody is adding features, so nobody is re-reviewing the assumptions, and the traffic is low enough that anomalies do not stand out.</p>
+        <div class="step-code">
+          <span class="hl">Vulnerable API:</span> Azure AD Graph, <code>graph.windows.net</code> (the deprecated pre-Microsoft-Graph API)<br>
+          <span class="hl">What it validated:</span> That <code>nameid</code> mapped to a real user<br>
+          <span class="hl">What it never validated:</span> That the Actor token came from the tenant being accessed<br>
+          <span class="hl">Blast radius:</span> Every Entra ID tenant, since the flaw was in the shared service<br>
+          <span class="hl">CVE:</span> CVE-2025-55241, CVSS 10.0
+        </div>
+        <div class="step-tags"><span class="stag">Azure AD Graph</span><span class="stag">Legacy API</span><span class="stag">Missing Tenant Check</span><span class="stag">CVE-2025-55241</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery - Finding a Target User's netId Three Different Ways</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Impersonation needed the target's netId, and netIds increment rather than randomize, so they could be brute-forced, read from B2B guest attributes, or lifted from any leaked token</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener">T1087.004 - Account Discovery: Cloud Account</a>
+        </div>
+        <p class="step-desc">The one thing standing between an attacker and a given tenant was knowing a user's internal <code>netId</code>, and it turned out not to stand for long. Because netIds increment rather than being randomly assigned, they can be walked systematically, reducing "find a valid user in this tenant" to minutes or hours of automation. If the attacker had ever invited someone as a B2B guest, the guest object stored the home tenant user's netId in its <code>alternativeSecurityIds</code> attribute, readable by whoever issued the invitation. And any token that had ever leaked - expired, redacted in a bug report, pasted into a support ticket - carried a <code>puid</code> claim that yields a working netId. Values that are not secret, because nobody designed them to be secret, become the last remaining control the moment the boundary above them fails.</p>
+        <div class="step-code">
+          <span class="hl">Method 1:</span> Brute force - netIds increment rather than randomize, so they enumerate in minutes to hours<br>
+          <span class="hl">Method 2:</span> B2B guest objects store the home tenant netId in <code>alternativeSecurityIds</code>, readable by the inviter<br>
+          <span class="hl">Method 3:</span> Any leaked or expired token with a <code>puid</code> claim yields a usable netId<br>
+          <span class="hl">Design assumption broken:</span> That an internal identifier does not need to be treated as sensitive
+        </div>
+        <div class="step-tags"><span class="stag">netId</span><span class="stag">Enumerable Identifiers</span><span class="stag">B2B Guest</span><span class="stag">T1087.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact - Global Admin, and Every Control Bypassed by Construction</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Impersonating a Global Administrator gave full directory access, and neither MFA, Conditional Access, device compliance, nor tenant hardening applied to any part of the path</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 - Account Manipulation</a>
+        </div>
+        <p class="step-desc">With a Global Administrator impersonated, the attacker holds the tenant: directory contents, group and role membership, application and service principal configuration, and the ability to grant themselves durable access through more conventional means. What makes this different from every other identity chain on this page is that no customer decision affected the outcome. Conditional Access never evaluated the request because there was no user sign-in to evaluate. MFA was never prompted because no authentication occurred at the user layer. Device compliance, sign-in risk policies, named locations, token protection - none of them sat on this path. As the researcher put it plainly, there was no setting that could have mitigated this, including for tenants that had done everything right.</p>
+        <div class="step-code">
+          <span class="hl">Access obtained:</span> Global Administrator equivalent, via impersonation rather than role assignment<br>
+          <span class="hl">Conditional Access:</span> Not evaluated - no user sign-in occurs<br>
+          <span class="hl">MFA:</span> Never prompted - no user-layer authentication<br>
+          <span class="hl">Hardened tenants:</span> Equally affected; no configuration mitigated it<br>
+          <span class="hl">Duration of a stolen token's usefulness:</span> 24 hours, un-revocable
+        </div>
+        <div class="step-tags"><span class="stag">Global Admin</span><span class="stag">CA Bypass</span><span class="stag">MFA Irrelevant</span><span class="stag">T1098</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🕳 Defense Evasion - Almost Nothing Reached the Victim's Logs</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Token issuance, impersonation, and every read produced no log in the target tenant; only modifications were recorded, and those with a misleading actor</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1562/008/" target="_blank" rel="noopener">T1562.008 - Impair Defenses: Disable or Modify Cloud Logs</a>
+        </div>
+        <p class="step-desc">Read the telemetry picture as a whole and the honest conclusion is that a victim organization could not have answered the question "were we accessed." Issuing the Actor token: no log. Crafting the impersonation token: no log. Reading the entire directory through Azure AD Graph: no log. Only write operations landed in the audit log, and even those arrived confusingly, recording the impersonated Global Administrator's UPN alongside the <em>display name of Exchange</em> - an artifact pattern that reads as a Microsoft service doing something odd rather than as an intrusion. This is the same failure that made <a href="storm-0558.html">Storm-0558</a> so painful two years earlier, and it is worth naming the general form: when authentication material is forged rather than stolen, logs are the only remaining detection, and a design that does not log issuance has removed the last one.</p>
+        <div class="step-code">
+          <span class="hl">Actor token issuance:</span> No log<br>
+          <span class="hl">Impersonation token creation:</span> No log<br>
+          <span class="hl">Directory reads via Azure AD Graph:</span> No log<br>
+          <span class="hl">Writes:</span> Logged, but showing the impersonated user's UPN with Exchange's display name<br>
+          <span class="hl">Practical consequence:</span> A victim could not determine whether they had been accessed
+        </div>
+        <div class="step-tags"><span class="stag">No Telemetry</span><span class="stag">Unanswerable Question</span><span class="stag">Audit Artifact</span><span class="stag">T1562.008</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🛠 Resolution - Reported July 14, Fixed Globally July 17</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Microsoft restored the tenant check and then blocked applications from requesting Actor tokens for Azure AD Graph at all</div>
+        </div>
+        <p class="step-desc">The disclosure timeline is the encouraging part of this entry, and worth recording accurately. Mollema reported to MSRC on July 14, 2025. Microsoft deployed a production fix globally on July 17, three days later. On August 6 it shipped a second mitigation preventing applications from obtaining Actor tokens for Azure AD Graph using service principal credentials, narrowing the mechanism to Microsoft's own internal services. CVE-2025-55241 was assigned September 4, and the research was published September 17. Microsoft's internal telemetry found no evidence of exploitation before the fix. Nothing here required customer action, which is the point: this was fixed on the provider's side because it could only be fixed on the provider's side.</p>
+        <div class="step-code">
+          <span class="hl">July 14, 2025:</span> Reported to the Microsoft Security Response Center<br>
+          <span class="hl">July 17, 2025:</span> Production fix deployed globally - tenant validation restored<br>
+          <span class="hl">August 6, 2025:</span> Applications blocked from requesting Actor tokens for Azure AD Graph<br>
+          <span class="hl">September 4, 2025:</span> CVE-2025-55241 assigned, CVSS 10.0<br>
+          <span class="hl">September 17, 2025:</span> Public disclosure
+        </div>
+        <div class="step-tags"><span class="stag">Responsible Disclosure</span><span class="stag">3-Day Fix</span><span class="stag">Provider-Side Only</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Accept honestly that you could not have stopped this one, and let that inform where you spend.</strong> There was no tenant setting, no licence tier, and no architecture that mitigated it. That is not a counsel of despair, it is an argument for the controls that limit consequences rather than prevent access: what an account can reach once it is inside, how quickly you would notice a change, and how fast you can revoke. Prevention has a ceiling that your provider sets; containment does not.</div>
+        <div class="def-item"><strong>Retire legacy API surfaces on your side and push your vendors to retire theirs.</strong> The flaw lived in Azure AD Graph, an API already deprecated in favour of Microsoft Graph. Audit which applications in your tenant still call <code>graph.windows.net</code>, migrate them, and then block the legacy endpoint where you can. Every deprecated-but-reachable interface in your estate is carrying assumptions nobody has re-reviewed in years, and this is what that costs.</div>
+        <div class="def-item"><strong>Treat internal identifiers as sensitive, because a boundary failure promotes them into the only control left.</strong> netIds were enumerable because nobody needed them to be unguessable. Apply the same suspicion to your own systems: object IDs, tenant GUIDs, and user identifiers that leak through APIs, error messages, support tickets, and screenshots. Redact them by default, and prefer non-sequential identifiers so enumeration is not free.</div>
+        <div class="def-item"><strong>Log what your provider does not, and know where your telemetry actually stops.</strong> You cannot add logging inside Microsoft's service, but you can collect Entra ID audit and sign-in logs into your own <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> with retention you control, so the record survives an attacker who reaches the tenant. Then write down which activities your provider does not log at all - that list is your blind spot inventory, and it belongs in your incident response plan rather than being discovered during an incident.</div>
+        <div class="def-item"><strong>Hunt for the specific artifact pattern this produced.</strong> The only trace was a write operation where the initiator's UPN belonged to a user while the display name belonged to a Microsoft service such as Exchange. Build a detection for that mismatch generally - an audit event whose actor identity is internally inconsistent - because it generalizes past this particular CVE to any impersonation flaw with the same shape.</div>
+        <div class="def-item"><strong>Reduce standing Global Administrator, since impersonation targets whoever holds the role.</strong> The attack impersonates an existing privileged user, so fewer permanent Global Admins is a smaller target set. Use <a class="glossary-link" href="../glossary.html#term-pim">Privileged Identity Management</a> for just-in-time elevation, keep break-glass accounts minimal and monitored, and separate administrative identities from day-to-day ones so the high-value <code>nameid</code> values are not the ones that appear in every guest invitation and shared document.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://dirkjanm.io/obtaining-global-admin-in-every-entra-id-tenant-with-actor-tokens/" target="_blank" rel="noopener">Dirk-jan Mollema - One Token to rule them all</a>
+        <a class="src-link" href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-55241" target="_blank" rel="noopener">MSRC - CVE-2025-55241</a>
+        <a class="src-link" href="https://nvd.nist.gov/vuln/detail/CVE-2025-55241" target="_blank" rel="noopener">NVD - CVE-2025-55241</a>
+        <a class="src-link" href="https://thehackernews.com/2025/09/microsoft-patches-critical-entra-id.html" target="_blank" rel="noopener">The Hacker News - Microsoft patches the Entra ID flaw</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1606/" target="_blank" rel="noopener">MITRE T1606</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../azure-security.html">Azure security</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../shared-responsibility-model.html">Shared responsibility</a>
+  </div>
+</div>
+
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="tj-actions-changed-files.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="salesloft-drift-unc6395.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
