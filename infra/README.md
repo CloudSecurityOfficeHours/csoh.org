@@ -44,12 +44,27 @@ leg runs at **Full (strict)**:
 ## File layout
 
 ```
-infra/terraform/
-  aws/          S3 (private) + CloudFront/OAC + response-headers policy + OIDC role
-  azure/        Storage account + $web static website + Entra federated cred
-  gcp/          Cloud Run + Artifact Registry + WIF (LB/Armor/CDN removed)
-  cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules
+infra/
+  README.md                   this file - architecture, cost, cutover runbook
+  MANUAL_SECURITY_STEPS.md    steps needing a dashboard or registrar login, so
+                              they cannot be committed and CI cannot run them
+  AWS_IDENTITY_MIGRATION.md   root-account -> Identity Center migration runbook
+  terraform/
+    aws/          S3 (private) + CloudFront/OAC + response-headers policy + OIDC role
+    azure/        Storage account + $web static website + Entra federated cred
+    gcp/          Cloud Run + Artifact Registry + WIF (LB/Armor/CDN removed)
+    cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules,
+                  plus the DNS security records:
+                    dns_caa.tf     CAA - which CAs may issue for this domain
+                    dns_dnssec.tf  DNSSEC signing (carries prevent_destroy)
+                    dns_mail.tf    DMARC, MTA-STS, TLS-RPT
 ```
+
+The `dns_*.tf` files are why the Cloudflare stack matters even though this site
+sends no mail: DNS is the layer every other control rests on, and CAA and DMARC
+are themselves just DNS records - forge the answer and you strip both. See
+[SECURITY.md -> DNS & Email Security](../SECURITY.md#dns--email-security) for
+what each record buys and how to verify the chain end to end.
 
 All four states live in the same GCS bucket (`csoh-org-495800-tfstate`) under
 separate prefixes (`csoh/aws`, `csoh/azure`, `csoh/prod`, `csoh/cloudflare`).

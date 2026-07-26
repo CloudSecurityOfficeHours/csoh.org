@@ -725,6 +725,7 @@ csoh.org/
 ├── search-synonyms.json        # Acronym ↔ expansion map fed into the search index
 ├── meetings-search-index.json  # Search index for meeting recaps (auto-generated)
 ├── vendor/                     # Self-hosted third-party JS (SRI-pinned, first-party origin)
+│   ├── README.md               # What each file is, and the local patches applied to it
 │   ├── minisearch-7.1.2.min.js # Search library used by search-init.js
 │   └── goatcounter-count.js    # Cookieless page-view counter loader
 │
@@ -739,7 +740,8 @@ csoh.org/
 ├── csoh.ics                    # Calendar file for the recurring Friday session
 ├── security.txt                # Security contact (root mirror)
 ├── .well-known/                # Well-known endpoints (carved out of the dotfile deny)
-│   └── security.txt            # Security.txt at the RFC 9116 canonical location
+│   ├── security.txt            # Security.txt at the RFC 9116 canonical location
+│   └── mta-sts.txt             # MTA-STS policy (served via mta-sts.csoh.org)
 │
 │  ── Images ──
 ├── img/                        # Images and preview thumbnails
@@ -781,6 +783,8 @@ csoh.org/
 │
 ├── infra/                      # Infrastructure-as-code for the multi-cloud deploy
 │   ├── README.md               # Architecture, cost, and cutover runbook
+│   ├── MANUAL_SECURITY_STEPS.md   # Steps needing a dashboard/registrar login
+│   ├── AWS_IDENTITY_MIGRATION.md  # Root-account → Identity Center runbook
 │   └── terraform/              # Terraform for AWS, GCP, Azure & Cloudflare - every .tf file
 │       │                       #   commented line by line so a newcomer can read it
 │       ├── aws/                # S3 + CloudFront origin, OIDC deploy role
@@ -862,6 +866,8 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](tools/RUN_SEO_AUDIT_README.md) |
 | `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](tools/CHECK_PAGESPEED_README.md) |
 | `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](tools/CHECK_LIGHTHOUSE_README.md) |
+| `check_edge_headers.py` | Asserts the live security headers match `rules.tf` - the Cloudflare ruleset is inert after creation, so Terraform cannot catch drift | [README](tools/CHECK_EDGE_HEADERS_README.md) |
+| `check_robots_parity.py` | Asserts the live `robots.txt` matches the repo, catching an edge-injected managed `robots.txt` | [README](tools/CHECK_ROBOTS_PARITY_README.md) |
 | `check_reading_list_staleness.py` | Flags reading-list sources that stopped publishing | [README](tools/CHECK_READING_LIST_STALENESS_README.md) |
 | `check_meeting_staleness.py` | Flags a stalled meeting-recap cadence | docstring |
 | `check_conference_staleness.py` | Flags conference "Next:" dates that have gone stale | docstring |

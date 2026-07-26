@@ -448,8 +448,13 @@ against the list above.
 
 ## 4. DNSSEC - sign the zone
 
-Currently **off** (no DS, no DNSKEY, no AD flag). Cloudflare is authoritative for this
-zone, so this is close to one click plus one registrar paste.
+**APPLIED 2026-07-26 - signing is on, delegation still settling.** The zone is signed
+(`dig +short DNSKEY csoh.org` returns 2 keys), but at the time of writing the parent
+`.org` zone has not yet published the DS record and validating resolvers are not setting
+the `ad` flag. Cloudflare is both registrar and DNS provider here and publishes the DS
+itself, so no action is required - but this is **not finished until `dig +short DS
+csoh.org` returns a record and the `ad` flag appears.** Re-check before treating DNSSEC
+as a control you rely on; see Verify below.
 
 The web surface is largely covered by HSTS preload already, so the real value is in the
 records that have no transport-layer backstop: `MX` (redirect inbound mail to an attacker

@@ -501,6 +501,63 @@ only one that needs a manual rotation cadence.
 
 ---
 
+## DNS & Email Security
+
+The site is static and sends no mail, but the domain still has to be defended:
+DNS is the layer every other control ultimately rests on, and an unprotected
+domain is worth spoofing even when it has no inbox to compromise. All of the
+records below are managed in Terraform under
+[`infra/terraform/cloudflare/`](infra/terraform/cloudflare/) - `dns_caa.tf`,
+`dns_dnssec.tf`, and `dns_mail.tf` - so they are reviewable and reproducible
+rather than dashboard state.
+
+| Control | Value | What it stops |
+|---|---|---|
+| **CAA** | 5 authorized CAs (Let's Encrypt, DigiCert, Google Trust Services, Sectigo/Comodo, SSL.com), `issue` + `issuewild` each, plus `iodef: mailto:admin@csoh.org` | Any other CA issuing a certificate for `csoh.org`. The `iodef` address gets notified on a rejected issuance attempt. |
+| **DNSSEC** | Zone signed at Cloudflare (`prevent_destroy` on the resource) | Forged DNS answers. This is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who can forge a response can strip either. |
+| **SPF** | `v=spf1 include:_spf.google.com ~all` | Unauthorized hosts sending as `@csoh.org`. |
+| **DKIM** | `google._domainkey` (RSA) | Tampering with, or forging, message bodies in transit. |
+| **DMARC** | `p=quarantine; sp=quarantine; pct=100`, aggregate reports to Cloudflare | Spoofed mail reaching inboxes. Moved up from `p=none` (monitor-only) - the policy now actually does something. |
+| **MTA-STS** | `mode: testing`, `max_age: 604800`, policy at `/.well-known/mta-sts.txt` | Downgrade and MITM attacks on inbound mail delivery. |
+| **TLS-RPT** | `v=TLSRPTv1; rua=mailto:admin@csoh.org` | Nothing on its own - it reports TLS delivery failures so an active downgrade attempt is visible. |
+
+Two operational notes that matter more than the table:
+
+**MTA-STS is a two-part control and both halves must agree.** The `_mta-sts` TXT
+record carries an `id` that receivers use to detect policy changes, and the
+policy itself is the file at `https://mta-sts.csoh.org/.well-known/mta-sts.txt`.
+That hostname is a proxied CNAME to the apex, so the policy is served by the
+same three origins as the site - which means it depends on the same
+`/.well-known/` carve-out described under File Access Controls, and on
+`include-hidden-files: true` in `deploy.yml`. If either regresses, MTA-STS
+breaks silently on two origins out of three. **When you change the policy file,
+bump the `id` in `dns_mail.tf`** or receivers will keep using the cached one.
+
+It is deliberately at `mode: testing`, which reports failures without bouncing
+mail. Moving to `mode: enforce` is a separate decision that should follow a
+period of clean TLS-RPT reports, not ride along with an unrelated change.
+
+**DNSSEC has an activation step beyond signing.** Signing the zone is not the
+same as DNSSEC being live: the parent zone must publish a DS record delegating
+trust. Cloudflare is both registrar and DNS provider for this domain, so it
+publishes the DS at `.org` itself - there is no registrar copy-paste, which is
+the step DNSSEC most often dies on. Publication can lag the apply.
+
+Verify the whole chain, not just the parts:
+
+```sh
+dig +short DNSKEY csoh.org            # zone is signed        (expect 2 keys)
+dig +short DS     csoh.org            # parent delegates trust (expect a DS)
+dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'   # expect the "ad" flag
+```
+
+The `ad` (Authenticated Data) flag is the one that counts - it means a
+validating resolver checked the signatures and they held. **A DS present with no
+`ad` flag means signing and delegation disagree; investigate rather than assume
+propagation lag.** The full runbook, including what to do before transferring
+the domain to another registrar, is
+[`infra/MANUAL_SECURITY_STEPS.md`](infra/MANUAL_SECURITY_STEPS.md) section 4.
+
 ## Deployment Security
 
 ### Multi-cloud deploy
