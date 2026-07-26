@@ -341,24 +341,63 @@ right fix is to add its SPF include, not to leave `~all` in place forever.
 
 ## 3. CAA records - constrain who may issue certificates for csoh.org
 
-There is currently **no CAA record**, so all ~50 publicly trusted CAs may issue for this
-domain. CAA turns that into a two-CA surface and, with `iodef`, alerts you on attempted
-mis-issuance. HSTS preload does not help here: a preloaded domain still trusts any
-publicly trusted chain.
+**DONE 2026-07-25**, via the Cloudflare dashboard's "add recommended CAA records" helper
+rather than Terraform. Before that there was no CAA record at all, meaning every publicly
+trusted CA - roughly fifty - could issue for this domain. HSTS preload does not help:
+a preloaded domain still trusts any publicly trusted chain.
 
-The records are defined in Terraform, in
-[`terraform/cloudflare/dns_caa.tf`](terraform/cloudflare/dns_caa.tf), with the reasoning
-inline. Four records on the apex:
+Eleven records are now live, Cloudflare's full supported-CA set:
 
-| Tag | Value | Why |
-| --- | --- | --- |
-| `issue` | `letsencrypt.org` | issuer of the certificate currently served |
-| `issue` | `pki.goog` | Google Trust Services, Cloudflare's other primary CA |
-| `issue` | `ssl.com` | also in Cloudflare's rotation; headroom so a rotation cannot fail issuance |
-| `iodef` | `mailto:admin@csoh.org` | be told when a CA refuses a request that violates the above |
+| Tag | Values |
+| --- | --- |
+| `issue` | comodoca.com, digicert.com, letsencrypt.org, pki.goog, ssl.com |
+| `issuewild` | the same five |
+| `iodef` | mailto:admin@csoh.org |
 
-These are new records, so unlike the DMARC change there is **nothing to import** - a plain
-apply creates them.
+That set is correct and safe. In particular `letsencrypt.org` appears under **`issuewild`**,
+which is what matters: Universal SSL issues a wildcard here (`*.csoh.org`, `csoh.org`), and
+once any `issuewild` record exists it governs wildcard issuance completely, with the
+`issue` records no longer applying to wildcards. An `issuewild` set omitting the real
+issuer would forbid the certificate the site runs on, and nothing would break until a
+renewal was silently refused weeks later.
+
+Five CAs is more permissive than a minimal pin naming only Let's Encrypt, deliberately.
+Cloudflare chooses and rotates the issuing CA itself and on the Free plan there is no
+setting to fix it, so a narrow pin fails at renewal time rather than at apply time. Five
+instead of fifty is where nearly all the benefit is.
+
+### Bringing them under Terraform (do this BEFORE the next apply)
+
+[`terraform/cloudflare/dns_caa.tf`](terraform/cloudflare/dns_caa.tf) now declares all
+eleven, mirroring the live values exactly. **They are not yet in state.** Until they are
+imported, any `terraform apply` in this stack creates a duplicate of all eleven - which
+matters because the DNSSEC change in section 4 needs an apply.
+
+Generate the import commands (needs the Terraform token, which has DNS Read):
+
+```bash
+curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/9bba25b9d72c820bda69e692e8f9a41d/dns_records?type=CAA&per_page=100" | python3 -c '
+import json,sys
+ZONE="9bba25b9d72c820bda69e692e8f9a41d"
+KEYS={"comodoca.com":"comodoca","digicert.com; cansignhttpexchanges=yes":"digicert","letsencrypt.org":"letsencrypt","pki.goog; cansignhttpexchanges=yes":"pkigoog","ssl.com":"sslcom"}
+d=json.load(sys.stdin)
+if not d.get("success"): sys.exit("API error: %s" % d.get("errors"))
+n=0
+for r in d["result"]:
+    tag=r["data"]["tag"]; val=str(r["data"]["value"])
+    if tag=="iodef": addr="cloudflare_record.caa_iodef"
+    else:
+        k=KEYS.get(val)
+        if not k: print("# UNMAPPED, add to locals first: %s %s" % (tag,val)); continue
+        addr="cloudflare_record.caa_%s[\"%s\"]" % (tag,k)
+    print("terraform -chdir=infra/terraform/cloudflare import %s%s%s %s/%s" % (chr(39),addr,chr(39),ZONE,r["id"])); n+=1
+print("# %d commands (expect 11)" % n, file=sys.stderr)
+'
+```
+
+Review the output, then run the commands. Afterwards `terraform plan` must show **no
+changes for any `caa_` resource**. If it wants to create them, the import did not take -
+stop, because applying then doubles every record.
 
 > ### Do NOT add `issuewild ";"`
 >
@@ -376,21 +415,22 @@ apply creates them.
 > certificate the site runs on, and nothing breaks until a renewal is silently refused
 > weeks later.
 >
-> Under RFC 8659, with no `issuewild` record present the `issue` records govern wildcards
-> too. Omitting it is both correct and safe.
+> The live records take the other valid approach: `issuewild` exists and lists the same
+> five CAs as `issue`. Under RFC 8659, once ANY `issuewild` record is present it governs
+> wildcard issuance completely and the `issue` records stop applying to wildcards - so the
+> two lists must be kept identical. `dns_caa.tf` builds both from one `local`, which is
+> what makes that impossible to get wrong by editing only one of them.
+>
+> (Having no `issuewild` at all is also valid, and then `issue` covers wildcards too. What
+> is never valid here is an `issuewild` list that omits the real issuer.)
 
-**Do not narrow the CA list to just the current issuer.** Cloudflare picks and rotates the
-CA itself, and on the Free plan there is no setting to fix it (that is an Advanced
-Certificate Manager feature). Pinning one CA works until the day Cloudflare renews with a
-different one. Three CAs instead of ~50 is where nearly all the benefit is.
-
-**Verify after apply:**
+**Verify:**
 
 ```bash
 dig +short CAA csoh.org
 ```
 
-Expected: four lines. Before the apply it returns nothing.
+Expected: eleven lines.
 
 **Then verify again after the next renewal.** The certificate live at the time of writing
 expires 2026-09-29, so renewal is due around late August. CAA is enforced at issuance, so
