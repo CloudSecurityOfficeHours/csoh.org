@@ -233,3 +233,52 @@ environment is itself restricted to `main` by a deployment branch policy, so
 the environment pin enforces the branch transitively;
 `var.github_branch` in `infra/terraform/gcp/variables.tf` documents that intent
 but is not referenced by the trust.
+
+## Two Cloudflare tokens, and the local one can't run Terraform
+
+`.env`'s `CLOUDFLARE_API_TOKEN` is the CI cache-purge token: one permission,
+**Zone → Cache Purge**, scoped to `csoh.org`. That is deliberate, because the
+deploy path should not hold a credential able to rewrite the security headers.
+
+It also means `terraform apply` in `infra/terraform/cloudflare/` does not work
+with it. What you get is `Authentication error (10000)` and `Unauthorized to
+access requested resource (9109)` naming individual resources, which reads like
+a broken config rather than a scope problem. The token verifies as valid via
+`/user/tokens/verify`, which makes it look even less like the cause.
+
+Worse, Cloudflare gates each **ruleset phase** behind its own permission group,
+and this stack spans three phases plus DNS, load balancing, and zone settings.
+A partly-scoped token fails only the resources it cannot reach, so the missing
+permissions surface two at a time over several runs. The full eight-group list
+is in `infra/README.md`; use a second, broader token and keep it out of CI.
+
+## Terraform must be a native arm64 build on this machine
+
+Check with `file "$(which terraform)"` before debugging anything else. Intel
+Homebrew lives at `/usr/local` and installs an x86_64 Terraform, which then
+downloads x86_64 **providers**, which then run under Rosetta. The AWS provider
+binary is ~725 MB and translating it exceeds Terraform's plugin-start timeout.
+
+The symptom is not an error that names any of this: a provider process pegged
+at 100% CPU with **zero network connections**, and
+`timeout while waiting for plugin to start` roughly half the time, so it looks
+flaky rather than broken. Only the AWS stack really suffers; the Google and
+Cloudflare providers are small enough to translate in time. After switching to
+a native build, re-run `terraform init` in all four stack directories -
+`azure/` is easy to miss until `terraform output` fails with
+`Required plugins are not installed`.
+
+Related, same debugging session: keep `AWS_EC2_METADATA_DISABLED=true`
+exported. Local AWS auth is `aws login` with a `login_session` in
+`~/.aws/config`, and the Terraform provider does not implement that mechanism -
+it needs `aws configure export-credentials --format env`. When the session
+expires, the provider falls through the credential chain to EC2 instance
+metadata, which does not exist on a laptop, and hangs for minutes before
+failing with `no EC2 IMDS role found`. That message points at IMDS instead of
+at the expired session. `aws sts get-caller-identity` gives the real answer in
+one line.
+
+And if a run dies wedged, never reach for `-lock=false`. It does not clear the
+lock, it starts a *second* concurrent apply against the same state. Confirm no
+terraform process is alive first (a plugin whose parent is `PPID 1` is an
+orphan), then `force-unlock` with the ID from the error.

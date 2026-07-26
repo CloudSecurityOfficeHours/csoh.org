@@ -102,6 +102,42 @@ and nothing else. If either the secret or the variable is missing the deploy
 fails by design - publishing to the origins while silently leaving a stale edge
 is exactly the failure that job exists to stop.
 
+### There are TWO Cloudflare tokens, and they are not interchangeable
+
+The cache-purge token above is deliberately useless for anything else. Running
+`terraform apply` against `infra/terraform/cloudflare/` needs a **second, broader
+token**, and this is not written down anywhere else - the local `.env` holds only
+the narrow CI one, so reaching for it produces a pile of
+`Authentication error (10000)` and `Unauthorized to access requested resource
+(9109)` failures that look like a broken config rather than a scope problem.
+
+Cloudflare gates each *ruleset phase* behind its own permission group, and this
+stack spans three phases plus DNS, load balancing, and zone settings. Miss one
+group and only the resources it covers fail, so the missing permissions surface
+a couple at a time across several runs. The complete set:
+
+| Scope | Permission | Needed for |
+|---|---|---|
+| **Account** → Load Balancing: Monitors and Pools | Edit | `cloudflare_load_balancer_pool`, `cloudflare_load_balancer_monitor` (both account-scoped) |
+| **Zone** → Zone | Read | reading the zone at all |
+| **Zone** → Zone Settings | Edit | `cloudflare_zone_settings_override` (zone.tf: TLS mode, min version, HSTS-adjacent dials) |
+| **Zone** → DNS | Edit | `cloudflare_record.www` |
+| **Zone** → Load Balancers | Edit | `cloudflare_load_balancer` (zone-scoped) |
+| **Zone** → Cache Rules | Edit | the `http_request_cache_settings` ruleset |
+| **Zone** → Dynamic Redirect | Edit | the `http_request_dynamic_redirect` ruleset (www -> apex, legacy paths) |
+| **Zone** → Transform Rules | Edit | the `http_response_headers_transform` ruleset (the security headers) |
+
+Set Zone Resources to `csoh.org` only. Keep this token **separate** from the
+cache-purge secret and out of CI: the deploy path should never hold a credential
+that can rewrite the security headers. Do not fall back to the Global API Key -
+it authenticates as the whole account and sidesteps every one of these limits.
+
+The five required `-var` values are not secrets, but they are tedious to
+re-derive (see the apply command in the bootstrap section below). Keeping them
+as `TF_VAR_account_id`, `TF_VAR_zone_id`, `TF_VAR_aws_origin_host`,
+`TF_VAR_gcp_origin_host` and `TF_VAR_azure_origin_host` in the gitignored `.env`
+lets Terraform pick them up with no flags at all.
+
 The AWS account ID, Azure subscription ID, and Azure tenant ID are fixed
 accounts hardcoded in the Terraform (`infra/terraform/aws`, `.../azure`) and
 the deploy workflow - they're identifiers, not secrets, so they're committed
