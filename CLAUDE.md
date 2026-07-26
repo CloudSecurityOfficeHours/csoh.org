@@ -94,6 +94,9 @@ step:
   evaluate the regex denies.
 - `tools/site-publish.filter` — `+ /.well-known/` before the `- .*` catch-all,
   or the file is never uploaded to the S3 / Azure origins at all.
+- `deploy.yml` — `include-hidden-files: true` on the artifact upload, or the
+  file is dropped between staging and publishing. See the next section; this
+  is the one that is easy to miss because nothing errors.
 
 This isn't cosmetic. `/security.txt` names `https://csoh.org/.well-known/security.txt`
 in its `Canonical:` field, so RFC 9116 tooling fetches that exact URL; it used
@@ -103,6 +106,54 @@ to 403 and fail validation. If you harden the dotfile rules, re-test with:
 curl -sI https://csoh.org/.well-known/security.txt | head -1   # want 200
 curl -sI https://csoh.org/.git/config                | head -1   # want 403
 ```
+
+## `upload-artifact` drops dotfiles by default, and says nothing
+
+Since v4.4, `actions/upload-artifact` defaults to `include-hidden-files: false`
+and silently omits every dot-path. It does not warn and does not fail: it prints
+a file count, and a count is not something anyone reads as an error.
+
+This is worse here than in most repos because of the fan-out. `build` stages
+`dist/` and uploads it; `publish-aws` and `publish-azure` download that artifact,
+but `publish-gcp` builds its container from a fresh checkout instead. So a file
+missing from the artifact is missing on two origins out of three, and Cloudflare
+load-balances across all three. `/.well-known/security.txt` came back 200 on
+roughly one request in three - far more annoying to diagnose than a clean 404,
+and invisible to any check that fetches a URL once and sees success.
+
+The tell is in the build log, if you go looking: `stage_site.sh` reported 2973
+files staged, the artifact carried 2972. One file, no error.
+
+`deploy.yml` now sets `include-hidden-files: true`. That is safe *because*
+`tools/site-publish.filter` already excludes every dot-path except
+`/.well-known/`, so `dist/` contains exactly one hidden directory and there is
+nothing else for the flag to smuggle through. **If you ever widen that filter,
+this reasoning has to be rechecked** - the flag stops being a targeted carve-out
+and becomes a blanket "ship every dotfile you staged."
+
+It is already earning its keep: `/.well-known/` now holds `mta-sts.txt` as well
+as `security.txt`, and MTA-STS would have been dropped on two origins the same
+silent way. Anything added under `/.well-known/` from here (MTA-STS, ACME
+challenges, `openid-configuration`) rides on this one flag, so verify a new
+entry against production rather than assuming, and request it several times so
+you actually land on each origin:
+
+```sh
+for i in $(seq 1 12); do
+  curl -so /dev/null -w '%{http_code} ' "https://csoh.org/.well-known/<file>?cb=$RANDOM"
+done; echo   # want twelve 200s, not eight
+```
+
+Two general lessons, both of which cost real time here:
+
+- **Verifying one origin is not verifying the deploy.** A local nginx test
+  proved the config was right and still could not see this, because the bug
+  lived between staging and publishing rather than in any origin's config.
+  When a fix touches what gets published, re-test against production and
+  request it enough times to land on every origin.
+- **A silent count is a failure mode.** Prefer a check that asserts, not one
+  that prints. Comparing "files staged" against "files in the artifact" would
+  have caught this at the moment it broke.
 
 ## Path filters must cover everything `stage_site.sh` publishes
 
