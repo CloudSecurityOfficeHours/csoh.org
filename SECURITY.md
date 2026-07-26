@@ -514,7 +514,7 @@ rather than dashboard state.
 | Control | Value | What it stops |
 |---|---|---|
 | **CAA** | 5 authorized CAs (Let's Encrypt, DigiCert, Google Trust Services, Sectigo/Comodo, SSL.com), `issue` + `issuewild` each, plus `iodef: mailto:admin@csoh.org` | Any other CA issuing a certificate for `csoh.org`. The `iodef` address gets notified on a rejected issuance attempt. |
-| **DNSSEC** | Zone signed at Cloudflare (`prevent_destroy` on the resource) | Forged DNS answers. This is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who can forge a response can strip either. |
+| **DNSSEC** | ⚠️ **Signed but NOT active** - zone is signed at Cloudflare, but no DS is published at `.org`, so nothing validates. See below. | *Would* stop forged DNS answers, which is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who can forge a response strips either. Today it stops nothing. |
 | **SPF** | `v=spf1 include:_spf.google.com ~all` | Unauthorized hosts sending as `@csoh.org`. |
 | **DKIM** | `google._domainkey` (RSA) | Tampering with, or forging, message bodies in transit. |
 | **DMARC** | `p=quarantine; sp=quarantine; pct=100`, aggregate reports to Cloudflare | Spoofed mail reaching inboxes. Moved up from `p=none` (monitor-only) - the policy now actually does something. |
@@ -537,13 +537,43 @@ It is deliberately at `mode: testing`, which reports failures without bouncing
 mail. Moving to `mode: enforce` is a separate decision that should follow a
 period of clean TLS-RPT reports, not ride along with an unrelated change.
 
-**DNSSEC has an activation step beyond signing.** Signing the zone is not the
-same as DNSSEC being live: the parent zone must publish a DS record delegating
-trust. Cloudflare is both registrar and DNS provider for this domain, so it
-publishes the DS at `.org` itself - there is no registrar copy-paste, which is
-the step DNSSEC most often dies on. Publication can lag the apply.
+**DNSSEC is signed but not active, and this needs a human.** Signing the zone is
+not the same as DNSSEC being live: the parent zone must publish a DS record
+delegating trust. As of 2026-07-26, 18 hours after the apply, that has not
+happened:
 
-Verify the whole chain, not just the parts:
+| Check | Result |
+|---|---|
+| `dig DNSKEY csoh.org` | 2 keys - KSK (257) + ZSK (256), alg 13 |
+| `dig csoh.org A +dnssec` | RRSIG present - **the zone really is signed** |
+| `dig DS csoh.org` | *nothing*, via 1.1.1.1, 8.8.8.8, 9.9.9.9 and the `.org` nameservers |
+| `whois csoh.org` | `DNSSEC: unsigned` at the registry |
+| `ad` flag | not set by any validating resolver |
+
+An earlier version of this section said Cloudflare publishes the DS itself
+because it is both registrar and DNS provider, so no action was required. The
+registrar part is true (`whois` confirms `Registrar: Cloudflare, Inc.`), but the
+conclusion was wrong: `cloudflare_zone_dnssec` turns on **signing**, and the DS
+still has to be submitted to the registry. 18 hours and a registry status of
+`unsigned` is not propagation lag.
+
+**What this means today:** DNSSEC provides *zero* protection. Validating
+resolvers treat the zone as unsigned, exactly as before. That is the safe
+failure direction - the dangerous one is a DS published for a key the provider
+no longer uses, which makes the domain vanish for anyone behind a validating
+resolver rather than merely go unprotected. So there is no rollback urgency,
+but CAA and DMARC remain forgeable until this is finished.
+
+**To finish it:** in the Cloudflare dashboard, DNS → Settings → DNSSEC, confirm
+the DS is submitted to the registry (for Cloudflare-registrar domains this is a
+one-click action, not something `terraform apply` performs). The DS must match
+the current KSK:
+
+```
+257 3 13 mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+ KkxLbxILfDLUT0rAK9iUzy1L53eKGQ==
+```
+
+Then verify the whole chain, not just the parts:
 
 ```sh
 dig +short DNSKEY csoh.org            # zone is signed        (expect 2 keys)
@@ -554,8 +584,11 @@ dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'   # expect the "ad" flag
 The `ad` (Authenticated Data) flag is the one that counts - it means a
 validating resolver checked the signatures and they held. **A DS present with no
 `ad` flag means signing and delegation disagree; investigate rather than assume
-propagation lag.** The full runbook, including what to do before transferring
-the domain to another registrar, is
+propagation lag.** `whois csoh.org` reporting `DNSSEC: signed` is the
+registry-side confirmation.
+
+The full runbook, including what to do before transferring the domain to another
+registrar, is
 [`infra/MANUAL_SECURITY_STEPS.md`](infra/MANUAL_SECURITY_STEPS.md) section 4.
 
 ## Deployment Security

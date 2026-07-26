@@ -448,13 +448,45 @@ against the list above.
 
 ## 4. DNSSEC - sign the zone
 
-**APPLIED 2026-07-26 - signing is on, delegation still settling.** The zone is signed
-(`dig +short DNSKEY csoh.org` returns 2 keys), but at the time of writing the parent
-`.org` zone has not yet published the DS record and validating resolvers are not setting
-the `ad` flag. Cloudflare is both registrar and DNS provider here and publishes the DS
-itself, so no action is required - but this is **not finished until `dig +short DS
-csoh.org` returns a record and the `ad` flag appears.** Re-check before treating DNSSEC
-as a control you rely on; see Verify below.
+> ## ⚠️ NOT FINISHED - one manual step remains
+>
+> **Signing is on. Delegation is not.** Re-checked 2026-07-26, 18 hours after the
+> apply:
+>
+> | Check | Result |
+> |---|---|
+> | `dig DNSKEY csoh.org` | 2 keys (KSK 257 + ZSK 256, alg 13) |
+> | `dig csoh.org A +dnssec` | RRSIG present - the zone really is signed |
+> | `dig DS csoh.org` | **nothing**, via 1.1.1.1 / 8.8.8.8 / 9.9.9.9 and the `.org` nameservers |
+> | `whois csoh.org` | **`DNSSEC: unsigned`** at the registry |
+> | `ad` flag | not set by any validating resolver |
+>
+> An earlier draft of this section concluded that because Cloudflare is both
+> registrar and DNS provider, it publishes the DS itself and no action was
+> required. The registrar part is correct - `whois` confirms
+> `Registrar: Cloudflare, Inc.` - but the conclusion was wrong.
+> `cloudflare_zone_dnssec` enables **signing**; the DS still has to be submitted
+> to the registry. A registry status of `unsigned` after 18 hours is not
+> propagation lag.
+>
+> **Impact today: DNSSEC protects nothing.** Validating resolvers treat the zone
+> as unsigned, exactly as before this work. Note that this is the *safe* failure
+> direction - the dangerous one is a DS published for a key the provider no
+> longer uses, which makes the domain vanish for anyone behind a validating
+> resolver. So there is no rollback urgency, but sections 2 and 3 (CAA, DMARC)
+> stay forgeable until this is done.
+>
+> **To finish:** Cloudflare dashboard → DNS → Settings → DNSSEC, and confirm the
+> DS is submitted to the registry. For a Cloudflare-registrar domain this is a
+> one-click action; `terraform apply` does not perform it. The DS must match the
+> current KSK:
+>
+> ```
+> 257 3 13 mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+ KkxLbxILfDLUT0rAK9iUzy1L53eKGQ==
+> ```
+>
+> Done when `dig +short DS csoh.org` returns a record, `whois csoh.org` reports
+> `DNSSEC: signed`, and the `ad` flag appears. See Verify below.
 
 The web surface is largely covered by HSTS preload already, so the real value is in the
 records that have no transport-layer backstop: `MX` (redirect inbound mail to an attacker
