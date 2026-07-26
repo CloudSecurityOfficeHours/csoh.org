@@ -425,7 +425,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/mitnick-novell.html",
      "Mitnick / Novell 1994 Breach Kill Chain",
-     "OSINT → pretexting → phone social engineering → the voicemail trap that named the hacker. Personal post-mortem.",
+     "War dialing → pretexting → the voicemail trap that named the hacker → the watched honeypot. Personal post-mortem.",
      "Breach Kill Chain"),
     ("breaches/codefinger-s3.html",
      "Codefinger S3 Ransomware 2025 Kill Chain",
