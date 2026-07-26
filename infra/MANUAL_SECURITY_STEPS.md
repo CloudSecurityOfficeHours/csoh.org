@@ -256,45 +256,86 @@ in inboxes. That address is the RFC 9116 contact in `/.well-known/security.txt`,
 forged "send the PoC here instead" reply to a vulnerability reporter is entirely
 plausible, and the site publishes a mailing list to a large practitioner audience.
 
-### Before you enforce: read the reports
+### Who actually sends as csoh.org
 
-You already have `rua` reporting pointed at Cloudflare's aggregator. Check it and confirm
-every legitimate sender is aligned before tightening. The known senders are Google
-Workspace (`include:_spf.google.com`, plus the `google._domainkey` DKIM record, both
-confirmed present) and the Kit newsletter.
+**Two** DKIM selectors are published, not one:
 
-**Kit needs a decision.** There is no Kit DKIM record and no Kit SPF include on this
-domain, which strongly suggests Kit sends from its own domain with a reply-to rather than
-as `@csoh.org`. If that is right, enforcement will not affect the newsletter. Confirm it
-in the DMARC reports rather than assuming, and if Kit does send as `@csoh.org`, add its
-SPF include and DKIM record **before** step 2b.
+```bash
+dig +short TXT google._domainkey.csoh.org    # Google Workspace
+dig +short TXT default._domainkey.csoh.org   # a second sender, signs as csoh.org
+```
+
+That second selector matters, and an earlier draft of this file got it wrong by claiming
+no such record existed. DMARC passes if **either** SPF or DKIM aligns and passes - not
+both. So a sender that signs with a valid DKIM signature for `csoh.org` survives
+enforcement even though the SPF record lists only Google. That is what makes the move to
+quarantine low-risk here rather than a gamble on the newsletter.
+
+Still read the aggregate reports before going further (Cloudflare dashboard → **Email
+Security → DMARC Management**). They are the only source that shows what is *actually*
+sending and whether it authenticates; everything above is inference from DNS.
 
 ### 2a. Move to quarantine
 
-In the Cloudflare dashboard: **DNS → Records**, edit the `_dmarc` TXT record to:
+The record is now managed in Terraform, in
+[`terraform/cloudflare/dns_mail.tf`](terraform/cloudflare/dns_mail.tf), with the reasoning
+for each tag inline. It sets:
 
 ```
-v=DMARC1; p=quarantine; sp=quarantine; pct=100; adkim=s; aspf=s; rua=mailto:325e7f2d0aeb4bf097745889b5b2dd23@dmarc-reports.cloudflare.net; ruf=mailto:admin@csoh.org; fo=1;
+v=DMARC1; p=quarantine; sp=quarantine; pct=100; rua=mailto:325e7f2d0aeb4bf097745889b5b2dd23@dmarc-reports.cloudflare.net
 ```
 
-`sp=quarantine` covers subdomains, which currently inherit `p=none`. `adkim=s` / `aspf=s`
-require strict alignment.
+Deliberately *not* included, though an earlier draft of this file suggested them:
+`adkim=s` / `aspf=s` (strict alignment is a separate tightening and should not ride along
+with an enforcement change), and `ruf=` (forensic reports are ignored by most receivers
+and can carry recipient PII).
 
-### 2b. After a clean reporting period (2 to 4 weeks), move to reject
+> #### IMPORT BEFORE YOU APPLY. This one bites silently.
+>
+> The `_dmarc` record already exists in Cloudflare. Terraform does not know that, so a
+> plain `apply` **creates a second one**. Cloudflare will happily hold two TXT records at
+> the same name, and a domain publishing two DMARC records is treated by every receiver as
+> publishing **none at all** - RFC 7489 says to ignore the domain's policy entirely rather
+> than guess. You would end up strictly worse off than `p=none`, with no error anywhere
+> and a plan that looked like it worked.
+>
+> Find the existing record's ID (needs the Terraform token from
+> [README.md](README.md#there-are-two-cloudflare-tokens-and-they-are-not-interchangeable),
+> which has DNS Edit):
+>
+> ```bash
+> curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/9bba25b9d72c820bda69e692e8f9a41d/dns_records?type=TXT&name=_dmarc.csoh.org" | python3 -c "import json,sys; r=json.load(sys.stdin)['result']; print(r[0]['id'] if len(r)==1 else f'EXPECTED 1 RECORD, FOUND {len(r)} - fix that first')"
+> ```
+>
+> Then import it (this needs the same `-var` values as any other command in this stack):
+>
+> ```bash
+> terraform -chdir=infra/terraform/cloudflare import cloudflare_record.dmarc 9bba25b9d72c820bda69e692e8f9a41d/<record-id>
+> ```
+>
+> Now `plan` must show **1 to change, 0 to add**. If it says *add*, the import did not
+> take: stop, do not apply.
 
-Change `p` and `sp` to `reject` in the same record, and tighten SPF from softfail to
-hardfail by editing the apex TXT record to:
-
-```
-v=spf1 include:_spf.google.com -all
-```
-
-**Verify:**
+Then apply, and confirm the result is a single record:
 
 ```bash
 dig +short TXT _dmarc.csoh.org
-dig +short TXT csoh.org | grep spf
 ```
+
+Exactly one line, containing `p=quarantine`. Two lines means the import was skipped and
+DMARC is now switched off entirely - delete the duplicate in the dashboard immediately.
+
+### 2b. After a clean reporting period (2 to 4 weeks), move to reject
+
+Change `p` and `sp` to `reject` in `dns_mail.tf` and apply. By then the record is
+Terraform-managed, so this is a one-line diff and a normal review.
+
+**SPF is a separate decision, not part of this step.** The apex is
+`v=spf1 include:_spf.google.com ~all`, and tightening `~all` to `-all` carries a different
+risk than the DMARC change: the second DKIM signer is not in the SPF record, and some
+receivers weight an SPF hard fail on its own, independently of DMARC. Identify that sender
+from the aggregate reports first. If it is the Kit newsletter sending as `@csoh.org`, the
+right fix is to add its SPF include, not to leave `~all` in place forever.
 
 ---
 
