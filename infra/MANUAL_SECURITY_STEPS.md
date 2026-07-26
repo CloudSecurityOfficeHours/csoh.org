@@ -417,19 +417,50 @@ MTA), the SPF/DKIM/DMARC TXT records (forge a permissive policy so a receiver va
 a spoofed message sees a pass), and any future `_acme-challenge` TXT (satisfy a CA's
 DNS-01 validation and mint a certificate).
 
-Do this **after** step 3, so the signed zone covers the new CAA records.
+It is also what makes steps 2 and 3 mean anything. DMARC policy and CAA restrictions are
+both just DNS records; an attacker who can forge a DNS answer can replace either. A CA
+checks CAA over plain DNS at issuance time, so a forged answer strips the restriction.
 
-1. Cloudflare dashboard: **DNS → Settings → DNSSEC → Enable DNSSEC**.
-2. Cloudflare shows a DS record. Copy it.
-3. Log in to the registrar for `csoh.org` and paste the DS record into its DNSSEC section.
-4. Wait for propagation (usually minutes, occasionally hours).
+**There is no registrar copy-paste step for this domain**, contrary to what an earlier
+draft of this file said. `whois csoh.org` reports `Registrar: Cloudflare, Inc.`, and the
+nameservers are Cloudflare's, so Cloudflare is both registrar and DNS provider. It
+publishes the DS record at `.org` itself when signing is enabled, and withdraws it if
+signing is disabled.
 
-**Verify:**
+That matters, because the copy-paste is exactly where DNSSEC normally goes wrong: a
+registrar publishing a DS record for a key the DNS provider no longer uses makes every
+validating resolver treat all answers as forged. The domain does not slow down, it
+vanishes, and only for users behind validating resolvers, which makes it painful to
+diagnose. Cloudflare owning both sides removes that failure mode.
+
+Managed in Terraform, in
+[`terraform/cloudflare/dns_dnssec.tf`](terraform/cloudflare/dns_dnssec.tf). The resource
+carries `prevent_destroy = true`, so a stray `terraform destroy` cannot silently unsign
+the zone.
 
 ```bash
-dig +short DS csoh.org                          # expect a DS record
-dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:' # expect the "ad" flag
+terraform -chdir=infra/terraform/cloudflare apply
 ```
+
+**Verify.** The apply prints the DS record and the signing status; the parent zone can
+take minutes to hours to publish, so the `dig` may lag the `terraform output`:
+
+```bash
+terraform -chdir=infra/terraform/cloudflare output dnssec_status   # expect "active"
+dig +short DS csoh.org                                             # expect a DS record
+dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'                    # expect the "ad" flag
+```
+
+The `ad` (Authenticated Data) flag is the one that matters: it means a validating resolver
+checked the signatures and they held. A DS record present but no `ad` flag means signing
+and delegation disagree - investigate before assuming it is propagation lag.
+
+> ### If you ever transfer the domain to another registrar
+>
+> Disable DNSSEC **before** the transfer and re-enable it after. Otherwise the new
+> registrar inherits a DS record for a key that no longer signs the zone, which is the
+> outage described above. This is the one operation that reintroduces the risk Cloudflare
+> currently removes.
 
 ---
 

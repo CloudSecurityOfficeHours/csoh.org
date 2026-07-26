@@ -43,3 +43,28 @@ output "monitor_id" {
   description = "Health monitor ID."
   value       = cloudflare_load_balancer_monitor.site.id
 }
+
+# Output #4: the DS record for the signed zone, and the signing status.
+# A DS ("Delegation Signer") record is what the PARENT zone (.org) publishes to
+# vouch for this zone's signing key - it is the link that makes DNSSEC
+# validation possible, and it is the thing a resolver checks first.
+#
+# Because Cloudflare is this domain's registrar as well as its DNS provider
+# (see dns_dnssec.tf), it publishes this DS at .org automatically and there is
+# no value here to copy anywhere. It is surfaced for VERIFICATION: after an
+# apply, what `terraform output dnssec_ds` prints should be the same record
+# that `dig +short DS csoh.org` returns once the parent has published it, which
+# can lag by minutes to hours. A lasting disagreement between the two is the
+# early warning for the mismatch that takes a domain offline.
+output "dnssec_ds" {
+  description = "DS record for csoh.org, to compare against `dig +short DS csoh.org`."
+  value       = cloudflare_zone_dnssec.site.ds
+}
+
+# The zone's signing status as Cloudflare reports it: "active" once signing is
+# live, "pending" while it is being set up. Worth checking before trusting the
+# DS above.
+output "dnssec_status" {
+  description = "Cloudflare's DNSSEC status for the zone (expect \"active\")."
+  value       = cloudflare_zone_dnssec.site.status
+}
