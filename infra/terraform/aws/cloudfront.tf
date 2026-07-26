@@ -156,8 +156,40 @@ resource "aws_cloudfront_distribution" "site" {
   viewer_certificate {
     # Use the no-cost AWS-provided cert that covers *.cloudfront.net.
     cloudfront_default_certificate = true
-    # Refuse outdated, insecure TLS versions; require modern TLS 1.2+.
-    minimum_protocol_version = "TLSv1.2_2021"
+
+    # NO minimum_protocol_version HERE, DELIBERATELY. It is not an oversight,
+    # and re-adding it does not raise the TLS floor.
+    #
+    # CloudFront ignores this argument whenever the default *.cloudfront.net
+    # certificate is in use: that certificate is served from a shared
+    # distribution point pinned to the "TLSv1" security policy, and AWS silently
+    # holds it there no matter what you ask for. The argument only starts doing
+    # something once the distribution has an ACM certificate on a real domain.
+    #
+    # The file used to say `minimum_protocol_version = "TLSv1.2_2021"`, which
+    # was pure decoration with one real cost: the plan never converged. AWS kept
+    # reporting TLSv1, Terraform kept proposing TLSv1.2_2021, and the
+    # distribution sat permanently in the diff. That in turn deferred
+    # aws_iam_role_policy.publisher and aws_s3_bucket_policy.site, whose
+    # aws_iam_policy_document data sources depend on this distribution, so both
+    # showed `policy` as "known after apply" with no actual change. One inert
+    # argument, three resources permanently dirty, every single plan.
+    #
+    # That is worth avoiding on its own terms. A stack that always reports
+    # changes teaches whoever runs it to skim the diff, which is exactly how
+    # genuine drift slips through - the mirror image of the ignore_changes trap
+    # documented in ../cloudflare/rules.tf. Omitting the argument lets the
+    # provider use its own "TLSv1" default, which matches what CloudFront
+    # actually enforces, and the plan comes back clean.
+    #
+    # This is not a weakness in the TLS visitors negotiate. Nothing reaches this
+    # distribution except Cloudflare, over its own connection; the public
+    # csoh.org certificate and its TLS floor (min_tls_version in
+    # ../cloudflare/zone.tf) live at the edge, not here.
+    #
+    # IF THIS DISTRIBUTION EVER GETS AN ACM CERTIFICATE on a real hostname, add
+    # `minimum_protocol_version = "TLSv1.2_2021"` back at the same time. At that
+    # point it is load-bearing rather than decorative.
   }
 }
 
