@@ -26,14 +26,17 @@ ticking the step off - several of these fail silently if a record is malformed.
 
 ## 1. Apply the three Terraform changes
 
-The code changes are committed but **inert until applied**, and they are independent of
-each other. Status as of 2026-07-25:
+**All three were applied and verified on 2026-07-25.** This section is kept as the record
+of what was done and how each was checked, not as outstanding work.
 
-| Stack | State | Effect while un-applied |
+| Stack | State | Verified by |
 |---|---|---|
-| **GCP** (1a) | **done and verified live** | - |
-| **Cloudflare** (1b) | outstanding | `www.csoh.org` still redirect-loops on plain HTTP |
-| **AWS** (1c) | outstanding | the CloudFront origin still serves no security headers of its own |
+| **GCP** (1a) | done | `plan` clean; live `attributeCondition` pins `environment:production`; the deploy afterward still authenticated |
+| **Cloudflare** (1b) | done | `curl -sI http://www.csoh.org/about.html` returns `Location: https://csoh.org/about.html` |
+| **AWS** (1c) | done | `check_edge_headers.py --url https://<dist>.cloudfront.net/` returns all 8 matching |
+
+One caveat carried forward: the AWS stack does **not** plan clean, and by design it cannot.
+See 1c below - one inert argument keeps three resources permanently in the diff.
 
 #### Before you start: two local traps that waste hours
 
@@ -202,10 +205,24 @@ and worry:
 
 The plan will also show `viewer_certificate.minimum_protocol_version` moving from `TLSv1`
 to `TLSv1.2_2021`. That change never sticks. With `cloudfront_default_certificate = true`,
-CloudFront pins the viewer protocol to `TLSv1` and ignores the argument, so this is a
-permanent no-op diff on every future plan. It is not a TLS weakness: Cloudflare terminates
-the TLS that visitors actually negotiate, and this distribution is only ever reached by
-Cloudflare. Do not "fix" it by requesting an ACM certificate for a hostname nothing uses.
+CloudFront pins the viewer protocol to `TLSv1` and ignores the argument. It is not a TLS
+weakness: Cloudflare terminates the TLS that visitors actually negotiate, and this
+distribution is only ever reached by Cloudflare. Do not "fix" it by requesting an ACM
+certificate for a hostname nothing uses.
+
+**It is, however, why this stack never plans clean.** Confirmed after the apply: the plan
+is permanently `0 to add, 3 to change`, and all three trace to that one argument. The
+distribution shows a `viewer_certificate` diff that cannot converge; the two policy
+resources then defer because their `aws_iam_policy_document` data sources depend on the
+distribution, and show `policy` as unknown-after-apply with zero concrete field changes.
+
+That matters more than it looks. A stack that always reports changes trains whoever runs
+it to skim the diff, which is precisely how genuine drift goes unnoticed - the same
+failure shape as the Cloudflare `ignore_changes` trap, arrived at from the other
+direction. The clean fix is to delete the `minimum_protocol_version` argument entirely:
+the provider's default is `TLSv1`, which is what CloudFront enforces anyway, so the plan
+converges and all three diffs disappear. Re-add it only if this distribution ever moves to
+an ACM certificate on a real hostname, at which point the argument starts doing something.
 
 CloudFront distribution updates take a few minutes to propagate.
 
