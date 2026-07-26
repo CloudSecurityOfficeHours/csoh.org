@@ -175,6 +175,7 @@ CANON_NAV = """\
                         <li><a href="news.html">News</a></li>
                         <li><a href="threat-research.html">Threat Research</a></li>
                         <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="cloud-breach-year-in-review.html">Year in Review</a></li>
                         <li><a href="cloud-soc.html">Cloud SOC</a></li>
                         <li><a href="detection-engineering.html">Detection Engineering</a></li>
                         <li><a href="incident-response.html">Incident Response</a></li>
@@ -390,6 +391,10 @@ def active_href_for(path: Path) -> str | None:
         return 'cloud-security-portfolio-projects.html'
     if parent == 'homelab':
         return 'cloud-security-home-lab.html'
+    # Every per-year review highlights the series hub in the nav, the same way
+    # a breaches/ page highlights the kill-chain index.
+    if path.name.startswith('cloud-breach-year-in-review-'):
+        return 'cloud-breach-year-in-review.html'
     return path.name
 
 
