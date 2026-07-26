@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="CVE-2025-53770: unauthenticated RCE on on-prem SharePoint, then stolen ASP.NET machine keys that let attackers forge trusted requests long after the patch.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="CVE-2025-53770, SharePoint ToolShell, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2025, unauthenticated RCE, MachineKey theft, forged VIEWSTATE, Storm-2603, Warlock ransomware, web shell">
+    <title>SharePoint ToolShell 2025 Breach Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/sharepoint-toolshell.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/sharepoint-toolshell.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/sharepoint-toolshell.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="SharePoint ToolShell 2025 Breach Kill Chain">
+    <meta property="og:description" content="Why patching ToolShell was not enough: stolen ASP.NET machine keys let attackers forge __VIEWSTATE requests indistinguishable from legitimate traffic.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2025-07-24">
+    <meta property="article:modified_time" content="2026-07-26">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="CVE-2025-53770">
+    <meta property="article:tag" content="SharePoint ToolShell">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2025">
+    <meta property="article:tag" content="unauthenticated RCE">
+    <meta property="article:tag" content="MachineKey theft">
+    <meta property="article:tag" content="Storm-2603">
+    <meta property="article:tag" content="Warlock ransomware">
+    <meta property="og:url" content="https://csoh.org/breaches/sharepoint-toolshell.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/sharepoint-toolshell.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SharePoint ToolShell 2025 Breach Kill Chain">
+    <meta name="twitter:description" content="Why patching ToolShell was not enough: stolen ASP.NET machine keys let attackers forge __VIEWSTATE requests indistinguishable from legitimate traffic.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/sharepoint-toolshell.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=dd0f54c0" as="style"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/style.css?v=dd0f54c0"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "SharePoint ToolShell - Unauthenticated Deserialization at ToolPane.aspx → Web Shell → MachineKey Theft → Forged __VIEWSTATE → Warlock Ransomware",
+  "description": "CVE-2025-53770: unauthenticated RCE on on-prem SharePoint, then stolen ASP.NET machine keys that let attackers forge trusted requests long after the patch.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2025-07-24",
+  "dateModified": "2026-07-26",
+  "mainEntityOfPage": "https://csoh.org/breaches/sharepoint-toolshell.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "SharePoint ToolShell Exploitation (CVE-2025-53770)",
+    "startDate": "2025-07-18",
+    "description": "Attackers exploited unauthenticated deserialization in on-premises Microsoft SharePoint, planted web shells, stole ASP.NET machine keys to forge trusted __VIEWSTATE requests that survive patching, and in some cases deployed Warlock ransomware."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Organization",
+      "name": "Storm-2603"
+    },
+    {
+      "@type": "Thing",
+      "name": "Microsoft SharePoint"
+    },
+    {
+      "@type": "Thing",
+      "name": "ASP.NET"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "SharePoint ToolShell 2025",
+      "item": "https://csoh.org/breaches/sharepoint-toolshell.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All five session digests</span></a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">SharePoint ToolShell 2025</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>SharePoint ToolShell 2025</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="sharepoint-toolshell-2025">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">July 2025</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-purple">On-Prem SharePoint</span>
+    </div>
+    <h2 class="inc-title">SharePoint "ToolShell" - Unauthenticated Deserialization at ToolPane.aspx → Web Shell → MachineKey Theft → Forged __VIEWSTATE Forever → Warlock Ransomware</h2>
+    <p class="inc-summary">Around July 18, 2025, CVE-2025-53770 and CVE-2025-53771 came under active exploitation against on-premises Microsoft SharePoint Servers. A crafted HTTP POST to <code>ToolPane.aspx</code> triggered unauthenticated deserialization and remote code execution; attackers dropped a web shell, typically <code>spinstall0.aspx</code>, in the layouts folder. Then came the step that made this different from an ordinary RCE: they stole the server's ASP.NET MachineKeys - the ValidationKey and DecryptionKey - and used them to forge <code>__VIEWSTATE</code> payloads that SharePoint accepts as legitimate. <strong>Patching does not undo that.</strong> An attacker holding your machine keys can return through requests indistinguishable from normal traffic, and stays until the keys are rotated. Microsoft attributed some activity to Storm-2603, assessed with moderate confidence as China-based, which went on to deploy Warlock ransomware. SharePoint Online in Microsoft 365 was not affected.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>Unauthenticated</strong> RCE - no credential needed</div>
+      <div class="inc-stat"><strong>Stolen machine keys</strong> outlive the patch entirely</div>
+      <div class="inc-stat"><strong>75-85+</strong> servers globally assessed as compromised</div>
+      <div class="inc-stat"><strong>Not affected:</strong> SharePoint Online in Microsoft 365</div>
+    </div>
+    <a class="pm-link" href="https://www.bitsight.com/blog/toolshell-threat-brief-sharepoint-rce-vulnerabilities-cve-2025-53770-53771-explained" target="_blank" rel="noopener">📄 Bitsight - ToolShell threat brief ↗</a>
+    <a class="pm-link" href="https://www.fastly.com/blog/toolshell-remote-code-execution-sharepoint-cve-2025-53770-cve-2025-53771" target="_blank" rel="noopener">📄 Fastly - ToolShell RCE explained ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a> - One POST to a Web Part Settings Page</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">A crafted HTTP POST to <code>ToolPane.aspx</code>, an ordinary endpoint for managing web part settings, triggered deserialization of untrusted input and unauthenticated remote code execution</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing Application</a>
+        </div>
+        <p class="step-desc">Unsafe deserialization is a decades-old bug class and still one of the most reliable paths to code execution in enterprise .NET applications, because deserializing attacker-controlled data means instantiating attacker-chosen types and running their constructors. Here the reachable endpoint was <code>ToolPane.aspx</code>, a routine part of SharePoint's web part configuration machinery that most administrators would never think of as security-relevant. No authentication was required, so the prerequisite was simply network reachability - and on-premises SharePoint is very often published to the internet precisely so that remote staff and partners can use it.</p>
+        <div class="step-code">
+          <span class="hl">CVEs:</span> CVE-2025-53770 and CVE-2025-53771<br>
+          <span class="hl">Endpoint:</span> <code>ToolPane.aspx</code>, normally used to manage web part settings<br>
+          <span class="hl">Bug class:</span> Deserialization of untrusted data<br>
+          <span class="hl">Prerequisite:</span> Network reachability. No credential, no user interaction<br>
+          <span class="hl">Scope:</span> On-premises SharePoint Server only; SharePoint Online was not affected
+        </div>
+        <div class="step-tags"><span class="stag">Deserialization</span><span class="stag">ToolPane.aspx</span><span class="stag">Unauthenticated RCE</span><span class="stag">T1190</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🐚 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a> - A Web Shell in the Layouts Folder</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Attackers planted web shells such as <code>spinstall0.aspx</code> in SharePoint's layouts directory, giving persistent command execution and a stage for further payloads</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1505/003/" target="_blank" rel="noopener">T1505.003 - Server Software Component: Web Shell</a>
+        </div>
+        <p class="step-desc">The layouts folder is a natural hiding place because it legitimately contains many <code>.aspx</code> files, so one more does not stand out to a human browsing the directory. The observed shells fetched and ran further malware from attacker infrastructure, converting a single exploited request into an interactive foothold on the server. This is the artifact most defenders went looking for once the advisories landed, and finding and deleting it feels like resolution - which is exactly the trap the next step sets, because by the time the shell is found the attacker has usually already taken something that removing it will not affect.</p>
+        <div class="step-code">
+          <span class="hl">Artifact:</span> Web shells including <code>spinstall0.aspx</code><br>
+          <span class="hl">Location:</span> SharePoint's layouts folder, which legitimately holds many <code>.aspx</code> files<br>
+          <span class="hl">Capability:</span> Persistent command execution and staging of further malware<br>
+          <span class="hl">The trap:</span> Deleting it feels like remediation, and is not
+        </div>
+        <div class="step-tags"><span class="stag">Web Shell</span><span class="stag">spinstall0.aspx</span><span class="stag">Layouts Folder</span><span class="stag">T1505.003</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access - Stealing the Keys That Sign Everything</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The attackers extracted the ASP.NET MachineKeys - the ValidationKey and DecryptionKey - from the compromised server</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/004/" target="_blank" rel="noopener">T1552.004 - Unsecured Credentials: Private Keys</a>
+        </div>
+        <p class="step-desc">This is the move that elevates ToolShell above a typical web application compromise. ASP.NET uses the machine keys to sign and encrypt <code>__VIEWSTATE</code>, the mechanism by which the framework trusts state that round-trips through the client. Whoever holds those keys can produce state the application will accept as its own. They are the server's identity to itself, and unlike a password nobody thinks of them as a credential with a rotation policy - most administrators have never touched them and many do not know they exist. Read this alongside <a href="storm-0558.html">Storm-0558</a> and the shared lesson is stark: theft of signing material converts a bounded intrusion into indefinite trusted access, and it is the failure that is hardest to recover from because everything downstream is designed to believe it.</p>
+        <div class="step-code">
+          <span class="hl">Stolen:</span> ASP.NET <code>ValidationKey</code> and <code>DecryptionKey</code><br>
+          <span class="hl">Purpose:</span> Signing and encrypting <code>__VIEWSTATE</code>, the framework's trusted client-side state<br>
+          <span class="hl">Effect of theft:</span> The ability to produce state the application accepts as its own<br>
+          <span class="hl">Why they are forgotten:</span> Rarely rotated, rarely inventoried, rarely thought of as credentials<br>
+          <span class="hl">Parallel:</span> Storm-0558 - stolen signing material is the hardest compromise to recover from
+        </div>
+        <div class="step-tags"><span class="stag">MachineKey</span><span class="stag">ValidationKey</span><span class="stag">Signing Material</span><span class="stag">T1552.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🎫 Defense Evasion - Forged Requests Nobody Can Distinguish</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">With the keys, attackers forged <code>__VIEWSTATE</code> payloads that SharePoint accepted as legitimate, providing authenticated command execution that survives patching</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1606/" target="_blank" rel="noopener">T1606 - Forge Web Credentials</a>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1550/" target="_blank" rel="noopener">T1550 - Use Alternate Authentication Material</a>
+        </div>
+        <p class="step-desc">A forged <code>__VIEWSTATE</code> signed with the real keys is not an anomaly to the application - it is a correctly signed request, and SharePoint validates it exactly as it validates its own. This is the single most important operational fact about ToolShell and the one most likely to be missed during response. Applying the patch closes the door the attacker came through and does nothing about the key they copied on the way in. Removing the web shell deletes the artifact and leaves the capability. Multiple analyses described the result as a permanent backdoor, and the phrasing is fair: until the machine keys are rotated, the attacker can return through traffic that is cryptographically indistinguishable from legitimate use, and no amount of log review will separate the two.</p>
+        <div class="step-code">
+          <span class="hl">Technique:</span> Forged <code>__VIEWSTATE</code> payloads signed with the stolen keys<br>
+          <span class="hl">Application's view:</span> A correctly signed, entirely legitimate request<br>
+          <span class="hl">Patching:</span> Closes the entry path, does nothing about the copied key<br>
+          <span class="hl">Web shell removal:</span> Deletes the artifact, leaves the capability<br>
+          <span class="hl">Required for recovery:</span> Rotating the machine keys, then restarting IIS
+        </div>
+        <div class="step-tags"><span class="stag">Forged __VIEWSTATE</span><span class="stag">Survives Patching</span><span class="stag">Indistinguishable Traffic</span><span class="stag">T1606</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a> - SharePoint Sits Next to Everything</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">A compromised on-premises SharePoint server is domain-joined, service-account-rich, and full of the documents that make the rest of the network easier</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1078/002/" target="_blank" rel="noopener">T1078.002 - Valid Accounts: Domain Accounts</a>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1213/002/" target="_blank" rel="noopener">T1213.002 - Data from Information Repositories: Sharepoint</a>
+        </div>
+        <p class="step-desc">On-premises SharePoint is rarely isolated. It is domain-joined, it runs under service accounts that frequently hold more Active Directory privilege than anyone intended, and it stores the corpus an intruder most wants next: network documentation, credentials pasted into pages, contracts, HR files, and project material. Reporting placed compromises at roughly 75 to 85 or more servers globally, which is a small number for a mass-exploitation event and reflects both the on-premises footprint and the targeting. The organizations that were hit tend to be the ones that kept SharePoint on-premises for regulatory or data-residency reasons, which correlates with holding exactly the material worth stealing.</p>
+        <div class="step-code">
+          <span class="hl">Position:</span> Domain-joined, often running service accounts with excessive AD privilege<br>
+          <span class="hl">Content:</span> Network documentation, pasted credentials, contracts, HR and project files<br>
+          <span class="hl">Scale:</span> Roughly 75-85+ servers globally assessed as compromised<br>
+          <span class="hl">Selection bias:</span> On-prem SharePoint often means regulated data kept deliberately in house
+        </div>
+        <div class="step-tags"><span class="stag">Domain Joined</span><span class="stag">Service Accounts</span><span class="stag">Document Corpus</span><span class="stag">T1213.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">🔒 Impact - Storm-2603 and Warlock Ransomware</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Microsoft attributed some exploitation to Storm-2603, assessed with moderate confidence as China-based, and observed Warlock ransomware deployed through this access</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1486/" target="_blank" rel="noopener">T1486 - Data Encrypted for Impact</a>
+        </div>
+        <p class="step-desc">Multiple actors moved on these CVEs, which is the normal pattern once a reliable unauthenticated exploit for widely deployed software becomes known. Microsoft tracks part of the activity as Storm-2603, assessed with moderate confidence to be China-based - note the confidence language, which is doing real work and should be preserved rather than flattened into a claim. That cluster went on to deploy Warlock ransomware. The combination is worth sitting with: an unauthenticated internet-facing RCE, a persistence mechanism that survives patching, and a ransomware payload at the end. An organization that patched promptly, removed the web shell, and did not rotate its machine keys could be encrypted weeks later and have no idea how the actor got back in.</p>
+        <div class="step-code">
+          <span class="hl">Attributed cluster:</span> Storm-2603, assessed by Microsoft with <em>moderate confidence</em> as China-based<br>
+          <span class="hl">Payload:</span> Warlock ransomware<br>
+          <span class="hl">Multiple actors:</span> Typical once a reliable unauthenticated exploit is public<br>
+          <span class="hl">The dangerous sequence:</span> Patch, delete the shell, skip key rotation, get encrypted weeks later
+        </div>
+        <div class="step-tags"><span class="stag">Storm-2603</span><span class="stag">Warlock Ransomware</span><span class="stag">Moderate Confidence</span><span class="stag">T1486</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Rotate the machine keys, then restart IIS - patching alone leaves the attacker inside.</strong> This is the single most important instruction on this page. If a SharePoint server was exposed during the exploitation window, assume the ValidationKey and DecryptionKey are stolen, rotate them, and restart IIS so the new keys take effect. Everything else in your response is undone if you skip this, because forged <code>__VIEWSTATE</code> traffic is cryptographically valid and you will not find it in logs.</div>
+        <div class="def-item"><strong>Get on-premises collaboration servers off the public internet.</strong> The vulnerability was unauthenticated, so reachability was the entire prerequisite. Put SharePoint behind a VPN or identity-aware proxy, or move to SharePoint Online, which this vulnerability did not affect. The Microsoft 365 exclusion is the clearest possible statement about where the maintenance burden lands: someone has to patch it within hours, and it does not have to be you.</div>
+        <div class="def-item"><strong>Assume compromise from the start of the exploitation window and hunt accordingly.</strong> Exploitation was underway before advisories landed. Search the layouts folder for unexpected <code>.aspx</code> files including <code>spinstall0.aspx</code>, review IIS logs for POST requests to <code>ToolPane.aspx</code>, and look for unusual child processes spawned by the SharePoint worker process. Absence of a web shell is not absence of compromise - the keys may already be gone.</div>
+        <div class="def-item"><strong>Constrain what the server can do outbound and what its service account can reach.</strong> Web shells fetched further payloads from attacker infrastructure, so default-deny egress from the SharePoint host breaks that stage. Then audit the service account: SharePoint service accounts routinely accumulate Active Directory privilege far past what the application needs, and that surplus is what turns a web compromise into a domain problem. Apply <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a> and tier your administrative accounts.</div>
+        <div class="def-item"><strong>Inventory cryptographic material as credentials with owners and rotation schedules.</strong> Almost nobody tracks machine keys, which is why stealing them works so well. Build an inventory of signing and encryption material across your estate - ASP.NET machine keys, SAML signing certificates, JWT signing keys, API signing secrets - with an owner, a rotation interval, and a tested rotation procedure for each. The <a href="storm-0558.html">Storm-0558</a> chain makes the same argument from the cloud side.</div>
+        <div class="def-item"><strong>Have an emergency patch path measured in hours for internet-facing systems.</strong> ToolShell went from active exploitation to public advisory to broad opportunistic scanning within days. Any internet-facing enterprise application needs a pre-authorized change path, a named approver, and a rehearsed rollback, so the decision to patch immediately is not being made for the first time during an active campaign. See <a href="../vulnerability-management.html">vulnerability management</a>.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.bitsight.com/blog/toolshell-threat-brief-sharepoint-rce-vulnerabilities-cve-2025-53770-53771-explained" target="_blank" rel="noopener">Bitsight - ToolShell threat brief</a>
+        <a class="src-link" href="https://www.fastly.com/blog/toolshell-remote-code-execution-sharepoint-cve-2025-53770-cve-2025-53771" target="_blank" rel="noopener">Fastly - ToolShell RCE analysis</a>
+        <a class="src-link" href="https://censys.com/advisory/cve-2025-53770/" target="_blank" rel="noopener">Censys - July 21 advisory and exposure data</a>
+        <a class="src-link" href="https://logpoint.com/en/blog/toolshell-when-sharepoint-becomes-a-gateway-to-rce" target="_blank" rel="noopener">Logpoint - When SharePoint becomes a gateway to RCE</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1606/" target="_blank" rel="noopener">MITRE T1606</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../vulnerability-management.html">Vulnerability management</a>
+    <a class="src-link" href="../network-security.html">Network security</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="entra-id-actor-token.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="salesloft-drift-unc6395.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

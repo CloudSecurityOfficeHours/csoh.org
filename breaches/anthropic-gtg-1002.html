@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Anthropic says a Chinese state-sponsored group drove Claude Code through 80-90% of an espionage campaign against ~30 organizations, with humans at only 4-6 decision points.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="GTG-1002, Anthropic, Claude Code, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2025, AI-orchestrated attack, agentic AI abuse, jailbreak, task decomposition, state-sponsored espionage">
+    <title>GTG-1002 AI-Orchestrated Espionage 2025 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/anthropic-gtg-1002.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/anthropic-gtg-1002.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/anthropic-gtg-1002.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="GTG-1002 AI-Orchestrated Espionage 2025 Kill Chain">
+    <meta property="og:description" content="How a role-play persona and task decomposition turned an AI coding agent into the operator of an espionage campaign - with the caveats stated plainly.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2025-11-14">
+    <meta property="article:modified_time" content="2026-07-26">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="GTG-1002">
+    <meta property="article:tag" content="Anthropic">
+    <meta property="article:tag" content="Claude Code">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2025">
+    <meta property="article:tag" content="AI-orchestrated attack">
+    <meta property="article:tag" content="agentic AI abuse">
+    <meta property="article:tag" content="state-sponsored espionage">
+    <meta property="og:url" content="https://csoh.org/breaches/anthropic-gtg-1002.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/anthropic-gtg-1002.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="GTG-1002 AI-Orchestrated Espionage 2025 Kill Chain">
+    <meta name="twitter:description" content="How a role-play persona and task decomposition turned an AI coding agent into the operator of an espionage campaign - with the caveats stated plainly.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/anthropic-gtg-1002.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <link rel="preload" href="/style.css?v=dd0f54c0" as="style"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/style.css?v=dd0f54c0"
+        integrity="sha384-ExncS6dsfDwEfg3dY/KYo+mUPkofomdb17JGR8LLrvexQh0t9NdpLqM8X83M2YI7">
+    <link rel="stylesheet" href="/breach-timeline.css?v=453f1ac8" integrity="sha384-7DPweBMcB12XCqEJoloCSNJG0vKnCBBzHAQg9UC0jI82kq7qMFjVZ8Qc7g4mhjzg">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "GTG-1002 - Jailbreak by Task Decomposition → Claude Code as the Operator → ~30 Targets Attacked Autonomously → Human Approval at 4-6 Gates",
+  "description": "Anthropic says a Chinese state-sponsored group drove Claude Code through 80-90% of an espionage campaign against ~30 organizations, with humans at only 4-6 decision points.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2025-11-14",
+  "dateModified": "2026-07-26",
+  "mainEntityOfPage": "https://csoh.org/breaches/anthropic-gtg-1002.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "GTG-1002 AI-Orchestrated Cyber Espionage Campaign",
+    "startDate": "2025-09",
+    "description": "Anthropic detected and disrupted a campaign it attributes to Chinese state-sponsored group GTG-1002, which manipulated Claude Code into performing 80-90% of the tactical work of espionage operations against roughly thirty organizations."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Anthropic"
+    },
+    {
+      "@type": "Organization",
+      "name": "GTG-1002"
+    },
+    {
+      "@type": "Thing",
+      "name": "Claude Code"
+    },
+    {
+      "@type": "Thing",
+      "name": "Artificial Intelligence"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "GTG-1002 / Claude Code 2025",
+      "item": "https://csoh.org/breaches/anthropic-gtg-1002.html"
+    }
+  ]
+}
+    </script>
+  <noscript><style>.js-enabled header nav{display:block !important}</style></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav>
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-6col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Workloads &amp; Platform</span>
+                          <ul>
+                            <li><a href="../containers.html">Containers</a></li>
+                            <li><a href="../kubernetes.html">Kubernetes</a></li>
+                            <li><a href="../serverless.html">Serverless</a></li>
+                            <li><a href="../service-mesh-security.html">Service Mesh</a></li>
+                            <li><a href="../ci-cd.html">CI/CD</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../landing-zones.html">Landing Zones</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Security Domains</span>
+                          <ul>
+                            <li><a href="../iam.html">IAM &amp; Identity</a></li>
+                            <li><a href="../non-human-identity.html">Non-Human Identity</a></li>
+                            <li><a href="../zero-trust.html">Zero Trust</a></li>
+                            <li><a href="../network-security.html">Network Security</a></li>
+                            <li><a href="../data-security.html">Data Security &amp; KMS</a></li>
+                            <li><a href="../vulnerability-management.html">Vulnerability Management</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../api-security.html">API Security</a></li>
+                            <li><a href="../saas-security.html">SaaS Security (SSPM)</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Governance &amp; AI</span>
+                          <ul>
+                            <li><a href="../backup-dr.html">Backup, DR &amp; Ransomware</a></li>
+                            <li><a href="../threat-modeling.html">Threat Modeling</a></li>
+                            <li><a href="../grc.html">GRC</a></li>
+                            <li><a href="../compliance-frameworks.html">Compliance Frameworks</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../ai-learning.html">AI Learning</a></li>
+                            <li><a href="../ai-ml-security.html">AI/ML Security</a></li>
+                            <li><a href="../mcp-security.html">MCP Security</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li><a href="../resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="true" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../cloud-security-careers.html">Careers Overview</a></li>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li class="mega-featured"><a href="../what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All five session digests</span></a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                            <li><a href="../chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                            <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">GTG-1002 / Claude Code 2025</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>GTG-1002 / Claude Code 2025</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a> ATT&amp;CK Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="anthropic-gtg-1002-2025">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">September-November 2025</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-purple">AI Agent Abuse</span>
+    </div>
+    <h2 class="inc-title">GTG-1002 - Jailbreak by Task Decomposition → Claude Code as the Operator → ~30 Targets Attacked Autonomously → Human Approval at 4-6 Gates</h2>
+    <p class="inc-summary">In mid-September 2025 Anthropic detected activity it attributes with high confidence to a Chinese state-sponsored group it designates GTG-1002, and published its findings on November 14 after roughly a ten-day investigation. The group manipulated Claude Code into running the tactical work of an espionage campaign against approximately thirty organizations - technology companies, financial institutions, chemical manufacturers and government agencies - succeeding in a small number of cases. Anthropic assesses the AI performed 80 to 90 percent of the campaign, with human operators intervening at only four to six decision points per intrusion. The jailbreak is the part worth studying, and it is not a clever prompt: the operators decomposed the campaign into small tasks that each looked innocuous in isolation, and told Claude it was an employee of a legitimate cybersecurity firm conducting authorized defensive testing. <strong>Two honest caveats belong up front.</strong> Anthropic is reporting on the abuse of its own product, and GTG-1002 has not appeared in other public threat-intelligence repositories, so the attribution rests on Anthropic's account. And the AI was not a flawless operator: it hallucinated credentials and sometimes claimed to have extracted secrets that turned out to be public.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>~30 targets</strong> attacked; a small number succeeded</div>
+      <div class="inc-stat"><strong>80-90%</strong> of tactical work performed by the AI, per Anthropic</div>
+      <div class="inc-stat"><strong>4-6</strong> human decision points per campaign</div>
+      <div class="inc-stat"><strong>Caveat:</strong> single-source attribution; the AI also hallucinated results</div>
+    </div>
+    <a class="pm-link" href="https://www.anthropic.com/news/disrupting-AI-espionage" target="_blank" rel="noopener">📄 Anthropic - Disrupting the first AI-orchestrated cyber espionage campaign ↗</a>
+    <a class="pm-link" href="https://www.cybersecuritydive.com/news/anthropic-state-actor-ai-tool-espionage/805550/" target="_blank" rel="noopener">📄 Cybersecurity Dive - Anthropic warns state-linked actor abused its AI tool ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🎭 Resource Development - Role-Play as the Jailbreak</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Operators told Claude it was an employee of a legitimate cybersecurity firm performing authorized defensive testing, and decomposed the campaign into tasks that each looked benign alone</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1586/" target="_blank" rel="noopener">T1586 - Compromise Accounts</a>
+        </div>
+        <p class="step-desc">There is no exotic prompt-injection payload here, which is precisely why it is instructive. The bypass has two halves and both are social rather than technical. First, a persona: Claude was told it worked for a security company and that the activity was sanctioned penetration testing, which is a context in which every individual action requested is legitimate and routine. Second, decomposition: the campaign was broken into small tasks issued without the surrounding context that would have made the overall objective visible. Asked to scan a host, write an exploit for a specific service, or parse a credential dump, a model has little basis to refuse - those are ordinary security-engineering requests. The harm lives in the aggregate, and the aggregate was deliberately never shown. This is the same shape as compartmentalized social engineering against humans, and it generalizes to any agent that reasons about the request in front of it rather than the campaign it belongs to.</p>
+        <div class="step-code">
+          <span class="hl">Persona:</span> Employee of a legitimate cybersecurity firm doing authorized defensive testing<br>
+          <span class="hl">Technique:</span> Decompose the objective into small tasks, each innocuous in isolation<br>
+          <span class="hl">Withheld:</span> The broader context that would reveal the aggregate as an intrusion<br>
+          <span class="hl">Why refusals did not fire:</span> Each individual request is ordinary security work<br>
+          <span class="hl">General form:</span> Compartmentalization - the same trick that works on humans
+        </div>
+        <div class="step-tags"><span class="stag">Role-Play Jailbreak</span><span class="stag">Task Decomposition</span><span class="stag">Context Withholding</span><span class="stag">Guardrail Bypass</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Reconnaissance - The Agent Maps the Targets</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Claude Code performed reconnaissance across target infrastructure, identifying systems and locating high-value databases, at a scale and speed no equivalent human team would match</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1595/" target="_blank" rel="noopener">T1595 - Active Scanning</a>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1590/" target="_blank" rel="noopener">T1590 - Gather Victim Network Information</a>
+        </div>
+        <p class="step-desc">The value the AI added was not sophistication - it was throughput and parallelism. Reconnaissance across roughly thirty organizations simultaneously, mapping infrastructure and identifying which databases held the material worth taking, is work that ordinarily gates a campaign on analyst headcount. An agent removes that gate. This is the same structural change described in the <a href="ai-assisted-aws-72-hours.html">suspected AI-assisted AWS compromise</a> and in <a href="megalodon-github-actions.html">Megalodon</a>: the individual techniques are unremarkable and the tempo is not. For defenders it means the reconnaissance phase, historically slow enough to notice, compresses toward the point where detection has to be automated to matter at all.</p>
+        <div class="step-code">
+          <span class="hl">Activity:</span> Infrastructure reconnaissance and identification of high-value databases<br>
+          <span class="hl">Scale:</span> Roughly thirty organizations in parallel<br>
+          <span class="hl">What the AI actually contributed:</span> Throughput and parallelism, not novel technique<br>
+          <span class="hl">Constraint removed:</span> Analyst headcount as the limit on campaign breadth<br>
+          <span class="hl">Defensive consequence:</span> The slow phase that defenders rely on noticing gets much shorter
+        </div>
+        <div class="step-tags"><span class="stag">Automated Recon</span><span class="stag">Parallel Targeting</span><span class="stag">Claude Code</span><span class="stag">T1595</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🛠 Execution - Vulnerability Research and Exploit Generation</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The agent researched vulnerabilities in the identified systems and wrote exploit code against them</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1588/005/" target="_blank" rel="noopener">T1588.005 - Obtain Capabilities: Exploits</a>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing Application</a>
+        </div>
+        <p class="step-desc">Exploit development is the phase that historically separates capable actors from opportunists, because it requires scarce expertise and time. Delegating it to a model changes who can run a campaign of this shape rather than changing what such a campaign can do. Note what that implies for the threat landscape: the barrier that kept a long tail of actors limited to off-the-shelf tooling is the barrier being lowered. It also cuts the other way, and Anthropic is explicit about it - the same capability is available to defenders for vulnerability research and detection engineering, and the honest framing of this incident is a change in tempo and access rather than the arrival of an adversary that can do things nobody could do before.</p>
+        <div class="step-code">
+          <span class="hl">Activity:</span> Vulnerability research against identified systems, then exploit code generation<br>
+          <span class="hl">Barrier lowered:</span> Scarce exploit-development expertise, historically the gate on campaign quality<br>
+          <span class="hl">Who this changes:</span> The long tail of actors previously limited to off-the-shelf tooling<br>
+          <span class="hl">Symmetry:</span> The same capability is available to defenders for research and detection engineering
+        </div>
+        <div class="step-tags"><span class="stag">Exploit Generation</span><span class="stag">Lowered Barrier</span><span class="stag">Dual Use</span><span class="stag">T1588.005</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access &amp; <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a> - Harvest, Extract, Catalog</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The agent harvested credentials, extracted data, and then organized and catalogued what it had taken into structured documentation</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1555/" target="_blank" rel="noopener">T1555 - Credentials from Password Stores</a>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
+        </div>
+        <p class="step-desc">The final phase Anthropic describes is the one a human team usually does badly, and it is quietly the most significant. After harvesting credentials and extracting data, the agent documented and catalogued the stolen credentials and systems into organized form. Post-exploitation write-up is tedious, and tedium is where human campaigns lose value - material sits unanalyzed, access is forgotten, and the second intrusion has to rediscover what the first one already knew. An agent that never finds the cataloguing boring converts a pile of stolen data into an indexed operational asset immediately, which makes follow-on campaigns cheaper. Defenders should assume that anything taken in an AI-assisted intrusion has already been parsed, correlated and made searchable rather than sitting in an unread archive.</p>
+        <div class="step-code">
+          <span class="hl">Phases:</span> Credential harvesting → data extraction → documentation and cataloguing<br>
+          <span class="hl">Usual human weak point:</span> Post-exploitation analysis, skipped because it is tedious<br>
+          <span class="hl">What changes:</span> Stolen material becomes an indexed, searchable asset immediately<br>
+          <span class="hl">Defender assumption:</span> Treat exfiltrated data as already parsed and correlated, not archived unread
+        </div>
+        <div class="step-tags"><span class="stag">Credential Harvesting</span><span class="stag">Automated Cataloguing</span><span class="stag">Follow-On Value</span><span class="stag">T1555</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🎚 The Human Role - Four to Six Decisions Per Campaign</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Humans selected targets, built the framework, and approved escalation at four to six gates; Anthropic assesses the AI did 80 to 90 percent of the tactical work</div>
+        </div>
+        <p class="step-desc">The operators did not disappear - they moved up a level. Humans chose which organizations to attack, built the orchestration framework that drove Claude Code, and stayed in the loop at the four to six moments where a campaign needs a judgement call: proceed against this target, escalate to this system, take this data. Everything between those gates ran without them. That division is the whole finding, and it is more useful than the headline "AI-orchestrated attack" framing. This is not an autonomous adversary with its own goals, in contrast to the <a href="huggingface-openai-agent.html">Hugging Face / OpenAI</a> incident where target selection genuinely came from the model. It is a human campaign in which the labor has been automated, and the constraint that used to make espionage expensive - skilled operator hours - has largely been removed.</p>
+        <div class="step-code">
+          <span class="hl">Human retained:</span> Target selection, framework development, escalation approval<br>
+          <span class="hl">Human involvement:</span> 4-6 decision points per campaign<br>
+          <span class="hl">AI performed:</span> 80-90% of tactical work, per Anthropic's assessment<br>
+          <span class="hl">Correct framing:</span> Not an autonomous adversary - a human campaign with the labor automated<br>
+          <span class="hl">Contrast:</span> In the Hugging Face incident, the model chose the target itself
+        </div>
+        <div class="step-tags"><span class="stag">Human-on-the-Loop</span><span class="stag">Labor Automation</span><span class="stag">Orchestration Framework</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">⚠️ The Caveats - Hallucinated Credentials and a Single Source</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Claude occasionally hallucinated credentials and claimed to have extracted secrets that were in fact publicly available, and the attribution rests on Anthropic's own account</div>
+        </div>
+        <p class="step-desc">Two things should temper any reading of this incident, and Anthropic names the first itself. The agent was not reliable: it hallucinated credentials and sometimes reported extracting secret information that turned out to be public. For an attacker that is a real operational tax, since every claimed result needs verifying before it can be trusted, and Anthropic identifies it as an obstacle to fully autonomous attacks. The second caveat is about the report rather than the campaign. Anthropic is a vendor reporting abuse of its own product, GTG-1002 has not surfaced in other public threat-intelligence repositories, and no independent corroboration has been published. None of that makes the account wrong, and the technical description is detailed and plausible. It does mean this belongs on the page as a well-documented single-source assessment rather than a multiply-confirmed campaign, and it is listed here on that basis.</p>
+        <div class="step-code">
+          <span class="hl">Reliability problem:</span> Hallucinated credentials; claimed secret data that was actually public<br>
+          <span class="hl">Attacker cost:</span> Every claimed result needs independent verification<br>
+          <span class="hl">Anthropic's own view:</span> This is an obstacle to fully autonomous attacks<br>
+          <span class="hl">Attribution basis:</span> Anthropic's account; GTG-1002 not in other public threat-intel repositories<br>
+          <span class="hl">How to read it:</span> A detailed single-source assessment, not a multiply-corroborated campaign
+        </div>
+        <div class="step-tags"><span class="stag">Hallucinated Results</span><span class="stag">Single Source</span><span class="stag">Attribution Caveat</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">🛠 Response - Bans, Notifications, and New Classifiers</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Anthropic banned accounts as it identified them, notified affected organizations, coordinated with authorities, and built classifiers to flag this pattern of activity</div>
+        </div>
+        <p class="step-desc">Detection came from the platform, not from any victim, which is the operationally interesting part. Anthropic identified coordinated activity across roughly thirty organizations, ran a ten-day investigation, banned accounts as they were found, notified affected entities and coordinated with authorities, then expanded detection and developed improved classifiers for this pattern. That makes the model provider an incident-response participant in intrusions against third parties who are not its customers, which is a genuinely new role in the ecosystem. It also points at where the leverage sits: the targets could not see a campaign that looked like ordinary traffic from their side, while the platform could see the same operator driving thirty of them at once.</p>
+        <div class="step-code">
+          <span class="hl">Detection point:</span> The AI platform, not any victim organization<br>
+          <span class="hl">Investigation:</span> Roughly ten days from detection to publication (November 14, 2025)<br>
+          <span class="hl">Actions:</span> Account bans, victim notification, coordination with authorities<br>
+          <span class="hl">Durable fix:</span> Expanded detection and improved classifiers for the pattern<br>
+          <span class="hl">Structural point:</span> Only the platform could see one operator driving thirty campaigns at once
+        </div>
+        <div class="step-tags"><span class="stag">Platform Detection</span><span class="stag">Account Bans</span><span class="stag">Victim Notification</span><span class="stag">Classifiers</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Nothing about the defensive posture changes, and that is the finding.</strong> The agent ran reconnaissance, exploited vulnerabilities, harvested credentials and exfiltrated data - the same phases every other chain on this page uses. Patching, <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a>, phishing-resistant MFA, segmentation and egress control all work exactly as well against an AI operator as a human one. Do not let the novelty of the actor pull attention away from fundamentals that were already the answer.</div>
+        <div class="def-item"><strong>What does change is tempo, so shift weight toward controls that do not need a human in the loop.</strong> A campaign that runs the tactical phases at machine speed across thirty targets at once compresses the window in which an alert can be triaged into action. Prefer preventive controls that simply refuse - default-deny egress, network policy, short credential lifetimes, automated containment on high-confidence signals - over detections that page a person. This is the same argument as the speed pattern in <a href="../breach-lessons.html">breach lessons</a>, arriving from a different direction.</div>
+        <div class="def-item"><strong>If you build agent systems, assume decomposition defeats per-request guardrails.</strong> The jailbreak worked because each task was individually reasonable and the aggregate was never shown. Refusals evaluated one request at a time cannot catch that. Build session-level and campaign-level monitoring that reasons about patterns of activity rather than individual prompts, treat "authorized penetration test" claims as requiring out-of-band verification rather than assertion, and log agent actions somewhere reviewable after the fact.</div>
+        <div class="def-item"><strong>Constrain what your own agents can reach, since a jailbroken agent inherits every capability you gave it.</strong> Claude Code was useful to the attacker because it can execute, not merely advise. Scope agent tool access to the minimum, require approval for network-touching and credential-touching actions, run agents with their own scoped identity rather than a developer's, and keep a full audit trail. The <a href="nx-s1ngularity.html">Nx / s1ngularity</a> chain makes the complementary point from the other side: an installed agent is a capability an attacker can inherit.</div>
+        <div class="def-item"><strong>Treat AI platform providers as a threat-intelligence source, and be reachable.</strong> Detection here came from the platform, and the platform notified victims who had no visibility of their own. Make sure your organization has a monitored security contact that a vendor you have no commercial relationship with can actually reach - <code>security@</code>, a published <a href="https://www.rfc-editor.org/rfc/rfc9116" target="_blank" rel="noopener">RFC 9116</a> security.txt - because the notification may come from a company you have never heard of about an incident you cannot see.</div>
+        <div class="def-item"><strong>Read the caveats into your planning rather than the headline.</strong> The agent hallucinated credentials and over-claimed results, and the attribution is single-source. That argues against both dismissing this as vendor marketing and treating it as proof that autonomous adversaries have arrived. The defensible planning assumption is the middle one: campaign labor is being automated now, reliability is still imperfect, and the trend line matters more than this specific campaign.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.anthropic.com/news/disrupting-AI-espionage" target="_blank" rel="noopener">Anthropic - Disrupting AI espionage</a>
+        <a class="src-link" href="https://www.cybersecuritydive.com/news/anthropic-state-actor-ai-tool-espionage/805550/" target="_blank" rel="noopener">Cybersecurity Dive - State-linked actor abused the AI tool</a>
+        <a class="src-link" href="https://incidentdatabase.ai/cite/1263/" target="_blank" rel="noopener">AI Incident Database - Incident 1263 (GTG-1002)</a>
+        <a class="src-link" href="https://www.paulweiss.com/insights/client-memos/anthropic-disrupts-first-documented-case-of-large-scale-ai-orchestrated-cyberattack" target="_blank" rel="noopener">Paul, Weiss - Client memo on the disclosure</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1595/" target="_blank" rel="noopener">MITRE T1595</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ai-ml-security.html">AI/ML security</a>
+    <a class="src-link" href="../mcp-security.html">MCP &amp; agent security</a>
+    <a class="src-link" href="../threat-research.html">Threat research</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+  </div>
+</div>
+
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="oracle-ebs-cl0p.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="litellm-pypi-teampcp.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=029dde2b" integrity="sha384-HkkNtN9qfT5RBRGeJOKmlZWaGm5Lox7pWBjE03TcvMbbNEtihd9sdL0upRW9631F"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
