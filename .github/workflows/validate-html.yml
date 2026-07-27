@@ -139,15 +139,25 @@ jobs:
       # not gating a merge, and a full sweep is the point of the cron.
       - name: Detect HTML changes
         id: html
+        # Context values go through `env:` rather than being interpolated
+        # straight into the script. That is this repo's house pattern for
+        # anything coming out of `github.*`, and here it also keeps the
+        # comparison honest: `${{ github.event_name }}` substituted directly
+        # into a `[ ... != ... ]` test renders as a literal string on both
+        # sides, so the shell reads `[ "pull_request" != "pull_request" ]` and
+        # the logs show a tautology. Correct, but unreadable.
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "Event is ${{ github.event_name }}, not a pull request: validating everything."
+          if [ "$IS_PR" != "true" ]; then
+            echo "Event is $EVENT, not a pull request: validating everything."
             echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base='${{ github.event.pull_request.base.sha }}'
-          if git diff --name-only "$base"...HEAD | grep -qE '\.html$'; then
+          if git diff --name-only "$BASE_SHA"...HEAD | grep -qE '\.html$'; then
             echo "This pull request touches HTML: validating."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
