@@ -83,6 +83,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-07-13 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.83s · CLS 0.000 · TBT 0ms · FCP 1.05s · CrUX-M (origin): LCP 1.20s (FAST) · INP 57ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 1.01s (FAST) · INP 36ms (FAST) · CLS 0.000 (FAST) |
 | 2026-07-20 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.71s · CLS 0.000 · TBT 54ms · FCP 1.05s · CrUX-M (origin): LCP 1.17s (FAST) · INP 54ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 1.05s (FAST) · INP 36ms (FAST) · CLS 0.000 (FAST) |
 | 2026-07-20 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.05s · CLS 0.000 · TBT 0ms · FCP 1.05s · CrUX-M (origin): LCP 1.17s (FAST) · INP 54ms (FAST) · CLS 0.000 (FAST) · CrUX-D (origin): LCP 1.05s (FAST) · INP 36ms (FAST) · CLS 0.000 (FAST) |
+| 2026-07-27 | 100 / 96 / 100 / 100 | 100 / 96 / 100 / 100 | Mobile: LCP 1.14s · CLS 0.000 · TBT 8ms · FCP 1.08s · M-a11y: color-contrast · D-a11y: color-contrast |
 
 ## How to use
 
