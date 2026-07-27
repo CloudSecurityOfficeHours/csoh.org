@@ -31,14 +31,24 @@ name: Validate HTML
 # workflow contains jobs; a job contains steps. Each event below is a
 # separate trigger - any one of them can start this workflow.
 on:
-  # `pull_request` fires when someone opens or updates a PR. `paths:` filters
-  # it down: the workflow only runs if a changed file matches a pattern here.
-  # `'**.html'` means "any .html file in any folder" (** = any directory depth),
-  # so PRs that only edit CSS, scripts, or docs are skipped - no point
-  # re-validating then.
+  # `pull_request` fires when someone opens or updates a PR.
+  #
+  # THERE IS DELIBERATELY NO `paths:` FILTER HERE, and putting one back would
+  # break more than it saves. This job is a REQUIRED STATUS CHECK on `main`, and
+  # a required check is satisfied only by a check run that actually reports. A
+  # workflow that `paths:` filters out never starts, so it produces no check run
+  # at all, so the requirement is never met and the pull request is blocked
+  # forever waiting for a result that cannot arrive. That is not a hypothetical:
+  # it would hang every PR touching only Python, YAML, or docs.
+  #
+  # The filtering still happens, just one level down. The "Detect HTML changes"
+  # step below works out whether this PR touches any .html, and the expensive
+  # steps are gated on its output. So a non-HTML PR still gets a green
+  # `validate-html` check, in a couple of seconds, having done no work.
+  #
+  # The `push:` trigger below keeps its `paths:` filter, because nothing depends
+  # on a push producing a check run.
   pull_request:
-    paths:
-      - '**.html'
   # `push` fires when commits land on a branch. `branches:` limits it to
   # `main`, and `paths:` again limits it to HTML changes - so both conditions
   # must hold for this trigger to fire. This catches direct commits to main
@@ -108,6 +118,43 @@ jobs:
       # compromised tag from running malicious code on our runner.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # Needed by the next step: diffing this PR against its base commit
+          # requires both commits to be present, and checkout defaults to a
+          # depth of 1. Without this the `git diff` below fails with a bad
+          # object rather than reporting no changes, which would at least be
+          # loud - but there is no reason to find out.
+          fetch-depth: 0
+
+      # Decide whether this run has any HTML to validate.
+      #
+      # This exists because the `pull_request` trigger above deliberately has no
+      # `paths:` filter (see the long note there): as a required status check
+      # this workflow must ALWAYS produce a check run, including on pull
+      # requests that touch no HTML at all. The filtering therefore moves here,
+      # where skipping work is cheap and still reports success.
+      #
+      # Any event that is not a pull_request - push to main, the weekly cron, a
+      # manual dispatch - validates everything unconditionally. Those runs are
+      # not gating a merge, and a full sweep is the point of the cron.
+      - name: Detect HTML changes
+        id: html
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Event is ${{ github.event_name }}, not a pull request: validating everything."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base='${{ github.event.pull_request.base.sha }}'
+          if git diff --name-only "$base"...HEAD | grep -qE '\.html$'; then
+            echo "This pull request touches HTML: validating."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No .html files changed in this pull request; nothing to validate."
+            echo "This check reports success so it can serve as a required status check."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # This step uses `run:` instead of `uses:` - it executes a shell command
       # on the runner. Here it launches a small Python script that lives in the
@@ -117,6 +164,7 @@ jobs:
       # browser - they "pass" HTML validation but break behavior. JSON-LD
       # and other data-typed <script> blocks are allowed (CSP exempts them).
       - name: Reject inline scripts (CSP gate)
+        if: steps.html.outputs.changed == 'true'
         run: python3 tools/check_no_inline_scripts.py
 
       # Step 3 - Require width/height on every <svg viewBox>. Without the
@@ -126,6 +174,7 @@ jobs:
       # Web Vitals. The attributes only set the aspect ratio; final
       # rendered size still comes from CSS.
       - name: Require SVG dimensions (CLS gate)
+        if: steps.html.outputs.changed == 'true'
         run: python3 tools/check_svg_dimensions.py
 
       # Step 3b - Every JSON-LD block must be valid JSON. Strict schema.org
@@ -134,11 +183,13 @@ jobs:
       # data at all - silently, since presence-only audits still see a
       # <script> tag. This gate parses each block with json.loads.
       - name: Validate JSON-LD (structured-data gate)
+        if: steps.html.outputs.changed == 'true'
         run: python3 tools/check_jsonld.py
 
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
+        if: steps.html.outputs.changed == 'true'
         uses: Cyb3r-Jak3/html5validator-action@443b108eb8e134b63a1f8a8ba0c942d552608ed7  # master 2025-09-19
         # `with:` passes input parameters into a `uses:` action - like
         # arguments to a function. The keys an action accepts are defined by
@@ -156,7 +207,9 @@ jobs:
       # even if the previous step failed, so we still get the log when it's
       # most useful.
       - name: Upload validation log
-        if: always()
+        # `always()` so a FAILED validation still uploads its log, but only when
+        # validation actually ran - there is no log to upload on a skipped run.
+        if: always() && steps.html.outputs.changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           # `name` is the label the download shows under; `path` is which file

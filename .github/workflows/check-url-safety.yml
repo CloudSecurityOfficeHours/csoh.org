@@ -39,14 +39,23 @@ name: Check URL Safety
 # events below is enough to launch a fresh run; they are alternatives, not
 # requirements.
 on:
-  # `pull_request` fires when someone opens or updates a PR. `paths:` filters
-  # it down: the workflow only runs if a changed file matches a pattern here.
-  # `'**.html'` means "any .html file in any folder" (** = any directory
-  # depth) - HTML is where new URLs get introduced, so PRs that only touch
-  # CSS, scripts, or docs are skipped.
+  # `pull_request` fires when someone opens or updates a PR.
+  #
+  # THERE IS DELIBERATELY NO `paths:` FILTER HERE. This job is a REQUIRED STATUS
+  # CHECK on `main`, and a required check is only satisfied by a check run that
+  # actually reports. A workflow filtered out by `paths:` never starts and so
+  # produces no check run, leaving the pull request blocked forever waiting on a
+  # result that cannot arrive - which would hang every PR touching only Python,
+  # YAML, or docs.
+  #
+  # The filtering moved into the "Detect HTML changes" step below, which decides
+  # whether this PR touches any .html and gates the scan on the answer. A
+  # non-HTML PR still gets a green `check-urls` check, quickly, having scanned
+  # nothing.
+  #
+  # The `push:` trigger below keeps its `paths:` filter; nothing depends on a
+  # push producing a check run.
   pull_request:
-    paths:
-      - '**.html'
   # `push` on main, same path filter. Without this the scan had never once run
   # on the event that actually publishes: every run in this workflow's history
   # was a pull_request or the weekly cron. That left a real gap, because the
@@ -142,11 +151,46 @@ jobs:
       # that SHA corresponds to.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # The next step diffs this PR against its base commit, which needs
+          # both commits present; checkout defaults to a depth of 1.
+          fetch-depth: 0
+
+      # Decide whether this run has any HTML to scan.
+      #
+      # The `pull_request` trigger above deliberately carries no `paths:` filter
+      # (see the note there), because as a required status check this workflow
+      # must always produce a check run. The path filtering lives here instead,
+      # where skipping is cheap and still reports success.
+      #
+      # Anything that is not a pull_request - a push to main, the weekly cron, a
+      # manual dispatch - scans everything. Those runs gate no merge, and a full
+      # sweep is the point of the cron: a URL that was safe last week can be
+      # re-registered and turn hostile without any file changing.
+      - name: Detect HTML changes
+        id: html
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Event is ${{ github.event_name }}, not a pull request: scanning everything."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base='${{ github.event.pull_request.base.sha }}'
+          if git diff --name-only "$base"...HEAD | grep -qE '\.html$'; then
+            echo "This pull request touches HTML: scanning."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No .html files changed in this pull request; no URLs to scan."
+            echo "This check reports success so it can serve as a required status check."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Step 2 - Install Python on the runner so the next step's `python3`
       # command exists; the safety check is a Python script. Another SHA-pinned
       # first-party action.
       - name: Set up Python
+        if: steps.html.outputs.changed == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         # `with:` passes named inputs (settings) into the action above - like
         # arguments to a function. This action reads `python-version`.
@@ -156,6 +200,7 @@ jobs:
       # Step 3 - Run the actual scanner and decide pass/fail.
       # `run: |` runs a multi-line shell script on the runner.
       - name: Run URL safety check
+        if: steps.html.outputs.changed == 'true'
         run: |
           # Run the scanner, redirecting BOTH stdout and stderr (`2>&1`) into
           # one report file. The step runs under `bash -e`, so a nonzero exit
@@ -184,7 +229,9 @@ jobs:
       # to keep the report. `if: always()` runs this even when an earlier step
       # failed (the report still exists and is exactly what we need to debug).
       - name: Upload safety report
-        if: always()
+        # `always()` so a FAILED scan still uploads its report, but only when a
+        # scan actually ran - a skipped run produces no report to upload.
+        if: always() && steps.html.outputs.changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           # `name` is the label of the downloadable bundle; `path` is the file
