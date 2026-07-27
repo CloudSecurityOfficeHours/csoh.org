@@ -1275,3 +1275,4 @@ Copyright © 2023-2026 Cloud Security Office Hours / Shawn Nunley
 ---
 
 For the latest updates and announcements, sign up for the [mailing list](https://csoh.kit.com/39feb4f397).
+
