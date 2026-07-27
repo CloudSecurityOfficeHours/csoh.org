@@ -15,13 +15,14 @@ python3 tools/check_robots_parity.py --url https://csoh.org/        # same, robo
 python3 tools/check_robots_parity.py --url http://127.0.0.1:8000/robots.txt
 ```
 
-Passing run (against a local `python3 -m http.server` serving the repo's own file):
+Passing run, against production (real output, 2026-07-26, after the edge injection was
+turned off):
 
 ```
-Checking robots.txt from robots.txt against http://127.0.0.1:8731/robots.txt
+Checking robots.txt from robots.txt against https://csoh.org/robots.txt
   ok  99 lines match, byte-for-byte after whitespace normalization
 
-OK: robots.txt at http://127.0.0.1:8731/robots.txt matches the repo.
+OK: robots.txt at https://csoh.org/robots.txt matches the repo.
 ```
 
 Standard library only. No `pip install`, no Cloudflare API token: it does a plain `GET`
@@ -48,17 +49,23 @@ response at the edge, prepending a Content-Signal preamble and a
 `# BEGIN Cloudflare Managed content` block ahead of the origin's file. That block carries
 `Disallow: /` for the crawlers the repo Allows.
 
-It is enabled on this zone right now. Confirm in two commands:
+It was enabled on this zone until **2026-07-26**, when the toggle was turned off (see
+[How it got here](#how-it-got-here)). Both of these return `0` today, and that is the
+state this checker now defends:
 
 ```sh
-curl -s https://csoh.org/robots.txt | grep -c 'Cloudflare Managed'   # 2
+curl -s https://csoh.org/robots.txt | grep -c 'Cloudflare Managed'   # 0 today; was 2
 grep -c 'Cloudflare Managed' robots.txt                              # 0
 ```
 
-The origin file is untouched and still present, immediately below the injection. That is
-what makes it hard to notice: `git diff` is clean, all three origins serve the right
-bytes, `terraform plan` is clean (nothing in `infra/terraform/cloudflare/` declares this
-toggle), and only the edge disagrees.
+The `2` was the `# BEGIN` and `# END` marker pair around the injected block. The served
+file ran to 160 lines against the repo's 99; today both are 99, so a plain
+`curl -s https://csoh.org/robots.txt | wc -l` is the fastest smell test.
+
+The injection leaves the origin file untouched and still present, immediately below its
+own block. That is what makes it hard to notice: `git diff` is clean, all three origins
+serve the right bytes, `terraform plan` is clean (nothing in
+`infra/terraform/cloudflare/` declares this toggle), and only the edge disagrees.
 
 What crawlers then do is genuinely undefined. RFC 9309 says records sharing a user-agent
 token should be merged, in which case an `Allow: /` and a `Disallow: /` of equal
@@ -96,8 +103,9 @@ parser bug can never make a drifted file look clean.
 
 ## When it fails
 
-A real run against production today, abridged (the script prints the full 60-line
-injected block in the diff; exit status 1):
+A real run against production on 2026-07-26, taken while the injection was still live and
+before the toggle was turned off, abridged (the script prints the full 60-line injected
+block in the diff; exit status 1):
 
 ```
 Checking robots.txt from robots.txt against https://csoh.org/robots.txt

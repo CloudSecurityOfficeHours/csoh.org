@@ -9,14 +9,17 @@ Terraform cannot enforce this particular resource.
 ## Quick Start
 
 ```bash
-python3 tools/check_edge_headers.py                                  # checks https://csoh.org/
+python3 tools/check_edge_headers.py                                  # 40 samples of https://csoh.org/
 python3 tools/check_edge_headers.py --url https://csoh.org/about.html
+python3 tools/check_edge_headers.py --url https://<dist>.cloudfront.net/ --samples 1
 ```
 
-Passing run:
+Passing run (real output, 2026-07-26, about 12 seconds wall clock):
 
 ```
 Checking 8 security headers from infra/terraform/cloudflare/rules.tf against https://csoh.org/
+Sampling 40 cache-busted requests to reach all origins
+  origins reached: aws=8, azure=17, gcp-or-unlabelled=15
   ok  Strict-Transport-Security
   ok  X-Content-Type-Options
   ok  X-Frame-Options
@@ -26,11 +29,16 @@ Checking 8 security headers from infra/terraform/cloudflare/rules.tf against htt
   ok  Cross-Origin-Opener-Policy
   ok  Cross-Origin-Resource-Policy
 
-OK: all 8 headers at https://csoh.org/ match the repo.
+OK: all 8 headers match the repo across 40 request(s) to https://csoh.org/.
 ```
 
-Standard library only. No `pip install`, no Cloudflare API token: it just does a plain
-`GET` and reads the response headers.
+Two flags. `--url` points at any hostname: use an origin's own hostname to check that
+origin directly instead of the edge. `--samples` sets how many cache-busted requests to
+make, default 40, and the next section is entirely about why that number is not 1. Use
+`--samples 1` when `--url` names a single origin, where there is nothing to sample.
+
+Standard library only. No `pip install`, no Cloudflare API token: it just does plain
+`GET`s and reads the response headers.
 
 ## Why this exists: the ruleset in Git is inert
 
@@ -60,13 +68,67 @@ origin until 2026-07-25:
 | Origin | Sets these headers itself? |
 |---|---|
 | GCP / Cloud Run (nginx) | Yes, via [`nginx-security-headers.conf`](../nginx-security-headers.conf) |
-| AWS / CloudFront | Yes, since `aws_cloudfront_response_headers_policy.security` was added to [`infra/terraform/aws/cloudfront.tf`](../infra/terraform/aws/cloudfront.tf) - but **only once `terraform -chdir=infra/terraform/aws apply` has run**; until then the distribution still serves no headers of its own |
+| AWS / CloudFront | Yes, via `aws_cloudfront_response_headers_policy.security` in [`infra/terraform/aws/cloudfront.tf`](../infra/terraform/aws/cloudfront.tf), added and applied on 2026-07-25. Before that apply the distribution served no headers of its own, and its `*.cloudfront.net` hostname is public |
 | Azure Blob static website | **No.** Azure Blob static websites cannot emit custom response headers at all |
 
 So the script closes the loop from the other end. Terraform cannot tell you the edge
 drifted, so CI asks the edge directly. Drift from a forgotten apply, an ad-hoc
 dashboard edit, or someone with the Cloudflare API token weakening a header now fails
 the build instead of going unnoticed.
+
+## Why 40 requests and not one
+
+Until 2026-07-26 this gate made exactly one request, and that made it far weaker than it
+looked. Read the table above again: the apex is a Cloudflare load balancer over three
+origins, and **AWS and GCP now set these headers themselves**. An AWS-served or GCP-served
+response therefore looks perfect whether the Cloudflare ruleset is correct, weakened, or
+deleted outright. Only an **Azure**-served response actually exercises the ruleset, because
+Azure Blob static websites cannot emit custom response headers at all.
+
+One request that happens to land on AWS or GCP is not a check of the thing this script
+exists to guard. It is a check of the origin that did not need guarding. The distribution
+measured over 20 requests on 2026-07-26 was 10 GCP, 6 AWS, 4 Azure, so a single-request
+gate reported green roughly four times in five even in the scenario where the edge ruleset
+had been deleted - and the real-world failure it was missing would have shipped to about
+one visitor in five. Azure's share is not fixed: the 40-sample run quoted above saw 17.
+
+So the script now makes `--samples` requests (default 40), each with a unique
+`?__hdrcheck=` cache-buster - a cached response would just re-confirm whichever origin
+answered first - and prints which origins it reached:
+
+```
+  origins reached: aws=8, azure=17, gcp-or-unlabelled=15
+```
+
+Every failure is tagged with the origin that produced it, which is the diagnostic that
+matters: a failure seen **only** on `origin=azure` means the Cloudflare ruleset is the
+broken part, since Azure has nothing else to fall back on. A failure on all three is
+more likely a bad value in `rules.tf` itself.
+
+The default of 40 comes from measurement, not from a binomial calculation, because
+Cloudflare's steering is not independent per request: it arrives in bursts. The numbers
+recorded in the script's `DEFAULT_SAMPLES` comment, all from 2026-07-26: two consecutive
+25-sample runs reached Azure **zero** times, and the next reached it 17 times. At 40
+samples, five consecutive runs reached Azure 15, 15, 12, 7 and 11 times. Forty costs about
+10 seconds and has so far always reached Azure; 25 demonstrably has not.
+
+**This is sampling, not proof, and the script says so.** Nothing here can force Cloudflare
+to route a request to a chosen origin. A run that never lands on Azure has not tested the
+ruleset, so a passing run that saw no Azure response prints:
+
+```
+  ! warning: no request landed on the Azure origin, which is the only
+    one relying on the Cloudflare ruleset. Consider raising --samples.
+```
+
+Treat that warning as "this run proved nothing about the edge" and re-run with a higher
+`--samples`. The only deterministic alternative is reading the ruleset back through the
+Cloudflare API, which needs a token with ruleset permissions; the deploy path deliberately
+carries only a cache-purge token (see the two-tokens section in [`CLAUDE.md`](../CLAUDE.md)),
+and giving CI the broader one to check a header would hand it the ability to rewrite one.
+
+`--samples 1` remains correct when `--url` names a single origin hostname directly: there
+is one origin, so there is nothing to sample.
 
 ## What it checks
 
@@ -103,6 +165,10 @@ the time it runs it is checking a fully-published site.
   run: python3 tools/check_edge_headers.py --url https://csoh.org/
 ```
 
+No `--samples` there on purpose: CI gets the default 40, and the ~10 seconds it costs is
+noise next to a deploy. If you ever add `--samples` to that step, adding a smaller number
+is the one direction that silently weakens the gate.
+
 That job historically had no checkout of its own (which is why the SRI step above it is
 written as an inline heredoc). It now checks out the repo purely to get this script,
 with `persist-credentials: false` - nothing in the job talks to git after the clone, so
@@ -115,14 +181,16 @@ against production with `'unsafe-inline'` added to `script-src` in `rules.tf` (v
 abridged here; the script prints them in full, exit status 1):
 
 ```
-FAIL: 1 header(s) do not match what Git declares.
+FAIL: 1 header problem(s) versus what Git declares.
 
-  - Content-Security-Policy: DRIFT
+  - [origin=azure] Content-Security-Policy: DRIFT
       repo: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; ...
       edge: default-src 'self'; script-src 'self'; style-src 'self'; ...
 ```
 
-`repo:` is what `rules.tf` declares, `edge:` is what csoh.org served.
+`repo:` is what `rules.tf` declares, `edge:` is what csoh.org served. The `[origin=...]`
+tag says which origin answered the request that produced the problem, and identical
+problems are reported once however many samples hit them.
 
 **`terraform apply` will NOT fix this** while `ignore_changes = [rules]` is in place.
 It will report a clean plan and change nothing. Two things actually work:
@@ -131,9 +199,16 @@ It will report a clean plan and change nothing. Two things actually work:
 2. Temporarily drop the `lifecycle` block for a single `terraform apply`, then put it
    back (expect the inconsistent-result error to reappear on the next re-apply).
 
-A `MISSING` result for every header usually means you pointed `--url` at a bare origin
-rather than at the Cloudflare edge. That is a real thing to check by hand, but it is
-expected to fail for the Azure origin, which cannot set the headers at all.
+A `MISSING` result for every header, tagged `[origin=azure]`, is the signature of the
+failure this gate is built for: the Azure origin serves no headers of its own, so the
+edge ruleset has stopped applying.
+
+The same all-`MISSING` result when you pointed `--url` at the Azure blob endpoint
+directly, with `--samples 1`, is expected and means nothing is wrong - you bypassed the
+edge. Pointing `--url` at the AWS or GCP origin directly should now **pass**, since both
+set the headers themselves; that is a useful way to confirm the CloudFront policy and
+`nginx-security-headers.conf` have not fallen behind, because nothing in CI checks those
+two.
 
 ## The parsing gotcha worth remembering
 
@@ -171,8 +246,15 @@ against each other:
 - `infra/terraform/aws/cloudfront.tf` (`aws_cloudfront_response_headers_policy.security`)
 - `nginx-security-headers.conf` (the GCP origin)
 
-Change one, change all three. This script only asserts the first one against the live
-edge; it will not notice an origin that has fallen behind.
+Change one, change all three. **CI checks only the first.** The other two are kept in
+step by hand.
+
+Sampling does not change that. The ruleset's `set` operation overwrites whatever the
+origin sent, so a response that came back through the apex carries the edge's values no
+matter which origin produced it - which is precisely why an edge failure shows up only on
+Azure, and equally why a stale CloudFront policy or a stale `nginx-security-headers.conf`
+is invisible from the apex. To check those two, aim `--url` at the origin hostname itself
+with `--samples 1`, as described under [When it fails](#when-it-fails).
 
 ## Delete this script when...
 

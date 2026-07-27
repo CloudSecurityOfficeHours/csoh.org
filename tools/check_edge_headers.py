@@ -34,11 +34,19 @@ the ruleset for real again.
 
 USAGE
 -----
-    python3 tools/check_edge_headers.py                 # checks https://csoh.org/
+    python3 tools/check_edge_headers.py                        # 40 samples of the edge
     python3 tools/check_edge_headers.py --url https://csoh.org/about.html
+    python3 tools/check_edge_headers.py --url https://<dist>.cloudfront.net/ --samples 1
 
-`--url` is the only flag; point it at an origin's own hostname to check that
-origin directly instead of the edge.
+`--url` points at any hostname; use an origin's own hostname to check that origin
+directly instead of the edge.
+
+`--samples` sets how many cache-busted requests to make (default 40). The apex is
+a load balancer over three origins and only Azure depends on the Cloudflare
+ruleset, so one request can pass while the edge is broken - see DEFAULT_SAMPLES
+below. Use `--samples 1` when pointing at a single origin, where there is nothing
+to sample. The run reports which origins it reached, and warns if it never
+reached Azure, because such a run did not test what it claims to.
 
 Exits non-zero on any missing or mismatched header.
 """
@@ -46,6 +54,7 @@ Exits non-zero on any missing or mismatched header.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import urllib.error
@@ -56,6 +65,31 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 RULES_TF = REPO_ROOT / "infra" / "terraform" / "cloudflare" / "rules.tf"
 
 DEFAULT_URL = "https://csoh.org/"
+
+# How many cache-busted requests to make by default.
+#
+# The apex is a Cloudflare load balancer over three origins. AWS and GCP now set
+# these headers themselves (aws_cloudfront_response_headers_policy.security and
+# nginx-security-headers.conf), so ONLY Azure-served responses actually test the
+# Cloudflare ruleset this script exists to guard. A single request - which is
+# what this gate did until 2026-07-26 - had roughly a 4-in-5 chance of landing
+# on an origin that looks correct even with the ruleset deleted.
+#
+# Steering is not evenly random per request; it arrives in bursts. Measured
+# 2026-07-26: two consecutive 25-sample runs reached Azure zero times, then the
+# next reached it 17 times. At 40 samples, five consecutive runs reached Azure
+# 15, 15, 12, 7 and 11 times. So 40 is chosen from observed behaviour, not from
+# a binomial calculation that assumes independence the balancer does not honour.
+#
+# BE HONEST ABOUT THE LIMIT: this is sampling, not proof. Nothing here can force
+# Cloudflare to route to a specific origin, and the only deterministic check
+# would be reading the ruleset back through the Cloudflare API, which needs a
+# token the deploy path deliberately does not carry (see CLAUDE.md on the two
+# tokens). If a run reports no Azure request, it did not test the thing it
+# claims to test, and it says so.
+#
+# Cost is about 10 seconds.
+DEFAULT_SAMPLES = 40
 
 # The rule we care about inside rules.tf. Anchoring on the ref keeps us from
 # picking up headers from some future second rule in the same file.
@@ -132,22 +166,74 @@ def normalize(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def check(url: str, expected: dict[str, str]) -> list[str]:
-    """Return a list of human-readable problems; empty means the edge matches."""
+def identify_origin(headers: dict[str, str]) -> str:
+    """Best-effort: which of the three origins answered this request.
+
+    Only used for coverage reporting, never for pass/fail, so a wrong guess
+    costs nothing but a confusing label.
+    """
+    if "x-ms-request-id" in headers or "x-ms-version" in headers:
+        return "azure"
+    if "x-amz-cf-id" in headers or "x-amz-request-id" in headers:
+        return "aws"
+    # No positive marker for the GCP origin: Cloudflare rewrites `Server:` to
+    # "cloudflare" on the way out, so nginx leaves no fingerprint. Everything
+    # that is neither Azure nor AWS is therefore GCP in practice, but label it
+    # honestly rather than asserting something we did not observe.
+    return "gcp-or-unlabelled"
+
+
+def check_once(url: str, expected: dict[str, str]) -> tuple[list[str], str]:
+    """Check a single response. Returns (problems, origin-label)."""
     actual = fetch_headers(url)
     problems: list[str] = []
 
     for name, want in expected.items():
         got = actual.get(name.lower())
         if got is None:
-            problems.append(f"{name}: MISSING at the edge (expected {want!r})")
+            problems.append(f"{name}: MISSING (expected {want!r})")
         elif normalize(got) != normalize(want):
             problems.append(
                 f"{name}: DRIFT\n"
                 f"      repo: {normalize(want)}\n"
                 f"      edge: {normalize(got)}"
             )
-    return problems
+    return problems, identify_origin(actual)
+
+
+def check(url: str, expected: dict[str, str], samples: int = 1) -> tuple[list[str], dict[str, int]]:
+    """Sample the URL `samples` times; return (problems, origin hit counts).
+
+    WHY MORE THAN ONE REQUEST. csoh.org is a Cloudflare load balancer over three
+    origins, and two of them now set these headers themselves: the AWS origin via
+    aws_cloudfront_response_headers_policy.security, and the GCP origin via
+    nginx-security-headers.conf. Only Azure Blob cannot, so Azure-served
+    responses are the ones that depend entirely on the Cloudflare ruleset this
+    script exists to guard.
+
+    A single request therefore had roughly a 4-in-5 chance of landing on an
+    origin that would look correct even if the Cloudflare ruleset had been
+    deleted. Measured distribution over 20 requests on 2026-07-26: 10 GCP,
+    6 AWS, 4 Azure. The gate reported green while a real edge failure would
+    have shipped to about one visitor in five.
+
+    Each request carries a unique cache-busting query string, because a cached
+    response does not re-exercise the origin and would just re-confirm whichever
+    origin answered first.
+    """
+    problems: list[str] = []
+    seen: dict[str, int] = {}
+    sep = "&" if "?" in url else "?"
+
+    for i in range(max(1, samples)):
+        probe = f"{url}{sep}__hdrcheck={i}-{os.getpid()}"
+        found, origin = check_once(probe, expected)
+        seen[origin] = seen.get(origin, 0) + 1
+        for p in found:
+            tagged = f"[origin={origin}] {p}"
+            if tagged not in problems:
+                problems.append(tagged)
+    return problems, seen
 
 
 def main() -> int:
@@ -157,16 +243,34 @@ def main() -> int:
         default=DEFAULT_URL,
         help=f"URL to check (default: {DEFAULT_URL})",
     )
+    ap.add_argument(
+        "--samples",
+        type=int,
+        default=DEFAULT_SAMPLES,
+        help=(
+            f"how many cache-busted requests to make (default: {DEFAULT_SAMPLES}). "
+            "The apex is a load balancer over three origins and only one of them "
+            "(Azure) depends on the Cloudflare ruleset, so a single request can "
+            "pass while the edge is broken. Use 1 only when pointing --url at a "
+            "single origin hostname, where there is nothing to sample."
+        ),
+    )
     args = ap.parse_args()
 
     expected = parse_expected_headers()
     print(f"Checking {len(expected)} security headers from "
           f"infra/terraform/cloudflare/rules.tf against {args.url}")
+    if args.samples > 1:
+        print(f"Sampling {args.samples} cache-busted requests to reach all origins")
 
-    problems = check(args.url, expected)
+    problems, seen = check(args.url, expected, args.samples)
+
+    if seen:
+        print("  origins reached: "
+              + ", ".join(f"{k}={v}" for k, v in sorted(seen.items())))
 
     if problems:
-        print(f"\nFAIL: {len(problems)} header(s) do not match what Git declares.\n")
+        print(f"\nFAIL: {len(problems)} header problem(s) versus what Git declares.\n")
         for p in problems:
             print(f"  - {p}")
         print(
@@ -175,11 +279,23 @@ def main() -> int:
             "the Cloudflare dashboard to match\nthis repo, or temporarily drop "
             "ignore_changes for one apply."
         )
+        print(
+            "\nNote the origin= tag on each problem. A failure seen ONLY on "
+            "origin=azure means the\nCloudflare ruleset is the broken part, "
+            "because Azure Blob cannot set these headers\nitself and depends "
+            "entirely on the edge."
+        )
         return 1
 
     for name in expected:
         print(f"  ok  {name}")
-    print(f"\nOK: all {len(expected)} headers at {args.url} match the repo.")
+    print(f"\nOK: all {len(expected)} headers match the repo "
+          f"across {args.samples} request(s) to {args.url}.")
+    if args.samples > 1 and "azure" not in seen:
+        print(
+            "  ! warning: no request landed on the Azure origin, which is the only\n"
+            "    one relying on the Cloudflare ruleset. Consider raising --samples."
+        )
     return 0
 
 

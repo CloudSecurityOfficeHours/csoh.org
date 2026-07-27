@@ -47,6 +47,22 @@ on:
   pull_request:
     paths:
       - '**.html'
+  # `push` on main, same path filter. Without this the scan had never once run
+  # on the event that actually publishes: every run in this workflow's history
+  # was a pull_request or the weekly cron. That left a real gap, because the
+  # repo owner and the csoh-ci App are both on the Main ruleset's bypass list,
+  # so HTML reaches production by direct push routinely - as it did throughout
+  # the 2026-07-25/26 remediation. A URL-safety scan that only ever sees PRs
+  # does not cover the path most content takes to the live site.
+  #
+  # This does not block the deploy (it is a separate workflow), so treat it as
+  # detection rather than prevention: it runs alongside the deploy and reports.
+  # Making it blocking would mean adding it to the Main ruleset's required
+  # status checks.
+  push:
+    branches: [main]
+    paths:
+      - '**.html'
   # `schedule` runs the workflow on a timer using cron syntax. This weekly
   # recheck catches domains that turn malicious AFTER they were originally
   # safe to link.

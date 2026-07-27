@@ -270,9 +270,19 @@ jobs:
       # direct API merges do. So this approval step is still needed to
       # drive auto-merge below to completion.
       - name: Auto approve
-        # Skip unless the create-PR step actually produced a PR number. (An
-        # empty string `''` means no PR was opened - e.g. nothing changed.)
-        if: steps.cpr.outputs.pull-request-number != ''
+        # Two conditions, and the second one matters. Skip unless the create-PR
+        # step actually produced a PR number (an empty string `''` means no PR
+        # was opened), AND the diff is news content only.
+        #
+        # The scope check used to be missing here, so a PR that touched
+        # something unexpected still received a code-owner approval - it simply
+        # did not get auto-merge enabled by the next step. That is a weaker
+        # safety valve than it looks: an approved PR satisfies the Main
+        # ruleset's review requirement, so anyone could merge it later without
+        # a second look, and the approval carries the repo owner's identity via
+        # CSOH_PAT. Withhold the approval too, not just the auto-merge.
+        # update-resources.yml already gates its approval this way.
+        if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.only_news_files == 'true'
         # `gh` is GitHub's official command-line tool, preinstalled on the
         # runner. `gh pr review --approve <number>` submits an approval review.
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"

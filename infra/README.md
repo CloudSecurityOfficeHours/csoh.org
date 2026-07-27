@@ -56,7 +56,7 @@ infra/
     cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules,
                   plus the DNS security records:
                     dns_caa.tf     CAA - which CAs may issue for this domain
-                    dns_dnssec.tf  DNSSEC signing (carries prevent_destroy)
+                    dns_dnssec.tf  DNSSEC signing only - NOT delegation; see below
                     dns_mail.tf    DMARC, MTA-STS, TLS-RPT
 ```
 
@@ -65,6 +65,19 @@ sends no mail: DNS is the layer every other control rests on, and CAA and DMARC
 are themselves just DNS records - forge the answer and you strip both. See
 [SECURITY.md -> DNS & Email Security](../SECURITY.md#dns--email-security) for
 what each record buys and how to verify the chain end to end.
+
+**`dns_dnssec.tf` is half the control, and the half Terraform cannot do is the
+one that counts.** `cloudflare_zone_dnssec` signs the zone: as of 2026-07-26
+`dig DNSKEY csoh.org` returns a KSK and a ZSK and `dig +dnssec csoh.org A`
+returns RRSIGs, so the signing really is live. But no DS record is published at
+the `.org` registry, so no resolver validates anything and no `ad` flag is ever
+set. **Cloudflare being the registrar does not make DS submission automatic** -
+that belief is exactly why this is still outstanding. It is a separate
+dashboard action, and until it is taken, DNSSEC here protects nothing.
+`prevent_destroy` on the resource is about not silently unsigning a zone that a
+parent might one day be delegating to; it says nothing about whether delegation
+exists. Runbook:
+[`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 4.
 
 All four states live in the same GCS bucket (`csoh-org-495800-tfstate`) under
 separate prefixes (`csoh/aws`, `csoh/azure`, `csoh/prod`, `csoh/cloudflare`).
@@ -201,17 +214,36 @@ Only `deploy.yml`'s `publish-gcp` job uses GCP auth, and it declares
 `environment: production`. If you add a job that needs cloud credentials, it
 must declare that environment or it will be rejected at the token exchange.
 
-**This needs a `terraform apply` in `infra/terraform/gcp/` to take effect.**
+**Applied 2026-07-25, re-verified 2026-07-26.** The live provider carries both
+halves of the condition; confirm with:
+
+```bash
+terraform -chdir=infra/terraform/gcp state show \
+  google_iam_workload_identity_pool_provider.github | grep attribute_condition
+terraform -chdir=infra/terraform/gcp state show \
+  google_service_account_iam_member.deployer_wif_binding | grep member
+```
+
+Both must name `repo:CloudSecurityOfficeHours/csoh.org:environment:production`.
+Read the live state, not the `.tf` file - the whole point of this section is
+that the two can disagree.
 
 ## Security headers are declared in three places
 
-Header values now live in three files, and they must stay in step:
+Header values now live in three files, and they must stay in step **by hand** -
+no tool compares them. Change a header in one, change it in all three:
 
-| File | Applies to | Notes |
+| File | Applies to | Checked by CI? |
 |---|---|---|
-| `infra/terraform/cloudflare/rules.tf` | every response, all origins | the `csoh-security-headers` ruleset |
-| `infra/terraform/aws/cloudfront.tf` | the CloudFront origin | `aws_cloudfront_response_headers_policy.security` |
-| `nginx-security-headers.conf` | the GCP Cloud Run origin | baked into the container image |
+| `infra/terraform/cloudflare/rules.tf` | every response, all origins (the `csoh-security-headers` ruleset) | yes - `check_edge_headers.py` asserts the live edge against this file |
+| `infra/terraform/aws/cloudfront.tf` | the CloudFront origin (`aws_cloudfront_response_headers_policy.security`) | no |
+| `nginx-security-headers.conf` | the GCP Cloud Run origin, baked into the container image | no |
+
+The CI column is the part that surprises people: the gate reads `rules.tf` as
+its expected values and the **edge** as its actual values. The other two files
+are neither the source nor the target of any assertion, so a header tightened in
+`rules.tf` alone will pass CI while both origins still serve the old value to
+anyone who reaches their public hostnames directly.
 
 **Azure has no fourth entry, and cannot.** Azure Blob static websites cannot
 emit custom response headers at all, so that origin depends entirely on the
@@ -226,7 +258,13 @@ ruleset - HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
 and the CSP through `security_headers_config`, plus `Permissions-Policy`,
 `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` through
 `custom_headers_config` (those three have no first-class argument in the
-resource). **This needs a `terraform apply` in `infra/terraform/aws/`.**
+resource). **Applied 2026-07-25, re-verified 2026-07-26** - a request straight to
+the distribution's `*.cloudfront.net` hostname now returns all eight:
+
+```bash
+python3 tools/check_edge_headers.py --samples 1 \
+  --url "https://$(terraform -chdir=infra/terraform/aws output -raw cloudfront_domain)/"
+```
 
 ### The `ignore_changes` trap, and the CI gate that compensates
 
@@ -243,9 +281,28 @@ Terraform cannot catch that, so CI asserts it from the outside instead.
 `rules.tf` and compares them against what the live site actually serves:
 
 ```bash
-python3 tools/check_edge_headers.py                        # defaults to https://csoh.org/
-python3 tools/check_edge_headers.py --url <origin-url>     # check one origin directly
+python3 tools/check_edge_headers.py                              # 40 samples of https://csoh.org/
+python3 tools/check_edge_headers.py --url <origin-url> --samples 1   # one origin directly
 ```
+
+**Why it samples.** The apex is a load balancer over three origins, and two of
+them (AWS via the CloudFront policy, GCP via `nginx-security-headers.conf`) now
+set these headers themselves. A response from either looks correct even if the
+Cloudflare ruleset were deleted outright, so only an Azure-served response
+actually tests the thing this script exists to test. One request gives you no
+say in which origin answers. It therefore makes 40 cache-busted requests by
+default - each with a unique query string, because a cached response would just
+re-confirm whichever origin replied first - prints the origin mix it saw, and
+warns if it never reached Azure. The default is measured, not guessed: on
+2026-07-26 two consecutive 25-sample runs reached Azure zero times, while five
+consecutive 40-sample runs all reached it. Pass `--samples 1` when checking a
+single origin hostname.
+
+**Scope: this checks the edge, and only the edge.** Neither
+`aws/cloudfront.tf`'s policy nor `nginx-security-headers.conf` is asserted by CI
+against anything, and the script never compares the three files to each other.
+Keeping them in step is manual (see the table above); check an origin by hand
+after editing its headers.
 
 It exits non-zero on any missing or drifted header, and `deploy.yml`'s
 `purge-cloudflare` job runs it right after the existing SRI verification, so
@@ -295,26 +352,39 @@ terraform -chdir=infra/terraform/cloudflare apply \
 Then run the deploy workflow once (`gh workflow run "Deploy - build once, publish to AWS + GCP + Azure"`)
 so all three origins have content before any DNS points at them.
 
-## Pending applies - 2026-07 security remediation
+## The 2026-07 security-remediation applies - done
 
-Three Terraform changes are committed but **not yet live**. They are
-independent of each other: each touches a different provider and a different
-state prefix, so they can be applied in any order, one at a time, and a failure
-in one does not block the others. All three need the usual admin session for
-that cloud plus GCS application-default credentials for the state backend.
+Three Terraform changes landed in the repo on 2026-07-25. **All three were
+applied that day and re-verified against production on 2026-07-26**; nothing
+here is outstanding work. They were independent of each other - each touches a
+different provider and a different state prefix - so they went in one at a time,
+and each needed the usual admin session for that cloud plus GCS
+application-default credentials for the state backend.
+
+| Stack | Change | Live check |
+|---|---|---|
+| `gcp/` | WIF trust narrowed to `environment:production` | `attribute_condition` and the IAM member both pin the subject |
+| `cloudflare/` | `www` redirect no longer derived from the request | `http://www.csoh.org/about.html` → `https://csoh.org/about.html` |
+| `aws/` | CloudFront response-headers policy | all 8 headers present on `*.cloudfront.net` |
+
+Kept below because the *verification* is the reusable part: each entry says what
+to run and what a regression would look like. The blow-by-blow of the applies
+themselves, including the local toolchain traps that ate an afternoon, is
+[`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 1.
 
 **1. GCP - narrow the WIF trust to the production environment**
 (`gcp/wif.tf`, `gcp/variables.tf`; see *OIDC trust* above)
 
 ```bash
-terraform -chdir=infra/terraform/gcp plan     # expect: provider + IAM member changes only
-terraform -chdir=infra/terraform/gcp apply
+terraform -chdir=infra/terraform/gcp state show \
+  google_iam_workload_identity_pool_provider.github | grep attribute_condition
+# want: assertion.repository == '...' && assertion.sub == 'repo:...:environment:production'
 ```
 
-Verify by running the deploy workflow and confirming `publish-gcp` still
-authenticates. If it fails at the `google-github-actions/auth` step, the job
-is not entering the `production` environment - fix the workflow, do not widen
-the trust back to `attribute.repository`.
+The end-to-end check is the deploy workflow: if `publish-gcp` fails at the
+`google-github-actions/auth` step, the job is not entering the `production`
+environment - fix the workflow, do not widen the trust back to
+`attribute.repository`.
 
 **2. Cloudflare - fix the `www` redirect loop** (`cloudflare/rules.tf`)
 
@@ -330,26 +400,30 @@ host hardcoded, never derived from the request, with `preserve_query_string`
 carrying the query.
 
 ```bash
-terraform -chdir=infra/terraform/cloudflare apply   # plus the -var flags from bootstrap above
-curl -sI http://www.csoh.org/about.html | grep -i -E 'HTTP/|location'
-#   want: 301 with `location: https://csoh.org/about.html`
+curl -sI http://www.csoh.org/about.html | grep -i -E 'HTTP/|^location'
+#   want: 301 with `location: https://csoh.org/about.html`   <- what it returns now
 #   bug:  301 with `Location: http://www.csoh.org/about.html` (points at itself)
 ```
+
+Test it over **plaintext `http://`**, not `https://`. The `https://` case worked
+throughout; the loop only ever existed on the scheme the redirect derived its
+target from. A future edit to `cloudflare/rules.tf` that reintroduces
+`wildcard_replace` on `full_uri` would look fine over HTTPS and be broken again.
 
 **3. AWS - CloudFront emits its own security headers** (`aws/cloudfront.tf`;
 see *Security headers are declared in three places* above)
 
 ```bash
-terraform -chdir=infra/terraform/aws apply
-# then check the origin directly, bypassing the Cloudflare edge:
-python3 tools/check_edge_headers.py \
+# check the origin directly, bypassing the Cloudflare edge:
+python3 tools/check_edge_headers.py --samples 1 \
   --url "https://$(terraform -chdir=infra/terraform/aws output -raw cloudfront_domain)/"
 ```
 
-Before the apply that command reports the headers as missing, which is exactly
-the gap being closed. Pointed at the Azure origin it will keep reporting them
-missing forever - Azure Blob cannot set them, and the edge is the only thing
-that adds them there.
+`--samples 1` because a single origin hostname has nothing to sample - the
+multi-request default exists for the apex, which load-balances. Before the apply
+this reported the headers as missing, which is exactly the gap that was closed.
+Pointed at the Azure origin it will keep reporting them missing forever - Azure
+Blob cannot set them, and the edge is the only thing that adds them there.
 
 ## Cutover (safety-gated) & rollback
 
@@ -417,8 +491,15 @@ curl -s https://csoh.org/ | grep -o 'style\.css?v=[0-9a-f]*'
 # Check the live security headers against infra/terraform/cloudflare/rules.tf
 #   Terraform cannot enforce that ruleset (ignore_changes = [rules]), so this
 #   is the only thing that catches drift. deploy.yml runs it on every deploy.
+#   Defaults to 40 cache-busted samples of the apex, because only the Azure
+#   origin depends on the edge ruleset and one request may never reach it.
+#   Read the "origins reached:" line - a run that never saw Azure proved little.
 python3 tools/check_edge_headers.py
 python3 tools/check_edge_headers.py --url https://csoh.org/about.html
+
+# Same check against one origin (nothing to sample - it is not load-balanced)
+python3 tools/check_edge_headers.py --samples 1 \
+  --url "https://$(terraform -chdir=infra/terraform/aws output -raw cloudfront_domain)/"
 ```
 
 ## Cost

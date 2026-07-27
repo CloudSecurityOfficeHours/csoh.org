@@ -55,8 +55,9 @@ on:
 # exchanges a GitHub OIDC token for short-lived Claude credentials.
 permissions:
   # `contents: read` = the token may clone/read this repo's files, nothing
-  # more. It cannot push commits; the GitHub App token (minted in the first
-  # step) provides write access where it's actually needed.
+  # more. It cannot push commits; the GitHub App token provides write access
+  # where it's actually needed. That token is minted AFTER the Claude Code
+  # step, not at the top of the job - see the note beside the checkout step.
   contents: read
   # OIDC (OpenID Connect) is a standard way for one system to prove its
   # identity to another using a short-lived, signed token instead of a stored
@@ -106,46 +107,34 @@ jobs:
     # earlier step created. Each step is EITHER a `uses:` (a prebuilt, shared
     # action pulled from another repo) OR a `run:` (raw shell commands).
     steps:
-      # Mint a short-lived installation token from the csoh-ci GitHub App so
-      # the create-PR step has push access AND the PR can trigger downstream
-      # CI (the default GITHUB_TOKEN cannot trigger workflows on PRs it opens).
-      # `- name:` is the human-readable label shown in the run's logs.
-      - name: Mint installation token
-        # `id:` gives this step a handle so later steps can read its results
-        # via `steps.app-token.outputs.<name>` (used below as the push token).
-        id: app-token
-        # `uses:` runs a prebuilt action from another GitHub repo. The part
-        # after `@` pins the EXACT version. Here it's a full 40-char commit
-        # SHA (not a tag like `v3`) because tags can be silently moved to new
-        # code; a SHA is immutable, so we always run the exact reviewed code.
-        # The trailing `# v3.1.1` is just a human note for which release it is.
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
-        # `with:` passes named inputs to the action - like function arguments.
-        with:
-          # `${{ ... }}` is GitHub Actions' expression syntax, substituted at
-          # run time. `secrets.NAME` reads an encrypted value stored in the
-          # repo/org settings; it's never printed in logs. These two identify
-          # and authenticate the csoh-ci GitHub App so it can mint a token.
-          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
-          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
-
-      # The VM starts empty - it has none of the repo's files. The standard
-      # `actions/checkout` action clones the repository onto the VM so the
-      # later steps can read and edit resources.html.
+      # STEP ORDER IS A SECURITY CONTROL IN THIS JOB. READ BEFORE REORDERING.
+      #
+      # The Claude Code step below reads web pages nobody here controls, so it
+      # must be treated as processing untrusted input. Every credential present
+      # in the job's environment while it runs is a credential a prompt
+      # injection can try to reach: `Read` accepts absolute paths, so
+      # /proc/self/environ and any file the runner wrote are in scope, and
+      # `WebFetch` can carry whatever it finds to an arbitrary URL.
+      #
+      # So the csoh-ci App installation token - which has repo write, and whose
+      # App is on the Main ruleset's bypass_actors list - is deliberately NOT
+      # minted here at the top. It is minted AFTER the model step, immediately
+      # before the create-PR step that is the only thing needing it. Steps run
+      # in order, so during the model step that token does not exist yet.
+      #
+      # Moving the mint back above the model step would silently undo this.
+      #
+      # The checkout below therefore uses the default GITHUB_TOKEN, which this
+      # workflow scopes to `contents: read` (see the permissions block above).
+      # Cloning is all it has to do.
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
-          # Clone using the App token (from the step above) instead of the
-          # default GITHUB_TOKEN. That matters because commits/PRs created
-          # with the App token CAN trigger downstream workflows; the default
-          # token deliberately cannot, to prevent infinite CI loops.
-          token: ${{ steps.app-token.outputs.token }}
-          # Do NOT leave that token behind in .git/config. By default checkout
-          # persists the credential as an http.extraheader for the rest of the
-          # job, where any later step - including the Claude Code step below,
-          # which reads web pages it does not control - could read it back out
-          # with a plain file read and exfiltrate it. Nothing here needs it:
-          # the create-pull-request step is handed the token explicitly.
+          # Do not leave any credential behind in .git/config. By default
+          # checkout persists one as an http.extraheader for the rest of the
+          # job, where the Claude Code step below could read it back out with a
+          # plain file read. Nothing here needs it: create-pull-request is
+          # handed the App token explicitly, further down.
           persist-credentials: false
           # `fetch-depth: 0` clones the FULL git history (not just the latest
           # commit). The create-PR action needs full history to build a clean
@@ -180,7 +169,26 @@ jobs:
           # credentials. If a future prompt genuinely needs Python, add a
           # checked-in script and allowlist that exact path - never the bare
           # interpreter.
-          claude_args: '--model claude-opus-4-8 --allowedTools "Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),WebSearch,WebFetch"'
+          #
+          # `Bash(grep:*)` and `Bash(wc:*)` were removed on 2026-07-26. They
+          # looked harmless next to the interpreter that was removed before
+          # them, but `grep` takes a path like any other, so `Bash(grep:*)`
+          # was a read primitive over the whole runner filesystem - including
+          # /proc/self/environ, which holds this step's own secrets. The
+          # built-in `Grep` tool that remains searches the workspace and is
+          # not a shell. The prompt's "grep for the URLs you added" step is
+          # served by it just as well.
+          #
+          # RESIDUAL RISK, stated plainly rather than papered over: `Read`
+          # still accepts absolute paths and `WebFetch` is unqualified,
+          # because the whole job of this step is to research resources on
+          # the open web and a domain allowlist would defeat it. So a prompt
+          # injection can still reach CLAUDE_CODE_OAUTH_TOKEN in this step's
+          # environment and exfiltrate it. That token is rotatable and buys
+          # model usage, nothing in this repo or in any cloud account. The
+          # credential that actually matters, the csoh-ci App token, is not
+          # minted until after this step for exactly that reason.
+          claude_args: '--model claude-opus-4-8 --allowedTools "Read,Edit,Glob,Grep,WebSearch,WebFetch"'
           # `prompt:` is the instructions handed to Claude. The `|` is YAML's
           # "literal block scalar": every indented line below is kept verbatim
           # (newlines preserved) and passed through as one multi-line string.
@@ -252,6 +260,32 @@ jobs:
 
             Do not modify any file other than resources.html. Do not
             commit or push - the workflow handles that.
+
+      # Mint a short-lived installation token from the csoh-ci GitHub App so
+      # the create-PR step has push access AND the PR can trigger downstream
+      # CI (the default GITHUB_TOKEN cannot trigger workflows on PRs it opens).
+      #
+      # DELIBERATELY PLACED HERE, after the Claude Code step above rather than
+      # at the top of the job. See the long note beside the checkout step: this
+      # token has repo write and the csoh-ci App is on the Main ruleset's
+      # bypass_actors list, so it must not exist in the environment while a
+      # model is reading pages it does not control. Everything from this point
+      # on is deterministic shell and prebuilt actions.
+      - name: Mint installation token
+        # `id:` gives this step a handle so later steps can read its results
+        # via `steps.app-token.outputs.<name>` (used below as the push token).
+        id: app-token
+        # `uses:` runs a prebuilt action from another GitHub repo. The part
+        # after `@` pins the EXACT version. Here it's a full 40-char commit
+        # SHA (not a tag like `v3`) because tags can be silently moved to new
+        # code; a SHA is immutable, so we always run the exact reviewed code.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          # `secrets.NAME` reads an encrypted value stored in repo settings;
+          # it is never printed in logs. These two identify and authenticate
+          # the csoh-ci GitHub App so it can mint an installation token.
+          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
+          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 
       # Bail out cleanly if Claude didn't change anything (e.g., it concluded
       # there was nothing high-quality to add this week, or hit an error).

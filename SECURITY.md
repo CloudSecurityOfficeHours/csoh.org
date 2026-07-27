@@ -17,7 +17,8 @@ The site previously deployed via FTPS to a LiteSpeed shared host. That path was 
 ## HTTP Security Headers
 
 All responses from csoh.org include these security headers. They are declared in
-**three** places, and all three have to stay in step:
+**three** places, and all three have to stay in step by hand - CI asserts only
+the first row (see [Edge header drift is a CI gate](#edge-header-drift-is-a-ci-gate)):
 
 | Where | Covers | File |
 |-------|--------|------|
@@ -102,9 +103,28 @@ header name/value pairs out of `rules.tf` and compares them against what the
 live site actually returns:
 
 ```bash
-python3 tools/check_edge_headers.py                    # checks https://csoh.org/
-python3 tools/check_edge_headers.py --url <origin>     # check one origin directly
+python3 tools/check_edge_headers.py                       # 40 samples of https://csoh.org/
+python3 tools/check_edge_headers.py --url <origin> --samples 1   # one origin directly
 ```
+
+**It samples, and the sampling is the point.** The apex is a load balancer over
+three origins, and AWS and GCP now set these headers themselves - so a response
+from either looks correct *even if the Cloudflare ruleset were deleted
+outright*. Only an Azure-served response actually exercises the edge, because
+Azure Blob cannot emit custom headers at all. A single request has no say in
+which origin answers, so the checker makes 40 cache-busted requests by default
+(`--samples`, each with a unique query string so a cached response cannot
+re-confirm whichever origin replied first), prints which origins it reached,
+and warns when it never reached Azure - because such a run did not test what it
+claims to. That default is empirical, not a guess: on 2026-07-26 two
+consecutive 25-sample runs reached Azure zero times. Use `--samples 1` only
+when pointing at a single origin hostname, where there is nothing to sample.
+
+**It checks the edge, and only the edge.** The CloudFront response-headers
+policy and `nginx-security-headers.conf` are *not* asserted by CI against
+anything. See invariant 4 below: keeping the three locations in step is a
+manual discipline, and a run against the apex that happens to sample only
+AWS/GCP responses tells you the origins are healthy, not that the edge is.
 
 The `purge-cloudflare` job in `deploy.yml` runs it after the existing SRI
 verification and **fails the deploy on any drift** - a forgotten apply, a
@@ -170,7 +190,7 @@ All first-party CSS and JavaScript files include SRI hashes:
 ```
 
 The `update_sri.py` script:
-1. Calculates SHA-384 hashes for every asset in its `ASSETS` list - currently `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search.css`, `search-init.js`, and the vendored `vendor/goatcounter-count.js`. Any new shared asset must be added to that list or it ships with neither an integrity hash nor a cache-bust key
+1. Calculates SHA-384 hashes for every asset in its `ASSETS` list - currently `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search.css`, `search-init.js`, and the vendored `vendor/goatcounter-count.js`. Any new shared asset must be added to that list or it ships with neither an integrity hash nor a cache-bust key. **`vendor/minisearch-7.1.2.min.js` is deliberately not on the list**: it is a pinned, never-edited upstream release, so its hash is stable and is written directly into `search.html` with a comment saying so. If you ever bump that pin, the hash is yours to update by hand - `update_sri.py` will not notice
 2. Updates the `integrity` attribute in all HTML files
 3. Adds cache-busting `?v=` parameters derived from the hash
 4. Runs automatically in CI - `site-update-deploy.yml` stamps the repo, and `deploy.yml` re-stamps the build output before staging, so the published artifact is self-consistent even if a commit landed with stale hashes
@@ -199,10 +219,12 @@ silently, which in the GoatCounter case would quietly resume sending data
 - All `target="_blank"` links automatically receive `rel="noopener noreferrer"` via JavaScript enforcement on page load
 - This prevents reverse tabnapping attacks
 
-**No Third-Party JavaScript:**
-- No third-party scripts - the only analytics is GoatCounter (cookieless, no IP storage, no cross-site tracking), and its loader is self-hosted at `/vendor/goatcounter-count.js` so `script-src` stays `'self'`; no tracking pixels, no CDN-hosted libraries
-- **The query string is stripped from what the beacon sends.** Upstream GoatCounter transmits `location.search` twice - as a dedicated `q` field and appended to the `p` (path) field. On this site that leaked visitor search terms, because `/search.html?q=<term>` is a deep-linkable URL (`search-init.js` reads `params.get('q')`). Both are patched out locally (`q: ''`, and `get_path` returns `loc.pathname` alone), so the beacon matches what `privacy.html` promises: page path only. See [`vendor/README.md`](vendor/README.md)
-- All JavaScript is first-party, self-hosted, and SRI-hashed
+**No Remotely-Loaded JavaScript:**
+- **Nothing is fetched from a third-party host.** Every `<script>` on the site points at `csoh.org`, so `script-src` stays `'self'` and a CDN compromise is not an attack path. There are no tracking pixels and no remote libraries
+- **Two of those scripts are third-party *code*, vendored and served first-party**, and the distinction matters when you audit supply chain rather than network origin: [`vendor/goatcounter-count.js`](vendor/goatcounter-count.js) (the GoatCounter loader, on every page) and [`vendor/minisearch-7.1.2.min.js`](vendor/minisearch-7.1.2.min.js) (MiniSearch, on `/search.html` only). Both carry an SRI `integrity` attribute, so a tampered copy is refused by the browser even though it is served from our own origin. MiniSearch is pinned to an exact version and hand-stamped in `search.html` rather than managed by `update_sri.py` - the file is static and never regenerated, so its hash does not move
+- **Analytics: the script is ours, the service is not.** The loader is self-hosted, but it beacons to `csoh.goatcounter.com`, which is where the counting actually happens - that is why `csoh.goatcounter.com` appears in `img-src` and `connect-src` in the CSP. GoatCounter is cookieless, stores no IP address, and does no cross-site tracking, but it is still a third party receiving a request per pageview
+- **What the beacon carries, precisely:** page path, `Referer`, page title, an event flag, screen width, and a bot flag; the receiving end additionally sees the `User-Agent`, from which GoatCounter derives browser and OS. Not "page path only"
+- **The query string is stripped from what the beacon sends.** Upstream GoatCounter transmits `location.search` twice - as a dedicated `q` field and appended to the `p` (path) field. On this site that leaked visitor search terms, because `/search.html?q=<term>` is a deep-linkable URL (`search-init.js` reads `params.get('q')`). Both are patched out locally (`q: ''`, and `get_path` returns `loc.pathname` alone), so no search term leaves the browser. See [`vendor/README.md`](vendor/README.md)
 
 **No Cookies or Tracking:**
 - The site sets no cookies of any kind
@@ -318,7 +340,7 @@ grep -ho 'uses: [^ ]*@[0-9a-f]\{40\}  *# .*' .github/workflows/*.yml | sed 's/us
 
 ### No External Dependencies (Client-Side)
 
-The site loads zero external JavaScript libraries, CSS frameworks, or fonts. Everything is self-hosted. This eliminates CDN compromise as an attack vector.
+The browser fetches nothing from a third-party host: no CDN-hosted JavaScript, no CSS framework, no web fonts. This eliminates CDN compromise as an attack vector. Two third-party *libraries* are in the tree - `vendor/goatcounter-count.js` and `vendor/minisearch-7.1.2.min.js` - but both are vendored, version-pinned, and served from `csoh.org` under an SRI hash, so a supply-chain change can only arrive through a commit in this repo.
 
 ### Minimal Python Dependencies
 
@@ -446,7 +468,21 @@ GitHub's auto-merge feature evaluates `reviewDecision` independently and does no
 
 `site-update-deploy.yml` is unaffected - it does direct in-place commits to `main` (not via PR), and the App's bypass *does* apply to direct pushes.
 
-### Repository secrets currently in use
+### Repository secrets
+
+Everything below is a live secret. One of them is **not in use** and is flagged
+for deletion - the list is the inventory, not the consumption record. Re-derive
+both sides of that distinction with:
+
+```bash
+gh api repos/CloudSecurityOfficeHours/csoh.org/actions/secrets \
+  --jq '.secrets[] | "\(.name) \(.updated_at)"'          # what exists
+grep -rhoE 'secrets\.[A-Z_0-9]+' .github/workflows/ | sort -u   # what is referenced
+```
+
+(The first command lists repo-level secrets only. `CSOH_CI_CLIENT_ID`,
+`CSOH_CI_PRIVATE_KEY` and `CSOH_PAT` are org-level, so they appear in the second
+list and not the first.)
 
 | Secret | Purpose | Type |
 |--------|---------|------|
@@ -456,7 +492,7 @@ GitHub's auto-merge feature evaluates `reviewDecision` independently and does no
 | `CLAUDE_CODE_OAUTH_TOKEN` | `update-resources.yml` model auth (subscription quota, not API billing) | medium-sensitivity |
 | `PSI_API_KEY` | `check-pagespeed.yml` - Google PageSpeed Insights v5, restricted to that one API | low-sensitivity |
 | `CLOUDFLARE_API_TOKEN` | `deploy.yml` cache purge - scoped to Zone → Cache Purge on `csoh.org` alone | medium-sensitivity |
-| `SSH_PRIVATE_KEY` | **Unused.** No workflow references it - left over from the retired FTPS/shared-host era. A high-sensitivity secret that nothing consumes is pure downside; delete it. | high-sensitivity |
+| `SSH_PRIVATE_KEY` | ⚠️ **Live but unreferenced - flagged for removal, still present.** Re-confirmed 2026-07-26: it is in the repo's secret list (last updated 2026-02-18) and no workflow reads it, a leftover from the retired FTPS/shared-host era. It has not been deleted yet, so do not read this row as "already gone." A high-sensitivity secret that nothing consumes is pure downside: it can only be exfiltrated, never noticed missing. Delete it in Settings → Secrets and variables → Actions, then strike this row. | high-sensitivity |
 
 Non-secret identifiers live in repo **Variables**, not Secrets, and are populated
 from `terraform output` (see [infra/README.md](infra/README.md)):
@@ -516,12 +552,34 @@ rather than dashboard state.
 | **CAA** | 5 authorized CAs (Let's Encrypt, DigiCert, Google Trust Services, Sectigo/Comodo, SSL.com), `issue` + `issuewild` each, plus `iodef: mailto:admin@csoh.org` | Any other CA issuing a certificate for `csoh.org`. The `iodef` address gets notified on a rejected issuance attempt. |
 | **DNSSEC** | ⚠️ **Signed but NOT active** - zone is signed at Cloudflare, but no DS is published at `.org`, so nothing validates. See below. | *Would* stop forged DNS answers, which is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who can forge a response strips either. Today it stops nothing. |
 | **SPF** | `v=spf1 include:_spf.google.com ~all` | Unauthorized hosts sending as `@csoh.org`. |
-| **DKIM** | `google._domainkey` (RSA) | Tampering with, or forging, message bodies in transit. |
+| **DKIM** | **Two** selectors, both RSA: `google._domainkey` (Google Workspace) and `default._domainkey` (a second sender). See below. | Tampering with, or forging, message bodies in transit. |
 | **DMARC** | `p=quarantine; sp=quarantine; pct=100`, aggregate reports to Cloudflare | Spoofed mail reaching inboxes. Moved up from `p=none` (monitor-only) - the policy now actually does something. |
 | **MTA-STS** | `mode: testing`, `max_age: 604800`, policy at `/.well-known/mta-sts.txt` | Downgrade and MITM attacks on inbound mail delivery. |
 | **TLS-RPT** | `v=TLSRPTv1; rua=mailto:admin@csoh.org` | Nothing on its own - it reports TLS delivery failures so an active downgrade attempt is visible. |
 
-Two operational notes that matter more than the table:
+Three operational notes that matter more than the table:
+
+**There are two DKIM selectors, and the second one is why `p=quarantine` was
+safe.** SPF authorizes Google and nothing else (`v=spf1
+include:_spf.google.com ~all`), so read on its own it says any other sender is
+unauthorized. But DMARC passes on **either** aligned SPF or aligned DKIM, not
+both, so a second sender that signs with a valid DKIM signature for `csoh.org`
+survives enforcement even though SPF never lists it. Confirm both selectors
+exist before touching SPF or the DMARC policy:
+
+```sh
+dig +short TXT google._domainkey.csoh.org     # Google Workspace
+dig +short TXT default._domainkey.csoh.org    # the second sender
+```
+
+An earlier draft of the runbook claimed `default._domainkey` did not exist, and
+that error pointed straight at tightening SPF - which would have broken the
+second sender for no gain. The caution and the reasoning are in
+[`infra/MANUAL_SECURITY_STEPS.md`](infra/MANUAL_SECURITY_STEPS.md) section 2.
+**Do not narrow SPF, and do not move to `p=reject`, on DNS inference alone.**
+The DMARC aggregate reports (Cloudflare dashboard → Email Security → DMARC
+Management) are the only source that shows what is actually sending as
+`csoh.org` and whether it authenticates.
 
 **MTA-STS is a two-part control and both halves must agree.** The `_mta-sts` TXT
 record carries an `id` that receivers use to detect policy changes, and the
@@ -683,7 +741,7 @@ detail in a comment at the code it touches, so start there.
 | 2 | Cloud trust boundary | `infra/terraform/gcp/wif.tf`, `gcp/variables.tf` | WIF `attribute_condition` and IAM member both pinned to `repo:<owner>/<repo>:environment:production`, matching AWS and Azure |
 | 3 | Third-party PII on live pages | `meetings/2024-07-19.html`, `meetings/2024-08-30.html`, both search indexes, `tools/add_meeting.py` | Removed a participant's corporate email address from two recaps; added `scrub_emails()` so it cannot recur |
 | 4 | Redirect loop on `www` over HTTP | `infra/terraform/cloudflare/rules.tf` | `target_url` now `concat("https://csoh.org", http.request.uri.path)` instead of a `wildcard_replace` on `full_uri` |
-| 5 | Header drift undetectable | new `tools/check_edge_headers.py`, `.github/workflows/deploy.yml`, `cloudflare/rules.tf` | CI now asserts the live headers against `rules.tf` and fails the deploy on drift |
+| 5 | Header drift undetectable | new `tools/check_edge_headers.py`, `.github/workflows/deploy.yml`, `cloudflare/rules.tf` | CI now asserts the live **edge** headers against `rules.tf` and fails the deploy on drift. Extended 2026-07-26 to sample 40 cache-busted requests and report origin coverage, after single-request runs were found to pass without ever reaching the one origin that depends on the ruleset |
 | 6 | AWS origin had no headers | `infra/terraform/aws/cloudfront.tf` | New `aws_cloudfront_response_headers_policy.security`, wired into `default_cache_behavior` |
 | 7 | JSON-LD escaping | `update_news.py` | Escapes `<`, `>`, `&` rather than only `</` |
 | 8 | Redirect-header injection | `tools/normalize_urls.py` | Rejects resolved destinations containing markup characters or a non-http(s) scheme |
@@ -713,11 +771,15 @@ page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
    every branch, mint `csoh-deployer` credentials. If you ever need a second job
    to authenticate to GCP, give it `environment: production` rather than
    loosening the condition.
-4. **The three header locations stay in step.**
-   `infra/terraform/cloudflare/rules.tf`, `infra/terraform/aws/cloudfront.tf`,
-   and `nginx-security-headers.conf`. Change a header in one, change it in all
-   three. `tools/check_edge_headers.py` catches edge-versus-repo drift but does
-   not compare the three files to each other.
+4. **The three header locations stay in step, and nothing automated checks
+   that.** `infra/terraform/cloudflare/rules.tf`,
+   `infra/terraform/aws/cloudfront.tf`, and `nginx-security-headers.conf`.
+   Change a header in one, change it in all three.
+   `tools/check_edge_headers.py` asserts the **edge** against `rules.tf` and
+   nothing else: it never compares the three files to each other, and the
+   CloudFront policy and the nginx config have no CI gate of their own. Point
+   it at an origin hostname by hand (`--url <origin> --samples 1`) after
+   editing that origin's headers, because CI will not do it for you.
 5. **`tools/add_meeting.py` keeps scrubbing emails.** Zoom AI summaries name
    people by display name, and some display names are work email addresses. The
    scrub lives in `clean_text()`, which is the shared funnel for both the HTML
@@ -725,20 +787,43 @@ page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
    fails, so a late-Friday publish is never blocked. **Read the warning** and
    give the person a first name if one reads better. `@csoh.org` is exempt.
 
-### Still requires the operator
+### The three Terraform applies - done and verified
 
-Three of the changes (#2, #4, #6) are Terraform and are inert until applied.
-Until then the repo is ahead of the deployed state:
+Three of the changes (#2, #4, #6) were Terraform, and Terraform in a repo is
+just a proposal until someone runs `apply`. **All three were applied on
+2026-07-25 and re-verified against production on 2026-07-26.** The deployed
+state and the repo agree:
+
+| # | Stack | What it changed | Verified by |
+|---|---|---|---|
+| 2 | `gcp/` | WIF trust pinned to `environment:production` | live `attribute_condition` and the `principal://.../subject/...` IAM member both carry `repo:CloudSecurityOfficeHours/csoh.org:environment:production`; the deploy afterward still authenticated |
+| 4 | `cloudflare/` | `www` redirect target no longer derived from the request | `curl -sI http://www.csoh.org/about.html` returns `Location: https://csoh.org/about.html`, not a redirect to itself |
+| 6 | `aws/` | CloudFront response-headers policy | `check_edge_headers.py --url https://<dist>.cloudfront.net/ --samples 1` reports all 8 headers matching |
+
+Re-check them at any time with:
 
 ```bash
-terraform -chdir=infra/terraform/gcp        apply    # WIF subject pin
-terraform -chdir=infra/terraform/aws        apply    # CloudFront headers policy
-terraform -chdir=infra/terraform/cloudflare apply    # www redirect target
+terraform -chdir=infra/terraform/gcp state show \
+  google_iam_workload_identity_pool_provider.github | grep attribute_condition
+curl -sI http://www.csoh.org/about.html | grep -i -E 'HTTP/|^location'
+python3 tools/check_edge_headers.py --samples 1 \
+  --url "https://$(terraform -chdir=infra/terraform/aws output -raw cloudfront_domain)/"
 ```
 
-The Cloudflare header ruleset is the exception: `ignore_changes = [rules]` means
-`apply` will not push header edits, and any change to those values has to go in
-by hand in the dashboard (or by dropping the `lifecycle` block for one apply).
+The AWS stack used to carry a caveat here - it never planned clean, because
+`viewer_certificate.minimum_protocol_version` could not converge while the
+default `*.cloudfront.net` certificate is in use, and that one inert argument
+kept three resources permanently in the diff. Commit `288fcec3` deleted it, so
+"clean plan" is now the signal to look for on all four stacks. The reasoning is
+preserved in a comment where the argument used to be, in
+`infra/terraform/aws/cloudfront.tf`. The per-apply record and the local
+toolchain traps that cost hours on the day are in
+[`infra/MANUAL_SECURITY_STEPS.md`](infra/MANUAL_SECURITY_STEPS.md) section 1.
+
+The Cloudflare **header** ruleset remains the standing exception, and applying
+these three did not change that: `ignore_changes = [rules]` means `apply` will
+not push header edits, so any change to those values still has to go in by hand
+in the dashboard (or by dropping the `lifecycle` block for one apply).
 See [Edge header drift is a CI gate](#edge-header-drift-is-a-ci-gate).
 
 ---

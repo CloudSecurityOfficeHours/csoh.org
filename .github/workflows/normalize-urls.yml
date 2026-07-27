@@ -221,6 +221,16 @@ jobs:
           # to a file AND echoes it to the log. The `../` on the tee path puts
           # the report one level up, in the repo root, next to the safety
           # report.
+          # `set -o pipefail` is REQUIRED here and its absence was a real bug.
+          # The step runs under GitHub's default `bash -e {0}`: `-e` without
+          # `-o pipefail`. A pipeline's exit status is its LAST command's, so
+          # `tee` returning 0 masked whatever normalize_urls.py returned, and
+          # `-e` never fired. That mattered once the script gained a guard that
+          # rejects redirect destinations containing markup characters: it
+          # exits 2 and prints `::error::` on an unsafe destination, and this
+          # step swallowed both, so the run went green and the PR was opened as
+          # though nothing had been skipped.
+          set -o pipefail
           cd tools && python3 normalize_urls.py --apply 2>&1 | tee ../normalize-report.txt
           # Return to the repo root for any later steps.
           cd ..
