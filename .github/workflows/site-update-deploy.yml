@@ -104,17 +104,24 @@ permissions:
 # -----------------------------------------------------------------------------
 # `concurrency:` stops two runs that share the same `group:` name from
 # executing at the same time - GitHub lets only one run per group proceed and
-# holds (or cancels) the rest. This `deploy-pipeline` group is shared across
-# all the workflows that push commits to main (site-update-deploy,
-# update-news, normalize-urls) so they queue serially instead of racing and
+# holds (or cancels) the rest. This `deploy-pipeline` group is shared by the
+# workflows that push commits DIRECTLY to main - this one and
+# update-counts.yml - so their pushes queue serially instead of racing and
 # clobbering each other.
+#
+# update-news and normalize-urls are deliberately NOT in this group: they open
+# PRs on their own branches rather than pushing to main, and cancellation is a
+# property of the INCOMING run - so a content push landing here with
+# cancel-in-progress: true would kill their long feed/redirect crawls mid-run
+# if they shared the group. Each keeps its own group instead (see the §3
+# comments in those files).
 #
 # cancel-in-progress: true - if a newer push is queued while an older
 # housekeeping run is in flight, cancel the older one so we don't push
 # stale SRI/sitemap state on top of a newer base.
 concurrency:
   # A fixed, constant group name (NOT keyed on `${{ github.ref }}`) means
-  # every run of every commit-pushing workflow shares this one lock. A
+  # every run of every direct-to-main workflow shares this one lock. A
   # ref-keyed group would only serialize runs on the same branch, but these
   # workflows all push to the same `main` and would still collide; the
   # constant name forces them into a single serial queue.
@@ -138,6 +145,14 @@ jobs:
     # `runs-on:` picks the type of machine GitHub spins up for the job here a
     # fresh, GitHub-hosted Ubuntu Linux VM that is wiped after the run.
     runs-on: ubuntu-latest
+    # Hard cap on the whole job. This job does the same redirect-resolving URL
+    # scan that check-url-safety.yml and normalize-urls.yml cap at 15 minutes,
+    # plus Playwright screenshots - and it holds the `deploy-pipeline` lock,
+    # so without a cap a single hung HTTP request would block every other
+    # direct-to-main push for the 6-hour default. 60 minutes is generous
+    # headroom for the slowest legitimate run (a full cache-expired URL
+    # re-resolve plus a large preview batch) while still bounding the lock.
+    timeout-minutes: 60
     # `steps:` is the ordered list of actions/commands the job runs, top to
     # bottom, on that VM. Each `- name:` below is one step.
     steps:
@@ -173,8 +188,8 @@ jobs:
       # The VM starts empty, so the first thing almost every workflow does is
       # `actions/checkout` to clone this repo's code onto the machine.
       # App-authenticated full clone. fetch-depth: 0 = no shallow clone, so
-      # `git diff` and `git log` see full history (needed for the
-      # diff-against-original-SHA checks below).
+      # the `git pull --rebase` fallback in the push-retry steps below has
+      # real history to replay our commit onto.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -183,18 +198,6 @@ jobs:
           # in `run:` steps authenticate as the App without re-supplying it.
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
-
-      # First `run:` step: instead of a prebuilt action, it runs a shell
-      # command directly on the VM. Writing `key=value` lines into the special
-      # file named by `$GITHUB_OUTPUT` publishes a step output that other steps
-      # read as `steps.<id>.outputs.<key>` (here: steps.original_sha.outputs.sha).
-      # `$(...)` runs `git rev-parse HEAD` and substitutes its result (the SHA).
-      # Remember the commit SHA we started from. Later steps push new commits
-      # and we want to compare against THIS sha (not HEAD) to know what the
-      # original push actually changed.
-      - name: Save original commit SHA
-        id: original_sha
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The fresh VM has no project tooling pre-configured, so we install what
       # the scripts need. Install Python - most of the housekeeping scripts

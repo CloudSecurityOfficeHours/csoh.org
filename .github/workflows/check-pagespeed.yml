@@ -280,20 +280,42 @@ jobs:
           PYEOF
 
       # Did the script change anything? (It always should - appending a
-      # row - but guard against the no-op case.)
-      # This records a `has_changes` true/false output that the next step's
-      # `if:` reads, so we only open a PR when there's actually a diff to ship.
+      # row - but guard against the no-op case.) Also decide whether every
+      # change is confined to seo-audits/ - the approve and auto-merge steps
+      # below are gated on that, so an unexpected file keeps the PR open for
+      # a human instead of rubber-stamping it through.
+      #
+      # Untracked files are included deliberately: peter-evans/create-pull-
+      # request commits EVERYTHING in the working tree, including brand-new
+      # files a plain `git diff` never lists - so a scope check that only
+      # looked at the diff could approve a PR carrying files it never saw.
       - name: Detect changed files
         id: changes
         run: |
           set -euo pipefail
-          # `git diff --name-only` lists files modified but not yet committed.
-          # `[ -z ... ]` is true when that list is empty (nothing changed).
-          if [ -z "$(git diff --name-only)" ]; then
+          # `git diff --name-only` lists modified tracked files; `git ls-files
+          # --others --exclude-standard` lists new untracked ones. Together
+          # they are exactly the set the create-PR action would commit.
+          files="$(git diff --name-only; git ls-files --others --exclude-standard)"
+          if [ -z "$files" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "in_scope=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          # Walk every changed path. If ANY falls outside seo-audits/, flip
+          # in_scope=false and stop - humans need to review it.
+          in_scope=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              seo-audits/*) ;;                          # expected - allowed
+              *) in_scope=false; break ;;               # unexpected file
+            esac
+          done <<< "$files"
+          echo "in_scope=$in_scope" >> "$GITHUB_OUTPUT"
+          echo "Changed files (in_scope=$in_scope):"
+          echo "$files"
 
       # Open a PR with the SCORECARD update. Deploy + site-housekeeping
       # workflows have path filters that exclude seo-audits/, so a
@@ -334,9 +356,16 @@ jobs:
       # because GitHub blocks self-approval AND the auto-merge feature
       # doesn't honor the App's ruleset bypass for the approval rule.
       - name: Auto approve
-        # Only if a PR was actually opened: the create-PR step exposes the new
-        # PR's number, and it's empty when no PR was made.
-        if: steps.cpr.outputs.pull-request-number != ''
+        # Two conditions, and the second one matters: a PR was actually opened
+        # (its number is not empty), AND every changed path is under
+        # seo-audits/. This used to be gated on the PR number alone, reasoning
+        # that check_pagespeed.py only touches SCORECARD.md - the same
+        # assumption update-news.yml made before it learned the hard way (see
+        # its "Auto approve" comments): an approval satisfies the Main
+        # ruleset's review requirement and carries the repo owner's identity
+        # via CSOH_PAT, so an out-of-scope PR must not receive it. Withhold
+        # the approval too, not just the auto-merge.
+        if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.in_scope == 'true'
         # `gh` is GitHub's official command-line tool, preinstalled on runners.
         # `gh pr review --approve <number>` posts an approving review on the PR.
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
@@ -346,11 +375,12 @@ jobs:
           # GitHub's "you can't approve your own PR" rule.
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
 
-      # Enable auto-merge. The diff is a single-line SCORECARD append; safe
-      # to merge once status checks pass. No file-allowlist gate needed -
-      # check_pagespeed.py only touches SCORECARD.md.
+      # Enable auto-merge. The expected diff is a single-line SCORECARD
+      # append; safe to merge once status checks pass. Same scope gate as the
+      # approval above: anything outside seo-audits/ leaves the PR open for a
+      # human.
       - name: Enable auto-merge
-        if: steps.cpr.outputs.pull-request-number != ''
+        if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.in_scope == 'true'
         # `--auto` tells GitHub to merge the PR by itself as soon as all
         # required checks pass and it's approved; `--squash` combines the PR's
         # commits into one. So this step just arms the merge, it doesn't block.

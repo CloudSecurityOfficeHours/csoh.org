@@ -209,6 +209,12 @@ jobs:
     # `runs-on:` picks the runner type. `ubuntu-latest` is a GitHub-hosted
     # Linux VM, created clean for this job and thrown away when it finishes.
     runs-on: ubuntu-latest
+    # Every job in this workflow carries a `timeout-minutes` cap. This matters
+    # more here than in most workflows: the `deploy` concurrency group above
+    # uses cancel-in-progress: false, so a wedged job doesn't just waste a
+    # runner - it holds the deploy lock and every later deploy queues behind it
+    # for the 6-HOUR default timeout. A cap turns that into minutes.
+    timeout-minutes: 15
     # The ordered list of things this job does, top to bottom.
     steps:
       # A step is one action. `name:` is just its label in the run logs.
@@ -267,6 +273,10 @@ jobs:
       # yet at this point, so the rglob only walks the source tree.
       # site-update-deploy.yml still stamps the repo, which keeps the committed
       # HTML tidy; correctness no longer depends on it.
+      #
+      # NOTE: this artifact only feeds AWS and Azure. publish-gcp builds its
+      # image from a fresh checkout, so it runs its own copy of this step -
+      # if you change the logic here, change it there too.
       - name: Re-stamp SRI hashes (belt and braces)
         run: |
           set -euo pipefail
@@ -329,6 +339,9 @@ jobs:
     # parallel once build is done.
     needs: build
     runs-on: ubuntu-latest
+    # See the note on the build job: caps how long a hung sync can hold the
+    # deploy lock.
+    timeout-minutes: 15
     # `environment:` ties this job to a named GitHub Environment ("production").
     # Environments can carry their own variables/secrets and protection rules
     # (e.g. required approvals). They also scope which OIDC tokens the cloud
@@ -409,6 +422,9 @@ jobs:
   publish-azure:
     needs: build
     runs-on: ubuntu-latest
+    # See the note on the build job: caps how long a hung sync can hold the
+    # deploy lock.
+    timeout-minutes: 15
     environment: production
     steps:
       # Same dist/ bundle, downloaded onto this job's separate VM.
@@ -483,6 +499,9 @@ jobs:
   publish-gcp:
     needs: build
     runs-on: ubuntu-latest
+    # Longest cap of the publish jobs: docker build + Trivy DB download + scan
+    # + registry push + Cloud Run rollout. See the note on the build job.
+    timeout-minutes: 30
     environment: production
     # `env:` here defines environment variables shared by EVERY step in this
     # job. They name the GCP project, region, and resource names once, so the
@@ -553,6 +572,28 @@ jobs:
           if [ "$size" -lt 100000 ]; then
             echo "search-index.json is suspiciously small ($size bytes)" >&2
             exit 1
+          fi
+
+      # Same belt-and-braces re-stamp as the build job, and for the same
+      # reason the search index is rebuilt above: this job bakes its image from
+      # the RAW CHECKOUT (`COPY . /usr/share/nginx/html/`), not from the
+      # corrected dist/ artifact. Without this step, a commit carrying stale
+      # SRI hashes would ship corrected HTML on AWS and Azure but stale-hash
+      # HTML here - browsers reject the assets on the mismatch, and the site
+      # renders unstyled on roughly one request in three, the most annoying
+      # failure shape this repo knows. The SRI verify in purge-cloudflare
+      # fetches the homepage once, so it only has a ~1-in-3 chance of landing
+      # on this origin and catching it; prevention has to happen per-origin.
+      - name: Re-stamp SRI hashes (belt and braces)
+        run: |
+          set -euo pipefail
+          out=$(python3 update_sri.py)
+          echo "$out"
+          # "Modified 0 of N files" means the commit already had correct
+          # hashes. Anything else means the push would have shipped a broken
+          # origin, so say so loudly - the image is still correct either way.
+          if ! echo "$out" | grep -q "Modified 0 of"; then
+            echo "::warning::HTML was committed with stale SRI hashes; this build corrected them for the GCP image. Run update_sri.py before pushing asset changes."
           fi
 
       # Build the Docker image locally on the runner from the repo's Dockerfile.
@@ -705,6 +746,9 @@ jobs:
   purge-cloudflare:
     needs: [publish-aws, publish-azure, publish-gcp]
     runs-on: ubuntu-latest
+    # See the note on the build job: caps how long a hung purge or verify can
+    # hold the deploy lock.
+    timeout-minutes: 10
     environment: production
     steps:
       # Unlike the clouds above, Cloudflare has no OIDC federation, so this is

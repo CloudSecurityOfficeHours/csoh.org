@@ -7,6 +7,12 @@
 # HTML, weekly to catch external link rot, and on demand. Posts a comment on
 # PRs when problems are found, but never fails - link rot is everywhere and
 # shouldn't block merges.
+#
+# On the weekly cron (and manual runs) there is no PR to comment on, and
+# because the job never fails, findings used to land in an artifact nobody
+# opened - the run stayed green and the rot stayed live. Those runs now
+# maintain a sticky tracking issue instead (same pattern as the staleness
+# checkers), which auto-closes once a crawl comes back clean.
 # =============================================================================
 
 # This whole file is a "workflow": a set of automated steps that GitHub runs
@@ -60,6 +66,9 @@ permissions:
   contents: read
   # Allow writing to pull requests (needed to post the broken-links comment).
   pull-requests: write
+  # Allow managing issues (needed for the sticky tracking issue that surfaces
+  # findings from the weekly cron, where there is no PR to comment on).
+  issues: write
 
 
 # -----------------------------------------------------------------------------
@@ -185,6 +194,36 @@ jobs:
           retention-days: 30
           # If the file is missing, just warn instead of failing the step.
           if-no-files-found: warn
+
+      # On non-PR runs (the weekly cron, a manual dispatch) there is no PR to
+      # comment on, so surface findings as a sticky tracking issue instead -
+      # otherwise the crawl's whole point is defeated: the job never fails, so
+      # a green run with an unread artifact is indistinguishable from a clean
+      # one. The shared composite action (.github/actions/sticky-issue, also
+      # used by the staleness checkers) opens/updates the issue while the
+      # report contains lychee's `[Errors]` section and auto-closes it once a
+      # crawl comes back clean.
+      - name: Open, update, or close tracking issue (non-PR runs)
+        if: github.event_name != 'pull_request'
+        uses: ./.github/actions/sticky-issue
+        with:
+          # GITHUB_TOKEN is the automatic per-run credential; the `issues:
+          # write` permission above is what lets it manage the issue.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Broken links: the latest crawl found failures"
+          label: broken-links
+          label-description: Auto-generated reports from check-broken-links.yml
+          report-file: ./lychee-report.md
+          # lychee prints an `[Errors]` section header only when something is
+          # broken; its absence means a clean crawl. (Matched literally, not
+          # as a regex - the action uses grep -F.)
+          stale-marker: '[Errors]'
+          footer: >-
+            _This issue auto-closes once a scheduled crawl comes back clean.
+            Triage guide: NXDOMAIN on two resolvers = genuinely dead, fix the
+            link; 403/429 = bot-blocked, exclude it in .lychee.toml._
+          # A non-empty close-comment enables auto-close on a clean report.
+          close-comment: The latest link crawl found no broken links.
 
       # Quick scan: did lychee find errors? Sets a step output we use below.
       # `[Errors]` is the section header lychee prints when something is broken.

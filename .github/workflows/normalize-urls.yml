@@ -61,22 +61,28 @@ permissions:
 
 # -----------------------------------------------------------------------------
 # §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
-# One shared lane with site-update-deploy so repo-writing runs never overlap.
+# One fixed lock of its own, so only self-overlap is prevented.
 # -----------------------------------------------------------------------------
 # `concurrency` prevents runs from stepping on each other. GitHub allows only
-# ONE active run per named `group` at a time; others wait in a queue. Any
-# workflow that sets the SAME group name shares that single lane. Unlike the
-# per-ref `${{ github.ref }}` groups other workflows use, this one is a fixed
-# constant so it locks against a DIFFERENT workflow (site-update-deploy), not
-# just other runs of itself - both write to the repo, so they must serialize.
-# Shared with site-update-deploy so commits to main never race each other.
-# Queue serially.
+# ONE active run per named `group` at a time; others wait in a queue.
+#
+# This workflow used to share the `deploy-pipeline` group with
+# site-update-deploy, on the theory that "both write to the repo." But this
+# workflow never pushes to main - it pushes a branch and opens a PR - so there
+# is no main-race to serialize against. Sharing the group was actively harmful:
+# cancellation is a property of the INCOMING run, and site-update-deploy joins
+# that group with cancel-in-progress: true, so any content push landing during
+# the monthly ~15-minute redirect crawl would cancel this run mid-flight, and
+# the PR would silently not appear until next month. update-news moved to its
+# own group for exactly this reason; this workflow now follows suit.
 concurrency:
-  # The shared lane name. site-update-deploy uses this same string, so a URL
-  # normalization and a site deploy can never run simultaneously.
-  group: deploy-pipeline
+  # A fixed, constant name (not keyed on `${{ github.ref }}`) so every run of
+  # THIS workflow shares one lock - scheduled, manual, or otherwise - and two
+  # normalization runs can never race on the shared `normalize-urls` branch.
+  group: normalize-urls
   # `false` = let an in-progress run finish instead of canceling it when a new
-  # one is queued. We never want to abort a deploy partway through.
+  # one is queued. A half-done crawl that gets replaced produces no PR at all,
+  # so finishing the older run is always the better outcome.
   cancel-in-progress: false
 
 # -----------------------------------------------------------------------------

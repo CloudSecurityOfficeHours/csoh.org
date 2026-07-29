@@ -275,17 +275,44 @@ jobs:
 
       # Did the audit actually change anything on disk? `git diff --name-only`
       # lists modified tracked files; `git ls-files --others --exclude-standard`
-      # lists brand-new untracked files (like today's report). If the combined
-      # string is empty (-z), set has_changes=false so the PR step below is
-      # skipped - no point opening an empty PR.
+      # lists brand-new untracked files (like today's report). If both are
+      # empty, set has_changes=false so the PR step below is skipped - no
+      # point opening an empty PR. (An earlier version tested
+      # `-z "$(cmd1) $(cmd2)"`, whose literal space meant the string was never
+      # empty and has_changes was always true; harmless in practice only
+      # because the audit always writes a new report file.)
+      #
+      # Also decide whether every change is confined to seo-audits/ - the
+      # approve and auto-merge steps below are gated on that, so an unexpected
+      # file keeps the PR open for a human instead of rubber-stamping it
+      # through. Untracked files are included deliberately:
+      # peter-evans/create-pull-request commits EVERYTHING in the working
+      # tree, so a scope check that only looked at the diff could approve a
+      # PR carrying files it never saw.
       - name: Detect changed files
         id: changes
         run: |
-          if [ -z "$(git diff --name-only) $(git ls-files --others --exclude-standard)" ]; then
+          set -euo pipefail
+          files="$(git diff --name-only; git ls-files --others --exclude-standard)"
+          if [ -z "$files" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "in_scope=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          # Walk every changed path. If ANY falls outside seo-audits/, flip
+          # in_scope=false and stop - humans need to review it.
+          in_scope=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              seo-audits/*) ;;                          # expected - allowed
+              *) in_scope=false; break ;;               # unexpected file
+            esac
+          done <<< "$files"
+          echo "in_scope=$in_scope" >> "$GITHUB_OUTPUT"
+          echo "Changed files (in_scope=$in_scope):"
+          echo "$files"
 
       # A note on "[skip ci]": putting that text in a commit message tells
       # GitHub Actions to NOT run workflows for that commit. We deliberately
@@ -327,18 +354,26 @@ jobs:
       # GH_TOKEN environment variable. `env:` sets variables just for this
       # step. We approve with a SECOND identity (CSOH_PAT, a Personal Access
       # Token) because GitHub forbids approving your own PR, and our auto-merge
-      # rule still requires one approval. The `if:` skips this when no PR was
-      # created (pull-request-number is empty).
+      # rule still requires one approval.
+      #
+      # The `if:` requires BOTH a created PR (pull-request-number non-empty)
+      # AND every changed path under seo-audits/. The scope condition matters:
+      # an approval satisfies the Main ruleset's review requirement and
+      # carries the repo owner's identity via CSOH_PAT, so an out-of-scope PR
+      # must not receive it - withhold the approval too, not just the
+      # auto-merge (the same lesson update-news.yml documents).
       - name: Auto approve
-        if: steps.cpr.outputs.pull-request-number != ''
+        if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.in_scope == 'true'
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
         env:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
       # Turn on auto-merge so GitHub squash-merges the PR automatically once
       # its required status checks pass - no human needed. This uses the App
-      # token (not the PAT) to perform the merge.
+      # token (not the PAT) to perform the merge. Same scope gate as the
+      # approval above: anything outside seo-audits/ leaves the PR open for a
+      # human.
       - name: Enable auto-merge
-        if: steps.cpr.outputs.pull-request-number != ''
+        if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.in_scope == 'true'
         run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}

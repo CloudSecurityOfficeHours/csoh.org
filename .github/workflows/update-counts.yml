@@ -70,21 +70,25 @@ permissions:
 
 # -----------------------------------------------------------------------------
 # §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
-# One global lock so two count-syncs never push to main at the same time.
+# Shares the deploy-pipeline lane with site-update-deploy: both push to main.
 # -----------------------------------------------------------------------------
 # `concurrency:` lets at most one run hold a named "group" at a time. Runs in
 # the same group queue up or cancel each other; runs in different groups are
-# unaffected. Because this workflow commits to a shared branch (main), we use
-# ONE fixed group name (not one keyed on `${{ github.ref }}`) so every run of
-# this workflow - scheduled, manual, or push-triggered - shares a single lock
-# and two of them can never race to push.
+# unaffected. This workflow pushes commits DIRECTLY to main, which is exactly
+# what the shared `deploy-pipeline` group exists to serialize - so it joins
+# that lane rather than keeping a private lock and relying solely on the
+# `git push || (git pull --rebase && git push)` retry to survive a collision
+# with a housekeeping push. (The retry stays as a second line of defense.)
 concurrency:
-  # A constant group name (not per-branch) means every run shares one lock.
-  group: update-counts
-  # If a newer run starts, cancel the older in-progress one. Recomputing counts
-  # reads the latest files from scratch, so the newest run always has the best
-  # data - nothing is lost by dropping the older one.
-  cancel-in-progress: true
+  # The shared lane name. site-update-deploy uses this same string, so a count
+  # sync and a housekeeping run can never push to main simultaneously.
+  group: deploy-pipeline
+  # `false` = wait behind an in-flight housekeeping run instead of killing it.
+  # site-update-deploy joins this group with cancel-in-progress: true, which is
+  # right for content pushes superseding each other, but a weekly count sync
+  # has no newer-run to defer to - overlapping self-runs are near-impossible at
+  # this cadence - and it must never cancel housekeeping mid-push.
+  cancel-in-progress: false
 
 # -----------------------------------------------------------------------------
 # §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)

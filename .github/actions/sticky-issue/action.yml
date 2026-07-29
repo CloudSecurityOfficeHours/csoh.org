@@ -1,0 +1,181 @@
+# =============================================================================
+# sticky-issue - open, update, or close a single labeled tracking issue
+# -----------------------------------------------------------------------------
+# Shared by the report-style workflows (check-meeting-staleness,
+# check-conference-staleness, check-reading-list-staleness, and the scheduled
+# runs of check-broken-links). Each of those used to carry its own copy of the
+# same ~70 lines of shell - ensure the label exists, find the open issue by
+# exact title, edit-or-create it, auto-close when healthy - and the copies had
+# already begun to drift. This composite action is the single home for that
+# logic; the workflows keep only what is genuinely theirs (which checker to
+# run, the title/label/footer text, and whether the issue auto-closes).
+#
+# A "composite action" is a reusable bundle of steps that runs INSIDE the
+# calling job - same runner, same checkout, same filesystem. Workflows invoke
+# it with `uses: ./.github/actions/sticky-issue` (the leading ./ means "from
+# this repo's checkout", which is why the caller must check out first).
+#
+# Behavior matrix:
+#   report unhealthy (marker found, or always-stale) -> create or update the
+#     issue with the report as its body
+#   report healthy + close-comment set + issue open  -> close it with a comment
+#   report healthy + close-comment empty             -> leave any issue alone
+#     (for hand-triaged reports like the reading list, where a human decides
+#     when the checklist is done)
+# =============================================================================
+
+name: Sticky tracking issue
+description: >-
+  Open, update, or auto-close a single labeled tracking issue whose body is a
+  generated markdown report. Matches on exact title + label so repeated runs
+  refresh one issue instead of piling up duplicates.
+
+# `inputs:` declares the parameters callers pass via `with:`. Each becomes
+# available below as `${{ inputs.<name> }}`.
+inputs:
+  token:
+    description: >-
+      Token for the gh CLI. The caller's GITHUB_TOKEN is enough as long as the
+      calling workflow grants `issues: write`.
+    required: true
+  title:
+    description: >-
+      Exact issue title. Used both to find the existing open issue and to
+      create a new one, so it must stay constant across runs.
+    required: true
+  label:
+    description: Label that tags (and finds) the tracking issue.
+    required: true
+  label-description:
+    description: Description used if the label has to be created.
+    required: false
+    default: Auto-generated tracking issue
+  report-file:
+    description: Path to the markdown report that becomes the issue body.
+    required: true
+  footer:
+    description: >-
+      Markdown appended after the report, below a horizontal rule - typically
+      a note explaining when/how the issue closes.
+    required: false
+    default: ''
+  stale-marker:
+    description: >-
+      Literal string whose presence in the report means "unhealthy - keep the
+      issue open". Matched with grep -F (no regex). Ignored when always-stale
+      is true.
+    required: false
+    default: 'Status:** STALE'
+  always-stale:
+    description: >-
+      Set to 'true' to skip the marker check and always create/update the
+      issue with the latest report (for recurring checklist-style reports).
+    required: false
+    default: 'false'
+  close-comment:
+    description: >-
+      Comment posted when a healthy report auto-closes an open issue. Leave
+      empty to never auto-close (a human closes the issue instead).
+    required: false
+    default: ''
+
+# `runs:` is where a composite action defines its steps. Unlike workflow jobs,
+# every `run:` step here must name its `shell:` explicitly.
+runs:
+  using: composite
+  steps:
+    - name: Open, update, or close tracking issue
+      shell: bash
+      # Inputs and context values go through `env:` rather than being
+      # interpolated straight into the script - the house pattern for anything
+      # dynamic, so unexpected characters in a title or footer can't break out
+      # of the shell quoting.
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TITLE: ${{ inputs.title }}
+        LABEL: ${{ inputs.label }}
+        LABEL_DESCRIPTION: ${{ inputs.label-description }}
+        REPORT_FILE: ${{ inputs.report-file }}
+        FOOTER: ${{ inputs.footer }}
+        STALE_MARKER: ${{ inputs.stale-marker }}
+        ALWAYS_STALE: ${{ inputs.always-stale }}
+        CLOSE_COMMENT: ${{ inputs.close-comment }}
+        REPO: ${{ github.repository }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        # Strict mode: -e exit on any error, -u error on unset variables,
+        # -o pipefail catch a failure anywhere in a pipeline.
+        set -euo pipefail
+
+        # Make sure the label exists before we filter/tag by it. On a repo
+        # that already has it, `gh label create` errors; `2>/dev/null` hides
+        # that and `|| true` swallows the non-zero exit so strict mode
+        # doesn't abort.
+        gh label create "$LABEL" \
+          --color "fbca04" \
+          --description "$LABEL_DESCRIPTION" \
+          --repo "$REPO" 2>/dev/null || true
+
+        # Decide health. grep -F treats the marker as a literal string (no
+        # regex escaping needed by callers); -q sets an exit code only.
+        if [ "$ALWAYS_STALE" = "true" ] || grep -qF -- "$STALE_MARKER" "$REPORT_FILE"; then
+          stale=1
+        else
+          stale=0
+        fi
+
+        # Look up any already-open tracking issue so we update instead of
+        # opening a duplicate: list open issues with our label, keep only the
+        # exact-title match (the --search is loose), take at most one number.
+        existing="$(gh issue list \
+          --repo "$REPO" \
+          --state open \
+          --label "$LABEL" \
+          --search "in:title \"$TITLE\"" \
+          --json number,title \
+          --jq ".[] | select(.title == \"$TITLE\") | .number" \
+          | head -n1)"
+
+        if [ "$stale" -eq 1 ]; then
+          # Build the issue body: a credit line, the report, then the caller's
+          # footer below a rule. GitHub caps issue bodies at 65,536 chars, so
+          # cap the report at 60k and say so - the run's artifact always holds
+          # the full version.
+          body="$RUNNER_TEMP/sticky-issue-body.md"
+          {
+            echo "_Auto-updated by [$WORKFLOW_NAME]($RUN_URL)._"
+            echo ""
+            head -c 60000 "$REPORT_FILE"
+            if [ "$(wc -c < "$REPORT_FILE")" -gt 60000 ]; then
+              echo ""
+              echo "_(report truncated - the full version is in the workflow run's artifacts)_"
+            fi
+            if [ -n "$FOOTER" ]; then
+              echo ""
+              echo "---"
+              printf '%s\n' "$FOOTER"
+            fi
+          } > "$body"
+          # Non-empty `existing` means an issue is already open: edit in
+          # place. Otherwise open a new one.
+          if [ -n "$existing" ]; then
+            echo "updating issue #$existing"
+            gh issue edit "$existing" --repo "$REPO" --body-file "$body"
+          else
+            echo "creating new issue"
+            gh issue create \
+              --repo "$REPO" \
+              --title "$TITLE" \
+              --label "$LABEL" \
+              --body-file "$body"
+          fi
+        elif [ -n "$existing" ] && [ -n "$CLOSE_COMMENT" ]; then
+          # Healthy again and auto-close requested: close with the caller's
+          # explanation plus a credit back to this run.
+          echo "report healthy - closing issue #$existing"
+          gh issue close "$existing" --repo "$REPO" \
+            --comment "$CLOSE_COMMENT Auto-closed by [$WORKFLOW_NAME]($RUN_URL)."
+        else
+          echo "report healthy - nothing to do"
+        fi

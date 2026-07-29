@@ -52,26 +52,20 @@ on:
   # whether this PR touches any .html and gates the scan on the answer. A
   # non-HTML PR still gets a green `check-urls` check, quickly, having scanned
   # nothing.
-  #
-  # The `push:` trigger below keeps its `paths:` filter; nothing depends on a
-  # push producing a check run.
   pull_request:
-  # `push` on main, same path filter. Without this the scan had never once run
-  # on the event that actually publishes: every run in this workflow's history
-  # was a pull_request or the weekly cron. That left a real gap, because the
-  # repo owner and the csoh-ci App are both on the Main ruleset's bypass list,
-  # so HTML reaches production by direct push routinely - as it did throughout
-  # the 2026-07-25/26 remediation. A URL-safety scan that only ever sees PRs
-  # does not cover the path most content takes to the live site.
+  # THERE IS DELIBERATELY NO `push:` TRIGGER, and one was briefly here. It was
+  # added on the observation that this workflow had never once run on the
+  # event that actually publishes (direct pushes to main, which the repo owner
+  # and the csoh-ci App both make routinely via the ruleset bypass list). But
+  # push-to-main coverage already exists: site-update-deploy.yml runs the SAME
+  # scanner (tools/check_all_site_urls.py) as a BLOCKING gate on every
+  # `**.html` push to main - a stronger check than this workflow's
+  # detection-only run, on the identical event with the identical path filter,
+  # and `[skip ci]` commits skip both workflows equally. So a push trigger
+  # here only ran the full redirect-resolving crawl a second time in parallel,
+  # for no additional coverage. If the inline gate in site-update-deploy.yml
+  # is ever removed, a push trigger belongs back here.
   #
-  # This does not block the deploy (it is a separate workflow), so treat it as
-  # detection rather than prevention: it runs alongside the deploy and reports.
-  # Making it blocking would mean adding it to the Main ruleset's required
-  # status checks.
-  push:
-    branches: [main]
-    paths:
-      - '**.html'
   # `schedule` runs the workflow on a timer using cron syntax. This weekly
   # recheck catches domains that turn malicious AFTER they were originally
   # safe to link.
@@ -163,8 +157,8 @@ jobs:
       # must always produce a check run. The path filtering lives here instead,
       # where skipping is cheap and still reports success.
       #
-      # Anything that is not a pull_request - a push to main, the weekly cron, a
-      # manual dispatch - scans everything. Those runs gate no merge, and a full
+      # Anything that is not a pull_request - the weekly cron, a manual
+      # dispatch - scans everything. Those runs gate no merge, and a full
       # sweep is the point of the cron: a URL that was safe last week can be
       # re-registered and turn hostile without any file changing.
       - name: Detect HTML changes

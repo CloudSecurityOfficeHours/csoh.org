@@ -174,106 +174,26 @@ jobs:
       # its body. Otherwise create one. The label gives a stable handle for
       # filtering and for future automation. We use the auto-injected
       # GITHUB_TOKEN - issues:write was granted above and that's all we need.
+      #
+      # The open/update mechanics live in the shared composite action
+      # `.github/actions/sticky-issue` (see check-meeting-staleness.yml for
+      # the fuller note on why). Two inputs make this workflow's semantics
+      # different from its siblings: `always-stale: 'true'` refreshes the
+      # issue on every monthly run regardless of report content (this is a
+      # recurring checklist, not a pass/fail gate), and the ABSENCE of a
+      # close-comment means the action never auto-closes it - the reading
+      # list is hand-curated, so a human decides when the checklist is done.
       - name: Open or update tracking issue
-        # `env:` defines environment variables available to this step's shell
-        # as $GH_TOKEN, $REPO, $RUN_URL. `${{ ... }}` is GitHub Actions'
-        # expression syntax: GitHub evaluates what's inside before the shell
-        # runs and substitutes the result. Passing dynamic values via env (and
-        # then quoting "$VAR" in the script) is safer than pasting `${{ ... }}`
-        # straight into the command line, where attacker-controlled text could
-        # break out and inject commands.
-        env:
-          # `secrets.GITHUB_TOKEN` is the short-lived token GitHub mints
-          # automatically for each run; its powers are exactly the
-          # `permissions:` set above (read contents, write issues). `secrets.`
-          # values are masked in logs. The `gh` CLI reads this from $GH_TOKEN
-          # to authenticate. (Note: this token is per-run and unrelated to the
-          # keyless cloud OIDC used by the deploy workflows.)
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # `github.repository` is a built-in context value: the "owner/repo"
-          # slug of this repository (e.g. "Nunley/csoh.org").
-          REPO: ${{ github.repository }}
-          # Build a direct URL to THIS run by stitching together the server
-          # base (github.server_url), the repo slug, and this run's unique id
-          # (github.run_id). We embed it in the issue so a reader can jump back.
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        # The `|` makes this a multi-line "literal block": every following
-        # indented line is one shell script, newlines preserved, run together.
-        run: |
-          # Bash safety switches: -e aborts on the first failing command, -u
-          # errors on use of an unset variable, and -o pipefail makes a
-          # pipeline fail if ANY stage fails (not just the last). Together they
-          # turn silent mistakes into a loud, failed step.
-          set -euo pipefail
-
-          # The issue's exact title and the label we attach. Both are matched
-          # on later to find the existing issue, so they must stay constant.
-          title="Reading list: monthly staleness report"
-          label="reading-list-staleness"
-
-          # `gh` is GitHub's official command-line tool, preinstalled on hosted
-          # runners; it talks to the GitHub API using $GH_TOKEN. The trailing
-          # backslashes join these lines into one command. `2>/dev/null`
-          # discards the error output, and `|| true` forces a success exit code
-          # so `set -e` won't abort: if the label already exists the API
-          # returns HTTP 409 (conflict), which here is fine to ignore.
-          # Ensure the label exists. `gh label create` 409s on duplicate, so
-          # we swallow the error - there's no idempotent flag for this.
-          gh label create "$label" \
-            --color "fbca04" \
-            --description "Auto-generated reports from check-reading-list-staleness.yml" \
-            --repo "$REPO" 2>/dev/null || true
-
-          # Wrap the markdown report with run metadata so a reader landing on
-          # the issue can jump back to the workflow run that produced it.
-          # `{ ...; } > issue-body.md` runs all the commands in the braces as a
-          # group and redirects their combined output into one file. `echo`
-          # prints a line; `cat staleness.md` dumps the report the Python step
-          # wrote. So the file becomes: a header link to this run, a blank
-          # line, the report, then a footer note - assembled in order.
-          {
-            echo "_Auto-updated by [check-reading-list-staleness]($RUN_URL)._"
-            echo ""
-            cat staleness.md
-            echo ""
-            echo "---"
-            echo "_The reading list is hand-curated. This issue is a checklist, not a queue -"
-            echo "close it when you've decided which (if any) entries to act on; the next"
-            echo "monthly run will reopen / refresh it as needed._"
-          } > issue-body.md
-
-          # `$( ... )` is command substitution: run the command inside and
-          # capture its printed output into the `existing` variable. We ask the
-          # API for open issues carrying our label whose title matches, return
-          # the data as JSON (--json), then filter it with --jq (a built-in
-          # jq query): keep only issues whose title is an EXACT match and emit
-          # their numbers. `--search` does loose text matching, so the jq
-          # `select(.title == ...)` is what enforces the exact title. `head -n1`
-          # keeps just the first number. If none match, `existing` is empty.
-          # Look up an existing open issue by exact title + label.
-          existing="$(gh issue list \
-            --repo "$REPO" \
-            --state open \
-            --label "$label" \
-            --search "in:title \"$title\"" \
-            --json number,title \
-            --jq ".[] | select(.title == \"$title\") | .number" \
-            | head -n1)"
-
-          # `[ -n "$existing" ]` is true when the string is non-empty - i.e. we
-          # found a matching open issue. In that case overwrite its body with
-          # our freshly assembled file (--body-file) instead of opening a
-          # duplicate. Otherwise, create a brand-new issue with that title,
-          # label, and body. This "update if present, else create" pattern is
-          # what makes the report a single sticky issue month over month.
-          if [ -n "$existing" ]; then
-            echo "updating issue #$existing"
-            gh issue edit "$existing" --repo "$REPO" --body-file issue-body.md
-          else
-            echo "creating new issue"
-            gh issue create \
-              --repo "$REPO" \
-              --title "$title" \
-              --label "$label" \
-              --body-file issue-body.md
-          fi
+        uses: ./.github/actions/sticky-issue
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Reading list: monthly staleness report"
+          label: reading-list-staleness
+          label-description: Auto-generated reports from check-reading-list-staleness.yml
+          report-file: staleness.md
+          always-stale: 'true'
+          # `|` is YAML's literal block: the footer keeps these line breaks.
+          footer: |
+            _The reading list is hand-curated. This issue is a checklist, not a queue -
+            close it when you've decided which (if any) entries to act on; the next
+            monthly run will reopen / refresh it as needed._
