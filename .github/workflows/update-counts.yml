@@ -208,11 +208,21 @@ jobs:
             # the matching noreply email) so the history reads cleanly.
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            # Stage the count edits (all *.html at any depth - git's own
-            # pathspec `*.html` matches across folders, so subdir pages like
-            # breaches/ and meetings/ are included - plus the OG script) and any
-            # refreshed share-card images under img/og.
-            git add '*.html' tools/generate_og_images.py img/og
+            # Stage EVERYTHING the sync may have rewritten. This used to be an
+            # explicit list ('*.html', the OG script, img/og), and the list
+            # went stale: sync_counts.py also owns count markers in CLAUDE.md,
+            # README.md, tools/SYNC_COUNTS_README.md, and llms.txt. On a run
+            # where ONLY those had drifted, nothing got staged and the
+            # `git commit` below failed with "no changes added to commit"
+            # (2026-07-29); on runs where HTML drifted too, their updates were
+            # silently dropped from the commit instead. `git add -u` stages
+            # every modified tracked file - nothing else in this job writes to
+            # the working tree, so that set is exactly what sync_counts.py and
+            # generate_og_images.py touched. The explicit img/og add still
+            # picks up any brand-new (untracked) share-card JPGs, which -u
+            # alone would miss.
+            git add -u
+            git add img/og
             git commit -m "chore: sync site counts + refresh count share-cards"
             # Push to main. If another pipeline pushed while we worked, the plain
             # `git push` is rejected (non-fast-forward); the `|| ( ... )` fallback
