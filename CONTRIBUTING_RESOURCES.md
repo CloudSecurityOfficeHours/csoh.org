@@ -260,7 +260,7 @@ For example:
 }
 ```
 
-3. Scroll down and click "Commit changes"
+4. Scroll down and click "Commit changes"
 
 ---
 

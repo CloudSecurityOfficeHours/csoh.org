@@ -631,7 +631,7 @@ csoh.org/
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
-├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 20 chains
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 45 chains
 ├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
 ├── kevin-mitnick.html          # Special resource page
 │
@@ -705,7 +705,7 @@ csoh.org/
 ├── google66d489593949bd4c.html # Google Search Console verification token
 │
 │  ── Subdirectory page sets ──
-├── breaches/                   # 20 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── breaches/                   # 45 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 105 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
@@ -1149,7 +1149,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - 228 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - 262 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`

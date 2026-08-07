@@ -34,9 +34,6 @@ These incidents have solid post-mortems and haven't been added yet. Pick one up!
 
 | Incident | Year | Provider | Where to find the source |
 |---|---|---|---|
-| Salesloft / Drift OAuth token theft (UNC6395) | 2025 | SaaS / Salesforce | Google Threat Intelligence (Mandiant) blog - the canonical SaaS OAuth supply-chain breach, 700+ orgs |
-| Codefinger S3 SSE-C ransomware | 2025 | AWS S3 | Halcyon threat research - uniquely cloud-native ransomware using customer-supplied encryption keys |
-| tj-actions/changed-files action compromise | 2025 | GitHub Actions | StepSecurity and Wiz analyses - CI/CD action supply-chain compromise |
 | Midnight Blizzard (APT29) Microsoft corporate | 2024 | Azure / Entra | Microsoft MSRC blog - password-spray into a legacy tenant, then OAuth app abuse |
 | Sisense customer credential compromise | 2024 | Cloud BI | CISA advisory - cascading cloud-BI supply-chain exposure |
 
@@ -178,7 +175,7 @@ Leave the `<nav class="incident-pager">` block that the copied page already has 
 ### 2. Register the page
 
 - **Timeline card.** In `breach-timeline.html`, add a `<li class="breach-card" id="<slug>">` in date order, matching the existing cards exactly (meta row with `inc-year` / `sev-badge` / `prov-tag`, then `breach-card-title`, `breach-card-summary`, and the `breach-card-cta`), linking to `breaches/<slug>.html`.
-- **ItemList schema.** In the same file's `ItemList` JSON-LD, add a `ListItem` for the new page and **increment `numberOfItems`** (e.g. `10` to `11`). The count must equal the number of cards.
+- **ItemList schema.** In the same file's `ItemList` JSON-LD, add a `ListItem` for the new page and **increment `numberOfItems`** by 1. The count must equal the number of cards.
 - **Pager.** Fix the `incident-pager` prev/next links on the new page and on the two pages it now sits between, so the chain stays in order.
 - **Sitemap.** Add `https://csoh.org/breaches/<slug>.html` to `sitemap.xml`.
 - **Nav/footer.** Run `python3 tools/sync_chrome.py` so the shared header/footer stay identical site-wide.
