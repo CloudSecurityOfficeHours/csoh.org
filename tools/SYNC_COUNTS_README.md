@@ -41,7 +41,7 @@ Nothing is configured. Each number is derived from the thing it describes:
 **3. `<!--count:...-->` prose markers**, in both HTML pages and Markdown docs. Wrap a number in a marker and it becomes self-maintaining:
 
 ```html
-Access <!--count:resources_floor-->430+<!--/count--> curated resources.
+Access <!--count:resources_floor-->450+<!--/count--> curated resources.
 ```
 
 The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so `README.md` can use them too. Available keys:
