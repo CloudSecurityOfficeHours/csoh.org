@@ -1110,7 +1110,7 @@ Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog
 Same shape, different content, and neither one edits the site either - each opens or refreshes exactly one sticky issue:
 
 - **`check-meeting-staleness.yml`** (Mondays 15:00 UTC) runs `tools/check_meeting_staleness.py` and files an issue labeled `meeting-staleness` when the newest recap on `meetings.html` is older than the expected weekly cadence. It catches an ingest that quietly stopped working, which no other check would notice.
-- **`check-conference-staleness.yml`** (1st of the month, 14:00 UTC) runs `tools/check_conference_staleness.py` over the "Next:" dates on `conferences.html` and files an issue labeled `conference-staleness` for any that have passed. Conference dates rot in place: the link still resolves, so lychee stays quiet, but the page is advertising an event that already happened.
+- **`check-conference-staleness.yml`** (1st of the month, 14:00 UTC) runs `tools/check_conference_staleness.py` over the "Next:" dates on `conferences.html` and files an issue labeled `conference-staleness` for any that have passed. Conference dates rot in place: the link still resolves, so lychee stays quiet, but the page is advertising an event that already happened. It also scans the *visible text* of cards marked `ongoing` or `TBA`, whose `data-next-date` is deliberately never compared against today - the BSides card advertised a date four days past while the check reported OK, because only the attribute was ever examined.
 
 Both are deliberately `paths:`-filtered so that editing the content they watch does *not* re-trigger them - only the script and the workflow file do.
 
