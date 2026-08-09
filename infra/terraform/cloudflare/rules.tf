@@ -215,49 +215,27 @@ resource "cloudflare_ruleset" "redirects" {
     }
   }
 
-  # --- /csoh/* prefix strip → / (dynamic target) ---
-  # Old links lived under "/csoh/..."; this strips that prefix so they land on
-  # the matching page at the site root.
-  rules {
-    ref         = "csoh_prefix_strip"
-    description = "/csoh/* -> /*"
-    # Match any request path that begins with "/csoh/".
-    expression = "starts_with(http.request.uri.path, \"/csoh/\")"
-    action     = "redirect"
-    enabled    = true
-    action_parameters {
-      from_value {
-        status_code           = 301
-        preserve_query_string = true
-        target_url {
-          # concat() glues strings together: the fixed "https://csoh.org" plus
-          # the path with its "/csoh/" prefix replaced by "/". So
-          # /csoh/about.html -> https://csoh.org/about.html.
-          expression = "concat(\"https://csoh.org\", wildcard_replace(http.request.uri.path, \"/csoh/*\", \"/$${1}\"))"
-        }
-      }
-    }
-  }
+  # --- RETIRED 2026-08-09: csoh_prefix_strip (/csoh/* -> /*) ---
+  # This dynamically stripped a "/csoh/" prefix, a layout two site generations
+  # old. It was removed to free a slot: this phase is capped at 10 rules on the
+  # Free plan, and Cloudflare rejects the entire ruleset update at 11 with
+  # "exceeded the maximum number of rules in the phase
+  # http_request_dynamic_redirect: N out of 10 (50001)" - an atomic failure, so
+  # you find out at apply, not at plan.
+  #
+  # The evidence it was dead weight: Search Console's complete "Not found (404)"
+  # export of 2026-08-09 held 224 URLs and not one was /csoh/*, and the whole
+  # property reported a single "Page with redirect". Google had no memory of
+  # that prefix at all.
+  #
+  # If /csoh/... links ever resurface, do not re-add this here - the phase is
+  # now full. Put them in a Bulk Redirect list instead (account-scoped, its own
+  # quota); that also needs Account -> Filter Lists + Rulesets on the token,
+  # which the current zone-scoped one does not have.
 
-  # The old PHP home page URL - send it to the real home page.
-  rules {
-    ref         = "bare_index_php"
-    description = "/index.php -> home"
-    # Match either "/index.php" or "/index.php/". "or" combines the two checks.
-    expression = "http.request.uri.path eq \"/index.php\" or http.request.uri.path eq \"/index.php/\""
-    action     = "redirect"
-    enabled    = true
-    action_parameters {
-      from_value {
-        status_code = 301
-        # No query string to keep on the home page.
-        preserve_query_string = false
-        # This target is a fixed string ("value"), not a computed expression, so
-        # everything goes to the bare home page.
-        target_url { value = "https://csoh.org/" }
-      }
-    }
-  }
+  # The old PHP front-controller URLs, merged into conc8_root below - both send
+  # traffic to the bare home page with identical parameters, so they do not
+  # need separate rules.
 
   # --- Retired career pages -> consolidated guide ---
   # Three entry-path pages were merged into breaking-into-cloud-security.html
@@ -381,10 +359,15 @@ resource "cloudflare_ruleset" "redirects" {
   # Matched by exact path (not a /conc8 prefix) so that /conc8/concrete/* falls
   # through to a 404 as described above. Query strings are ignored by an
   # http.request.uri.path test, so this one rule absorbs all 55 RAND() variants.
+  #
+  # The bare /index.php and /index.php/ spellings were folded in here on
+  # 2026-08-09 (previously the separate bare_index_php rule). Same destination,
+  # same status code, same query-string handling - one rule where there were
+  # two, which is what paid for one of the four directory redirects below.
   rules {
     ref         = "conc8_root"
-    description = "/conc8 root + front-controller spellings -> home"
-    expression  = "http.request.uri.path in {\"/conc8\" \"/conc8/\" \"/conc8/index\" \"/conc8/index.php\" \"/conc8/index.php/\"}"
+    description = "/conc8 root + bare /index.php front-controller spellings -> home"
+    expression  = "http.request.uri.path in {\"/conc8\" \"/conc8/\" \"/conc8/index\" \"/conc8/index.php\" \"/conc8/index.php/\" \"/index.php\" \"/index.php/\"}"
     action      = "redirect"
     enabled     = true
     action_parameters {
@@ -392,6 +375,85 @@ resource "cloudflare_ruleset" "redirects" {
         status_code           = 301
         preserve_query_string = false
         target_url { value = "https://csoh.org/" }
+      }
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Section directories -> their index page
+  # ---------------------------------------------------------------------------
+  # The site is flat files, so /meetings/ has no index document and the four
+  # content subdirectories are dead URLs - the kind people type, link, and
+  # guess. Worse, they answered inconsistently: sampling /homelab/ twelve times
+  # returned a mix of 403 and 404, because S3 replies 403 (AccessDenied) for a
+  # missing key while nginx and Azure reply 404. Cloudflare load-balances
+  # across all three, so the response depended on which origin caught the
+  # request. That split is what put entries in Search Console's "Blocked due
+  # to access forbidden (403)" bucket, and it is invisible to any check that
+  # fetches a URL once.
+  #
+  # These four are separate rules rather than one wildcard_replace, because
+  # only meetings/ follows the <dir>.html pattern. The targets come from
+  # active_href_for() in tools/sync_chrome.py, which is the existing source of
+  # truth for "which top-level page owns this subdirectory" - keep them in step.
+  #
+  # Each rule covers the bare and trailing-slash spellings both.
+  rules {
+    ref         = "dir_meetings"
+    description = "/meetings[/] -> /meetings.html"
+    expression  = "http.request.uri.path in {\"/meetings\" \"/meetings/\"}"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/meetings.html" }
+      }
+    }
+  }
+
+  rules {
+    ref         = "dir_breaches"
+    description = "/breaches[/] -> /breach-timeline.html"
+    expression  = "http.request.uri.path in {\"/breaches\" \"/breaches/\"}"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/breach-timeline.html" }
+      }
+    }
+  }
+
+  rules {
+    ref         = "dir_portfolio"
+    description = "/portfolio[/] -> /cloud-security-portfolio-projects.html"
+    expression  = "http.request.uri.path in {\"/portfolio\" \"/portfolio/\"}"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/cloud-security-portfolio-projects.html" }
+      }
+    }
+  }
+
+  rules {
+    ref         = "dir_homelab"
+    description = "/homelab[/] -> /cloud-security-home-lab.html"
+    expression  = "http.request.uri.path in {\"/homelab\" \"/homelab/\"}"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/cloud-security-home-lab.html" }
       }
     }
   }
