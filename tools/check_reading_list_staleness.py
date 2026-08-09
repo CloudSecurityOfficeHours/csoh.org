@@ -83,8 +83,19 @@ FEED_OVERRIDES = {
     "https://www.cloudsecuritypodcast.tv/": "https://anchor.fm/s/10fb9928/podcast/rss",
     # YouTube intermittently serves a consent/redirect wall to non-browser
     # clients, so the @handle page fetch sporadically yields no <link rel=alternate>
-    # ("no feed discovered"). Pin the channel-id Atom feed directly.
+    # ("no feed discovered"). Pin the channel-id Atom feed directly. Every
+    # @handle on the reading list is pinned, so none of them can report
+    # "no feed discovered" again. Re-derive an id from the handle page with:
+    #   curl -s -A '<browser UA>' https://www.youtube.com/@<handle> \
+    #     | grep -o '"externalId":"UC[A-Za-z0-9_-]\{22\}"'
+    # The feed endpoint rate-limits rapid repeat requests with a 404, so verify
+    # one id at a time rather than in a tight loop.
+    "https://www.youtube.com/@AWSEventsChannel": "https://www.youtube.com/feeds/videos.xml?channel_id=UCdoadna9HFHsxXWhafhNvKw",
+    "https://www.youtube.com/@BlackHatOfficialYT": "https://www.youtube.com/feeds/videos.xml?channel_id=UCJ6q9Ie29ajGqKApbLqfBOg",
+    "https://www.youtube.com/@cncf": "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqbFHwN-nwalWPjPUKpvTA",
+    "https://www.youtube.com/@DEFCONConference": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6Om9kAkl32dWlDSNlDS9Iw",
     "https://www.youtube.com/@fwdcloudsec": "https://www.youtube.com/feeds/videos.xml?channel_id=UCjfghTrOeq5Qu0WdKjxBpBA",
+    "https://www.youtube.com/@SANSCloudSecurity": "https://www.youtube.com/feeds/videos.xml?channel_id=UCMaclFQGtT064H9KNsfomGA",
 }
 
 REQUEST_TIMEOUT = 20
