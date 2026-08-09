@@ -258,6 +258,143 @@ resource "cloudflare_ruleset" "redirects" {
       }
     }
   }
+
+  # --- Retired career pages -> consolidated guide ---
+  # Three entry-path pages were merged into breaking-into-cloud-security.html
+  # in commit dda6a39b (2026-07-20) and the source files deleted. The 301s were
+  # written into .htaccess, which nothing in this stack reads, so all three
+  # 404'd in production from the day they were removed - long enough for Google
+  # Search Console to file them under "Not found (404)". These are the real
+  # ones. Do not move them back to .htaccess.
+  rules {
+    ref         = "retired_career_pages"
+    description = "3 retired career pages -> breaking-into-cloud-security.html"
+    # "in { ... }" is set membership: true if the path equals any listed value.
+    # Members are space-separated, NOT comma-separated - a comma is a syntax
+    # error in this expression language.
+    expression = "http.request.uri.path in {\"/is-cloud-security-a-good-career.html\" \"/get-into-cloud-security-no-experience.html\" \"/help-desk-to-cloud-security.html\"}"
+    action     = "redirect"
+    enabled    = true
+    action_parameters {
+      from_value {
+        status_code = 301
+        # These pages never took query parameters; drop anything appended.
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/breaking-into-cloud-security.html" }
+      }
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Legacy Concrete CMS (/conc8/) - the bulk of the Search Console 404s
+  # ---------------------------------------------------------------------------
+  # The pre-static site ran Concrete CMS under /conc8/, whose front controller
+  # put the page path after index.php (e.g. /conc8/index.php/blog/calendar).
+  # infra/README.md's cutover step 4 has always told you to verify a /conc8/
+  # redirect with curl, but no rule was ever written - the check would have
+  # failed if anyone had run it.
+  #
+  # Google still has the whole tree. The Search Console "Not found (404)" export
+  # of 2026-08-09 held 224 URLs, and 220 of them were /conc8/*. The buckets, and
+  # what each rule below covers:
+  #
+  #   100  /conc8/index.php/cloud-security-resources/<slug>   -> conc8_resources
+  #     8  /conc8/index.php/resources/<slug>                  -> conc8_resources
+  #     4  /conc8/index.php/blog/<slug>                        -> conc8_blog
+  #     1  /conc8/index.php/kevin-mitnick                      -> conc8_mitnick
+  #    55  /conc8, /conc8/, /conc8/index[.php] (+ query junk)  -> conc8_root
+  #    52  /conc8/concrete/*                                   -> DELIBERATELY 404
+  #
+  # Two notes on what is NOT redirected:
+  #
+  #   - /conc8/concrete/* is Concrete's own installed source tree: vendor/,
+  #     src/, themes/, and browsable directory listings. Google indexed 52 of
+  #     them, including a stray error_log. None of it was ever content, none of
+  #     it has a successor, and a 404 is the correct, honest answer. (That these
+  #     were publicly crawlable at all was a real exposure on the old stack; it
+  #     died with the migration to static hosting.)
+  #   - /cdn-cgi/l/email-protection is a Cloudflare Email Obfuscation artifact,
+  #     not our URL. Nothing to do.
+  #
+  # Every rule sets preserve_query_string = false on purpose. 88 of the 224 URLs
+  # carry CMS pagination junk - ?ccm_paging_p_b2968=3&ccm_order_by_b2968=RAND(
+  # 1633498375)&... - because the block re-seeded RAND() on every render, so the
+  # old site minted a brand-new URL each time Googlebot looked at it. That is
+  # what inflated one page into 55. Carrying those params through the redirect
+  # would rebuild the same infinite crawl space on the new URLs.
+  # ---------------------------------------------------------------------------
+
+  # Exact 1:1 match - the old Mitnick page still exists at a new path.
+  rules {
+    ref         = "conc8_mitnick"
+    description = "/conc8/index.php/kevin-mitnick -> /kevin-mitnick.html"
+    expression  = "http.request.uri.path eq \"/conc8/index.php/kevin-mitnick\""
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/kevin-mitnick.html" }
+      }
+    }
+  }
+
+  # 108 per-resource CMS pages. Each was a standalone page for one tool or link;
+  # that content now lives as cards on resources.html, so the category page is
+  # the genuine successor rather than a stand-in. Not a soft-404 pattern: the
+  # destination really does contain what the old URL described.
+  rules {
+    ref         = "conc8_resources"
+    description = "/conc8/index.php/{cloud-security-,}resources/* -> /resources.html"
+    expression  = "starts_with(http.request.uri.path, \"/conc8/index.php/cloud-security-resources\") or starts_with(http.request.uri.path, \"/conc8/index.php/resources\")"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/resources.html" }
+      }
+    }
+  }
+
+  # The old blog tree: /blog/calendar, /blog/presentations,
+  # /blog/open-session-summaries, /blog/topic/207/podcasts. This is the redirect
+  # infra/README.md's cutover step 4 has always claimed to verify.
+  rules {
+    ref         = "conc8_blog"
+    description = "/conc8/index.php/blog/* -> /news.html"
+    expression  = "starts_with(http.request.uri.path, \"/conc8/index.php/blog\")"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/news.html" }
+      }
+    }
+  }
+
+  # The old CMS root and its front-controller spellings -> the new home page.
+  # Matched by exact path (not a /conc8 prefix) so that /conc8/concrete/* falls
+  # through to a 404 as described above. Query strings are ignored by an
+  # http.request.uri.path test, so this one rule absorbs all 55 RAND() variants.
+  rules {
+    ref         = "conc8_root"
+    description = "/conc8 root + front-controller spellings -> home"
+    expression  = "http.request.uri.path in {\"/conc8\" \"/conc8/\" \"/conc8/index\" \"/conc8/index.php\" \"/conc8/index.php/\"}"
+    action      = "redirect"
+    enabled     = true
+    action_parameters {
+      from_value {
+        status_code           = 301
+        preserve_query_string = false
+        target_url { value = "https://csoh.org/" }
+      }
+    }
+  }
 }
 
 # =============================================================================

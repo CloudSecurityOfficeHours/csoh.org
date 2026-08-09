@@ -1,6 +1,43 @@
 # =============================================================================
-# CSOH Security Hardening - .htaccess  
+# CSOH Security Hardening - .htaccess
 # Generated: 2026-02-11
+#
+# !! INERT. NOTHING IN THIS FILE RUNS IN PRODUCTION. !!
+#
+# This is a leftover from the original Apache/shared-hosting deployment. The
+# site now serves from Cloudflare in front of three origins - S3, Azure Blob
+# static websites, and an nginx container on Cloud Run - and *none of them
+# reads .htaccess*. The file is not even published: tools/site-publish.filter
+# drops every dot-path except /.well-known/, so it never reaches an origin.
+#
+# It is kept only as a record of intent for rules that still need a real home.
+# A rule added here is a rule that does nothing, and the failure is silent -
+# no error, no warning, the redirect simply never fires. That is exactly how
+# the three retired career-page 301s in section 10 came to 404 in production
+# for weeks while this file claimed they were handled, and how Google ended up
+# with a pile of "Not found (404)" in Search Console.
+#
+# Where each concern actually lives now:
+#
+#   Security headers (section 1) -> infra/terraform/cloudflare/rules.tf
+#                                   (cloudflare_ruleset.security_headers),
+#                                   infra/terraform/aws/cloudfront.tf, and
+#                                   nginx-security-headers.conf. See CLAUDE.md:
+#                                   the Cloudflare one carries ignore_changes.
+#   Dotfile / sensitive-path deny  -> nginx.conf, plus tools/site-publish.filter
+#                                   (which is what keeps them off S3/Azure at all)
+#   Redirects (sections 8, 9, 10)  -> infra/terraform/cloudflare/rules.tf
+#                                   (cloudflare_ruleset.redirects)
+#   Caching (section 6)            -> cloudflare_ruleset.cache in the same file
+#   Error pages (section 8)        -> per-origin 404 config
+#   WebP negotiation (section 6b)  -> NOT ported. Object-storage origins cannot
+#                                   do content negotiation. The <img> tags
+#                                   reference .webp directly instead.
+#
+# BEFORE YOU EDIT: if you want a rule to take effect, put it in the Terraform
+# above and apply it. If you only want to record intent, fine - but say so, and
+# do not let a runbook cite this file as proof that something is live.
+#
 # Place this file in the root directory (your document root)
 # =============================================================================
 
@@ -285,6 +322,11 @@ RewriteRule ^index\.php/?$ / [R=301,L]
 #     these 301s so old links, bookmarks, and search results resolve. If you
 #     delete the three source files, these rules still work (R=301 fires on the
 #     URL match regardless of whether the file exists).
+#
+#     ^ All true of Apache, and all irrelevant here: these three rules have
+#     never fired in production. See the INERT banner at the top of this file.
+#     The live versions are cloudflare_ruleset.redirects (ref
+#     "retired_career_pages") in infra/terraform/cloudflare/rules.tf.
 # ---------------------------------------------------------------------------
 RewriteRule ^is-cloud-security-a-good-career\.html$ /breaking-into-cloud-security.html [R=301,L]
 RewriteRule ^get-into-cloud-security-no-experience\.html$ /breaking-into-cloud-security.html [R=301,L]
