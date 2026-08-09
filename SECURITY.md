@@ -385,23 +385,35 @@ steps actually do rather than inheriting the block.
 This is the one workflow where a model reads attacker-influenceable content
 (`WebFetch`/`WebSearch` over the open web) inside a job that holds real
 credentials: the `csoh-ci` installation token, `CLAUDE_CODE_OAUTH_TOKEN`, and
-`id-token: write` at workflow scope. Two properties keep that from being an
-arbitrary-code-execution path, and **neither may be relaxed**:
+`id-token: write` at workflow scope. Three properties keep that from being an
+arbitrary-code-execution path, and **none may be relaxed**:
 
-1. **No bare interpreter in `--allowedTools`.** The allowlist is
-   `Read,Edit,Glob,Grep,Bash(grep:*),Bash(wc:*),WebSearch,WebFetch`.
-   `Bash(python3:*)` used to be on it, which made the rest of the list
-   decorative: the pattern matches `python3 -c '<anything>'`, i.e. a full
-   interpreter reachable by prompt injection in a fetched page. If a future
+1. **No shell at all in `--allowedTools`.** The allowlist is exactly
+   `Read,Edit,Glob,Grep,WebSearch,WebFetch`. Every entry is an in-process tool
+   and no `Bash(...)` pattern remains. It got there in two removals.
+   `Bash(python3:*)` went first: it matches `python3 -c '<anything>'`, i.e. a
+   full interpreter reachable by prompt injection in a fetched page, which made
+   the rest of the list decorative. `Bash(grep:*)` and `Bash(wc:*)` went second,
+   and that is the subtler one - `grep` takes a path like nearly every Unix
+   command, so `Bash(grep:*)` was a read primitive over the whole runner
+   filesystem, `/proc/self/environ` included. The built-in `Grep` tool that
+   remains searches the checked-out workspace and is not a shell. If a future
    prompt genuinely needs Python, add a checked-in script and allowlist that
    exact path - never the interpreter itself.
-2. **`persist-credentials: false` on that job's `actions/checkout`.** By default
-   checkout leaves the App token in `.git/config` as an `http.extraheader` for
-   the remainder of the job, where any later step could read it back out with a
-   plain file read. Nothing after the clone talks to git; the
-   `create-pull-request` step is passed the token explicitly.
+2. **The `csoh-ci` App token is minted after the model step, not before.** The
+   mint step sits immediately above the create-PR step that consumes it, so the
+   credential that can write to this repo does not exist on the runner while the
+   model is reading the open web. Moving it back to the top of the job, where
+   mint steps conventionally go, silently undoes this. What is reachable during
+   the research pass is `CLAUDE_CODE_OAUTH_TOKEN`, which buys model usage and
+   grants nothing in this repo or in any cloud account.
+3. **`persist-credentials: false` on that job's `actions/checkout`.** By default
+   checkout leaves whatever token it used in `.git/config` as an
+   `http.extraheader` for the remainder of the job, where any later step could
+   read it back out with a plain file read. Nothing after the clone talks to git;
+   the `create-pull-request` step is passed the token explicitly.
 
-The second matters more than it looks because `csoh-ci` is on the `Main`
+Properties 2 and 3 matter more than they look because `csoh-ci` is on the `Main`
 ruleset's bypass list with mode "Always" (see [App configuration](#app-configuration)),
 so a leaked installation token is a direct push to `main`, not just a PR.
 
@@ -550,7 +562,7 @@ rather than dashboard state.
 | Control | Value | What it stops |
 |---|---|---|
 | **CAA** | 5 authorized CAs (Let's Encrypt, DigiCert, Google Trust Services, Sectigo/Comodo, SSL.com), `issue` + `issuewild` each, plus `iodef: mailto:admin@csoh.org` | Any other CA issuing a certificate for `csoh.org`. The `iodef` address gets notified on a rejected issuance attempt. |
-| **DNSSEC** | ⚠️ **Signed but NOT active** - zone is signed at Cloudflare, but no DS is published at `.org`, so nothing validates. See below. | *Would* stop forged DNS answers, which is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who can forge a response strips either. Today it stops nothing. |
+| **DNSSEC** | **Signed and delegated** - zone signed at Cloudflare, `DS 2371 13 2` published at `.org`, `whois` reports `signedDelegation`. Verified 2026-08-09. See below. | Forged DNS answers, which is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who could forge a response would strip either. A validating resolver now rejects the forgery instead of serving it. |
 | **SPF** | `v=spf1 include:_spf.google.com ~all` | Unauthorized hosts sending as `@csoh.org`. |
 | **DKIM** | **Two** selectors, both RSA: `google._domainkey` (Google Workspace) and `default._domainkey` (a second sender). See below. | Tampering with, or forging, message bodies in transit. |
 | **DMARC** | `p=quarantine; sp=quarantine; pct=100`, aggregate reports to Cloudflare | Spoofed mail reaching inboxes. Moved up from `p=none` (monitor-only) - the policy now actually does something. |
@@ -595,55 +607,66 @@ It is deliberately at `mode: testing`, which reports failures without bouncing
 mail. Moving to `mode: enforce` is a separate decision that should follow a
 period of clean TLS-RPT reports, not ride along with an unrelated change.
 
-**DNSSEC is signed but not active, and this needs a human.** Signing the zone is
-not the same as DNSSEC being live: the parent zone must publish a DS record
-delegating trust. As of 2026-07-26, 18 hours after the apply, that has not
-happened:
+**DNSSEC is signed and delegated, and there is nothing left to submit.** Signing
+the zone was never the same as DNSSEC being live: the parent zone also has to
+publish a DS record delegating trust. Both halves are done, verified 2026-08-09:
 
 | Check | Result |
 |---|---|
 | `dig DNSKEY csoh.org` | 2 keys - KSK (257) + ZSK (256), alg 13 |
-| `dig csoh.org A +dnssec` | RRSIG present - **the zone really is signed** |
-| `dig DS csoh.org` | *nothing*, via 1.1.1.1, 8.8.8.8, 9.9.9.9 and the `.org` nameservers |
-| `whois csoh.org` | `DNSSEC: unsigned` at the registry |
-| `ad` flag | not set by any validating resolver |
+| `dig csoh.org A +dnssec` | RRSIG present - the zone is signed |
+| `dig +short DS csoh.org` | `2371 13 2 17867E31182375DA5E7C315D67552D70600A7EFB2475404F2B7414B7B097F734` |
+| `whois csoh.org` | `DNSSEC: signedDelegation` at the registry |
+| Google DoH + Cloudflare DoH | both return `AD=true` - the chain validates |
 
-An earlier version of this section said Cloudflare publishes the DS itself
-because it is both registrar and DNS provider, so no action was required. The
-registrar part is true (`whois` confirms `Registrar: Cloudflare, Inc.`), but the
-conclusion was wrong: `cloudflare_zone_dnssec` turns on **signing**, and the DS
-still has to be submitted to the registry. 18 hours and a registry status of
-`unsigned` is not propagation lag.
+**Do not submit a DS record.** An earlier version of this section ended with
+instructions to do exactly that, and pinned a KSK to submit. It is already
+published. Submitting a second one, or submitting a DS for anything other than
+the current KSK, is the one DNSSEC mistake that takes a domain offline for every
+validating resolver: the name does not degrade, it stops resolving. Key rotation
+is Cloudflare's job here and it keeps the registry in step; the only reason to
+touch the DS by hand is a registrar transfer, which is covered in the runbook.
 
-**What this means today:** DNSSEC provides *zero* protection. Validating
-resolvers treat the zone as unsigned, exactly as before. That is the safe
-failure direction - the dangerous one is a DS published for a key the provider
-no longer uses, which makes the domain vanish for anyone behind a validating
-resolver rather than merely go unprotected. So there is no rollback urgency,
-but CAA and DMARC remain forgeable until this is finished.
+Two corrections from getting here are worth keeping, because each cost real
+time. First, `cloudflare_zone_dnssec` turns on **signing** only. An earlier draft
+reasoned that because Cloudflare is both registrar and DNS provider
+(`whois` does confirm `Registrar: Cloudflare, Inc.`) the DS would be published
+automatically. It is not: delegation was a separate manual step in the
+dashboard, and assuming otherwise left the zone undelegated for two weeks.
 
-**To finish it:** in the Cloudflare dashboard, DNS → Settings → DNSSEC, confirm
-the DS is submitted to the registry (for Cloudflare-registrar domains this is a
-one-click action, not something `terraform apply` performs). The DS must match
-the current KSK:
-
-```
-257 3 13 mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+ KkxLbxILfDLUT0rAK9iUzy1L53eKGQ==
-```
-
-Then verify the whole chain, not just the parts:
+Second, and the reason the gap went unnoticed that long: **the obvious `ad`-flag
+check is unreliable on some network paths.** This section used to recommend
 
 ```sh
-dig +short DNSKEY csoh.org            # zone is signed        (expect 2 keys)
-dig +short DS     csoh.org            # parent delegates trust (expect a DS)
 dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'   # expect the "ad" flag
 ```
 
-The `ad` (Authenticated Data) flag is the one that counts - it means a
-validating resolver checked the signatures and they held. **A DS present with no
-`ad` flag means signing and delegation disagree; investigate rather than assume
-propagation lag.** `whois csoh.org` reporting `DNSSEC: signed` is the
-registry-side confirmation.
+On at least one network here that returns `flags: qr rd ra` with no `ad`, and it
+does the same for known-good signed domains - `cloudflare.com` and
+`internetsociety.org` both fail it identically. The AD bit is being stripped in
+transit, so the command measures the path, not the zone. Reading it as a verdict
+on `csoh.org` is what produced the wrong "delegation never happened" conclusion.
+Ask a resolver that reports its validation result over HTTPS instead:
+
+```sh
+dig +short DNSKEY csoh.org      # zone is signed         (expect 2 keys)
+dig +short DS     csoh.org      # parent delegates trust (expect 2371 13 2 ...)
+whois csoh.org | grep -i dnssec # registry view          (expect signedDelegation)
+
+# The one that counts: did a validating resolver check the signatures?
+curl -s "https://dns.google/resolve?name=csoh.org&type=A"
+curl -s -H 'accept: application/dns-json' \
+     "https://cloudflare-dns.com/dns-query?name=csoh.org&type=A"
+# read the "AD" field in each - want true from both
+```
+
+Two independent resolvers because one agreeing with you is not corroboration.
+And whichever method you use, **run it against a control domain in the same
+breath**: a known-good signed zone that fails your check tells you the
+measurement is broken, and a broken measurement is indistinguishable from a
+broken zone until you have that second data point. **A DS present with no
+validation from any resolver means signing and delegation genuinely disagree;
+investigate rather than assume propagation lag.**
 
 The full runbook, including what to do before transferring the domain to another
 registrar, is
@@ -754,13 +777,17 @@ page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
 
 ### Invariants - do not undo these
 
-1. **No bare interpreter in an allowlist for a job that reads untrusted input.**
+1. **No shell entry at all in an allowlist for a job that reads untrusted input.**
    `update-resources.yml` reads the open web with `WebFetch`/`WebSearch` while
    holding the `csoh-ci` token, `CLAUDE_CODE_OAUTH_TOKEN`, and `id-token: write`.
-   `Bash(python3:*)` matches `python3 -c '<anything>'`, which makes every other
-   entry on the list decorative. If a prompt needs Python, check in a script and
-   allowlist that exact path. The same reasoning applies to any future
-   `Bash(sh:*)`, `Bash(node:*)`, `Bash(perl:*)`, or similar.
+   Its allowlist is `Read,Edit,Glob,Grep,WebSearch,WebFetch` and must stay free
+   of `Bash(...)` entries. `Bash(python3:*)` matches `python3 -c '<anything>'`,
+   which makes every other entry on the list decorative; the same reasoning
+   applies to any future `Bash(sh:*)`, `Bash(node:*)`, `Bash(perl:*)`, or
+   similar. The broader form of the rule, learned from `Bash(grep:*)`: **an
+   entry naming a command that accepts a path is a filesystem-read capability**,
+   however read-only the command looks. If a prompt needs Python, check in a
+   script and allowlist that exact path.
 2. **`persist-credentials: false` on that checkout stays.** Otherwise the App
    token sits in `.git/config` as an `http.extraheader` for the rest of the job,
    readable by a plain file read from any later step. `csoh-ci` is on the `Main`

@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var matchesDate = checkDateFilter(cardDate);
 
-            card.style.display = (matchesSearch && matchesFilter && matchesDate) ? '' : 'none';
+            card.classList.toggle('is-hidden', !(matchesSearch && matchesFilter && matchesDate));
         });
     }
 
@@ -231,11 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
             singleDateInput.value = '';
             startDateInput.value = '';
             endDateInput.value = '';
-            document.getElementById('startDateContainer').style.display = 'none';
-            document.getElementById('endDateContainer').style.display = 'none';
-            document.getElementById('singleDateContainer').style.display = 'none';
-            document.getElementById('applyDateFilter').style.display = 'none';
-            document.getElementById('clearDateFilter').style.display = 'none';
+            hideDateControls();
         }
 
         filterCards();
@@ -261,13 +257,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (showAllContributorsBtn) {
         showAllContributorsBtn.addEventListener('click', function() {
             var allContributorsDiv = document.getElementById('allContributors');
-            if (allContributorsDiv.style.display === 'none') {
-                allContributorsDiv.style.display = '';
-                this.textContent = 'Hide Additional Contributors';
-            } else {
-                allContributorsDiv.style.display = 'none';
-                this.textContent = 'Show All Contributors';
-            }
+            var nowHidden = allContributorsDiv.classList.toggle('is-hidden');
+            this.textContent = nowHidden ? 'Show All Contributors' : 'Hide Additional Contributors';
         });
     }
 
@@ -282,24 +273,36 @@ document.addEventListener('DOMContentLoaded', function() {
     var applyDateFilter = document.getElementById('applyDateFilter');
     var clearDateFilter = document.getElementById('clearDateFilter');
 
+    // Visibility here is a class, not element.style.display. The markup ships
+    // these controls with .is-hidden because the page is served under
+    // `style-src 'self'`: an inline style="display: none" attribute is blocked
+    // outright, which left Apply and Clear rendering on page load.
+    function setDateControlHidden(el, hidden) {
+        el.classList.toggle('is-hidden', hidden);
+    }
+
+    function hideDateControls() {
+        setDateControlHidden(startDateContainer, true);
+        setDateControlHidden(endDateContainer, true);
+        setDateControlHidden(singleDateContainer, true);
+        setDateControlHidden(applyDateFilter, true);
+        setDateControlHidden(clearDateFilter, true);
+    }
+
     dateFilterType.addEventListener('change', function() {
         var filterType = this.value;
 
-        startDateContainer.style.display = 'none';
-        endDateContainer.style.display = 'none';
-        singleDateContainer.style.display = 'none';
-        applyDateFilter.style.display = 'none';
-        clearDateFilter.style.display = 'none';
+        hideDateControls();
 
         if (filterType === 'before' || filterType === 'after') {
-            singleDateContainer.style.display = 'block';
-            applyDateFilter.style.display = 'block';
-            clearDateFilter.style.display = 'block';
+            setDateControlHidden(singleDateContainer, false);
+            setDateControlHidden(applyDateFilter, false);
+            setDateControlHidden(clearDateFilter, false);
         } else if (filterType === 'range') {
-            startDateContainer.style.display = 'block';
-            endDateContainer.style.display = 'block';
-            applyDateFilter.style.display = 'block';
-            clearDateFilter.style.display = 'block';
+            setDateControlHidden(startDateContainer, false);
+            setDateControlHidden(endDateContainer, false);
+            setDateControlHidden(applyDateFilter, false);
+            setDateControlHidden(clearDateFilter, false);
         }
     });
 
@@ -336,11 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
         singleDateInput.value = '';
         startDateInput.value = '';
         endDateInput.value = '';
-        startDateContainer.style.display = 'none';
-        endDateContainer.style.display = 'none';
-        singleDateContainer.style.display = 'none';
-        applyDateFilter.style.display = 'none';
-        clearDateFilter.style.display = 'none';
+        hideDateControls();
         filterCards();
     });
 

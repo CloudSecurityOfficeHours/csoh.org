@@ -4,22 +4,22 @@ Companion to the 2026-07-25 security remediation. Everything in this file needs 
 credential, a dashboard, or a registrar login, so it cannot be committed and CI cannot
 apply it. The sections are ordered by real risk reduction, not by effort.
 
-> ## Status as of 2026-07-26: one action is outstanding
+> ## Status as of 2026-08-09: nothing here is outstanding
 >
 > | Section | State |
 > |---|---|
 > | 1. Three Terraform applies | done 2026-07-25 |
 > | 2. DMARC enforcement | done 2026-07-25, now `p=quarantine` |
 > | 3. CAA records | done 2026-07-25, eleven live and imported into state |
-> | **4. DNSSEC** | **half done. The zone is signed; the DS record has never been submitted to the `.org` registry, so DNSSEC protects nothing today.** |
+> | 4. DNSSEC | done. Zone signed AND delegated; DS 2371 live at `.org`, both Google and Cloudflare DoH report `AD=true` |
 > | 5. Cloudflare managed robots.txt | done 2026-07-26, injection disabled and CI now gates on parity |
 > | 6. MTA-STS and TLS-RPT | done 2026-07-26, live in `mode: testing` |
 > | 7. Origin exposure | a standing decision, not a task |
 >
-> Section 4 is the only thing here that needs doing now. Two follow-ups are scheduled
-> rather than outstanding, and both are gated on reading reports first: DMARC `p=reject`
-> (2b, earliest around 2026-08-08) and MTA-STS `mode: enforce` (6, after a clean
-> seven-day TLS-RPT window).
+> Two follow-ups remain scheduled rather than outstanding, and both are gated on reading
+> reports first rather than on a date: DMARC `p=reject` (2b) and MTA-STS `mode: enforce`
+> (6, after a clean seven-day TLS-RPT window). Both windows have now passed, so they are
+> ready to action once the reports look clean.
 
 The sections that are done are kept as the record of what was changed and how each was
 checked, because that is the part that decays. Re-run the verification commands rather than
@@ -508,48 +508,52 @@ against the list above.
 
 ---
 
-## 4. DNSSEC - sign the zone AND delegate it (NOT FINISHED)
+## 4. DNSSEC - sign the zone AND delegate it (DONE, verified 2026-08-09)
 
-> ## ⚠️ NOT FINISHED - one manual step remains
+> ## Both halves are live
 >
-> **Signing is on. Delegation is not.** Re-checked 2026-07-26, 18 hours after the
-> apply:
+> Signing AND delegation are complete. Verified 2026-08-09:
 >
 > | Check | Result |
 > |---|---|
 > | `dig DNSKEY csoh.org` | 2 keys (KSK 257 + ZSK 256, alg 13) |
-> | `dig csoh.org A +dnssec` | RRSIG present - the zone really is signed |
-> | `dig DS csoh.org` | **nothing**, via 1.1.1.1 / 8.8.8.8 / 9.9.9.9 and the `.org` nameservers |
-> | `whois csoh.org` | **`DNSSEC: unsigned`** at the registry |
-> | `ad` flag | not set by any validating resolver |
+> | `dig csoh.org A +dnssec` | RRSIG present - the zone is signed |
+> | `dig +short DS csoh.org` | `2371 13 2 17867E31182375DA5E7C315D67552D70600A7EFB2475404F2B7414B7B097F734` |
+> | `whois csoh.org` | `DNSSEC: signedDelegation` |
+> | DS digest vs live KSK | recomputed SHA-256 over the DNSKEY RDATA: **matches**, key tag 2371 |
+> | Google DoH / Cloudflare DoH | both return `AD=true` - the chain validates |
 >
-> An earlier draft of this section concluded that because Cloudflare is both
-> registrar and DNS provider, it publishes the DS itself and no action was
-> required. The registrar part is correct - `whois` confirms
-> `Registrar: Cloudflare, Inc.` - but the conclusion was wrong.
-> `cloudflare_zone_dnssec` enables **signing**; the DS still has to be submitted
-> to the registry. A registry status of `unsigned` after 18 hours is not
-> propagation lag.
+> **DO NOT SUBMIT A DS RECORD.** An earlier version of this section listed that as
+> "the one outstanding action in this file" and pinned a KSK to submit. It has
+> since been done. Submitting again, or submitting a DS for a key that is not the
+> current KSK, is the single DNSSEC failure mode that takes a domain offline for
+> every validating resolver - the domain does not slow down, it vanishes. If you
+> are reading this looking for something to do, there is nothing here.
 >
-> **Impact today: DNSSEC protects nothing.** Validating resolvers treat the zone
-> as unsigned, exactly as before this work. Note that this is the *safe* failure
-> direction - the dangerous one is a DS published for a key the provider no
-> longer uses, which makes the domain vanish for anyone behind a validating
-> resolver. So there is no rollback urgency, but sections 2 and 3 (CAA, DMARC)
-> stay forgeable until this is done.
+> **Two corrections are worth keeping, because both cost real time.**
 >
-> **To finish - this is the one outstanding action in this file:** Cloudflare
-> dashboard → DNS → Settings → DNSSEC, and submit the DS record to the registry.
-> For a Cloudflare-registrar domain this is a one-click action, but it *is* an
-> action: `terraform apply` does not perform it and never will, and no amount of
-> waiting will produce it. The DS must match the current KSK:
+> First: `cloudflare_zone_dnssec` enables **signing** only. Delegation was a
+> separate manual step, and an earlier draft wrongly concluded that Cloudflare
+> being the registrar made it automatic. It does not.
 >
+> Second, and the reason this section read as unfinished for two weeks: **the
+> `ad`-flag check below is unreliable on some networks.** Running
+> `dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'` returns no `ad` flag from at
+> least one network path here, and it does the same for KNOWN-GOOD signed domains
+> (`cloudflare.com`, `internetsociety.org`) - the AD bit is being stripped in
+> transit. That false negative is what produced the "delegation never happened"
+> conclusion. Do not trust it. Ask a resolver that reports validation over HTTPS
+> instead:
+>
+> ```sh
+> curl -s "https://dns.google/resolve?name=csoh.org&type=A" | grep -o '"AD":[a-z]*'
+> curl -s -H 'accept: application/dns-json' \
+>   "https://cloudflare-dns.com/dns-query?name=csoh.org&type=A" | grep -o '"AD":[a-z]*'
 > ```
-> 257 3 13 mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+ KkxLbxILfDLUT0rAK9iUzy1L53eKGQ==
-> ```
 >
-> Done when `dig +short DS csoh.org` returns a record, `whois csoh.org` reports
-> `DNSSEC: signed`, and the `ad` flag appears. See Verify below.
+> Both should print `"AD":true`. A control domain is the cheap way to tell a broken
+> measurement from a broken zone: if `cloudflare.com` fails your check too, the
+> check is wrong, not the zone.
 
 The web surface is largely covered by HSTS preload already, so the real value is in the
 records that have no transport-layer backstop: `MX` (redirect inbound mail to an attacker
@@ -560,9 +564,10 @@ DNS-01 validation and mint a certificate).
 It is also what makes steps 2 and 3 mean anything. DMARC policy and CAA restrictions are
 both just DNS records; an attacker who can forge a DNS answer can replace either. A CA
 checks CAA over plain DNS at issuance time, so a forged answer strips the restriction.
-Neither is protected today, because the delegation step below has not been done.
+Both are protected now that the delegation below is live: a forged answer fails validation
+rather than being accepted.
 
-### Signing and delegation are two separate things, and only one of them is done
+### Signing and delegation are two separate things, and both are now done
 
 DNSSEC needs both halves, from two different systems:
 
@@ -578,18 +583,17 @@ DNSSEC needs both halves, from two different systems:
 
 2. **Delegation**, at the registry. The `DS` record - a hash of the KSK - has to be
    published in the `.org` zone by the registrar, so that a validating resolver walking
-   down from the root has a reason to trust our `DNSKEY`. **This has not been done, and it
-   is the outstanding action in this file.** Without it, `DNSKEY` and `RRSIG` are just
-   records nobody has been told to check, and validating resolvers treat the zone exactly
-   as they treated it before any of this work.
+   down from the root has a reason to trust our `DNSKEY`. **This was done separately, and
+   is live:** `dig +short DS csoh.org` returns DS 2371 and `whois` reports
+   `DNSSEC: signedDelegation`. Without it, `DNSKEY` and `RRSIG` would be records nobody
+   had been told to check.
 
 **Cloudflare being both registrar and DNS provider does not merge those two steps.** An
 earlier draft of this section assumed it did, concluded there was no registrar action at
-all, and that assumption is the entire reason the DS is still missing today. `whois
-csoh.org` does report `Registrar: Cloudflare, Inc.`, and the nameservers are Cloudflare's,
-but the DS submission is still a distinct action someone has to take (see the callout above
-for where the button is). `terraform apply` will not do it, and waiting will not do it: the
-registry has read `DNSSEC: unsigned` since the apply.
+all, and that assumption delayed the delegation. `whois csoh.org` does report
+`Registrar: Cloudflare, Inc.`, and the nameservers are Cloudflare's, but the DS submission
+was still a distinct action someone had to take. `terraform apply` does not do it and
+waiting does not do it. It has since been done.
 
 What owning both sides *does* remove is narrower, and worth keeping straight because it is
 the reason there is no urgency to roll anything back. The classic DNSSEC outage is a
@@ -598,31 +602,43 @@ which point every validating resolver treats all answers as forged. The domain d
 slow down, it vanishes, and only for users behind validating resolvers, which makes it
 painful to diagnose. Cloudflare managing the key material and the registrar record together
 means a key rotation updates both, so that specific failure mode is off the table here. A
-missing DS is the safe direction; a wrong DS is the dangerous one.
+missing DS was the safe direction while delegation was pending; a wrong DS is the dangerous
+one, and now that a DS is live that is the failure mode to protect against.
 
 **Verify.** The `terraform output` reflects the signing half only; the `dig` and `whois`
 checks are the ones that tell you whether delegation actually landed. Status as of
-2026-07-26 is in the right-hand column:
+2026-08-09 is in the right-hand column:
 
 ```bash
-terraform -chdir=infra/terraform/cloudflare output dnssec_status   # want "active"   -> active
-dig +short DNSKEY csoh.org                                         # want 2 keys     -> KSK 257 + ZSK 256, alg 13
-dig +short DS csoh.org                                             # want a DS record -> EMPTY
-whois csoh.org | grep -i '^DNSSEC:'                                # want "signed"   -> DNSSEC: unsigned
-dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'                    # want the "ad" flag -> absent
+terraform -chdir=infra/terraform/cloudflare output dnssec_status   # want "active"    -> active
+dig +short DNSKEY csoh.org                                         # want 2 keys      -> KSK 257 + ZSK 256, alg 13
+dig +short DS csoh.org                                             # want a DS record -> 2371 13 2 17867E31...B097F734
+whois csoh.org | grep -i '^DNSSEC:'                                # want signed      -> DNSSEC: signedDelegation
+curl -s "https://dns.google/resolve?name=csoh.org&type=A" | grep -o '"AD":[a-z]*'          # -> "AD":true
+curl -s -H 'accept: application/dns-json' \
+  "https://cloudflare-dns.com/dns-query?name=csoh.org&type=A" | grep -o '"AD":[a-z]*'      # -> "AD":true
 ```
 
-The `ad` (Authenticated Data) flag is the one that matters: it means a validating resolver
-checked the signatures and they held. A DS record present but no `ad` flag means signing
-and delegation disagree - investigate before assuming it is propagation lag. No DS and no
-`ad` flag, which is the state today, means delegation was never requested at all.
+Validation by a resolver is the check that matters: it means the signatures were verified
+and they held. **Do not use `dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'` for this.**
+That was the command this block used to recommend, and it returns no `ad` flag on at least
+one network path here even for known-good signed zones - `cloudflare.com` and
+`internetsociety.org` fail it identically, because the AD bit is stripped in transit. It
+measures the path, not the zone, and reading it as a verdict is what produced the wrong
+"delegation never happened" conclusion. Ask a resolver that reports its validation result
+over HTTPS, use two of them, and run a control domain in the same breath: a known-good zone
+that fails your check means the check is broken, not the zone. A DS present with no
+validation from any resolver means signing and delegation genuinely disagree - investigate
+before assuming propagation lag.
 
 > ### If you ever transfer the domain to another registrar
 >
 > Disable DNSSEC **before** the transfer and re-enable it after. Otherwise the new
 > registrar inherits a DS record for a key that no longer signs the zone, which is the
-> stale-DS outage described above. This becomes live advice the moment the DS is submitted;
-> until then there is no DS to go stale.
+> stale-DS outage described above. **This is live advice now.** An earlier version of this
+> box deferred it on the grounds that there was no DS to go stale; DS 2371 is published at
+> `.org`, so a transfer done without this step can take the domain offline for every
+> validating resolver.
 
 ---
 
@@ -753,8 +769,10 @@ python3 tools/check_edge_headers.py        # OK, 8 headers; 40 samples, and it n
 python3 tools/check_robots_parity.py       # OK, robots.txt matches the repo
 dig +short TXT _dmarc.csoh.org             # ONE line, p=quarantine
 dig +short CAA csoh.org                    # 11 lines
-dig +short DS csoh.org                     # STILL EMPTY - see section 4
-whois csoh.org | grep -i '^DNSSEC:'        # still "unsigned" - same thing
+dig +short DS csoh.org                     # want DS 2371 ...
+whois csoh.org | grep -i '^DNSSEC:'        # want signedDelegation
+curl -s "https://dns.google/resolve?name=csoh.org&type=A" | grep -o '"AD":[a-z]*'   # want "AD":true
+# NOT `dig +dnssec ... | grep flags` for the ad bit - see section 4, it false-negatives here
 dig +short TXT _mta-sts.csoh.org           # v=STSv1; id=2026072601
 curl -sI http://www.csoh.org/about.html | grep -i '^location:'   # https://csoh.org/about.html
 curl -sI https://csoh.org/.well-known/security.txt | head -1     # HTTP/2 200

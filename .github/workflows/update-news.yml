@@ -180,6 +180,16 @@ jobs:
       # Did the script change anything? And were the changes ONLY to the
       # safe-to-auto-merge files? We use this to decide whether to enable
       # auto-merge or require human review.
+      #
+      # Untracked files are included deliberately: peter-evans/create-pull-
+      # request commits EVERYTHING in the working tree, including brand-new
+      # files a plain `git diff` never lists - so a scope check that only
+      # looked at the diff could approve a PR carrying files it never saw.
+      # update_news.py rewrites three files that all already exist, so today
+      # a new file means the script did something unexpected, which is
+      # precisely the case this gate is for. (check-pagespeed.yml and
+      # run-seo-audit.yml use the identical pair of commands for the same
+      # reason.)
       - name: Detect changed files
         # This step publishes two named "outputs" (has_changes, only_news_
         # files). Later steps read them as steps.changes.outputs.<name> - the
@@ -191,8 +201,12 @@ jobs:
           # `set -euo pipefail` - fail fast on errors, undefined vars, or
           # broken pipes. Standard "strict mode" for shell scripts.
           set -euo pipefail
-          # `git diff --name-only` lists files modified vs the last commit.
-          files="$(git diff --name-only)"
+          # `git diff --name-only` lists modified tracked files; `git ls-files
+          # --others --exclude-standard` lists new untracked ones (--exclude-
+          # standard honors .gitignore, so ignored junk isn't counted). Run
+          # back to back inside one `$( )`, they are exactly the set the
+          # create-PR action would commit.
+          files="$(git diff --name-only; git ls-files --others --exclude-standard)"
 
           # `[ -z "$files" ]` is true when the list is empty, i.e. the script
           # changed nothing. In that case record "no changes" and stop early.

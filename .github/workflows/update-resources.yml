@@ -157,8 +157,9 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Command-line flags forwarded to the Claude Code CLI. `--model`
           # picks which model to use. `--allowedTools` is an allowlist of the
-          # ONLY tools Claude may use this run; `Bash(grep:*)` means it may run
-          # grep but not arbitrary shell - a guardrail so it can't, say, push.
+          # ONLY tools Claude may use this run. Every entry on it is now an
+          # in-process tool; there is no `Bash(...)` pattern of any kind, so
+          # this step cannot start a shell at all.
           #
           # `Bash(python3:*)` used to be on this list and is deliberately gone.
           # It matched `python3 -c '<anything>'`, i.e. a full interpreter, which
@@ -289,6 +290,18 @@ jobs:
 
       # Bail out cleanly if Claude didn't change anything (e.g., it concluded
       # there was nothing high-quality to add this week, or hit an error).
+      #
+      # The file list below counts untracked files as well as modified ones,
+      # deliberately: peter-evans/create-pull-request commits EVERYTHING in
+      # the working tree, including brand-new files a plain `git diff` never
+      # lists - so a scope check reading only the diff could clear a PR that
+      # carries files it never saw. That matters more here than anywhere
+      # else in this repo: Claude's Edit tool can create a file, not just
+      # modify one, and this workflow's steer is "only touch resources.html".
+      # A new file is exactly the kind of surprise the check exists to catch,
+      # and it was the one shape the check could not see.
+      # (check-pagespeed.yml and run-seo-audit.yml use the identical pair of
+      # commands for the same reason.)
       - name: Detect changed files
         # This step is named via `id:` so later steps can branch on its
         # results, e.g. `steps.changes.outputs.has_changes`.
@@ -301,9 +314,13 @@ jobs:
           # variables, -o pipefail fail if any command in a pipe fails. This
           # makes the script stop loudly instead of silently misbehaving.
           set -euo pipefail
-          # `git diff --name-only` lists paths Claude modified vs the last
-          # commit. We capture that list into the `files` shell variable.
-          files="$(git diff --name-only)"
+          # `git diff --name-only` lists tracked paths Claude modified vs the
+          # last commit; `git ls-files --others --exclude-standard` lists new
+          # untracked ones (--exclude-standard honors .gitignore, so ignored
+          # junk isn't counted). Run back to back inside one `$( )`, they are
+          # exactly the set the create-PR action would commit. We capture that
+          # combined list into the `files` shell variable.
+          files="$(git diff --name-only; git ls-files --others --exclude-standard)"
           # `[ -z "$files" ]` is true when the list is empty (no edits).
           if [ -z "$files" ]; then
             # `$GITHUB_OUTPUT` is a file GitHub gives each step; appending

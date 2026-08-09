@@ -56,7 +56,8 @@ infra/
     cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules,
                   plus the DNS security records:
                     dns_caa.tf     CAA - which CAs may issue for this domain
-                    dns_dnssec.tf  DNSSEC signing only - NOT delegation; see below
+                    dns_dnssec.tf  DNSSEC signing only; delegation is not
+                                   Terraform's to do - see below
                     dns_mail.tf    DMARC, MTA-STS, TLS-RPT
 ```
 
@@ -66,17 +67,29 @@ are themselves just DNS records - forge the answer and you strip both. See
 [SECURITY.md -> DNS & Email Security](../SECURITY.md#dns--email-security) for
 what each record buys and how to verify the chain end to end.
 
-**`dns_dnssec.tf` is half the control, and the half Terraform cannot do is the
-one that counts.** `cloudflare_zone_dnssec` signs the zone: as of 2026-07-26
-`dig DNSKEY csoh.org` returns a KSK and a ZSK and `dig +dnssec csoh.org A`
-returns RRSIGs, so the signing really is live. But no DS record is published at
-the `.org` registry, so no resolver validates anything and no `ad` flag is ever
-set. **Cloudflare being the registrar does not make DS submission automatic** -
-that belief is exactly why this is still outstanding. It is a separate
-dashboard action, and until it is taken, DNSSEC here protects nothing.
-`prevent_destroy` on the resource is about not silently unsigning a zone that a
-parent might one day be delegating to; it says nothing about whether delegation
-exists. Runbook:
+**`dns_dnssec.tf` is only half the control, and the other half was never
+Terraform's to do.** `cloudflare_zone_dnssec` signs the zone: `dig DNSKEY
+csoh.org` returns a KSK and a ZSK (alg 13) and `dig +dnssec csoh.org A` returns
+RRSIGs. Delegation is the separate half, done at the registry, and it is now
+live too: `dig +short DS csoh.org` returns `2371 13 2 ...`, `whois csoh.org`
+reports `DNSSEC: signedDelegation`, and both Google and Cloudflare DNS-over-HTTPS
+answer with `AD=true`. Verified 2026-08-09.
+
+**Do not submit a DS record.** One is already published, and submitting a second
+one (or one for a key that is not the current KSK) is the DNSSEC failure that
+makes a domain disappear for every validating resolver.
+
+The reason this file used to say otherwise is worth keeping: **Cloudflare being
+the registrar did not make DS submission automatic.** Believing it did left the
+zone signed but undelegated for two weeks, hidden behind a check
+(`dig +dnssec ... | grep flags:`) that returns no `ad` flag on some network paths
+even for known-good domains. Verify with a resolver that reports validation over
+HTTPS, and against a control domain, per
+[SECURITY.md -> DNS & Email Security](../SECURITY.md#dns--email-security).
+
+`prevent_destroy` on the resource is about not silently unsigning a zone the
+parent is delegating to - which, now that the DS is live, would break resolution
+rather than merely drop protection. Runbook:
 [`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 4.
 
 All four states live in the same GCS bucket (`csoh-org-495800-tfstate`) under
