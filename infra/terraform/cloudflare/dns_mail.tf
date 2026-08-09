@@ -57,10 +57,38 @@ resource "cloudflare_record" "dmarc" {
   #
   #   rua=         where to send aggregate reports - daily XML summaries of who
   #                sent mail as csoh.org and whether it authenticated. This is
-  #                the Cloudflare DMARC Management address that was already
-  #                configured, kept as-is. It is the feedback loop: read it
-  #                before tightening to reject. Not a secret; it is published in
-  #                public DNS by definition.
+  #                the feedback loop: read it before tightening to reject.
+  #                Neither address is a secret; both are published in public DNS
+  #                by definition.
+  #
+  #                TWO destinations, comma-separated. Receivers send a copy to
+  #                each, so this is additive and reversible - removing one does
+  #                not disturb the other.
+  #                  1. The Cloudflare DMARC Management address, which backs the
+  #                     dashboard view under Email -> DMARC Management.
+  #                  2. admin@csoh.org, which gets the RAW gzipped XML. The
+  #                     dashboard summarises; the raw reports name the DKIM
+  #                     SELECTOR each source signed with, which is what is
+  #                     actually needed to identify the second signer on this
+  #                     domain (default._domainkey, still unattributed) before
+  #                     deciding on p=reject or on tightening SPF to -all.
+  #
+  #                WHY admin@csoh.org AND NOT A PERSONAL ADDRESS. RFC 7489
+  #                section 7.1 requires External Destination Verification: when a
+  #                rua mailbox sits at a DIFFERENT domain than the DMARC record,
+  #                that other domain must publish
+  #                    csoh.org._report._dmarc.<their-domain>  TXT  "v=DMARC1"
+  #                to consent to receiving our reports. Checked before writing
+  #                this: gmail.com publishes no such record for csoh.org and
+  #                never will, so a personal Gmail address would be silently
+  #                skipped by compliant receivers - reports simply would not
+  #                arrive, with nothing to indicate why. The Cloudflare address
+  #                above works precisely because Cloudflare DOES publish that
+  #                record for its own domain (verify with
+  #                `dig +short TXT csoh.org._report._dmarc.dmarc-reports.cloudflare.net`).
+  #                admin@csoh.org is same-domain, so it needs no authorization
+  #                at all. Any future third-party analyser (dmarcian, Postmark)
+  #                hands you an address at THEIR domain for this same reason.
   #
   # Alignment mode is left at its default (relaxed) for both SPF and DKIM.
   # Strict alignment is a separate tightening and should not ride along with an
@@ -69,7 +97,7 @@ resource "cloudflare_record" "dmarc" {
   # when it serves the record; embedding literal `"` here publishes them twice
   # and the policy stops parsing. Compare `dig +short TXT _dmarc.csoh.org`,
   # which shows the quotes Cloudflare added, against this value, which has none.
-  content = "v=DMARC1; p=quarantine; sp=quarantine; pct=100; rua=mailto:325e7f2d0aeb4bf097745889b5b2dd23@dmarc-reports.cloudflare.net"
+  content = "v=DMARC1; p=quarantine; sp=quarantine; pct=100; rua=mailto:325e7f2d0aeb4bf097745889b5b2dd23@dmarc-reports.cloudflare.net,mailto:admin@csoh.org"
 
   # A DMARC record is policy data, not a host - there is nothing to proxy.
   proxied = false
