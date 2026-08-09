@@ -285,23 +285,58 @@ the environment pin enforces the branch transitively;
 `var.github_branch` in `infra/terraform/gcp/variables.tf` documents that intent
 but is not referenced by the trust.
 
-## Two Cloudflare tokens, and the local one can't run Terraform
+## Two Cloudflare tokens, and only one of them is on this machine
 
-`.env`'s `CLOUDFLARE_API_TOKEN` is the CI cache-purge token: one permission,
-**Zone → Cache Purge**, scoped to `csoh.org`. That is deliberate, because the
-deploy path should not hold a credential able to rewrite the security headers.
+There are two, deliberately. The **cache-purge** token has a single permission,
+**Zone → Cache Purge**, scoped to `csoh.org`, because the deploy path should not
+hold a credential able to rewrite the security headers. The **Terraform** token
+is much broader and must stay out of CI.
 
-It also means `terraform apply` in `infra/terraform/cloudflare/` does not work
-with it. What you get is `Authentication error (10000)` and `Unauthorized to
-access requested resource (9109)` naming individual resources, which reads like
-a broken config rather than a scope problem. The token verifies as valid via
-`/user/tokens/verify`, which makes it look even less like the cause.
+The purge token now lives **only** in the GitHub Actions secret
+`CLOUDFLARE_API_TOKEN`, which `deploy.yml`'s `purge-cloudflare` job reads. It is
+not in `.env` and cannot be recovered from CI - Actions secrets are write-only.
+If you need to purge by hand, make a *new* Custom token (Zone → Cache Purge,
+Zone Resources `csoh.org` only) rather than rolling the existing one; rolling
+invalidates what CI holds and the next deploy's purge job fails. The rotation
+procedure, which does include replacing the Actions secret, is in
+`SECURITY.md`.
 
-Worse, Cloudflare gates each **ruleset phase** behind its own permission group,
-and this stack spans three phases plus DNS, load balancing, and zone settings.
-A partly-scoped token fails only the resources it cannot reach, so the missing
-permissions surface two at a time over several runs. The full eight-group list
-is in `infra/README.md`; use a second, broader token and keep it out of CI.
+`.env` holds `CLOUDFLARE_TF_API_TOKEN` - the broad Terraform one. The provider
+only reads `CLOUDFLARE_API_TOKEN`, so map it for the run and do not export it
+globally:
+
+```sh
+set -a; . ./.env; set +a
+export CLOUDFLARE_API_TOKEN="$CLOUDFLARE_TF_API_TOKEN"
+```
+
+`.env` also carries `TF_VAR_account_id`, `TF_VAR_zone_id`, and the three
+`TF_VAR_*_origin_host` values, so plan and apply need no `-var` flags and no
+AWS/GCP/Azure logins. The origin hostnames come from the `csoh-origins` LB pool.
+
+Two ways this misleads you when it goes wrong:
+
+- **A stale or invalid token reads as a scope problem.** Both Cloudflare values
+  in `.env` were silently invalid for a while, and CI never noticed because it
+  uses the Actions secret, not the file. If the API says `Invalid API Token`,
+  check the value before the permissions. Token length is *not* a validity
+  signal - these are ~53 characters with a short `prefix_`, not 40.
+- **A genuinely under-scoped token looks valid.** `/user/tokens/verify` reports
+  `active` regardless of scope, and Cloudflare gates each **ruleset phase**
+  behind its own permission group. This stack spans three phases plus DNS, load
+  balancing, and zone settings, so a partly-scoped token fails only the
+  resources it cannot reach and the missing permissions surface two at a time
+  over several runs. `Authentication error (10000)` and `Unauthorized to access
+  requested resource (9109)` naming individual resources is that shape. The full
+  eight-group list is in `infra/README.md`.
+
+One more thing that will surprise you: a plan of this stack always shows
+`cloudflare_record.dmarc`, `.mta_sts_id`, and `.smtp_tls_reporting` changing.
+That is quote-stripping drift in Terraform *state* - live DNS already serves the
+unquoted content - so it is a no-op, but it means an unscoped `apply` writes to
+production DMARC and MTA-STS as a side effect. Scope edge-config applies with
+`-target=cloudflare_ruleset.redirects`, and reconcile the DNS deliberately if
+you ever want it to stop appearing.
 
 ## Terraform must be a native arm64 build on this machine
 
