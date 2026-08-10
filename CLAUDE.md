@@ -190,6 +190,39 @@ down. Check all of these when adding one:
 not automatic — `homelab/` is deliberately excluded from search and
 cross-linking.
 
+## `img/og/` and `img/thumbs/` are not interchangeable
+
+Two in-house image sets, two different jobs, and reaching for the wrong one
+is easy because both are "the picture for that page".
+
+- **`img/og/`** — 1200×630 social cards from `tools/generate_og_images.py`.
+  Built to be read at full width in a Slack or LinkedIn unfurl: headline,
+  subtitle, footer.
+- **`img/thumbs/`** — 3:2 glyph tiles from `tools/generate_thumbnails.py`.
+  Built for the compact card grids on `index.html` and
+  `what-practitioners-think.html`, whose columns land at 197-303px. One
+  glyph, one category word, no sentences.
+
+The compact grids used OG cards for a while and it failed twice over. The
+shared `.resource-card .resource-preview` rule pins previews to a 160px-tall
+box with `object-fit: cover` — correct for the ~460 third-party screenshots
+in `img/previews/`, which arrive at mixed sizes and need normalising. Against
+a 1.905 OG card in a 233px column that box is 1.46, so cover sliced 12-18%
+off *each side*: the CSOH wordmark, the badge pill, and the first and last
+words of the title. "Cloud Security News" rendered as "oud Security New".
+Fixing the crop alone only exposed the second problem — at 233px the card's
+6px subtitle was illegible and its headline just repeated the `<h3>` beneath
+it.
+
+So: `--og` and `--thumb` modifier classes each pin the box to their asset's
+own ratio, and cover is a no-op for both. The four featured "start here"
+cards still use OG cards deliberately; at 311px they are legible and the
+extra weight suits them.
+
+Both generators need Playwright, which on this machine is under
+`/usr/bin/python3`, not the pyenv default. After adding a tile, run
+`generate_webp.py img/thumbs` and then `update_sri.py`.
+
 ## Never allowlist a bare interpreter in a job that reads the web
 
 `update-resources.yml` runs `anthropics/claude-code-action` behind an
@@ -248,6 +281,104 @@ Header values now live in **three** places that must stay in step:
 Azure Blob static websites cannot emit custom response headers at all, so that
 origin still depends entirely on the edge. That gap is known and cannot be
 closed from this repo.
+
+## A health check is one request multiplied by every Cloudflare data center
+
+The load balancer monitor in `infra/terraform/cloudflare/load_balancer.tf` runs
+against **all three origins from every Cloudflare data center**. At `interval =
+60` that worked out to roughly 757 probe sources per cycle, about **1.09M probes
+per origin per day**. Whatever that probe fetches, you are buying it a million
+times a day.
+
+It used to fetch `GET /`. Azure Blob static websites cannot gzip, so each probe
+shipped the full uncompressed `index.html`: 52,425 bytes, against 11,193
+gzipped. That is ~57 GB/day of billed egress, and it produced a **$119.77**
+Azure bandwidth bill for July 2026 plus $12.66 of read operations. Commit
+`e4eab64c` switched the monitor to `method = "HEAD"`, which took the per-probe
+wire cost from 52,425 bytes to **372**, and the month from 1,771 GB to 12 GB -
+back inside Azure's 100 GB/month free allowance, so the line went to zero.
+
+HEAD is only safe here because `expected_body` is not set, so the body was
+downloaded and discarded anyway. **If you ever set `expected_body`, this has to
+go back to GET**, and the bill comes back with it.
+
+Two things about this that cost real time:
+
+- **It reads as traffic, not as configuration.** The daily egress curve was
+  almost perfectly flat, ~40 GB/day rising to ~50 GB/day, with no weekday or
+  weekend variation at all. Human traffic is never that smooth; a flat curve is
+  a machine. The confirmation was in the origin access logs, where **97.8% of
+  requests were `Cloudflare-Traffic-Manager/1.0` asking for `/`**.
+- **One origin's bill does not tell you where the traffic enters.** The obvious
+  theory was that someone had found the public `*.web.core.windows.net` endpoint
+  and was scraping it directly, bypassing the edge. Comparing a second origin
+  killed that in one query: GCP Cloud Run was serving ~1.05M requests/day
+  against Azure's ~1.09M, i.e. an even split, which only happens if Cloudflare's
+  load balancer is the thing generating it.
+
+The check that answers "who is actually hitting the origins":
+
+```sh
+gcloud logging read 'resource.type="cloud_run_revision"' \
+  --limit=1000 --freshness=30m --project=csoh-org-495800 \
+  --format='value(httpRequest.userAgent)' | sort | uniq -c | sort -rn | head
+```
+
+`check_regions` is what bounds the fan-out, and there are two traps in it. It
+lives on `cloudflare_load_balancer_pool`, **not** on the monitor - the v4
+provider has no such attribute on `cloudflare_load_balancer_monitor` at all, so
+setting it there validates fine and does nothing. And the plan caps how many
+regions you may list: three returned `the number of probe regions exceeds the
+allowed maximum: validation failed (1002)`. Leaving it unset means every data
+center, which is the expensive default.
+
+Worse, **a rejected pool apply still writes the value into Terraform state**.
+After that failure, state claimed `["ENAM","WEU","WNAM"]` while live Cloudflare
+had none. `terraform plan -refresh-only` surfaces the drift; a normal plan
+refreshes first so it self-corrects in memory, but do not trust a state read on
+its own after a failed apply.
+
+The general lesson, which applies past health checks: **anything on a timer
+against an origin is a unit cost multiplied by a fan-out you did not choose.**
+At this probe rate every 1 KB added to `index.html` was worth about $3/month,
+which is not a tradeoff anyone would have accepted if it had been visible. Ask
+what the fan-out is before asking whether the payload is small.
+
+## Cache rules match on file extension, and the last match wins
+
+`cloudflare_ruleset.cache` in `rules.tf` keys off
+`http.request.uri.path.extension`. That field is **empty** for `/` and for any
+clean URL like `/about`, so those matched no tier at all, fell through to
+Cloudflare's default - which does not cache HTML - and came back
+`cf-cache-status: DYNAMIC`. The home page was being fetched from an origin on
+every single request. `/search-index.json` (3.5 MB, the largest file on the
+site) was uncached for the same reason, as was `llms.txt`.
+
+The rule now also matches `json`, `txt`, the empty extension, and
+`ends_with(path, "/")`. Note that `matches` is not available: this zone has no
+regex support in rule expressions, so extensionless paths have to be caught with
+plain string functions.
+
+The second half is the one that will bite you again: **cache rules apply the
+last matching rule, not the first.** The tier-1 rule pinning `/search.html` to
+60 seconds sits above the general HTML rule, and had been silently overridden
+since it was written - production served `search.html` with `max-age=3600`. The
+general rule now carries `and http.request.uri.path ne "/search.html"`, which
+makes the outcome independent of ordering rather than dependent on getting the
+order right. Prefer that shape: an explicit exclusion survives someone inserting
+a rule above it, a carefully ordered list does not.
+
+Caching `json`/`txt` for an hour is safe only because `purge-cloudflare` clears
+the edge on every deploy. If that job is ever removed, these TTLs need rethinking.
+
+Verify by asking for the same URL twice - the second must not say `DYNAMIC`:
+
+```sh
+for u in / /about /search-index.json /search.html; do
+  printf '%-22s ' "$u"
+  curl -sI "https://csoh.org$u" | grep -i '^cf-cache-status' | tr -d '\r'
+done
+```
 
 ## `vendor/` files are patched, and a re-vendor silently reverts the patch
 

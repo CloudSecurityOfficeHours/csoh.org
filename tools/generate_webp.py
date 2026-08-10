@@ -34,6 +34,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DIRS = [
     REPO_ROOT / "img" / "og",
+    REPO_ROOT / "img" / "thumbs",
     REPO_ROOT / "img" / "previews",
     REPO_ROOT / "chat-screenshots",
 ]

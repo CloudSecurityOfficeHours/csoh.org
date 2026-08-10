@@ -847,6 +847,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `generate_recaps_rss.py` | Builds `recaps.xml`, the meeting-recap RSS feed | docstring |
 | `generate_og_images.py` | 1200×630 social cards for top-level pages | docstring |
 | `generate_meeting_og_images.py` | 1200×630 social cards for meeting recaps | [README](tools/GENERATE_MEETING_OG_IMAGES_README.md) |
+| `generate_thumbnails.py` | 3:2 glyph tiles for the compact card grids (`img/thumbs/`) | docstring |
 | `generate_news_banners.py` | Banner images for news sources | docstring |
 | `generate_preview.py` | Screenshot previews for resource cards | [README](tools/GENERATE_PREVIEW_README.md) |
 | `generate_webp.py` | `.webp` siblings for every raster image | docstring |

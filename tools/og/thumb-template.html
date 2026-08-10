@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<title>Card thumbnail template</title>
+<style>
+  /* Thumbnail canvas: 480x320 (3:2), screenshotted at device_scale_factor 2
+     so the shipped JPEG is 960x640. The compact card grid renders these at
+     197-303px wide, so everything on the tile is sized to survive a ~2x
+     downscale: nothing thinner than a 3px stroke, no type under 26px.
+
+     This is deliberately NOT the OG template. An OG card is a 1200px-wide
+     social embed built around a headline; shrunk into a 233px card slot its
+     type is illegible and it just repeats the <h3> underneath. A thumbnail
+     has one job at that size: be recognisable at a glance. So it carries a
+     glyph and a category word, and lets the card's own heading do the
+     talking. */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 480px;
+    height: 320px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    /* Same brand base as the OG card, so the two read as one family. The
+       accent wash is per-topic and is what makes 23 tiles distinguishable
+       from each other at thumbnail size. */
+    background:
+      radial-gradient(circle at 78% 22%, var(--accent-glow) 0%, transparent 58%),
+      linear-gradient(135deg, #16202c 0%, #223243 52%, #2b4a63 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 34px 36px;
+    position: relative;
+  }
+  /* Hairline inner edge: keeps the tile from bleeding into a dark card
+     surface once the border-radius is applied by the site CSS. */
+  body::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    pointer-events: none;
+  }
+  .glyph {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Nudged up a touch so the label below doesn't crowd it optically. */
+    padding-bottom: 10px;
+  }
+  .glyph svg {
+    width: 132px;
+    height: 132px;
+    stroke: var(--accent);
+    stroke-width: 1.45;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    /* Faint bloom so line art doesn't look weak against the gradient. */
+    filter: drop-shadow(0 0 18px var(--accent-glow));
+  }
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .accent-bar {
+    width: 34px;
+    height: 5px;
+    background: var(--accent);
+    border-radius: 3px;
+    flex: none;
+  }
+  .label {
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+</style>
+</head>
+<body>
+<div class="glyph" id="glyph"></div>
+<div class="foot">
+  <span class="accent-bar"></span>
+  <span class="label" id="label">Label</span>
+</div>
+
+<script>
+  // Glyph set. Hand-drawn on a 24x24 grid, stroke-only, in the manner of
+  // Feather/Lucide so they sit together as one set. Kept deliberately simple:
+  // at 233px card width these render around 64px, and detail below ~1.4 units
+  // of the grid disappears at that size.
+  const ICONS = {
+    'cloud-check':
+      '<path d="M7 18.4h10a4.1 4.1 0 0 0 .4-8.2A5.6 5.6 0 0 0 6.5 9.7 4.3 4.3 0 0 0 7 18.4Z"/>' +
+      '<path d="m9.6 13.9 1.9 1.9 3.6-4"/>',
+    'split-panel':
+      '<path d="M3.4 5.4h17.2v13.2H3.4Z"/><path d="M12 5.4v13.2"/>' +
+      '<circle cx="7.7" cy="12" r="1.5"/><circle cx="16.3" cy="12" r="1.5"/>',
+    'layers':
+      '<path d="M12 3.2 20.8 7.5 12 11.8 3.2 7.5Z"/>' +
+      '<path d="m3.2 12 8.8 4.3 8.8-4.3"/><path d="m3.2 16.4 8.8 4.4 8.8-4.4"/>',
+    'cube':
+      '<path d="M12 3.2 20.3 7.9v8.2L12 20.8 3.7 16.1V7.9Z"/>' +
+      '<path d="M12 12.6 20.3 7.9"/><path d="M12 12.6 3.7 7.9"/><path d="M12 12.6v8.2"/>',
+    'globe':
+      '<circle cx="12" cy="12" r="8.8"/><path d="M3.2 12h17.6"/>' +
+      '<path d="M12 3.2a13.4 13.4 0 0 1 0 17.6 13.4 13.4 0 0 1 0-17.6Z"/>',
+    'key':
+      '<circle cx="8" cy="15.4" r="3.4"/><path d="M10.4 13 20.4 3"/>' +
+      '<path d="m16.6 6.8 2.2 2.2"/><path d="m13.9 9.5 1.8 1.8"/>',
+    'shield-keyhole':
+      '<path d="M12 3.2 19.6 6v6.1c0 4.5-3.1 7.6-7.6 8.9-4.5-1.3-7.6-4.4-7.6-8.9V6Z"/>' +
+      '<circle cx="12" cy="10.9" r="1.7"/><path d="M12 12.6v2.6"/>',
+    'panels':
+      '<path d="M3.6 5.2h9.6v9.6H3.6Z"/><path d="M10.8 9.2h9.6v9.6h-9.6Z"/>',
+    'flask':
+      '<path d="M9.4 3.4v5.4l-5 8.8a2.1 2.1 0 0 0 1.8 3.2h11.6a2.1 2.1 0 0 0 1.8-3.2l-5-8.8V3.4Z"/>' +
+      '<path d="M8.3 3.4h7.4"/><path d="M7.1 14.6h9.8"/>',
+    'wrench':
+      '<path d="M15.8 4.2a5.2 5.2 0 0 0-6.9 6.6l-5.2 5.2v4.2h4.2l5.2-5.2a5.2 5.2 0 0 0 6.6-6.9l-3.1 3.1-2.6-.6-.6-2.6Z"/>',
+    'award':
+      '<circle cx="12" cy="9.1" r="5.5"/><path d="m8.5 13.7-1.6 7.3 5.1-2.7 5.1 2.7-1.6-7.3"/>',
+    'chip':
+      '<path d="M6.4 6.4h11.2v11.2H6.4Z"/><path d="M9.9 9.9h4.2v4.2H9.9Z"/>' +
+      '<path d="M9.5 6.4V3.4"/><path d="M14.5 6.4V3.4"/><path d="M9.5 20.6v-3"/><path d="M14.5 20.6v-3"/>' +
+      '<path d="M6.4 9.5h-3"/><path d="M6.4 14.5h-3"/><path d="M20.6 9.5h-3"/><path d="M20.6 14.5h-3"/>',
+    'briefcase':
+      '<path d="M3.4 8.4h17.2v10.2H3.4Z"/>' +
+      '<path d="M8.9 8.4V6.1a1.6 1.6 0 0 1 1.6-1.6h3a1.6 1.6 0 0 1 1.6 1.6v2.3"/>' +
+      '<path d="M3.4 13h17.2"/>',
+    'cap':
+      '<path d="M12 4.1 22 9l-10 4.9L2 9Z"/>' +
+      '<path d="M6.6 11.4V16c0 1.8 2.4 3.1 5.4 3.1s5.4-1.3 5.4-3.1v-4.6"/>',
+    'route':
+      '<circle cx="5.2" cy="18.6" r="2.2"/><circle cx="18.8" cy="5.4" r="2.2"/>' +
+      '<path d="M7.4 18.6h6.1a3.2 3.2 0 0 0 3.2-3.2V8.6a3.2 3.2 0 0 1 3.2-3.2h-1.1"/>',
+    'rack':
+      '<path d="M4.2 4.4h15.6v6H4.2Z"/><path d="M4.2 13.6h15.6v6H4.2Z"/>' +
+      '<circle cx="7.4" cy="7.4" r="1.1"/><circle cx="7.4" cy="16.6" r="1.1"/>' +
+      '<path d="M13 7.4h3.6"/><path d="M13 16.6h3.6"/>',
+    'users':
+      '<circle cx="9.2" cy="8.8" r="3.4"/><path d="M3.2 19.4a6 6 0 0 1 12 0"/>' +
+      '<circle cx="17" cy="9.6" r="2.5"/><path d="M15.6 14.4a5.2 5.2 0 0 1 5.2 5"/>',
+    'bubble-chip':
+      '<path d="M3.8 5.2h16.4v10.6h-9.7l-4.7 3.9v-3.9H3.8Z"/>' +
+      '<path d="M9.6 8.4h4.8v4.2H9.6Z"/>',
+    'door-in':
+      '<path d="M9 3.4h9.6v17.2H9"/><circle cx="11.9" cy="12" r="0.9"/>' +
+      '<path d="M2.4 12h5.2"/><path d="m5.4 9.4 2.6 2.6-2.6 2.6"/>',
+    'bug':
+      '<path d="M7.6 11.2a4.4 4.4 0 0 1 8.8 0v3a4.4 4.4 0 0 1-8.8 0Z"/>' +
+      '<path d="M9.1 8.4a2.9 2.9 0 0 1 5.8 0"/>' +
+      '<path d="M7.6 12.4H4.2"/><path d="M16.4 12.4h3.4"/>' +
+      '<path d="m7.9 15.6-2.6 2"/><path d="m16.1 15.6 2.6 2"/>' +
+      '<path d="m7.9 9.4-2.6-2"/><path d="m16.1 9.4 2.6-2"/>',
+    'links':
+      '<path d="M10.4 13.6a3.6 3.6 0 0 0 5.4.4l2.4-2.4a3.6 3.6 0 0 0-5.1-5.1l-1.4 1.4"/>' +
+      '<path d="M13.6 10.4a3.6 3.6 0 0 0-5.4-.4l-2.4 2.4a3.6 3.6 0 0 0 5.1 5.1l1.4-1.4"/>',
+    'scales':
+      '<path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4.4 8.2 12 6.2l7.6 2"/>' +
+      '<path d="M2.2 13.4a2.7 2.7 0 0 0 5.4 0l-2.7-5.2Z"/>' +
+      '<path d="M16.4 13.4a2.7 2.7 0 0 0 5.4 0l-2.7-5.2Z"/>',
+    'mic':
+      '<path d="M12 3.4a2.6 2.6 0 0 1 2.6 2.6v5a2.6 2.6 0 0 1-5.2 0V6A2.6 2.6 0 0 1 12 3.4Z"/>' +
+      '<path d="M6.4 10.8a5.6 5.6 0 0 0 11.2 0"/><path d="M12 16.4v4.2"/><path d="M8.8 20.6h6.4"/>',
+  };
+
+  const params = new URLSearchParams(location.search);
+  const icon = params.get('icon') || 'cloud-check';
+  const accent = params.get('accent') || '#38bdf8';
+  const label = params.get('label');
+
+  document.documentElement.style.setProperty('--accent', accent);
+  // Glow is the accent at low alpha. Accents are passed as #rrggbb so an
+  // 8-digit hex append is the cheapest way to get the matching rgba.
+  document.documentElement.style.setProperty('--accent-glow', accent + '33');
+
+  document.getElementById('glyph').innerHTML =
+    '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+    (ICONS[icon] || ICONS['cloud-check']) + '</svg>';
+
+  if (label !== null) document.getElementById('label').textContent = label;
+</script>
+</body>
+</html>
