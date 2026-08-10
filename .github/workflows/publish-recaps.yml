@@ -1,0 +1,297 @@
+# =============================================================================
+# Publish Meeting Recaps
+# -----------------------------------------------------------------------------
+# Every Saturday morning, pulls Zoom AI Companion summaries for any Friday
+# session that is not yet on the site, turns each one into a
+# meetings/YYYY-MM-DD.html recap, refreshes everything downstream of the recap
+# archive, and opens a PR for review.
+#
+# WHY A PR AND NOT A DIRECT PUSH. Unlike Update News, this content cannot ship
+# unreviewed. Zoom's transcription mis-hears guest speakers and vendors
+# ("Tumeric" for Tumeryk, "Rohit Velia" for Rohit Valia), and its summaries
+# state contested things as fact - a recap once described a threat-intel report
+# as having "falsely accused" a named company, which is an untested allegation
+# in an active lawsuit. The mechanical cleanup is automated (see
+# BACKFILL_ZOOM_SUMMARIES_README.md); the judgement is not. This workflow's
+# real product is a PR that is 90% done and needs a human for the last 10%.
+#
+# SELF-HEALING. backfill_zoom_summaries.py publishes EVERY unpublished Friday
+# it finds, not just last week's. A failed or skipped run therefore costs
+# nothing permanent: the next Saturday catches up on both weeks. That is why a
+# single weekly schedule is enough and there is no retry logic here.
+#
+# REQUIRED SECRETS. This workflow does nothing until all three exist as repo
+# Actions secrets. They are the same Zoom Server-to-Server OAuth values that
+# live in .env locally:
+#
+#   ZOOM_ACCOUNT_ID
+#   ZOOM_CLIENT_ID
+#   ZOOM_CLIENT_SECRET
+#
+# The Zoom app also needs the three summary scopes listed in
+# tools/BACKFILL_ZOOM_SUMMARIES_README.md
+# (meeting:read:list_summaries:admin, meeting:read:list_meetings:admin,
+# meeting:read:summary:admin). Without the secrets the backfill step exits 1
+# and the run fails loudly, which is the intended behaviour: a silent no-op
+# would look exactly like a week with no session.
+# =============================================================================
+
+name: Publish Meeting Recaps
+
+# -----------------------------------------------------------------------------
+# §1 - Triggers
+# -----------------------------------------------------------------------------
+on:
+  schedule:
+    # Saturday 15:00 UTC = 08:00 PT, roughly a day after the Friday 07:00 PT
+    # session. The delay is deliberate: Zoom's AI Companion needs time to
+    # finish generating a summary, and a run that fires too early finds
+    # nothing and waits a week.
+    - cron: '0 15 * * 6'   # min hour day-of-month month day-of-week (6 = Sat)
+  # Manual button in the Actions tab. This is the one to use after a missed
+  # week, or to test a change to the pipeline without waiting for Saturday.
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    # Exercise the workflow when its own definition changes, same convention as
+    # the sibling workflows. Editing the recap scripts does NOT trigger a run:
+    # that would fetch from Zoom during unrelated work and could open a recap
+    # PR at a surprising moment.
+    paths:
+      - '.github/workflows/publish-recaps.yml'
+
+# -----------------------------------------------------------------------------
+# §2 - Permissions
+# Read-only on the built-in token; the write path is the csoh-ci App token.
+# -----------------------------------------------------------------------------
+permissions:
+  contents: read
+
+# -----------------------------------------------------------------------------
+# §3 - Concurrency
+# Its own lock, so a recap run is never cancelled by a deploy or news refresh.
+# -----------------------------------------------------------------------------
+concurrency:
+  group: publish-recaps
+  cancel-in-progress: false
+
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps
+# -----------------------------------------------------------------------------
+jobs:
+  publish-recaps:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Short-lived installation token from the csoh-ci GitHub App. Same
+      # reasoning as update-news.yml: App permissions are scoped to this repo,
+      # and unlike the built-in GITHUB_TOKEN an App token can trigger CI on the
+      # PR it opens (so Lint / Validate HTML actually run on the recap).
+      - name: Mint installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
+          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          # create-pull-request needs full history to build a clean branch.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.x'
+
+      # Snapshot the recap set before we touch anything. The difference against
+      # the same listing afterwards is exactly the list of newly published
+      # recaps, which several later steps need in order to scope themselves to
+      # just the new pages instead of reprocessing all 100+.
+      - name: Record existing recaps
+        run: |
+          set -euo pipefail
+          ls meetings/*.html | sort > /tmp/recaps-before.txt
+          echo "Recaps on disk before this run: $(wc -l < /tmp/recaps-before.txt)"
+
+      # The main event. Reads Zoom's AI Companion summaries, selects the Friday
+      # 07:00 PT sessions, strips the noise (per-attendee action items with
+      # private tasks.zoom.us links, music/AI-gave-up sections), and shells out
+      # to add_meeting.py for each date. add_meeting.py writes the recap page,
+      # patches the pager, updates meetings.html + sitemap.xml + the meetings
+      # search index, and regenerates recaps.xml.
+      #
+      # The Zoom credentials are Server-to-Server OAuth. backfill's load_dotenv
+      # helper reads .env when present and never overrides an already-set
+      # variable, so exporting them here Just Works with no .env on the runner.
+      - name: Publish unpublished Friday recaps
+        env:
+          ZOOM_ACCOUNT_ID: ${{ secrets.ZOOM_ACCOUNT_ID }}
+          ZOOM_CLIENT_ID: ${{ secrets.ZOOM_CLIENT_ID }}
+          ZOOM_CLIENT_SECRET: ${{ secrets.ZOOM_CLIENT_SECRET }}
+        run: |
+          # Note: no `-e`. This step inspects the exit code itself, because
+          # backfill_zoom_summaries.py uses a three-way convention:
+          #
+          #   0 = every candidate date published
+          #   1 = setup failure (missing Zoom credentials) - genuinely fatal
+          #   2 = published what it could; at least one date had no usable
+          #       summary
+          #
+          # Exit 2 is the NORMAL steady state here, not an error. Zoom's history
+          # contains at least one permanently-empty summary_content record
+          # (2024-09-13), so every single run reports one failure and returns 2.
+          # Treating that as fatal would abort the job *after* the recaps were
+          # written but *before* the PR was opened, so the work would be done
+          # and then thrown away, every week, silently.
+          set -uo pipefail
+          python3 tools/backfill_zoom_summaries.py
+          rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+            echo "::error::backfill_zoom_summaries.py exited $rc (credentials or API failure)"
+            exit "$rc"
+          fi
+          if [ "$rc" -eq 2 ]; then
+            echo "::notice::Some dates had no usable Zoom summary; see the log above."
+          fi
+
+      # Work out what actually got published. `comm -13` prints lines unique to
+      # the second file, i.e. recaps that exist now but did not before.
+      - name: Identify new recaps
+        id: new
+        run: |
+          set -euo pipefail
+          ls meetings/*.html | sort > /tmp/recaps-after.txt
+          comm -13 /tmp/recaps-before.txt /tmp/recaps-after.txt > /tmp/recaps-new.txt
+          COUNT=$(wc -l < /tmp/recaps-new.txt | tr -d ' ')
+          # Collapse the list onto one line so it can be passed as --pages args.
+          PAGES=$(tr '\n' ' ' < /tmp/recaps-new.txt)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "pages=$PAGES" >> "$GITHUB_OUTPUT"
+          echo "Newly published: ${COUNT:-0}"
+          cat /tmp/recaps-new.txt || true
+
+      # Rebuild the meetings search index from the RENDERED pages. add_meeting
+      # already inserted a record per new recap, but it builds that record from
+      # the parsed source note; rebuilding here keeps the index in step with
+      # what is actually on the page. inject_session_blocks scores against this
+      # index, so it has to run first. (See ADD_MEETING_README.md.)
+      - name: Rebuild meetings search index
+        if: steps.new.outputs.count != '0'
+        run: python3 tools/build_meetings_search_index.py
+
+      # Wrap cloud-security keywords in each new recap with links to the
+      # matching topic pages, capped at 3 per recap.
+      # The page list is passed through the environment rather than
+      # interpolated straight into the command text. The values originate from
+      # Zoom meeting dates, so they are external input, and `${{ }}` inside a
+      # `run:` is substituted before bash ever sees it. Going via env keeps the
+      # data out of the script body. (add_meeting.py constrains filenames to
+      # meetings/YYYY-MM-DD.html, so this is belt and braces.)
+      - name: Inject topic links into new recaps
+        if: steps.new.outputs.count != '0'
+        env:
+          PAGES: ${{ steps.new.outputs.pages }}
+        run: python3 tools/inject_meeting_topic_links.py --pages $PAGES
+
+      # The reverse direction: refresh the "From the Friday sessions" block on
+      # every topic page, so a new recap displaces the oldest entry on any
+      # topic it covers. Idempotent, and rewrites the block wholesale.
+      - name: Refresh From the Friday sessions blocks
+        if: steps.new.outputs.count != '0'
+        run: python3 tools/inject_session_blocks.py
+
+      # Meeting counts appear in prose, JSON-LD and OG subtitles.
+      - name: Sync counts
+        if: steps.new.outputs.count != '0'
+        run: python3 tools/sync_counts.py
+
+      # Per-recap 1200x630 OG cards. This needs a headless browser, which is by
+      # far the heaviest and most brittle dependency in this workflow.
+      #
+      # DELIBERATELY NON-BLOCKING. Without a generated card a recap falls back
+      # to banner.png as its og:image, which is a cosmetic downgrade. Letting a
+      # Playwright or Chromium hiccup fail the whole job would trade a cosmetic
+      # problem for an unpublished recap, which is the failure mode this entire
+      # workflow exists to prevent. `continue-on-error` records the failure in
+      # the run without stopping the job, and the PR body flags it.
+      - name: Generate OG cards for new recaps
+        id: og
+        if: steps.new.outputs.count != '0'
+        continue-on-error: true
+        env:
+          PAGES: ${{ steps.new.outputs.pages }}
+        run: |
+          set -euo pipefail
+          pip install playwright
+          playwright install --with-deps chromium
+          python3 tools/generate_meeting_og_images.py --pages $PAGES
+
+      - name: Detect changes
+        id: changes
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No unpublished Friday sessions found; nothing to do."
+          fi
+
+      # Open the PR. There is deliberately NO auto-approve and NO auto-merge
+      # here, unlike update-news.yml. The review IS the point of this workflow.
+      #
+      # Note the commit message and title avoid the CI-skip tokens documented in
+      # CLAUDE.md. GitHub scans the whole head-commit message and silently
+      # skips every workflow if it finds one, which would mean the recap merges
+      # to main and never deploys.
+      - name: Create Pull Request
+        id: cpr
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          # The App authors the PR so it can trigger downstream CI. Do not swap
+          # this for CSOH_PAT: see the long comment in update-news.yml.
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: 'content: publish Friday meeting recaps from Zoom summaries'
+          title: 'content: Publish meeting recaps'
+          body: |
+            Automatically generated by the Publish Meeting Recaps workflow from
+            Zoom AI Companion summaries.
+
+            **New recaps:** ${{ steps.new.outputs.count }}
+            ${{ steps.new.outputs.pages }}
+
+            OG card generation: `${{ steps.og.outcome }}` (a failure here is
+            cosmetic only; the recaps fall back to `banner.png` and cards can be
+            regenerated later with `tools/generate_meeting_og_images.py`).
+
+            ---
+
+            ### Review checklist
+
+            This PR is intentionally **not** auto-merged. Zoom's summaries need
+            a human pass before they are published:
+
+            - [ ] **Headline.** Without one, `add_meeting.py` uses the first
+                  topic heading, which is often generic ("Cloud Security Office
+                  Hours Meeting"). The page title truncates at 52 characters, so
+                  write something short and specific.
+            - [ ] **Names.** Zoom mis-hears guest speakers and companies. Verify
+                  any guest or vendor name against a public source.
+            - [ ] **Sensitive claims.** Summaries state contested things as
+                  fact. Reframe allegations as allegations, and do not attribute
+                  criticism of a named company to a named community member.
+            - [ ] **Off-topic content.** The strippers catch the known shapes;
+                  skim for anything new.
+
+            To fix any of the above, edit the staged markdown and re-run
+            `add_meeting.py` locally rather than patching the HTML, so the meta
+            tags, JSON-LD and index card stay consistent. See
+            `tools/BACKFILL_ZOOM_SUMMARIES_README.md`.
+          branch: publish-meeting-recaps
+          delete-branch: true
+          labels: automated, content

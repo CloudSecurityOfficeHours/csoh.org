@@ -9,6 +9,35 @@ Bulk-imports CSOH meeting recaps into [`meetings.html`](../meetings.html) from Z
 | `fetch_zoom_transcript.py` | Cloud recording VTT | Raw transcript (speakers + timestamps) | A specific meeting; when you want a rich recap summarized from the verbatim transcript |
 | `backfill_zoom_summaries.py` | AI Companion `summary_content` | Zoom's own recap (overview + topic sections) | Bulk backfill across the full history, no per-meeting summarization step |
 
+## This now runs weekly in CI
+
+As of 2026-08, you do not normally run this by hand.
+[`.github/workflows/publish-recaps.yml`](../.github/workflows/publish-recaps.yml)
+runs it every **Saturday at 15:00 UTC** (08:00 PT), the morning after the
+Friday session, and opens a PR with the new recaps plus everything downstream
+of them: the meetings search index, topic-page links, the "From the Friday
+sessions" blocks, counts, and per-recap OG cards.
+
+The PR is **not** auto-merged, unlike the news one. Everything in the "Review
+checklist" section below is why: the mechanical cleanup is automated, the
+judgement is not. The PR body carries that checklist so it travels with the
+work.
+
+Two behaviours of this script that the workflow depends on, and that you should
+preserve if you change it:
+
+- **It publishes every unpublished Friday, not just the most recent one.** That
+  makes a missed run self-healing, so the workflow needs no retry logic.
+- **Exit 2 means "published what it could".** Zoom's history contains at least
+  one permanently-empty `summary_content` record (2024-09-13), so a completely
+  healthy run still reports one failure and returns 2. The workflow treats 0 and
+  2 as success and only fails on other codes. If you change this convention,
+  change the workflow with it, or the job will start aborting after writing the
+  recaps but before opening the PR.
+
+Run it by hand with the Actions tab's "Run workflow" button after a missed week,
+or locally as below when you want to iterate.
+
 ## Setup
 
 Requires all the usual Zoom Server-to-Server OAuth credentials (`ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` in `.env`) **plus** the summary-specific scopes added to the app:
