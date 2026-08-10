@@ -1,0 +1,197 @@
+# =============================================================================
+# Check Mobile Layout
+# -----------------------------------------------------------------------------
+# Renders a 20-page sample at iPhone-13 width (390x844) in headless Chromium and
+# asserts the things that only break visually, where no parser or linter looks:
+#
+#   1. No horizontal overflow at the body or document level.
+#   2. With the hamburger menu OPEN - every nav link inside the viewport, every
+#      tap target >= 40px tall, and sibling rows in a dropdown sharing a
+#      padding-left and a height, so the menu doesn't look jagged.
+#   3. The hero h1 doesn't visually overflow.
+#
+# tools/check_mobile_layout.py holds the actual assertions and serves the repo
+# itself, so there is no build step here - it is `pip install`, then run.
+#
+# WHY THIS IS ITS OWN WORKFLOW AND NOT A STEP IN validate-html.yml
+# ----------------------------------------------------------------
+# validate-html.yml gates its expensive steps on "does this PR touch .html", and
+# that gate is right for a markup validator. It would be exactly wrong here. The
+# nav markup is generated and rarely edited; what actually moves these numbers is
+# style.css. The failure that prompted this workflow was CSS-only - the mega-menu
+# "featured" rows carried a subtitle and a bold weight into the mobile accordion,
+# making 8 rows 6.6px taller than their siblings and 2 of them 23.6px taller.
+# Not one byte of HTML changed. Folded into validate-html, this check would have
+# been skipped on precisely the commit that broke it.
+#
+# It also wants a browser download (~30s) that a required markup check shouldn't
+# have to wait for.
+#
+# HOW IT WENT UNNOTICED FOR SO LONG
+# ---------------------------------
+# It didn't run anywhere. The script was written, committed, and referenced by no
+# workflow, so it failed on all 20 pages with 60 issues and nothing said so. That
+# is the same silent-skip shape CLAUDE.md documents for the `'*.html'` path
+# filter and the inert Cloudflare ruleset: a check that never runs is
+# indistinguishable from a check that passes. Hence this file.
+# =============================================================================
+
+name: Check Mobile Layout
+
+# -----------------------------------------------------------------------------
+# §1 - Triggers
+# -----------------------------------------------------------------------------
+on:
+  # NO `paths:` FILTER HERE, DELIBERATELY - same reasoning as validate-html.yml.
+  # A workflow that `paths:` filters out never starts, so it produces no check
+  # run at all. That is harmless today, but the moment anyone makes this a
+  # required status check on `main` it would hang every PR that happens to touch
+  # no CSS, waiting forever for a result that cannot arrive.
+  #
+  # The filtering still happens, one level down: "Detect layout-affecting
+  # changes" below decides whether there is anything to render, and the costly
+  # steps are gated on its output. An unrelated PR still gets a green check in a
+  # few seconds having downloaded no browser. So this workflow is safe to promote
+  # to a required check without editing it - which is the point.
+  pull_request:
+  # Safety net for direct pushes to main that bypass the PR flow. Nothing depends
+  # on a push producing a check run, so this trigger keeps its `paths:` filter.
+  #
+  # Note `**.html` and not `*.html`: GitHub's `*` does not match `/`, so the
+  # single-star form means root-level pages ONLY and would miss breaches/,
+  # meetings/, portfolio/ and homelab/ entirely. CLAUDE.md has the full story -
+  # this exact mistake shipped a fix that never deployed. The sample below
+  # includes breaches/capital-one.html and meetings/2026-04-17.html, so the
+  # single-star form would genuinely skip pages this workflow tests.
+  push:
+    branches:
+      - main
+    paths:
+      - '**.html'
+      - '**.css'
+      - '**.js'
+      - 'tools/check_mobile_layout.py'
+      - 'tools/sync_chrome.py'
+      - '.github/workflows/check-mobile-layout.yml'
+  # Weekly safety net, 07:20 UTC on Mondays - just after Validate HTML's 07:00 so
+  # the two don't contend. Catches drift that slipped past both triggers above,
+  # and would have caught this failure on its own.
+  schedule:
+    - cron: '20 7 * * 1'
+  # Manual "Run workflow" button in the Actions tab.
+  workflow_dispatch:
+
+# -----------------------------------------------------------------------------
+# §2 - Permissions
+# Read-only. This workflow renders pages and reports; it never writes to the
+# repo and never comments on a PR.
+# -----------------------------------------------------------------------------
+permissions:
+  contents: read
+
+# -----------------------------------------------------------------------------
+# §3 - Concurrency
+# Per-branch/per-PR lock, so pushing a new commit cancels the in-flight run
+# rather than queueing a second browser behind it. Read-only, so interrupting
+# is safe.
+# -----------------------------------------------------------------------------
+concurrency:
+  group: check-mobile-layout-${{ github.ref }}
+  cancel-in-progress: true
+
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps
+# -----------------------------------------------------------------------------
+jobs:
+  check-mobile-layout:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The change-detection step below diffs this PR against its base
+          # commit, and both commits have to be present for that. checkout
+          # defaults to depth 1, which would make the diff fail on a bad object.
+          fetch-depth: 0
+
+      # Decide whether anything in this run can move the rendered layout.
+      #
+      # The set is wider than it looks like it needs to be, on purpose. Beyond
+      # the nav itself the script asserts document-level horizontal overflow and
+      # hero-heading overflow, which any stylesheet or page can break - so every
+      # .html, .css and .js file counts, plus the checker and the script that
+      # generates the nav markup. CLAUDE.md's rule for path filters applies to
+      # this regex too: widening it costs one redundant run of identical bytes,
+      # narrowing it costs a regression that ships.
+      - name: Detect layout-affecting changes
+        id: layout
+        # `github.*` values go through `env:` rather than being interpolated
+        # into the script body - the house pattern in this repo, and it keeps
+        # the string comparison readable in the logs instead of rendering as a
+        # tautology like [ "pull_request" != "pull_request" ].
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_PR" != "true" ]; then
+            echo "Event is $EVENT, not a pull request: rendering the full sample."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$BASE_SHA"...HEAD \
+              | grep -qE '\.(html|css|js)$|^tools/(check_mobile_layout|sync_chrome)\.py$|^\.github/workflows/check-mobile-layout\.yml$'; then
+            echo "This pull request can affect rendered layout: rendering the sample."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing in this pull request affects layout; nothing to render."
+            echo "This check reports success so it is safe to require on main."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.layout.outputs.changed == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.x'
+
+      # Same pin and same two-step shape as update-counts.yml and
+      # publish-recaps.yml: the pip package ships the driver, not the browser, so
+      # the Chromium binary is a separate download. The `==` pin matters more
+      # here than for an image generator - this job asserts pixel measurements,
+      # and a browser that lays text out a fraction differently moves every
+      # number it checks. Bump it deliberately, and re-run the check when you do.
+      - name: Install Playwright and Chromium
+        if: steps.layout.outputs.changed == 'true'
+        run: |
+          pip install 'playwright==1.59.0'
+          playwright install chromium
+
+      # The script serves the repo from a throwaway localhost port itself, so
+      # there is nothing to build or start first. Exit 1 on any failed
+      # assertion fails the job; exit 2 means Playwright is missing, which the
+      # step above would have to have failed silently for.
+      #
+      # Screenshots are written on every run but only uploaded on failure (next
+      # step). Capturing them during the failing run rather than re-running with
+      # the flag afterwards is deliberate: a re-run can render differently from
+      # the run that failed, and evidence that doesn't match the failure is
+      # worse than none.
+      - name: Check mobile layout
+        if: steps.layout.outputs.changed == 'true'
+        run: python3 tools/check_mobile_layout.py --screenshots mobile-shots
+
+      # Two frames per page - the top of the open menu, and the Learn dropdown
+      # expanded, which is the largest and the usual offender. The failure this
+      # workflow was written for is a few px of row height, which reads as
+      # obvious in a screenshot and as noise in a log line.
+      - name: Upload mobile screenshots
+        if: failure() && steps.layout.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: mobile-layout-screenshots
+          path: mobile-shots/
+          retention-days: 30
+          if-no-files-found: warn

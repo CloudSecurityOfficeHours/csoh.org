@@ -4396,6 +4396,51 @@ footer {
         pointer-events: none;
     }
 
+    /* One row = one line = 44px, structurally. `.mega-menu .mega-col a` sets
+       white-space: normal for the desktop grid, where columns are as narrow
+       as 119px and titles have to wrap; this column is ~355px, so nothing
+       needs to wrap here and a wrap only ever means a jagged row.
+
+       Pinning it is the point. The longest label clears the 299px content
+       box by 9px - fine in Chromium, but that is a 3% margin against a
+       device whose font metrics we do not control, and CI runs Chromium
+       (see CLAUDE.md on iOS Safari rendering rows taller). Rather than trust
+       the margin, remove the failure mode: the row cannot grow a second line
+       no matter how the text measures. A future label too long for the box
+       then truncates with an ellipsis - visible, and local to that row -
+       instead of silently re-jagging the menu. */
+    .mega-menu .mega-col a {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Featured rows lose their subtitle and their bold here. Both are grid
+       affordances: on desktop the mega-menu is a 3-6 column grid, so a
+       featured cell running three lines tall only makes its own column
+       taller and reads as a deliberate promo. This accordion flattens that
+       grid into one ~40-row list, where the same treatment makes the row
+       6.6px taller than its siblings (the subtitle block) - and 23.6px on
+       the two whose bold title then wraps, which it does by 1-4px at 390px.
+       A row half again as tall as its neighbours reads as a layout bug in a
+       vertical list, not as emphasis.
+
+       500 is what plain rows carry (.dropdown-menu a), so featured rows now
+       match them in weight and height; the accent colour from the desktop
+       rule still marks them as promoted, and costs neither. Every row lands
+       on the shared 44px tap-target floor.
+
+       These two selectors are (0,3,1) and (0,4,0) - the same weight as the
+       desktop rules they override (~line 4251), so they must stay AFTER
+       them in the file. tools/check_mobile_layout.py asserts the result. */
+    .mega-menu .mega-col .mega-featured > a {
+        font-weight: 500;
+    }
+
+    .mega-menu .mega-col .mega-featured .mega-tag {
+        display: none;
+    }
+
     /* CTA on mobile: full-width button at the bottom of the accordion. */
     .nav-cta-item {
         margin: 0.75rem 1rem 0.5rem;
