@@ -148,7 +148,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->105<!--/count--> weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->107<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
 
@@ -444,7 +444,7 @@ Archive of past Zoom session presentations:
 
 ### 📝 Meeting Recaps (`meetings.html`)
 Topic-by-topic recaps of every weekly session:
-- **<!--count:meetings-->105<!--/count--> meeting recaps** with per-topic summaries and speaker notes
+- **<!--count:meetings-->107<!--/count--> meeting recaps** with per-topic summaries and speaker notes
 - Searchable, filterable by tag (AWS, Azure, AI, supply chain, conferences, etc.)
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
