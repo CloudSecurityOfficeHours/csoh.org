@@ -482,9 +482,30 @@ GitHub's auto-merge feature evaluates `reviewDecision` independently and does no
 
 ### Repository secrets
 
-Everything below is a live secret. One of them is **not in use** and is flagged
-for deletion - the list is the inventory, not the consumption record. Re-derive
-both sides of that distinction with:
+Everything below is a live secret. **Do not read this table by itself as the
+inventory** - it is a description of the inventory, and the two drift apart. It
+did: this table carried an `SSH_PRIVATE_KEY` row marked "live but unreferenced,
+flagged for removal, still present", re-confirmed by hand on 2026-07-26. The
+secret had in fact already been deleted, and the `ZOOM_*` set was live and
+undocumented here at the same time. A hand-maintained list of secrets is exactly
+as trustworthy as the last time somebody diffed it against the API.
+
+So the diff is now a script rather than a habit:
+
+```bash
+python3 tools/rotate_secrets.py            # inventory, drift, rotation ages
+python3 tools/rotate_secrets.py audit --check   # exit 1 on drift (CI gate)
+```
+
+It derives what is *referenced* by scanning the workflows, reads what *exists*
+from the API, and fails on any of: a referenced secret that does not exist, an
+existing secret nothing reads, a referenced secret with no registry entry (and
+therefore no rotation plan), or anything past its cadence. It also prints which
+of its checks it could not run and why, because org-level secrets need
+`admin:org` and neither `GITHUB_TOKEN` nor the default local token has it. Full
+rationale in [tools/ROTATE_SECRETS_README.md](tools/ROTATE_SECRETS_README.md).
+
+To check by hand anyway:
 
 ```bash
 gh api repos/CloudSecurityOfficeHours/csoh.org/actions/secrets \
@@ -494,17 +515,30 @@ grep -rhoE 'secrets\.[A-Z_0-9]+' .github/workflows/ | sort -u   # what is refere
 
 (The first command lists repo-level secrets only. `CSOH_CI_CLIENT_ID`,
 `CSOH_CI_PRIVATE_KEY` and `CSOH_PAT` are org-level, so they appear in the second
-list and not the first.)
+list and not the first. The second over-reports: six workflows document the
+`${{ secrets.NAME }}` syntax in comments, so `NAME` shows up as a secret.)
 
-| Secret | Purpose | Type |
-|--------|---------|------|
-| `CSOH_CI_CLIENT_ID` | GitHub App's Client ID (`Iv23.*`) | identifier (not sensitive on its own) |
-| `CSOH_CI_PRIVATE_KEY` | GitHub App's RSA private key | high-sensitivity |
-| `CSOH_PAT` | Approve App-opened PRs (auto-merge driver) | medium-sensitivity (narrow scope) |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `update-resources.yml` model auth (subscription quota, not API billing) | medium-sensitivity |
-| `PSI_API_KEY` | `check-pagespeed.yml` - Google PageSpeed Insights v5, restricted to that one API | low-sensitivity |
-| `CLOUDFLARE_API_TOKEN` | `deploy.yml` cache purge - scoped to Zone → Cache Purge on `csoh.org` alone | medium-sensitivity |
-| `SSH_PRIVATE_KEY` | ⚠️ **Live but unreferenced - flagged for removal, still present.** Re-confirmed 2026-07-26: it is in the repo's secret list (last updated 2026-02-18) and no workflow reads it, a leftover from the retired FTPS/shared-host era. It has not been deleted yet, so do not read this row as "already gone." A high-sensitivity secret that nothing consumes is pure downside: it can only be exfiltrated, never noticed missing. Delete it in Settings → Secrets and variables → Actions, then strike this row. | high-sensitivity |
+| Secret | Scope | Purpose | Type |
+|--------|-------|---------|------|
+| `CSOH_CI_CLIENT_ID` | org | GitHub App's Client ID (`Iv23.*`) | identifier (not sensitive on its own) |
+| `CSOH_CI_PRIVATE_KEY` | org | GitHub App's RSA private key | high-sensitivity |
+| `CSOH_PAT` | org | Approve App-opened PRs (auto-merge driver) | medium-sensitivity (narrow scope) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | repo | `update-resources.yml` model auth (subscription quota, not API billing) | medium-sensitivity |
+| `PSI_API_KEY` | repo | `check-pagespeed.yml` - Google PageSpeed Insights v5, restricted to that one API | low-sensitivity |
+| `CLOUDFLARE_API_TOKEN` | repo | `deploy.yml` cache purge - scoped to Zone → Cache Purge on `csoh.org` alone | medium-sensitivity |
+| `ZOOM_ACCOUNT_ID` | repo | `publish-recaps.yml` - Zoom account id for the Server-to-Server OAuth grant | identifier |
+| `ZOOM_CLIENT_ID` | repo | `publish-recaps.yml` - S2S OAuth app client id | identifier |
+| `ZOOM_CLIENT_SECRET` | repo | `publish-recaps.yml` - S2S OAuth app secret; the grant it buys is scoped to reading meetings, summaries and recordings, with no user or write scopes | medium-sensitivity |
+
+The **Scope** column is load-bearing, not decorative. A repo-level secret
+shadows an org-level one of the same name, so writing the value at the wrong
+level updates something nothing reads: the write succeeds, the inventory looks
+right, and CI keeps using the old credential. `rotate_secrets.py` resolves the
+scope from the API rather than from this table for exactly that reason.
+
+`SSH_PRIVATE_KEY` (a leftover from the retired FTPS/shared-host era, last
+updated 2026-02-18, read by no workflow) has been deleted. Confirmed absent from
+the repo's secret list on 2026-08-09.
 
 Non-secret identifiers live in repo **Variables**, not Secrets, and are populated
 from `terraform output` (see [infra/README.md](infra/README.md)):
@@ -536,16 +570,37 @@ only one that needs a manual rotation cadence.
 
 ### Rotation guidance
 
+Rotate with `python3 tools/rotate_secrets.py roll <SECRET>` (or `roll --due`)
+rather than by hand. The manual columns below are what the script does, kept
+here so the intent survives the script.
+
+The script's value is the ordering and the checks, not the typing. It always
+goes **mint → verify → write → confirm the write landed → revoke the old**, and
+it verifies each new credential three ways before anything depends on it: the
+operation CI performs must succeed, a deliberately corrupted copy must *fail*
+(otherwise the probe proves nothing), and an operation the credential should be
+too narrow for must be denied (otherwise the token is over-scoped and shipping
+it is worse than shipping a broken one). Rotating by hand skips all of that:
+`gh secret set` reports success against a typo, a truncated paste, or a token
+created with the wrong permissions, and the first sign of trouble is a red
+scheduled run days later.
+
 | Item | Rotation cadence | Process |
 |------|-----------------|---------|
 | App installation token | Automatic, every ~1 hour | None - handled by GitHub |
-| App private key | Annually or on suspected compromise | Generate new key in App settings; replace `CSOH_CI_PRIVATE_KEY` secret; revoke old key |
-| `CSOH_PAT` | Every 6-12 months (or before its set expiry) | Generate new fine-grained PAT (resource owner: `CloudSecurityOfficeHours`, repo: `csoh.org`, permission: pull-requests: write only); replace org-level Actions secret |
+| App private key | Annually or on suspected compromise | `roll CSOH_CI_PRIVATE_KEY`. GitHub has no API to generate an App key, so the script prints the App settings URL, takes the downloaded `.pem`, then signs a JWT with it and mints a real installation token to confirm it authenticates as `csoh-ci` and still grants `contents`+`pull_requests` write. Delete the old key only after that passes. |
+| `CSOH_PAT` | Every 6-12 months (or before its set expiry) | `roll CSOH_PAT`. No API to create a fine-grained PAT; the script prints the exact settings (resource owner `CloudSecurityOfficeHours`, repo `csoh.org`, permission pull-requests: write only) and then verifies the new token can read PRs **and cannot read Actions secrets** - the latter is what makes the "even if it leaks, all it can do is approve PRs" claim above true rather than assumed. |
 | Cloud access tokens (GCP/AWS/Azure) | Automatic, every ~1 hour | None - minted per workflow run via OIDC, no stored credential on any cloud |
-| `CLOUDFLARE_API_TOKEN` | Every 6-12 months, or on suspected compromise | Cloudflare → My Profile → API Tokens → roll; recreate as a Custom token with the single permission Zone → Cache Purge, Zone Resources limited to `csoh.org`; replace the Actions secret |
-| `CLAUDE_CODE_OAUTH_TOKEN` | On suspected compromise, or when it expires | Re-run `claude setup-token` locally and replace the Actions secret |
-| `PSI_API_KEY` | Low urgency - it is rate-limit-scoped, not privileged | Regenerate in Google Cloud console credentials, keep the "PageSpeed Insights API" restriction, replace the Actions secret |
+| `CLOUDFLARE_API_TOKEN` | Every 6-12 months, or on suspected compromise | `roll CLOUDFLARE_API_TOKEN`. **Create a new Custom token (Zone → Cache Purge, Zone Resources `csoh.org` only) - do not use "Roll" on the existing one.** Rolling invalidates the value CI holds before a replacement has been verified, and Actions secrets are write-only, so there is no undo. Verification purges one harmless file and then confirms the token *cannot* read DNS. Fully automatic if `CLOUDFLARE_TOKENS_API_TOKEN` (User → API Tokens → Edit) is in `.env`; the Terraform token cannot do it (`9109`). |
+| `ZOOM_CLIENT_SECRET` | Every 6-12 months, or on suspected compromise | `roll ZOOM_CLIENT_SECRET`. Regenerate in the Zoom Marketplace S2S OAuth app. Zoom invalidates the old secret **immediately**, so `publish-recaps.yml` is broken from that moment until the new value is written - keep the window short. Verification performs the account-credentials grant and then lists recordings, the exact call `tools/fetch_zoom_transcript.py` makes. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | On suspected compromise, or when it expires | `roll CLAUDE_CODE_OAUTH_TOKEN`, which runs `claude setup-token`. Note the verification deliberately also runs with a corrupted token: `claude -p` falls back to the logged-in local session when the supplied token is bad, so without that control the check would pass for any string. |
+| `PSI_API_KEY` | Low urgency - it is rate-limit-scoped, not privileged | `roll PSI_API_KEY`, fully automatic. Creates a new key restricted to `pagespeedonline.googleapis.com`, confirms it works, confirms it is refused by a second Google API (proving the restriction stuck), writes the secret, deletes the old key. |
 | GCP runtime SA roles | On every Terraform apply | The runtime SA's IAM bindings live in [`infra/terraform/gcp/service_accounts.tf`](infra/terraform/gcp/service_accounts.tf) - review on every change |
+
+Rotation ages are not tracked in this file - `updated_at` from the API is the
+only honest source, and `rotate_secrets.py` reports it against the cadences
+above. The org-level rows are unreadable without `admin:org`, and the script
+reports those ages as *unknown* rather than as clean.
 
 ---
 

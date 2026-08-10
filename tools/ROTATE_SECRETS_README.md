@@ -169,10 +169,41 @@ first place. Full-line YAML comments are skipped, because six workflows explain
 the `${{ secrets.NAME }}` syntax in prose and a naive grep counts `NAME` as a
 secret.
 
-It is safe to wire into `lint.yml` as a gate, with one caveat: org secrets are
-unreadable from a runner too unless the job is given a token with `admin:org`,
-so a CI run sees the same `unknown` rows this machine does. It gates the
-repo-level half honestly and says so about the rest.
+### In CI
+
+The `secret-audit` job in `lint.yml` runs `audit --check` on every push and PR.
+It enforces less than a local run, and it says so rather than implying
+otherwise.
+
+Reading the Actions secrets API needs a `secrets` permission that `GITHUB_TOKEN`
+cannot be granted - it is not one of the keys `permissions:` accepts - so on a
+runner the script sees no `updated_at` for anything. The cadence check and the
+orphaned-secret check therefore do not run in CI. They run locally, where `gh`
+is authenticated as a human.
+
+That is why every run prints a **Coverage** section marking each check
+`enforced` or `not checked`, with the reason, and why the summary counts checks
+not run alongside errors:
+
+```
+Coverage
+--------
+  enforced     referenced secret has a registry entry
+  enforced     registry entry is consumed by a workflow
+  not checked  repo secret exists / is not orphaned - needs the Actions secrets API (GITHUB_TOKEN cannot read it)
+  not checked  repo secret is within its rotation cadence - needs the Actions secrets API (GITHUB_TOKEN cannot read it)
+  not checked  org secret age and orphan status - needs admin:org
+```
+
+A gate that skips checks silently is worse than no gate: the green tick gets
+read as "all of this was verified." Same failure shape as the inert Cloudflare
+ruleset and the `'*.html'` path filter in `CLAUDE.md`.
+
+The obvious fix - hand CI a PAT that can read secrets - is deliberately not
+taken. Putting a long-lived credential into CI in order to audit long-lived
+credentials is a bad trade, and it would immediately be the broadest secret in
+the repo. What CI gates is the check that matters most anyway: **a secret added
+to a workflow without a rotation plan fails the build.**
 
 ## `verify` cannot tell you what CI holds
 

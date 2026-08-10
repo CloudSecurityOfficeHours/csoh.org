@@ -1,7 +1,7 @@
 # =============================================================================
 # Lint
 # -----------------------------------------------------------------------------
-# Quality gate for code & GitHub Actions on every push and PR. Three checks:
+# Quality gate for code & GitHub Actions on every push and PR. Four checks:
 #
 #   1. actionlint  - workflow syntax + shellcheck on inline `run:` blocks.
 #                    Catches things like unquoted variables, typo'd `uses:`
@@ -11,8 +11,11 @@
 #                    `except`) without nitpicking on style.
 #   3. yamllint    - structural sanity on every YAML file with a config that's
 #                    relaxed for GitHub Actions quirks (see .yamllint.yml).
+#   4. secret-audit - every `${{ secrets.X }}` a workflow reads must have a
+#                    registry entry in tools/rotate_secrets.py, i.e. a written
+#                    rotation plan. Adding a secret without one fails here.
 #
-# All three are fast (<30s combined). They run as parallel jobs so failures
+# All four are fast (<30s combined). They run as parallel jobs so failures
 # in one check don't hide failures in the others - you see everything at once.
 # Read-only on the repo; never modifies code, never posts comments.
 # =============================================================================
@@ -74,7 +77,7 @@ concurrency:
 
 # -----------------------------------------------------------------------------
 # §4 - Jobs and steps
-# Three independent jobs running in parallel. Each fails the workflow on its
+# Four independent jobs running in parallel. Each fails the workflow on its
 # own - we don't want a Python lint failure to mask a workflow lint failure.
 # -----------------------------------------------------------------------------
 # `jobs:` holds the units of work. Each job runs on its own fresh virtual
@@ -167,3 +170,54 @@ jobs:
       # non-zero exit (any reported problem) fails the step and the job.
       - name: Run yamllint
         run: yamllint .
+
+  # -------------------------------------------------------------------------
+  # secret-audit - every secret a workflow reads must have a rotation plan.
+  # -------------------------------------------------------------------------
+  # tools/rotate_secrets.py scans .github/workflows/ for `${{ secrets.X }}` and
+  # cross-references a registry of every long-lived credential: what it is for,
+  # how sensitive it is, how often it should be rotated, and how to roll it.
+  # `--check` exits 1 when the two disagree.
+  #
+  # The specific thing this catches is a secret added to a workflow without
+  # anyone deciding how it gets rotated - which is how you end up with a
+  # credential that is simply never rolled, because nothing ever asks. It also
+  # catches a secret referenced after being deleted, and a registry entry left
+  # behind after its last consumer went away.
+  #
+  # WHAT THIS JOB CANNOT SEE, AND WHY IT SAYS SO
+  # --------------------------------------------
+  # Reading the Actions secrets API needs a `secrets` permission that
+  # GITHUB_TOKEN cannot be granted - it is not one of the keys `permissions:`
+  # accepts - and the org-level secrets need `admin:org` on top of that. So on
+  # a runner the script cannot see any secret's `updated_at`, which means the
+  # rotation-cadence check and the orphaned-secret check do not run here. They
+  # run locally, where `gh` is authenticated as a human.
+  #
+  # That gap is the reason the script prints a "Coverage" section listing each
+  # check as `enforced` or `not checked`, with the reason. A gate that skips
+  # checks silently is worse than no gate, because the green tick gets read as
+  # "all of this was verified" - the same failure shape as the inert Cloudflare
+  # ruleset and the `'*.html'` path filter documented in CLAUDE.md. Read the
+  # Coverage block in this job's log rather than assuming a pass covers
+  # everything.
+  #
+  # Deliberately NOT fixed by handing this job a PAT that can read secrets:
+  # putting a long-lived credential into CI in order to audit long-lived
+  # credentials is a bad trade, and it would be the broadest secret in the repo.
+  secret-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # No pip install and no setup-python: the script is stdlib-only by
+      # design, and ubuntu-latest ships both python3 and the gh CLI.
+      #
+      # GH_TOKEN is what `gh api` authenticates with. It is expected to be
+      # refused by the secrets endpoints; the script treats that as "cannot
+      # read" rather than "nothing there", and reports it in Coverage.
+      - name: Audit workflow secrets against the rotation registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/rotate_secrets.py audit --check
