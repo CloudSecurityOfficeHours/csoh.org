@@ -114,7 +114,11 @@ jobs:
       - name: Record existing recaps
         run: |
           set -euo pipefail
-          ls meetings/*.html | sort > /tmp/recaps-before.txt
+          # `find` rather than `ls`: with no matches a glob stays literal and
+          # `ls` would fail the step, and shellcheck flags parsing ls output
+          # (SC2012). Both snapshots must use the identical form, or `comm`
+          # below reports every page as new.
+          find meetings -maxdepth 1 -name '*.html' | sort > /tmp/recaps-before.txt
           echo "Recaps on disk before this run: $(wc -l < /tmp/recaps-before.txt)"
 
       # The main event. Reads Zoom's AI Companion summaries, selects the Friday
@@ -172,7 +176,8 @@ jobs:
         id: new
         run: |
           set -euo pipefail
-          ls meetings/*.html | sort > /tmp/recaps-after.txt
+          # Same form as the "before" snapshot above - see the note there.
+          find meetings -maxdepth 1 -name '*.html' | sort > /tmp/recaps-after.txt
           comm -13 /tmp/recaps-before.txt /tmp/recaps-after.txt > /tmp/recaps-new.txt
           COUNT=$(wc -l < /tmp/recaps-new.txt | tr -d ' ')
           # Collapse the list onto one line so it can be passed as --pages args.
@@ -203,7 +208,16 @@ jobs:
         if: steps.new.outputs.count != '0'
         env:
           PAGES: ${{ steps.new.outputs.pages }}
-        run: python3 tools/inject_meeting_topic_links.py --pages $PAGES
+        run: |
+          set -euo pipefail
+          # PAGES is a space-separated list that has to become one argv entry
+          # per page, so it must be split - but leaving it bare splits *and*
+          # glob-expands, and this data originates from Zoom. Reading it into
+          # an array splits on IFS only, with no pathname expansion, which is
+          # what the note above is actually asking for. (It also silences
+          # SC2086 honestly, rather than by suppressing it.)
+          IFS=' ' read -r -a PAGE_ARGS <<< "$PAGES"
+          python3 tools/inject_meeting_topic_links.py --pages "${PAGE_ARGS[@]}"
 
       # The reverse direction: refresh the "From the Friday sessions" block on
       # every topic page, so a new recap displaces the oldest entry on any
@@ -236,7 +250,10 @@ jobs:
           set -euo pipefail
           pip install playwright
           playwright install --with-deps chromium
-          python3 tools/generate_meeting_og_images.py --pages $PAGES
+          # Split on IFS without glob-expanding - see the note on the topic
+          # links step above.
+          IFS=' ' read -r -a PAGE_ARGS <<< "$PAGES"
+          python3 tools/generate_meeting_og_images.py --pages "${PAGE_ARGS[@]}"
 
       - name: Detect changes
         id: changes
