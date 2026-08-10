@@ -631,12 +631,45 @@ jobs:
       # GCP's keyless login: Workload Identity Federation (WIF). The provider
       # below is configured to trust this workflow's OIDC token and then act as
       # the named service account - no service-account key file involved.
+      #
+      # Attempted twice, for the same reason as the Azure login in
+      # publish-azure: a transient token-exchange failure here fails the job,
+      # which leaves GCP behind the other two origins while Cloudflare keeps
+      # load-balancing across all three, and skips purge-cloudflare on top of
+      # that. See the long note on that step for the full blast radius.
+      #
+      # Note the asymmetry with publish-aws, which deliberately has NO such
+      # retry: aws-actions/configure-aws-credentials already retries the STS
+      # assume-role call 12 times with exponential backoff by default
+      # (`retry-max-attempts` defaults to 12, `disable-retry` to false), so
+      # wrapping it would just add a 13th attempt. google-github-actions/auth
+      # has no equivalent - it exposes no retry input and does not back off -
+      # so the retry has to be built here. If you ever set `disable-retry: true`
+      # on the AWS step, it needs this treatment too.
       - name: Authenticate to GCP via WIF
+        id: gcpauth
+        # First attempt only - never set this on the retry below, or a real
+        # misconfiguration (a WIF provider whose attribute-condition no longer
+        # matches, a service account that lost roles/iam.workloadIdentityUser)
+        # would pass through both attempts and leave the gcloud steps below
+        # running unauthenticated.
+        continue-on-error: true
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
         with:
           # The full resource path of the WIF provider that vets our OIDC token.
           workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           # The GCP service account this job impersonates (its deploy identity).
+          service_account: csoh-deployer@csoh-org-495800.iam.gserviceaccount.com
+
+      # Second attempt. Gated on `outcome`, not `conclusion` - continue-on-error
+      # rewrites `conclusion` to 'success' on a swallowed failure, so a
+      # conclusion-based gate would never fire and this would be dead code that
+      # still reads correctly. Keep the inputs and pinned SHA identical above.
+      - name: Authenticate to GCP via WIF (retry)
+        if: steps.gcpauth.outcome == 'failure'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: csoh-deployer@csoh-org-495800.iam.gserviceaccount.com
 
       # Install and configure the `gcloud` CLI on the runner, reusing the WIF
