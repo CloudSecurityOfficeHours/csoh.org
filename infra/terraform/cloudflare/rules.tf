@@ -532,13 +532,34 @@ resource "cloudflare_ruleset" "cache" {
     }
   }
 
-  # Tier 3: HTML and XML pages. These change more often than assets, so cache for
-  # a moderate window.
+  # Tier 3: pages and text documents. These change more often than assets, so
+  # cache for a moderate window.
   rules {
     ref         = "cache_html_xml_short"
-    description = "HTML + XML - 1 hour, revalidate"
-    # Match .html and .xml files by extension.
-    expression = "http.request.uri.path.extension in {\"html\" \"xml\"}"
+    description = "HTML/XML/JSON/TXT + extensionless pages - 1 hour, revalidate"
+    # Match by extension, PLUS the extensionless cases. That last part matters:
+    # this rule used to be `extension in {"html" "xml"}` alone, and
+    # http.request.uri.path.extension is empty for "/" and for any clean URL
+    # like "/about". Those matched no cache rule at all, fell through to
+    # Cloudflare's default - which does NOT cache HTML - and returned
+    # cf-cache-status: DYNAMIC, i.e. every single request for the home page was
+    # forwarded to an origin. "json" and "txt" are here for the same reason:
+    # /search-index.json is the largest file on the site (3.5 MB) and was being
+    # served uncached on every search-page load.
+    #
+    # ends_with() and eq are plain string functions, not regex - the zone is on
+    # a Cloudflare plan without regex support in rule expressions, so `matches`
+    # is not available here.
+    #
+    # The trailing "and path ne /search.html" is load-bearing. Cache rules apply
+    # the LAST matching rule, not the first, so this rule was already silently
+    # overriding the 60-second search.html rule above it: production served
+    # search.html with max-age=3600, never 60. Excluding it here restores that
+    # rule's intent and makes the outcome independent of rule ordering.
+    #
+    # Parentheses are required: `and` binds tighter than `or`, so without them
+    # the exclusion would attach only to the last `or` branch.
+    expression = "(http.request.uri.path.extension in {\"html\" \"xml\" \"json\" \"txt\"} or http.request.uri.path.extension eq \"\" or ends_with(http.request.uri.path, \"/\")) and http.request.uri.path ne \"/search.html\""
     action     = "set_cache_settings"
     enabled    = true
     action_parameters {

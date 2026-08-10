@@ -39,8 +39,17 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # "http", "tcp", etc.). HTTPS is used so the check exercises the same
   # encrypted path real visitors use.
   type = "https"
-  # Use an HTTP GET (just fetch a page) for the probe, like a browser would.
-  method = "GET"
+  # HEAD, not GET. A GET made Cloudflare download the ENTIRE homepage from every
+  # origin on every probe, and the probe runs from every Cloudflare data center
+  # (see check_regions on the pool below) - roughly 1.09M probes per origin per
+  # day. Azure Blob static websites cannot gzip, so each of those probes shipped
+  # the full uncompressed index.html (52 KB, vs 11 KB gzipped): ~57 GB/day of
+  # billed egress, ~$120/month, for bytes that were downloaded and discarded.
+  # HEAD returns headers only (verified: Azure answers 200 with a 0-byte body),
+  # so it still proves the origin is alive and serving 200s. Nothing is lost by
+  # the switch because expected_body is not set, so the body was never inspected
+  # in the first place. If you ever add expected_body, this must go back to GET.
+  method = "HEAD"
   # The URL path to request on each origin. "/" is the site's home page, which
   # every origin serves, so it is a good "are you alive?" target.
   path = "/"
@@ -56,7 +65,7 @@ resource "cloudflare_load_balancer_monitor" "site" {
   retries = 2
   # Free-text label shown in the Cloudflare dashboard so humans know what this
   # monitor is for. Has no effect on behavior.
-  description = "csoh.org origin health (HTTPS GET /)"
+  description = "csoh.org origin health (HTTPS HEAD /)"
   # false = require a VALID TLS certificate from the origin during the probe.
   # We do NOT skip certificate verification, matching the strict TLS posture
   # set in zone.tf (every origin presents a real cert for its own hostname).
@@ -86,6 +95,21 @@ resource "cloudflare_load_balancer_pool" "origins" {
   # generated ID via cloudflare_load_balancer_monitor.site.id - this reference
   # is what makes Terraform create the monitor BEFORE the pool.
   monitor = cloudflare_load_balancer_monitor.site.id
+  # Which Cloudflare regions run the health check. This attribute lives on the
+  # POOL, not on the monitor (the v4 provider has no check_regions on
+  # cloudflare_load_balancer_monitor at all - look for it there and you will not
+  # find it).
+  #
+  # Leaving it unset means "probe from EVERY Cloudflare data center", which is
+  # what we were doing: ~757 probe sources per 60s cycle, ~1.09M probes per
+  # origin per day. Even as a HEAD that is ~33M billed storage transactions a
+  # month on Azure (~$13). Three regions covering where the audience actually is
+  # gives the same failure signal at a fraction of the probe volume.
+  #
+  # Region codes: WNAM/ENAM = Western/Eastern North America, WEU = Western
+  # Europe. Full list:
+  # https://developers.cloudflare.com/load-balancing/reference/region-mapping-api
+  check_regions = ["ENAM", "WEU"]
   # The pool is considered "up" only while at least this many origins are
   # healthy. 1 means: as long as any single cloud is alive, keep serving. The
   # whole site stays online even if two of the three clouds go down.
