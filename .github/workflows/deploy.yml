@@ -190,14 +190,74 @@ concurrency:
 
 # -----------------------------------------------------------------------------
 # §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
-# One `build` job stages the site, then three publish jobs (`needs: build`) fan
-# out to AWS, Azure, and GCP in parallel.
+# A `validate` gate runs first, then `build` stages the site, then three publish
+# jobs (`needs: build`) fan out to AWS, Azure, and GCP in parallel.
 # -----------------------------------------------------------------------------
 # `jobs:` holds the units of work. A "job" runs on its own fresh virtual
 # machine ("runner"). By default jobs run in PARALLEL; the `needs:` key (used
 # below) is how you force one job to wait for another. Each job is made of
 # ordered "steps".
 jobs:
+  # ---------------------------------------------------------------------------
+  # Correctness gate. Nothing publishes unless this passes.
+  #
+  # WHY THIS EXISTS. validate-html.yml runs the same checks, but it is a
+  # SEPARATE workflow triggered by the same push, so it runs *alongside* this
+  # one rather than in front of it. GitHub's `needs:` cannot reach across
+  # workflows. On 2026-08-10 a commit with unresolved `git stash pop` conflict
+  # markers in meetings.html was published to all three origins while
+  # validate-html was still running; the JSON-LD gate did fail, ~30 seconds
+  # after the broken page was already live. A gate that reports after the fact
+  # is a smoke alarm wired to a photo album.
+  #
+  # Duplicating three fast scripts across two workflows is the deliberate
+  # trade. validate-html.yml keeps the fuller treatment (html5validator, PR
+  # comments, artifact upload) for pull requests; this job is the narrow,
+  # seconds-long "is it safe to publish" check on the push path.
+  # ---------------------------------------------------------------------------
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.x'
+
+      # The check that would have caught the 2026-08-10 incident directly,
+      # rather than as a side effect of markers happening to land inside a
+      # JSON-LD block. Conflict markers in plain prose are just as broken and
+      # no other gate looks for them.
+      #
+      # Only `<<<<<<< ` and `>>>>>>> ` are matched. A bare `=======` line is
+      # NOT a reliable signal: it is legitimate Markdown heading underline and
+      # appears in the comment banners of these very workflow files.
+      - name: Reject merge conflict markers
+        run: |
+          set -uo pipefail
+          # `grep -r` exits 1 when it finds nothing, which is the good case, so
+          # the exit code is captured rather than allowed to trip errexit.
+          hits=$(grep -rIn --exclude-dir=.git --exclude-dir=node_modules \
+                   -e '^<<<<<<< ' -e '^>>>>>>> ' . || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Unresolved merge conflict markers found. Publishing blocked."
+            echo "$hits"
+            exit 1
+          fi
+          echo "No conflict markers found."
+
+      - name: Reject inline scripts (CSP gate)
+        run: python3 tools/check_no_inline_scripts.py
+
+      - name: Require SVG dimensions (CLS gate)
+        run: python3 tools/check_svg_dimensions.py
+
+      - name: Validate JSON-LD (structured-data gate)
+        run: python3 tools/check_jsonld.py
+
   # ---------------------------------------------------------------------------
   # Build the public file set once. tools/build_search_index.py regenerates
   # /search-index.json, then tools/stage_site.sh produces dist/ - the exact
@@ -206,6 +266,12 @@ jobs:
   # ---------------------------------------------------------------------------
   # `build` is this job's internal id (referenced later by `needs: build`).
   build:
+    # Wait for the correctness gate above. This is the whole point of that job:
+    # a failing check must stop the deploy, not merely report on it afterwards.
+    # If `validate` fails, `build` never starts, so the three publish jobs and
+    # the Cloudflare purge never start either, and the previously-deployed site
+    # stays live and intact.
+    needs: validate
     # `runs-on:` picks the runner type. `ubuntu-latest` is a GitHub-hosted
     # Linux VM, created clean for this job and thrown away when it finishes.
     runs-on: ubuntu-latest
