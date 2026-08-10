@@ -503,7 +503,34 @@ jobs:
       # Azure's flavour of keyless OIDC login. Entra ID (Azure's identity
       # system) has a "federated credential" that trusts this workflow's OIDC
       # token and signs us in as the app below - again, no stored secret.
+      #
+      # This step is attempted TWICE. `az login` occasionally gets a non-JSON
+      # response (an empty body, or an HTML error page) from the Entra token
+      # endpoint and dies parsing it. The tell is a Python JSONDecodeError -
+      # `JSON is invalid: Expecting value: line 1 column 1 (char 0)` - followed
+      # by the action's generic fallback, which advises checking `auth-type`.
+      # That advice is a DEAD END: auth-type is not the problem, and the log
+      # above it will show the OIDC subject claim and client-id resolving
+      # correctly. It is an Azure-side blip, and it retries clean. Real
+      # instance: run 31347298268 on 2026-08-10.
+      #
+      # Losing this job is not a no-op. publish-aws and publish-gcp still
+      # succeed, so Azure alone falls behind, and Cloudflare load-balances
+      # across all three origins - about one request in three then serves the
+      # previous deploy. purge-cloudflare `needs:` all three publish jobs, so
+      # it skips too and the edge keeps serving stale objects on top of that.
+      # Nothing repairs it until the next unrelated push. That is the same
+      # partial-origin failure shape as the dotfile-artifact bug in CLAUDE.md,
+      # and it is worth one duplicated step to avoid.
       - name: Azure login (OIDC)
+        id: azlogin
+        # First attempt only. A failure here is swallowed so the retry below
+        # can run; if that one also fails, the job fails normally. This must
+        # NOT be set on the retry, or a genuine misconfiguration (a rotated
+        # client-id, a federated credential whose subject no longer matches)
+        # would sail through both attempts and hand an unauthenticated runner
+        # to the sync step.
+        continue-on-error: true
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
         with:
           # The app (service principal) identity to sign in as. This one IS a
@@ -512,6 +539,21 @@ jobs:
           # Tenant + subscription are fixed accounts (identifiers, not secrets),
           # pinned here and in infra/terraform/azure to match. AZURE_CLIENT_ID
           # stays a repo Variable because it's an output of `terraform apply`.
+          tenant-id: 10e6d2fb-a320-46fa-8df1-9aa7a8f6b2dc
+          subscription-id: f973ebad-a06c-4d5c-8161-0faf2a13076c
+
+      # Second attempt, and the reason `continue-on-error` above is safe. Runs
+      # only when the first one failed - `outcome` is the step's result BEFORE
+      # continue-on-error rewrites it, which is why this reads `outcome` and
+      # not `conclusion` (`conclusion` is 'success' whenever continue-on-error
+      # swallowed a failure, so gating on it would never fire).
+      #
+      # Keep the inputs and the pinned SHA identical to the step above.
+      - name: Azure login (OIDC, retry)
+        if: steps.azlogin.outcome == 'failure'
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: 10e6d2fb-a320-46fa-8df1-9aa7a8f6b2dc
           subscription-id: f973ebad-a06c-4d5c-8161-0faf2a13076c
 
