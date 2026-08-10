@@ -368,3 +368,48 @@ And if a run dies wedged, never reach for `-lock=false`. It does not clear the
 lock, it starts a *second* concurrent apply against the same state. Confirm no
 terraform process is alive first (a plugin whose parent is `PPID 1` is an
 orphan), then `force-unlock` with the ID from the error.
+
+## Local `dig` lies on this machine. Verify DNS over DoH, with a control.
+
+Two separate wrong answers in one day, both from `dig` on this laptop, both
+costing real time. Neither looked like a tooling problem at the time; both
+looked like the infrastructure was broken.
+
+**It strips the DNSSEC AD bit.** `dig +dnssec csoh.org A @1.1.1.1 | grep flags:`
+returns `qr rd ra` with no `ad`, which reads as "DNSSEC is not validating". It
+is. The zone has been signed and delegated since late July, and both Google and
+Cloudflare DNS-over-HTTPS return `AD=true`. That false negative was believed for
+two weeks and written into three documents, one of which then instructed an
+operator to submit a DS record for an already-delegated zone: the single DNSSEC
+mistake that takes a domain fully dark for every validating resolver.
+
+**It serves stale records after a change.** Immediately after a `terraform
+apply` that added a second `rua` address to `_dmarc`, `dig @rosalie.ns.cloudflare.com`
+- the zone's own authoritative nameserver - still returned the OLD value, while
+Terraform state and both DoH resolvers showed the new one. Trusting `dig` there
+would have meant concluding the apply failed and re-running it.
+
+So: **do not verify a DNS change with local `dig`.** Ask a resolver that answers
+over HTTPS, and ask two of them:
+
+```sh
+curl -s "https://dns.google/resolve?name=csoh.org&type=A" | grep -o '"AD":[a-z]*'
+curl -s -H 'accept: application/dns-json' \
+  "https://cloudflare-dns.com/dns-query?name=_dmarc.csoh.org&type=TXT"
+```
+
+**And run a control query before believing any negative result.** This is the
+cheap move that would have caught both cases in seconds:
+
+- For the AD bit, ask about a domain that is definitely signed. `cloudflare.com`
+  and `internetsociety.org` fail the same `dig` check here. If a known-good
+  domain fails your test, the test is wrong, not the zone.
+- For a stale record, compare against a record you did *not* just change.
+  `_mta-sts` read identically via `dig` and DoH at the same moment `_dmarc` did
+  not, which located the problem immediately: not a broken resolver, a stale
+  answer for exactly the record that had changed.
+
+The general form, since this file already records two other instances of it (the
+inert Cloudflare ruleset, and `terraform apply` reporting success while shipping
+nothing): **an instrument that reports "nothing is there" is indistinguishable
+from a broken instrument until you point it at something you know is there.**
