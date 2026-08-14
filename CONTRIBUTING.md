@@ -581,7 +581,7 @@ git push origin add-news-sources
 
 **Learning resources:**
 - [Git Basics](https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control)
-- [GitHub Git Cheat Sheet](https://github.github.com/training-kit/downloads/github-git-cheat-sheet.pdf)
+- [GitHub Git Cheat Sheet](https://training.github.com/downloads/github-git-cheat-sheet.pdf)
 
 ---
 
