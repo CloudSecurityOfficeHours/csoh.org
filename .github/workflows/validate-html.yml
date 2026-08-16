@@ -1,7 +1,7 @@
 # =============================================================================
 # Validate HTML
 # -----------------------------------------------------------------------------
-# The PR gate for markup correctness. Four checks, all blocking:
+# The PR gate for markup correctness. Six checks, all blocking:
 #
 #   1. No inline <script> blocks    - the production CSP is `script-src 'self'`,
 #                                     so an inline script is silently dropped in
@@ -15,6 +15,15 @@
 #   4. The W3C HTML5 validator (Nu HTML Checker) over every .html file - catches
 #                                     unclosed tags, anchors nested inside
 #                                     anchors or buttons, invalid attributes.
+#   5. Crosslink coverage           - every root page is either cross-linked or
+#                                     explicitly opted out; an unlisted page is
+#                                     silently never visited by the linker.
+#   6. Glossary integrity           - unique <dt> ids, no alias claimed by two
+#                                     entries, anchors resolve, no entry made
+#                                     unreachable by accident.
+#
+# 5 and 6 assert whole-repo invariants rather than inspecting the diff, so they
+# run on every invocation. 1-4 are gated on the diff actually containing HTML.
 #
 # Failing the job posts a PR comment with the last 50 lines of the validator log
 # so the contributor doesn't have to dig through the run output.
@@ -44,20 +53,38 @@ on:
   # The filtering still happens, just one level down. The "Detect HTML changes"
   # step below works out whether this PR touches any .html, and the expensive
   # steps are gated on its output. So a non-HTML PR still gets a green
-  # `validate-html` check, in a couple of seconds, having done no work.
+  # `validate-html` check in a couple of seconds, having run only the two
+  # whole-repo invariant checks (~0.8s together) and skipped the rest.
   #
   # The `push:` trigger below keeps its `paths:` filter, because nothing depends
   # on a push producing a check run.
   pull_request:
   # `push` fires when commits land on a branch. `branches:` limits it to
-  # `main`, and `paths:` again limits it to HTML changes - so both conditions
+  # `main`, and `paths:` again limits which pushes matter - so both conditions
   # must hold for this trigger to fire. This catches direct commits to main
   # that bypass the PR flow, so we don't have to wait for the weekly cron.
+  #
+  # The list is not only '**.html'. Two of the steps below check whole-repo
+  # invariants that a pure-Python change can break with no HTML in the diff:
+  # dropping a page from TARGET_PAGES, or editing the glossary parser or the
+  # UNREACHABLE map. Commit 0559db56 added the glossary gate and touched no
+  # HTML, so this workflow did not run and the new gate never executed - the
+  # check meant to catch silent omissions was itself silently skipped. Anything
+  # a step here reads has to be able to trigger the step.
   push:
     branches:
       - main
     paths:
       - '**.html'
+      - 'tools/check_crosslink_coverage.py'
+      - 'tools/check_glossary_coverage.py'
+      - 'tools/crosslink_pages.py'
+      - 'tools/crosslink_glossary.py'
+      - 'tools/glossary_terms.py'
+      - 'tools/check_jsonld.py'
+      - 'tools/check_no_inline_scripts.py'
+      - 'tools/check_svg_dimensions.py'
+      - '.github/workflows/validate-html.yml'
   # `schedule` runs the workflow on a timer using cron syntax (five fields:
   # minute, hour, day-of-month, month, day-of-week; `*` means "every").
   # `0 7 * * 1` reads: minute 0, hour 7, every day-of-month, every month,
@@ -204,8 +231,13 @@ jobs:
       # before this gate existed - 8 pages, then 23 more on a sweep, one of
       # them ~9,500 words. A silent omission is exactly the failure mode a
       # check should convert into a loud one.
+      #
+      # Deliberately NOT gated on steps.html.outputs.changed. This asserts a
+      # whole-repo invariant rather than inspecting the diff, and the way it
+      # breaks most easily is a pure-Python edit - dropping a name from
+      # TARGET_PAGES - with no HTML in the commit at all. It takes ~0.4s, so
+      # there is nothing to save by skipping it.
       - name: Require crosslink coverage for every root page
-        if: steps.html.outputs.changed == 'true'
         run: python3 tools/check_crosslink_coverage.py
 
       # Step 3d - The glossary's own invariants. Both cross-linkers degrade
@@ -214,8 +246,9 @@ jobs:
       # sits earlier in the file, and a duplicated id silently steals another
       # entry's links. 5,000+ links across the site resolve through this one
       # mapping, so a quiet break here is expensive and invisible.
+      # Unconditional for the same reason as 3c: editing the parser, a
+      # denylist, or the UNREACHABLE map breaks this with no HTML in the diff.
       - name: Check glossary integrity and reachability
-        if: steps.html.outputs.changed == 'true'
         run: python3 tools/check_glossary_coverage.py
 
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
