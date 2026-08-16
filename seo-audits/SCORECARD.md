@@ -97,6 +97,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-07-29 | 100 / 96 / 100 / 100 | 100 / 96 / 100 / 100 | Mobile: LCP 1.08s · CLS 0.000 · TBT 0ms · FCP 1.06s · M-a11y: color-contrast · D-a11y: color-contrast |
 | 2026-08-03 | 100 / 96 / 100 / 100 | 100 / 96 / 100 / 100 | Mobile: LCP 1.14s · CLS 0.000 · TBT 27ms · FCP 1.06s · M-a11y: color-contrast · D-a11y: color-contrast |
 | 2026-08-10 | 100 / 96 / 100 / 100 | 100 / 96 / 100 / 100 | Mobile: LCP 1.08s · CLS 0.000 · TBT 0ms · FCP 1.06s · M-a11y: color-contrast · D-a11y: color-contrast |
+| 2026-08-16 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.07s · CLS 0.000 · TBT 0ms · FCP 1.05s |
 
 ## How to use
 
