@@ -1,16 +1,22 @@
 # =============================================================================
 # Check Broken Links
 # -----------------------------------------------------------------------------
-# Crawls every link in our published HTML pages - the root pages plus the
-# breaches/, meetings/, portfolio/, and homelab/ subfolders (using lychee) -
-# and reports any that 404, DNS-fail, or otherwise rot. Runs on PRs that touch
-# HTML, weekly to catch external link rot, and on demand. Posts a comment on
-# PRs when problems are found, but never fails - link rot is everywhere and
-# shouldn't block merges.
+# Crawls every link in our published content - the root pages plus the
+# breaches/, meetings/, portfolio/, and homelab/ subfolders, and the published
+# Terraform under infra/terraform/ (using lychee) - and reports any that 404,
+# DNS-fail, or otherwise rot. Runs on PRs that touch HTML or Terraform, weekly
+# to catch external link rot, and on demand. Posts a comment on PRs when
+# problems are found, but does not fail on a broken link - link rot is
+# everywhere and shouldn't block merges.
+#
+# It DOES fail when the crawl itself did not happen. See the "Assert the crawl
+# actually ran" step: an unparseable .lychee.toml kept this job green for
+# eleven weeks while it checked zero URLs, because "no report" and "clean
+# report" were indistinguishable to everything downstream.
 #
 # On the weekly cron (and manual runs) there is no PR to comment on, and
-# because the job never fails, findings used to land in an artifact nobody
-# opened - the run stayed green and the rot stayed live. Those runs now
+# because the job does not fail on rot, findings used to land in an artifact
+# nobody opened - the run stayed green and the rot stayed live. Those runs now
 # maintain a sticky tracking issue instead (same pattern as the staleness
 # checkers), which auto-closes once a crawl comes back clean.
 # =============================================================================
@@ -38,8 +44,16 @@ on:
   pull_request:
     # `**.html` is a glob: `**` matches any folders/subfolders, so this means
     # "any file ending in .html, anywhere in the repo."
+    #
+    # `**.tf` is here because the Terraform under infra/terraform/ is PUBLISHED
+    # (tools/site-publish.filter excludes *.py/*.md/*.sh but nothing excludes
+    # *.tf), and 65% of its lines are teaching prose. A single `*` would not
+    # do: GitHub's `*` does not match `/`, so `*.tf` would mean root-level
+    # only and every file under infra/terraform/<cloud>/ would be skipped.
+    # Same trap as the `**.html` one documented in CLAUDE.md.
     paths:
       - '**.html'
+      - '**.tf'
   # Weekly external-link recheck - Mondays at 06:00 UTC. External sites die
   # on their own schedule; this catches it without us having to think about it.
   # `schedule:` runs the workflow on a timer instead of in response to a push.
@@ -154,6 +168,16 @@ jobs:
           # breaches/, meetings/, portfolio/, and homelab/ subfolders (all
           # flat). The tooling template tools/og/template.html has no real
           # links, so it's deliberately left out.
+          #
+          # The last glob covers the published Terraform. Those .tf files ship
+          # to the origins like any page, and they are deliberately
+          # comment-heavy teaching material (~65% comments, ~3,100 lines of
+          # prose) - so until this was added, the only prose on the site that
+          # no gate ever read was the prose written to be read. lychee treats
+          # an unknown extension as plaintext and extracts URLs from it, so no
+          # extra tooling is needed. The URL-shaped strings in HCL that are
+          # identifiers rather than destinations (CSP allowlist hosts, the OIDC
+          # issuer, placeholder examples) are anchored out in .lychee.toml.
           args: >-
             --config .lychee.toml
             --cache
@@ -167,6 +191,7 @@ jobs:
             './meetings/*.html'
             './portfolio/*.html'
             './homelab/*.html'
+            './infra/terraform/*/*.tf'
           # Write the crawl results to this file (path relative to the repo).
           output: ./lychee-report.md
           # Produce that report as Markdown so it renders nicely in a PR comment.
@@ -174,6 +199,50 @@ jobs:
           # By default this action would "fail" (turn the job red) on a broken
           # link. We force false so a dead link never blocks a merge.
           fail: false                                   # never fail the job - see header
+
+      # -----------------------------------------------------------------------
+      # Did the crawl actually happen?
+      # -----------------------------------------------------------------------
+      # This job is built never to fail on a broken LINK - link rot is everyone
+      # else's fault and shouldn't block a merge. But that tolerance used to
+      # extend to the crawler itself failing, and those are not the same thing.
+      #
+      # Worked example, and the reason this step exists. On 2026-05-29 a triage
+      # commit added seven exclude entries written `"news\.ycombinator\.com"`.
+      # In TOML, `\.` inside a double-quoted string is an invalid escape, so
+      # lychee could not parse .lychee.toml and exited before crawling
+      # anything. It wrote no report. The `[Errors]` grep below found no
+      # `[Errors]` in a file that did not exist, so `has_errors` came out
+      # `false`; the sticky-issue step read the same absent report as a clean
+      # crawl and posted "The latest link crawl found no broken links."
+      # The job was green every week for eleven weeks while checking zero URLs.
+      #
+      # So: assert the crawl produced a real report that counted a real number
+      # of links. This catches a config parse error, a lychee crash, and a glob
+      # that silently matches nothing. It is deliberately the one condition in
+      # this workflow that DOES fail the job - a checker that isn't running is
+      # a broken checker, not a broken link.
+      - name: Assert the crawl actually ran
+        run: |
+          if [ ! -f ./lychee-report.md ]; then
+            echo "::error::lychee produced no report - it failed before crawling."
+            echo "Check the 'Check for broken links' step above; a .lychee.toml"
+            echo "parse error exits lychee before it reads any input."
+            exit 1
+          fi
+          # Every real lychee markdown report opens with a Summary table
+          # carrying a "Total" row. Pull the count out of it: the row looks
+          # like `| 🔍 Total       | 546   |`, so take the last numeric field.
+          total=$(grep -m1 'Total' ./lychee-report.md | grep -oE '[0-9]+' | tail -1)
+          if [ -z "$total" ]; then
+            echo "::error::lychee report has no Summary/Total row - malformed report."
+            echo "--- report ---"; cat ./lychee-report.md; exit 1
+          fi
+          if [ "$total" -eq 0 ]; then
+            echo "::error::lychee checked 0 links - the input globs matched nothing."
+            exit 1
+          fi
+          echo "lychee checked $total links. Crawl ran."
 
       # An "artifact" is a file the workflow saves and attaches to the run so
       # reviewers can download the full crawl afterward from the Actions page.

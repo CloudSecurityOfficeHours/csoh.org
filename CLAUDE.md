@@ -176,6 +176,107 @@ Widening a filter is always the safe direction: a superfluous pattern costs one
 redundant deploy of identical bytes; a missing one costs a change that never
 goes live.
 
+## The published Terraform is content, and gets the same link gate as a page
+
+`tools/site-publish.filter` is a **deny-list**: it excludes `*.py`, `*.md`,
+`*.sh`, and `/tools/`, and everything not named is published. Nothing names
+`infra/`, so `./tools/stage_site.sh` stages all 31 `.tf` files and they serve
+live (`curl -sI https://csoh.org/infra/terraform/aws/oidc.tf` returns 200).
+
+That is easy to read as an accident and treat as harmless. It isn't harmless,
+because these files are deliberately **65% comments - about 3,100 lines of
+teaching prose**, written so a newcomer can read the multi-cloud build end to
+end (`README.md`, terraform.html). For a long time they were the only prose on
+the site that no gate ever read: `check_docs_consistency.py` globs `*.html` and
+`*.md`, `weekly-docs-review.yml` slices `git ls-files '*.html'`, and lychee's
+input globs were HTML-only. The prose written to be read was the prose nothing
+reviewed.
+
+`check-broken-links.yml` now crawls `./infra/terraform/*/*.tf` as well, and its
+`paths:` trigger carries `'**.tf'` (single `*` would match root-level only, per
+the section above). lychee treats an unknown extension as plaintext and pulls
+URLs out of it, so this needed no new tooling.
+
+The one thing that does need care: **HCL is full of URL-shaped strings that are
+identifiers, not destinations** - CSP allowlist hosts, the OIDC issuer
+`https://token.actions.githubusercontent.com`, `principal://` IAM members,
+placeholder examples like AWS's own `d111.cloudfront.net`. Unfiltered they
+produced 12 errors, all false. The excludes for them in `.lychee.toml` are
+anchored to the bare host root (`/?$`) precisely so the same host **with a
+path** is still checked - `https://img.youtube.com/` is suppressed, the ~10
+real `https://img.youtube.com/vi/<id>/hqdefault.jpg` thumbnails are not. Keep
+that shape when you add one; a bare `"img\\.youtube\\.com"` would silently stop
+checking every video thumbnail on the site.
+
+Adding a CSP host or a federation issuer to a `.tf` file will surface as a
+fresh 404 on its bare root. That is expected. Anchor it and add it.
+
+Two things worth knowing about the publishing itself, neither of them changed
+here because both are judgement calls rather than bugs:
+
+- **Nothing on the site links to the published copies.** Every reference on
+  terraform.html points at `github.com/.../blob/main/infra/...`, and `infra/`
+  is not in `sitemap.xml`. The served copies are reachable only by typing the
+  URL.
+- **They are served with the wrong content-type on at least one origin.**
+  `oidc.tf` comes back `binary/octet-stream` (browser downloads it) from one
+  origin and `text/plain` (browser displays it) from another, so which one a
+  reader gets depends on which origin the load balancer picked.
+
+If you ever decide the served copies aren't earning their keep, adding `-
+/infra/` to the filter is safe from a link perspective: nothing on the site
+would 404. Leave the link gate in place regardless - the prose is still
+teaching material on GitHub, and a dead link in a comment is dead either way.
+
+## A TOML escape typo disabled link checking for eleven weeks, and CI stayed green
+
+On 2026-05-29 a broken-link triage commit added seven exclude entries to
+`.lychee.toml` written like this:
+
+```toml
+"news\.ycombinator\.com",     # invalid: \. is not a TOML escape
+"news\\.ycombinator\\.com",   # correct
+```
+
+The rest of the file already used `\\.`; only these seven were wrong. In a TOML
+basic (double-quoted) string, `\.` is an **invalid escape sequence**, and TOML
+has no lenient mode: one bad escape fails the *whole file*. So lychee could not
+load its config and exited before crawling anything.
+
+Every downstream check then agreed that all was well:
+
+- lychee wrote **no report**, and `lychee-action` runs with `fail: false`.
+- The `[Errors]` grep looked for a section header in a file that did not exist,
+  found nothing, and set `has_errors=false`.
+- The sticky-issue action classified the absent report as **healthy**. Its
+  check is `grep -qF -- "$STALE_MARKER" "$REPORT_FILE"` inside an `if`, so a
+  missing file fails the grep without tripping `set -e`, and `stale=0`. No
+  issue happened to be open, so it did nothing; had one been open it would
+  have auto-closed it with "The latest link crawl found no broken links."
+
+Eleven weeks of green runs, zero URLs checked. This is the same shape as the
+inert Cloudflare ruleset and the dropped dotfiles: *an instrument that reports
+"nothing is there" is indistinguishable from a broken instrument.*
+
+Note the second-order trap in that grep, since the pattern recurs: **"the
+marker is absent" and "the file is absent" are the same result to `grep -q`,**
+and putting it in an `if` is exactly what suppresses the error that would have
+told you which.
+
+The fix is the `Assert the crawl actually ran` step in `check-broken-links.yml`,
+which fails the job unless the report exists and its Summary table counts a
+non-zero `Total`. That catches a config parse error, a lychee crash, and an
+input glob that matches nothing. Note the deliberate asymmetry, and preserve
+it: **a broken link never fails this job; a crawl that did not happen always
+does.** They are not the same failure.
+
+Validate the config before trusting a green run - the parse error is loud when
+you actually ask for it:
+
+```sh
+lychee --dump --config .lychee.toml './*.html' | head -1
+```
+
 ## A new page subdirectory has to be registered in several places
 
 `portfolio/` and `homelab/` each needed hand-registration, and `homelab/` was
