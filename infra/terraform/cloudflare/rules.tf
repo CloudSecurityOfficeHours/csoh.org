@@ -482,8 +482,10 @@ resource "cloudflare_ruleset" "cache" {
   rules {
     ref         = "cache_search_html"
     description = "search.html - effectively uncached (60s)"
-    # Match exactly the /search.html path.
-    expression = "http.request.uri.path eq \"/search.html\""
+    # Match exactly the /search.html path, on a production hostname. See the
+    # QA rule at the bottom of this ruleset for why every tier here carries
+    # that host exclusion.
+    expression = "http.request.uri.path eq \"/search.html\" and http.host ne \"qa.${var.zone_name}\""
     # This action sets the caching rules carried in action_parameters below.
     action  = "set_cache_settings"
     enabled = true
@@ -515,7 +517,7 @@ resource "cloudflare_ruleset" "cache" {
     description = "CSS/JS/images - 1 year immutable"
     # Match by file extension. "in { ... }" tests whether the URL's extension is
     # one of the listed values (space-separated set).
-    expression = "http.request.uri.path.extension in {\"css\" \"js\" \"png\" \"jpg\" \"jpeg\" \"gif\" \"webp\" \"svg\" \"ico\"}"
+    expression = "http.request.uri.path.extension in {\"css\" \"js\" \"png\" \"jpg\" \"jpeg\" \"gif\" \"webp\" \"svg\" \"ico\"} and http.host ne \"qa.${var.zone_name}\""
     action     = "set_cache_settings"
     enabled    = true
     action_parameters {
@@ -559,7 +561,7 @@ resource "cloudflare_ruleset" "cache" {
     #
     # Parentheses are required: `and` binds tighter than `or`, so without them
     # the exclusion would attach only to the last `or` branch.
-    expression = "(http.request.uri.path.extension in {\"html\" \"xml\" \"json\" \"txt\"} or http.request.uri.path.extension eq \"\" or ends_with(http.request.uri.path, \"/\")) and http.request.uri.path ne \"/search.html\""
+    expression = "(http.request.uri.path.extension in {\"html\" \"xml\" \"json\" \"txt\"} or http.request.uri.path.extension eq \"\" or ends_with(http.request.uri.path, \"/\")) and http.request.uri.path ne \"/search.html\" and http.host ne \"qa.${var.zone_name}\""
     action     = "set_cache_settings"
     enabled    = true
     action_parameters {
@@ -572,6 +574,87 @@ resource "cloudflare_ruleset" "cache" {
       browser_ttl {
         mode    = "override_origin"
         default = 3600
+      }
+    }
+  }
+
+  # QA: never cache anything on qa.csoh.org.
+  #
+  # Without this, tier 3 above would hold a QA page at the edge for an hour,
+  # which makes the environment useless for its one job - you push a fix, reload,
+  # and see the old page with no indication why. QA traffic is a handful of
+  # requests from a handful of people, so there is nothing to gain by caching it.
+  #
+  # ON PLACEMENT, which is the trap this ruleset has already sprung once. Cache
+  # rules apply the LAST matching rule, not the first: that is how the tier 3
+  # rule silently overrode the 60-second search.html rule above it for as long
+  # as both existed, and production served search.html with max-age=3600. So the
+  # fix here is NOT to rely on this rule sitting at the bottom. Every tier above
+  # carries `and http.host ne "qa.csoh.org"`, which makes their match sets
+  # DISJOINT from this one - no request can satisfy both a tier rule and this
+  # rule, so which one comes last stops mattering. Moving this block, or
+  # inserting a fourth tier below it, cannot break QA caching. Prefer that shape
+  # over a carefully ordered list; ordering is a comment that does not run.
+  rules {
+    ref         = "cache_qa_bypass"
+    description = "qa.csoh.org - bypass cache entirely"
+    expression  = "http.host eq \"qa.${var.zone_name}\""
+    action      = "set_cache_settings"
+    enabled     = true
+    action_parameters {
+      # false = do not cache this response at the edge at all, and do not serve
+      # it from cache. Every QA request reaches the Cloud Run QA service.
+      cache = false
+    }
+  }
+}
+
+# =============================================================================
+# Origin rules - route qa.csoh.org to the QA Cloud Run service
+# -----------------------------------------------------------------------------
+# A fourth ruleset, in a phase this stack did not use before. It exists to solve
+# one specific problem: Cloud Run decides WHICH service a request is for by
+# reading the Host header, and it now runs two services in this project.
+#
+# The DNS record in qa.tf points qa.csoh.org at the QA service's *.run.app
+# hostname, but a proxied record sends the ORIGINAL Host header to the origin.
+# So Cloud Run would receive `Host: qa.csoh.org`, match that against no service
+# it knows, and answer 404 for every request - a failure that looks like a
+# broken deploy rather than a missing header rewrite, because the DNS resolves
+# correctly, TLS completes, and Access logs the visitor in first.
+#
+# Production does not need this rule: its origins sit in a Load Balancer pool,
+# and each pool origin in load_balancer.tf sets its own `host_header` override.
+# QA is deliberately outside that pool (see qa.tf for the cost reason), so the
+# override has to be made here instead.
+# =============================================================================
+resource "cloudflare_ruleset" "origin_qa" {
+  zone_id     = var.zone_id
+  name        = "csoh-origin-qa"
+  description = "Rewrite Host + origin for qa.csoh.org so Cloud Run resolves the QA service"
+  kind        = "zone"
+  # This phase runs after Cloudflare has decided to go to an origin, and lets
+  # us change WHICH origin and WHAT Host header it is asked with.
+  phase = "http_request_origin"
+
+  rules {
+    ref         = "origin_qa_host_rewrite"
+    description = "qa.csoh.org - send to the QA Cloud Run service"
+    expression  = "http.host eq \"qa.${var.zone_name}\""
+    # "route" is the action that overrides origin/Host for the matched request.
+    action  = "route"
+    enabled = true
+    action_parameters {
+      # The Host header Cloud Run actually sees. This is the line that makes
+      # the difference between a working QA site and a uniform 404.
+      host_header = var.gcp_qa_origin_host
+      # Where to connect. Strictly speaking the DNS CNAME already resolves
+      # here, so this is belt and braces - but stating it means the routing no
+      # longer depends on the DNS record's target being right, and the two
+      # cannot drift apart into a state where requests land on the production
+      # service while carrying a QA Host header.
+      origin {
+        host = var.gcp_qa_origin_host
       }
     }
   }

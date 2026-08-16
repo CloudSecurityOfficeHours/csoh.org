@@ -83,3 +83,39 @@ variable "azure_origin_host" {
   description = "Azure $web static-website hostname (no scheme)."
   type        = string
 }
+
+# The QA origin: the *.run.app hostname of the SECOND Cloud Run service
+# (csoh-site-qa), which serves qa.csoh.org. Read it the same way as the three
+# above, from the gcp stack's outputs:
+#   gcp_qa_origin_host = host part of \
+#     terraform -chdir=../gcp output -raw cloud_run_qa_service_url
+#
+# Note what this variable is NOT used for. It is deliberately absent from the
+# Load Balancer pool in load_balancer.tf: pool members are health-checked from
+# every Cloudflare data center, roughly 1.09M probes per origin per day, which
+# is what produced a $119.77 Azure bandwidth bill. QA is reached by a plain
+# proxied DNS record (qa.tf) plus a Host-header rewrite (rules.tf) instead, so
+# it is never probed and can scale to zero.
+variable "gcp_qa_origin_host" {
+  description = "GCP Cloud Run *.run.app hostname for the QA service (no scheme)."
+  type        = string
+}
+
+# Who may log in to qa.csoh.org through Cloudflare Access. Every address listed
+# here can request a one-time code by email and, on entering it, reach the QA
+# site; nobody else gets past the login page.
+#
+# Deliberately has NO default, which makes it required. Two reasons. First, a
+# default would put personal email addresses into a file this repo PUBLISHES -
+# everything under infra/ is served on the site as teaching material for
+# terraform.html, since tools/site-publish.filter does not exclude it. Second, a
+# wrong default here fails open in the most annoying direction: it would build a
+# login page that the site's owner cannot get through.
+#
+# Terraform reads it from TF_VAR_qa_allowed_emails like the others, but because
+# it is a LIST rather than a string the environment variable has to carry JSON:
+#   TF_VAR_qa_allowed_emails='["you@example.com","reviewer@example.com"]'
+variable "qa_allowed_emails" {
+  description = "Email addresses allowed through Cloudflare Access to qa.csoh.org."
+  type        = list(string)
+}
