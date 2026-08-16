@@ -141,14 +141,29 @@ resource "cloudflare_zero_trust_access_policy" "qa_allow_listed_emails" {
   decision = "allow"
 
   # WHO matches. `include` is the "any of these" set - a visitor who satisfies
-  # any entry is allowed. Listing individual email addresses is the tightest
-  # option; `email_domain` would admit anyone at a domain, which is wrong for a
-  # personal address, and Access also supports country, IP range, and identity
-  # provider group matching.
+  # any entry is allowed.
+  #
+  # CURRENTLY WIDE OPEN, DELIBERATELY. `everyone = true` means exactly what it
+  # says: anyone who reaches qa.csoh.org is let through. The login page still
+  # appears, which makes this look more protective than it is - it is a turnstile
+  # rather than a lock. Treat qa.csoh.org as PUBLIC: do not put anything on it
+  # you would not publish, and note that an indexable duplicate of the site is
+  # the SEO risk this app was originally added to prevent.
+  #
+  # This is here because email login needs One-Time PIN enabled as a login
+  # method, and enabling it needs a token permission group beyond what this
+  # stack otherwise requires (see the note above this resource). Rather than
+  # leave Terraform disagreeing with the live policy - which would silently
+  # revert it on the next apply and lock the owner out - the open policy is
+  # written down.
+  #
+  # TO TIGHTEN IT LATER: enable One-Time PIN under Zero Trust > Settings >
+  # Authentication > Login methods, put the allowed addresses in
+  # TF_VAR_qa_allowed_emails, then swap the `everyone` line below for:
+  #     email = var.qa_allowed_emails
+  # and re-apply this resource. Nothing else has to change.
   include {
-    # Fed from var.qa_allowed_emails so the addresses stay out of this file -
-    # everything under infra/ is published on the site as teaching material.
-    email = var.qa_allowed_emails
+    everyone = true
   }
 }
 

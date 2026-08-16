@@ -105,17 +105,24 @@ variable "gcp_qa_origin_host" {
 # here can request a one-time code by email and, on entering it, reach the QA
 # site; nobody else gets past the login page.
 #
-# Deliberately has NO default, which makes it required. Two reasons. First, a
-# default would put personal email addresses into a file this repo PUBLISHES -
-# everything under infra/ is served on the site as teaching material for
-# terraform.html, since tools/site-publish.filter does not exclude it. Second, a
-# wrong default here fails open in the most annoying direction: it would build a
-# login page that the site's owner cannot get through.
+# NOT CURRENTLY IN USE. The Access policy in qa.tf is set to `everyone = true`,
+# so qa.csoh.org shows a login page that admits anybody. Email matching needs
+# One-Time PIN enabled as a login method, and enabling that needs a token
+# permission group this stack does not otherwise require. This variable is kept,
+# and now defaults to empty, so tightening the policy later is a one-line change
+# in qa.tf rather than a re-derivation of how any of it worked.
+#
+# The default is empty rather than a real address on purpose: everything under
+# infra/ is served on the site as teaching material for terraform.html, since
+# tools/site-publish.filter does not exclude it, so a default here would publish
+# personal email addresses.
 #
 # Terraform reads it from TF_VAR_qa_allowed_emails like the others, but because
-# it is a LIST rather than a string the environment variable has to carry JSON:
+# it is a LIST rather than a string the environment variable has to carry JSON,
+# and it is worth single-quoting so the brackets are never exposed to globbing:
 #   TF_VAR_qa_allowed_emails='["you@example.com","reviewer@example.com"]'
 variable "qa_allowed_emails" {
-  description = "Email addresses allowed through Cloudflare Access to qa.csoh.org."
+  description = "Email addresses allowed through Cloudflare Access to qa.csoh.org (unused while the policy admits everyone)."
   type        = list(string)
+  default     = []
 }
