@@ -12,104 +12,34 @@ Also skips self-references (a term doesn't link to its own dt) and only
 links the first occurrence of each term per dd group to keep things
 readable.
 
-Re-runnable: rerunning the script after editing the glossary won't
-duplicate links - existing <a class="glossary-link"> wrappers are
-preserved and treated as already-linked.
+Re-runnable, but rebuild-idempotent rather than preservation-idempotent:
+main() STRIPS every existing <a class="glossary-link"> wrapper and relinks
+from scratch, so the current rules apply to the whole file consistently. A
+hand-added or hand-retargeted link inside glossary.html does not survive the
+next run. Fix the headword or the rules instead.
+
+(This docstring used to claim the opposite - that existing wrappers were
+"preserved and treated as already-linked". They never were. Anyone who trusted
+it and hand-fixed a link here would have watched the fix vanish silently.)
+
+Term parsing lives in glossary_terms.py, shared with crosslink_pages.py so the
+two cannot drift apart again.
 """
 import re
 import sys
-from html import unescape
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from glossary_terms import (  # noqa: E402
+    BASE_DENYLIST as DENYLIST,
+    derive_keys,
+    slugify,
+)
+
+__all__ = ["DENYLIST", "derive_keys", "slugify", "main"]
+
 GLOSSARY = Path(__file__).resolve().parent.parent / "glossary.html"
-
-
-def slugify(text: str) -> str:
-    text = unescape(text)
-    text = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()
-    return "term-" + text if text else "term-unknown"
-
-
-# Generic single-word keys that overlap too often with ordinary English
-# usage. Excluded from the lookup so we don't spam-link every "public" or
-# "private" in a definition with the Public/Private cloud-deployment dt.
-DENYLIST = {
-    "public",
-    "private",
-    "hybrid",
-    "image",
-    "baseline",
-    "registry",
-    "principal",
-    "first",
-    "csp",
-    "sp",
-    "soc",
-    "cloud",
-}
-
-
-def _acronymish(s: str) -> bool:
-    """True if s reads like an acronym (CNAPP, MFA, ATT&CK, S3) rather than
-    an ordinary word or phrase. Used to tell an acronym/expansion parenthetical
-    ("CNAPP (Cloud-Native Application Protection Platform)") apart from a
-    disambiguation qualifier ("Air Gap (Cloud)", "Ambient Mode (Service Mesh)")
-    that must never become a link alias."""
-    letters = re.sub(r"[^A-Za-z]", "", s)
-    return bool(letters) and len(s.strip()) <= 8 and letters.isupper()
-
-
-def derive_keys(dt_inner_html: str) -> list[str]:
-    """Return the lookup keys for a <dt>, ordered (primary first)."""
-    text = re.sub(r"<[^>]+>", "", dt_inner_html)
-    text = unescape(text).strip()
-
-    # Split off the long-form description after an em/en dash.
-    parts = re.split(r"\s+-\s+|\s*[\u2014\u2013]\s*", text, maxsplit=1)
-    lhs = parts[0]
-    rhs = parts[1] if len(parts) > 1 else ""
-
-    keys: list[str] = []
-
-    def add_with_parens(s: str) -> None:
-        # Base: drop parenthesized aliases.
-        base = re.sub(r"\s*\([^)]*\)", "", s).strip()
-        for piece in re.split(r"\s*/\s*", base):
-            piece = piece.strip()
-            if piece:
-                keys.append(piece)
-        # Then any aliases inside parens - but only when the pair reads as an
-        # acronym/expansion ("CNAPP (Cloud-Native Application Protection
-        # Platform)"), not a disambiguation qualifier ("Air Gap (Cloud)").
-        # Registering "Cloud" as an alias once wrapped the bare word "cloud"
-        # 60x across the glossary, all pointing at term-air-gap.
-        base_is_acronym = _acronymish(base)
-        for m in re.finditer(r"\(([^)]+)\)", s):
-            for piece in re.split(r"\s*/\s*", m.group(1)):
-                piece = piece.strip()
-                if piece and (base_is_acronym or _acronymish(piece)):
-                    keys.append(piece)
-
-    add_with_parens(lhs)
-
-    if rhs:
-        for piece in re.split(r"\s*/\s*", rhs):
-            piece = re.sub(r"\s*\([^)]*\)", "", piece).strip()
-            if piece and 1 <= len(piece.split()) <= 6:
-                keys.append(piece)
-
-    # Dedupe, preserve order, drop denylisted single-word keys.
-    seen: set[str] = set()
-    unique: list[str] = []
-    for k in keys:
-        kl = k.lower()
-        if not kl or kl in seen:
-            continue
-        if kl in DENYLIST:
-            continue
-        seen.add(kl)
-        unique.append(k)
-    return unique
 
 
 def add_dt_ids(content: str) -> tuple[str, dict[str, str]]:

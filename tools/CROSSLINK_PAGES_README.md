@@ -24,7 +24,9 @@ The script is **idempotent** - every run strips existing cross-page glossary lin
 
 The list of target pages is at the top of `crosslink_pages.py` in `TARGET_PAGES`. Add new top-level pages there as the site grows. Note: `breaches/*.html` and `meetings/*.html` are auto-discovered via `SUBDIR_PATTERNS` and rewritten too (with a computed `../glossary.html#` prefix), so you do NOT list those individually.
 
-The glossary itself, error pages (`403.html`, `404.html`), and the Google site verification stub are deliberately excluded.
+Root pages that should *not* be cross-linked are named in `DELIBERATELY_UNLINKED`, each with a reason: the glossary itself (`crosslink_glossary.py` owns it), `news.html` (rebuilt every 3h, so links would be wiped), `search.html` (a JS UI with ~40 words), the error pages, and the Search Console stub.
+
+Keep both lists complete. A page in neither is silently never visited - no error, no warning, just a page shipping with zero glossary links. That happened twice in August 2026 (8 pages, then 23 more, one of them ~9,500 words), so `tools/check_crosslink_coverage.py` now fails if a root page is in neither list, and runs in `validate-html.yml`.
 
 ## Linking rules
 
@@ -106,4 +108,4 @@ EOF
 | `crosslink_glossary.py` | `glossary.html` only | `<a class="glossary-link" href="#term-...">` (anchor-only, intra-page) |
 | `crosslink_pages.py` | All content pages | `<a class="glossary-link" href="glossary.html#term-...">` (cross-page) |
 
-Both share the same `derive_keys` and slugification logic and use the same `glossary-link` class so they look identical in the DOM.
+Both import `derive_keys`, `slugify` and the denylists from [`glossary_terms.py`](glossary_terms.py), and use the same `glossary-link` class so they look identical in the DOM. They used to keep private copies of that logic, which drifted until each carried a bug the other had already fixed - hence the shared module. The one thing they do *not* share is the denylist: `crosslink_pages.py` uses `PAGE_DENYLIST` (`BASE_DENYLIST` plus words like `data`, `policy`, `account` that recur constantly in page prose), while the glossary uses the shorter `BASE_DENYLIST`.

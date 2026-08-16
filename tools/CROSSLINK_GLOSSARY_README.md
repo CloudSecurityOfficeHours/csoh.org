@@ -5,14 +5,17 @@ Adds anchor IDs to every `<dt>` in `glossary.html` and hyperlinks every glossary
 ## What it does
 
 1. **Assigns IDs.** Every `<dt>` gets `id="term-..."`, derived from the headword (e.g. `IAM - Identity & Access Management` → `id="term-iam"`).
-2. **Builds a key→slug lookup.** Pulls every alias from each `<dt>`:
-   - The primary headword and any `/`-separated aliases on the left of an em-dash.
-   - The long form on the right of the em-dash (when ≤6 words).
-   - Parenthetical aliases like `(K8s)` or `(AD)`.
+2. **Builds a key→slug lookup.** Term parsing lives in [`glossary_terms.py`](glossary_terms.py), shared with `crosslink_pages.py` so the two cannot drift. It pulls every alias from each `<dt>`:
+   - The primary headword and any ` / `-separated alternatives on the left of the dash.
+   - The long form on the right of the dash (when ≤6 words).
+   - Parenthetical aliases like `(K8s)` or `(Checkov / Trivy / tfsec)`.
+   - A **spaced** slash separates alternatives; an **unspaced** one is part of a single designation, so `ISO/IEC 42001` and `CI/CD` are indexed whole as well as split, and the whole form wins because keys match longest-first.
 3. **Hyperlinks every occurrence.** Walks every `<dd>` and wraps each glossary-term mention in `<a class="glossary-link" href="#term-...">`. Skips:
    - Text already inside an existing `<a>` tag (no nesting).
    - Self-references (a term won't link to itself in its own definition).
-   - A small denylist of generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `image`, `baseline`, `registry`, `principal`, `first`, `csp`, `sp`, `soc`, `cloud`).
+   - `BASE_DENYLIST` in `glossary_terms.py`: generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `cloud`, `iso`, …). `crosslink_pages.py` adds more on top for page prose; the glossary keeps the shorter list because inside a definition these words are usually being used in their defined sense.
+
+   One alias belongs to exactly one entry, and the winner is whichever `<dt>` comes first in the file — so a collision resolves by file order rather than by intent. Keep headwords disjoint, and check with the duplicate-alias snippet in [`CROSSLINK_PAGES_README.md`](CROSSLINK_PAGES_README.md#verifying) after editing them.
 
 ## Usage
 

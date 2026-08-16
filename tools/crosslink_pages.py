@@ -29,8 +29,21 @@ from __future__ import annotations
 
 import re
 import sys
-from html import unescape
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from glossary_terms import (  # noqa: E402
+    PAGE_DENYLIST as DENYLIST,
+    derive_keys as _derive_keys,
+    slugify,
+)
+
+
+def derive_keys(dt_inner_html: str) -> list[str]:
+    """Page-prose keys for a <dt>: the shared parser, page denylist applied."""
+    return _derive_keys(dt_inner_html, DENYLIST)
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GLOSSARY_FILE = REPO_ROOT / "glossary.html"
@@ -181,71 +194,6 @@ SUBDIR_PATTERNS = [
     "meetings/*.html",
 ]
 
-# Single-word terms common enough in English that linking them is more
-# distracting than helpful. This is a superset of crosslink_glossary.py's
-# denylist - it adds words (cloud, data, policy, ...) that recur constantly in
-# page prose where crosslink_glossary.py only runs over the glossary itself.
-DENYLIST = {
-    # The standards body, not a concept. Every headword of the form
-    # "ISO/IEC <number>" yields a bare "ISO" key, so without this the word
-    # linked to whichever ISO entry sits earliest in the glossary (27001) even
-    # when the sentence was about 27017 or 42001. The full designations are
-    # indexed as their own keys and match longest-first, so "ISO/IEC 42001"
-    # still links correctly - it is only the bare word that is suppressed.
-    "iso",
-    "public",
-    "private",
-    "hybrid",
-    "image",
-    "baseline",
-    "registry",
-    "principal",
-    "first",
-    # Extras for content pages where these words appear constantly:
-    "cloud",
-    "data",
-    "policy",
-    "policies",
-    "control",
-    "controls",
-    "secret",
-    "secrets",
-    "key",
-    "keys",
-    "log",
-    "logs",
-    "audit",
-    "scope",
-    "session",
-    "sessions",
-    "tag",
-    "tags",
-    "role",
-    "roles",
-    "user",
-    "users",
-    "account",
-    "accounts",
-    # False-positive single-word remnants extracted from compound entries
-    # like "Blue / Red Team" or "Kev / Kevin" - link the full phrase only.
-    "blue",
-    "red",
-    "purple",
-    "kev",
-    "agent",      # too generic in prose; Agent (LLM) usually rendered with caps
-    "container",  # generic English usage
-    "drift",      # configuration drift only meaningful with context
-    "subnet",     # plain networking term, common
-    "functions",  # also common English
-    "vault",      # ambiguous: HashiCorp/Azure Key Vault depending on context
-    "blast",      # only useful in "blast radius"
-    "ad",         # shell `ad`, ambiguous
-    "csp",        # cloud prose: usually Cloud Service Provider, not Content Security Policy
-    "sp",         # "NIST SP" (Special Publication) collides with SP - Service Provider
-    "soc",        # ambiguous: Security Operations Center vs the SOC 1/2/3 report family
-}
-
-# Sections of the file to skip wholesale (no links anywhere inside).
 SKIP_BLOCK_TAGS = (
     # Skip the entire <head> - <title>, <meta>, JSON-LD <script>, OG tags etc.
     # never contain user-visible prose and must not have <a> tags inserted.
@@ -294,70 +242,6 @@ def _existing_link_pattern_for(prefix: str) -> re.Pattern[str]:
         rf'<a\s+class="glossary-link"\s+href="{re.escape(prefix)}[^"]+">([^<]+)</a>',
         re.IGNORECASE,
     )
-
-
-def slugify(text: str) -> str:
-    text = unescape(text)
-    text = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()
-    return "term-" + text if text else "term-unknown"
-
-
-def derive_keys(dt_inner_html: str) -> list[str]:
-    """Same logic as crosslink_glossary.derive_keys."""
-    text = re.sub(r"<[^>]+>", "", dt_inner_html)
-    text = unescape(text).strip()
-    parts = re.split(r"\s+-\s+|\s*[\u2014\u2013]\s*", text, maxsplit=1)
-    lhs = parts[0]
-    rhs = parts[1] if len(parts) > 1 else ""
-    keys: list[str] = []
-
-    def add_alternatives(s: str) -> None:
-        """Index a slash-separated headword fragment.
-
-        A *spaced* slash separates alternatives ("SASE / SSE"); an *unspaced*
-        one is part of a single designation ("ISO/IEC 42001", "CI/CD"). Both
-        the whole designation and its parts are indexed, and because
-        build_term_regexes sorts alternatives longest-first, prose containing
-        "ISO/IEC 42001" matches that key as one link instead of rendering as
-        an "ISO" link (pointing at the 27001 entry) followed by a separate
-        "IEC 42001" link.
-        """
-        for alt in re.split(r"\s+/\s+", s):
-            alt = alt.strip()
-            if not alt:
-                continue
-            keys.append(alt)
-            if "/" in alt:
-                for piece in alt.split("/"):
-                    piece = piece.strip()
-                    if piece:
-                        keys.append(piece)
-
-    def add_with_parens(s: str) -> None:
-        base = re.sub(r"\s*\([^)]*\)", "", s).strip()
-        add_alternatives(base)
-        for m in re.finditer(r"\(([^)]+)\)", s):
-            for piece in re.split(r"\s*/\s*", m.group(1)):
-                piece = piece.strip()
-                if piece:
-                    keys.append(piece)
-
-    add_with_parens(lhs)
-    if rhs:
-        for piece in re.split(r"\s+/\s+", rhs):
-            piece = re.sub(r"\s*\([^)]*\)", "", piece).strip()
-            if piece and 1 <= len(piece.split()) <= 6:
-                keys.append(piece)
-
-    seen: set[str] = set()
-    unique: list[str] = []
-    for k in keys:
-        kl = k.lower()
-        if not kl or kl in seen or kl in DENYLIST:
-            continue
-        seen.add(kl)
-        unique.append(k)
-    return unique
 
 
 def load_glossary_terms() -> tuple[dict[str, str], list[str]]:
