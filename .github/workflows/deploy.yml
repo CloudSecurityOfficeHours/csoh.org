@@ -866,17 +866,42 @@ jobs:
             "${{ steps.tag.outputs.image }}"
 
       # Artifact Registry has immutable_tags=true, so re-pushing an existing tag
-      # fails outright. The registry check at the top of this job already
-      # determined whether that is the case, so this step simply does not run on
-      # a promotion or a rerun - which is also what makes those runs idempotent.
+      # fails outright. The check at the top of this job decides whether we
+      # built or pulled; this step re-asks the same question immediately before
+      # pushing, because the answer can CHANGE while the job runs.
       #
-      # (This used to repeat the `describe` call inline. Having the answer in
-      # one place means the build/pull fork above and this push cannot disagree
-      # about whether the image exists, which is precisely the disagreement that
-      # let a scanned image and a deployed image drift apart.)
+      # That is not hypothetical. deploy-qa.yml builds the same commit into the
+      # same tag in the same repository, so when a commit reaches `main` and
+      # `qa` at once, both workflows race. On 2026-08-16 the production run
+      # checked the registry (empty), spent two minutes building and scanning,
+      # and by the time it pushed, the QA run had published the tag - so the
+      # push was rejected, `Deploy to Cloud Run` was skipped, and GCP was left a
+      # commit behind AWS and Azure with `purge-cloudflare` skipped on top. That
+      # is the split-origin state this repo has hit before: roughly one request
+      # in three serving stale content, from a workflow that looked like it had
+      # simply failed.
+      #
+      # Re-checking here closes it. Finding the tag present is a SUCCESS, not an
+      # error: the bytes are already where they need to be, and the run that put
+      # them there ran the same Trivy gate before pushing.
+      #
+      # Note the deliberate asymmetry with the build/pull fork above, which
+      # still keys off the ORIGINAL check. Re-deciding that here would mean
+      # scanning one image and deploying another, which is the exact gap this
+      # job was restructured to close. The narrow trade is that in a lost race
+      # the locally built image is discarded unscanned-for-nothing, and the
+      # registry copy - scanned by the QA run - is what gets deployed.
       - name: Push container image
         if: steps.registry.outputs.exists == 'false'
-        run: docker push "${{ steps.tag.outputs.image }}"
+        run: |
+          set -euo pipefail
+          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
+            echo "::notice::Tag appeared in Artifact Registry while this job was building"
+            echo "(a concurrent deploy-qa.yml run of the same commit). Skipping the push;"
+            echo "the deploy below will use the image already published, which that run scanned."
+          else
+            docker push "${{ steps.tag.outputs.image }}"
+          fi
 
       # Roll out a new Cloud Run revision running the image we just pushed.
       # Cloud Run scales to zero when idle and back up on demand. Flags below
