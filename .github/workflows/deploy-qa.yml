@@ -1,0 +1,309 @@
+# =============================================================================
+# Deploy the `qa` branch to the QA origin
+# -----------------------------------------------------------------------------
+# Production (deploy.yml) builds once and fans out to three clouds. This does
+# one thing: build the site into the same container image and roll it out to the
+# csoh-site-qa Cloud Run service, reachable at https://qa.csoh.org behind a
+# Cloudflare Access login.
+#
+#   push to `qa` ─► validate ─► publish-qa (build + Trivy + push + Cloud Run)
+#
+# WHY ONLY GCP. The QA origin is a Cloud Run container, which is the only one of
+# the three production origins that actually runs nginx.conf and
+# nginx-security-headers.conf - S3 and Azure Blob just serve stored bytes, and
+# Azure cannot emit response headers at all. So this single origin exercises
+# strictly MORE of the serving path than two of the three production origins do,
+# for free (Cloud Run scales to zero). Adding S3/Azure QA copies would cost
+# money and test less.
+#
+# HOW PROMOTION WORKS, and why this workflow is what makes it safe. The image is
+# tagged csoh-site:<short-sha> in the SAME Artifact Registry repo production
+# uses. That repo sets immutable_tags, and deploy.yml's push step skips a tag
+# that already exists. So when a commit tested here is later fast-forwarded onto
+# `main`, production computes the identical tag, finds it already present, and
+# deploys THE EXACT BYTES THIS WORKFLOW PUSHED rather than rebuilding them.
+# Promotion is therefore "ship the artifact you tested", not "rebuild and hope".
+#
+# That property is load bearing, and it breaks the moment this workflow and
+# publish-gcp stop producing identical images. If you change the build here,
+# change it there too.
+# =============================================================================
+name: Deploy QA - publish the qa branch to the QA origin
+
+on:
+  # Every push to `qa`, with NO `paths:` filter - deliberately unlike deploy.yml.
+  #
+  # Two reasons. First, this repo has been bitten repeatedly by path filters that
+  # were narrower than what stage_site.sh actually publishes: `'*.html'` does not
+  # match `breaches/`, so commit 874a813c fixed per-breach pages and never
+  # deployed, silently. Adding a THIRD filter to keep in step with deploy.yml and
+  # site-update-deploy.yml would be a third chance to make that mistake.
+  #
+  # Second, the cost argument that justifies a filter in production does not
+  # apply here. A production deploy fans out to three clouds and purges the edge;
+  # a QA deploy rolls one Cloud Run revision that scales back to zero. A
+  # redundant QA deploy costs essentially nothing, while a QA change that
+  # silently does NOT deploy costs exactly the confidence this environment
+  # exists to provide.
+  push:
+    branches: [qa]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for the keyless OIDC exchange with GCP. Note this alone is NOT
+  # enough: the WIF trust in infra/terraform/gcp/wif.tf pins the token's subject
+  # to a GitHub Environment, so the job below must also declare
+  # `environment: qa` or authentication fails with an error that does not
+  # explain why.
+  id-token: write
+
+concurrency:
+  group: deploy-qa
+  # TRUE here, where deploy.yml uses false. That difference is deliberate.
+  #
+  # Production cannot be cancelled mid-flight because its publish jobs upload
+  # assets first and HTML second across three origins; a cancel between those
+  # passes leaves an origin serving new CSS beside HTML naming the old hash, and
+  # SRI then blocks the asset and the site renders unstyled. None of that shape
+  # exists here: a Cloud Run rollout is one atomic revision switch, Artifact
+  # Registry tags are immutable so a half-finished push cannot corrupt a tag, and
+  # there is no edge cache to poison (rules.tf bypasses cache for qa.csoh.org).
+  # So superseding an in-flight QA deploy is safe, and while iterating you want
+  # the newest push to win rather than queue behind two stale ones.
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The same correctness gate production runs, for the same reason: a gate that
+  # reports AFTER publishing is a smoke alarm wired to a photo album. Running it
+  # in QA too means a broken commit is caught before it is ever promoted, rather
+  # than at the production door.
+  #
+  # Kept intentionally identical to deploy.yml's `validate` job. If you add a
+  # gate there, add it here, or a commit can pass QA and fail promotion.
+  # ---------------------------------------------------------------------------
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.x'
+
+      - name: Reject merge conflict markers
+        run: |
+          set -uo pipefail
+          hits=$(grep -rIn --exclude-dir=.git --exclude-dir=node_modules \
+                   -e '^<<<<<<< ' -e '^>>>>>>> ' . || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Unresolved merge conflict markers found. Publishing blocked."
+            echo "$hits"
+            exit 1
+          fi
+          echo "No conflict markers found."
+
+      - name: Reject inline scripts (CSP gate)
+        run: python3 tools/check_no_inline_scripts.py
+
+      - name: Require SVG dimensions (CLS gate)
+        run: python3 tools/check_svg_dimensions.py
+
+      - name: Validate JSON-LD (structured-data gate)
+        run: python3 tools/check_jsonld.py
+
+  # ---------------------------------------------------------------------------
+  # Build the image and roll out a QA revision. Mirrors deploy.yml's publish-gcp
+  # step for step, with three things changed: the service name, the deploy
+  # identity, and the GitHub Environment.
+  # ---------------------------------------------------------------------------
+  publish-qa:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # REQUIRED, and the single easiest thing to get wrong here. The WIF provider
+    # in infra/terraform/gcp/wif.tf accepts a token only when its `sub` claim is
+    # `repo:<owner>/<repo>:environment:production` OR
+    # `repo:<owner>/<repo>:environment:qa`. Without this line the job's token
+    # carries neither, GCP rejects it, and the failure names the token exchange
+    # rather than the missing environment.
+    #
+    # The `qa` environment must also carry a deployment branch policy limiting it
+    # to the `qa` branch, mirroring how `production` is limited to `main`. That
+    # policy is what stops this workflow being run from an arbitrary branch.
+    environment: qa
+    env:
+      PROJECT_ID: csoh-org-495800
+      REGION: us-central1
+      # The only value that differs from production's env block.
+      SERVICE: csoh-site-qa
+      REPO: csoh-containers
+      IMAGE_NAME: csoh-site
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Same two-attempt pattern as publish-gcp. google-github-actions/auth
+      # exposes no retry input and does not back off, so a transient
+      # token-exchange blip fails the job outright unless the retry is built by
+      # hand. `continue-on-error` is set on the FIRST attempt only - putting it
+      # on the retry would let a genuine misconfiguration (a WIF condition that
+      # no longer matches, a service account that lost workloadIdentityUser)
+      # sail through both attempts and hand an unauthenticated runner to gcloud.
+      - name: Authenticate to GCP via WIF
+        id: gcpauth
+        continue-on-error: true
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          # The QA deploy identity, NOT csoh-deployer. Its roles stop at the
+          # csoh-site-qa service (run.admin scoped to that one service, plus
+          # read-only run.viewer), so this workflow cannot deploy production
+          # even though both identities live in the same project and come
+          # through the same WIF pool. See infra/terraform/gcp/service_accounts.tf.
+          service_account: csoh-deployer-qa@csoh-org-495800.iam.gserviceaccount.com
+
+      # Gated on `outcome`, not `conclusion`: continue-on-error rewrites
+      # `conclusion` to 'success' on a swallowed failure, so a conclusion-based
+      # gate would never fire and this would be dead code that still reads
+      # correctly. Keep the inputs and pinned SHA identical to the step above.
+      - name: Authenticate to GCP via WIF (retry)
+        if: steps.gcpauth.outcome == 'failure'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: csoh-deployer-qa@csoh-org-495800.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db  # v3.0.1
+
+      - name: Configure docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # IDENTICAL tag computation to publish-gcp, and that is the whole point:
+      # both workflows must derive the same reference from the same commit, or
+      # promotion silently stops reusing the tested image and starts rebuilding.
+      - name: Compute image tag
+        id: tag
+        run: |
+          SHA="${GITHUB_SHA::12}"
+          REF="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}"
+          echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build search index
+        run: |
+          set -euo pipefail
+          python3 tools/build_search_index.py
+          test -f search-index.json
+          size=$(stat -c%s search-index.json)
+          if [ "$size" -lt 100000 ]; then
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            exit 1
+          fi
+          echo "search-index.json built: $((size / 1024)) KB"
+
+      # Same belt-and-braces re-stamp production does, for the same reason: the
+      # image is baked from the RAW CHECKOUT via the Dockerfile's
+      # `COPY . /usr/share/nginx/html/`, so HTML committed with stale SRI hashes
+      # would ship next to assets it cannot name correctly and the QA site would
+      # render unstyled. Correcting it here also means the image promoted to
+      # production is already correct.
+      - name: Re-stamp SRI hashes (belt and braces)
+        run: |
+          set -euo pipefail
+          out=$(python3 update_sri.py)
+          echo "$out"
+          if ! echo "$out" | grep -q "Modified 0 of"; then
+            echo "::warning::HTML was committed with stale SRI hashes; this build corrected them. Run update_sri.py before pushing asset changes."
+          fi
+
+      - name: Build container image
+        run: |
+          docker build \
+            --tag "${{ steps.tag.outputs.image }}" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            .
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          TRIVY_VERSION="0.70.0"
+          TRIVY_SHA256="8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9"
+          curl -fsSL -o /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          rm /tmp/trivy.tar.gz
+          trivy --version
+
+      # Scanning in QA is not redundant with production's scan - it is the one
+      # that covers the bytes production will actually run, because production
+      # skips the push when the tag already exists and therefore deploys THIS
+      # image. A HIGH/CRITICAL finding here stops a vulnerable image from ever
+      # entering the registry, which is the only moment it can still be stopped
+      # cheaply.
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --no-progress \
+            --ignorefile .trivyignore.yaml \
+            "${{ steps.tag.outputs.image }}"
+
+      # Artifact Registry has immutable_tags=true, so re-pushing an existing tag
+      # fails. This makes reruns idempotent, and also handles the case where a
+      # commit is pushed to `qa` twice.
+      - name: Push container image (skip if already in registry)
+        run: |
+          set -euo pipefail
+          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
+            echo "Image already exists in Artifact Registry - skipping push (idempotent rerun)."
+          else
+            docker push "${{ steps.tag.outputs.image }}"
+          fi
+
+      - name: Deploy to Cloud Run (QA)
+        run: |
+          gcloud run deploy "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ steps.tag.outputs.image }}" \
+            --platform managed \
+            --ingress all \
+            --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --quiet
+
+      # Print where to look, and the exact commit to promote. The image
+      # reference is echoed because it is the thing production will reuse: if a
+      # promotion ever deploys something unexpected, comparing this line against
+      # publish-gcp's "Compute image tag" output is the fastest way to see that
+      # the two workflows have drifted.
+      - name: Summarise
+        run: |
+          {
+            echo "### QA deploy complete"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Site | https://qa.csoh.org (Cloudflare Access login required) |"
+            echo "| Commit | \`${GITHUB_SHA::12}\` |"
+            echo "| Image | \`${{ steps.tag.outputs.image }}\` |"
+            echo
+            echo "Promote with the **Promote QA to production** workflow, which"
+            echo "fast-forwards \`main\` to this commit. Production will find this"
+            echo "exact image already in Artifact Registry and deploy it without"
+            echo "rebuilding."
+          } >> "$GITHUB_STEP_SUMMARY"
+          gcloud run services describe "${{ env.SERVICE }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --format='value(status.latestReadyRevisionName,status.url)'

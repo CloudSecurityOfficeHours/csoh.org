@@ -1,0 +1,183 @@
+# =============================================================================
+# Promote QA to production
+# -----------------------------------------------------------------------------
+# One button. It fast-forwards `main` to whatever `qa` currently points at,
+# which fires deploy.yml exactly as an ordinary push would. This workflow does
+# not build, publish, or deploy anything itself - it only moves a branch ref.
+#
+# WHY THAT IS ENOUGH, AND WHY IT SHIPS THE BYTES YOU TESTED. deploy-qa.yml
+# already built and pushed csoh-site:<short-sha> into the same Artifact Registry
+# repo production uses, and that repo sets immutable_tags. When deploy.yml runs
+# for the promoted commit it derives the identical tag, its "skip if already in
+# registry" step finds the image present, and it deploys THAT image rather than
+# the one it just rebuilt. So promotion reuses the tested artifact without any
+# artifact-passing machinery between the two workflows.
+#
+# THE ONE INVARIANT: `main` must be an ancestor of `qa`. It is checked below and
+# the promotion is refused otherwise, because a non-fast-forward push here would
+# silently discard commits from main. That matters more in this repo than in
+# most: main moves ON ITS OWN. site-update-deploy.yml pushes housekeeping
+# commits directly to it (carrying CI-skip markers, so they produce no workflow
+# run at all and are easy to miss), and update-news.yml merges PRs into it
+# several times a day. So `qa` falls behind `main` routinely, through no action
+# of yours, and the fix is always to bring main INTO qa first - never to force
+# the promotion.
+# =============================================================================
+name: Promote QA to production
+
+on:
+  # Manual only. There is deliberately no automatic trigger: the entire point of
+  # the QA environment is that a human looks at qa.csoh.org and then decides.
+  workflow_dispatch:
+
+permissions:
+  # Read-only for the auto-injected GITHUB_TOKEN. The push below does NOT use
+  # it - see the App token step for why - so this stays minimal.
+  contents: read
+  # Needed by the `gh run list` gate, which asks whether deploy-qa.yml has
+  # actually succeeded for the commit being promoted.
+  actions: read
+
+concurrency:
+  # Serialize promotions. Two at once would race on the same ref, and the loser
+  # would push a stale SHA over the winner.
+  group: promote-qa
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The auto-injected GITHUB_TOKEN cannot push to `main`: the repo's `Main`
+      # ruleset protects the branch, and its bypass_actors list names the
+      # csoh-ci App, not the github-actions bot. So mint an installation token
+      # for that App, exactly as update-news.yml and site-update-deploy.yml do.
+      - name: Mint installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
+          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
+
+      # Full history, and cloned with the App token so the push at the end is
+      # authorised. fetch-depth: 0 is REQUIRED here, not merely convenient: the
+      # ancestry test below needs both branches' full history, and a shallow
+      # clone makes `git merge-base --is-ancestor` answer wrongly rather than
+      # fail, which would turn the safety check into a rubber stamp.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      # Resolve both branch heads once, from the REMOTE refs rather than from
+      # whatever the checkout happens to have left HEAD pointing at, and publish
+      # them as step outputs for the later steps and the summary.
+      - name: Resolve branch heads
+        id: refs
+        run: |
+          set -euo pipefail
+          git fetch origin main qa --quiet
+          MAIN_SHA=$(git rev-parse origin/main)
+          QA_SHA=$(git rev-parse origin/qa)
+          {
+            echo "main_sha=${MAIN_SHA}"
+            echo "qa_sha=${QA_SHA}"
+            echo "qa_short=${QA_SHA::12}"
+          } >> "$GITHUB_OUTPUT"
+          echo "main is at ${MAIN_SHA::12}"
+          echo "qa   is at ${QA_SHA::12}"
+
+      # Nothing to do is a SUCCESS, not a failure - clicking promote twice
+      # should be harmless rather than a red run in the Actions tab.
+      - name: Stop early if there is nothing to promote
+        id: nothing
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.refs.outputs.main_sha }}" = "${{ steps.refs.outputs.qa_sha }}" ]; then
+            echo "::notice::main and qa are already identical - nothing to promote."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # THE FAST-FORWARD GATE. `git merge-base --is-ancestor A B` exits 0 when A
+      # is an ancestor of B. If main is NOT an ancestor of qa, then main carries
+      # commits qa does not, and pushing qa over main would delete them.
+      #
+      # In this repo that is the expected steady state rather than an anomaly,
+      # so the message has to tell you how to fix it rather than just complain.
+      - name: Require a fast-forward
+        if: steps.nothing.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor "${{ steps.refs.outputs.main_sha }}" "${{ steps.refs.outputs.qa_sha }}"; then
+            echo "main is an ancestor of qa - fast-forward is safe."
+            exit 0
+          fi
+          BEHIND=$(git rev-list --count "${{ steps.refs.outputs.qa_sha }}..${{ steps.refs.outputs.main_sha }}")
+          echo "::error::Refusing to promote: main has ${BEHIND} commit(s) that qa does not."
+          echo "Promoting would discard them. Bring main into qa first:"
+          echo "    git fetch origin && git switch qa && git merge origin/main && git push origin qa"
+          echo ""
+          echo "Commits on main but not on qa:"
+          git log --oneline "${{ steps.refs.outputs.qa_sha }}..${{ steps.refs.outputs.main_sha }}"
+          exit 1
+
+      # THE QA GATE. Ask GitHub whether deploy-qa.yml has actually SUCCEEDED for
+      # this exact commit. Without it, "promote" would happily ship a commit that
+      # was pushed to qa thirty seconds ago and never finished deploying, or one
+      # whose QA deploy failed - which would defeat the purpose of having a QA
+      # environment at all.
+      #
+      # This check is reliable precisely because deploy-qa.yml carries NO paths
+      # filter: every push to qa runs it, so every qa head commit has a run to
+      # find. If a paths filter is ever added there, a filtered-out commit would
+      # have no run and this gate would block a legitimate promotion.
+      - name: Require a successful QA deploy for this commit
+        if: steps.nothing.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          COUNT=$(gh run list \
+            --workflow=deploy-qa.yml \
+            --commit "${{ steps.refs.outputs.qa_sha }}" \
+            --status success \
+            --json databaseId --jq 'length')
+          if [ "${COUNT}" -eq 0 ]; then
+            echo "::error::No successful 'Deploy QA' run for ${{ steps.refs.outputs.qa_short }}."
+            echo "Either the QA deploy is still running, or it failed. Check:"
+            echo "  gh run list --workflow=deploy-qa.yml --commit ${{ steps.refs.outputs.qa_sha }}"
+            exit 1
+          fi
+          echo "Found ${COUNT} successful QA deploy(s) for ${{ steps.refs.outputs.qa_short }}."
+
+      # The promotion itself. `origin/qa:main` pushes the qa commit onto the main
+      # branch. No --force: every gate above exists so that this can be an
+      # ordinary, non-destructive fast-forward, and if it is somehow not one, the
+      # push SHOULD be rejected rather than forced through.
+      - name: Fast-forward main to qa
+        if: steps.nothing.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          git push origin "${{ steps.refs.outputs.qa_sha }}:refs/heads/main"
+          echo "main fast-forwarded to ${{ steps.refs.outputs.qa_short }}."
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Promote QA to production"
+            echo
+            if [ "${{ steps.nothing.outputs.skip }}" = "true" ]; then
+              echo "Nothing to promote - \`main\` and \`qa\` were already identical."
+            else
+              echo "\`main\` fast-forwarded to \`${{ steps.refs.outputs.qa_short }}\`."
+              echo
+              echo "This fires **Deploy** automatically. That run will rebuild the"
+              echo "image, find the identical tag already in Artifact Registry from"
+              echo "the QA build, skip the push, and deploy the exact bytes QA"
+              echo "tested. Watch it in the Actions tab."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

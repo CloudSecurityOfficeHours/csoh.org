@@ -700,11 +700,51 @@ jobs:
           # `path:shortsha`, consumed below as steps.tag.outputs.image.
           echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
 
+      # Ask Artifact Registry whether this exact tag already exists, BEFORE
+      # deciding whether to build. This one question reorders the whole job, and
+      # it exists to close a real gap:
+      #
+      # This job used to build unconditionally, Trivy-scan what it had just
+      # built, then skip the push when the tag was already present and deploy
+      # the REGISTRY copy. That means it scanned one set of bytes and shipped a
+      # different set. The Dockerfile runs `apk upgrade --no-cache`, so a
+      # rebuild days later genuinely differs from the stored image - the scan
+      # would pass on freshly-patched packages while the older image actually
+      # being deployed carried the CVEs.
+      #
+      # It was a narrow window when the only way a tag pre-existed was a
+      # workflow rerun minutes later. The QA promotion path widens it to however
+      # long a change sits in QA before being promoted, because deploy-qa.yml
+      # pushes the image and this job then reuses it. So: find out first, then
+      # either build (new commit) or pull (promotion), and scan whichever one is
+      # actually going to be deployed.
+      #
+      # `describe` exits non-zero when the tag is absent, which is the normal
+      # case, so the failure is captured rather than allowed to trip errexit.
+      - name: Check whether this image is already in Artifact Registry
+        id: registry
+        run: |
+          set -euo pipefail
+          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image already in Artifact Registry - this is a promotion or a rerun."
+            echo "Will PULL and scan the stored image rather than rebuilding, so the"
+            echo "bytes scanned are the bytes deployed."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Image not in Artifact Registry - building it."
+          fi
+
       # Same index the object-storage origins serve, baked into the image via
       # the Dockerfile's `COPY . /usr/share/nginx/html/`.
       # (Rebuilt here because this job has the source, not the dist/ artifact;
       # same fail-fast + size sanity guard as the build job.)
+      #
+      # Skipped on a promotion: the stored image was built from this very commit
+      # and already contains an index generated the same way, so rebuilding it
+      # would be wasted work that cannot change what gets deployed.
       - name: Build search index
+        if: steps.registry.outputs.exists == 'false'
         run: |
           set -euo pipefail
           python3 tools/build_search_index.py
@@ -725,7 +765,12 @@ jobs:
       # failure shape this repo knows. The SRI verify in purge-cloudflare
       # fetches the homepage once, so it only has a ~1-in-3 chance of landing
       # on this origin and catching it; prevention has to happen per-origin.
+      #
+      # Skipped on a promotion, for the same reason as the search index above:
+      # deploy-qa.yml ran this identical step before pushing the image, so the
+      # stored bytes already carry corrected hashes.
       - name: Re-stamp SRI hashes (belt and braces)
+        if: steps.registry.outputs.exists == 'false'
         run: |
           set -euo pipefail
           out=$(python3 update_sri.py)
@@ -749,6 +794,7 @@ jobs:
       # (Comments are kept ABOVE the command: a `#` line between two
       # backslash-continued shell lines would break the command.)
       - name: Build container image
+        if: steps.registry.outputs.exists == 'false'
         run: |
           docker build \
             --tag "${{ steps.tag.outputs.image }}" \
@@ -756,6 +802,20 @@ jobs:
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             .
+
+      # The promotion branch of the fork above. Pull the stored image so the
+      # Trivy step below has something local to scan - and, crucially, so what
+      # it scans is the same image the deploy step will roll out. Without this
+      # the scan would either have nothing to look at or would be looking at a
+      # rebuild that is never shipped.
+      #
+      # Note this is what makes a promotion catch NEWLY DISCLOSED CVEs. The
+      # image was scanned clean when deploy-qa.yml pushed it, but Trivy's
+      # database moves; re-scanning the identical bytes at promotion time is the
+      # check that a vulnerability published in between still blocks the deploy.
+      - name: Pull the image being promoted
+        if: steps.registry.outputs.exists == 'true'
+        run: docker pull "${{ steps.tag.outputs.image }}"
 
       # Install Trivy, an open-source vulnerability scanner, so we can check the
       # image for known security flaws BEFORE it ever reaches the registry.
@@ -805,22 +865,18 @@ jobs:
             --ignorefile .trivyignore.yaml \
             "${{ steps.tag.outputs.image }}"
 
-      # Artifact Registry has immutable_tags=true, so re-pushing a tag fails.
-      # Make push idempotent for workflow reruns by checking AR first.
-      # ("Idempotent" = safe to run more than once with the same result; a
-      # re-run of the same commit won't error out on the push.)
-      - name: Push container image (skip if already in registry)
-        run: |
-          set -euo pipefail
-          # `describe` succeeds only if that exact image:tag is already in the
-          # registry. We discard its output (>/dev/null) and errors (2>&1).
-          if gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" --quiet >/dev/null 2>&1; then
-            # Already there from a prior run - nothing to do.
-            echo "Image already exists in Artifact Registry - skipping push (idempotent rerun)."
-          else
-            # Not present yet - upload it.
-            docker push "${{ steps.tag.outputs.image }}"
-          fi
+      # Artifact Registry has immutable_tags=true, so re-pushing an existing tag
+      # fails outright. The registry check at the top of this job already
+      # determined whether that is the case, so this step simply does not run on
+      # a promotion or a rerun - which is also what makes those runs idempotent.
+      #
+      # (This used to repeat the `describe` call inline. Having the answer in
+      # one place means the build/pull fork above and this push cannot disagree
+      # about whether the image exists, which is precisely the disagreement that
+      # let a scanned image and a deployed image drift apart.)
+      - name: Push container image
+        if: steps.registry.outputs.exists == 'false'
+        run: docker push "${{ steps.tag.outputs.image }}"
 
       # Roll out a new Cloud Run revision running the image we just pushed.
       # Cloud Run scales to zero when idle and back up on demand. Flags below
