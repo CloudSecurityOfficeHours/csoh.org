@@ -96,6 +96,12 @@ COUNT_EXCEPTIONS = {
     # claim - the same trap CLAUDE.md records for writing a CI-skip token
     # while explaining one.
     ("tools/DOCS_CONSISTENCY_README.md", "102"): "quotes the defect it documents",
+    # "the 24 vendors that appear under more than one category" - describing how
+    # the vendor count is computed, not claiming an inventory total. Third time
+    # a doc has tripped this check by explaining it; prose about a number and
+    # prose asserting a number look identical to a regex, which is the standing
+    # reason count findings are reported rather than auto-fixed.
+    ("tools/DOCS_CONSISTENCY_README.md", "24"): "explains the dedupe, not a total",
 }
 
 # Glossary entries nothing links to are usually a signal, but these are the
