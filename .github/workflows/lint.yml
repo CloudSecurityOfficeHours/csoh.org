@@ -1,7 +1,7 @@
 # =============================================================================
 # Lint
 # -----------------------------------------------------------------------------
-# Quality gate for code & GitHub Actions on every push and PR. Four checks:
+# Quality gate for code & GitHub Actions on every push and PR. Five checks:
 #
 #   1. actionlint  - workflow syntax + shellcheck on inline `run:` blocks.
 #                    Catches things like unquoted variables, typo'd `uses:`
@@ -14,8 +14,11 @@
 #   4. secret-audit - every `${{ secrets.X }}` a workflow reads must have a
 #                    registry entry in tools/rotate_secrets.py, i.e. a written
 #                    rotation plan. Adding a secret without one fails here.
+#   5. dark-branch - style.css carries two dark-mode branches (attribute and
+#                    prefers-color-scheme). They must stay in step, or dark-OS
+#                    visitors get light-mode colours for the whole first paint.
 #
-# All four are fast (<30s combined). They run as parallel jobs so failures
+# All five are fast (<30s combined). They run as parallel jobs so failures
 # in one check don't hide failures in the others - you see everything at once.
 # Read-only on the repo; never modifies code, never posts comments.
 # =============================================================================
@@ -221,3 +224,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/rotate_secrets.py audit --check
+
+  # ---------------------------------------------------------------------------
+  # dark-branch - the two dark-mode branches in style.css must stay in step.
+  #
+  # `[data-theme="dark"] X` governs after main.js stamps the attribute;
+  # `:root:not([data-theme]) X` inside @media (prefers-color-scheme: dark)
+  # governs before it, which - since main.js loads at the bottom of <body> -
+  # is the whole first paint for anyone on a dark OS, and forever with JS off.
+  #
+  # Only the first branch was ever maintained. It drifted to 196 rules against
+  # the other's 36, and the gap rendered as light-mode text on dark surfaces:
+  # a .btn-primary whose text exactly matched its own background (contrast
+  # 1.00, invisible), .hamburger at 1.08:1, body copy at 2.04:1. None of it
+  # was visible to the SEO audit, which does not check contrast, and PSI runs
+  # light so it never saw it either.
+  #
+  # The generated block cannot drift silently again while this gate exists.
+  # It is read-only: it fails the build, it never rewrites style.css.
+  # ---------------------------------------------------------------------------
+  dark-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # stdlib-only, same as the other checks here - no pip install needed.
+      - name: Check the system-dark branch mirrors the toggle branch
+        run: python3 tools/sync_dark_branch.py --check
