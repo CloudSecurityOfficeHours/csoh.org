@@ -358,7 +358,7 @@
     <div class="inc-meta">
       <span class="inc-year">January-April 2021</span>
       <span class="sev-badge sev-critical">Critical</span>
-      <span class="prov-tag prov-green">CI/CD Tooling</span>
+      <span class="prov-tag prov-green"><a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a>/CD Tooling</span>
     </div>
     <h2 class="inc-title">Codecov Bash Uploader - Credential Leaked by a Docker Build → One Line Added to a Script Everyone Curls → Two Months of CI Environment Variables Exfiltrated</h2>
     <p class="inc-summary">On January 31, 2021 an attacker exploited an error in Codecov's Docker image creation process to extract a Google Cloud Storage key, and used it to modify the Bash Uploader - the script that tens of thousands of CI pipelines download and execute on every build to report coverage. The change was a single added line that exported the CI environment to a server the attacker controlled. It ran undetected for two months. What ended it was not monitoring: on April 1 a customer verifying the script's integrity noticed the SHA-256 of the file they had downloaded did not match the value published on GitHub. Codecov disclosed on April 15. The exposure covers every secret present in an affected pipeline, and the downstream list is the point - HashiCorp had to rotate a GPG signing key used for release verification, and Twilio, Rapid7 and Confluent were all affected. <strong>This is the earliest chain on this page in which the software supply chain is a build-time script rather than a package,</strong> and it is the direct ancestor of the <a href="litellm-pypi-teampcp.html">LiteLLM / Trivy</a> compromise five years later.</p>
@@ -394,7 +394,7 @@
       </div>
     </div>
 
-    <div class="phase-lbl ph-persist">📝 <a class="glossary-link" href="../glossary.html#term-supply-chain">Supply Chain</a> - Modify the Script, Repeatedly</div>
+    <div class="phase-lbl ph-persist">📝 Supply Chain - Modify the Script, Repeatedly</div>
     <div class="kc-step step-o">
       <div class="step-num">02</div>
       <div class="step-body">
@@ -441,7 +441,7 @@
         <div class="step-hdr">
           <div class="step-title">On April 1, 2021 a customer verifying the uploader's integrity found the SHA-256 of the downloaded script did not match the value published on GitHub</div>
         </div>
-        <p class="step-desc">Two months of continuous exfiltration ended because one customer did the integrity check that the documentation offered and almost nobody performed. That is worth stating plainly rather than framing as a happy ending: the control existed, it worked perfectly, and it was optional, so it caught the attack sixty days late. Codecov investigated, disclosed publicly on April 15, and by April 29 was telling affected organizations which specific environment variables had been exposed. There is a general principle here that recurs across this page - an integrity check that is documented but not enforced is a control you do not have. Compare the release-tag verification that would have caught <a href="litellm-pypi-teampcp.html">LiteLLM</a>, or the hash pinning that would have caught <a href="npm-debug-chalk-phishing.html">npm debug/chalk</a>: available, cheap, and skipped.</p>
+        <p class="step-desc">Two months of continuous <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> ended because one customer did the integrity check that the documentation offered and almost nobody performed. That is worth stating plainly rather than framing as a happy ending: the control existed, it worked perfectly, and it was optional, so it caught the attack sixty days late. Codecov investigated, disclosed publicly on April 15, and by April 29 was telling affected organizations which specific environment variables had been exposed. There is a general principle here that recurs across this page - an integrity check that is documented but not enforced is a control you do not have. Compare the release-tag verification that would have caught <a href="litellm-pypi-teampcp.html">LiteLLM</a>, or the hash <a class="glossary-link" href="../glossary.html#term-pinning">pinning</a> that would have caught <a href="npm-debug-chalk-phishing.html">npm debug/chalk</a>: available, cheap, and skipped.</p>
         <div class="step-code">
           <span class="hl">April 1, 2021:</span> A customer's SHA-256 check fails against the published value<br>
           <span class="hl">April 15, 2021:</span> Codecov discloses publicly<br>
@@ -453,7 +453,7 @@
       </div>
     </div>
 
-    <div class="phase-lbl ph-impact">🌊 Impact - The Blast Radius Is Everyone Else's Pipelines</div>
+    <div class="phase-lbl ph-impact">🌊 Impact - The <a class="glossary-link" href="../glossary.html#term-blast-radius">Blast Radius</a> Is Everyone Else's Pipelines</div>
     <div class="kc-step step-b">
       <div class="step-num">05</div>
       <div class="step-body">
@@ -478,7 +478,7 @@
         <div class="def-item"><strong>Never <code>curl | bash</code> in a pipeline - pin the artifact and verify it every run.</strong> This is the control that ends the chain. Vendor the uploader or installer at a known version, verify its checksum or signature before executing, and fail the build on mismatch. The customer who found this proved the check works; the two months proved that documenting it is not the same as enforcing it. Any third-party script fetched at build time should be treated exactly like a dependency, because that is what it is.</div>
         <div class="def-item"><strong>Stop putting long-lived secrets in the CI environment at all.</strong> The payload's whole value was that everything sat in environment variables waiting to be read. Replace static cloud keys with <a class="glossary-link" href="../glossary.html#term-oidc-federation">OIDC federation</a> so credentials are minted per job and expire in minutes, scope every remaining secret to the single job that needs it, and split jobs so no step holds both third-party tooling and the credentials it could steal. That last point is exactly what the <a href="litellm-pypi-teampcp.html">LiteLLM</a> compromise repeated five years later.</div>
         <div class="def-item"><strong>Keep secrets out of container images, and prove it.</strong> The initial access was a build-time credential recoverable from image layers. Use build secrets that do not persist into layers (BuildKit <code>--mount=type=secret</code>), never <code>COPY</code> credential files even if a later layer deletes them, and run a scanner over published images in CI to catch it when someone does. Assume anything that ever existed in a layer is public.</div>
-        <div class="def-item"><strong>Constrain egress from build runners so a one-line exfiltration fails.</strong> The payload sent data to an arbitrary host from inside the pipeline. Default-deny outbound from runners with an allow-list of the registries, artifact stores and vendor endpoints you actually use, and alert on connections to anything else. This single control breaks the exfiltration step in Codecov, <a href="megalodon-github-actions.html">Megalodon</a>, and <a href="litellm-pypi-teampcp.html">LiteLLM</a> alike.</div>
+        <div class="def-item"><strong>Constrain <a class="glossary-link" href="../glossary.html#term-ingress">egress</a> from build runners so a one-line exfiltration fails.</strong> The payload sent data to an arbitrary host from inside the pipeline. Default-deny outbound from runners with an allow-list of the registries, artifact stores and vendor endpoints you actually use, and alert on connections to anything else. This single control breaks the exfiltration step in Codecov, <a href="megalodon-github-actions.html">Megalodon</a>, and <a href="litellm-pypi-teampcp.html">LiteLLM</a> alike.</div>
         <div class="def-item"><strong>Maintain a CI secret inventory before you need it.</strong> The expensive part of this incident for most victims was working out what to rotate. Keep a current list of every secret available to each pipeline, its owner, its blast radius, and the command that rotates it - then rehearse a full rotation. An organization that can rotate everything in an afternoon treats this class of incident very differently from one that cannot enumerate its own secrets.</div>
         <div class="def-item"><strong>Monitor your published artifacts from the outside.</strong> Codecov did not detect that its own hosted script had been altered for two months. If you publish something customers download and execute, continuously verify from an external vantage point that what is being served still matches what you intended to serve - the same argument this site applies to its own <a href="../how-csoh-org-is-secured.html">SRI and edge-header checks</a>.</div>
       </div>

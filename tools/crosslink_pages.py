@@ -114,6 +114,18 @@ TARGET_PAGES = [
     "cloud-security-sales-engineer.html",
     "cloud-security-customer-success-engineer.html",
     "help-desk-to-cloud-security.html",
+    # Registered August 2026. These shipped without being added here, so they
+    # carried zero glossary cross-links while every comparable page carried
+    # 45+. Nothing errors when a page is missing from this list - it is simply
+    # never visited - so check this file whenever a top-level page is added.
+    "mcp-security.html",
+    "non-human-identity.html",
+    "what-practitioners-think.html",
+    "what-practitioners-think-about-ai-security.html",
+    "what-practitioners-think-about-security-conferences.html",
+    "what-practitioners-think-about-security-regulation.html",
+    "what-practitioners-think-about-supply-chain-security.html",
+    "what-practitioners-think-about-vulnerability-management.html",
 ]
 
 # Subdirectory pages (per-breach, per-meeting) are auto-discovered rather

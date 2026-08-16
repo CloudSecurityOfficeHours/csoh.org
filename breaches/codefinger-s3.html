@@ -355,10 +355,10 @@
     <div class="inc-meta">
       <span class="inc-year">January 2025</span>
       <span class="sev-badge sev-critical">Critical</span>
-      <span class="prov-tag" style="background:rgba(255,153,0,.15);color:#ff9900;">AWS S3</span>
+      <span class="prov-tag" style="background:rgba(255,153,0,.15);color:#ff9900;">AWS <a class="glossary-link" href="../glossary.html#term-s3">S3</a></span>
     </div>
     <h2 class="inc-title">Codefinger / S3 Ransomware - Stolen AWS Keys → Valid Access → Bucket Enum → SSE-C Encryption → 7-Day Delete + BTC Ransom</h2>
-    <p class="inc-summary">A financially motivated actor tracked as Codefinger used compromised or publicly exposed AWS access keys to encrypt victims' <a class="glossary-link" href="../glossary.html#term-s3">S3</a> buckets using AWS's own Server-Side Encryption with Customer-Provided Keys (SSE-C). Because the attacker generates and holds the AES-256 key locally, and AWS stores only an HMAC of that key, victims cannot decrypt their data without paying. Codefinger applied S3 Lifecycle policies to delete the encrypted objects within seven days as ransom pressure and demanded payment in Bitcoin. No AWS vulnerability was exploited - the entire campaign relied on abusing valid credentials and native AWS features. Halcyon, which disclosed the campaign on January 13, 2025, observed at least two victim organisations.</p>
+    <p class="inc-summary">A financially motivated actor tracked as Codefinger used compromised or publicly exposed AWS access keys to encrypt victims' S3 buckets using AWS's own Server-Side Encryption with Customer-Provided Keys (<a class="glossary-link" href="../glossary.html#term-sase">SSE</a>-C). Because the attacker generates and holds the AES-256 key locally, and AWS stores only an HMAC of that key, victims cannot decrypt their data without paying. Codefinger applied S3 Lifecycle policies to delete the encrypted objects within seven days as ransom pressure and demanded payment in Bitcoin. No AWS vulnerability was exploited - the entire campaign relied on abusing valid credentials and native AWS features. Halcyon, which disclosed the campaign on January 13, 2025, observed at least two victim organisations.</p>
     <div class="inc-stats">
       <div class="inc-stat"><strong>SSE-C</strong> abused as the encryption primitive</div>
       <div class="inc-stat"><strong>7 days</strong> until S3 Lifecycle deletes the data</div>
@@ -378,7 +378,7 @@
           <div class="step-title">Attacker obtained AWS access keys from public exposure or prior compromise</div>
           <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
         </div>
-        <p class="step-desc">Codefinger sourced valid AWS access key IDs and secret access keys that had been publicly disclosed or otherwise compromised. Long-lived IAM access keys routinely leak through committed source code, exposed config files, CI logs, and public buckets, and are harvested by scanners within minutes of exposure. Halcyon assessed the actor used keys with permissions to read and write S3 objects, so no privilege escalation or AWS vulnerability was needed - possession of a working key pair was sufficient.</p>
+        <p class="step-desc">Codefinger sourced valid AWS access key IDs and secret access keys that had been publicly disclosed or otherwise compromised. Long-lived <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> access keys routinely leak through committed source code, exposed config files, <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> logs, and public buckets, and are harvested by scanners within minutes of exposure. Halcyon assessed the actor used keys with permissions to read and write S3 objects, so no <a class="glossary-link" href="../glossary.html#term-privilege-escalation">privilege escalation</a> or AWS vulnerability was needed - possession of a working key pair was sufficient.</p>
         <div class="step-code">
           <span class="hl">Credential type:</span> Long-lived AWS IAM access key ID + secret access key<br>
           <span class="hl">Common leak paths:</span> Git commits, public S3 buckets, CI/CD logs, hardcoded app config<br>
@@ -396,13 +396,13 @@
           <div class="step-title">Attacker authenticated to the victim AWS account with the stolen keys</div>
           <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
         </div>
-        <p class="step-desc">Using the compromised keys, Codefinger authenticated to the victim's AWS account as a legitimate principal via the AWS SDK, CLI, or API. Because the request came from a valid IAM identity, it passed authentication with no anomaly. The keys carried s3:GetObject and s3:PutObject permissions - enough to read existing objects and overwrite them with encrypted copies. AWS CloudTrail recorded the API activity, but by default no alert fires on legitimate-looking S3 calls from a new IP or region.</p>
+        <p class="step-desc">Using the compromised keys, Codefinger authenticated to the victim's AWS account as a legitimate principal via the AWS SDK, CLI, or API. Because the request came from a valid IAM identity, it passed authentication with no anomaly. The keys carried s3:GetObject and s3:PutObject permissions - enough to read existing objects and overwrite them with encrypted copies. AWS <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> recorded the API activity, but by default no alert fires on legitimate-looking S3 calls from a new IP or region.</p>
         <div class="step-code">
           <span class="hl">Access method:</span> AWS CLI / SDK / S3 API calls signed with the stolen key pair<br>
           <span class="hl">Required IAM perms:</span> s3:GetObject, s3:PutObject on target buckets<br>
           <span class="hl">Detection gap:</span> Valid-credential access from a new IP raised no default alert
         </div>
-        <div class="step-tags"><span class="stag">Valid Accounts</span><span class="stag">IAM</span><span class="stag">No MFA on Keys</span><span class="stag">T1078.004</span></div>
+        <div class="step-tags"><span class="stag">Valid Accounts</span><span class="stag">IAM</span><span class="stag">No <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> on Keys</span><span class="stag">T1078.004</span></div>
       </div>
     </div>
 
@@ -465,11 +465,11 @@
     <div class="def-box">
       <h3>🛡 How to Defend Against This Chain</h3>
       <div class="def-items">
-        <div class="def-item"><strong>Restrict or disable SSE-C where you do not need it.</strong> Most workloads use SSE-S3 or SSE-KMS, not SSE-C. Add an S3 bucket policy or SCP that denies s3:PutObject when the request carries the x-amz-server-side-encryption-customer-algorithm header, so an attacker cannot encrypt your objects with a key you do not control. This closes the exact primitive Codefinger abused.</div>
-        <div class="def-item"><strong>Eliminate long-lived IAM access keys and rotate what remains.</strong> Prefer short-lived credentials via IAM roles, SSO, and STS. Where keys are unavoidable, rotate them regularly, scope them tightly, and scan your repos, CI logs, and buckets for exposed keys. Nearly every cloud ransomware case starts with a leaked long-lived <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> key.</div>
-        <div class="def-item"><strong>Apply least privilege to S3 permissions.</strong> Grant s3:PutObject and s3:GetObject only to the principals and buckets that require them. A leaked key with narrow, read-only scope cannot re-encrypt your data. Audit for over-permissioned keys and wildcard S3 policies.</div>
+        <div class="def-item"><strong>Restrict or disable SSE-C where you do not need it.</strong> Most workloads use SSE-S3 or SSE-<a class="glossary-link" href="../glossary.html#term-kms">KMS</a>, not SSE-C. Add an S3 bucket policy or <a class="glossary-link" href="../glossary.html#term-scp">SCP</a> that denies s3:PutObject when the request carries the x-amz-server-side-encryption-customer-algorithm header, so an attacker cannot encrypt your objects with a key you do not control. This closes the exact primitive Codefinger abused.</div>
+        <div class="def-item"><strong>Eliminate long-lived IAM access keys and rotate what remains.</strong> Prefer short-lived credentials via IAM roles, <a class="glossary-link" href="../glossary.html#term-sso">SSO</a>, and <a class="glossary-link" href="../glossary.html#term-sts">STS</a>. Where keys are unavoidable, rotate them regularly, scope them tightly, and scan your repos, CI logs, and buckets for exposed keys. Nearly every cloud ransomware case starts with a leaked long-lived IAM key.</div>
+        <div class="def-item"><strong>Apply <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a> to S3 permissions.</strong> Grant s3:PutObject and s3:GetObject only to the principals and buckets that require them. A leaked key with narrow, read-only scope cannot re-encrypt your data. Audit for over-permissioned keys and wildcard S3 policies.</div>
         <div class="def-item"><strong>Enable S3 Versioning and Object Lock, and keep isolated backups.</strong> Versioning preserves prior object versions so an SSE-C overwrite does not destroy the original, and Object Lock in compliance mode blocks deletion within a retention window - defeating the 7-day lifecycle pressure. Maintain backups in a separate account the leaked key cannot reach.</div>
-        <div class="def-item"><strong>Alert on SSE-C usage and lifecycle changes in CloudTrail.</strong> Monitor CloudTrail for PutObject calls carrying the customer-key headers, for PutBucketLifecycleConfiguration events, and for unfamiliar source IPs on existing keys. Route these to your SIEM so unusual S3 encryption or new deletion policies trigger an immediate response.</div>
+        <div class="def-item"><strong>Alert on SSE-C usage and lifecycle changes in CloudTrail.</strong> Monitor CloudTrail for PutObject calls carrying the customer-key headers, for PutBucketLifecycleConfiguration events, and for unfamiliar source IPs on existing keys. Route these to your <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> so unusual S3 encryption or new deletion policies trigger an immediate response.</div>
       </div>
     </div>
 
