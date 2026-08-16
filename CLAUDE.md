@@ -645,3 +645,43 @@ The general form, since this file already records two other instances of it (the
 inert Cloudflare ruleset, and `terraform apply` reporting success while shipping
 nothing): **an instrument that reports "nothing is there" is indistinguishable
 from a broken instrument until you point it at something you know is there.**
+
+## There is a QA site now, and `main` is still production
+
+`qa.csoh.org` is a staging copy of the site, deployed from the `qa` branch to a
+second Cloud Run service. `main` still means production and still deploys the
+moment anything lands on it - the QA branch is an addition, not a redirection.
+Promotion is **Actions → Promote QA to production**, which fast-forwards `main`.
+
+Work on QA in `../csoh-qa`, a worktree permanently on `qa`. Do not `git switch
+qa` in the main checkout: several Claude sessions share it, and switching moves
+all of them mid-task.
+
+Four things here are load-bearing and look like mistakes:
+
+- **`deploy-qa.yml` has no `paths:` filter, on purpose.** A third filter to keep
+  in step with `deploy.yml` and `site-update-deploy.yml` is a third chance to
+  repeat the `'*.html'` bug above. And `promote-qa.yml`'s "was this commit
+  actually QA-tested?" gate only works because every push to `qa` produces a run.
+  Adding a filter there makes filtered-out commits unpromotable.
+- **The QA container config must stay identical to production's.** Promotion
+  reuses the image QA built, by tag, from the shared Artifact Registry repo.
+  A QA-only container setting silently turns promotion back into a rebuild.
+  Anything QA-specific belongs at the Cloudflare edge.
+- **QA is deliberately outside the load balancer pool.** See the health-check
+  section above: pool membership means being probed from every data center,
+  around the clock, and never scaling to zero.
+- **The Host rewrite is a Worker, not an Origin Rule.** Cloud Run picks a
+  service by `Host`, and Host Header Override is a paid-plan feature this zone
+  does not have. The entitlement is checked at apply, not at plan, so the config
+  validates and plans cleanly and then fails - another instance of the pattern
+  this file keeps recording, where the instrument reports success for something
+  that will not work.
+
+`qa.csoh.org` sits behind Cloudflare Access, but its origin's `*.run.app`
+hostname is publicly reachable exactly as production's is. Access is not a
+secrecy boundary; do not stage anything there that would harm you if read early.
+
+Full docs, including the ten Cloudflare token permission groups, what each error
+code actually means, and the registry race between the two deploy workflows:
+`.github/workflows/QA_PIPELINE_README.md`.
