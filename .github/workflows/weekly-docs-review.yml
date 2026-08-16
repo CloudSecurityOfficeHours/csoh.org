@@ -253,6 +253,19 @@ jobs:
     if: github.event_name != 'push'
     permissions:
       contents: read
+      # claude-code-action mints an OIDC token to authenticate the subscription
+      # OAuth flow, and fails with "Could not fetch an OIDC token" without this.
+      #
+      # Safe here for one specific reason, and it is worth stating because
+      # `id-token: write` is otherwise the permission that turns a job into a
+      # cloud credential: all three clouds pin their trust to
+      # `repo:<owner>/<repo>:environment:production` (see CLAUDE.md and
+      # infra/terraform/*/). This job declares no `environment:`, so the token
+      # it mints cannot satisfy any of those trust conditions and cannot be
+      # traded for AWS, Azure, or GCP access. Do NOT add `environment:
+      # production` to this job - that pin is the only thing standing between a
+      # web-reading model and the deployer roles.
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
