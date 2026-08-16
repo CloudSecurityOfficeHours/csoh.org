@@ -153,9 +153,9 @@ the narrow CI one, so reaching for it produces a pile of
 (9109)` failures that look like a broken config rather than a scope problem.
 
 Cloudflare gates each *ruleset phase* behind its own permission group, and this
-stack spans three phases plus DNS, load balancing, and zone settings. Miss one
-group and only the resources it covers fail, so the missing permissions surface
-a couple at a time across several runs. The complete set:
+stack spans four phases plus DNS, load balancing, zone settings, and Zero Trust
+Access. Miss one group and only the resources it covers fail, so the missing
+permissions surface a couple at a time across several runs. The complete set:
 
 | Scope | Permission | Needed for |
 |---|---|---|
@@ -167,17 +167,69 @@ a couple at a time across several runs. The complete set:
 | **Zone** → Cache Rules | Edit | the `http_request_cache_settings` ruleset |
 | **Zone** → Dynamic Redirect | Edit | the `http_request_dynamic_redirect` ruleset (www -> apex, legacy paths) |
 | **Zone** → Transform Rules | Edit | the `http_response_headers_transform` ruleset (the security headers) |
+| **Zone** → Origin Rules | Edit | the `http_request_origin` ruleset (rules.tf: the Host rewrite that routes qa.csoh.org to the QA Cloud Run service) |
+| **Account** → Access: Apps and Policies | Edit | `cloudflare_zero_trust_access_application`, `cloudflare_zero_trust_access_policy` (qa.tf: the login in front of qa.csoh.org) |
+
+The last two were added by the QA pipeline and each failed in the misleading way
+this section warns about, so they are worth a note.
+
+**Origin Rules.** `http_request_origin` was a phase this stack had never used,
+so the token had no group covering it. Terraform reported `request is not
+authorized` against the ruleset resource, with every other resource in the same
+apply succeeding. Confirm the group is present before re-running an apply, which
+is faster than reading a partial apply's output:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $CLOUDFLARE_TF_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/$TF_VAR_zone_id/rulesets/phases/http_request_origin/entrypoint"
+```
+
+`200` means the group is there, `403` means it is not. Swap the phase name to
+check any of the other three.
+
+**Access is ACCOUNT-scoped, not zone-scoped.** An Access application protecting
+one hostname inside this zone reads like a zone-scoped object, and the provider
+accepts `zone_id`, but Zero Trust is an account-level product in current
+Cloudflare and the zone Access API is legacy. A token holding the account group
+above gets `Authentication error (10000)` on the zone endpoint - the classic
+"looks like a bad credential, is actually the wrong endpoint" shape. The tell:
+
+```bash
+# succeeds                                    # fails with 10000
+.../accounts/$TF_VAR_account_id/access/apps   .../zones/$TF_VAR_zone_id/access/apps
+```
 
 Set Zone Resources to `csoh.org` only. Keep this token **separate** from the
 cache-purge secret and out of CI: the deploy path should never hold a credential
 that can rewrite the security headers. Do not fall back to the Global API Key -
 it authenticates as the whole account and sidesteps every one of these limits.
 
-The five required `-var` values are not secrets, but they are tedious to
+The seven required `-var` values are not secrets, but they are tedious to
 re-derive (see the apply command in the bootstrap section below). Keeping them
 as `TF_VAR_account_id`, `TF_VAR_zone_id`, `TF_VAR_aws_origin_host`,
-`TF_VAR_gcp_origin_host` and `TF_VAR_azure_origin_host` in the gitignored `.env`
-lets Terraform pick them up with no flags at all.
+`TF_VAR_gcp_origin_host`, `TF_VAR_azure_origin_host`,
+`TF_VAR_gcp_qa_origin_host` and `TF_VAR_qa_allowed_emails` in the gitignored
+`.env` lets Terraform pick them up with no flags at all.
+
+Two cautions on that file, both learned the hard way. `qa_allowed_emails` is a
+**list**, so its environment form has to carry JSON, and it is worth
+single-quoting so the brackets are never exposed to globbing:
+
+```sh
+TF_VAR_qa_allowed_emails='["you@example.com"]'
+```
+
+And `.env` is *sourced*, not parsed, so a shell metacharacter in any value
+breaks every variable after it rather than just its own line. Pasting a literal
+placeholder like `<host-from-step-2>` is the easy way to do this: `<` and `>`
+are redirection operators, so the file dies with `parse error near '\n'` and
+every later value - including `CLOUDFLARE_TF_API_TOKEN` - silently reads as
+empty. That presents as an authentication failure, several steps away from the
+actual typo. Check the whole file loads before blaming a credential:
+
+```sh
+set -a; . ./.env; set +a && echo "env OK"
+```
 
 The AWS account ID, Azure subscription ID, and Azure tenant ID are fixed
 accounts hardcoded in the Terraform (`infra/terraform/aws`, `.../azure`) and

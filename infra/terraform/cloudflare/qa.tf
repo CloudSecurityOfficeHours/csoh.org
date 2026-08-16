@@ -66,9 +66,24 @@ resource "cloudflare_record" "qa" {
 # current product naming, and are what the pending v5 upgrade expects - so
 # writing them this way now avoids renaming these resources twice.)
 resource "cloudflare_zero_trust_access_application" "qa" {
-  # Zone-scoped rather than account-scoped, because this app protects one
-  # hostname inside csoh.org.
-  zone_id = var.zone_id
+  # ACCOUNT-scoped, not zone-scoped, and this is worth knowing before you spend
+  # an hour on it. Access applications can in principle be attached to either,
+  # and attaching to the zone reads more naturally here because the app protects
+  # exactly one hostname inside csoh.org. But Zero Trust is an account-level
+  # product in current Cloudflare, and the zone-scoped Access API is legacy: a
+  # token carrying Account -> Access: Apps and Policies can create this
+  # resource, while the same token gets `Authentication error (10000)` on the
+  # zone endpoint.
+  #
+  # That error is exactly the shape CLAUDE.md warns about - /user/tokens/verify
+  # reports the token `active` regardless of scope, so an under-scoped or
+  # wrong-endpoint call looks like a credential problem when it is neither. The
+  # tell is that the same token succeeds on
+  # /accounts/<id>/access/apps and fails on /zones/<id>/access/apps.
+  #
+  # Being account-scoped changes nothing about what is protected: `domain` below
+  # names the hostname, and the account owns this zone.
+  account_id = var.account_id
   # Label shown in the Zero Trust dashboard and on the login page itself.
   name = "csoh.org QA"
   # The hostname to protect. Must match the DNS record above; Access attaches
@@ -100,9 +115,10 @@ resource "cloudflare_zero_trust_access_policy" "qa_allow_listed_emails" {
   # Which application this policy governs. Referencing the resource above also
   # tells Terraform to create the application first.
   application_id = cloudflare_zero_trust_access_application.qa.id
-  # Policies are scoped the same way as their application.
-  zone_id = var.zone_id
-  name    = "Allow listed emails"
+  # Policies must be scoped the same way as the application they govern, so this
+  # is account-scoped too. Mixing the two produces the same 10000 error.
+  account_id = var.account_id
+  name       = "Allow listed emails"
   # Policies are evaluated in precedence order, lowest first. There is only one
   # here, so this is just "first".
   precedence = 1
