@@ -143,6 +143,13 @@ SUBDIR_PATTERNS = [
 # denylist - it adds words (cloud, data, policy, ...) that recur constantly in
 # page prose where crosslink_glossary.py only runs over the glossary itself.
 DENYLIST = {
+    # The standards body, not a concept. Every headword of the form
+    # "ISO/IEC <number>" yields a bare "ISO" key, so without this the word
+    # linked to whichever ISO entry sits earliest in the glossary (27001) even
+    # when the sentence was about 27017 or 42001. The full designations are
+    # indexed as their own keys and match longest-first, so "ISO/IEC 42001"
+    # still links correctly - it is only the bare word that is suppressed.
+    "iso",
     "public",
     "private",
     "hybrid",
@@ -261,12 +268,31 @@ def derive_keys(dt_inner_html: str) -> list[str]:
     rhs = parts[1] if len(parts) > 1 else ""
     keys: list[str] = []
 
+    def add_alternatives(s: str) -> None:
+        """Index a slash-separated headword fragment.
+
+        A *spaced* slash separates alternatives ("SASE / SSE"); an *unspaced*
+        one is part of a single designation ("ISO/IEC 42001", "CI/CD"). Both
+        the whole designation and its parts are indexed, and because
+        build_term_regexes sorts alternatives longest-first, prose containing
+        "ISO/IEC 42001" matches that key as one link instead of rendering as
+        an "ISO" link (pointing at the 27001 entry) followed by a separate
+        "IEC 42001" link.
+        """
+        for alt in re.split(r"\s+/\s+", s):
+            alt = alt.strip()
+            if not alt:
+                continue
+            keys.append(alt)
+            if "/" in alt:
+                for piece in alt.split("/"):
+                    piece = piece.strip()
+                    if piece:
+                        keys.append(piece)
+
     def add_with_parens(s: str) -> None:
         base = re.sub(r"\s*\([^)]*\)", "", s).strip()
-        for piece in re.split(r"\s*/\s*", base):
-            piece = piece.strip()
-            if piece:
-                keys.append(piece)
+        add_alternatives(base)
         for m in re.finditer(r"\(([^)]+)\)", s):
             for piece in re.split(r"\s*/\s*", m.group(1)):
                 piece = piece.strip()
@@ -275,7 +301,7 @@ def derive_keys(dt_inner_html: str) -> list[str]:
 
     add_with_parens(lhs)
     if rhs:
-        for piece in re.split(r"\s*/\s*", rhs):
+        for piece in re.split(r"\s+/\s+", rhs):
             piece = re.sub(r"\s*\([^)]*\)", "", piece).strip()
             if piece and 1 <= len(piece.split()) <= 6:
                 keys.append(piece)

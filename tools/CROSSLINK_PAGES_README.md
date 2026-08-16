@@ -30,6 +30,8 @@ The glossary itself, error pages (`403.html`, `404.html`), and the Google site v
 
 - **First occurrence per page only.** Subsequent mentions of the same term on the same page are not linked, to keep prose readable.
 - **Acronyms (all-caps, 2-8 chars) match case-sensitively.** This prevents `cd` (the shell command) from matching `CD` (Continuous Delivery), `Kev` (a person's name) from matching `KEV` (Known Exploited Vulnerabilities), etc. Multi-word and lowercase glossary entries continue to match case-insensitively.
+- **A spaced slash separates alternatives; an unspaced one is part of the name.** `SASE / SSE` is two aliases. `ISO/IEC 42001` and `CI/CD` are single designations, indexed whole *and* split into parts, with the whole form winning because alternatives are matched longest-first. Get this wrong and `ISO/IEC 42001` in prose renders as an `ISO` link pointing at the 27001 entry followed by a separate `IEC 42001` link, which is what it used to do.
+- **One alias, one entry.** An alias is claimed by the first `<dt>` in document order, so if two entries derive the same key the winner depends on glossary ordering rather than on intent. Keep headwords disjoint: when a dedicated entry exists (`SCC - Security Command Center`), do not also list that term in a broader entry's headword (`GuardDuty / Defender for Cloud / Security Command Center`), and do not use a parenthetical as a disambiguator (`Ambient Mode (Service Mesh)`) because the parenthetical is read as an alias. Put that context in the definition instead. The invariant is checked by the snippet in "Verifying" below.
 - **Skip zones** - the linker never touches text inside any of these:
   - existing `<a>` tags (no double-linking)
   - `<code>`, `<pre>`, `<script>`, `<style>`
@@ -59,6 +61,43 @@ Done. Linked 228 term mentions across 5 pages.
 ```
 
 The trailing parenthesized list shows which terms were linked on each page so you can spot any unwanted matches.
+
+## Verifying
+
+Two invariants are worth checking after editing glossary headwords. Neither is
+enforced by the script, and both fail silently: a duplicate alias simply
+resolves to whichever entry sits earlier in the file.
+
+```sh
+# 1. No alias is claimed by two entries. Expect "duplicate alias keys: 0".
+python3 - <<'EOF'
+import sys, re, collections; sys.path.insert(0, "tools")
+import crosslink_pages as cp
+raw = collections.defaultdict(list)
+for m in re.finditer(r'<dt id="(term-[a-z0-9-]+)">(.*?)</dt>', open("glossary.html").read(), re.S):
+    for k in cp.derive_keys(m.group(2)):
+        raw[k.lower()].append(m.group(1))
+d = {k: v for k, v in raw.items() if len(v) > 1}
+print("duplicate alias keys:", len(d))
+for k, v in d.items():
+    print("  ", k, "->", v)
+EOF
+
+# 2. Every link's anchor text belongs to the entry it points at.
+#    Expect "mismatched links: 0".
+python3 - <<'EOF'
+import sys, re, glob; sys.path.insert(0, "tools")
+import crosslink_pages as cp
+k2s, _ = cp.load_glossary_terms()
+bad = 0
+for f in glob.glob("*.html") + glob.glob("meetings/*.html") + glob.glob("breaches/*.html"):
+    for m in re.finditer(r'<a class="glossary-link" href="[^"]*#(term-[a-z0-9-]+)">([^<]+)</a>', open(f).read()):
+        want = k2s.get(m.group(2).lower())
+        if want and want != m.group(1):
+            print(f'  {f}: "{m.group(2)}" -> {m.group(1)}, expected {want}'); bad += 1
+print("mismatched links:", bad)
+EOF
+```
 
 ## Relationship to `crosslink_glossary.py`
 
