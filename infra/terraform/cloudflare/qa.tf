@@ -106,11 +106,24 @@ resource "cloudflare_zero_trust_access_application" "qa" {
 # to it that let specific people through. This is the only policy, so the rule
 # is simply "these addresses, nobody else."
 #
-# No identity provider needs configuring for this to work. With none set up,
-# Cloudflare offers its built-in One-Time PIN: the visitor types an email
-# address, and if it is on the list below, Cloudflare emails a short code that
-# logs them in. That is why this needs no Google/GitHub/Okta integration and no
-# passwords stored anywhere.
+# The intended login method is One-Time PIN: the visitor types an email address,
+# and if it is on the list below, Cloudflare emails a short code that logs them
+# in. No Google/GitHub/Okta integration, and no password stored anywhere.
+#
+# ONE-TIME PIN MUST BE EXPLICITLY ENABLED, which is easy to assume otherwise
+# because it is built in rather than a third-party integration. With no login
+# method enabled, the Access page offers only "Cloudflare" - sign in with a
+# Cloudflare account - and a visitor whose Cloudflare account email differs from
+# the list below is refused with "That account does not have access". That reads
+# like a broken policy, and sends you to inspect the include rule below, which
+# is correct. The tell is the login page offering exactly one method and it not
+# being email.
+#
+# Turn it on under Zero Trust > Settings > Authentication > Login methods, or
+# declare it as a `cloudflare_zero_trust_access_identity_provider` with
+# type = "onetimepin". Declaring it needs the Access: Organizations, Identity
+# Providers, and Groups token group, which is one more than the rest of this
+# stack requires - hence it is not managed here.
 resource "cloudflare_zero_trust_access_policy" "qa_allow_listed_emails" {
   # Which application this policy governs. Referencing the resource above also
   # tells Terraform to create the application first.
