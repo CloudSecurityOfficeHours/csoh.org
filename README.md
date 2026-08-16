@@ -863,6 +863,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_no_inline_scripts.py` | No inline `<script>` blocks (the CSP forbids them) | docstring |
 | `check_svg_dimensions.py` | `width`/`height` on every `<svg>` that has a `viewBox` | docstring |
 | `check_crosslink_coverage.py` | Every root page is either cross-linked or explicitly opted out - `crosslink_pages.py` skips unlisted pages silently, so omissions never surfaced | docstring |
+| `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](tools/RUN_SEO_AUDIT_README.md) |

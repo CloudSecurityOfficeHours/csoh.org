@@ -31,6 +31,26 @@ Linked 180 term mentions across 197 unique terms.   # illustrative - the live gl
 
 The script is **rebuild-idempotent, not preservation-idempotent**: every run first STRIPS all existing `<a class="glossary-link">` wrappers (it prints `Stripped N existing link(s) for fresh relinking.`), then relinks from scratch under the current rules. So any hand-added or specially-scoped glossary link inside `glossary.html` is discarded on the next run - add glossary entries via the script's rules, not by hand-wrapping. Removed terms lose their lookup entry, and pre-existing links to a removed slug will 404 and should be cleaned up by hand.
 
+## Verifying
+
+`tools/check_glossary_coverage.py` asserts the invariants this script depends on
+but never checks itself. Every one of them fails silently: a `<dt>` yielding no
+keys is skipped without a message, an alias claimed by two entries resolves to
+whichever `<dt>` is earlier in the file, and a duplicated id quietly steals
+another entry's links.
+
+```bash
+python3 tools/check_glossary_coverage.py
+```
+
+It fails on: a `<dt>` with no id or a duplicated id, an alias claimed by two
+entries (under either tool's denylist), a `<dt>` not followed by a `<dd>`, an
+intra-glossary anchor that does not resolve, an entry linking to itself, and an
+entry that has become unreachable - one whose keys are all denylisted, so
+nothing can ever link to it. Known-unreachable entries are declared in that
+script's `UNREACHABLE` map with a reason, the same way `crosslink_pages.py`
+declares pages it deliberately does not link. It runs in `validate-html.yml`.
+
 ## When to run
 
 - **After adding a `<dt>` / `<dd>` pair** to `glossary.html`.
