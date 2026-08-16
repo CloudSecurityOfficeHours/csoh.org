@@ -11,17 +11,17 @@ contains any of these:
 [skip ci]  [ci skip]  [no ci]  [skip actions]  [actions skip]
 ```
 
-It scans the **whole message — subject and body** — and does not care about
+It scans the **whole message - subject and body** - and does not care about
 backticks or quotes. Writing one while *describing* it is enough to trigger it.
 
 This has bitten us. Commit `7dc15f03` fixed a bug about `[skip ci]`, and quoted
 the token in its body to explain the problem. Result: Deploy, Lint, and Validate
 HTML all reported `total_count: 0`. The fix sat in `main`, unpublished, and the
-push looked successful — nothing fails, nothing warns, no run appears at all.
+push looked successful - nothing fails, nothing warns, no run appears at all.
 The same content pushed with the token reworded triggered 2 runs immediately.
 
 To write about the tokens in a commit message, describe them instead:
-"a CI-skip marker", "the skip-ci token". Only commit *messages* are affected —
+"a CI-skip marker", "the skip-ci token". Only commit *messages* are affected -
 the strings are harmless in files like this one.
 
 Our housekeeping workflow (`site-update-deploy.yml`) uses these tokens on
@@ -34,7 +34,7 @@ problem.
 
 Almost always SRI: the browser is refusing `style.css` because its hash doesn't
 match the `integrity=` the HTML asks for, so every rule is dropped. Confirm in
-one shot — compare what's served against what the page demands:
+one shot - compare what's served against what the page demands:
 
 ```sh
 curl -s https://csoh.org/ | grep -o 'style\.css?v=[0-9a-f]*'          # what the HTML wants
@@ -60,7 +60,7 @@ in CI rather than in production.
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped
 onto all ~233 pages by `tools/sync_chrome.py`. Edit the `CANON_*` constants
-there and re-run it — never hand-edit the pages, or they drift. The logo drifted
+there and re-run it - never hand-edit the pages, or they drift. The logo drifted
 into four shapes this way, and 126 pages silently lost their logo mark entirely.
 
 It is idempotent; running it twice changes nothing the second time.
@@ -88,13 +88,13 @@ Full docs: `tools/SYNC_COUNTS_README.md`.
 along with `.git` and `.env`. Two places say otherwise, and they must stay in
 step:
 
-- `nginx.conf` — `location ^~ /.well-known/` placed before `location ~ /\.`.
+- `nginx.conf` - `location ^~ /.well-known/` placed before `location ~ /\.`.
   The `^~` is what does the work, not the ordering: nginx takes the longest
   matching *prefix* location, and `^~` tells it to stop there and never
   evaluate the regex denies.
-- `tools/site-publish.filter` — `+ /.well-known/` before the `- .*` catch-all,
+- `tools/site-publish.filter` - `+ /.well-known/` before the `- .*` catch-all,
   or the file is never uploaded to the S3 / Azure origins at all.
-- `deploy.yml` — `include-hidden-files: true` on the artifact upload, or the
+- `deploy.yml` - `include-hidden-files: true` on the artifact upload, or the
   file is dropped between staging and publishing. See the next section; this
   is the one that is easy to miss because nothing errors.
 
@@ -159,12 +159,12 @@ Two general lessons, both of which cost real time here:
 
 GitHub's `*` does **not** match `/`, so `'*.html'` in a `paths:` filter means
 *root-level pages only*. `deploy.yml` and `site-update-deploy.yml` both use
-`'**.html'` for this reason — with `'*.html'` a commit touching only
+`'**.html'` for this reason - with `'*.html'` a commit touching only
 `breaches/`, `meetings/`, `portfolio/`, or `homelab/` never triggered a deploy.
 Commit `874a813c` is a real instance: it fixed MITRE technique links on
 per-breach pages only, and did not publish.
 
-The failure is silent — no error, no warning, the push just looks fine and the
+The failure is silent - no error, no warning, the push just looks fine and the
 change waits for the next unrelated commit. When you add a published file,
 add it to both filters. Re-derive the published set with:
 
@@ -179,7 +179,7 @@ goes live.
 ## A new page subdirectory has to be registered in several places
 
 `portfolio/` and `homelab/` each needed hand-registration, and `homelab/` was
-missed in `run_seo_audit.py` for months — invisibly, because the SEO score
+missed in `run_seo_audit.py` for months - invisibly, because the SEO score
 averages over the pages it *did* audit, so an absent directory can't drag it
 down. Check all of these when adding one:
 
@@ -187,7 +187,7 @@ down. Check all of these when adding one:
 (`AUDITED_SUBDIRS`) · `tools/check_all_site_urls.py` · `.lychee.toml` ·
 `tools/build_search_index.py` (`SUBDIR_TYPES`) · `tools/crosslink_pages.py`
 (`SUBDIR_PATTERNS`) · `sitemap.xml`. The last three are opt-in judgement calls,
-not automatic — `homelab/` is deliberately excluded from search and
+not automatic - `homelab/` is deliberately excluded from search and
 cross-linking.
 
 ## `img/og/` and `img/thumbs/` are not interchangeable
@@ -195,22 +195,22 @@ cross-linking.
 Two in-house image sets, two different jobs, and reaching for the wrong one
 is easy because both are "the picture for that page".
 
-- **`img/og/`** — 1200×630 social cards from `tools/generate_og_images.py`.
+- **`img/og/`** - 1200×630 social cards from `tools/generate_og_images.py`.
   Built to be read at full width in a Slack or LinkedIn unfurl: headline,
   subtitle, footer.
-- **`img/thumbs/`** — 3:2 glyph tiles from `tools/generate_thumbnails.py`.
+- **`img/thumbs/`** - 3:2 glyph tiles from `tools/generate_thumbnails.py`.
   Built for the compact card grids on `index.html` and
   `what-practitioners-think.html`, whose columns land at 197-303px. One
   glyph, one category word, no sentences.
 
 The compact grids used OG cards for a while and it failed twice over. The
 shared `.resource-card .resource-preview` rule pins previews to a 160px-tall
-box with `object-fit: cover` — correct for the ~460 third-party screenshots
+box with `object-fit: cover` - correct for the ~460 third-party screenshots
 in `img/previews/`, which arrive at mixed sizes and need normalising. Against
 a 1.905 OG card in a 233px column that box is 1.46, so cover sliced 12-18%
 off *each side*: the CSOH wordmark, the badge pill, and the first and last
 words of the title. "Cloud Security News" rendered as "oud Security New".
-Fixing the crop alone only exposed the second problem — at 233px the card's
+Fixing the crop alone only exposed the second problem - at 233px the card's
 6px subtitle was illegible and its headline just repeated the `<h3>` beneath
 it.
 
