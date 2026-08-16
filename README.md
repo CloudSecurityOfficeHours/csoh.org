@@ -158,7 +158,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->450+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->460+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -359,7 +359,7 @@ Version-control fundamentals - branching, commits, pull requests, and history hy
 The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources (`resources.html`)
-Comprehensive catalog of **<!--count:resources_floor-->450+<!--/count--> cloud security resources** organized by 6 categories:
+Comprehensive catalog of **<!--count:resources_floor-->460+<!--/count--> cloud security resources** organized by 6 categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
