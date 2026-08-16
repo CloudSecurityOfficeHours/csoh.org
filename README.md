@@ -674,7 +674,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (105 entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (<!--count:meetings-->107<!--/count--> entries, topic-by-topic)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
@@ -705,8 +705,8 @@ csoh.org/
 ├── google66d489593949bd4c.html # Google Search Console verification token
 │
 │  ── Subdirectory page sets ──
-├── breaches/                   # 20 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 105 per-meeting recap pages (split from meetings.html)
+├── breaches/                   # <!--count:breaches-->45<!--/count--> per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── meetings/                   # <!--count:meetings-->107<!--/count--> per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
 │

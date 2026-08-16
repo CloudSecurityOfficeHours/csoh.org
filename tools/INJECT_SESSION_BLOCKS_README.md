@@ -24,9 +24,59 @@ topic page **into** recaps. Running both creates the loop.
 3. For each topic page in `TOPIC_KEYWORDS`, every recap is scored by counting
    keyword occurrences. A recap needs `MIN_SCORE` (2) hits to count, which keeps
    out recaps that mention a term once in passing.
-4. The `MAX_RECAPS` (4) most recent qualifying recaps are rendered.
-5. A page with fewer than 2 qualifying recaps is skipped entirely. A block with
+4. Recaps listed in `INELIGIBLE` are dropped here regardless of score. See
+   *Ineligible recaps* below.
+5. Each surviving recap gets a blurb. See *What the blurb says* below.
+6. The `MAX_RECAPS` (4) most recent qualifying recaps are rendered.
+7. A page with fewer than 2 qualifying recaps is skipped entirely. A block with
    one weak entry is worse than no block.
+
+## What the blurb says
+
+The curated card summary in `meetings.html` describes the **whole meeting**. On a
+page about one topic that is frequently filler: a session that spent forty minutes
+debriefing Black Hat surfaced on `conferences.html` as "Shawn greeted the group
+from his vacation at Disney World." The recap *selection* was right; the display
+copy was off-topic, under a heading promising the community worked the topic
+through.
+
+So the blurb is chosen in this order:
+
+1. The card summary, if it already names the topic.
+2. Otherwise a passage quoted from the recap page's own `<h3>`/`<p>` sections -
+   the highest-scoring section body, trimmed to whole sentences near
+   `EXCERPT_CHARS` (280), **starting at the first sentence that names the topic**.
+   Anchoring on the keyword rather than the paragraph's opening is what makes
+   "the copy we display mentions the topic" true rather than merely likely.
+3. If no section names the topic at all, the recap is **dropped from this page**.
+   It came up in scattered asides, which is not what the heading claims.
+
+Two details worth keeping:
+
+- Sections are ranked on their **body** text alone. A section matching only in
+  its heading has no sentence to quote, and the heading is never displayed.
+- Anchors are unwrapped from quoted passages. A recap's links are written for a
+  page one directory down (`../glossary.html`) and are auto-inserted, so a
+  paragraph pulled onto `incident-response.html` could easily contain a link
+  back to `incident-response.html`. Unwrapping sidesteps both.
+
+## Ineligible recaps
+
+`INELIGIBLE` maps a recap date to why it may never be echoed onto a topic page.
+
+The recap page itself stays exactly where it is. The archive is an accurate
+record of what was said on the call, and the archive is not the problem: what is
+wrong is auto-promoting a recap onto a technical reference page under a heading
+saying the community worked *this topic* through, where a reader reads it as
+CSOH's position. `docs/EDITORIAL_STANDARDS.md` §3 puts party politics off-topic
+"including when they arrive indirectly through an auto-surfaced session recap."
+
+Scoring cannot catch these. A session that spent its first ten minutes on an
+election and its next hour on incident response scores high on "incident
+response" precisely because the technical half was real.
+
+Filtering happens in `pick()`, not at load time, so an ineligible recap still
+counts toward the "browse all N recaps" total in the block's footer.
 
 ## Usage
 
@@ -69,6 +119,7 @@ matches.
 
 ## Note on escaping
 
-Display fields are lifted verbatim out of `meetings.html`, where they are already
-HTML-escaped. They interpolate raw by design. Escaping them again renders
-entities as literal text (`CISA&#x27;s`).
+Display fields are lifted verbatim out of `meetings.html`, and quoted passages
+out of the recap pages under `meetings/`. Both are already HTML-escaped. They
+interpolate raw by design. Escaping them again renders entities as literal text
+(`CISA&#x27;s`).

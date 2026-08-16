@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-15">
-    <meta property="article:modified_time" content="2026-05-15">
+    <meta property="article:modified_time" content="2026-08-16">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Cloud Providers">
     <meta property="article:tag" content="landing zone">
@@ -78,7 +78,7 @@
         }
       },
       "datePublished": "2026-05-15",
-      "dateModified": "2026-05-15",
+      "dateModified": "2026-08-16",
       "mainEntityOfPage": "https://csoh.org/landing-zones.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -415,7 +415,7 @@
 
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-15">Last updated <strong>2026-05-15</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/landing-zones.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-08-16">Last updated <strong>2026-08-16</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/landing-zones.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
             <p><strong>The 30-second version:</strong> A <strong><a class="glossary-link" href="glossary.html#term-landing-zone">landing zone</a></strong> (a.k.a. <strong>cloud foundation</strong>) is the baseline of <em>accounts, identities, networks, logging sinks, and guardrails</em> that workloads land into when they're deployed. The point is that every workload - the second one, the fiftieth, the five-hundredth - starts from the same identity model, network segmentation, log aggregation, and <a class="glossary-link" href="glossary.html#term-policy-as-code">policy-as-code</a> guardrails, instead of whatever the team that built it decided in the moment.</p>
@@ -428,6 +428,7 @@
                 <li><a href="#what-is">What a landing zone actually is</a></li>
                 <li><a href="#why">Why it exists - the problem it solves</a></li>
                 <li><a href="#building-blocks">The eight building blocks every landing zone has</a></li>
+                <li><a href="#residency">Region strategy and data residency</a></li>
                 <li><a href="#comparison">AWS, Azure, and GCP side-by-side</a></li>
                 <li><a href="#aws">AWS - Control Tower &amp; Landing Zone Accelerator</a></li>
                 <li><a href="#azure">Azure - Cloud Adoption Framework landing zones</a></li>
@@ -510,6 +511,37 @@
           </picture>
           <figcaption>Photo by Brett Sayles on Pexels</figcaption>
         </figure>
+
+        <section id="residency">
+            <h2>Region strategy and data residency</h2>
+            <p>Which regions you allow is a day-one decision, and it is the one most likely to force a rebuild if you get it wrong. It is not a ninth building block: it is a constraint that runs through several of the eight above, and it decides the shape of your hierarchy before you create the first account.</p>
+
+            <h3>The two ways to express it</h3>
+            <ul>
+                <li><strong>Residency as a guardrail.</strong> One hierarchy, with an org-level policy denying resource creation outside an approved region list. Simplest, and right for most organizations.
+                    <ul>
+                        <li><strong>AWS:</strong> an <a class="glossary-link" href="glossary.html#term-scp">SCP</a> denying actions where the <code>aws:RequestedRegion</code> condition key is outside your list, plus Control Tower's governed-Regions setting.</li>
+                        <li><strong>Azure:</strong> the built-in <em>Allowed locations</em> and <em>Allowed locations for resource groups</em> policies, assigned at the management-group scope.</li>
+                        <li><strong>GCP:</strong> the <code>constraints/gcp.resourceLocations</code> organization policy.</li>
+                    </ul>
+                </li>
+                <li><strong>Residency as a hierarchy boundary.</strong> A separate OU, management group, or folder per jurisdiction, each with its own policy set, its own logging sink, and its own account-vending pipeline. Necessary when different jurisdictions need genuinely different controls or different administrators. Expensive, so do not reach for it until a requirement forces you to.</li>
+            </ul>
+            <p>Choosing between these is why residency belongs at the front of the project. The first pattern is a policy assignment; the second changes block 1, block 4, and block 7, and retrofitting it means moving accounts between OUs after they hold production data.</p>
+
+            <h3>The parts people miss</h3>
+            <ul>
+                <li><strong>Global services sit outside the region deny.</strong> IAM, CloudFront, Route 53 and their equivalents are not regional, so a region-restricting policy has to exempt them or it breaks the account it is protecting. Exempting them is correct, and it also means those control planes are not covered by your residency claim.</li>
+                <li><strong>Centralized logging is itself a residency decision.</strong> Block 4 aggregates audit and flow logs into one security account. If that sink lives in one region and your workloads are spread across jurisdictions, you have moved the data you were trying to keep in place. Decide whether you need per-jurisdiction sinks before you wire the aggregation.</li>
+                <li><strong>Keys, and who holds them.</strong> Where <a class="glossary-link" href="glossary.html#term-kms">KMS</a> keys live, whether you bring your own or hold your own, and which of the provider's personnel can reach the key material. For most sovereignty requirements this matters more than where the bytes are stored.</li>
+                <li><strong>Operator access.</strong> Support and operations staff in other jurisdictions can be in scope for a residency requirement even when no data ever leaves the region. Read the requirement rather than assuming it is about storage.</li>
+                <li><strong>Service availability differs by region.</strong> A restricted region list will eventually block a service a team wants. Have a documented exception path before that happens, or the list gets widened in an emergency by whoever is on call.</li>
+            </ul>
+
+            <h3>Sovereign cloud</h3>
+            <p>Beyond region pinning, all three hyperscalers now sell a sovereign variant with separate operations, local personnel, and contractual jurisdiction guarantees, and there is a growing set of non-hyperscaler European providers. This is a live topic on the Friday call: European governments and large enterprises have been moving workloads off US providers on sovereignty and geopolitical grounds, sometimes accepting real capability gaps to do it.</p>
+            <p>The landing-zone consequence is worth naming early: a sovereign estate is usually a <em>separate</em> hierarchy rather than a region inside your existing one, because the identity plane, the support model, and often the tenant itself are separate. If sovereign cloud is plausibly in your future, decide now whether your foundation is one estate or two, because the answer changes your identity design more than your network design.</p>
+        </section>
 
         <section id="comparison">
             <h2>AWS, Azure, and GCP side-by-side</h2>
@@ -760,6 +792,9 @@
 
             <h3>How does this relate to zero trust?</h3>
             <p>The landing zone is where zero-trust principles get <em>operationalized</em>. "Verify explicitly" means SSO + MFA at the foundation. "Least privilege" means <a class="glossary-link" href="glossary.html#term-scp">SCP</a>/Policy guardrails at the OU/MG/folder level. "Assume breach" means centralized logging + detective controls. Zero trust is the philosophy; the landing zone is the infrastructure that makes it actually work.</p>
+
+            <h3>Can I add data-residency controls later?</h3>
+            <p>Region restriction, yes: it is a policy assignment you can make on day 500 as easily as day 1, though you will then have to relocate whatever was built in the meantime. What does not retrofit cheaply is residency expressed as <em>structure</em> - a separate OU, management group, or folder per jurisdiction, with its own logging sink and its own account vending. That reshapes the hierarchy, and moving accounts between OUs once they hold production data is the expensive kind of migration. See <a href="#residency">region strategy and data residency</a> for which of the two your requirement actually calls for.</p>
         </section>
 
         <section class="cta-section">

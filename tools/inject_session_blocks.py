@@ -24,6 +24,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 MEETINGS_HTML = REPO / "meetings.html"
+MEETINGS_DIR = REPO / "meetings"
 SEARCH_INDEX = REPO / "meetings-search-index.json"
 
 START = "<!-- SESSION_BLOCK_START -->"
@@ -34,6 +35,27 @@ END = "<!-- SESSION_BLOCK_END -->"
 # term once in passing.
 MAX_RECAPS = 4
 MIN_SCORE = 2
+
+# How long a pulled-in excerpt may run before it is trimmed to whole sentences.
+# Roughly the length of the curated card summaries it stands in for.
+EXCERPT_CHARS = 280
+
+# Recaps that must never be echoed onto a topic page, by date.
+#
+# The recap page itself stays exactly where it is - the archive is an accurate
+# record of what was said on the call, and the archive is not the problem. What
+# is wrong is auto-promoting a recap onto a technical reference page under a
+# heading that says the community worked *this topic* through, where a reader
+# reads it as CSOH's position. See docs/EDITORIAL_STANDARDS.md §3 (Apolitical):
+# party politics are off-topic "including when they arrive indirectly through an
+# auto-surfaced session recap."
+#
+# Scoring cannot catch these. A session that spent its first ten minutes on an
+# election and its next hour on incident response scores high on "incident
+# response" precisely because the technical half was real.
+INELIGIBLE: dict[str, str] = {
+    "2025-08-08": "opens on the origins of the Trump-Russia investigation",
+}
 
 # Topic page -> phrases that mean the session covered that topic. Seeded from
 # tools/inject_meeting_topic_links.py (which solves the mirror-image problem:
@@ -108,16 +130,50 @@ CARD_RE = re.compile(
     re.DOTALL,
 )
 
+# The recap body, and the per-discussion sections inside it. Scoped to the
+# article so the site footer's own <h3>CSOH</h3> block cannot match.
+ARTICLE_RE = re.compile(r'<article class="section meeting-page">(.*?)</article>', re.DOTALL)
+SECTION_RE = re.compile(r"<h3>(?P<heading>.*?)</h3>\s*<p>(?P<body>.*?)</p>", re.DOTALL)
+TAG_RE = re.compile(r"<[^>]+>")
+ANCHOR_RE = re.compile(r"</?a\b[^>]*>")
+
+
+def load_sections(date: str) -> list[tuple[str, str]]:
+    """The (heading, paragraph) pairs a recap page breaks its discussion into."""
+    path = MEETINGS_DIR / f"{date}.html"
+    if not path.exists():
+        return []
+    article = ARTICLE_RE.search(path.read_text(encoding="utf-8"))
+    if not article:
+        return []
+    return [
+        (m.group("heading").strip(), _plain_links(m.group("body")))
+        for m in SECTION_RE.finditer(article.group(1))
+    ]
+
+
+def _plain_links(body: str) -> str:
+    """Recap prose with its anchors unwrapped, inline emphasis kept.
+
+    A recap's links are written for a page one directory down ("../glossary.html")
+    and are auto-inserted, so a paragraph pulled onto incident-response.html can
+    easily contain a link back to incident-response.html. Unwrapping sidesteps
+    both, and an excerpt is not the place we want a reader clicking away from.
+    """
+    return " ".join(ANCHOR_RE.sub("", body).split())
+
 
 def load_meetings() -> list[dict]:
     """Display copy from the recap cards, scoring text from the search index."""
     cards = {}
     for m in CARD_RE.finditer(MEETINGS_HTML.read_text(encoding="utf-8")):
-        cards[m.group("date")] = {
-            "date": m.group("date"),
+        date = m.group("date")
+        cards[date] = {
+            "date": date,
             "human": m.group("human").strip(),
             "headline": m.group("headline").strip(),
             "summary": m.group("summary").strip(),
+            "sections": load_sections(date),
         }
     index = json.loads(SEARCH_INDEX.read_text(encoding="utf-8"))
     for rec in index:
@@ -132,15 +188,82 @@ def load_meetings() -> list[dict]:
 
 
 def pick(meetings: list[dict], keywords: list[str]) -> list[dict]:
-    """Recaps that clearly covered this topic, most recent first."""
+    """Recaps that clearly covered this topic, most recent first.
+
+    Ineligible recaps are filtered here rather than at load time so they still
+    count toward the "browse all N recaps" total - they remain in the archive,
+    they are only barred from being promoted onto a topic page.
+
+    A recap has to clear the bar twice: once across the whole transcript, and
+    again inside a single passage we can quote. Whole-recap scoring alone put
+    sessions on pages where the topic came up in scattered asides, under a
+    heading claiming the community worked it through.
+    """
     hits = []
     for m in meetings:
-        score = sum(m["text"].count(kw) for kw in keywords)
-        if score >= MIN_SCORE:
-            hits.append(m)
+        if m["date"] in INELIGIBLE:
+            continue
+        if sum(m["text"].count(kw) for kw in keywords) < MIN_SCORE:
+            continue
+        blurb = blurb_for(m, keywords)
+        if blurb is None:
+            continue
+        hits.append({**m, "blurb": blurb})
         if len(hits) >= MAX_RECAPS:
             break
     return hits
+
+
+def _mentions(text: str, keywords: list[str]) -> bool:
+    return any(kw in TAG_RE.sub("", text).lower() for kw in keywords)
+
+
+def _excerpt(body: str, keywords: list[str]) -> str:
+    """Whole sentences from `body`, starting at the first one to name the topic.
+
+    Starting at the paragraph's opening sentence is what produced the off-topic
+    blurbs: a section can spend two sentences on preamble before reaching the
+    thing the reader came for. Anchoring on the keyword is what makes "the copy
+    we display mentions the topic" true rather than merely likely.
+    """
+    sentences = re.split(r"(?<=[.!?])\s+", body)
+    start = next((i for i, s in enumerate(sentences) if _mentions(s, keywords)), 0)
+    kept: list[str] = []
+    for sentence in sentences[start:]:
+        if kept and len(TAG_RE.sub("", " ".join(kept + [sentence]))) > EXCERPT_CHARS:
+            break
+        kept.append(sentence)
+    out = " ".join(kept)
+    if out == body:
+        return out
+    # Cutting on a sentence boundary leaves a full stop the ellipsis would follow
+    # as ".…". Drop it, matching how the curated card summaries trail off.
+    return out.rstrip().removesuffix(".") + "…"
+
+
+def blurb_for(meeting: dict, keywords: list[str]) -> str | None:
+    """Display copy for this recap on *this* topic page, or None if it has none.
+
+    The curated card summary describes the whole meeting, so on a page about one
+    topic it is often filler: a session that spent forty minutes debriefing Black
+    Hat surfaced as "Shawn greeted the group from his vacation at Disney World."
+    The selection was right and the display copy was off-topic, under a heading
+    promising the community worked the topic through.
+
+    So: use the card summary when it already names the topic, otherwise quote the
+    recap's own passage on it. If no passage names it, the topic only came up in
+    scattered asides and the recap does not belong on this page at all.
+    """
+    if _mentions(meeting["summary"], keywords):
+        return meeting["summary"]
+    # Ranked on the body alone. A section that matches only in its heading has no
+    # sentence to quote, and the heading itself is never displayed.
+    best, best_score = "", 0
+    for _heading, body in meeting["sections"]:
+        score = sum(TAG_RE.sub("", body).lower().count(kw) for kw in keywords)
+        if score > best_score:
+            best, best_score = body, score
+    return _excerpt(best, keywords) if best_score else None
 
 
 def render(picks: list[dict], total: int) -> str:
@@ -155,7 +278,7 @@ def render(picks: list[dict], total: int) -> str:
             f'            <time datetime="{m["date"]}">{m["human"]}</time>\n'
             f'            <span class="session-echo-title">{m["headline"]}</span>\n'
             f'          </a>\n'
-            f'          <p class="session-echo-summary">{m["summary"]}</p>\n'
+            f'          <p class="session-echo-summary">{m["blurb"]}</p>\n'
             f'        </li>'
         )
     lines = "\n".join(items)

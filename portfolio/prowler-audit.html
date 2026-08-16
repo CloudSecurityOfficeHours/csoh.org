@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-04">
-    <meta property="article:modified_time" content="2026-05-04">
+    <meta property="article:modified_time" content="2026-08-16">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Portfolio Projects">
     <meta property="article:tag" content="prowler tutorial">
@@ -62,7 +62,7 @@
       "totalTime": "PT8H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-05-04",
-      "dateModified": "2026-05-04",
+      "dateModified": "2026-08-16",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -303,10 +303,11 @@
     </section>
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-04">Last updated <strong>2026-05-04</strong></time> · <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/portfolio/prowler-audit.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-08-16">Last updated <strong>2026-08-16</strong></time> · <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/portfolio/prowler-audit.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
-            <p><strong>Time:</strong> ~4 hours &nbsp;·&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;·&nbsp; <strong>Stack:</strong> AWS · Prowler · Terraform</p>
+            <p><strong>Time:</strong> ~4 hours &nbsp;·&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;·&nbsp; <strong>Stack:</strong> AWS · Prowler · Terraform</p>
+            <p><strong>This one assumes you already run AWS.</strong> You need an account you control, comfort with the AWS CLI, and enough IAM familiarity to create a role and attach policies to it. If none of that is true yet, start with the <a href="../cloud-security-home-lab.html">home lab setup</a> and come back.</p>
         </div>
 
         <section id="intro">
@@ -353,7 +354,27 @@
             <pre><code>pip install prowler
 prowler --version</code></pre>
             <h3>2. Create read-only credentials for Prowler</h3>
-            <p>Don't run Prowler with admin. Create an IAM user / role with the policy in the Prowler repo's <code>permissions/</code> directory. Configure a dedicated AWS profile for it.</p>
+            <p>Don't run Prowler with admin. Prowler needs two AWS managed policies plus one small custom policy the project maintains, all read-only. Attach them to a dedicated IAM role:</p>
+            <pre><code># The two managed policies Prowler documents as its baseline.
+aws iam attach-role-policy --role-name prowler-readonly \
+  --policy-arn arn:aws:iam::aws:policy/SecurityAudit
+aws iam attach-role-policy --role-name prowler-readonly \
+  --policy-arn arn:aws:iam::aws:policy/job-function/ViewOnlyAccess
+
+# Plus the project's own additions, which cover services the two above miss.
+curl -sO https://raw.githubusercontent.com/prowler-cloud/prowler/master/permissions/prowler-additions-policy.json
+aws iam put-role-policy --role-name prowler-readonly \
+  --policy-name prowler-additions \
+  --policy-document file://prowler-additions-policy.json</code></pre>
+            <p><code>SecurityAudit</code> and <code>ViewOnlyAccess</code> are AWS-managed and grant no write actions. The additions policy is worth reading before you apply it: it is short, and knowing why a posture scanner needs each entry is exactly the kind of thing an interviewer asks about. The current requirements are in <a href="https://docs.prowler.com/user-guide/providers/aws/authentication" target="_blank" rel="noopener noreferrer">Prowler's AWS authentication docs</a>.</p>
+            <p>Now give that role its own CLI profile, so no command in this project can accidentally run as your admin identity:</p>
+            <pre><code># In ~/.aws/config
+[profile prowler-readonly]
+role_arn = arn:aws:iam::&lt;your-account-id&gt;:role/prowler-readonly
+source_profile = &lt;your-normal-profile&gt;
+region = us-east-1</code></pre>
+            <p>Confirm it works, and confirm it is the identity you think it is, before scanning:</p>
+            <pre><code>aws sts get-caller-identity --profile prowler-readonly</code></pre>
             <h3>3. Run the baseline scan</h3>
             <pre><code>prowler aws --profile prowler-readonly --output-formats html json-ocsf</code></pre><p>This produces a comprehensive scan against ~400 checks. Commit the HTML and JSON outputs to your repo as the <em>before</em> snapshot. Don't worry if the report is alarming on first run - that's the point.</p>
             <h3>4. Triage the findings</h3>
