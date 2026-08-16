@@ -105,24 +105,31 @@ variable "gcp_qa_origin_host" {
 # here can request a one-time code by email and, on entering it, reach the QA
 # site; nobody else gets past the login page.
 #
-# NOT CURRENTLY IN USE. The Access policy in qa.tf is set to `everyone = true`,
-# so qa.csoh.org shows a login page that admits anybody. Email matching needs
-# One-Time PIN enabled as a login method, and enabling that needs a token
-# permission group this stack does not otherwise require. This variable is kept,
-# and now defaults to empty, so tightening the policy later is a one-line change
-# in qa.tf rather than a re-derivation of how any of it worked.
+# Deliberately has NO default, which makes it required. Two reasons. First, a
+# default would put personal email addresses into a file this repo PUBLISHES -
+# everything under infra/ is served on the site as teaching material for
+# terraform.html, since tools/site-publish.filter does not exclude it. Second,
+# an empty value fails in the most annoying direction: it would build a login
+# page that the site's owner cannot get through.
 #
-# The default is empty rather than a real address on purpose: everything under
-# infra/ is served on the site as teaching material for terraform.html, since
-# tools/site-publish.filter does not exclude it, so a default here would publish
-# personal email addresses.
+# Enforcing this list also requires an email login method to exist. One-Time PIN
+# is enabled on the account (as a `onetimepin` identity provider); if it is ever
+# removed, the login page falls back to offering only "Cloudflare" account
+# sign-in and every address here stops matching.
 #
 # Terraform reads it from TF_VAR_qa_allowed_emails like the others, but because
 # it is a LIST rather than a string the environment variable has to carry JSON,
 # and it is worth single-quoting so the brackets are never exposed to globbing:
 #   TF_VAR_qa_allowed_emails='["you@example.com","reviewer@example.com"]'
 variable "qa_allowed_emails" {
-  description = "Email addresses allowed through Cloudflare Access to qa.csoh.org (unused while the policy admits everyone)."
+  description = "Email addresses allowed through Cloudflare Access to qa.csoh.org."
   type        = list(string)
-  default     = []
+
+  # A policy with an empty include matches nobody, which presents as a login
+  # page that rejects every address rather than as a configuration error. Fail
+  # at plan time instead.
+  validation {
+    condition     = length(var.qa_allowed_emails) > 0
+    error_message = "qa_allowed_emails must list at least one address, or nobody can reach qa.csoh.org. Set TF_VAR_qa_allowed_emails='[\"you@example.com\"]'."
+  }
 }
