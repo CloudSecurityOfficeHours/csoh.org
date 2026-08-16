@@ -73,3 +73,25 @@ output "deployer_sa_email" {
   # csoh-deployer@csoh-org-495800.iam.gserviceaccount.com).
   value = google_service_account.deployer.email
 }
+
+# The QA service's *.run.app URL. Unlike the production one above, this is NOT
+# fed to a Cloudflare load balancer pool - QA is deliberately kept out of the
+# pool so it is never health-checked (see the cost note in cloud_run.tf). It is
+# consumed instead by the origin rule in
+# infra/terraform/cloudflare/rules.tf, which rewrites the Host header on
+# requests to qa.csoh.org so Cloud Run can tell which service they are for.
+# Strip the "https://" scheme when pasting it into that variable, same as the
+# production origin hosts.
+output "cloud_run_qa_service_url" {
+  description = "Cloud Run *.run.app URL for the QA service (strip the https:// scheme to use as TF_VAR_gcp_qa_origin_host)."
+  value       = google_cloud_run_v2_service.site_qa.uri
+}
+
+# The QA deploy identity, for the `service_account:` input of the
+# google-github-actions/auth step in deploy-qa.yml. Deliberately a different
+# account from `deployer_sa_email` above: its roles stop at the QA Cloud Run
+# service, so this workflow cannot deploy production (see service_accounts.tf).
+output "deployer_qa_sa_email" {
+  description = "Service account deploy-qa.yml impersonates"
+  value       = google_service_account.deployer_qa.email
+}

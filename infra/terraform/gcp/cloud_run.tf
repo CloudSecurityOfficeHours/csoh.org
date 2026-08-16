@@ -191,3 +191,137 @@ resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   # gatekeeping (TLS, WAF, rate limiting) happens at Cloudflare's edge.
   member = "allUsers"
 }
+
+# --- The QA service -----------------------------------------------------------
+# A second, identical Cloud Run service that the `qa` branch deploys to, so a
+# change can be viewed on a real origin before it is promoted to `main` and
+# fanned out to all three clouds. Reached at qa.csoh.org, behind Cloudflare
+# Access (see infra/terraform/cloudflare/access.tf).
+#
+# WHY CLOUD RUN, RATHER THAN A FOURTH STATIC BUCKET. This is the only one of the
+# three production origins that actually runs nginx.conf and
+# nginx-security-headers.conf. S3 and Azure Blob just hand back stored bytes,
+# and Azure cannot emit custom response headers at all. So one Cloud Run QA
+# origin exercises strictly MORE of the serving path than two of the three
+# production origins do - redirects, the JSON allowlist, cache-control tiers,
+# and every security header - at no extra cost.
+#
+# IT COSTS NOTHING AT REST. `min_instance_count = 0` means no container runs,
+# and nothing is billed, until someone actually loads the page. Note that this
+# service is deliberately NOT added to the Cloudflare load balancer pool in
+# infra/terraform/cloudflare/load_balancer.tf. Pool members are health-checked
+# from every Cloudflare data center, which worked out to ~1.09M probes per
+# origin per day and produced a $119.77 Azure bandwidth bill. A QA origin behind
+# a monitor would be probed around the clock and could never scale to zero,
+# turning a free environment into a permanently-billed one. It gets a plain
+# proxied DNS record instead.
+#
+# THE IMAGE IS THE SAME IMAGE. Both services pull from the one Artifact Registry
+# repo at the tag csoh-site:<short-sha>. That repo sets immutable_tags, and
+# deploy.yml's push step skips a tag that is already present, so promoting a
+# commit to `main` redeploys the EXACT bytes QA tested rather than rebuilding
+# them from source. That property only holds while the two services stay
+# configuration-identical, so resist adding QA-only container settings here:
+# anything QA-specific belongs at the Cloudflare edge, not in the image.
+resource "google_cloud_run_v2_service" "site_qa" {
+  project = var.project_id
+  # Distinct service name, hence a distinct *.run.app URL. Everything else
+  # about this service matches production on purpose.
+  name     = "csoh-site-qa"
+  location = var.region
+
+  # Same as production: Cloudflare reaches this service from the public
+  # internet at its *.run.app URL, so ingress has to allow public traffic.
+  #
+  # KNOWN, ACCEPTED GAP: that *.run.app hostname is therefore reachable
+  # WITHOUT passing through Cloudflare, which means it also bypasses the
+  # Cloudflare Access login in front of qa.csoh.org. Production has the same
+  # property (as does the AWS distribution's *.cloudfront.net name), but it
+  # matters slightly more here because QA content is unreleased. Closing it
+  # would mean either a shared-secret header checked in nginx or a Cloudflare
+  # Tunnel; the first breaks the image-identity property described above, and
+  # the second is more moving parts than this is worth. Do not treat Access as
+  # a secrecy boundary for anything that would actually harm you if read early.
+  ingress = "INGRESS_TRAFFIC_ALL"
+
+  scaling {
+    min_instance_count = 0
+  }
+
+  template {
+    # Reuses the SAME runtime identity as production. Safe, and the simplest
+    # thing that can work: that account deliberately holds zero roles because
+    # the container only serves static files, so there is nothing for a
+    # separate QA runtime identity to isolate.
+    service_account = google_service_account.cloud_run_runtime.email
+
+    scaling {
+      min_instance_count = 0
+      # Lower ceiling than production's 10. QA serves a handful of humans, so
+      # this is purely a cost guard against a runaway loop or a crawler.
+      max_instance_count = 4
+    }
+
+    containers {
+      # Same placeholder as production - the real image arrives on the first
+      # deploy from the qa branch, and the lifecycle block below stops
+      # Terraform reverting it afterwards.
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+
+      ports {
+        container_port = 80
+      }
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "256Mi"
+        }
+        cpu_idle          = true
+        startup_cpu_boost = true
+      }
+
+      startup_probe {
+        http_get {
+          path = "/"
+          port = 80
+        }
+        initial_delay_seconds = 1
+        period_seconds        = 5
+        failure_threshold     = 3
+      }
+    }
+  }
+
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+      client,
+      client_version,
+    ]
+  }
+
+  depends_on = [
+    google_project_service.apis,
+    google_artifact_registry_repository.containers,
+  ]
+}
+
+# Same reasoning as the production invoker binding above: Cloudflare forwards
+# requests to the *.run.app URL as an ordinary anonymous HTTP client and has no
+# way to present a Google credential, so the service has to permit
+# unauthenticated invocation. The QA gate is Cloudflare Access at the edge, not
+# Cloud Run IAM - see the ingress note above for what that does and does not
+# protect.
+resource "google_cloud_run_v2_service_iam_member" "public_invoker_qa" {
+  project  = google_cloud_run_v2_service.site_qa.project
+  location = google_cloud_run_v2_service.site_qa.location
+  name     = google_cloud_run_v2_service.site_qa.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}

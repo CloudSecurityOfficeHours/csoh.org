@@ -99,7 +99,8 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   # Two claims are required, not one:
   #   * repository - the run came from this exact repo (values from variables.tf,
   #     e.g. "CloudSecurityOfficeHours/csoh.org").
-  #   * sub - the run was executing in the `production` GitHub Environment.
+  #   * sub - the run was executing in the `production` or `qa` GitHub
+  #     Environment.
   #
   # The second half is what makes this equivalent to the other two clouds.
   # Checking only `repository` trusted EVERY workflow in the repo, on every
@@ -110,7 +111,23 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   # `publish-gcp` job (which declares `environment: production`) needs to pass.
   # The `production` environment is itself restricted to the `main` branch, so
   # this transitively enforces the branch rule that var.github_branch describes.
-  attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' && assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production'"
+  #
+  # The `qa` alternative was added for deploy-qa.yml. It follows the same shape
+  # deliberately: `qa` is a real GitHub Environment, restricted by its own
+  # deployment branch policy to the `qa` branch, so this stays an environment
+  # pin rather than a looser `assertion.ref` check. Widening it to something
+  # like a `startsWith` on the subject would re-open exactly the hole the
+  # production pin closed, because a workflow can enter an environment it was
+  # not built for far more easily than it can forge a claim.
+  #
+  # PASSING THIS CONDITION IS NOT AUTHORIZATION. It only gets a token minted
+  # from the pool. WHICH service account that token may then impersonate is
+  # decided separately, by the `principal://` bindings in Step 3 below - and the
+  # `qa` subject is bound only to the narrowly-scoped QA deployer. Both halves
+  # have to name a subject for it to be able to deploy anything; editing this
+  # condition alone produces a token that can do nothing, and editing only the
+  # binding below produces a token that is never issued.
+  attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' && (assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production' || assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:qa')"
 
   # OIDC settings: tell GCP who issues the tokens we trust. The issuer_uri is
   # GitHub Actions' well-known, fixed OIDC issuer URL - GCP fetches GitHub's
@@ -153,4 +170,28 @@ resource "google_service_account_iam_member" "deployer_wif_binding" {
   # subject is defense in depth, and mirrors the StringEquals-on-sub condition
   # in aws/oidc.tf and the `subject =` line in azure/identity.tf.
   member = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github.workload_identity_pool_id}/subject/repo:${var.github_owner}/${var.github_repo}:environment:production"
+}
+
+# STEP 4 - the SECOND permission grant, for QA. Identical in shape to Step 3,
+# with two things changed: the subject ends `:environment:qa` instead of
+# `:environment:production`, and it points at the QA deployer service account
+# rather than the production one.
+#
+# This pairing is the whole point of splitting the identities. A token minted by
+# deploy-qa.yml carries the `qa` subject, so it matches ONLY this binding, so it
+# can impersonate ONLY csoh-deployer-qa - whose roles stop at the csoh-site-qa
+# Cloud Run service (see service_accounts.tf). It cannot act as
+# `google_service_account.deployer` and therefore cannot reach production, even
+# though both tokens come from the same pool and pass the same provider
+# condition.
+#
+# It follows that the `qa` GitHub Environment must have a deployment branch
+# policy restricting it to the `qa` branch, exactly as `production` is
+# restricted to `main`. Without that policy this trust still works, but it would
+# accept a run of deploy-qa.yml from any branch - which is a much smaller
+# problem than the production equivalent, yet the same shape, and free to avoid.
+resource "google_service_account_iam_member" "deployer_qa_wif_binding" {
+  service_account_id = google_service_account.deployer_qa.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github.workload_identity_pool_id}/subject/repo:${var.github_owner}/${var.github_repo}:environment:qa"
 }

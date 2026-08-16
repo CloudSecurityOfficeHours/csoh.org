@@ -134,3 +134,90 @@ resource "google_service_account_iam_member" "deployer_act_as_runtime" {
 # and Cloud CDN retired, there is nothing to invalidate - Cloudflare caches
 # at the edge and is purged separately. The deployer now needs only
 # run.admin + artifactregistry.writer + act-as on the runtime SA.)
+
+# --- The QA deployer ----------------------------------------------------------
+# A THIRD identity, impersonated by the deploy-qa.yml workflow when it ships the
+# `qa` branch to the csoh-site-qa Cloud Run service.
+#
+# WHY NOT JUST REUSE THE DEPLOYER ABOVE. Because that one holds `roles/run.admin`
+# at PROJECT scope, so anything able to impersonate it can deploy an arbitrary
+# image to the production service. Reusing it would mean the QA path - which
+# runs on a branch with no review requirement, and which exists precisely so
+# half-finished work can be pushed to it - could ship straight to csoh.org. The
+# bindings below are deliberately narrower: this account can update exactly one
+# Cloud Run service, and that service is not production.
+#
+# Note what this does NOT isolate, because it is easy to over-read. QA and
+# production share one Artifact Registry repo (on purpose - it is what makes
+# promoting a tested image possible rather than rebuilding it), so an image
+# pushed by QA is an image production may later run. That is inherent to the
+# promotion model and is gated by the human merge to `main`, the validate job,
+# and the Trivy scan, not by this identity split. What the split buys is that a
+# compromised QA workflow cannot *deploy* to production - it can only offer
+# bytes that a later, separately-gated production run chooses to pick up.
+resource "google_service_account" "deployer_qa" {
+  project = var.project_id
+  # ID -> email csoh-deployer-qa@csoh-org-495800.iam.gserviceaccount.com.
+  account_id   = "csoh-deployer-qa"
+  display_name = "csoh.org GitHub Actions QA deployer"
+  description  = "Impersonated by deploy-qa.yml via WIF to deploy the csoh-site-qa Cloud Run service only."
+}
+
+# Grant 1 of 4: admin, but ONLY on the QA service.
+#
+# Contrast `google_project_iam_member.deployer_run_admin` above, which grants
+# the same role across the entire project. This resource type
+# (`google_cloud_run_v2_service_iam_member`) attaches the binding to ONE named
+# Cloud Run service, so the role's power to create revisions and change traffic
+# splits stops at csoh-site-qa. Referencing the service's attributes rather than
+# retyping its name also makes Terraform create it first.
+resource "google_cloud_run_v2_service_iam_member" "deployer_qa_run_admin" {
+  project  = google_cloud_run_v2_service.site_qa.project
+  location = google_cloud_run_v2_service.site_qa.location
+  name     = google_cloud_run_v2_service.site_qa.name
+  role     = "roles/run.admin"
+  member   = "serviceAccount:${google_service_account.deployer_qa.email}"
+}
+
+# Grant 2 of 4: project-wide READ on Cloud Run.
+#
+# This one is project-scoped where grant 1 is not, so it deserves a word.
+# `gcloud run deploy` does more than update the service: it resolves the
+# service, then polls a long-running operation until the revision is ready.
+# Those reads are not all scoped to the service being deployed, so a
+# service-only binding leaves the deploy failing partway through with a
+# permission error that names an operation rather than the service.
+# `roles/run.viewer` is READ-ONLY - it can list and describe services and
+# operations and cannot mutate anything - so widening this one to the project
+# costs no ability to change production, which grant 1 is what withholds.
+resource "google_project_iam_member" "deployer_qa_run_viewer" {
+  project = var.project_id
+  role    = "roles/run.viewer"
+  member  = "serviceAccount:${google_service_account.deployer_qa.email}"
+}
+
+# Grant 3 of 4: push images, scoped to the one repository.
+#
+# The production deployer holds `roles/artifactregistry.writer` at project
+# scope (see above); this uses the repository-scoped resource type instead, so
+# the QA identity can write to csoh-containers and to no other repo that may
+# exist in this project later. Same role, tighter blast radius.
+resource "google_artifact_registry_repository_iam_member" "deployer_qa_ar_writer" {
+  project    = google_artifact_registry_repository.containers.project
+  location   = google_artifact_registry_repository.containers.location
+  repository = google_artifact_registry_repository.containers.repository_id
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${google_service_account.deployer_qa.email}"
+}
+
+# Grant 4 of 4: permission to act as the runtime identity.
+#
+# Same requirement, and same single-service-account scoping, as
+# `deployer_act_as_runtime` above: to deploy a service that RUNS AS the runtime
+# SA, the deployer must be allowed to use that SA. Both Cloud Run services run
+# as the same zero-role runtime account, so this points at the same target.
+resource "google_service_account_iam_member" "deployer_qa_act_as_runtime" {
+  service_account_id = google_service_account.cloud_run_runtime.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.deployer_qa.email}"
+}
