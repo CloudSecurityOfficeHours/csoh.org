@@ -113,7 +113,6 @@ TARGET_PAGES = [
     "cloud-security-platform-engineer.html",
     "cloud-security-sales-engineer.html",
     "cloud-security-customer-success-engineer.html",
-    "help-desk-to-cloud-security.html",
     # Registered August 2026. These shipped without being added here, so they
     # carried zero glossary cross-links while every comparable page carried
     # 45+. Nothing errors when a page is missing from this list - it is simply
@@ -126,7 +125,51 @@ TARGET_PAGES = [
     "what-practitioners-think-about-security-regulation.html",
     "what-practitioners-think-about-supply-chain-security.html",
     "what-practitioners-think-about-vulnerability-management.html",
+    # Also registered August 2026, same oversight as the block above. These 23
+    # had accumulated since the list was last reconciled; breach-lessons.html
+    # alone is ~9,500 words and carried a single glossary link.
+    "about.html",
+    "breach-lessons.html",
+    "breaking-into-cloud-security.html",
+    "what-breaking-into-cloud-security-really-takes.html",
+    "cloud-breach-year-in-review.html",
+    "cloud-breach-year-in-review-2021-2022.html",
+    "cloud-breach-year-in-review-2023.html",
+    "cloud-breach-year-in-review-2024.html",
+    "cloud-breach-year-in-review-2025.html",
+    "cloud-breach-year-in-review-2026-h1.html",
+    "cloud-security-degree-programs.html",
+    "cloud-security-home-lab.html",
+    "cloud-security-interview-questions.html",
+    "cloud-security-portfolio-projects.html",
+    "cloud-security-reading-list.html",
+    "cloud-security-resume-guide.html",
+    "cnapp-vs-xdr.html",
+    "cspm-vs-cwpp.html",
+    "community.html",
+    "how-csoh-org-is-secured.html",
+    "mentorship.html",
+    "present.html",
+    "speakers.html",
 ]
+
+# Every other root-level page is out on purpose, so that a page missing from
+# TARGET_PAGES is a decision rather than an oversight. To keep it that way,
+# tools/check_crosslink_coverage.py fails if a root page is in neither list.
+#
+#   glossary.html                 crosslink_glossary.py owns it (intra-page links)
+#   news.html                     rebuilt by update_news.py every 3h; links would be wiped
+#   search.html                   a JS search UI, ~40 words of prose
+#   403.html / 404.html           error pages, no prose worth linking
+#   google66d489593949bd4c.html   Search Console verification stub
+DELIBERATELY_UNLINKED = {
+    "glossary.html",
+    "news.html",
+    "search.html",
+    "403.html",
+    "404.html",
+    "google66d489593949bd4c.html",
+}
 
 # Subdirectory pages (per-breach, per-meeting) are auto-discovered rather
 # than listed individually - there are ~100 meeting pages and the set

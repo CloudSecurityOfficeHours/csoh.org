@@ -196,6 +196,18 @@ jobs:
         if: steps.html.outputs.changed == 'true'
         run: python3 tools/check_jsonld.py
 
+      # Step 3c - Every root page must be either cross-linked by
+      # crosslink_pages.py or listed as deliberately unlinked. That script
+      # works from an opt-in list and a page missing from it is simply never
+      # visited: no error, no warning, just a page that ships with zero
+      # glossary links while its neighbours carry 40+. That happened twice
+      # before this gate existed - 8 pages, then 23 more on a sweep, one of
+      # them ~9,500 words. A silent omission is exactly the failure mode a
+      # check should convert into a loud one.
+      - name: Require crosslink coverage for every root page
+        if: steps.html.outputs.changed == 'true'
+        run: python3 tools/check_crosslink_coverage.py
+
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
