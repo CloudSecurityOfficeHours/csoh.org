@@ -285,8 +285,21 @@ jobs:
           # rather than as pages under review.
           git ls-files 'meetings/*.html' | sort | tail -12 > recent-recaps.txt
 
-          sort -u slice.txt | grep -v '^meetings/' | head -60 > review-slice.txt
-          echo "Reviewing $(wc -l < review-slice.txt) pages (bucket $bucket of 4)."
+          # Cap the slice, but SAY what the cap dropped. A step that prints
+          # "reviewing 60 pages" and silently discards the rest reads as full
+          # coverage; CLAUDE.md records two separate incidents of exactly that
+          # shape costing real time.
+          sort -u slice.txt | grep -v '^meetings/' > candidates.txt
+          head -60 candidates.txt > review-slice.txt
+          total=$(wc -l < candidates.txt)
+          kept=$(wc -l < review-slice.txt)
+          echo "Bucket $bucket of 4. Reviewing $kept of $total candidate pages."
+          if [ "$total" -gt "$kept" ]; then
+            echo "::notice::Slice capped at $kept; $(( total - kept )) candidate pages deferred to a later week."
+            # review-slice.txt is the first $kept lines of the sorted
+            # candidates, so the remainder is simply everything after them.
+            tail -n +$(( kept + 1 )) candidates.txt | sed 's/^/  deferred: /'
+          fi
           cat review-slice.txt
 
       # Lands previous-findings.md in the workspace for the prompt to read.
