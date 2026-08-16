@@ -15,7 +15,7 @@ the header buttons are the same two lines on every page):
   1. `../` path prefixes on pages inside breaches/, meetings/, portfolio/,
      and homelab/.
   2. The current-page markers (`aria-current="page"` on the active link and
-     `active` / `aria-expanded="true"` on its dropdown toggle).
+     the `active` class on its dropdown toggle).
 
 It replaces three older scripts (sync_navs.py, redesign_nav.py, unify_footer.py)
 that encoded an earlier nav design and were removed in favor of this one. Run
@@ -365,6 +365,18 @@ def mark_active(nav: str, active_href: str | None) -> str:
     """Set aria-current on the active link and `active` on its dropdown toggle.
 
     Operates on the unprefixed nav (active_href is a bare 'name.html').
+
+    The current-section marker is the `active` class and nothing else.
+    `aria-expanded` is deliberately left at "false": it means "the menu this
+    button controls is open right now", not "this is the section you are in",
+    and the dropdown is closed on load. Stamping "true" here told every screen
+    reader that the menu was already open on all 254 pages, so the first arrow
+    press went somewhere the user was not expecting. main.js owns the attribute
+    from load onward (initDropdownNav sets it on click and clears it on close
+    and on Escape); the only correct static value is "false". "You are here" is
+    already carried by `aria-current="page"` on the link just below, and the
+    visual pill is `.dropdown-toggle.active` in style.css, so neither depends
+    on the lie.
     """
     if not active_href or active_href not in NAV_DROPDOWN:
         return nav
@@ -376,7 +388,7 @@ def mark_active(nav: str, active_href: str | None) -> str:
     if label:
         old = (f'<button class="dropdown-toggle" aria-expanded="false" '
                f'aria-haspopup="true">{label} ')
-        new = (f'<button class="dropdown-toggle active" aria-expanded="true" '
+        new = (f'<button class="dropdown-toggle active" aria-expanded="false" '
                f'aria-haspopup="true">{label} ')
         nav = nav.replace(old, new, 1)
     return nav

@@ -31,7 +31,9 @@ Hand-editing is how the site got into the state that motivated this script: the 
 Everything is byte-identical everywhere except two legitimate differences, both applied automatically:
 
 1. **`../` path prefixes** on pages inside `breaches/`, `meetings/`, `portfolio/`, and `homelab/`.
-2. **Current-page markers** - `aria-current="page"` on the active link, plus `active` and `aria-expanded="true"` on its enclosing dropdown toggle. The mapping from page to dropdown is derived by scanning `CANON_NAV`, so adding a link to a menu column automatically makes that page highlight the right menu.
+2. **Current-page markers** - `aria-current="page"` on the active link, plus the `active` class on its enclosing dropdown toggle. The mapping from page to dropdown is derived by scanning `CANON_NAV`, so adding a link to a menu column automatically makes that page highlight the right menu.
+
+   The marker is the class and nothing else. `aria-expanded` stays `"false"` in the stamped HTML on every page, including the active one: it reports whether the menu is open *right now*, and on load it is closed. `main.js` (`initDropdownNav`) owns it from there. Setting it to `"true"` to mean "current section" is the accessibility bug fixed in this script's `mark_active()` - it announced all 254 nav menus as already open.
 
 ## Pages covered
 
