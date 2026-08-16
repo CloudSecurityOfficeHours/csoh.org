@@ -609,53 +609,10 @@ resource "cloudflare_ruleset" "cache" {
   }
 }
 
-# =============================================================================
-# Origin rules - route qa.csoh.org to the QA Cloud Run service
-# -----------------------------------------------------------------------------
-# A fourth ruleset, in a phase this stack did not use before. It exists to solve
-# one specific problem: Cloud Run decides WHICH service a request is for by
-# reading the Host header, and it now runs two services in this project.
-#
-# The DNS record in qa.tf points qa.csoh.org at the QA service's *.run.app
-# hostname, but a proxied record sends the ORIGINAL Host header to the origin.
-# So Cloud Run would receive `Host: qa.csoh.org`, match that against no service
-# it knows, and answer 404 for every request - a failure that looks like a
-# broken deploy rather than a missing header rewrite, because the DNS resolves
-# correctly, TLS completes, and Access logs the visitor in first.
-#
-# Production does not need this rule: its origins sit in a Load Balancer pool,
-# and each pool origin in load_balancer.tf sets its own `host_header` override.
-# QA is deliberately outside that pool (see qa.tf for the cost reason), so the
-# override has to be made here instead.
-# =============================================================================
-resource "cloudflare_ruleset" "origin_qa" {
-  zone_id     = var.zone_id
-  name        = "csoh-origin-qa"
-  description = "Rewrite Host + origin for qa.csoh.org so Cloud Run resolves the QA service"
-  kind        = "zone"
-  # This phase runs after Cloudflare has decided to go to an origin, and lets
-  # us change WHICH origin and WHAT Host header it is asked with.
-  phase = "http_request_origin"
-
-  rules {
-    ref         = "origin_qa_host_rewrite"
-    description = "qa.csoh.org - send to the QA Cloud Run service"
-    expression  = "http.host eq \"qa.${var.zone_name}\""
-    # "route" is the action that overrides origin/Host for the matched request.
-    action  = "route"
-    enabled = true
-    action_parameters {
-      # The Host header Cloud Run actually sees. This is the line that makes
-      # the difference between a working QA site and a uniform 404.
-      host_header = var.gcp_qa_origin_host
-      # Where to connect. Strictly speaking the DNS CNAME already resolves
-      # here, so this is belt and braces - but stating it means the routing no
-      # longer depends on the DNS record's target being right, and the two
-      # cannot drift apart into a state where requests land on the production
-      # service while carrying a QA Host header.
-      origin {
-        host = var.gcp_qa_origin_host
-      }
-    }
-  }
-}
+# (There is deliberately no `http_request_origin` ruleset here. Routing
+# qa.csoh.org to the QA Cloud Run service needs the Host header rewritten, and
+# an Origin Rule is the natural way to do that - but Host Header Override is a
+# PAID-PLAN feature, and this zone is on Free. Terraform reports it as
+# `not entitled to use the HostHeader override` at apply time, not at plan time,
+# so the config validates and plans cleanly right up until it fails. The rewrite
+# is done by a Worker instead; see qa.tf.)

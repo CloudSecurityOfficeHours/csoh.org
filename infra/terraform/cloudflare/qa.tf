@@ -3,11 +3,11 @@
 # deploys to, so a change can be looked at on a real origin before it is
 # promoted to `main` and fanned out to all three production clouds.
 #
-# Three things have to be true for that hostname to work, and they live in two
-# files. Here: the DNS record, and the Cloudflare Access login in front of it.
-# In rules.tf: an origin rule that rewrites the Host header (without it Cloud
-# Run cannot tell which of its two services the request is for and answers 404),
-# and a cache rule that stops the edge serving stale QA pages.
+# Three things have to be true for that hostname to work. Here: the DNS record,
+# the Cloudflare Access login in front of it, and the Worker that rewrites the
+# Host header (without it Cloud Run cannot tell which of its two services the
+# request is for and answers 404). In rules.tf: a cache rule that stops the edge
+# serving stale QA pages.
 #
 # WHAT THIS FILE DELIBERATELY DOES NOT DO. It does not add QA to the Load
 # Balancer in load_balancer.tf. Pool members are health-checked from every
@@ -137,4 +137,69 @@ resource "cloudflare_zero_trust_access_policy" "qa_allow_listed_emails" {
     # everything under infra/ is published on the site as teaching material.
     email = var.qa_allowed_emails
   }
+}
+
+# --- The Host header rewrite ---------------------------------------------------
+# Cloud Run decides WHICH service a request is for by reading the Host header,
+# and this project now runs two of them. A proxied Cloudflare record forwards the
+# ORIGINAL Host, so Cloud Run receives `Host: qa.csoh.org`, matches no service it
+# knows, and answers 404 to everything - after DNS resolves, after TLS completes,
+# and after Access has logged the visitor in, which makes it read like a broken
+# deploy rather than a missing header.
+#
+# WHY A WORKER AND NOT AN ORIGIN RULE. An Origin Rule is the obvious tool and it
+# is what this stack tried first. Host Header Override is a PAID-PLAN feature,
+# though, and csoh.org is on the Free plan. The trap is the timing: the config
+# validates, and `terraform plan` shows a clean create, because entitlement is
+# only checked when the ruleset is actually written. The apply then fails with
+# `not entitled to use the HostHeader override`. Plan success is not evidence
+# that a Cloudflare feature is available to you.
+#
+# Production does not need any of this: its origins live in a Load Balancer pool
+# and each pool origin sets its own host_header, which IS entitled because Load
+# Balancing is a paid add-on. QA is deliberately outside that pool (see the cost
+# note at the top of this file), so it needs its own mechanism.
+#
+# WHAT IT COSTS: nothing. Workers' free tier is 100,000 requests/day, and this
+# runs only on qa.csoh.org, behind a login, for a handful of people.
+#
+# ORDERING NOTE: Access is evaluated BEFORE Workers, so this script never runs
+# for an unauthenticated visitor. The login is not something this code has to
+# enforce, or could accidentally bypass.
+resource "cloudflare_workers_script" "qa_host_rewrite" {
+  account_id = var.account_id
+  name       = "csoh-qa-host-rewrite"
+  # ES module syntax (`export default { fetch }`) rather than the older
+  # addEventListener form, which Cloudflare is retiring.
+  module = true
+
+  # The whole proxy. Rebuild the URL with the origin's hostname and refetch;
+  # `new Request(url, request)` carries the method, headers and body across
+  # unchanged, and fetch derives the new Host from the URL.
+  #
+  # `redirect: "manual"` matters. Without it the Worker FOLLOWS any redirect the
+  # origin issues and returns the final body, so a visitor who asks for a URL
+  # that nginx redirects would silently receive different content at the address
+  # they typed - and the redirect rules in nginx.conf would be untestable in QA,
+  # which is one of the things QA exists to test. Manual passes the 3xx straight
+  # back to the browser, which then follows it normally.
+  content = <<-JS
+    export default {
+      async fetch(request) {
+        const url = new URL(request.url);
+        url.hostname = "${var.gcp_qa_origin_host}";
+        return fetch(new Request(url, request), { redirect: "manual" });
+      },
+    };
+  JS
+}
+
+# Bind the script to the hostname. The trailing /* is required: a route pattern
+# without a path matches only the bare hostname, so the home page would proxy
+# correctly and every asset under it would 404 - a failure that looks like a
+# broken stylesheet rather than a routing mistake.
+resource "cloudflare_workers_route" "qa" {
+  zone_id     = var.zone_id
+  pattern     = "qa.${var.zone_name}/*"
+  script_name = cloudflare_workers_script.qa_host_rewrite.name
 }
