@@ -24,6 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 
 ORIGIN = "https://csoh.org/"
@@ -58,13 +59,37 @@ def has_uncommitted_changes(path: Path, repo_root: Path) -> bool:
     return r2.returncode != 0
 
 
+# Every date in the sitemap is rendered in this one timezone.
+#
+# `%cs` renders a committer date in the *commit's own* timezone, so the value
+# depended on where the commit was made. Laptop commits landed in Pacific and
+# CI commits in UTC, and a news-bot commit at 2026-08-16T01:13Z was therefore
+# stamped 2026-08-16 while every neighbouring entry - same evening, same
+# work - said 2026-08-15. That is a lastmod dated in the future for anyone
+# west of Greenwich, and Google stops trusting lastmod on a site that reports
+# values it can tell are unreliable.
+#
+# Pacific rather than UTC because it is the timeline the site already runs on
+# ("Friday at 7am PT") and because it is behind UTC: a date correct in Pacific
+# is never in the future in UTC, so the values stay conservative in the
+# direction that matters. It also leaves the existing, already-correct laptop
+# dates untouched.
+SITEMAP_TZ = "America/Los_Angeles"
+
+
+def _today() -> dt.date:
+    return dt.datetime.now(ZoneInfo(SITEMAP_TZ)).date()
+
+
 def git_last_commit_date(path: Path, repo_root: Path) -> str | None:
+    """Committer date as YYYY-MM-DD, rendered in SITEMAP_TZ."""
     rel = str(path.relative_to(repo_root))
     r = subprocess.run(
-        ["git", "log", "-1", "--format=%cs", "--", rel],
+        ["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d", "--", rel],
         cwd=repo_root,
         capture_output=True,
         text=True,
+        env={**os.environ, "TZ": SITEMAP_TZ},
     )
     if r.returncode != 0:
         return None
@@ -73,12 +98,21 @@ def git_last_commit_date(path: Path, repo_root: Path) -> str | None:
 
 
 def last_modified(path: Path, repo_root: Path) -> str:
+    """Best-known modification date, never later than today in SITEMAP_TZ."""
+    today = _today()
+
     if has_uncommitted_changes(path, repo_root):
-        return dt.date.today().isoformat()
+        return today.isoformat()
+
     commit_date = git_last_commit_date(path, repo_root)
-    if commit_date:
-        return commit_date
-    return dt.date.fromtimestamp(os.path.getmtime(path)).isoformat()
+    if commit_date is None:
+        commit_date = dt.date.fromtimestamp(os.path.getmtime(path)).isoformat()
+
+    try:
+        parsed = dt.date.fromisoformat(commit_date)
+    except ValueError:
+        return today.isoformat()
+    return min(parsed, today).isoformat()
 
 
 def update_sitemap(repo_root: Path) -> int:
