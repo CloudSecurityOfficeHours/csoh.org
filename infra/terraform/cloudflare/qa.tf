@@ -96,10 +96,26 @@ resource "cloudflare_zero_trust_access_application" "qa" {
   # is short enough to be a real gate and long enough not to interrupt an
   # afternoon of QA.
   session_duration = "24h"
-  # Send visitors straight to the identity step instead of showing a chooser
-  # page first. There is only one login method here (see the policy below), so
-  # the chooser would be a pointless extra click.
-  auto_redirect_to_identity = true
+  # NOT setting auto_redirect_to_identity, deliberately.
+  #
+  # It skips the "sign in with" chooser and sends the visitor straight to the
+  # login method, which is nicer when there is only one. But Cloudflare rejects
+  # it unless `allowed_idps` names EXACTLY one provider, and this account has
+  # two enabled: the built-in Cloudflare account login, and the One-Time PIN
+  # provider that makes the email allowlist below enforceable.
+  #
+  # The failure mode is worth knowing because it is delayed. This app was
+  # created while zero identity providers existed, so the flag was accepted;
+  # enabling One-Time PIN later made the stored configuration invalid, and the
+  # next update failed with `allowed_idps must be provided and have only one
+  # identity provider for auto_redirect_to_identity to be set to true` - an
+  # error about a field nobody had touched, on an apply that changed something
+  # else entirely.
+  #
+  # Pinning allowed_idps to the OTP provider would restore the auto-redirect,
+  # but that provider was created outside Terraform (it needs a token permission
+  # group this stack does not otherwise use), so its id is not available here.
+  # One extra click on the chooser is not worth importing it.
 }
 
 # An Access application on its own blocks EVERYONE - it is the policies attached
