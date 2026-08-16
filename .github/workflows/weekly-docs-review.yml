@@ -46,6 +46,14 @@ on:
   # review concludes, so those pushes should re-run it. Same reasoning as the
   # note at the top of validate-html.yml: anything a step reads has to be able
   # to trigger the step.
+  #
+  # A push exercises the MECHANICAL job only. Two reasons, and the first is not
+  # optional: claude-code-action rejects the push event outright with
+  # "Unsupported event type: push", which failed the first run of this file.
+  # The second is the one that matters more - `publish` rewrites the tracking
+  # issue in place, so letting it run without a judgment report would replace
+  # the carried-forward items with a placeholder and silently drop every open
+  # finding. That is the precise failure this design exists to prevent.
   push:
     branches:
       - main
@@ -88,8 +96,13 @@ jobs:
       # --report writes the findings a human has to decide on; --fix applies the
       # rest. Both run, in that order, so the report describes the state the
       # reviewer will actually see.
+      # Written to RUNNER_TEMP, NOT the workspace. create-pull-request commits
+      # the entire working tree including untracked files, so a report left in
+      # the checkout counts as a change: the first run found no drift at all
+      # and still tried to open a PR, because the only thing that had "changed"
+      # was the report describing how nothing had changed.
       - name: Write the human-facing findings
-        run: python3 tools/check_docs_consistency.py --report script-findings.md
+        run: python3 tools/check_docs_consistency.py --report "$RUNNER_TEMP/script-findings.md"
 
       - name: Apply mechanical fixes
         run: python3 tools/check_docs_consistency.py --fix
@@ -98,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: script-findings
-          path: script-findings.md
+          path: ${{ runner.temp }}/script-findings.md
           retention-days: 90
           if-no-files-found: error
 
@@ -152,7 +165,14 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: ${{ steps.app-token.outputs.token }}
-          branch: docs-consistency/mechanical
+          # Under docs-review/, matching the existing docs-review/<date>
+          # branches. NOT docs-consistency/mechanical: git refs are paths, so a
+          # branch literally named `docs-consistency` makes `docs-consistency/
+          # anything` unpushable ("directory file conflict"), and a leftover
+          # branch by that name is exactly what broke the first run. There is
+          # no bare `docs-review` branch, and this name means there never
+          # should be.
+          branch: docs-review/mechanical
           # Reuse one branch. A weekly run that finds the same drift should
           # refresh the open PR rather than open a second one beside it.
           delete-branch: true
@@ -192,6 +212,8 @@ jobs:
   carry-forward:
     name: Fetch last week's open items
     runs-on: ubuntu-latest
+    # See the note on the push trigger: a push runs the mechanical half only.
+    if: github.event_name != 'push'
     permissions:
       contents: read
       issues: read
@@ -228,6 +250,7 @@ jobs:
     name: Review for accuracy, neutrality, temperature
     runs-on: ubuntu-latest
     needs: carry-forward
+    if: github.event_name != 'push'
     permissions:
       contents: read
     steps:
@@ -404,7 +427,7 @@ jobs:
             exit 1
           fi
           stray=$(git ls-files --others --exclude-standard \
-                  | grep -vE '^(judgment\.md|review-slice\.txt|recent-recaps\.txt|all-pages\.txt|slice\.txt|previous-findings\.md)$' || true)
+                  | grep -vE '^(judgment\.md|review-slice\.txt|recent-recaps\.txt|all-pages\.txt|slice\.txt|candidates\.txt|previous-findings\.md)$' || true)
           if [ -n "$stray" ]; then
             echo "::error::The review wrote files it should not have:"
             echo "$stray"
@@ -427,9 +450,11 @@ jobs:
     name: Refresh the tracking issue
     runs-on: ubuntu-latest
     needs: [mechanical, judgment]
-    # Runs even if a review job failed, so a partial result still reaches you
-    # rather than vanishing into a red run nobody opens.
-    if: always()
+    # `always()` so a partial result still reaches you rather than vanishing
+    # into a red run nobody opens - but never on a push, where there is no
+    # judgment report and refreshing the issue would drop every carried-forward
+    # item. See the note on the push trigger.
+    if: always() && github.event_name != 'push'
     permissions:
       contents: read
       issues: write
