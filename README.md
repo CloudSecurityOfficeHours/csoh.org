@@ -23,7 +23,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 | ⚖️ [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html) | What the cloud provider secures vs. what you secure (AWS / Azure / GCP) |
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
-| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | 360+ cloud-security vendors across 30 categories. No rankings, just orientation |
+| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
 | 📖 [Glossary](https://csoh.org/glossary.html) | 310 cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
@@ -338,7 +338,7 @@ Same SEO play for Google Cloud. Encryption-by-default story, Security Command Ce
 The definitive vendor-neutral comparison. Ten side-by-side `.comparison-table` blocks (identity, detection, data, network, compliance, pricing, customer identity, compute, container, serverless), conceptual differences that bite you (IAM-policy languages, org-boundary models, log pricing, VPC SC), a "which cloud for which job" guidance section, and a 20-row score-card summary.
 
 ### 🗺️ Vendor Landscape (`vendor-landscape.html`)
-A directory of **360+ cloud-security vendors** across 30 categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. Vendor-neutral one-liners, no rankings. Wiz affiliation disclosed.
+A directory of **<!--count:vendors_floor-->300+<!--/count--> cloud-security vendors** across <!--count:vendor_categories-->32<!--/count--> categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. Vendor-neutral one-liners, no rankings. Wiz affiliation disclosed.
 
 ### 🔍 Site Search (`search.html`)
 [MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict - `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
@@ -592,7 +592,7 @@ csoh.org/
 ├── what-is-cloud-security.html # Pillar: vendor-neutral cloud-security overview (FAQ schema)
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
-├── vendor-landscape.html       # 360+ cloud-security vendors across 30 categories
+├── vendor-landscape.html       # <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories
 ├── glossary.html               # 310 cloud security terms with live search & cross-links
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 │
@@ -1164,7 +1164,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - 208 unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and 102 meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->249<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->107<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

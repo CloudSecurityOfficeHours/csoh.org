@@ -281,7 +281,7 @@ Whether you're fixing a typo or rewriting a section, the process is the same.
 - [cloud-security-best-practices.html](cloud-security-best-practices.html) - Practitioner controls checklist
 - [shared-responsibility-model.html](shared-responsibility-model.html) - Provider vs. customer split
 - [cspm-vs-cnapp.html](cspm-vs-cnapp.html) - Tool category comparison
-- [vendor-landscape.html](vendor-landscape.html) - 360+ vendors across 30 categories
+- [vendor-landscape.html](vendor-landscape.html) - <!--count:vendors_floor-->300+<!--/count--> vendors across <!--count:vendor_categories-->32<!--/count--> categories
 - [landing-zones.html](landing-zones.html) - Cloud foundations (AWS / Azure / GCP reference designs)
 - [containers.html](containers.html) - Container security: boundary, escapes, IMDS, supply chain
 - [kubernetes.html](kubernetes.html) - Kubernetes & managed K8s (EKS / AKS / GKE) security

@@ -324,6 +324,10 @@ def display_values(counts: dict) -> dict:
         "glossary_terms": str(counts["glossary_terms"]),
         "glossary_terms_floor": f"{floor10(counts['glossary_terms'])}+",
         "long_form_floor": f"{floor10(counts['long_form'])}+",
+        "vendors": str(counts["vendors"]),
+        "vendors_floor": f"{floor10(counts['vendors'])}+",
+        "vendor_categories": str(counts["vendor_categories"]),
+        "og_images": str(counts["og_images"]),
     }
 
 
@@ -423,6 +427,53 @@ def long_form_count() -> int:
     return total
 
 
+# Sections of vendor-landscape.html that are front or back matter rather than a
+# vendor category. Everything else between the first and last category is one.
+VENDOR_NON_CATEGORIES = {
+    "On this page", "How to use this page", "The category map",
+    "Acquisition watch", "How to evaluate a vendor", "Caveats", "Where next",
+}
+
+
+def vendor_landscape() -> tuple[int, int]:
+    """(unique vendors, categories) on vendor-landscape.html.
+
+    Unlike every other directory page here, the vendor landscape has no card
+    markup to count - it is `<h2>` category sections holding
+    `<li><strong>Name</strong> - blurb</li>` entries. So the prose count was
+    never derived from anything and drifted freely: about.html claimed 350+
+    while README.md and CONTRIBUTING.md claimed 360+, and the real figure was
+    lower than both.
+
+    Two subtleties, both of which inflate the number if ignored:
+
+      * 24 vendors are listed under more than one category (Wiz, Aqua,
+        Chainguard, GitHub Advanced Security...), so entries total 337 while
+        distinct companies total 308. "N vendors" means companies, so the
+        unique count is what we report.
+      * Each category also opens with sentence-shaped `<li><strong>...</strong>`
+        caveats ("The categories aren't clean."). They are excluded by the
+        trailing period, which a vendor name never has.
+    """
+    text = (REPO / "vendor-landscape.html").read_text(encoding="utf-8")
+    body = re.sub(r"(?s)<(script|style|head|nav|footer).*?</\1>", "", text)
+    chunks = re.split(r"(<h2[^>]*>.*?</h2>)", body, flags=re.DOTALL)
+    names: set[str] = set()
+    categories = 0
+    for i in range(1, len(chunks), 2):
+        title = re.sub(r"<[^>]+>", "", chunks[i]).strip()
+        title = title.replace("&amp;", "&")
+        if any(title.startswith(n.replace("&amp;", "&")) for n in VENDOR_NON_CATEGORIES):
+            continue
+        categories += 1
+        section = chunks[i + 1] if i + 1 < len(chunks) else ""
+        for raw in re.findall(r"<li>\s*<strong>(.*?)</strong>", section, re.DOTALL):
+            name = re.sub(r"<[^>]+>", "", raw).strip()
+            if name and not name.endswith("."):
+                names.add(name)
+    return len(names), categories
+
+
 def canonical_counts() -> dict:
     res_html = (REPO / "resources.html").read_text(encoding="utf-8")
     gloss = (REPO / "glossary.html").read_text(encoding="utf-8")
@@ -435,6 +486,9 @@ def canonical_counts() -> dict:
         "ctfs": card_count("ctfs.html"),
         "conferences": card_count("conferences.html"),
         "long_form": long_form_count(),
+        "vendors": vendor_landscape()[0],
+        "vendor_categories": vendor_landscape()[1],
+        "og_images": len(list((REPO / "img" / "og").rglob("*.jpg"))),
     }
 
 

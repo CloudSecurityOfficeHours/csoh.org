@@ -328,11 +328,17 @@ def check_social_cards(path: Path, text: str) -> list[Finding]:
 
 # ----------------------------------------------------------------------- check 5
 
-# Prose inventory claims. Only subjects whose true value is derivable from the
-# repo are listed; "vendors" is deliberately absent - vendor-landscape.html is
-# prose in lists with no countable card structure, so there is no truth to
-# check against and guessing one would be worse than reporting the conflict.
+# Prose inventory claims whose true value is derivable from the repo.
+#
+# "vendors" used to be absent here, and the conflict it caused (about.html said
+# 350+, README.md and CONTRIBUTING.md said 360+) was reported rather than
+# checked, because vendor-landscape.html has no card markup to count. That was
+# the right call at the time and the wrong end state: sync_counts.vendor_landscape()
+# now counts the `<li><strong>Name</strong>` entries inside the category
+# sections, so the number is derived like every other. Both claims turned out to
+# be overstatements - 308 distinct vendors across 32 categories.
 COUNT_SUBJECTS = {
+    "vendors": "vendors_floor",
     "curated resources": "resources_floor",
     "curated cloud security resources": "resources_floor",
     "resources": "resources_floor",
@@ -346,7 +352,7 @@ COUNT_SUBJECTS = {
 COUNT_RE = re.compile(
     r"(\d{2,4})(\+?)\s+(?:curated\s+)?"
     r"(curated cloud security resources|curated resources|meeting recaps|glossary terms|"
-    r"breach kill chains|conferences|resources|recaps)\b",
+    r"breach kill chains|conferences|resources|recaps|vendors)\b",
     re.IGNORECASE,
 )
 
@@ -396,36 +402,6 @@ def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
                    "owns it.",
         ))
     return findings
-
-
-def check_count_conflicts(texts: dict[str, str]) -> list[Finding]:
-    """Inventory claims that disagree across documents with no derivable truth.
-
-    "vendors" is the live case: about.html says 350+ twice, README.md and
-    CONTRIBUTING.md say 360+. One is stale, but vendor-landscape.html has no
-    countable structure, so the script cannot say which. REPORT.
-    """
-    seen: dict[str, set[tuple[str, str]]] = {}
-    pat = re.compile(r"(\d{2,4})\+?\s+vendors\b", re.IGNORECASE)
-    for name, text in texts.items():
-        for m in pat.finditer(strip_code(text)):
-            if (name, m.group(1)) in COUNT_EXCEPTIONS:
-                continue
-            seen.setdefault("vendors", set()).add((name, m.group(1)))
-    out = []
-    for subject, pairs in seen.items():
-        values = {v for _, v in pairs}
-        if len(values) > 1:
-            where = ", ".join(f"{n} says {v}" for n, v in sorted(pairs))
-            out.append(Finding(
-                "count-conflict", "(multiple)",
-                f"{subject}: {where}",
-                fixable=False,
-                detail="vendor-landscape.html has no countable card structure, so "
-                       "no value can be derived. Pick one and consider giving "
-                       "sync_counts.py something to count.",
-            ))
-    return out
 
 
 # ----------------------------------------------------------------------- check 6
@@ -484,54 +460,94 @@ def check_repo_doc_refs(path: Path, text: str) -> list[Finding]:
 
 # ----------------------------------------------------------------------- check 8
 
+def _linkable_prose(html: str) -> str:
+    """Page text with the zones crosslink_pages.py refuses to touch removed.
+
+    An `<a>` cannot contain another `<a>` (invalid HTML), and the linker also
+    skips headings, code, and pre. Comparing against raw text instead reports
+    terms that are already spoken for: CALDERA appears on cloud-pentesting.html
+    only as the anchor text of a link to apache/caldera, and ISO/IEC 27001
+    appears on compliance-frameworks.html only inside an `<h2>` and a table-of-
+    contents anchor. Neither can ever gain a glossary link, so neither is an
+    orphan worth anyone's time.
+    """
+    html = re.sub(r"(?is)<(script|style|code|pre|title|button)\b.*?</\1>", " ", html)
+    html = re.sub(r"(?is)<h[1-6]\b[^>]*>.*?</h[1-6]>", " ", html)
+    html = re.sub(r"(?is)<a\b[^>]*>.*?</a>", " ", html)
+    return re.sub(r"<[^>]+>", " ", html)
+
+
 def check_glossary_orphans(pages: list[Path]) -> list[Finding]:
-    """Glossary entries that no page links to.
+    """Glossary entries whose headword sits in linkable prose but is not linked.
 
-    crosslink_pages.py links glossary terms from every page automatically, so an
-    entry with zero inbound links is one whose headword never appears in site
-    prose. That is worth a look - it may be a term that has fallen out of use,
-    or one whose headword is phrased differently from how anyone writes it.
+    The useful signal is narrow, and the first version of this check missed how
+    narrow. It reported all 17 entries with no inbound link, of which at most
+    one was actionable:
 
-    REPORT, firmly. An orphan is NOT evidence a term should be cut:
-    check_glossary_coverage.py maintains an UNREACHABLE list of headwords that
-    are deliberately unlinkable, and those are correct entries. Deletion is a
-    human call (docs/EDITORIAL_STANDARDS.md §7).
+      * 3 (container, drift, subnet) yield no keys under crosslink_pages.py's
+        PAGE_DENYLIST - ordinary English words deliberately never auto-linked
+        from a page. Unlinked is the correct state, exactly as for the entries
+        check_glossary_coverage.py lists in UNREACHABLE.
+      * 9 headwords appear nowhere in site prose at all. A glossary is a
+        reference, not an index of what the site happens to discuss, so a term
+        nobody has written about yet is not a defect.
+      * 4 appeared only inside anchors, headings, or - twice - not at all: the
+        old check matched CWE inside "CWEE" and IOA inside "IOActive", because
+        a `\\b` before a term does not stop it matching a longer word.
+
+    So: match on both boundaries, ignore what the linker cannot touch, and
+    report only terms that could gain a link and have not. REPORT, firmly - an
+    orphan is never evidence a term should be cut (EDITORIAL_STANDARDS.md §7).
     """
     glossary = REPO / "glossary.html"
     if not glossary.exists():
         return []
     html = glossary.read_text(encoding="utf-8")
-    entries = {
-        m.group(1)
-        for m in re.finditer(r'<dt[^>]*\bid\s*=\s*["\'](term-[^"\']+)["\']', html)
-    }
-    # Headwords check_glossary_coverage.py already records as unlinkable.
-    unreachable: set[str] = set()
-    if GLOSSARY_UNREACHABLE_SOURCE.exists():
-        src = GLOSSARY_UNREACHABLE_SOURCE.read_text(encoding="utf-8")
-        block = re.search(r"UNREACHABLE\s*=\s*\{(.*?)\n\}", src, re.DOTALL)
-        if block:
-            unreachable = set(re.findall(r'"(term-[^"]+)"', block.group(1)))
+
+    try:
+        from glossary_terms import PAGE_DENYLIST, derive_keys
+    except ImportError:  # pragma: no cover - the parser is a sibling module
+        return []
+
+    entries: dict[str, set[str]] = {}
+    for m in re.finditer(r'<dt[^>]*\bid\s*=\s*["\'](term-[^"\']+)["\'][^>]*>(.*?)</dt>',
+                         html, re.DOTALL):
+        keys = derive_keys(m.group(2), PAGE_DENYLIST)
+        if keys:  # no page keys means "never linkable from a page", by design
+            entries[m.group(1)] = keys
 
     linked: set[str] = set()
+    prose: list[str] = []
     for p in pages:
+        text = p.read_text(encoding="utf-8", errors="replace")
         if p.name == "glossary.html":
             continue
-        for m in re.finditer(r'href="[^"]*glossary\.html#(term-[^"#]+)"',
-                             p.read_text(encoding="utf-8", errors="replace")):
+        for m in re.finditer(r'href="[^"]*glossary\.html#(term-[^"#]+)"', text):
             linked.add(m.group(1))
+        prose.append(_linkable_prose(text))
+    corpus = "\n".join(prose)
 
-    orphans = sorted(entries - linked - unreachable)
-    if not orphans:
+    actionable = []
+    for slug, keys in sorted(entries.items()):
+        if slug in linked:
+            continue
+        for key in keys:
+            if re.search(rf"(?<![A-Za-z0-9]){re.escape(key)}(?![A-Za-z0-9])", corpus):
+                actionable.append((slug, key))
+                break
+
+    if not actionable:
         return []
-    shown = ", ".join(o.replace("term-", "") for o in orphans[:12])
-    more = f" (+{len(orphans) - 12} more)" if len(orphans) > 12 else ""
+    shown = ", ".join(f"{s.replace('term-', '')} (\"{k}\")" for s, k in actionable[:8])
+    more = f" (+{len(actionable) - 8} more)" if len(actionable) > 8 else ""
+    noun = "entry appears" if len(actionable) == 1 else "entries appear"
     return [Finding(
         "glossary-orphan", "glossary.html",
-        f"{len(orphans)} entries no page links to: {shown}{more}",
+        f"{len(actionable)} {noun} in prose but not linked: {shown}{more}",
         fixable=False,
-        detail="Not a deletion list. A headword may simply be phrased "
-               "differently from how the site writes it.",
+        detail="Re-running tools/crosslink_pages.py would link these, but it "
+               "rewrites glossary links across ~144 pages - do it deliberately, "
+               "not as a side effect. Never a deletion list.",
     )]
 
 
@@ -544,8 +560,6 @@ def collect(apply: bool) -> tuple[list[Finding], list[FileEdit]]:
 
     pages = html_pages()
     docs = doc_files()
-
-    conflict_texts: dict[str, str] = {}
 
     for p in pages + docs:
         original = p.read_text(encoding="utf-8", errors="replace")
@@ -564,11 +578,9 @@ def collect(apply: bool) -> tuple[list[Finding], list[FileEdit]]:
         f, text = check_em_dashes(p, text)
         findings += f
 
-        conflict_texts[rel(p)] = original
         if text != original:
             edits.append(FileEdit(p, text))
 
-    findings += check_count_conflicts(conflict_texts)
     findings += check_glossary_orphans(pages)
 
     if apply:

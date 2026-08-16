@@ -81,7 +81,7 @@ csoh.org/
 ├── cspm-vs-cnapp.html               # Tool-category comparison (CSPM/CNAPP/CWPP/CIEM/DSPM)
 ├── cspm-vs-cwpp.html                # Posture vs workload protection, head to head
 ├── cnapp-vs-xdr.html                # Where CNAPP ends and XDR/CDR begins
-├── vendor-landscape.html            # 360+ cloud-security vendors across 30 categories
+├── vendor-landscape.html            # <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories
 ├── glossary.html                    # 310 cloud-security terms with live search + cross-links
 ├── faq.html                         # Frequently asked questions
 │

@@ -54,8 +54,7 @@ this from the outside as well.
 | `date-placeholder` | reported | January 1 `datePublished` - the unfilled template |
 | `og-asset-missing` | reported | `og:image` / `twitter:image` naming a file that does not exist |
 | `count-drift` | reported | A prose inventory number that is false |
-| `count-conflict` | reported | Two documents claiming different totals with no derivable truth |
-| `glossary-orphan` | reported | Glossary entries no page links to |
+| `glossary-orphan` | reported | A term in linkable prose that carries no glossary link |
 | `dead-tool-ref` | reported | A doc naming a `tools/*.py` that no longer exists |
 
 ## Things that look like bugs and are not
@@ -108,7 +107,10 @@ regex.
   chrome sweeps touch every file at once, so all 272 pages share a last-commit
   date. That is why `dateModified` is treated as authoritative and why the
   weekly workflow filters sweep commits out of its review slice.
-- Vendor counts are deliberately not derivable: `vendor-landscape.html` is prose
-  in lists with no countable card structure. The conflict is reported; guessing
-  a number would be worse. Give `sync_counts.py` something to count if you want
-  this owned.
+- Vendor counts *are* derivable now. `vendor-landscape.html` has no card markup,
+  so the number was hand-typed and drifted: about.html said 350+, README.md and
+  CONTRIBUTING.md said 360+, and the truth was 308 distinct vendors across 32
+  categories. `sync_counts.vendor_landscape()` counts the
+  `<li><strong>Name</strong>` entries inside the category sections, skipping the
+  sentence-shaped caveats and deduplicating the 24 vendors that appear under
+  more than one category.
