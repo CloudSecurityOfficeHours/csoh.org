@@ -199,6 +199,30 @@ above gets `Authentication error (10000)` on the zone endpoint - the classic
 .../accounts/$TF_VAR_account_id/access/apps   .../zones/$TF_VAR_zone_id/access/apps
 ```
 
+**Read the `error` field, not the `message` field.** Cloudflare returns three
+different codes for what is ultimately the same problem, and one of them looks
+nothing like a scope error:
+
+| Code | What it actually means |
+|---|---|
+| `10000 Authentication error` | token cannot reach that endpoint at all |
+| `9109 Unauthorized to access requested resource` | token reaches it but not that object |
+| `1010` with an **empty message** | the group is present but set to Read, not Edit |
+
+That last one cost real time here. `terraform apply` prints ` (1010)` with
+nothing after it, and the API's `errors[].message` is genuinely empty - but the
+response body carries a separate `error` field reading `auth.forbidden`. A raw
+POST is the only way to see it, because the provider surfaces `message` only:
+
+```sh
+curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$TF_VAR_account_id/access/apps" \
+  -H "Authorization: Bearer $CLOUDFLARE_TF_API_TOKEN" -H "Content-Type: application/json" \
+  --data '{"name":"probe","domain":"probe.csoh.org","type":"self_hosted"}' | python3 -m json.tool
+```
+
+So a token that passes a GET probe is **not** proven able to apply. Read access
+is not evidence of Edit access, and every group in the table above needs Edit.
+
 Set Zone Resources to `csoh.org` only. Keep this token **separate** from the
 cache-purge secret and out of CI: the deploy path should never hold a credential
 that can rewrite the security headers. Do not fall back to the Global API Key -
