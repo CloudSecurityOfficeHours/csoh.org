@@ -36,7 +36,13 @@ BASE_DENYLIST = {
     "baseline",
     "registry",
     "principal",
-    "first",
+    # "first" used to live here. The glossary defines FIRST - the Forum of
+    # Incident Response and Security Teams, which owns CVSS and EPSS - and
+    # crosslink_glossary.py matched every key with re.IGNORECASE, so the key
+    # would have linked all ~980 ordinary uses of the word "first". Denying it
+    # was the only lever available, and it cost the entry every link it could
+    # have had. Both linkers now match acronym-shaped keys case-sensitively,
+    # so "FIRST" matches the 8 real mentions and "first" matches nothing.
     "csp",
     "sp",
     "soc",
@@ -69,6 +75,21 @@ def slugify(text: str) -> str:
     text = unescape(text)
     text = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()
     return "term-" + text if text else "term-unknown"
+
+
+def is_acronym(key: str) -> bool:
+    """All-uppercase, 2-8 chars, no spaces - match these case-sensitively.
+
+    Lets "AI" the acronym link while "ai" inside "aim" or "rain" does not, and
+    "KEV" link while the name "Kev" does not. Both cross-linkers consult this;
+    a key that satisfies it is only ever matched against text of the same case.
+    """
+    return (
+        2 <= len(key) <= 8
+        and " " not in key
+        and key == key.upper()
+        and any(c.isalpha() for c in key)
+    )
 
 
 # Parenthetical aliases are accepted unconditionally, and deliberately so.

@@ -13,7 +13,8 @@ Adds anchor IDs to every `<dt>` in `glossary.html` and hyperlinks every glossary
 3. **Hyperlinks every occurrence.** Walks every `<dd>` and wraps each glossary-term mention in `<a class="glossary-link" href="#term-...">`. Skips:
    - Text already inside an existing `<a>` tag (no nesting).
    - Self-references (a term won't link to itself in its own definition).
-   - `BASE_DENYLIST` in `glossary_terms.py`: generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `cloud`, `iso`, …). `crosslink_pages.py` adds more on top for page prose; the glossary keeps the shorter list because inside a definition these words are usually being used in their defined sense.
+   - `BASE_DENYLIST` in `glossary_terms.py`: generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `cloud`, `iso`, …).
+   - Acronym-shaped keys (all-caps, 2-8 chars, no spaces) are matched **case-sensitively**, the same rule `crosslink_pages.py` uses. `FIRST` links the Forum of Incident Response and Security Teams; the ordinary word `first` links nothing. Without this the key would have to be denylisted, which is what used to happen and what cost that entry every link it could have had. `crosslink_pages.py` adds more on top for page prose; the glossary keeps the shorter list because inside a definition these words are usually being used in their defined sense.
 
    One alias belongs to exactly one entry, and the winner is whichever `<dt>` comes first in the file — so a collision resolves by file order rather than by intent. Keep headwords disjoint, and check with the duplicate-alias snippet in [`CROSSLINK_PAGES_README.md`](CROSSLINK_PAGES_README.md#verifying) after editing them.
 

@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glossary_terms import (  # noqa: E402
     PAGE_DENYLIST as DENYLIST,
     derive_keys as _derive_keys,
+    is_acronym,
     slugify,
 )
 
@@ -267,17 +268,6 @@ def load_glossary_terms() -> tuple[dict[str, str], list[str]]:
                 key_to_slug[kl] = slug
                 original_keys.append(k)
     return key_to_slug, original_keys
-
-
-def is_acronym(key: str) -> bool:
-    """All-uppercase, 2-8 chars, no spaces - require case-sensitive match
-    so 'AI' (the acronym) matches but 'ai' (in 'aim', 'rain', etc.) doesn't."""
-    return (
-        2 <= len(key) <= 8
-        and " " not in key
-        and key == key.upper()
-        and any(c.isalpha() for c in key)
-    )
 
 
 def build_term_regexes(keys: list[str]) -> list[tuple[re.Pattern[str], bool]]:

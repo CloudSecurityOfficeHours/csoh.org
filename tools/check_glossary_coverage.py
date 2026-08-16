@@ -45,25 +45,23 @@ GLOSSARY = REPO / "glossary.html"
 # Entries that intentionally yield no lookup keys, and so are reachable only by
 # browsing or searching the glossary - never by an auto-generated link.
 #
-# All four are single-word headwords whose key is in BASE_DENYLIST. For three of
-# them that is the right call: "Image", "Registry" and "Principal" are ordinary
-# English words that would auto-link constantly in senses unrelated to the entry.
+# All three are single-word headwords whose key is in BASE_DENYLIST, and in each
+# case that is the right call: they are ordinary English words that would
+# auto-link constantly in senses unrelated to the entry.
 #
-# "FIRST" is a different case and worth understanding before copying the
-# pattern. It is the Forum of Incident Response and Security Teams, and as an
-# all-caps key crosslink_pages.py would match it case-sensitively, hitting the 8
-# real "FIRST" mentions and none of the ~980 ordinary "first"s.
-# crosslink_glossary.py has no such rule - it matches every key with
-# re.IGNORECASE - so the word has to be denied globally to stop it linking
-# "first" throughout the glossary. The denylist entry is therefore working
-# around a gap in one tool at the other's expense. Teaching
-# crosslink_glossary.py the same acronym rule would let "first" leave the
-# denylist and make this entry linkable again.
+# term-first used to be a fourth, and its removal is the pattern to imitate
+# rather than to extend this list. FIRST is the Forum of Incident Response and
+# Security Teams; the word had to be denied globally because
+# crosslink_glossary.py matched every key with re.IGNORECASE and would otherwise
+# have linked ~980 ordinary uses of "first". That was a tool limitation being
+# paid for by an entry. Both linkers now match acronym-shaped keys
+# case-sensitively, so the denylist entry could go and the term links again.
+# When something lands here, ask whether the headword is really unlinkable or
+# whether a linker is just not precise enough yet.
 UNREACHABLE = {
     "term-image": "'Image' is an ordinary English word; denylisted",
     "term-registry": "'Registry' is an ordinary English word; denylisted",
     "term-principal": "'Principal' is an ordinary English word; denylisted",
-    "term-first": "'FIRST' collides with the word 'first'; see note above",
 }
 
 DT_RE = re.compile(r"<dt(\s[^>]*)?>(.*?)</dt>", re.DOTALL)

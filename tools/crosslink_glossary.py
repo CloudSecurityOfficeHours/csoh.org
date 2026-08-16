@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glossary_terms import (  # noqa: E402
     BASE_DENYLIST as DENYLIST,
     derive_keys,
+    is_acronym,
     slugify,
 )
 
@@ -42,10 +43,16 @@ __all__ = ["DENYLIST", "derive_keys", "slugify", "main"]
 GLOSSARY = Path(__file__).resolve().parent.parent / "glossary.html"
 
 
-def add_dt_ids(content: str) -> tuple[str, dict[str, str]]:
-    """Add id="..." to each <dt> (if not already present). Returns the
-    updated content and a map of lowercased-key -> slug."""
+def add_dt_ids(content: str) -> tuple[str, dict[str, str], dict[str, str]]:
+    """Add id="..." to each <dt> (if not already present).
+
+    Returns the updated content, a map of lowercased-key -> slug, and a map of
+    lowercased-key -> the key's original-case spelling. The second map exists so
+    _link_text can apply the acronym rule: the match regex is case-insensitive,
+    but a key that `is_acronym` must still match text of the same case.
+    """
     key_to_slug: dict[str, str] = {}
+    key_to_original: dict[str, str] = {}
 
     def replace(m: re.Match) -> str:
         attrs = m.group(1) or ""
@@ -62,6 +69,7 @@ def add_dt_ids(content: str) -> tuple[str, dict[str, str]]:
             kl = k.lower()
             if kl and kl not in key_to_slug:
                 key_to_slug[kl] = slug
+                key_to_original[kl] = k
 
         if existing_id:
             return m.group(0)
@@ -70,7 +78,7 @@ def add_dt_ids(content: str) -> tuple[str, dict[str, str]]:
         return f"<dt{new_attrs}>{inner}</dt>"
 
     pattern = re.compile(r"<dt(\s[^>]*)?>(.*?)</dt>", re.DOTALL)
-    return pattern.sub(replace, content), key_to_slug
+    return pattern.sub(replace, content), key_to_slug, key_to_original
 
 
 def build_term_regex(keys: list[str]) -> re.Pattern[str]:
@@ -89,6 +97,7 @@ def link_dd(
     inner: str,
     term_re: re.Pattern[str],
     key_to_slug: dict[str, str],
+    key_to_original: dict[str, str],
     self_slug: str,
 ) -> str:
     """Return inner with every term mention wrapped in <a>.
@@ -113,11 +122,21 @@ def link_dd(
     tag_re = re.compile(r"<[^>]+>")
     for tm in tag_re.finditer(masked):
         if tm.start() > cursor:
-            out.append(_link_text(masked[cursor : tm.start()], term_re, key_to_slug, self_slug))
+            out.append(
+                _link_text(
+                    masked[cursor : tm.start()],
+                    term_re,
+                    key_to_slug,
+                    key_to_original,
+                    self_slug,
+                )
+            )
         out.append(tm.group(0))
         cursor = tm.end()
     if cursor < len(masked):
-        out.append(_link_text(masked[cursor:], term_re, key_to_slug, self_slug))
+        out.append(
+            _link_text(masked[cursor:], term_re, key_to_slug, key_to_original, self_slug)
+        )
     result = "".join(out)
 
     # Restore placeholders.
@@ -134,6 +153,7 @@ def _link_text(
     text: str,
     term_re: re.Pattern[str],
     key_to_slug: dict[str, str],
+    key_to_original: dict[str, str],
     self_slug: str,
 ) -> str:
     """Wrap glossary-term occurrences in text with <a>. Within a sentence,
@@ -156,6 +176,14 @@ def _link_text(
         slug = key_to_slug.get(word.lower())
         if not slug or slug == self_slug:
             continue
+        # The alternation is case-insensitive so ordinary multi-word terms match
+        # however they are capitalised, but an acronym key must match exactly.
+        # Without this, "FIRST" (Forum of Incident Response and Security Teams)
+        # linked every ordinary "first" in the glossary, which is why the word
+        # had to sit in the denylist and why that entry was unreachable.
+        original = key_to_original.get(word.lower())
+        if original and is_acronym(original) and word != original:
+            continue
         if slug in seen_in_sentence:
             continue
         seen_in_sentence.add(slug)
@@ -166,7 +194,12 @@ def _link_text(
     return "".join(out)
 
 
-def link_dds(content: str, term_re: re.Pattern[str], key_to_slug: dict[str, str]) -> str:
+def link_dds(
+    content: str,
+    term_re: re.Pattern[str],
+    key_to_slug: dict[str, str],
+    key_to_original: dict[str, str],
+) -> str:
     """Walk the file and link each <dd> based on the most recent preceding <dt>'s id."""
     # We track the "self" slug: the id of the most recent <dt>.
     pos_re = re.compile(r"<(dt|dd)(\s[^>]*)?>(.*?)</\1>", re.DOTALL | re.IGNORECASE)
@@ -185,7 +218,7 @@ def link_dds(content: str, term_re: re.Pattern[str], key_to_slug: dict[str, str]
             self_slug = id_m.group(1) if id_m else ""
             out.append(m.group(0))
         else:  # dd
-            new_inner = link_dd(inner, term_re, key_to_slug, self_slug)
+            new_inner = link_dd(inner, term_re, key_to_slug, key_to_original, self_slug)
             out.append(f"<dd{attrs}>{new_inner}</dd>")
         last_end = m.end()
     out.append(content[last_end:])
@@ -224,14 +257,14 @@ def main() -> int:
         print(f"Stripped {n_unwrapped} existing link(s) for fresh relinking.")
 
     # Pass 1: assign IDs and collect terms.
-    content, key_to_slug = add_dt_ids(content)
+    content, key_to_slug, key_to_original = add_dt_ids(content)
     if not key_to_slug:
         print("No <dt> entries found; nothing to do.", file=sys.stderr)
         return 1
 
     # Pass 2: link <dd>s.
     term_re = build_term_regex(list(key_to_slug.keys()))
-    content = link_dds(content, term_re, key_to_slug)
+    content = link_dds(content, term_re, key_to_slug, key_to_original)
 
     GLOSSARY.write_text(content, encoding="utf-8")
     n_terms = len({v for v in key_to_slug.values()})
