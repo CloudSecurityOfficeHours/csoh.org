@@ -76,8 +76,17 @@ on:
       - main
     paths:
       - '**.html'
+      # check_docs_consistency.py reads authored Markdown as well as HTML, so a
+      # commit touching only a README can break its gate. `**.md` matches at any
+      # depth; `*.md` would mean root-level only and would miss tools/*.md and
+      # docs/*.md entirely (see the `'*.html'` trap documented in CLAUDE.md).
+      - '**.md'
       - 'tools/check_crosslink_coverage.py'
       - 'tools/check_glossary_coverage.py'
+      - 'tools/check_docs_consistency.py'
+      # Imported by check_docs_consistency.py for the canonical counts, so a
+      # change to it changes that gate's verdict with nothing else in the diff.
+      - 'tools/sync_counts.py'
       - 'tools/crosslink_pages.py'
       - 'tools/crosslink_glossary.py'
       - 'tools/glossary_terms.py'
@@ -250,6 +259,23 @@ jobs:
       # denylist, or the UNREACHABLE map breaks this with no HTML in the diff.
       - name: Check glossary integrity and reachability
         run: python3 tools/check_glossary_coverage.py
+
+      # Step 3e - Documentation consistency, mechanical half. Keeps the class of
+      # defect the weekly review kept rediscovering from accumulating again: a
+      # visible "Last updated" disagreeing with the page's own JSON-LD, a
+      # datetime attribute disagreeing with the date printed beside it, an
+      # em-dash where docs/EDITORIAL_STANDARDS.md calls for a spaced hyphen.
+      #
+      # --check fails ONLY on findings the script can fix itself. Placeholder
+      # dates, missing card assets, and glossary orphans are reported to the
+      # weekly tracking issue instead - a gate that failed on something CI
+      # cannot fix would block every push until a human intervened, which is
+      # how a gate gets disabled rather than satisfied.
+      #
+      # Unconditional for the same reason as 3c and 3d: the Markdown it reads
+      # is not HTML, so `steps.html.outputs.changed` says nothing about it.
+      - name: Check documentation consistency
+        run: python3 tools/check_docs_consistency.py --check
 
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).

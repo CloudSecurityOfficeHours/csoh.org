@@ -395,7 +395,14 @@ validator and **fail** the PR. They are stdlib-only and take about a second each
 python3 tools/check_no_inline_scripts.py  # the strict CSP forbids inline <script>
 python3 tools/check_svg_dimensions.py     # width/height on every <svg> with a viewBox
 python3 tools/check_jsonld.py             # every ld+json block must parse
+python3 tools/check_docs_consistency.py --check   # dates, punctuation, count claims
 ```
+
+`check_docs_consistency.py --check` fails only on what it can fix itself; run
+`--fix` and commit the result. Everything else it finds is reported to the
+weekly `documentation-review` tracking issue for a human, and nothing it does
+ever deletes a file. See [docs/EDITORIAL_STANDARDS.md](docs/EDITORIAL_STANDARDS.md)
+for the standard it enforces.
 
 Three more checks run post-merge rather than on the PR, but are worth running
 locally if you touched what they cover:
