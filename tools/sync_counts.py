@@ -318,6 +318,12 @@ def display_values(counts: dict) -> dict:
         "meetings_floor": f"{floor10(counts['meetings'])}+",
         "breaches": str(counts["breaches"]),
         "feeds": str(counts["feeds"]),
+        "ctfs": str(counts["ctfs"]),
+        "ctfs_floor": f"{floor10(counts['ctfs'])}+",
+        "conferences": str(counts["conferences"]),
+        "glossary_terms": str(counts["glossary_terms"]),
+        "glossary_terms_floor": f"{floor10(counts['glossary_terms'])}+",
+        "long_form_floor": f"{floor10(counts['long_form'])}+",
     }
 
 
@@ -383,6 +389,40 @@ def feeds_count() -> int:
     return len(re.findall(r'"url"\s*:', m.group(1)))
 
 
+def card_count(page: str) -> int:
+    """Number of entry cards on a directory page.
+
+    ctfs.html and conferences.html are flat lists of `.resource-card` articles,
+    and each page's JSON-LD numberOfItems already tracks that same figure, so
+    counting the cards keeps the prose and the structured data on one source.
+    """
+    text = (REPO / page).read_text(encoding="utf-8")
+    return len(re.findall(r'class="resource-card"', text))
+
+
+def long_form_count() -> int:
+    """Root-level guide pages substantial enough to call long-form.
+
+    "Long-form" is defined here rather than asserted in prose: a root page that
+    is not a utility page and carries at least 1,500 words of body copy. Nav,
+    footer, script, and style blocks are stripped first so chrome does not
+    inflate the count.
+    """
+    utility = {
+        "403.html", "404.html", "search.html", "rss.html", "present.html",
+        "google66d489593949bd4c.html",
+    }
+    total = 0
+    for path in REPO.glob("*.html"):
+        if path.name in utility:
+            continue
+        text = path.read_text(encoding="utf-8")
+        body = re.sub(r"(?s)<(script|style|head|nav|footer).*?</\1>", "", text)
+        if len(re.sub(r"<[^>]+>", " ", body).split()) >= 1500:
+            total += 1
+    return total
+
+
 def canonical_counts() -> dict:
     res_html = (REPO / "resources.html").read_text(encoding="utf-8")
     gloss = (REPO / "glossary.html").read_text(encoding="utf-8")
@@ -392,6 +432,9 @@ def canonical_counts() -> dict:
         "breaches": len(list((REPO / "breaches").glob("*.html"))),
         "feeds": feeds_count(),
         "glossary_terms": len(re.findall(r'id="term-[a-z0-9-]+"', gloss)),
+        "ctfs": card_count("ctfs.html"),
+        "conferences": card_count("conferences.html"),
+        "long_form": long_form_count(),
     }
 
 

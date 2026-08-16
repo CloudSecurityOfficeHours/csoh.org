@@ -397,12 +397,25 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
         f"<h1>{human} - Meeting Recap</h1>",
         out, count=1,
     )
-    # Hero subtitle <p> immediately after the <h1>
-    out = re.sub(
-        r'(<section class="hero hero--compact">.*?<h1>[^<]+</h1>\s*<p>)[^<]*(</p>)',
+    # Hero subtitle <p> immediately after the <h1>.
+    #
+    # The inner pattern must tolerate markup, not just text. crosslink_pages.py
+    # wraps glossary terms in <a class="glossary-link"> wherever they appear,
+    # including inside this subtitle, and a `[^<]*` here silently stopped
+    # matching the moment that happened - re.sub with no match is a no-op that
+    # reports nothing, so 16 recaps shipped with the previous meeting's
+    # subtitle before anyone noticed. Match anything up to the closing tag.
+    out, n_sub = re.subn(
+        r'(<section class="hero hero--compact">.*?<h1>[^<]+</h1>\s*<p>)(?:(?!</p>).)*(</p>)',
         lambda mm: mm.group(1) + h.escape(headline) + mm.group(2),
         out, count=1, flags=re.DOTALL,
     )
+    if n_sub != 1:
+        raise SystemExit(
+            "add_meeting: could not find the hero subtitle <p> to replace. "
+            "The template markup changed - fix the pattern rather than "
+            "shipping a recap that carries the previous meeting's subtitle."
+        )
     out = re.sub(
         r'<li><span aria-current="page">[^<]+</span></li>',
         f'<li><span aria-current="page">{human}</span></li>',

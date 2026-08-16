@@ -165,7 +165,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 ## 🌐 About
 
-Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no cookies, no cross-site trackers, no on-site advertising (the only analytics is GoatCounter, a cookieless page-view counter). (The mailing list occasionally includes a clearly-labeled sponsored link from a community-aligned partner - never a separate promotional email.)
+Cloud Security Office Hours is a vendor-neutral, free community founded in February 2023. We meet on Zoom every Friday at 7am PT, share what we're learning, and maintain this resource hub. Everything on the site is free, no cookies, no cross-site trackers, no on-site advertising (the only analytics is GoatCounter, a cookieless page-view counter). (No sponsored content on the site or in the mailing list; hosting is offset by optional donations.)
 
 Sign up for the weekly Zoom link at **[csoh.kit.com](https://csoh.kit.com/39feb4f397)**. Subscribe to our cloud-security news at **[csoh.org/feed.xml](https://csoh.org/feed.xml)** (or visit the [RSS subscribe page](https://csoh.org/rss.html) for setup help).
 
