@@ -18,9 +18,13 @@ Idempotent: skips files whose .webp sibling is newer than the source.
 
 `--only-existing` refreshes the .webp files that are already committed and
 creates no new ones. It exists because these directories are deliberately
-partial: img/og holds 249 JPGs but only 15 committed .webp siblings, since
-only the handful of cards rendered through a <picture> element on index.html
-need one. A bare run over img/og would add the other 234 and commit them.
+partial: img/og holds 90 top-level JPGs but only 4 committed .webp siblings,
+because a sibling is only reachable where the image is rendered through a
+<picture> element - the four featured cards on index.html. Every other OG
+image is an og:image meta target, and a meta tag carries a single URL, so it
+can never use a <source srcset>. A bare run over img/og would add the other 86
+and commit them.
+
 When a generator re-renders one of those JPGs, its sibling has to be re-encoded
 or the browser keeps getting the old image from <source srcset> while the
 <img> fallback carries the new one - so pair a card regeneration with
@@ -53,6 +57,21 @@ DEFAULT_DIRS = [
 # perceived quality, but ~30% smaller. 75 is too soft on text; 90 starts
 # bloating without visible benefit.
 WEBP_QUALITY = 82
+
+
+def rel(p: Path) -> str:
+    """Display path: repo-relative inside the repo, absolute outside it.
+
+    A caller may legitimately pass a directory that is not under REPO_ROOT - a
+    scratch copy, a staging dir, anything absolute. Path.relative_to raises
+    ValueError in that case, and because these paths are only ever used for
+    progress output, that aborted an otherwise valid run partway through a
+    print rather than failing anything real.
+    """
+    try:
+        return str(p.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(p)
 
 
 def convert(src: Path, force: bool) -> tuple[str, int, int]:
@@ -107,7 +126,7 @@ def main() -> int:
 
     for d in targets:
         if not d.exists():
-            print(f"  - skip (missing): {d.relative_to(REPO_ROOT)}")
+            print(f"  - skip (missing): {rel(d)}")
             continue
         srcs = sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
         srcs.sort()
@@ -117,7 +136,7 @@ def main() -> int:
             srcs = [s for s in srcs if s.with_suffix(".webp").exists()]
         if not srcs:
             continue
-        print(f"📁 {d.relative_to(REPO_ROOT)} - {len(srcs)} source images")
+        print(f"📁 {rel(d)} - {len(srcs)} source images")
         for src in srcs:
             try:
                 status, src_b, dst_b = convert(src, force=args.force)
