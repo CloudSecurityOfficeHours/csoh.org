@@ -277,6 +277,60 @@ you actually ask for it:
 lychee --dump --config .lychee.toml './*.html' | head -1
 ```
 
+## The weekly docs review can be confidently, specifically wrong
+
+On 2026-08-17 the review's lead accuracy finding said `ai-ml-security.html`
+still presented a superseded OWASP LLM Top 10, and supplied the 2026
+renumbering in detail. The edition was real - published during Black Hat week.
+The renumbering was wrong in **7 of 10 positions**: Supply Chain given as LLM05
+"Improper Supply Chain" (really LLM04 Supply Chain), a category called "Vector
+and Memory Flaws" at LLM07 that does not exist in any edition (really
+Misinformation), Hidden Context Exposure at LLM09 (really LLM08).
+
+What makes it worth recording is that it read as the *most* trustworthy kind of
+finding. It named a publication date, quoted the page's own outbound link,
+explained why the change was not cosmetic, and closed with "Verified against
+the OWASP GenAI resource page plus Akamai's and CybersecurityNews' write-ups,
+which agree on the ordering."
+
+Those two do **not** agree - Akamai puts Hidden Context Exposure at LLM08,
+CybersecurityNews at LLM09 - and neither is authoritative. The finding had
+reproduced the scrambled one. The agreement was asserted, never checked.
+
+The tell was inside the finding: "Unbounded Consumption rose four positions to
+LLM10." LLM10 is where it already sat in 2025. A renumbering that names one
+position as both origin and destination refutes itself, and one careful re-read
+catches it.
+
+The canonical source settles it in a single request, and it is a directory
+listing - the ten filenames encode the ten IDs and titles, so there is no
+document to parse and nothing to interpret:
+
+```sh
+curl -s https://api.github.com/repos/GenAI-Security-Project/GenAI-LLM-Top10/contents/2026/final \
+  | grep -o '"name": "LLM[^"]*"'
+```
+
+Note the shape, because it inverts the failure this file keeps recording. The
+usual trap is an instrument reporting "nothing is there" while broken - the
+inert Cloudflare ruleset, the dropped dotfiles, lychee crawling zero URLs. This
+is the opposite, and harder: **an instrument reporting something specific,
+detailed, and wrong.** A blank report invites suspicion. A well-sourced-looking
+one disarms it.
+
+`weekly-docs-review.yml`'s prompt now demands the publishing body rather than
+coverage of it, requires an enumerated list to come whole from one named
+source, forbids claiming sources agree without quoting the element relied on
+from each, and ends every accuracy item with a `Source:` line - or
+`Source: UNVERIFIED - <why>`, which is what a news write-up or vendor blog
+earns. **Read the `Source:` line first.** It is the triage signal, and it is
+the only part of a finding that tells you how much of it to re-check.
+
+The rule that outlives the incident: **a correction is a claim, and a wrong
+correction costs more than a missed one.** A staleness left alone leaves the
+page as it was. A wrong correction gets applied, and the page ends up less
+accurate than before anyone reviewed it.
+
 ## A new page subdirectory has to be registered in several places
 
 `portfolio/` and `homelab/` each needed hand-registration, and `homelab/` was
@@ -320,9 +374,36 @@ own ratio, and cover is a no-op for both. The four featured "start here"
 cards still use OG cards deliberately; at 311px they are legible and the
 extra weight suits them.
 
-Both generators need Playwright, which on this machine is under
-`/usr/bin/python3`, not the pyenv default. After adding a tile, run
-`generate_webp.py img/thumbs` and then `update_sri.py`.
+Both generators need Playwright, and as of 2026-08-17 **no interpreter on this
+machine has it** - not `/usr/bin/python3` (3.9.6, and too old for the
+`Pillow==12.2.0` the workflow pins: 11.3.0 is the newest it can install), and
+not the Homebrew 3.14.7 that `python3` actually resolves to. This note
+previously said Playwright lived under `/usr/bin/python3`; it does not, and
+following that costs a detour. Build a throwaway venv instead:
+
+```sh
+python3 -m venv /tmp/ogvenv && /tmp/ogvenv/bin/pip install playwright Pillow
+/tmp/ogvenv/bin/playwright install chromium
+```
+
+`generate_og_images.py` imports Playwright lazily and needs nothing else;
+Pillow is `generate_webp.py`'s dependency, not its own. After adding a tile,
+run `generate_webp.py img/thumbs` and then `update_sri.py`.
+
+**`img/og/` is deliberately partial on `.webp`**, and a bare run over it is a
+mistake. 90 top-level cards, 4 siblings - `ctfs`, `meetings`, `news`,
+`threat-research` - because a sibling is only reachable where the image renders
+through a `<picture>`, and those are the four featured cards on `index.html`.
+Every other OG image is an `og:image` meta target; a meta tag carries one URL,
+so a sibling there can never be served by anything. `generate_webp.py img/og`
+would add 86 files nothing can reach. Use `--only-existing`, which refreshes
+what is committed and creates nothing.
+
+That flag is what lets `update-counts.yml` re-encode `meetings.webp` when it
+re-renders that card. Without it the card went stale in a direction that hides
+itself: every WebP-capable browser kept getting the old count from `<source
+srcset>` while the `.jpg` fallback carried the new one, so the only clients
+seeing the correction were the ones that could not take WebP.
 
 ## Never allowlist a bare interpreter in a job that reads the web
 
