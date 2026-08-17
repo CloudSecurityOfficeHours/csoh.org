@@ -16,6 +16,16 @@ wrap_img_webp.py then leaves that <img> alone).
 
 Idempotent: skips files whose .webp sibling is newer than the source.
 
+`--only-existing` refreshes the .webp files that are already committed and
+creates no new ones. It exists because these directories are deliberately
+partial: img/og holds 249 JPGs but only 15 committed .webp siblings, since
+only the handful of cards rendered through a <picture> element on index.html
+need one. A bare run over img/og would add the other 234 and commit them.
+When a generator re-renders one of those JPGs, its sibling has to be re-encoded
+or the browser keeps getting the old image from <source srcset> while the
+<img> fallback carries the new one - so pair a card regeneration with
+`generate_webp.py <dir> --only-existing`.
+
 Requires Pillow (pip install Pillow). On the deploy runner Pillow is
 already installed alongside Playwright for the preview generator.
 
@@ -23,6 +33,7 @@ Usage:
     python3 tools/generate_webp.py                   # all default dirs
     python3 tools/generate_webp.py chat-screenshots  # specific dir
     python3 tools/generate_webp.py --force           # regenerate even if up-to-date
+    python3 tools/generate_webp.py img/og --only-existing  # refresh, never add
 """
 
 from __future__ import annotations
@@ -74,6 +85,9 @@ def main() -> int:
     parser.add_argument("dirs", nargs="*", help="Subset of dirs to process")
     parser.add_argument("--force", action="store_true",
                         help="Regenerate even if .webp is up to date")
+    parser.add_argument("--only-existing", action="store_true",
+                        help="Refresh only sources that already have a .webp "
+                             "sibling; never create a new one")
     args = parser.parse_args()
 
     targets = [Path(d) if Path(d).is_absolute() else REPO_ROOT / d for d in args.dirs] or DEFAULT_DIRS
@@ -97,6 +111,10 @@ def main() -> int:
             continue
         srcs = sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
         srcs.sort()
+        # Refresh-only mode: keep just the sources that already have a sibling,
+        # so a partial directory stays partial. See the module docstring.
+        if args.only_existing:
+            srcs = [s for s in srcs if s.with_suffix(".webp").exists()]
         if not srcs:
             continue
         print(f"📁 {d.relative_to(REPO_ROOT)} - {len(srcs)} source images")
