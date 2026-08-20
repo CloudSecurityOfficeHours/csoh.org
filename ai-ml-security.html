@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-17">
-    <meta property="article:modified_time" content="2026-05-17">
+    <meta property="article:modified_time" content="2026-08-19">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Cloud Security Topics">
     <meta property="article:tag" content="AI security">
@@ -78,7 +78,7 @@
         }
       },
       "datePublished": "2026-05-17",
-      "dateModified": "2026-08-17",
+      "dateModified": "2026-08-19",
       "mainEntityOfPage": "https://csoh.org/ai-ml-security.html",
       "about": {
         "@type": "Thing",
@@ -500,7 +500,7 @@
 
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-08-17">Last updated <strong>2026-08-17</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/ai-ml-security.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-08-19">Last updated <strong>2026-08-19</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/ai-ml-security.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
             <p><strong>The 30-second version:</strong> This page is about <em>securing AI workloads</em> in cloud - the model, the data, the inference endpoint, the agent, and the vector store. If you're looking for how to <em>use AI to learn cloud security</em>, that's a different page: <a href="ai-learning.html">AI Learning</a>.</p>
@@ -859,6 +859,18 @@
                 <li><strong>Model-extraction signatures.</strong> Sequential queries that look like systematic decision-boundary probing - same query with slight variations across many calls.</li>
                 <li><strong>Vector-store anomalies.</strong> Unusual ingest volume or sources; queries that traverse multiple tenants' namespaces; embedding distributions that drift.</li>
             </ul>
+
+            <h3 id="shadow-ai-detection">Detecting AI you do not operate</h3>
+            <p>Every signal above assumes you own the inference endpoint. The question that actually arrives first is the opposite one: <em>somebody here is using a model we never sanctioned, and we would like to know who, what, and against which data.</em> That is a different telemetry problem, because the thing you are hunting deliberately produces no traffic to your infrastructure. It comes up on the Friday call more than any other AI topic, so it gets its own list.</p>
+            <p>Four sources, in rough order of how much they return for the effort:</p>
+            <ul>
+                <li><strong>Identity logs, and specifically the ones you are probably not ingesting.</strong> On Microsoft, the interactive sign-in log is the one everybody already collects and the least useful here. The service-principal and <em>non-interactive</em> user sign-in logs are where an application calling a model API on someone's behalf shows up, along with managed-identity sign-ins from workloads that were stood up without review. These are separate log categories in the Entra diagnostic settings, and each has to be selected explicitly before it reaches <a class="glossary-link" href="glossary.html#term-siem">Sentinel</a> or any other <a class="glossary-link" href="glossary.html#term-siem">SIEM</a>. If your shadow-AI dashboard reports zero, verify the ingestion before you believe it - an empty panel and an unconfigured log source look identical.</li>
+                <li><strong>Egress: DNS, proxy, and firewall.</strong> The only source that sees usage which never touches a corporate identity at all, which is most browser-based usage. Resolve outbound requests against a list of model API and AI-product hostnames, then invert the question: rather than alerting on known-bad, alert on any AI endpoint that is <em>not</em> on your sanctioned list. That inversion is what makes the list maintainable, because new providers appear faster than any blocklist is updated. A <a class="glossary-link" href="glossary.html#term-sase">SASE</a> or proxy tier gives you this for remote devices too; DNS logs alone give you most of it for free.</li>
+                <li><strong>OAuth consent grants.</strong> An AI product that asks for mail and drive scopes leaves a permanent record in your tenant's enterprise-application list, and unlike egress it survives the user closing the tab. Enumerate third-party consents in Entra ID or Google Workspace on a schedule and diff the result. This is the same control surface the <a href="breaches/vercel-context-ai-oauth.html">Vercel / Context.ai</a> chain ran through, so it earns its place twice.</li>
+                <li><strong>Device and endpoint inventory.</strong> Mobile device management for installed CLI agents and desktop assistants, browser-extension inventory for the far larger set that is just a logged-in web app, and IDE-assistant telemetry where your development platform exposes it. Slowest to stand up, and the only one that answers "what can this thing read on the machine."</li>
+            </ul>
+            <p>Two correlations are worth building once the sources exist. Join egress destinations against your sanctioned model list and alert on first-seen endpoints per user, which surfaces adoption rather than volume. And watch cloud-provider and corporate-card billing for AI vendor charges, because a paid subscription is an unusually reliable indicator that the usage is routine rather than experimental.</p>
+            <p>Detection is the easy half. The sanctioned-model list, the <a class="glossary-link" href="glossary.html#term-ai-gateway">AI gateway</a> that enforces it, the <a class="glossary-link" href="glossary.html#term-casb">CASB</a> and managed-settings controls, and the organizational fight about permissive-versus-strict policy are covered in <a href="ai-learning.html#governing-ai">Governing AI inside your own company</a>. Finding <a class="glossary-link" href="glossary.html#term-shadow-ai">shadow AI</a> without a sanctioned path to redirect it to produces a list nobody acts on.</p>
         </section>
 
         <figure class="page-photo">

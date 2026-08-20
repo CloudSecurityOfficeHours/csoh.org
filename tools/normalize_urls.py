@@ -37,6 +37,8 @@ TRACKING_PARAMS = {
     'utm_marketing_tactic',
     # Click IDs
     'fbclid', 'gclid', 'msclkid', 'dclid', 'twclid', 'li_fat_id',
+    # Google's newer pair, used where gclid is unavailable (iOS/consent mode)
+    'wbraid', 'gbraid',
     # Mailchimp
     'mc_cid', 'mc_eid',
     # Eloqua / marketing automation

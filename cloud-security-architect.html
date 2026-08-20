@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-31">
-    <meta property="article:modified_time" content="2026-05-31">
+    <meta property="article:modified_time" content="2026-08-19">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Career &amp; Learning">
     <meta property="article:tag" content="cloud security architect">
@@ -75,7 +75,7 @@
         }
       },
       "datePublished": "2026-05-31",
-      "dateModified": "2026-05-31",
+      "dateModified": "2026-08-19",
       "mainEntityOfPage": "https://csoh.org/cloud-security-architect.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -390,7 +390,7 @@
 
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-31">Last updated <strong>2026-05-31</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/cloud-security-architect.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-08-19">Last updated <strong>2026-08-19</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/cloud-security-architect.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <p style="margin:-0.25rem 0 1.25rem;font-size:0.95rem;"><a href="cloud-security-careers.html">← Back to all cloud security roles</a> &nbsp;·&nbsp; <a href="cloud-security-engineer.html">← Cloud Security Engineer (the role before this one)</a></p>
 
@@ -440,6 +440,7 @@
                 <li><a href="#influence">Influence without authority</a></li>
                 <li><a href="#multicloud">The multi-cloud dimension</a></li>
                 <li><a href="#data-security-design">Data security as an architectural concern</a></li>
+                <li><a href="#sovereignty">Data residency and sovereignty</a></li>
                 <li><a href="#zero-trust-design">Zero trust and the architect's design responsibility</a></li>
                 <li><a href="#company-stage">How the role changes by company stage</a></li>
                 <li><a href="#salary">Salary &amp; compensation</a></li>
@@ -734,6 +735,32 @@
                 <li><strong>Data classification and its connection to controls.</strong> Data classification only matters if the classification drives different control requirements. The architect who designs the classification schema and then designs the control differences between tiers - this data class requires encryption at rest, this one also requires a specific key ownership model, this one restricts egress to specific endpoints - produces a classification system engineers can actually implement. The classification-as-label-only approach produces compliance artifacts, not security outcomes. See <a href="data-security.html">data security</a>.</li>
                 <li><strong>Cross-account and cross-service data access patterns.</strong> In cloud, data can be accessed across account boundaries, across regions, and across service types in ways that have no on-prem equivalent. The architect needs to design the approved patterns for cross-account data access - what trust policies allow it, what logging captures it, what guardrails prevent it from happening accidentally - before the org has an incident that reveals the gap.</li>
             </ul>
+        </section>
+
+        <section id="sovereignty">
+            <h2>Data residency and sovereignty</h2>
+            <p>Where the data physically sits, and whose legal system can compel access to it, is an architectural constraint rather than a compliance one. It belongs on this page rather than the engineer's because it does not stay in its lane: it decides the shape of the account hierarchy, who holds the encryption keys, which managed services are even available to build with, and where the security team's own log aggregation lives. Retrofitting it means moving production accounts between organizational units after they hold data, which is the most expensive class of rework in this job.</p>
+            <p>It is also the topic the Friday call keeps returning to. Netherlands, Germany and France moving workloads off AWS and Microsoft; European governments continuing to reduce Microsoft dependence; Airbus choosing SAP's sovereign offering. The driver is not a new regulation. It is that residency stopped being a checkbox somebody satisfied by picking a region and became a question executives now ask directly.</p>
+
+            <h3>Separate the four things people mean by "sovereignty"</h3>
+            <p>Most unproductive conversations here are two people using one word for different requirements. Get the requirement stated as one of these before designing anything:</p>
+            <ul>
+                <li><strong>Data residency.</strong> The bytes stay in a named geography. The weakest of the four, and the only one a region-restriction policy solves on its own.</li>
+                <li><strong>Operational sovereignty.</strong> Nobody outside the jurisdiction can administer the system. This one catches architects out, because it is satisfiable with the data never moving and still fails: a support engineer in another country with break-glass access is in scope. It constrains your own operating model as much as the provider's.</li>
+                <li><strong>Key custody.</strong> The provider cannot decrypt the data unilaterally. Ranges from provider-managed keys through customer-managed <a class="glossary-link" href="glossary.html#term-kms">KMS</a> keys, to hold-your-own-key models where the key material never enters the provider's boundary and the provider calls out to you to unwrap it. For most sovereignty requirements this matters more than storage location, and it connects directly to the key-hierarchy decision above.</li>
+                <li><strong>Legal jurisdiction over the operator.</strong> The hardest, and the one no configuration setting reaches. A US-headquartered provider is subject to US legal process regardless of where a region is, which is the substance of the CLOUD Act argument and the reason the <em>Schrems II</em> ruling landed where it did. This is why sovereign offerings are usually structured as a separate legal entity with local shareholding rather than as a feature flag.</li>
+            </ul>
+            <p>The escalation between them is not free, and the architect's contribution is often to establish that the requirement is residency when the request said sovereignty. Ask what the requirement is protecting against, and who wrote it down.</p>
+
+            <h3>What the design decision actually costs</h3>
+            <ul>
+                <li><strong>Service availability, and therefore reference architecture.</strong> Sovereign and in-country regions run a subset of services, often several releases behind. A standard pattern that assumes a managed service unavailable in the sovereign estate forks your architecture in two, and the second fork gets less attention. Decide deliberately whether you are maintaining one reference architecture constrained to the intersection, or two.</li>
+                <li><strong>Your own security tooling is in scope.</strong> The <a class="glossary-link" href="glossary.html#term-siem">SIEM</a>, the <a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a>, the scanning pipeline and the centralized log sink all move data across boundaries by design. A residency claim that exempts the security stack is not a residency claim, and this is the most commonly missed piece because the security team scoped the requirement for everybody else.</li>
+                <li><strong>Global control planes cannot be regionalized.</strong> IAM, DNS and CDN control planes are not regional in any provider. Region-restricting policy has to exempt them, correctly, which also means those control planes sit outside whatever the residency statement promises. Say so in writing rather than letting an auditor find it.</li>
+                <li><strong>One hierarchy or several.</strong> A region guardrail applied across a single hierarchy is a policy assignment. A jurisdiction-per-boundary model with its own policy set, its own log sink, and its own account-vending pipeline is a structural decision that touches most of the landing zone. The mechanics of both, per provider, are on the <a href="landing-zones.html#residency">landing zones</a> page.</li>
+                <li><strong>Exit, if the requirement is political rather than legal.</strong> A migration driven by which country a vendor is headquartered in can be reversed or extended by the next government, so the useful architectural output is knowing what a provider exit would actually cost per workload. That inventory is worth having regardless, and it is a more defensible deliverable than a migration nobody has funded.</li>
+            </ul>
+            <p>The architect's product here is a written statement of which of the four requirements applies to which data classification, what the estate does to satisfy it, and what it explicitly does not cover. See <a href="data-security.html">data security</a> for the classification and key mechanics, and <a href="compliance-frameworks.html">compliance frameworks</a> for how the obligation is usually worded.</p>
         </section>
 
         <section id="zero-trust-design">
