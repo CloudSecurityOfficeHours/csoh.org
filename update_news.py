@@ -150,10 +150,20 @@ def fetch_feed(url: str, timeout: int = 15) -> Optional[str]:
         return None
 
 
+def normalize_dashes(text: str) -> str:
+    # Em/en dashes -> hyphens (no AI-looking dashes from external feeds).
+    # check_docs_consistency.py gates news.html on this, so every path that
+    # renders feed text needs it. Summaries get it via strip_html; titles never
+    # pass through strip_html (a security headline may legitimately contain
+    # text shaped like an HTML tag), so render_card and build_feed_xml call it
+    # directly.
+    return text.replace("\u2014", "-").replace("\u2013", "-")
+
+
 def strip_html(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = html.unescape(text)
-    text = text.replace("\u2014", "-").replace("\u2013", "-")  # normalize em/en dashes to hyphens (no AI-looking dashes from external feeds)
+    text = normalize_dashes(text)
     text = re.sub(r"\s+", " ", text).strip()
     # Remove HTML5-forbidden code points (C0 except TAB/LF/CR, DEL, C1 except U+0085)
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x84\x86-\x9f]", "", text)
@@ -410,7 +420,7 @@ def build_feed_xml(entries: List[Dict[str, str]], newest_iso: str) -> str:
     ET.SubElement(image, "link").text = "https://csoh.org/news.html"
 
     for entry in entries:
-        title = entry.get("title", "").strip()
+        title = normalize_dashes(entry.get("title", "")).strip()
         link = entry.get("link", "").strip()
         if not title or not link:
             continue
@@ -510,7 +520,7 @@ SOURCE_SLUGS = {
 
 
 def render_card(entry: Dict[str, str], indent: str) -> str:
-    title = html.escape(html.unescape(entry["title"]))
+    title = html.escape(normalize_dashes(html.unescape(entry["title"])))
     link = html.escape(html.unescape(entry["link"]))
     full_summary = strip_html(html.unescape(entry.get("summary", "")))
     summary = full_summary
