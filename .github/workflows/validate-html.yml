@@ -1,7 +1,7 @@
 # =============================================================================
 # Validate HTML
 # -----------------------------------------------------------------------------
-# The PR gate for markup correctness. Six checks, all blocking:
+# The PR gate for markup correctness. Seven checks, all blocking:
 #
 #   1. No inline <script> blocks    - the production CSP is `script-src 'self'`,
 #                                     so an inline script is silently dropped in
@@ -21,12 +21,18 @@
 #   6. Glossary integrity           - unique <dt> ids, no alias claimed by two
 #                                     entries, anchors resolve, no entry made
 #                                     unreachable by accident.
+#   7. Documentation consistency    - visible "Last updated" lines agree with
+#                                     the page's JSON-LD, datetime attributes
+#                                     agree with the date printed beside them,
+#                                     editorial rules hold. Fails only on
+#                                     findings the script could fix itself.
 #
-# 5 and 6 assert whole-repo invariants rather than inspecting the diff, so they
+# 5-7 assert whole-repo invariants rather than inspecting the diff, so they
 # run on every invocation. 1-4 are gated on the diff actually containing HTML.
 #
-# Failing the job posts a PR comment with the last 50 lines of the validator log
-# so the contributor doesn't have to dig through the run output.
+# Failing a PR run posts a comment that names the check that failed and quotes
+# that check's own output - each gate tees its output to a file for exactly
+# this purpose. The Nu checker's full log is kept as a run artifact besides.
 # =============================================================================
 
 name: Validate HTML
@@ -210,8 +216,17 @@ jobs:
       # browser - they "pass" HTML validation but break behavior. JSON-LD
       # and other data-typed <script> blocks are allowed (CSP exempts them).
       - name: Reject inline scripts (CSP gate)
+        id: inline-scripts
         if: steps.html.outputs.changed == 'true'
-        run: python3 tools/check_no_inline_scripts.py
+        # This gate and every gate below tee their output to a check-*.log
+        # file as well as the run log, so the PR-comment step at the bottom
+        # can quote the output of whichever gate failed. `set -o pipefail` is
+        # what keeps the gate a gate: a pipeline otherwise exits with the LAST
+        # command's status - tee's unconditional 0 - and a failing check would
+        # read as green.
+        run: |
+          set -o pipefail
+          python3 tools/check_no_inline_scripts.py 2>&1 | tee check-inline-scripts.log
 
       # Step 3 - Require width/height on every <svg viewBox>. Without the
       # attributes the browser can't derive an aspect ratio at parse time,
@@ -220,8 +235,11 @@ jobs:
       # Web Vitals. The attributes only set the aspect ratio; final
       # rendered size still comes from CSS.
       - name: Require SVG dimensions (CLS gate)
+        id: svg-dimensions
         if: steps.html.outputs.changed == 'true'
-        run: python3 tools/check_svg_dimensions.py
+        run: |
+          set -o pipefail
+          python3 tools/check_svg_dimensions.py 2>&1 | tee check-svg-dimensions.log
 
       # Step 3b - Every JSON-LD block must be valid JSON. Strict schema.org
       # parsers drop an entire block on the first syntax error (a single
@@ -229,8 +247,11 @@ jobs:
       # data at all - silently, since presence-only audits still see a
       # <script> tag. This gate parses each block with json.loads.
       - name: Validate JSON-LD (structured-data gate)
+        id: jsonld
         if: steps.html.outputs.changed == 'true'
-        run: python3 tools/check_jsonld.py
+        run: |
+          set -o pipefail
+          python3 tools/check_jsonld.py 2>&1 | tee check-jsonld.log
 
       # Step 3c - Every root page must be either cross-linked by
       # crosslink_pages.py or listed as deliberately unlinked. That script
@@ -247,7 +268,10 @@ jobs:
       # TARGET_PAGES - with no HTML in the commit at all. It takes ~0.4s, so
       # there is nothing to save by skipping it.
       - name: Require crosslink coverage for every root page
-        run: python3 tools/check_crosslink_coverage.py
+        id: crosslink
+        run: |
+          set -o pipefail
+          python3 tools/check_crosslink_coverage.py 2>&1 | tee check-crosslink-coverage.log
 
       # Step 3d - The glossary's own invariants. Both cross-linkers degrade
       # quietly here too: a <dt> that yields no lookup keys is skipped with no
@@ -258,7 +282,10 @@ jobs:
       # Unconditional for the same reason as 3c: editing the parser, a
       # denylist, or the UNREACHABLE map breaks this with no HTML in the diff.
       - name: Check glossary integrity and reachability
-        run: python3 tools/check_glossary_coverage.py
+        id: glossary
+        run: |
+          set -o pipefail
+          python3 tools/check_glossary_coverage.py 2>&1 | tee check-glossary-coverage.log
 
       # Step 3e - Documentation consistency, mechanical half. Keeps the class of
       # defect the weekly review kept rediscovering from accumulating again: a
@@ -275,11 +302,15 @@ jobs:
       # Unconditional for the same reason as 3c and 3d: the Markdown it reads
       # is not HTML, so `steps.html.outputs.changed` says nothing about it.
       - name: Check documentation consistency
-        run: python3 tools/check_docs_consistency.py --check
+        id: docs-consistency
+        run: |
+          set -o pipefail
+          python3 tools/check_docs_consistency.py --check 2>&1 | tee check-docs-consistency.log
 
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
+        id: html5
         if: steps.html.outputs.changed == 'true'
         uses: Cyb3r-Jak3/html5validator-action@443b108eb8e134b63a1f8a8ba0c942d552608ed7  # master 2025-09-19
         # `with:` passes input parameters into a `uses:` action - like
@@ -313,43 +344,124 @@ jobs:
           retention-days: 30                            # auto-delete after 30 days
           if-no-files-found: warn
 
-      # Step 6 - If validation failed AND this is a PR, post the errors as a
-      # comment so the contributor sees them without digging through logs.
+      # Step 6 - If a check failed AND this is a PR, post a comment naming the
+      # step that failed and quoting that step's own output, so the contributor
+      # sees the real error without digging through the run log.
       # The `if:` here is a guard: the step only runs when BOTH are true -
       # `failure()` (an earlier step in this job failed) AND `github.event_name`
       # is `pull_request` (this run came from a PR, not a push or the cron).
       # So contributors get feedback on their PR, but pushes/cron stay quiet.
+      #
+      # The comment is assembled from what actually failed, not from a fixed
+      # template. This job has seven steps that can fail, and this comment used
+      # to hardcode exactly one of them: it read the Nu validator's log.log no
+      # matter which step broke, so any other gate's failure produced "Found 0
+      # validation error(s) / Error reading validation log" - the one step that
+      # had NOT failed, presented as the diagnosis. PR #1532 got that comment
+      # three times while the real failure was the docs-consistency gate (an
+      # em-dash plus an unlinked glossary term); the Nu checker, skipped after
+      # the earlier failure, never even ran. Same shape CLAUDE.md keeps
+      # recording: an instrument that reports "nothing is there" while broken.
+      # So each gate's result is read from `steps.<id>.outcome`, and the output
+      # quoted is the file that gate teed its output to.
       - name: Comment on PR with validation results
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        # House pattern (see "Detect HTML changes"): context values enter the
+        # script through `env:`, not `${{ }}` interpolation. `outcome` is the
+        # step's own result - 'success', 'failure', 'cancelled', or 'skipped'
+        # (a step never reached comes through empty). A skipped gate can never
+        # be the failure being reported, so the script only looks for
+        # 'failure'. No gate sets continue-on-error, so `outcome` and
+        # `conclusion` are interchangeable here.
+        env:
+          OUTCOME_INLINE_SCRIPTS: ${{ steps.inline-scripts.outcome }}
+          OUTCOME_SVG_DIMENSIONS: ${{ steps.svg-dimensions.outcome }}
+          OUTCOME_JSONLD: ${{ steps.jsonld.outcome }}
+          OUTCOME_CROSSLINK: ${{ steps.crosslink.outcome }}
+          OUTCOME_GLOSSARY: ${{ steps.glossary.outcome }}
+          OUTCOME_DOCS_CONSISTENCY: ${{ steps.docs-consistency.outcome }}
+          OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
           # Inline JS that runs against GitHub's API. `github`, `context`, etc.
           # are pre-injected helpers from the github-script action.
           script: |
             const fs = require('fs');
-            let log = '';
-            try {
-              log = fs.readFileSync('log.log', 'utf8');
-            } catch (e) {
-              log = 'Error reading validation log';
+
+            // Every step that can fail this job, in run order. `file` is
+            // where that step left its output: the Python gates tee to
+            // check-*.log, the Nu checker action writes log.log itself.
+            const checks = [
+              { name: 'Reject inline scripts (CSP gate)', outcome: process.env.OUTCOME_INLINE_SCRIPTS, file: 'check-inline-scripts.log' },
+              { name: 'Require SVG dimensions (CLS gate)', outcome: process.env.OUTCOME_SVG_DIMENSIONS, file: 'check-svg-dimensions.log' },
+              { name: 'Validate JSON-LD (structured-data gate)', outcome: process.env.OUTCOME_JSONLD, file: 'check-jsonld.log' },
+              { name: 'Require crosslink coverage for every root page', outcome: process.env.OUTCOME_CROSSLINK, file: 'check-crosslink-coverage.log' },
+              { name: 'Check glossary integrity and reachability', outcome: process.env.OUTCOME_GLOSSARY, file: 'check-glossary-coverage.log' },
+              { name: 'Check documentation consistency', outcome: process.env.OUTCOME_DOCS_CONSISTENCY, file: 'check-docs-consistency.log' },
+              { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
+            ];
+
+            // Trim a gate's output to the last 50 lines (capped at 6000
+            // characters) so one noisy gate can't turn the comment into an
+            // unreadable wall of text. Full output stays in the run log.
+            const excerpt = (file) => {
+              let text = '';
+              try {
+                text = fs.readFileSync(file, 'utf8').replace(/\s+$/, '');
+              } catch (e) {
+                return '(no output was captured - see the workflow run log)';
+              }
+              if (!text) {
+                return '(the step failed without printing anything - see the workflow run log)';
+              }
+              const lines = text.split('\n');
+              let kept = lines.slice(-50).join('\n');
+              if (kept.length > 6000) kept = kept.slice(-6000);
+              if (kept.length < text.length) {
+                kept = `...(truncated - showing the tail of ${lines.length} lines)\n` + kept;
+              }
+              return kept;
+            };
+
+            // Four-backtick fences, so gate output that itself contains ```
+            // (a quoted Markdown line, say) can't break out of the block.
+            const fence = (s) => '````\n' + s + '\n````\n\n';
+
+            const failed = checks.filter((c) => c.outcome === 'failure');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let comment = '## :x: Validate HTML failed\n\n';
+            if (failed.length === 0) {
+              // failure() was true yet no gate reports failure, so the break
+              // is in the scaffolding around them (checkout, change
+              // detection, the artifact upload) - say so rather than blaming
+              // validation for a failure it did not produce.
+              comment += 'None of the seven validation gates failed; a scaffolding step ';
+              comment += '(checkout, change detection, or the log upload) broke instead. ';
+              comment += `See the [workflow run](${runUrl}) for which one.`;
+            } else if (failed.length === 1) {
+              // The normal case: steps run in order and the job stops at the
+              // first failure, so exactly one gate can have failed.
+              comment += `The **${failed[0].name}** step failed. Its output:\n\n`;
+              comment += fence(excerpt(failed[0].file));
+            } else {
+              // Unreachable today (no gate sets continue-on-error), but if
+              // one ever does, report every failure rather than the first.
+              comment += `${failed.length} steps failed.\n\n`;
+              for (const c of failed) {
+                comment += `### ${c.name}\n\n` + fence(excerpt(c.file));
+              }
+            }
+            if (failed.length > 0) {
+              comment += `Fix the output above and push again. Full logs are on the [workflow run](${runUrl})`;
+              if (failed.some((c) => c.file === 'log.log')) {
+                comment += ', which also keeps the complete validator log as an artifact';
+              }
+              comment += '.';
             }
 
-            // Trim the log to the last 50 lines so the PR comment doesn't
-            // become an unreadable wall of text.
-            const lines = log.split('\n');
-            const trimmed = lines.length > 50
-              ? '...(truncated)\n' + lines.slice(-50).join('\n')
-              : log;
-
-            const errorCount = (log.match(/error:/gi) || []).length;
-
-            let comment = `## :x: HTML Validation Failed\n\n`;
-            comment += `Found **${errorCount} validation error(s)** in HTML files.\n\n`;
-            comment += `\`\`\`\n${trimmed}\n\`\`\`\n\n`;
-            comment += `Fix the errors above and push again. Full log in workflow artifacts.`;
-
             // Post the comment on the PR.
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
