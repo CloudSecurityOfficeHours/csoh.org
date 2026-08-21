@@ -6,13 +6,13 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-CloudSecurityOfficeHours/csoh.org-blue)](https://github.com/CloudSecurityOfficeHours/csoh.org)
 [![Mailing List](https://img.shields.io/badge/Mailing%20List-2000%2B%20Members-orange)](https://csoh.kit.com/39feb4f397)
-[![License](https://img.shields.io/badge/License-Open%20Content-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-Open%20Content-green)](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/LICENSE)
 
 ---
 
 ## ⭐ Featured Guides
 
-The vendor-neutral curriculum, written by practitioners. This catalog mirrors the site navigation - **Learn**, **By Cloud**, **Threat Intel**, **Careers**, and **Community** - so the README and the nav stay in step. (The nav itself is canonical in [`tools/sync_chrome.py`](tools/sync_chrome.py).)
+The vendor-neutral curriculum, written by practitioners. This catalog mirrors the site navigation - **Learn**, **By Cloud**, **Threat Intel**, **Careers**, and **Community** - so the README and the nav stay in step. (The nav itself is canonical in [`tools/sync_chrome.py`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/sync_chrome.py).)
 
 ### Learn
 
@@ -456,10 +456,10 @@ A hub for the session-digest series: what the room actually said about a topic a
 Dedicated directory for hands-on cloud CTF challenges:
 - **52+ challenges** across AWS, Azure, GCP, Kubernetes, and AI security
 - Includes the full Wiz Cloud Security Championship calendar
-- Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](CONTRIBUTING_CTFS.md)
+- Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING_CTFS.md)
 
 ### 📡 RSS Subscribe ([`rss.html`](https://csoh.org/rss.html))
-Plain-English landing page for both feeds - `feed.xml` (cloud-security news, refreshed every 3 hours) and `recaps.xml` (one item per Friday-session recap). Explains what RSS is, recommends readers (Feedly, Inoreader, NetNewsWire, Thunderbird), and gives one-click subscribe instructions. See [RSS_FEED_README.md](RSS_FEED_README.md).
+Plain-English landing page for both feeds - `feed.xml` (cloud-security news, refreshed every 3 hours) and `recaps.xml` (one item per Friday-session recap). Explains what RSS is, recommends readers (Feedly, Inoreader, NetNewsWire, Thunderbird), and gives one-click subscribe instructions. See [RSS_FEED_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/RSS_FEED_README.md).
 
 ### 📖 Glossary ([`glossary.html`](https://csoh.org/glossary.html))
 A plain-English glossary of cloud-security acronyms and concepts:
@@ -548,7 +548,7 @@ The recurring root causes across all of these are synthesized in **[breach-lesso
 
 ### How to contribute a kill chain
 
-See **[CONTRIBUTING_KILL_CHAINS.md](CONTRIBUTING_KILL_CHAINS.md)** for the full guide including:
+See **[CONTRIBUTING_KILL_CHAINS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING_KILL_CHAINS.md)** for the full guide including:
 - What qualifies as a good kill chain entry
 - A list of candidate incidents with good post-mortems
 - The HTML template to copy for a new entry
@@ -596,7 +596,7 @@ Edit `threat-research.html` directly - each link is a standard `.resource-card` 
 
 - Static HTML - no database, no server-side code. Published active/active to AWS, GCP & Azure behind a single Cloudflare edge via keyless OIDC (see [How Automation Works](#-how-automation-works)).
 - URL-safety gate - every PR is scanned for unsafe URLs before merge (`check_all_site_urls.py`).
-- RSS feed - `feed.xml` regenerated with each news update. See [RSS_FEED_README.md](RSS_FEED_README.md).
+- RSS feed - `feed.xml` regenerated with each news update. See [RSS_FEED_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/RSS_FEED_README.md).
 - Dark mode - toggle plus `prefers-color-scheme` detection, persisted in `localStorage`.
 - Schema markup - NewsArticle, FAQPage, Organization, Event, CollectionPage.
 - Accessibility - semantic HTML5, ARIA labels, WCAG AA contrast in both themes.
@@ -835,36 +835,36 @@ csoh.org/
 
 ### The `tools/` directory
 
-Every script is stdlib-first, idempotent, and only writes when content actually changes (see [DEVELOPMENT.md → Scripts must only write when content actually changes](DEVELOPMENT.md#scripts-must-only-write-when-content-actually-changes)). Scripts with a `_README.md` beside them have long-form docs; the rest are documented by their module docstring.
+Every script is stdlib-first, idempotent, and only writes when content actually changes (see [DEVELOPMENT.md → Scripts must only write when content actually changes](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#scripts-must-only-write-when-content-actually-changes)). Scripts with a `_README.md` beside them have long-form docs; the rest are documented by their module docstring.
 
 **Content ingest (interactive or credentialed)**
 
 | Script | What it does | Docs |
 |---|---|---|
-| `submit_resource.py` | Interactive resource submission with URL validation + PR creation | [README](tools/SUBMIT_RESOURCE_README.md) · [example](tools/SUBMIT_RESOURCE_EXAMPLE.md) |
-| `submit_news_source.py` | Interactive news-source (RSS/Atom feed) submission | [README](tools/SUBMIT_NEWS_SOURCE_README.md) |
-| `submit_ctf.py` | Interactive cloud-CTF submission for `ctfs.html` | [README](tools/SUBMIT_CTF_README.md) |
-| `add_meeting.py` | Publish a new meeting recap (page + `meetings.html` entry + feeds) | [README](tools/ADD_MEETING_README.md) |
-| `fetch_zoom_transcript.py` | Pull a VTT transcript from a Zoom cloud recording (Server-to-Server OAuth) | [README](tools/FETCH_ZOOM_TRANSCRIPT_README.md) |
-| `backfill_zoom_summaries.py` | Bulk-import every Zoom AI Companion summary on the account | [README](tools/BACKFILL_ZOOM_SUMMARIES_README.md) |
+| `submit_resource.py` | Interactive resource submission with URL validation + PR creation | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_RESOURCE_README.md) · [example](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_RESOURCE_EXAMPLE.md) |
+| `submit_news_source.py` | Interactive news-source (RSS/Atom feed) submission | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_NEWS_SOURCE_README.md) |
+| `submit_ctf.py` | Interactive cloud-CTF submission for `ctfs.html` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_CTF_README.md) |
+| `add_meeting.py` | Publish a new meeting recap (page + `meetings.html` entry + feeds) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/ADD_MEETING_README.md) |
+| `fetch_zoom_transcript.py` | Pull a VTT transcript from a Zoom cloud recording (Server-to-Server OAuth) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/FETCH_ZOOM_TRANSCRIPT_README.md) |
+| `backfill_zoom_summaries.py` | Bulk-import every Zoom AI Companion summary on the account | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/BACKFILL_ZOOM_SUMMARIES_README.md) |
 
 **Site-wide stamping (run after content changes)**
 
 | Script | What it does | Docs |
 |---|---|---|
-| `sync_chrome.py` | Stamps ONE canonical nav, header buttons, and footer onto every page | [README](tools/SYNC_CHROME_README.md) |
-| `sync_counts.py` | Recomputes every count on the site (JSON-LD `numberOfItems`, `<!--count:-->` markers, OG subtitles) from the real cards | [README](tools/SYNC_COUNTS_README.md) |
-| `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](tools/CROSSLINK_GLOSSARY_README.md) |
-| `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](tools/CROSSLINK_PAGES_README.md) |
+| `sync_chrome.py` | Stamps ONE canonical nav, header buttons, and footer onto every page | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_CHROME_README.md) |
+| `sync_counts.py` | Recomputes every count on the site (JSON-LD `numberOfItems`, `<!--count:-->` markers, OG subtitles) from the real cards | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_COUNTS_README.md) |
+| `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) |
+| `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_PAGES_README.md) |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
-| `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
-| `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](tools/INJECT_SESSION_BLOCKS_README.md) |
+| `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
+| `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |
 | `inject_goatcounter.py` | Stamps the GoatCounter analytics tag onto every page | docstring |
-| `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
-| `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](tools/UPDATE_SITEMAP_README.md) |
+| `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
+| `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SITEMAP_README.md) |
 | `normalize_urls.py` | Strips tracking params, upgrades http→https, resolves redirects | docstring |
-| `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](tools/UPDATE_SRI_README.md) |
-| `../update_news.py` | Pulls 62 RSS feeds → `news.html`, `feed.xml`, sitemap lastmod | [README](tools/UPDATE_NEWS_README.md) |
+| `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md) |
+| `../update_news.py` | Pulls 62 RSS feeds → `news.html`, `feed.xml`, sitemap lastmod | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_NEWS_README.md) |
 
 **Generated artifacts (indexes, feeds, images)**
 
@@ -875,10 +875,10 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `generate_rss.py` | Rebuilds `feed.xml` from `news.html` | docstring |
 | `generate_recaps_rss.py` | Builds `recaps.xml`, the meeting-recap RSS feed | docstring |
 | `generate_og_images.py` | 1200×630 social cards for top-level pages | docstring |
-| `generate_meeting_og_images.py` | 1200×630 social cards for meeting recaps | [README](tools/GENERATE_MEETING_OG_IMAGES_README.md) |
+| `generate_meeting_og_images.py` | 1200×630 social cards for meeting recaps | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/GENERATE_MEETING_OG_IMAGES_README.md) |
 | `generate_thumbnails.py` | 3:2 glyph tiles for the compact card grids (`img/thumbs/`) | docstring |
 | `generate_news_banners.py` | Banner images for news sources | docstring |
-| `generate_preview.py` | Screenshot previews for resource cards | [README](tools/GENERATE_PREVIEW_README.md) |
+| `generate_preview.py` | Screenshot previews for resource cards | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/GENERATE_PREVIEW_README.md) |
 | `generate_webp.py` | `.webp` siblings for every raster image | docstring |
 | `wrap_img_webp.py` | Wraps `<img>` in `<picture>` with a WebP `<source>` | docstring |
 
@@ -886,23 +886,23 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 
 | Script | What it does | Docs |
 |---|---|---|
-| `check_all_site_urls.py` | Site-wide URL safety scan (phishing patterns, suspicious TLDs, shorteners) | [README](tools/CHECK_URL_SAFETY_README.md) |
-| `check_url_safety.py` | The single-URL validator `check_all_site_urls.py` is built on | [README](tools/CHECK_URL_SAFETY_README.md) |
+| `check_all_site_urls.py` | Site-wide URL safety scan (phishing patterns, suspicious TLDs, shorteners) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md) |
+| `check_url_safety.py` | The single-URL validator `check_all_site_urls.py` is built on | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md) |
 | `check_jsonld.py` | Every JSON-LD block on the site must be valid JSON | docstring |
 | `check_no_inline_scripts.py` | No inline `<script>` blocks (the CSP forbids them) | docstring |
 | `check_svg_dimensions.py` | `width`/`height` on every `<svg>` that has a `viewBox` | docstring |
 | `check_crosslink_coverage.py` | Every root page is either cross-linked or explicitly opted out - `crosslink_pages.py` skips unlisted pages silently, so omissions never surfaced | docstring |
 | `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
-| `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](tools/DOCS_CONSISTENCY_README.md) |
+| `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DOCS_CONSISTENCY_README.md) |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
-| `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](tools/RUN_SEO_AUDIT_README.md) |
-| `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](tools/CHECK_PAGESPEED_README.md) |
-| `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](tools/CHECK_LIGHTHOUSE_README.md) |
-| `check_edge_headers.py` | Asserts the live security headers match `rules.tf` - the Cloudflare ruleset is inert after creation, so Terraform cannot catch drift | [README](tools/CHECK_EDGE_HEADERS_README.md) |
-| `check_robots_parity.py` | Asserts the live `robots.txt` matches the repo, catching an edge-injected managed `robots.txt` | [README](tools/CHECK_ROBOTS_PARITY_README.md) |
-| `check_reading_list_staleness.py` | Flags reading-list sources that stopped publishing | [README](tools/CHECK_READING_LIST_STALENESS_README.md) |
+| `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/RUN_SEO_AUDIT_README.md) |
+| `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_PAGESPEED_README.md) |
+| `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_LIGHTHOUSE_README.md) |
+| `check_edge_headers.py` | Asserts the live security headers match `rules.tf` - the Cloudflare ruleset is inert after creation, so Terraform cannot catch drift | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_EDGE_HEADERS_README.md) |
+| `check_robots_parity.py` | Asserts the live `robots.txt` matches the repo, catching an edge-injected managed `robots.txt` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_ROBOTS_PARITY_README.md) |
+| `check_reading_list_staleness.py` | Flags reading-list sources that stopped publishing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_READING_LIST_STALENESS_README.md) |
 | `check_meeting_staleness.py` | Flags a stalled meeting-recap cadence | docstring |
 | `check_conference_staleness.py` | Flags conference "Next:" dates that have gone stale | docstring |
 
@@ -923,7 +923,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 ### Adding a New Resource
 
 **Fastest option:** Run `python3 tools/submit_resource.py` to add a resource interactively.
-**Script guide:** [tools/SUBMIT_RESOURCE_README.md](tools/SUBMIT_RESOURCE_README.md)
+**Script guide:** [tools/SUBMIT_RESOURCE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_RESOURCE_README.md)
 
 1. **Open `resources.html`** in your editor
 2. **Locate the appropriate section** (CTF, Labs, Tools, etc.)
@@ -950,14 +950,14 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 
 ### Adding a New Article to News
 
-News articles are **updated automatically** - you don't need to add them by hand. A GitHub Actions workflow runs every 3 hours, pulls articles from 62 cloud security RSS feeds, and creates a pull request with the new content. See the [How Automation Works](#-how-automation-works) section below for details, or read the full docs in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md).
+News articles are **updated automatically** - you don't need to add them by hand. A GitHub Actions workflow runs every 3 hours, pulls articles from 62 cloud security RSS feeds, and creates a pull request with the new content. See the [How Automation Works](#-how-automation-works) section below for details, or read the full docs in [tools/UPDATE_NEWS_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_NEWS_README.md).
 
 To **add a new news source**, either:
 
 1. Run `python3 tools/submit_news_source.py` (interactive, recommended)
 2. Or edit the `FEEDS` list at the top of `update_news.py` manually
 
-**Script guide:** [tools/SUBMIT_NEWS_SOURCE_README.md](tools/SUBMIT_NEWS_SOURCE_README.md)
+**Script guide:** [tools/SUBMIT_NEWS_SOURCE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_NEWS_SOURCE_README.md)
 
 ### Adding a New Zoom Session or Presentation
 
@@ -974,14 +974,14 @@ To **add a new news source**, either:
 
 Meeting recaps live on `meetings.html` and are ingested from Zoom, not written by hand. Two automation paths:
 
-- **Single meeting from a VTT transcript:** `python3 tools/fetch_zoom_transcript.py` pulls the transcript from your Zoom cloud recording, then `python3 tools/add_meeting.py <note>` appends a new `<article>` block to `meetings.html`. See [tools/FETCH_ZOOM_TRANSCRIPT_README.md](tools/FETCH_ZOOM_TRANSCRIPT_README.md) and [tools/ADD_MEETING_README.md](tools/ADD_MEETING_README.md).
-- **Bulk backfill from Zoom AI Companion summaries:** `python3 tools/backfill_zoom_summaries.py` imports every AI Companion summary on the account in one pass. See [tools/BACKFILL_ZOOM_SUMMARIES_README.md](tools/BACKFILL_ZOOM_SUMMARIES_README.md).
+- **Single meeting from a VTT transcript:** `python3 tools/fetch_zoom_transcript.py` pulls the transcript from your Zoom cloud recording, then `python3 tools/add_meeting.py <note>` appends a new `<article>` block to `meetings.html`. See [tools/FETCH_ZOOM_TRANSCRIPT_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/FETCH_ZOOM_TRANSCRIPT_README.md) and [tools/ADD_MEETING_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/ADD_MEETING_README.md).
+- **Bulk backfill from Zoom AI Companion summaries:** `python3 tools/backfill_zoom_summaries.py` imports every AI Companion summary on the account in one pass. See [tools/BACKFILL_ZOOM_SUMMARIES_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/BACKFILL_ZOOM_SUMMARIES_README.md).
 
 Both require Zoom Server-to-Server OAuth credentials in a local `.env` (see `.env.example`).
 
 ### Adding a New CTF
 
-Run `python3 tools/submit_ctf.py` to add a challenge to `ctfs.html` interactively. See [tools/SUBMIT_CTF_README.md](tools/SUBMIT_CTF_README.md) for the script, or [CONTRIBUTING_CTFS.md](CONTRIBUTING_CTFS.md) for the full contribution guide.
+Run `python3 tools/submit_ctf.py` to add a challenge to `ctfs.html` interactively. See [tools/SUBMIT_CTF_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_CTF_README.md) for the script, or [CONTRIBUTING_CTFS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING_CTFS.md) for the full contribution guide.
 
 ### Adding a Glossary Term
 
@@ -993,7 +993,7 @@ Run `python3 tools/submit_ctf.py` to add a challenge to `ctfs.html` interactivel
    - Hyperlink any existing terms that appear in your new definition.
 4. Update the search-bar count and OG description if the total moved past a round number.
 
-The script is idempotent and safe to re-run. See [tools/CROSSLINK_GLOSSARY_README.md](tools/CROSSLINK_GLOSSARY_README.md) for details.
+The script is idempotent and safe to re-run. See [tools/CROSSLINK_GLOSSARY_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) for details.
 
 ### Customizing the Homepage
 
@@ -1014,36 +1014,36 @@ The table below covers the 15 core workflows; `check-mobile-layout`, `deploy-qa`
 
 | Workflow | When | What it does |
 |---|---|---|
-| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
-| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
-| [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
-| [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens an auto-approved PR for a human to merge |
-| [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI, URL safety, normalization, schema, sitemap, previews |
+| [`update-news.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
+| [`update-resources.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
+| [`update-counts.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
+| [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens an auto-approved PR for a human to merge |
+| [`site-update-deploy.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI, URL safety, normalization, schema, sitemap, previews |
 
 **Deploy**
 
 | Workflow | When | What it does |
 |---|---|---|
-| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, publishes active/active to AWS + GCP + Azure behind Cloudflare, keyless OIDC per cloud |
+| [`deploy.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/deploy.yml) | push to `main` on site files | Builds once, publishes active/active to AWS + GCP + Azure behind Cloudflare, keyless OIDC per cloud |
 
 **PR quality gates**
 
 | Workflow | When | Blocks the PR? |
 |---|---|---|
-| [`lint.yml`](.github/workflows/lint.yml) | every push + PR | Yes - `actionlint` + `ruff` + `yamllint` |
-| [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | Yes, with a PR comment - W3C HTML5 validator |
-| [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Yes - phishing patterns, suspicious TLDs, shortener domains |
-| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | No - lychee crawl, PR comment only (link rot is everywhere) |
+| [`lint.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/lint.yml) | every push + PR | Yes - `actionlint` + `ruff` + `yamllint` |
+| [`validate-html.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | Yes, with a PR comment - W3C HTML5 validator |
+| [`check-url-safety.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Yes - phishing patterns, suspicious TLDs, shortener domains |
+| [`check-broken-links.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | No - lychee crawl, PR comment only (link rot is everywhere) |
 
 **Periodic audits (report-only, never edit the site)**
 
 | Workflow | When | Where the report lands |
 |---|---|---|
-| [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Row in `seo-audits/SCORECARD.md`; issue on regression |
-| [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Row in `seo-audits/SCORECARD.md` + `seo-audits/YYYY-MM-DD.md`; issue on regression |
-| [`check-meeting-staleness.yml`](.github/workflows/check-meeting-staleness.yml) | Mon 15:00 | Sticky issue labeled `meeting-staleness` |
-| [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | Sticky issue labeled `reading-list-staleness` |
-| [`check-conference-staleness.yml`](.github/workflows/check-conference-staleness.yml) | 1st of month, 14:00 | Sticky issue labeled `conference-staleness` for stale "Next:" dates on `conferences.html` |
+| [`check-pagespeed.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-pagespeed.yml) | Mon 14:00 | Row in `seo-audits/SCORECARD.md`; issue on regression |
+| [`run-seo-audit.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/run-seo-audit.yml) | Mon 14:15 | Row in `seo-audits/SCORECARD.md` + `seo-audits/YYYY-MM-DD.md`; issue on regression |
+| [`check-meeting-staleness.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-meeting-staleness.yml) | Mon 15:00 | Sticky issue labeled `meeting-staleness` |
+| [`check-reading-list-staleness.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | Sticky issue labeled `reading-list-staleness` |
+| [`check-conference-staleness.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-conference-staleness.yml) | 1st of month, 14:00 | Sticky issue labeled `conference-staleness` for stale "Next:" dates on `conferences.html` |
 
 ### Site Housekeeping Workflow
 
@@ -1095,7 +1095,7 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
   - Resolves redirecting URLs to their final destinations
 - **Output:** Creates a PR with a detailed report of all changes, auto-approved for review
 
-**Full docs:** See [tools/UPDATE_SRI_README.md](tools/UPDATE_SRI_README.md), [tools/GENERATE_PREVIEW_README.md](tools/GENERATE_PREVIEW_README.md), [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md), and [tools/CHECK_URL_SAFETY_README.md](tools/CHECK_URL_SAFETY_README.md)
+**Full docs:** See [tools/UPDATE_SRI_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md), [tools/GENERATE_PREVIEW_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/GENERATE_PREVIEW_README.md), [tools/UPDATE_NEWS_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_NEWS_README.md), and [tools/CHECK_URL_SAFETY_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md)
 
 ### Multi-Cloud Deploy Workflow
 
@@ -1118,11 +1118,11 @@ generated and static files only the deploy ships:
 - **publish-azure:** logs in via an Entra federated credential (OIDC), `az storage blob sync` into the `$web` static-website container.
 - **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. Auth is Workload Identity Federation - no stored key.
 
-Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo. Non-secret resource IDs come from repo Variables (see [infra/README.md](infra/README.md)).
+Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo. Non-secret resource IDs come from repo Variables (see [infra/README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md)).
 
 **Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover. (This replaced the old GCP Global HTTPS load balancer + Cloud Armor + Cloud CDN, which were redundant with Cloudflare and cost ~$100/mo.)
 
-**Full architecture, cost, and cutover runbook:** [infra/README.md](infra/README.md). The full security walkthrough is the public teaching page [cloud-deployment.html](cloud-deployment.html). Security model and rotation: [SECURITY.md → Deployment Security](SECURITY.md#deployment-security).
+**Full architecture, cost, and cutover runbook:** [infra/README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md). The full security walkthrough is the public teaching page [cloud-deployment.html](https://csoh.org/cloud-deployment.html). Security model and rotation: [SECURITY.md → Deployment Security](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md#deployment-security).
 
 ### QA Staging Site
 
@@ -1161,11 +1161,11 @@ secrecy boundary - do not stage anything there that would harm you if read early
 
 **Full docs**, including the ten Cloudflare token permission groups and the
 registry race between the two deploy workflows:
-[.github/workflows/QA_PIPELINE_README.md](.github/workflows/QA_PIPELINE_README.md).
+[.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md).
 
 ### Setup Note
 
-Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints short-lived (~1h) installation tokens at job start, plus a small fine-grained PAT (`CSOH_PAT`) used only to approve App-opened PRs (GitHub blocks self-approval). The full model - App config, ruleset bypass, why one PAT remains - is documented in [SECURITY.md → CI/CD Authentication](SECURITY.md#cicd-authentication). Setup / rotation steps for the PAT are in [tools/UPDATE_NEWS_README.md](tools/UPDATE_NEWS_README.md#setup-requirements).
+Workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) that mints short-lived (~1h) installation tokens at job start, plus a small fine-grained PAT (`CSOH_PAT`) used only to approve App-opened PRs (GitHub blocks self-approval). The full model - App config, ruleset bypass, why one PAT remains - is documented in [SECURITY.md → CI/CD Authentication](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md#cicd-authentication). Setup / rotation steps for the PAT are in [tools/UPDATE_NEWS_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_NEWS_README.md#setup-requirements).
 
 `deploy.yml` does *not* use the GitHub App - it authenticates to each cloud via keyless OIDC (GCP Workload Identity Federation, an AWS IAM role, an Azure Entra federated credential) and only needs the auto-injected `GITHUB_TOKEN` (with `id-token: write` for the OIDC exchanges). There is no cloud-side credential to set up or rotate for any of the three.
 
@@ -1183,7 +1183,7 @@ Runs `tools/run_seo_audit.py` - a deterministic structural SEO audit across ever
 
 For qualitative depth (internal-linking strategy, content depth, AI visibility, topical authority) that the deterministic script can't reason about, invoke `/seo-audit` from Claude Code manually and add a row off-cycle.
 
-**Full docs:** [tools/CHECK_PAGESPEED_README.md](tools/CHECK_PAGESPEED_README.md), [tools/RUN_SEO_AUDIT_README.md](tools/RUN_SEO_AUDIT_README.md).
+**Full docs:** [tools/CHECK_PAGESPEED_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_PAGESPEED_README.md), [tools/RUN_SEO_AUDIT_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/RUN_SEO_AUDIT_README.md).
 
 ### Monthly Reading-List Staleness Check
 
@@ -1191,7 +1191,7 @@ For qualitative depth (internal-linking strategy, content depth, AI visibility, 
 
 Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog / newsletter / YouTube channel on `cloud-security-reading-list.html`, discovers its RSS/Atom feed, and flags anything whose newest post is older than the threshold. The reading list is hand-curated and opinionated, so this workflow **never edits the page** - it only opens (or updates) a single tracking issue with the report for a human to act on.
 
-**Full docs:** [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md).
+**Full docs:** [tools/CHECK_READING_LIST_STALENESS_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_READING_LIST_STALENESS_README.md).
 
 ### The other two staleness checks
 
@@ -1237,18 +1237,18 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->268<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->268<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
 - ✅ **`security.txt`** (RFC 9116) for vulnerability disclosure, at both `/.well-known/security.txt` and `/security.txt`
 - ✅ Site-wide **canonical URLs** to consolidate ranking signals
-- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->317<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](tools/crosslink_pages.py))
+- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->317<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
 
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->252<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->109<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->252<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->109<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
@@ -1283,10 +1283,10 @@ Want to help improve CSOH? We have **beginner-friendly guides** for contributing
 
 ### 📚 Contribution Guides
 
-- **[Interactive Resource Submission Tool](tools/SUBMIT_RESOURCE_README.md)** - Automated Python script with URL validation and PR creation
-- **[Interactive News Source Submission Tool](tools/SUBMIT_NEWS_SOURCE_README.md)** - Add RSS/Atom feeds with the interactive script
-- **[How to Add a Resource](contribute-resources.html)** - Step-by-step guide for adding cloud security resources (tools, labs, certifications, etc.)
-- **[General Contributions](contribute.html)** - Guide for all other contributions:
+- **[Interactive Resource Submission Tool](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_RESOURCE_README.md)** - Automated Python script with URL validation and PR creation
+- **[Interactive News Source Submission Tool](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_NEWS_SOURCE_README.md)** - Add RSS/Atom feeds with the interactive script
+- **[How to Add a Resource](https://csoh.org/contribute-resources.html)** - Step-by-step guide for adding cloud security resources (tools, labs, certifications, etc.)
+- **[General Contributions](https://csoh.org/contribute.html)** - Guide for all other contributions:
   - Adding news sources for our automated news aggregation
   - Improving descriptions and content
   - Suggesting resource reorganization
@@ -1298,12 +1298,12 @@ Want to help improve CSOH? We have **beginner-friendly guides** for contributing
 **Easy options (no coding required):**
 1. [Report an issue](https://github.com/CloudSecurityOfficeHours/csoh.org/issues) - Found a bug? Have a suggestion?
 2. [Join the mailing list](https://csoh.kit.com/39feb4f397) - Get the weekly Zoom link and meeting info
-3. [Add a resource](contribute-resources.html) - Use our web-based guide (copy/paste method)
-4. [Use the submission tool](tools/SUBMIT_RESOURCE_README.md) - Interactive Python script (automated)
-5. [Add a news source](tools/SUBMIT_NEWS_SOURCE_README.md) - Interactive Python script
+3. [Add a resource](https://csoh.org/contribute-resources.html) - Use our web-based guide (copy/paste method)
+4. [Use the submission tool](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_RESOURCE_README.md) - Interactive Python script (automated)
+5. [Add a news source](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SUBMIT_NEWS_SOURCE_README.md) - Interactive Python script
 
 **For developers:**
-See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project architecture, and testing instructions.
+See **[DEVELOPMENT.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md)** for the full local setup guide, project architecture, and testing instructions.
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b add-resource`
@@ -1341,9 +1341,9 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 - ☕ **Donate** via [Buy Me a Coffee](https://buymeacoffee.com/csoh) (optional, fully community-run)
 
 ### Policies
-- 🤝 **[Code of Conduct](code-of-conduct.html)** - community standards across Friday Zoom, mailing list, and GitHub
-- 🔐 **[Privacy Policy](privacy.html)** - no cookies, no cross-site trackers, no on-site ads
-- 🔒 **[Security Policy](security-policy.html)** / [SECURITY.md](SECURITY.md) - coordinated disclosure
+- 🤝 **[Code of Conduct](https://csoh.org/code-of-conduct.html)** - community standards across Friday Zoom, mailing list, and GitHub
+- 🔐 **[Privacy Policy](https://csoh.org/privacy.html)** - no cookies, no cross-site trackers, no on-site ads
+- 🔒 **[Security Policy](https://csoh.org/security-policy.html)** / [SECURITY.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md) - coordinated disclosure
 
 ---
 
@@ -1351,7 +1351,7 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for the full local setup guide, project
 
 This project is dual-licensed:
 
-- **Website Code** (HTML markup, CSS, JS, Python, config): [MIT License](LICENSE) - fork, modify, and reuse freely with attribution.
+- **Website Code** (HTML markup, CSS, JS, Python, config): [MIT License](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/LICENSE) - fork, modify, and reuse freely with attribution.
 - **Editorial Content** (articles, guides, glossary entries, breach reconstructions, resource descriptions): [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) - you may share with attribution, but no commercial use and no derivative works without permission.
 - **Linked Resources**: Property of their respective creators/owners.
 - **News Articles**: Linked to original sources with proper attribution.
