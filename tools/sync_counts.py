@@ -53,6 +53,17 @@ CATEGORY_META = {
                    "Job boards, hiring platforms, and career resources for cloud security roles"),
 }
 
+# Short display-key aliases for the six resource categories, so a marker reads
+# <!--count:cat_ai_floor--> rather than repeating the section id.
+CATEGORY_ALIASES = {
+    "ctf-challenges": "ctf",
+    "labs-training": "labs",
+    "security-tools": "tools",
+    "certifications": "certs",
+    "ai-security": "ai",
+    "job-search": "jobs",
+}
+
 CARD_RE = re.compile(
     r'<a\s+[^>]*?href="([^"]+)"[^>]*>\s*<div class="resource-card"[^>]*>.*?<h3>(.*?)</h3>',
     re.DOTALL,
@@ -63,6 +74,16 @@ LDJSON_RE = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re
 # ---------------------------------------------------------------- source of truth
 def floor10(n: int) -> int:
     return (n // 10) * 10
+
+
+def floor5(n: int) -> int:
+    """Floor to a multiple of 5, for figures too small for a floor of 10.
+
+    The schema-type count sits in the 30s, where floor10 rounds "39" down to
+    "30+" and gives away nine types. A floor still absorbs the churn of one
+    page adding a nested type; it just does not have to cost that much.
+    """
+    return (n // 5) * 5
 
 
 def unique_resources(html: str) -> list[tuple[str, str]]:
@@ -328,6 +349,15 @@ def display_values(counts: dict) -> dict:
         "vendors_floor": f"{floor10(counts['vendors'])}+",
         "vendor_categories": str(counts["vendor_categories"]),
         "og_images": str(counts["og_images"]),
+        "resource_categories": str(counts["resource_categories"]),
+        **{f"cat_{alias}_floor": f"{floor10(counts['cards_per_category'].get(cid, 0))}+"
+           for cid, alias in CATEGORY_ALIASES.items()},
+        "sitemap_urls": str(counts["sitemap_urls"]),
+        "news_banners": str(counts["news_banners"]),
+        "faq_pages": str(counts["faq_pages"]),
+        "author_card_pages": str(counts["author_card_pages"]),
+        "schema_types": str(counts["schema_types"]),
+        "schema_types_floor": f"{floor5(counts['schema_types'])}+",
     }
 
 
@@ -357,6 +387,37 @@ HTML_PROSE_RULES = [
 
 def sync_html_prose(text: str, disp: dict) -> str:
     for pat, rep in HTML_PROSE_RULES:
+        text = re.sub(pat, rep.format(**disp), text)
+    return text
+
+
+# README.md's directory tree is a fenced code block, and a fence renders its
+# contents verbatim - an HTML comment inside one shows up as literal text
+# instead of disappearing. Four counts in that tree carried markers and were
+# displaying `<!--count:meetings-->107<!--/count-->` to every reader on GitHub.
+# Same constraint as llms.txt and JSON-LD, so the same answer: own the numbers
+# with narrow regexes anchored to the surrounding words, from outside the fence.
+MD_PROSE_RULES = [
+    (r"# \d+\+ cloud-security vendors across \d+ categories",
+     "# {vendors_floor} cloud-security vendors across {vendor_categories} categories"),
+    (r"# \d+ cloud security terms with live search",
+     "# {glossary_terms} cloud security terms with live search"),
+    (r"\(\d+\+ resources in \d+ categories\)",
+     "({resources_floor} resources in {resource_categories} categories)"),
+    (r"recaps \(\d+ entries, topic-by-topic\)",
+     "recaps ({meetings} entries, topic-by-topic)"),
+    (r"# \d+ per-breach kill chain pages",
+     "# {breaches} per-breach kill chain pages"),
+    (r"# \d+ per-meeting recap pages",
+     "# {meetings} per-meeting recap pages"),
+    (r"across the \d+ chains", "across the {breaches} chains"),
+    (r"\(\d+ RSS feeds, runs every 3 hours\)",
+     "({feeds} RSS feeds, runs every 3 hours)"),
+]
+
+
+def sync_md_prose(text: str, disp: dict) -> str:
+    for pat, rep in MD_PROSE_RULES:
         text = re.sub(pat, rep.format(**disp), text)
     return text
 
@@ -427,6 +488,78 @@ def long_form_count() -> int:
     return total
 
 
+def resource_categories() -> int:
+    """Top-level category sections on resources.html.
+
+    Unlike vendor-landscape.html, this page has no front or back matter in
+    `<h2>`, so every one is a category.
+    """
+    text = (REPO / "resources.html").read_text(encoding="utf-8")
+    return len(re.findall(r"<h2[^>]*>", text))
+
+
+def cards_per_category() -> dict:
+    """Resource cards in each category section of resources.html.
+
+    Counted per section rather than deduped site-wide: these figures describe
+    what a reader sees under one heading, and a number of entries are filed under
+    two categories, so the six section totals sum to more than `resources`. That is
+    correct for both - they answer different questions.
+    """
+    text = (REPO / "resources.html").read_text(encoding="utf-8")
+    starts = []
+    for cid in CATEGORY_META:
+        m = re.search(r'id="%s"' % re.escape(cid), text)
+        if m:
+            starts.append((m.start(), cid))
+    starts.sort()
+    out = {}
+    for i, (pos, cid) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
+        out[cid] = len(re.findall(r'"resource-card"', text[pos:end]))
+    return out
+
+
+def sitemap_urls() -> int:
+    """Number of <loc> entries in sitemap.xml."""
+    text = (REPO / "sitemap.xml").read_text(encoding="utf-8")
+    return len(re.findall(r"<loc>", text))
+
+
+def news_banners() -> int:
+    """Source banners under img/news-banners/.
+
+    Counts the JPGs only. Every banner also ships a `.webp` sibling served via
+    `<picture>`, so counting both would double the figure.
+    """
+    return len(list((REPO / "img" / "news-banners").glob("*.jpg")))
+
+
+def pages_matching(pattern: str) -> int:
+    """Published pages whose source matches `pattern`.
+
+    Uses the same page set as the marker sync itself (root plus the four
+    published subdirectories), so a count and the pages it describes can never
+    disagree about what "a page on the site" means.
+    """
+    rx = re.compile(pattern)
+    return sum(1 for f in html_files() if rx.search(f.read_text(encoding="utf-8")))
+
+
+def schema_types() -> int:
+    """Distinct schema.org @type values used across the site.
+
+    Counts types, not occurrences: `Organization` appearing on 200 pages is one
+    type. Nested types inside a graph (ImageObject, ListItem, Person...) count,
+    because they are what a consumer actually parses.
+    """
+    seen: set[str] = set()
+    for f in html_files():
+        text = f.read_text(encoding="utf-8")
+        seen.update(re.findall(r'"@type"\s*:\s*"([A-Za-z]+)"', text))
+    return len(seen)
+
+
 # Sections of vendor-landscape.html that are front or back matter rather than a
 # vendor category. Everything else between the first and last category is one.
 VENDOR_NON_CATEGORIES = {
@@ -489,6 +622,13 @@ def canonical_counts() -> dict:
         "vendors": vendor_landscape()[0],
         "vendor_categories": vendor_landscape()[1],
         "og_images": len(list((REPO / "img" / "og").rglob("*.jpg"))),
+        "resource_categories": resource_categories(),
+        "cards_per_category": cards_per_category(),
+        "sitemap_urls": sitemap_urls(),
+        "news_banners": news_banners(),
+        "faq_pages": pages_matching(r'"@type"\s*:\s*"FAQPage"'),
+        "author_card_pages": pages_matching(r"About the author"),
+        "schema_types": schema_types(),
     }
 
 
@@ -535,10 +675,12 @@ def main() -> int:
             if apply:
                 f.write_text(new_txt, encoding="utf-8")
 
-    # 2. Markdown docs: prose markers only.
+    # 2. Markdown docs: markers, plus regex rules for counts that sit inside a
+    #    fenced code block, where a marker would render as literal text.
     for f in md_files():
         txt = f.read_text(encoding="utf-8")
         new_txt = sync_markers(txt, disp)
+        new_txt = sync_md_prose(new_txt, disp)
         if new_txt != txt:
             drift.append(str(f.relative_to(REPO)))
             if apply:

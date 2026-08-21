@@ -24,7 +24,7 @@ The vendor-neutral curriculum, written by practitioners. This catalog mirrors th
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
-| 📖 [Glossary](https://csoh.org/glossary.html) | 310 cloud-security terms, plain-English, every cross-reference hyperlinked |
+| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->317<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
 #### Workloads & Platform
@@ -180,7 +180,7 @@ Our recommended learning sequence:
 1. **Get the Lay of the Land**: [What is Cloud Security?](https://csoh.org/what-is-cloud-security.html) - vendor-neutral pillar overview of the field
 2. **Follow the Roadmap**: [Cloud Security Learning Path](https://csoh.org/learning-path.html) - beginner → advanced with milestones, free labs, study targets
 3. **Master the Fundamentals**: [Best Practices](https://csoh.org/cloud-security-best-practices.html) and the [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html)
-4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - 310 terms, every cross-reference hyperlinked
+4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->317<!--/count--> terms, every cross-reference hyperlinked
 5. **Get Hands-On**: [CTF Challenges](https://csoh.org/ctfs.html) and [Resources](https://csoh.org/resources.html) for practice
 6. **Choose a Certification**: [Cloud Security Certifications guide](https://csoh.org/cloud-security-certifications.html) - CCSK, CCSP, AWS, Azure, GCP, CKS
 7. **Read Real Breaches**: [Breach Kill Chains](https://csoh.org/breach-timeline.html) - see how attacks actually happen
@@ -361,24 +361,24 @@ The site's own security model as a worked example: the strict CSP and the rest o
 ### 📚 Resources (`resources.html`)
 Comprehensive catalog of **<!--count:resources_floor-->480+<!--/count--> cloud security resources** organized by 6 categories:
 
-#### 🎯 CTF Challenges & Vulnerable Environments
+#### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->60+<!--/count--> entries)
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
 - **AWSGoat** - Vulnerable AWS stack from INE (formerly AppSecEngineer)
 - **Kubernetes Goat** - K8s containerized application with intentional vulnerabilities
 - **AIGoat** - AI/ML vulnerable applications
 - **Blue Team Labs** - Hands-on security scenarios
-- Plus 15+ additional CTF platforms (OWASP, HackTheBox, TryHackMe, etc.)
+- ...and the rest of the section (OWASP, HackTheBox, TryHackMe, etc.)
 
-#### 🧪 Hands-On Labs & Training Platforms
+#### 🧪 Hands-On Labs & Training Platforms (<!--count:cat_labs_floor-->60+<!--/count--> entries)
 - **Cybr** - Free AWS security labs
 - **Digital Cloud Training** - Comprehensive challenge labs
 - **AWS Well-Architected Labs** - Official AWS security training
 - **Immersive Labs** - Interactive cybersecurity training
 - **SecureFlag** - GCP security labs
 - **Pwned Labs** - Realistic penetration testing scenarios
-- Plus 20+ additional training platforms
+- ...and the rest of the section
 
-#### 🛡️ Security Tools & Platforms (25+ Tools)
+#### 🛡️ Security Tools & Platforms (<!--count:cat_tools_floor-->80+<!--/count--> entries)
 - **CNAPP (Cloud Native Application Protection)** - Runtime protection tools
 - **CSPM (Cloud Security Posture Management)** - Configuration & compliance scanning
 - **KSPM (Kubernetes Security Posture Management)** - K8s-specific security
@@ -386,7 +386,7 @@ Comprehensive catalog of **<!--count:resources_floor-->480+<!--/count--> cloud s
 - **Compliance & Config Management** - Terraform, Ansible, CloudFormation
 - **Vulnerability Management** - Snyk, Qualys, Tenable, etc.
 
-#### 🎓 Certifications & Professional Development (25+ Certs)
+#### 🎓 Certifications & Professional Development (<!--count:cat_certs_floor-->70+<!--/count--> entries)
 - **AWS** - Security Specialty, Solutions Architect, Database Specialty
 - **Azure** - Security Engineer Associate, Administrator Associate
 - **Google Cloud** - Professional Cloud Security Engineer
@@ -395,12 +395,12 @@ Comprehensive catalog of **<!--count:resources_floor-->480+<!--/count--> cloud s
 - **General Security** - CISSP, CEH, SC-300, AZ-305
 - **Bootcamps & Prep Courses** - Pwned Labs, AWSome Day, etc.
 
-#### 🤖 AI Security (50+ Resources)
+#### 🤖 AI Security & LLM Protection (<!--count:cat_ai_floor-->100+<!--/count--> entries)
 - **AI Security Tools** - Trend Micro Workload Security, etc.
 - **AI Vulnerable Environments** - AIGoat, AI Security CTFs
 - **AI Security Research** - Papers, whitepapers, research resources
 
-#### 💼 Job Search Resources (50+ Listings)
+#### 💼 Job Search & Career Development (<!--count:cat_jobs_floor-->100+<!--/count--> entries)
 - **Job Boards** - LinkedIn, Dice, CyberSecJobs, CloudSecurityJobs
 - **Resume Services** - Resume optimization platforms
 - **Interview Prep** - Technical interview guides
@@ -463,7 +463,7 @@ Plain-English landing page for both feeds - `feed.xml` (cloud-security news, ref
 
 ### 📖 Glossary (`glossary.html`)
 A plain-English glossary of cloud-security acronyms and concepts:
-- **310 terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
+- **<!--count:glossary_terms-->317<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
 - **Live search** filters terms and definitions as you type, hiding sections with no matches
 - **Cross-linked**: every glossary term mentioned in any other definition is automatically hyperlinked to its entry - see `tools/crosslink_glossary.py`
 - Targeted terms (arrived via `#term-...` anchor) get a yellow highlight so the reader can immediately spot them
@@ -494,21 +494,47 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 
 ### Current incidents covered
 
+All <!--count:breaches-->45<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
+
 | Incident | Year | Provider | Key Techniques |
 |---|---|---|---|
 | Mitnick / Novell | 1994 | On-Prem | War dialing, pretexting, voicemail trap, watched honeypot |
+| event-stream / npm | 2018 | npm | T1656, T1195.002, T1195.001, T1027 |
 | Capital One | 2019 | AWS | T1190, T1552.005, T1619, T1530 |
 | SolarWinds | 2020 | Azure AD / AWS | T1195.002, T1071.004, T1606.002, T1114.002 |
+| ChaosDB / Cosmos DB | 2021 | Azure Cosmos DB | T1580, T1562.007, T1552 |
+| Codecov Bash Uploader | 2021 | CI / Docker | T1552.001, T1078.004, T1195.002, T1552.007 |
+| Kaseya VSA / REvil | 2021 | MSP / RMM | T1190, T1072, T1562.001, T1486 |
+| Log4Shell | 2021 | Cross-cloud (OSS) | T1190, T1059, T1195.001, T1595.002 |
 | Uber | 2022 | AWS / GCP | T1078, T1621, T1552.001, T1078.004 |
 | LastPass | 2022-2023 | LastPass / AWS S3 | T1195.002, T1203, T1555, T1530 |
+| 0ktapus / Twilio | 2022 | Okta / SaaS | T1566.003, T1656, T1111, T1199 |
+| Okta / LAPSUS$ | 2022 | Okta | T1199, T1078, T1213 |
 | Storm-0558 | 2023 | Azure | T1078, T1552, T1606.001, T1114.002 |
 | Microsoft SAS Leak | 2023 | Azure | T1552.004, T1530 |
 | Scattered Spider / MGM | 2023 | Okta / Azure | T1598, T1078, T1484, T1486 |
+| 3CX / X_TRADER | 2023 | Supply chain (desktop app) | T1195.002, T1204.002, T1555, T1133 |
+| CircleCI | 2023 | CircleCI / CI | T1204.002, T1027, T1539, T1552.007 |
+| MOVEit / Cl0p | 2023 | MFT / on-prem | T1594, T1190, T1505.003, T1036.005 |
+| Okta Support System | 2023 | Okta | T1555.003, T1078, T1213, T1539 |
 | Snowflake / UNC5537 | 2024 | Snowflake | T1078.004, T1555.003, T1530, T1657 |
 | Promptware | 2024-2026 | AI / LLM (Gemini, Copilot) | T1566, T1071.001, T1534, T1530 |
+| Change Healthcare / ALPHV | 2024 | Citrix / on-prem | T1133, T1078, T1021, T1041 |
+| Midnight Blizzard / Microsoft | 2024 | Azure / Entra ID | T1110.003, T1090.002, T1114.002, T1552.001 |
+| Polyfill.io | 2024 | CDN / supply chain | T1583.001, T1059.007, T1195.002, T1497 |
+| Ultralytics / PyPI | 2024 | PyPI / GitHub Actions | T1059.004, T1190, T1195.001, T1195.002 |
+| XZ Utils Backdoor | 2024 | OSS / Linux | T1585, T1587.001, T1656, T1195.001 |
 | Codefinger / S3 | 2025 | AWS S3 | T1552, T1078.004, T1486, T1657 |
 | tj-actions/changed-files | 2025 | GitHub Actions | T1195.001, T1552.001, T1078 |
 | Salesloft Drift / UNC6395 | 2025 | Salesforce / SaaS | T1528, T1078.004, T1213, T1530 |
+| GTG-1002 / Claude Code | 2025 | AI / LLM (Claude Code) | T1586, T1595, T1590, T1588.005 |
+| Entra ID Actor Token | 2025 | Azure / Entra ID | T1580, T1528, T1606, T1078.004 |
+| npm debug / chalk | 2025 | npm | T1566.002, T1111, T1195.002, T1059.007 |
+| Nx / s1ngularity | 2025 | npm / GitHub Actions | T1059.004, T1190, T1552.007, T1070 |
+| Oracle EBS / Cl0p | 2025 | Oracle EBS | T1588.006, T1190, T1059, T1213 |
+| Shai-Hulud npm Worm | 2025 | npm | T1566.002, T1111, T1195.002, T1059.007 |
+| SharePoint ToolShell | 2025 | SharePoint / on-prem | T1190, T1505.003, T1552.004, T1606 |
+| UNC6040 / Salesforce Vishing | 2025 | Salesforce / SaaS | T1566.004, T1656, T1204.001, T1528 |
 | Storm-2949 / Entra ID SSPR | 2026 | Azure / Entra ID | T1621, T1098.005, T1556.006, T1530 |
 | Mini Shai-Hulud / TanStack npm | 2026 | npm / GitHub Actions | T1195.002, T1552.001, T1550.001, T1567.001 |
 | Suspected AI-Assisted AWS Compromise | 2026 | AWS | T1078.004, T1580, T1619, T1648 |
@@ -516,6 +542,7 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 | Vercel / Context.ai OAuth | 2026 | Google Workspace / SaaS | T1528, T1199, T1078, T1580 |
 | Vimeo / Anodot (ShinyHunters) | 2026 | Snowflake / BigQuery | T1199, T1078.004, T1213, T1657 |
 | Megalodon / GitHub Actions | 2026 | GitHub Actions | T1552.005, T1078, T1053, T1041 |
+| Hugging Face / OpenAI Agent | 2026 | AI / LLM (Hugging Face) | T1588.007, T1211, T1190, T1593 |
 
 The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined this past year are collected in the **[2025 Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review-2025.html)**.
 
@@ -592,8 +619,8 @@ csoh.org/
 ├── what-is-cloud-security.html # Pillar: vendor-neutral cloud-security overview (FAQ schema)
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
-├── vendor-landscape.html       # <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories
-├── glossary.html               # 310 cloud security terms with live search & cross-links
+├── vendor-landscape.html       # 300+ cloud-security vendors across 32 categories
+├── glossary.html               # 317 cloud security terms with live search & cross-links
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 │
 │  ── Tool-category comparisons ──
@@ -675,7 +702,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (<!--count:meetings-->107<!--/count--> entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (107 entries, topic-by-topic)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
@@ -684,7 +711,7 @@ csoh.org/
 ├── what-practitioners-think-about-vulnerability-management.html
 │
 │  ── Catalogs & feeds ──
-├── resources.html              # Main resource directory (410+ resources in 6 categories)
+├── resources.html              # Main resource directory (480+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
 ├── rss.html                    # Landing page explaining the RSS feeds to subscribers
 │
@@ -706,8 +733,8 @@ csoh.org/
 ├── google66d489593949bd4c.html # Google Search Console verification token
 │
 │  ── Subdirectory page sets ──
-├── breaches/                   # <!--count:breaches-->45<!--/count--> per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # <!--count:meetings-->107<!--/count--> per-meeting recap pages (split from meetings.html)
+├── breaches/                   # 45 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── meetings/                   # 107 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
 │
@@ -829,6 +856,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `sync_counts.py` | Recomputes every count on the site (JSON-LD `numberOfItems`, `<!--count:-->` markers, OG subtitles) from the real cards | [README](tools/SYNC_COUNTS_README.md) |
 | `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](tools/CROSSLINK_GLOSSARY_README.md) |
 | `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](tools/CROSSLINK_PAGES_README.md) |
+| `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](tools/INJECT_SESSION_BLOCKS_README.md) |
 | `inject_goatcounter.py` | Stamps the GoatCounter analytics tag onto every page | docstring |
@@ -867,6 +895,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
 | `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](tools/DOCS_CONSISTENCY_README.md) |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
+| `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](tools/RUN_SEO_AUDIT_README.md) |
 | `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](tools/CHECK_PAGESPEED_README.md) |
@@ -885,6 +914,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `site-publish.filter` | rsync filter listing what `stage_site.sh` includes and excludes |
 | `url_resolution_cache.json` | CI-seeded redirect cache for `normalize_urls.py` (never commit a local copy) |
 | `awesome-list-submissions.md` | Tracking notes for awesome-list outreach |
+| `rotate_secrets.py` | Inventories, audits, and rolls the short tail of long-lived credentials that cannot federate. Everything else in the deploy path is OIDC or App tokens that expire in ~1h; this tail is the part with no forcing function - nothing breaks and nothing warns, the tokens just get older | docstring |
 
 ---
 
@@ -1020,11 +1050,21 @@ The table below covers the 15 core workflows; `check-mobile-layout`, `deploy-qa`
 **Workflow file:** `.github/workflows/site-update-deploy.yml`
 
 **Triggers on pushes to `main` when these files change:**
-- `*.html`
-- `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
-- `chat-screenshots/**`, `img/**`
+- `**.html` - note the double `*`. GitHub's `*` does not match `/`, so `'*.html'`
+  would mean *root-level pages only* and a commit touching just `breaches/`,
+  `meetings/`, `portfolio/`, or `homelab/` would never trigger the workflow.
+  That failure is silent: nothing errors, the push looks fine, and the change
+  waits for the next unrelated commit.
+- `style.css`, `search.css`, `breach-timeline.css`
+- `main.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`
+- `vendor/**`, `chat-screenshots/**`, `img/**`
 - `update_sri.py`
 - Manual trigger via the GitHub Actions tab
+
+Re-derive the published set with `./tools/stage_site.sh /tmp/dist && find /tmp/dist -maxdepth 1`
+when you add a file, and add it to this filter *and* `deploy.yml`'s. Widening a
+filter is always the safe direction: a superfluous pattern costs one redundant
+deploy of identical bytes, a missing one costs a change that never goes live.
 
 **What it does (housekeeping only - actual deploy is `deploy.yml`):**
 - Updates SRI hashes and cache-busting tags if CSS/JS changed (using `update_sri.py`)
@@ -1063,9 +1103,13 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
 
 Builds the site once, then publishes it active/active to three cloud origins behind Cloudflare. This is the workflow that actually publishes csoh.org to production.
 
-**Triggers on pushes to `main` when these files change:**
-- The same path filters as `site-update-deploy.yml` (HTML, CSS, JS, screenshots, images)
-- `Dockerfile`, `nginx.conf`, `tools/stage_site.sh`, `tools/site-publish.filter`, `.github/workflows/deploy.yml`
+**Triggers on pushes to `main` when these files change:** a superset of
+`site-update-deploy.yml`'s filter - everything that workflow watches, plus the
+generated and static files only the deploy ships:
+- All of `site-update-deploy.yml`'s paths above (`**.html`, CSS, JS, `vendor/**`, images, screenshots)
+- `feed.xml`, `recaps.xml`, `sitemap.xml`, `robots.txt`, `llms.txt`, `humans.txt`, `manifest.json`, `csoh.ics`, `security.txt`, `.well-known/**`
+- `search-synonyms.json`, `meetings-search-index.json`, `preview-mapping.json`, `email-screenshots/**`
+- `Dockerfile`, `nginx.conf`, `nginx-security-headers.conf`, `infra/**`, `tools/stage_site.sh`, `tools/site-publish.filter`, `tools/build_search_index.py`, `.github/workflows/deploy.yml`
 - Manual trigger via the GitHub Actions tab
 
 **What it does - build once, fan out:**
@@ -1079,6 +1123,45 @@ Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo.
 **Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover. (This replaced the old GCP Global HTTPS load balancer + Cloud Armor + Cloud CDN, which were redundant with Cloudflare and cost ~$100/mo.)
 
 **Full architecture, cost, and cutover runbook:** [infra/README.md](infra/README.md). The full security walkthrough is the public teaching page [cloud-deployment.html](cloud-deployment.html). Security model and rotation: [SECURITY.md → Deployment Security](SECURITY.md#deployment-security).
+
+### QA Staging Site
+
+`qa.csoh.org` is a staging copy of the site, deployed from the **`qa` branch** to a
+second Cloud Run service by `deploy-qa.yml`. `main` still means production and
+still deploys the moment anything lands on it - QA is an addition, not a
+redirection. Promotion is **Actions → Promote QA to production**
+(`promote-qa.yml`), which fast-forwards `main`.
+
+Work on QA in the `../csoh-qa` worktree, which stays permanently on `qa`. Do not
+`git switch qa` in the main checkout - several sessions share it, and switching
+moves all of them mid-task.
+
+Four things here are deliberate and look like mistakes:
+
+- **`deploy-qa.yml` has no `paths:` filter, on purpose.** A third filter to keep
+  in step with the other two is a third chance to repeat the `'*.html'` bug
+  described above. `promote-qa.yml`'s "was this commit actually QA-tested?" gate
+  also depends on every push to `qa` producing a run, so a filter would make
+  filtered-out commits unpromotable.
+- **The QA container config must stay identical to production's.** Promotion
+  reuses the image QA built, by tag, from the shared Artifact Registry repo. A
+  QA-only container setting silently turns promotion back into a rebuild.
+  Anything QA-specific belongs at the Cloudflare edge.
+- **QA is deliberately outside the load-balancer pool.** Pool membership means
+  being probed from every Cloudflare data center around the clock, and never
+  scaling to zero.
+- **The Host rewrite is a Worker, not an Origin Rule.** Cloud Run picks a service
+  by `Host`, and Host Header Override is a paid-plan feature this zone does not
+  have. The entitlement is checked at apply rather than at plan, so the config
+  validates and plans cleanly and then fails.
+
+`qa.csoh.org` sits behind Cloudflare Access, but its origin's `*.run.app`
+hostname is publicly reachable exactly as production's is. Access is not a
+secrecy boundary - do not stage anything there that would harm you if read early.
+
+**Full docs**, including the ten Cloudflare token permission groups and the
+registry race between the two deploy workflows:
+[.github/workflows/QA_PIPELINE_README.md](.github/workflows/QA_PIPELINE_README.md).
 
 ### Setup Note
 
@@ -1125,17 +1208,17 @@ Both are deliberately `paths:`-filtered so that editing the content they watch d
 
 CSOH is engineered for organic discovery across traditional search (Google, Bing), AI search/answer engines (ChatGPT, Perplexity, Claude, Gemini), and social previews (LinkedIn, Twitter/X, Slack). The site uses no third-party scripts and no cross-site tracking - just clean semantic HTML, structured data, disciplined metadata, and a self-hosted cookieless page-view counter (GoatCounter).
 
-### Schema.org structured data (25+ types)
+### Schema.org structured data (<!--count:schema_types_floor-->35+<!--/count--> types)
 
 **Page-level schema** - each page declares what kind of thing it is:
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - 63 pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->64<!--/count--> pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
-- ✅ **DefinedTermSet** - the glossary, with 310 individual terms
+- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->317<!--/count--> individual terms
 
 **Entity schema** - who/what is responsible for the content:
 - ✅ **Organization** - CSOH itself, with founding date, contact point, sameAs links, search action
@@ -1147,20 +1230,20 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (85 pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->91<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - 228 URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->265<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
 - ✅ **`security.txt`** (RFC 9116) for vulnerability disclosure, at both `/.well-known/security.txt` and `/security.txt`
 - ✅ Site-wide **canonical URLs** to consolidate ranking signals
-- ✅ **Glossary cross-linking** - first occurrence of each of 310 terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](tools/crosslink_pages.py))
+- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->317<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](tools/crosslink_pages.py))
 
 ### Social previews
 
@@ -1170,7 +1253,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Performance signals (Core Web Vitals)
 
-- ✅ **WebP everywhere** - homepage banner, all 36 news-source banners, and the author photo all serve WebP via `<picture>` with JPG/PNG fallback (≈40-60% smaller payloads)
+- ✅ **WebP everywhere** - homepage banner, all <!--count:news_banners-->58<!--/count--> news-source banners, and the author photo all serve WebP via `<picture>` with JPG/PNG fallback (≈40-60% smaller payloads)
 - ✅ **`<link rel="preload">`** for critical CSS, with **SRI integrity hashes** auto-updated on every deploy
 - ✅ **`loading="lazy"`** on below-the-fold images
 - ✅ **`width` / `height`** attributes on every `<img>` to prevent CLS
