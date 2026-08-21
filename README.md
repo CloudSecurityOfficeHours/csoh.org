@@ -631,8 +631,9 @@ csoh.org/
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
-├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 20 chains
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 45 chains
 ├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
+├── cloud-breach-year-in-review-2026-h1.html  # 2026 first-half review (Jan-Jul 2026)
 ├── kevin-mitnick.html          # Special resource page
 │
 │  ── Governance + AI ──
@@ -760,7 +761,7 @@ csoh.org/
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
 ├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
-├── .github/workflows/          # 15 CI/CD workflows (see "How Automation Works" below)
+├── .github/workflows/          # 20 CI/CD workflows (see "How Automation Works" below)
 │
 ├── seo-audits/                 # SEO audit reports + SCORECARD.md (excluded from deploy filters)
 ├── preview-mapping.json        # Metadata for resource previews
@@ -977,7 +978,7 @@ Edit the "Resource Categories" section in `index.html` to:
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-All 15 workflows, grouped by what they do. Times are UTC.
+The table below covers the 15 core workflows; `check-mobile-layout`, `deploy-qa`, `promote-qa`, `publish-recaps`, and `weekly-docs-review` are the remaining five (QA pipeline docs: `.github/workflows/QA_PIPELINE_README.md`). Times are UTC.
 
 **Content automation (writes to the site)**
 
