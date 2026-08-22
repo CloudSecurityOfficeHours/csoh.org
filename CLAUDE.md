@@ -205,6 +205,123 @@ then into 0 across 826 elements. Eyeballing 107 pages would not have found
 them, and spot-checking the pages you happen to open finds only the ones you
 happen to open.
 
+## Colour contrast: two audits that pull in opposite directions
+
+`--secondary-color` is sky-700 `#0369a1`. **Do not lighten it back.** It was
+sky-600 `#0284c7` for a long time, which is 4.10:1 on `--white` and 3.91:1 on
+`--light-bg`, under WCAG AA's 4.5:1 for normal text - and it fails in *both*
+directions, as text on a light surface and as a surface under white text.
+
+The interesting part is how long that survived. It had already been found
+twice and spot-fixed twice, in `.btn-primary` and `.card-action`, each time by
+hardcoding sky-700 past the token rather than asking whether the token was
+wrong. Both left a comment reading "sky-700, not var(--secondary-color)
+sky-600" - so the stylesheet *documented* the token as failing AA and went on
+using it everywhere else. (Those two comments have since been rewritten, since
+the token now carries the same value; do not go looking for that wording.) The
+third instance was PageSpeed dropping Accessibility 100 -> 96 on 2026-08-22,
+once `d9da7f4d` pointed ~2,280 prose and glossary links at it. **When you find
+yourself writing a third exception to a token, the token is the bug.**
+
+### Fixing `color-contrast` can trip `link-in-text-block`
+
+Darkening the links fixed contrast against the background and immediately
+failed a different audit, because the two measure opposite quantities:
+
+- `color-contrast` wants the link **>= 4.5:1 against its background**.
+- `link-in-text-block` wants it **>= 3:1 against the surrounding text**, unless
+  the link carries a distinguisher that is not colour.
+
+On this palette nothing satisfies both. 3:1 against surrounding text needs the
+link at luminance >= 0.165 against `--text-color` `#1f2937`, >= 0.254 against
+the `#334155` that `.lede` and hero copy use, and >= 0.366 against `#475569`,
+while 4.5:1 against the `#f8fafc` page background caps it at 0.173. The ranges
+do not overlap, and a brute-force search over the blue region returns nothing.
+
+So prose links are underlined, and that is not a style preference - it is the
+only remaining variable. `d9da7f4d` had removed the underline and revealed it
+on hover instead, which never satisfied WCAG 1.4.1 (Use of Color) either:
+hover reaches neither a keyboard nor a touch screen, so for those users colour
+genuinely was the only cue.
+
+### `--text-muted` is referenced 13 times and defined zero times
+
+Every one of those is really its fallback literal, and there are six different
+literals (`#555`, `#666`, `#5b6573`, `#64748b`, `#94a3b8`, `#475569`). Nobody
+checks a fallback against both themes, so two of them rendered invisible
+rather than merely low-contrast:
+
+- `.news-date-count` was `rgba(255, 255, 255, 0.85)`, a value tuned to pass on
+  a dark surface. In light mode that is white on `#f8fafc`: **1.05:1**. The
+  article counts on news.html had not been readable in light mode since.
+- `.pull-quote cite`, `.author-card__kicker` and `.signature--final` were
+  `#777`, 4.28:1 on `--light-bg`.
+
+**Do not "fix" this by defining `--text-muted` globally.** Some of those
+fallbacks are light-on-dark on purpose, and one definition would invert them.
+Give the specific rule a light value and a dark override instead.
+
+### PSI scores light mode, on the home page only
+
+Which means a green PageSpeed run says nothing about dark mode or about any
+other page, and dark had a whole set of its own - light accents used as
+surfaces under white text (`.filter-btn.active` at 1.92:1, `.step-number` at
+1.46:1), an author card on 91 pages with no dark rules at all (bio 2.08:1),
+and every `.share-btn` label rendering `#6fc3ff` because
+`[data-theme="dark"] body a` at (0,1,2) outranks `.share-btn` at (0,1,0).
+
+One group is left failing on purpose: the 360 share buttons on news.html are
+white on the platforms' own brand colours, 2.83:1 to 3.62:1. Brand values, and
+no scored page uses them.
+
+### How to measure it without inventing failures
+
+Load each page **fresh** under browser-level `prefers-color-scheme` emulation
+and scan it in that state. Do **not** load once and flip `data-theme` on
+`<html>` to test the other theme: that reported ~500 phantom failures on
+resources.html and 80 on topics.html, all as light text "on rgb(255,255,255)",
+because the flip leaves part of the computed tree inconsistent and a
+background walk that stops before `documentElement` falls back to white. Walk
+backgrounds all the way up *including* `documentElement`, and skip any element
+with a `background-image` on itself or an ancestor.
+
+Two false positives are unavoidable and are also true of axe and Lighthouse:
+an element whose backdrop is a sibling `<img>` layer (kevin-mitnick.html's
+memorial hero is white text over a photo, and measures 1.05:1 while rendering
+perfectly), and anything over a gradient.
+
+**Always run a control before believing a clean result** - re-inject the known
+bad value and confirm the scan reports the failures again:
+
+```js
+document.head.appendChild(Object.assign(document.createElement('style'),
+  { textContent: ':root{--secondary-color:#0284c7}' }))   // must fail again
+```
+
+Same shape as the rest of this file: a scan that cannot measure a page returns
+zero, which is indistinguishable from a clean page.
+
+### The mirror block is generated
+
+`tools/sync_dark_branch.py` owns the `@media (prefers-color-scheme: dark)`
+block and Lint gates on `--check`. Write dark rules in the `[data-theme="dark"]`
+branch only and run the tool; hand-written mirrors fail the check on ordering
+even when they are correct. It flattens each rule onto one line, so a comment
+placed *inside* a rule lands mid-declaration in the mirror - put it above the
+selector.
+
+```sh
+python3 tools/sync_dark_branch.py && python3 update_sri.py
+python3 tools/sync_dark_branch.py --check
+```
+
+The general lesson, and it is the inverse of the one this file keeps
+recording: the usual trap is an instrument that reports nothing while broken.
+Here every instrument worked, and **reported one failure at a time** - so the
+first fix looked complete, shipped, and revealed a second audit that had been
+waiting behind it the whole time. Re-run the gate after a fix rather than
+reasoning that the fix must have worked.
+
 ## Site chrome is generated, not hand-edited
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped
