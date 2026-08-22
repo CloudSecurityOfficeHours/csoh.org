@@ -119,12 +119,91 @@ Two general lessons, both of which cost a wrong "verified" here:
   nine-section page, which reads as full coverage. Enumerate by what the page
   actually contains, not by the class you are already thinking about.
 
+Inline `style="..."` **attributes** fail the same way under a different
+directive, and in far greater numbers; that has its own section below.
+
 One violation left is not ours and cannot be fixed from this repo: Cloudflare
 injects its own bot-detection script (`__CF$cv$params`,
 `/cdn-cgi/challenge-platform/scripts/jsd/main.js`) into the HTML at the edge,
 and `script-src 'self'` blocks it on every page load, so those JS detections
 have never run. Changing that means the dashboard, per the
 `ignore_changes = [rules]` section below.
+
+## `style="..."` attributes are blocked by the same policy
+
+The section above is about `<style>` blocks, which CSP reports under
+`style-src-elem`. Inline **attributes** are `style-src-attr`, governed by the
+same `style-src 'self'`, and they fail the same silent way. This is worth its
+own heading because the audit that cleaned up the blocks grepped for `<style>`,
+found nothing further, and declared the site clean. There were **827 inline
+style attributes across 107 pages**, every one of them dead in production.
+
+An audit is only ever as wide as its search pattern, and "no matches" from a
+pattern that was never going to match is indistinguishable from a clean result.
+
+Most were cosmetic. Three were `display:none`, which inverts into something
+worse than a missing style, because the element renders:
+
+- `404.html`'s `#redirect-hint` showed its "Did you mean:" panel on **every**
+  404, with no suggestion in it, since the JS that fills in a target had not
+  run.
+- `cloud-security-reading-list.html` drew its icon sprite as a blank 300x150
+  box in the middle of the page.
+- `resources.html`'s `#noResults` was saved only by `main.js` hiding it on
+  load.
+
+The largest single case was the author card on **91 pages**: none of its six
+declarations applied, so instead of a 720px centred block with a circular
+avatar beside the text it rendered as a square avatar stacked above full-width
+text with no separator. `.pillar-card-stage5` was never defined in the
+stylesheet at all, so that card also silently used the default blue accent.
+
+### Three runtime dependencies that break when you fix this
+
+Moving a `display:none` out of an attribute and into a class is not a
+like-for-like swap. All three of these were live here:
+
+- **`el.style.display = ''` only reveals while the hiding *is* the attribute
+  being cleared.** Both `404.js` and `main.js` did exactly that. Once the
+  default lives in a class, clearing the inline value leaves the element
+  hidden. Set an explicit value instead.
+- **A class carrying `!important` cannot be overridden by an inline style at
+  all.** `.is-hidden` is `display: none !important`, so anything that must be
+  revealable must not use it. `#redirect-hint` is hidden by an id selector for
+  that reason.
+- **`element.style.cssText = '...'` is blocked exactly like an attribute.**
+  `main.js` built its source-filter heading that way, so that heading was
+  unstyled too. It is easy to miss because it looks like CSSOM, not markup.
+
+### The replacement is weaker than what it replaces
+
+An inline attribute outranks every rule in every stylesheet. The class you
+swap it for does not, and a bare class is `(0,1,0)` against descendant
+selectors like `.contribute-article p` or `.hero p` at `(0,1,1)`. The first
+conversion pass here looked correct and was wrong on **474 properties** for
+exactly that reason. Scope the new class under its container, qualify it with
+the element, or use `!important` and say why in a comment.
+
+The general form: **when you remove a mechanism that outranked everything, the
+replacement has to be checked against the old rendering, not against your
+intent.**
+
+### Check it by measuring, not by looking
+
+Grep first; nothing should match:
+
+```sh
+grep -rlE '\sstyle="[^"]*:' --include='*.html' .   # want: no output
+```
+
+Then prove the rendering did not move. Capture a set of computed properties on
+every affected element **twice** - once on localhost, where the attributes
+still apply and which is therefore the intended rendering, and once with
+production's CSP header applied via Playwright `route.fulfill` - and diff the
+two. That is what turned "looks fine to me" into 474 concrete regressions, and
+then into 0 across 826 elements. Eyeballing 107 pages would not have found
+them, and spot-checking the pages you happen to open finds only the ones you
+happen to open.
 
 ## Site chrome is generated, not hand-edited
 
