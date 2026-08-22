@@ -82,11 +82,46 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 # Top level: Learn / Resources / Threat Intel / Careers / Community, then the
 # Support + Join Friday Zoom pair (main.js injects "Search" ahead of them).
 #
-# "By Cloud" used to be a sixth top-level dropdown. It moved into Learn as a
-# column: with it in the bar, logo + nav came to 1140px inside a 1136px content
-# box, so the theme toggle wrapped to its own line on any page whose logo
-# markup is the wider variant. Its 4 links are a natural Learn column, and
-# folding them in buys ~95px of slack rather than shaving pixels.
+# The five top-level items are fixed by a hard width constraint, not by taste.
+# Measured at the 1024px breakpoint: logo 185px + toggle 36px + nav 786px =
+# 1007px inside a 1009px content box. There is no room for a sixth item, so
+# any reorganisation has to happen *inside* the dropdowns.
+#
+# Learn used to be a 6-column, 40-link mega menu - 43% of the whole nav, and
+# the site's entire subject index wearing a category's name. Two of its column
+# headings ("Workloads & Platform", "Governance & AI") were containers of
+# convenience: governance and AI have nothing to do with each other, they were
+# welded together to fill a sixth column. When a heading needs an ampersand to
+# hold itself up, the column count is driving the taxonomy.
+#
+# It now carries three single-axis columns - Foundations (concept), By Cloud
+# (platform), Build It (hands-on) - and the 25 subject pages live on
+# topics.html, reached by the .mega-all row. That row is the pattern for every
+# mega menu: the dropdown's hub page, promoted out of a column to a full-width
+# footer. Careers uses it for cloud-security-careers.html, which is why
+# "Careers Overview" no longer appears inside Getting Started.
+#
+# Resources was the inverse problem: 498 cards and 7 working filter categories
+# behind a single flat link. It gets a dropdown built from the filters
+# main.js already deep-links via ?category= (see validCategories there - keep
+# these two in step). CTF Challenges points at ctfs.html rather than
+# ?category=ctf because the dedicated page is the richer of the two.
+#
+# The six "What Practitioners Think" digests used to sit as sub-items in six
+# different columns across three dropdowns. They are the site's most
+# distinctive content and they were the hardest thing in the nav to find as a
+# set. They are now one column in Community, which is why that menu is 4col.
+# The heading is "Session Digests" and not "From the Friday Sessions" for a
+# mechanical reason: at 4 columns the longer label wraps to two lines while
+# LIVE / ARCHIVE / CONNECT stay on one, which drops that column's first item
+# a row below its neighbours. The provenance is carried by the featured
+# item's tag underneath it instead.
+#
+# Deliberate de-duplication, so this does not drift back: mentorship.html is
+# in Careers only (higher intent match than Community > Live), and
+# chat-resources / contribute-resources are in Resources only. Nothing was
+# orphaned - every link removed here is reachable from topics.html,
+# what-practitioners-think.html, or cloud-security-careers.html.
 #
 # Keep the 12-space indent; NAV_PATTERN below consumes the existing
 # indentation so this controls it fully.
@@ -95,7 +130,7 @@ CANON_NAV = """\
                 <ul>
                     <li class="has-dropdown has-mega">
                       <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
-                      <div class="dropdown-menu mega-menu mega-6col">
+                      <div class="dropdown-menu mega-menu mega-3col">
                         <div class="mega-col">
                           <span class="mega-heading">Foundations</span>
                           <ul>
@@ -118,46 +153,6 @@ CANON_NAV = """\
                           </ul>
                         </div>
                         <div class="mega-col">
-                          <span class="mega-heading">Workloads &amp; Platform</span>
-                          <ul>
-                            <li><a href="containers.html">Containers</a></li>
-                            <li><a href="kubernetes.html">Kubernetes</a></li>
-                            <li><a href="serverless.html">Serverless</a></li>
-                            <li><a href="service-mesh-security.html">Service Mesh</a></li>
-                            <li><a href="ci-cd.html">CI/CD</a></li>
-                            <li class="mega-featured"><a href="what-practitioners-think-about-supply-chain-security.html">What Practitioners Think About Supply Chain<span class="mega-tag">From the Friday sessions</span></a></li>
-                            <li><a href="landing-zones.html">Landing Zones</a></li>
-                          </ul>
-                        </div>
-                        <div class="mega-col">
-                          <span class="mega-heading">Security Domains</span>
-                          <ul>
-                            <li><a href="iam.html">IAM &amp; Identity</a></li>
-                            <li><a href="non-human-identity.html">Non-Human Identity</a></li>
-                            <li><a href="zero-trust.html">Zero Trust</a></li>
-                            <li><a href="network-security.html">Network Security</a></li>
-                            <li><a href="data-security.html">Data Security &amp; KMS</a></li>
-                            <li><a href="vulnerability-management.html">Vulnerability Management</a></li>
-                            <li class="mega-featured"><a href="what-practitioners-think-about-vulnerability-management.html">What Practitioners Think About Vuln Mgmt<span class="mega-tag">From the Friday sessions</span></a></li>
-                            <li><a href="api-security.html">API Security</a></li>
-                            <li><a href="saas-security.html">SaaS Security (SSPM)</a></li>
-                          </ul>
-                        </div>
-                        <div class="mega-col">
-                          <span class="mega-heading">Governance &amp; AI</span>
-                          <ul>
-                            <li><a href="backup-dr.html">Backup, DR &amp; Ransomware</a></li>
-                            <li><a href="threat-modeling.html">Threat Modeling</a></li>
-                            <li><a href="grc.html">GRC</a></li>
-                            <li><a href="compliance-frameworks.html">Compliance Frameworks</a></li>
-                            <li class="mega-featured"><a href="what-practitioners-think-about-security-regulation.html">What Practitioners Think About Regulation<span class="mega-tag">From the Friday sessions</span></a></li>
-                            <li><a href="ai-learning.html">AI Learning</a></li>
-                            <li><a href="ai-ml-security.html">AI/ML Security</a></li>
-                            <li><a href="mcp-security.html">MCP Security</a></li>
-                            <li class="mega-featured"><a href="what-practitioners-think-about-ai-security.html">What Practitioners Think About AI<span class="mega-tag">From the Friday sessions</span></a></li>
-                          </ul>
-                        </div>
-                        <div class="mega-col">
                           <span class="mega-heading">Build It</span>
                           <ul>
                             <li class="mega-featured"><a href="cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
@@ -166,9 +161,24 @@ CANON_NAV = """\
                             <li><a href="version-control.html">Git &amp; Version Control</a></li>
                           </ul>
                         </div>
+                        <a class="mega-all" href="topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
                       </div>
                     </li>
-                    <li><a href="resources.html">Resources</a></li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="resources.html">Browse All Resources</a></li>
+                        <li><a href="resources.html?category=tool">Security Tools</a></li>
+                        <li><a href="resources.html?category=lab">Labs &amp; Training</a></li>
+                        <li><a href="resources.html?category=certification">Certifications</a></li>
+                        <li><a href="ctfs.html">CTF Challenges</a></li>
+                        <li><a href="resources.html?category=ai-security">AI Security</a></li>
+                        <li><a href="resources.html?category=job">Job Search</a></li>
+                        <li><a href="cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="chat-resources.html">Chat Resources</a></li>
+                        <li><a href="contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
                     <li class="has-dropdown">
                       <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
                       <ul class="dropdown-menu">
@@ -189,9 +199,7 @@ CANON_NAV = """\
                         <div class="mega-col">
                           <span class="mega-heading">Getting Started</span>
                           <ul>
-                            <li><a href="cloud-security-careers.html">Careers Overview</a></li>
                             <li><a href="breaking-into-cloud-security.html">Breaking In</a></li>
-                            <li class="mega-featured"><a href="what-breaking-into-cloud-security-really-takes.html">What Breaking In Really Takes<span class="mega-tag">From the Friday sessions</span></a></li>
                             <li><a href="learning-path.html">Learning Path</a></li>
                             <li><a href="cloud-security-certifications.html">Certifications</a></li>
                             <li><a href="cloud-security-degree-programs.html">Degree Programs</a></li>
@@ -225,19 +233,18 @@ CANON_NAV = """\
                             <li><a href="cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
                           </ul>
                         </div>
+                        <a class="mega-all" href="cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
                       </div>
                     </li>
                     <li class="has-dropdown has-mega">
                       <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
-                      <div class="dropdown-menu mega-menu mega-3col">
+                      <div class="dropdown-menu mega-menu mega-4col">
                         <div class="mega-col">
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="sessions.html">Friday Zoom Sessions</a></li>
                             <li><a href="community.html">Community &amp; Signal</a></li>
-                            <li><a href="mentorship.html">Mentorship</a></li>
                             <li><a href="conferences.html">Conferences</a></li>
-                            <li class="mega-featured"><a href="what-practitioners-think-about-security-conferences.html">What Practitioners Think About Conferences<span class="mega-tag">From the Friday sessions</span></a></li>
                             <li><a href="present.html">Present at CSOH</a></li>
                           </ul>
                         </div>
@@ -245,10 +252,20 @@ CANON_NAV = """\
                           <span class="mega-heading">Archive</span>
                           <ul>
                             <li><a href="meetings.html">Meeting Recaps</a></li>
-                            <li class="mega-featured"><a href="what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
                             <li><a href="presentations.html">Presentations</a></li>
                             <li><a href="speakers.html">Guest Speakers</a></li>
-                            <li><a href="chat-resources.html">Chat Resources</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="what-practitioners-think-about-security-conferences.html">Conferences</a></li>
                           </ul>
                         </div>
                         <div class="mega-col">
@@ -259,7 +276,6 @@ CANON_NAV = """\
                             <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
                             <li><a href="rss.html">RSS Feed</a></li>
                             <li><a href="contribute.html">Contribute</a></li>
-                            <li><a href="contribute-resources.html">Add a Resource</a></li>
                           </ul>
                         </div>
                       </div>

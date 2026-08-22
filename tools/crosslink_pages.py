@@ -177,6 +177,13 @@ TARGET_PAGES = [
 #   403.html / 404.html           error pages, no prose worth linking
 #   google66d489593949bd4c.html   Search Console verification stub
 DELIBERATELY_UNLINKED = {
+    # Navigational index, not a destination prose would name. It exists because
+    # the Learn menu stopped listing all 40 subject pages and needed somewhere
+    # to send people; it is reached from that menu's hub row, from search, and
+    # from the "where next" blocks on the pages it indexes. There is no natural
+    # sentence on any page that wants an inline link to "topics", and inserting
+    # one would compete with the specific topic link that sentence should carry.
+    "topics.html",
     "glossary.html",
     "news.html",
     "search.html",

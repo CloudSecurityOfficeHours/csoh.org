@@ -462,6 +462,15 @@ function filterBySection(category) {
 }
 
 function addIconsToCards() {
+    // Opt-out for pages whose cards are deliberately text-only. The classifier
+    // below keys off tags and title keywords and falls back to a generic
+    // padlock when it cannot place a card, which is fine for the third-party
+    // directory it was written for. On an index of our own topic pages nothing
+    // matches, so every card renders the same glyph: 40 identical padlocks that
+    // encode nothing and cost a row of height each. topics.html sets
+    // data-no-card-icons on <main> for that reason.
+    if (document.querySelector('[data-no-card-icons]')) return;
+
     const cards = document.querySelectorAll('.resource-card');
     
     cards.forEach(card => {
