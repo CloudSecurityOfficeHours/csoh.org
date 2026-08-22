@@ -379,7 +379,7 @@ function generateSourceFilters() {
 
     var label = document.createElement('h4');
     label.textContent = 'Filter by Source:';
-    label.style.cssText = 'clear:both;width:100%;margin:0 0 0.5rem;font-size:0.9rem;color:#666;text-align:left;';
+    label.className = 'source-filter-label';   // was style.cssText, which CSP blocks
     container.appendChild(label);
 
     sorted.forEach(function (slug) {
@@ -632,7 +632,8 @@ function updateVisibleCount() {
     // Show/hide "no results" message
     const noResults = document.getElementById('noResults');
     if (noResults) {
-        noResults.style.display = visibleCount === 0 ? '' : 'none';
+        // '' would fall back to .no-results { display: none } in CSS, so be explicit.
+        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
     }
 
     // Announce to screen readers

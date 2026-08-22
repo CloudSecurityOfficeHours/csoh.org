@@ -45,6 +45,6 @@
   if (target) {
     link.href = target;
     link.textContent = '→ ' + target;
-    hint.style.display = '';
+    hint.style.display = 'block';   // was ''; the default is now .is-hidden in CSS
   }
 })();
