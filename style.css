@@ -1,6 +1,19 @@
 :root {
     --primary-color: #0f172a;
-    --secondary-color: #0284c7;
+    /* sky-700, not the sky-600 (#0284c7) this was for a long time. sky-600
+       is 4.10:1 on --white and 3.91:1 on --light-bg, under WCAG AA's 4.5:1
+       for normal text, and it fails in both directions: as text on a light
+       surface, and as a surface under white text. sky-700 is 5.93:1 / 5.67:1.
+
+       The same 4.10:1 had already been spot-fixed twice, in .btn-primary and
+       .card-action, each time by hardcoding sky-700 past this token rather
+       than by moving it. The third instance was PSI dropping Accessibility
+       100 -> 96 on 2026-08-22, once the new content-link rules pointed ~2,280
+       prose and glossary links here. Measured over a four-page sample, moving
+       the token took 216 failing elements to 1.
+
+       Dark mode redefines this to #6fc3ff and is unaffected. */
+    --secondary-color: #0369a1;
     --accent-color: #f59e0b;
     --text-color: #1f2937;
     --light-bg: #f8fafc;
@@ -358,9 +371,10 @@ nav a:focus {
     display: inline-block;
 }
 
-/* sky-700 (#0369a1), not var(--secondary-color) sky-600, for the same reason
-   as .card-action below: white on sky-600 is 4.10:1, under WCAG AA's 4.5:1.
-   PSI's color-contrast audit flagged this once the next-session block put a
+/* Hardcoded sky-700 predates --secondary-color moving to the same value, and
+   is kept explicit because this is a surface under white text rather than a
+   use of the accent: white on sky-600 was 4.10:1, under WCAG AA's 4.5:1, and
+   PSI's color-contrast audit flagged it once the next-session block put a
    primary button on a white surface. Hover stays sky-800 (7.56:1), still a
    deepening. See the .card-action comment for the earlier instance. */
 .btn-primary {
@@ -835,9 +849,11 @@ nav a:focus {
 }
 .news-date-heading .news-date-count {
     font-weight: 400;
-    /* Was 0.6 - bumped to 0.85 for WCAG AA contrast (the muted-text
-       fallback failed Lighthouse color-contrast on dark surfaces). */
-    color: var(--text-muted, rgba(255, 255, 255, 0.85));
+    /* This was rgba(255,255,255,0.85), tuned to pass on a dark surface. But
+       --text-muted is defined nowhere, so the fallback is what always renders,
+       and in light mode that is white on #f8fafc: 1.05:1, invisible. The
+       article counts have not been readable in light mode since. */
+    color: #5b6573;
     font-size: 0.9em;
 }
 
@@ -876,10 +892,30 @@ nav a:focus {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted, #777);
+    /* #777 was 4.28:1 on --light-bg, under AA's 4.5:1 for normal text.
+       #5b6573 is 5.65:1 and still reads as muted against --text-color.
+       --text-muted itself is referenced a dozen times in this file and
+       defined nowhere, so each of those is really its fallback literal.
+       They are not safe to unify under one definition: some sit on dark
+       surfaces and their fallbacks are light on purpose. */
+    color: var(--text-muted, #5b6573);
 }
 .author-card .author-card__name { margin: 0 0 0.5rem; font-size: 1.1rem; font-weight: 600; }
 .author-card .author-card__bio  { margin: 0; color: var(--text-muted, #555); }
+
+/* Both muted lines need a dark value: this card had no dark rules at all, so
+   they kept their light greys on a dark surface - the bio at 2.08:1 and the
+   kicker at 3.46:1 against --white. #94a3b8 is the muted grey the dark theme
+   already uses elsewhere (6.04:1 here). Mirrored in the prefers-color-scheme
+   block below; the two dark branches have to stay in step, which is what
+   commit 5871e8a0 was about. */
+[data-theme="dark"] .author-card .author-card__kicker,
+[data-theme="dark"] .author-card .author-card__bio { color: #94a3b8; }
+
+/* Built by main.js rather than written into a page, which is why it had no
+   dark value: #666 is 3.22:1 on --light-bg in dark mode. */
+[data-theme="dark"] .source-filter-label { color: #94a3b8; }
+[data-theme="dark"] .news-date-heading .news-date-count { color: rgba(255, 255, 255, 0.85); }
 
 /* Spacing utilities. See the !important note above. */
 .u-mt-05  { margin: 0.5rem 0 0 0 !important; }
@@ -1154,10 +1190,10 @@ a.glossary-link:hover {
 [data-theme="dark"] .featured-subhead { color: #94a3b8; }
 
 /* Inline text-link CTA used in community cards in place of full buttons.
-   Color is sky-700 (#0369a1) not var(--secondary-color) sky-600 because
-   sky-600 (#0284c7) on white sits at ~3.7:1 contrast - under WCAG AA's
-   4.5:1 threshold. PSI flagged these in PR #789 (color-contrast audit).
-   Hover deepens to sky-800 for the visual press-state cue. */
+   Colour is sky-700 (#0369a1), which --secondary-color now also carries; it
+   was hardcoded here when that token was still sky-600 (#0284c7), 4.10:1 on
+   white and under WCAG AA's 4.5:1. PSI flagged these in PR #789
+   (color-contrast audit). Hover deepens to sky-800 for the press-state cue. */
 .card-action {
     display: inline-block;
     margin-top: 0.75rem;
@@ -3682,9 +3718,15 @@ footer {
 [data-theme="dark"] .filter-btn:hover,
 [data-theme="dark"] .filter-btn.active {
     background-color: var(--secondary-color);
-    color: #fff;
+    /* Deep navy, not #fff: in dark --secondary-color is the LIGHT blue
+       #6fc3ff, so white on it was 1.92:1. #0f1419 is 9.63:1. */
+    color: #0f1419;
     border-color: var(--secondary-color);
 }
+
+/* Same inversion: dark redefines --primary-color to #c2d9ec, so the numbered
+   step badges were white on a pale blue disc at 1.46:1. 12.35:1 now. */
+[data-theme="dark"] .step-number { color: #0b1729; }
 
 [data-theme="dark"] .btn-secondary {
     background-color: #1e2e3e;
@@ -4147,6 +4189,13 @@ footer {
     transition: opacity 0.2s, transform 0.2s;
 }
 
+/* `[data-theme="dark"] body a` is (0,1,2) and outranks the (0,1,0) rule above,
+   so in dark mode these labels rendered #6fc3ff on the brand fill - 1.47:1 on
+   Twitter blue where the intended white is 2.83:1. The fills are brand values
+   and stay as they are; this only restores the colour the button asked for. */
+[data-theme="dark"] .share-btn,
+[data-theme="dark"] body a.share-btn { color: #fff; }
+
 .share-btn:hover {
     opacity: 0.85;
     transform: translateY(-1px);
@@ -4375,7 +4424,7 @@ footer {
         background-color: rgba(0, 0, 0, 0.28);
         box-shadow: none;
         border-radius: 0;
-        border-left: 3px solid var(--secondary-color, #3498db);
+        border-left: 3px solid var(--secondary-color, #0369a1);
         padding: 0;
         min-width: 0;
         opacity: 1;
@@ -4923,7 +4972,7 @@ footer {
 .meeting-card {
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-left: 4px solid var(--secondary-color, #3498db);
+    border-left: 4px solid var(--secondary-color, #0369a1);
     border-radius: 8px;
     padding: 0;
     margin: 0;
@@ -4965,7 +5014,7 @@ footer {
     margin-bottom: 0.5rem;
 }
 .meeting-card-cta {
-    color: var(--secondary-color, #3498db);
+    color: var(--secondary-color, #0369a1);
     font-weight: 600;
     font-size: 0.85rem;
 }
@@ -4995,13 +5044,13 @@ footer {
     color: var(--primary-color, #0f172a);
 }
 .meeting-page h2 time {
-    color: var(--secondary-color, #0284c7);
+    color: var(--secondary-color, #0369a1);
     font-weight: 600;
 }
 /* Quick-recap callout: the first <p> after the h2 is always the TL;DR */
 .meeting-page > h2 + p {
     background: linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
-    border-left: 4px solid var(--secondary-color, #0284c7);
+    border-left: 4px solid var(--secondary-color, #0369a1);
     border-radius: 0 8px 8px 0;
     padding: 0.95rem 1.1rem;
     margin: 0 0 1rem;
@@ -5013,7 +5062,7 @@ footer {
     text-transform: uppercase;
     font-size: 0.7rem;
     letter-spacing: 0.08em;
-    color: var(--secondary-color, #0284c7);
+    color: var(--secondary-color, #0369a1);
     margin-right: 0.5rem;
     vertical-align: 0.06em;
 }
@@ -5036,7 +5085,7 @@ footer {
     border-radius: 999px;
     font-weight: 600;
     font-size: 0.9rem;
-    color: var(--secondary-color, #0284c7);
+    color: var(--secondary-color, #0369a1);
     transition: background 0.15s, border-color 0.15s;
 }
 .meeting-page details.meeting-topics > summary::-webkit-details-marker { display: none; }
@@ -5049,7 +5098,7 @@ footer {
 .meeting-page details.meeting-topics[open] > summary::after { transform: rotate(90deg); }
 .meeting-page details.meeting-topics > summary:hover {
     background: rgba(2, 132, 199, 0.06);
-    border-color: var(--secondary-color, #0284c7);
+    border-color: var(--secondary-color, #0369a1);
 }
 .meeting-page details.meeting-topics[open] > summary { margin-bottom: 0.85rem; }
 
@@ -5078,7 +5127,7 @@ footer {
     padding: 0.4rem 0.85rem;
     border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 6px;
-    color: var(--secondary-color, #0284c7);
+    color: var(--secondary-color, #0369a1);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.9rem;
@@ -5086,7 +5135,7 @@ footer {
 }
 .meeting-page > p.small a:hover {
     background: rgba(2, 132, 199, 0.06);
-    border-color: var(--secondary-color, #0284c7);
+    border-color: var(--secondary-color, #0369a1);
 }
 
 /* Bottom prev/next/index pager. Styles live in breach-timeline.css for the
@@ -5102,7 +5151,7 @@ main > .incident-pager {
     padding: 0;
 }
 main > .incident-pager .pager-link {
-    color: var(--secondary-color, #0284c7);
+    color: var(--secondary-color, #0369a1);
     text-decoration: none;
     padding: 0.55rem 0.9rem;
     border: 1px solid var(--border-color, #e2e8f0);
@@ -5113,7 +5162,7 @@ main > .incident-pager .pager-link {
 }
 main > .incident-pager .pager-link:hover {
     background: rgba(2, 132, 199, 0.06);
-    border-color: var(--secondary-color, #0284c7);
+    border-color: var(--secondary-color, #0369a1);
     transform: translateY(-1px);
 }
 main > .incident-pager .pager-index { font-weight: 600; }
@@ -5204,7 +5253,7 @@ main > .incident-pager .pager-index { font-weight: 600; }
 }
 .page-meta strong { color: var(--text-color, #333); font-weight: 600; }
 .page-meta a {
-    color: var(--secondary-color, #3498db);
+    color: var(--secondary-color, #0369a1);
     text-decoration: none;
     font-weight: 500;
 }
@@ -5318,9 +5367,12 @@ main > .incident-pager .pager-index { font-weight: 600; }
     color: #334155;
 }
 [data-theme="light"] .hero--illustrated .btn-primary {
-    background: #0284c7;
+    /* sky-700 like .btn-primary itself: white on sky-600 was 4.10:1. This rule
+       overrides .btn-primary inside an illustrated hero, so it had kept the
+       failing pair after that one was fixed. */
+    background: #0369a1;
     color: #ffffff;
-    border-color: #0284c7;
+    border-color: #0369a1;
 }
 [data-theme="light"] .hero--illustrated .btn-primary:hover {
     background: #0369a1;
@@ -5598,7 +5650,7 @@ main > .incident-pager .pager-index { font-weight: 600; }
     font-style: italic;
     font-size: 1.1rem;
     margin: 2.5rem 0 1rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #5b6573);
 }
 [data-theme="dark"] .signature--final { color: #94a3b8; }
 
@@ -5689,7 +5741,7 @@ main > .incident-pager .pager-index { font-weight: 600; }
     display: block;
     margin-top: 0.5rem;
     font-size: 0.85rem;
-    color: var(--text-muted, #777);
+    color: var(--text-muted, #5b6573);
     font-style: normal;
     font-weight: 400;
 }
@@ -6234,7 +6286,8 @@ picture {
     :root:not([data-theme]) .tag.tag-csoh { background-color: #3498db; color: #1f2937; }
     :root:not([data-theme]) .filter-btn { background-color: var(--white); border-color: var(--border-color); color: var(--text-color); }
     :root:not([data-theme]) .filter-btn:hover,
-    :root:not([data-theme]) .filter-btn.active { background-color: var(--secondary-color); color: #fff; border-color: var(--secondary-color); }
+    :root:not([data-theme]) .filter-btn.active { background-color: var(--secondary-color); color: #0f1419; border-color: var(--secondary-color); }
+    :root:not([data-theme]) .step-number { color: #0b1729; }
     :root:not([data-theme]) .btn-secondary { background-color: #1e2e3e; color: var(--text-color); }
     :root:not([data-theme]) .btn-secondary:hover { background-color: #2a3d52; }
     :root:not([data-theme]) .show-all-btn { background-color: #1a2535; border-color: var(--secondary-color); color: var(--text-color); }
@@ -6323,6 +6376,12 @@ picture {
     :root:not([data-theme]) .threat-tile h4 { color: #e2e8f0; }
     :root:not([data-theme]) .threat-tile p { color: #94a3b8; }
     :root:not([data-theme]) .signature--final { color: #94a3b8; }
+    :root:not([data-theme]) .share-btn,
+    :root:not([data-theme]) body a.share-btn { color: #fff; }
+    :root:not([data-theme]) .source-filter-label { color: #94a3b8; }
+    :root:not([data-theme]) .news-date-heading .news-date-count { color: rgba(255, 255, 255, 0.85); }
+    :root:not([data-theme]) .author-card .author-card__kicker,
+    :root:not([data-theme]) .author-card .author-card__bio { color: #94a3b8; }
     :root:not([data-theme]) .lede { color: #e2e8f0; }
     :root:not([data-theme]) .contribute-article section > h2::before { background: linear-gradient(90deg, #38bdf8, transparent); }
     :root:not([data-theme]) .pull-quote { background: linear-gradient(135deg, rgba(56,189,248,0.10) 0%, transparent 100%); border-left-color: #38bdf8; color: #e2e8f0; }
