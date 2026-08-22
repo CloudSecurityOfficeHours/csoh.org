@@ -56,6 +56,76 @@ The `purge-cloudflare` job re-derives every versioned asset's hash from what the
 edge actually serves and fails the deploy on a mismatch, so this should surface
 in CI rather than in production.
 
+## An inline `<style>` block never applies in production
+
+The CSP is `default-src 'self'; style-src 'self'; script-src 'self'` with no
+`'unsafe-inline'`, no nonce and no hash, so the browser discards every inline
+`<style>` and inline `<script>` in a page. **localhost sends no CSP at all**,
+which is the whole problem: the block applies in every local check, the page
+looks right, and the breakage exists only in production.
+
+Two live instances, both found on 2026-08-22 and both as old as the code that
+introduced them:
+
+- **`ctfs.html`'s Wiz Championship calendar.** The entire `.ctf-calendar` rule
+  set was inline, so the container computed to `display: block` with
+  `grid-template-columns: none`: 12 cards stacked one per row at the full
+  1136px container, previews at 6.78:1, and `.ctf-month-badge` without the
+  `position: absolute` that lifts it onto the card. It had never rendered.
+- **The `<noscript>` nav fallback, on 152 pages.** Not cosmetic. `style.css`
+  hides `header nav` below 1023px behind the hamburger, gated on
+  `.js-enabled`, and that class is stamped **statically into `<body>`** rather
+  than added at runtime. `main.js` adds it again on DOMContentLoaded, which is
+  exactly what makes the static copy easy to miss, because the name reads like
+  a JS-only class. So with scripts off the class was still present, the nav was
+  still hidden, and the `<noscript>` rule meant to reveal it was blocked. All
+  79 navigation links were unreachable below 1023px with JavaScript disabled.
+
+Page-specific CSS goes in a file served from the origin. `search.html` reached
+this conclusion first and says so in a comment above its `/search.css` link;
+`cloud-deployment.html` says it again about inline `<style>` inside SVG, which
+is why that diagram uses presentation attributes. **The knowledge existed in
+three comments and in none of the places anyone reads before writing a page.**
+
+A new stylesheet has to be registered in three places, and the third is the one
+that fails silently: `ASSETS` in `update_sri.py`, then the `paths:` filter of
+**both** `deploy.yml` and `site-update-deploy.yml`. Those filters are explicit
+allow-lists of filenames, not patterns, so a commit touching only an
+unregistered asset never deploys - see the path-filter section below.
+
+Checking for this is two commands. Nothing but prose inside comments should
+match the first, and the second is what makes the local render honest:
+
+```sh
+grep -rln '<style>' --include='*.html' .          # want: no published page
+curl -sI https://csoh.org/ | grep -i '^content-security-policy'
+```
+
+To actually verify a layout, re-fetch the document with that header applied
+(Playwright `route.fulfill` with a `content-security-policy` header) and test
+**with scripts disabled as well as enabled** - the two paths diverge here, and
+only one of them was broken.
+
+Two general lessons, both of which cost a wrong "verified" here:
+
+- **A local render is not a production render when the difference is a
+  response header.** This is the same shape as the section on verifying one
+  origin: the bug lived between environments rather than in any file, so no
+  amount of re-reading the CSS could show it.
+- **Scope a check to the selector you suspect and it cannot report the case you
+  did not suspect.** The first fix measured every `section` containing
+  `.resource-grid`. The broken section used `.ctf-calendar`, so it was
+  *excluded from the output* rather than flagged: eight green rows on a
+  nine-section page, which reads as full coverage. Enumerate by what the page
+  actually contains, not by the class you are already thinking about.
+
+One violation left is not ours and cannot be fixed from this repo: Cloudflare
+injects its own bot-detection script (`__CF$cv$params`,
+`/cdn-cgi/challenge-platform/scripts/jsd/main.js`) into the HTML at the edge,
+and `script-src 'self'` blocks it on every page load, so those JS detections
+have never run. Changing that means the dashboard, per the
+`ignore_changes = [rules]` section below.
+
 ## Site chrome is generated, not hand-edited
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped
