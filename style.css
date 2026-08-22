@@ -796,9 +796,17 @@ nav a:focus {
 }
 
 /* Resource Cards Grid */
+/* auto-FILL, not auto-fit. auto-fit collapses the tracks it has no items for,
+   and the 1fr then stretches whatever is left across the entire row: a section
+   holding one card computed to `1136px 0px 0px` and rendered that card at the
+   full container width, with a 1100x160 preview - a 6.88:1 letterbox out of a
+   16:9 source, i.e. about a quarter of the picture. Two cards gave 552px each,
+   3.23:1. auto-fill keeps the empty tracks at their share, so a card is always
+   one column wide no matter how few of them a section has. Identical to auto-fit
+   for any grid whose first row is full, which is every other grid on the site. */
 .resource-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
     gap: 2rem;
     margin-top: 2rem;
 }
@@ -829,13 +837,13 @@ nav a:focus {
 
 /* Featured tier: 4 prominent cards across desktop, falling to 2 then 1. */
 .resource-grid--featured {
-    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 1.5rem;
 }
 
 /* Compact tier: denser secondary grid (up to 4 across) with tighter cards. */
 .resource-grid--compact {
-    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
     gap: 1rem;
     margin-top: 1rem;
 }
@@ -1020,6 +1028,25 @@ nav a:focus {
    repeated the <h3> beneath it. The tiles are authored for that size: one
    glyph, one category word. 3:2 is close enough to the old 1.46 box that
    the grid's vertical rhythm is unchanged. */
+/* The 160px box above normalises the heterogeneous third-party screenshots,
+   but it is a fixed height against a fluid column, so the ratio it produces
+   depends on the viewport: 1.91:1 at a 357px card. The sources are mostly
+   400x225, so that box was cropping 7% off a 16:9 picture and 30% off the
+   4:3 ones for no reason. Pinning the ratio makes cover a no-op for the 31
+   16:9 sources and takes a smaller, symmetric bite out of the rest - mean
+   visible area across ctfs.html goes 85.9% -> 90.8%.
+
+   16/9 is also what the max-width:768px branch already pinned, so desktop
+   was showing strictly less of each image than mobile did.
+
+   Excluding the two modifiers matters: this selector is 0,3,0 and theirs are
+   0,2,0, so without the :not() it would silently override the ratios they
+   pin below and re-crop the assets they exist to protect. */
+.resource-grid .resource-card .resource-preview:not(.resource-preview--og):not(.resource-preview--thumb) {
+    height: auto;
+    aspect-ratio: 16 / 9;
+}
+
 .resource-card .resource-preview--og {
     height: auto;
     aspect-ratio: 1200 / 630;
@@ -1798,17 +1825,12 @@ footer {
         padding: 1rem;
     }
 
-    /* One column here, so a card spans the viewport. The 160px box in
-       `.resource-card .resource-preview` is sized for a multi-column grid;
-       at full width it flattens the preview to roughly 3:1 and object-fit:
-       cover then eats over half the picture. Pin the ratio instead. 16/9 is
-       exactly the 400x225 sources (no crop at all) and takes a symmetric
-       bite out of the 600x450 ones. Scoped to .resource-grid because
-       .resources-grid hides its previews outright at this width, below. */
-    .resource-grid .resource-card .resource-preview {
-        height: auto;
-        aspect-ratio: 16 / 9;
-    }
+    /* One column here, so a card spans the viewport, and a fixed-height box
+       would flatten the preview to roughly 3:1. The 16/9 pin that used to
+       live here now applies at every width (see .resource-grid .resource-card
+       .resource-preview above), so this branch needs no override. It also
+       used to outrank the --og/--thumb modifiers and re-crop them; the
+       unconditional rule excludes both. */
 
     .resource-card {
         padding: 1.25rem;
