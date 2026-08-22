@@ -32,6 +32,10 @@ ASSETS: List[Tuple[str, str, str]] = [
     ('meetings.js', 'script', 'src'),
     ('glossary.js', 'script', 'src'),
     ('404.js', 'script', 'src'),
+    # Rules that apply only when JavaScript is off. Referenced from a
+    # <noscript> link rather than an inline block, because CSP drops
+    # inline <style>. See the file's own header.
+    ('noscript.css', 'link', 'href'),
     # /search.html's UI + lazy-loaded MiniSearch initializer.
     ('search.css', 'link', 'href'),
     ('search-init.js', 'script', 'src'),
