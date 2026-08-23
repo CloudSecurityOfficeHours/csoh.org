@@ -1116,23 +1116,25 @@ OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"</pre>
 
         <section id="cost">
             <h2>What this costs to run</h2>
-            <p>Approximate monthly bill at our traffic level (low - we're a community site):</p>
+            <p>Two of these lines are now read from the provider's billing API rather than estimated, and the table says which. That distinction is here because the first version of this table was wrong, and it was wrong in the way estimates usually are: confidently, and in the direction nobody checks.</p>
             <table class="compact-table">
-                <thead><tr><th>Component</th><th>Approx / month</th></tr></thead>
+                <thead><tr><th>Component</th><th>Per month</th><th>Source</th></tr></thead>
                 <tbody>
-                    <tr><td>Cloudflare Load Balancing add-on (Free plan + LB)</td><td>~$5-7</td></tr>
-                    <tr><td>AWS S3 + CloudFront (free-tier egress)</td><td>~$0-1</td></tr>
-                    <tr><td>GCP Cloud Run (scale-to-zero) + Artifact Registry</td><td>~$0-1</td></tr>
-                    <tr><td>Azure Blob static website</td><td>~$0-1</td></tr>
-                    <tr><td>Terraform state (GCS) + GCP logging</td><td>&lt; $2</td></tr>
-                    <tr><td class="compact-table__key">Total</td><td class="compact-table__key">~$8-12/mo</td></tr>
+                    <tr><td>Azure Blob static website</td><td>~$18</td><td>measured</td></tr>
+                    <tr><td>Cloudflare Load Balancing add-on (Free plan + LB)</td><td>$10</td><td>billed</td></tr>
+                    <tr><td>AWS S3 + CloudFront (free-tier egress)</td><td>~$0-1</td><td>estimated</td></tr>
+                    <tr><td>GCP Cloud Run (scale-to-zero) + Artifact Registry</td><td>~$0-1</td><td>estimated</td></tr>
+                    <tr><td>Terraform state (GCS) + GCP logging</td><td>&lt; $2</td><td>estimated</td></tr>
+                    <tr><td class="compact-table__key">Total</td><td class="compact-table__key">~$30/mo</td><td class="compact-table__key">$28 measured</td></tr>
                 </tbody>
             </table>
             <p class="u-mt-1">A few honest notes on cost:</p>
             <ul>
-                <li><strong>The Cloudflare Load Balancing add-on is the dominant line item</strong> (~$5-7); it buys the active/active failover across all three clouds. Everything below it is rounding error at our traffic.</li>
-                <li><strong>All three origins essentially scale to zero.</strong> S3 and Azure Blob bill for storage (pennies for a few hundred files) plus egress that mostly never happens because Cloudflare caches it; Cloud Run bills per request and is free when idle.</li>
-                <li>For a security community, the deployment <em>is</em> the value proposition - and it's a multi-cloud one. We get the full security story <em>and</em> three-cloud resilience for about the price of a couple coffees.</li>
+                <li><strong>Azure is the largest line, and almost none of it is storage.</strong> A recent month breaks down as $5.77 of "All Other Operations", $3.86 of read operations and $3.57 of write operations - against a few hundred megabytes of actually stored data, which costs approximately nothing. It is a <em>transaction</em> bill. Every deploy re-uploads the whole site, and the Cloudflare load balancer health-checks the origin from every one of its data centers, around the clock, forever. The rule from the health-check design applies to operation counts exactly as it does to bytes: <strong>ask what the fan-out is before asking whether the payload is small.</strong></li>
+                <li><strong>That same fan-out once cost $119.80 in a single month.</strong> The load-balancer monitor used to fetch <code>GET /</code>, and Azure Blob cannot gzip, so each of roughly a million daily probes pulled the full 52 KB homepage. Switching the monitor to <code>HEAD</code> took the per-probe wire cost to 372 bytes, and the daily bandwidth line from about $4.40 to $0.03, where it has stayed. The operations half of the bill survived that fix untouched, because a <code>HEAD</code> is still a billable read - which is why the line above is $18 and not $1.</li>
+                <li><strong>"Scales to zero" is a statement about compute, not about cost.</strong> Cloud Run genuinely bills nothing while idle. An object-storage origin does not work that way: it bills per request, and machine traffic never goes idle.</li>
+                <li><strong>Two rows are still estimates, which is the whole reason for that third column.</strong> The original table guessed Azure at "~$0-1" and was off by roughly eighteen times, so the fix was not a better guess - it was measurement. AWS Cost Explorer and a GCP BigQuery billing export were both switched on for this, and those rows get replaced with real figures once they finish ingesting.</li>
+                <li>For a security community the deployment <em>is</em> the value proposition, and this one is genuinely multi-cloud: the full security story plus active/active failover across three providers, for about $30 a month. Worth knowing where that $30 actually goes, though, which is what the rest of this section is for.</li>
             </ul>
         </section>
 

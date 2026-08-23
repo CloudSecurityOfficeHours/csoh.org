@@ -1049,6 +1049,48 @@ Azure bandwidth bill for July 2026 plus $12.66 of read operations. Commit
 wire cost from 52,425 bytes to **372**, and the month from 1,771 GB to 12 GB -
 back inside Azure's 100 GB/month free allowance, so the line went to zero.
 
+**The bandwidth line went to zero. The bill did not.** Confirmed against the
+Azure Cost Management API on 2026-08-23, which is the first time anyone read
+this rather than reasoning about it. Daily bandwidth does exactly what the fix
+predicted - about $4.40/day through 2026-08-09, then $0.03/day from the 11th
+onward, with `e4eab64c` landing on the evening of the 9th. But the month still
+came to $44.31, because **a `HEAD` is still a billable read operation.** The
+storage meter is the half that survived:
+
+| meter | Aug 1-23 |
+|---|---|
+| Standard Data Transfer Out | $31.06 (almost all pre-fix) |
+| All Other Operations | $5.77 |
+| Hot Read Operations | $3.86 |
+| Hot LRS Write Operations | $3.57 |
+
+There is no meaningful "data stored" line at all - a few hundred MB costs
+approximately nothing. **Azure runs ~$18/month, and essentially all of it is
+transactions**: probe reads from every Cloudflare data center, plus write and
+list operations from every deploy re-uploading ~3,200 files. July and August
+agree on that figure independently ($17.60 and a $17.70 run rate).
+
+Two things follow. The fan-out rule in this section is about **operation counts
+as much as bytes** - shrinking the payload to 372 bytes did nothing to the
+per-request charge, and could not have. And cloud-deployment.html's cost table
+had Azure at "~$0-1", off by roughly eighteen times, which is why that table now
+carries a `measured` / `estimated` column rather than a single "approximate"
+header. Estimates in it are a to-do, not a rounding.
+
+`az consumption usage list` is the wrong tool for checking any of this and will
+waste your time: on this subscription it returns hundreds of records with
+`pretaxCost`, `usageStart` and `usageQuantity` all `null`. Rows that look like
+data and carry none. Use the Cost Management API, which needs no extension:
+
+```sh
+az rest --method post \
+  --url "https://management.azure.com/subscriptions/<sub-id>/providers/Microsoft.CostManagement/query?api-version=2023-11-01" \
+  --body '{"type":"ActualCost","timeframe":"MonthToDate","dataset":{"granularity":"Daily","aggregation":{"totalCost":{"name":"PreTaxCost","function":"Sum"}},"grouping":[{"type":"Dimension","name":"Meter"}]}}'
+```
+
+It rate-limits aggressively at 429 after a few calls, so wrap it in a retry
+loop rather than assuming the first failure is real.
+
 HEAD is only safe here because `expected_body` is not set, so the body was
 downloaded and discarded anyway. **If you ever set `expected_body`, this has to
 go back to GET**, and the bill comes back with it.
