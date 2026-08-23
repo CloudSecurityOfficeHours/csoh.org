@@ -1371,13 +1371,38 @@ Cloud Run will not start a container whose image did not come out of
 an allowlist plus a default `ALWAYS_DENY` - and both `csoh-site` and
 `csoh-site-qa` opt in with `binary_authorization { use_default = true }`.
 
-It checks **provenance, not signatures.** Nothing verifies an attestation,
-because promotion deliberately redeploys the image QA built, and a "the
-production pipeline signed this" attestor would reject exactly the artifact we
-most want it to accept. Both deploy identities also hold registry write, so the
-control does not stop a compromised deployer from pushing a bad image into our
-own repo; what it removes is running an image that never passed through the
-registry at all. cloud-deployment.html says all of this in prose.
+It checks **provenance, not signatures**, and the reason is worth writing down
+because the obvious reason is wrong. It is *not* that promotion redeploys the
+image QA built and so the wrong pipeline would end up signing - an attestation
+is a signed statement *about a digest*, so production can attest to bytes it
+did not build. That framing was written into this file and into
+cloud-deployment.html on 2026-08-23 and then corrected. The real constraints
+are these two:
+
+- **Cloud Run accepts only the project's default policy.** `--binary-authorization`
+  must literally be set to `default`, gcloud says so in the flag help, and a
+  project has exactly one policy. There is no per-service platform policy in the
+  GA or beta gcloud surface, and no resource for one in the google or
+  google-beta provider v6 - only `google_binary_authorization_policy` (the
+  singular default) and `google_binary_authorization_attestor`. So one rule
+  governs `csoh-site` and `csoh-site-qa` together, and requiring an attestation
+  would require it on QA too, where images are born before anything has approved
+  them. Routing around it means a separate QA repo plus a digest-preserving copy
+  at promotion.
+- **A signature would be gated on the same boundary as registry write.** Both are
+  reachable only from a job that can enter the `production` or `qa` GitHub
+  Environment, so signing adds a second lock that opens with the same key. That
+  calculus changes the day the builder and the deployer stop being the same job.
+
+Both deploy identities hold registry write, so this control does not stop a
+compromised deployer from pushing a bad image into our own repo; what it removes
+is running an image that never passed through the registry at all.
+
+The general lesson, and it is the one this file records about the weekly docs
+review: **a confident, specific, well-argued reason is not a verified one.** The
+original wording named a real mechanism and reasoned correctly from it to the
+wrong conclusion, and nothing about reading it again would have caught that. One
+`gcloud run deploy --help` did.
 
 ### A rejected deploy still writes the spec, and the site stays up
 
