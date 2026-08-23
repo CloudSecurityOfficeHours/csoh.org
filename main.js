@@ -1048,19 +1048,26 @@ function initDropdownNav() {
         if (e.key === 'Escape') closeAll(null);
     });
 }
-
-// Localize the weekly session time. The session is Friday 07:00
-// America/Los_Angeles. Two consumers:
+// Localize the weekly session time. The session is Friday 07:00-08:00
+// America/Los_Angeles; csoh.ics is the source of truth for both ends.
+// Three consumers:
 //   [data-session-localtime] - inline "(that's X your time)" after an
 //     advertised "7am PT", so members outside Pacific don't do the math.
 //   [data-next-session]      - the homepage next-session banner, which needs
 //     the concrete upcoming date, not just the weekly cadence.
-// Purely additive: without Intl the markup keeps its server-rendered text.
+//   [data-session-countdown] - the homepage countdown, which ticks once a
+//     second and shows "live now" during the hour itself rather than a
+//     six-day countdown to the following week. See resolve().
+// Purely additive: without Intl - or without JS at all - the markup keeps its
+// server-rendered text, and the countdown stays hidden because only the code
+// below adds the --on class that reveals it.
 (function () {
     var TZ = 'America/Los_Angeles';
+    var DURATION_MS = 60 * 60 * 1000;   // csoh.ics: DTSTART 07:00, DTEND 08:00
     var els = document.querySelectorAll('[data-session-localtime]');
     var nextEls = document.querySelectorAll('[data-next-session]');
-    if (!els.length && !nextEls.length) return;
+    var countdown = document.querySelector('[data-session-countdown]');
+    if (!els.length && !nextEls.length && !countdown) return;
     if (typeof Intl === 'undefined' || !Intl.DateTimeFormat) return;
 
     // Offset (ms) of TZ at a given instant: local wall time minus UTC.
@@ -1077,43 +1084,120 @@ function initDropdownNav() {
         return asUTC - instant.getTime();
     }
 
-    // Instant of the upcoming Friday 07:00 PT. (Friday 7am is never near a
-    // DST switch, so the offset at 07:00 UTC that day equals the real one.)
-    var now = new Date();
-    var target = null;
-    for (var d = 0; d < 8 && !target; d++) {
-        var probe = new Date(now.getTime() + d * 86400000);
-        if (new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(probe) !== 'Fri') continue;
+    // Instant of 07:00 PT on the Pacific calendar day containing `probe`, or
+    // null if that day is not a Friday. (Friday 7am is never near a DST
+    // switch, so the offset at 07:00 UTC that day equals the real one.)
+    function sessionOn(probe) {
+        if (new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(probe) !== 'Fri') return null;
         var ymd = new Intl.DateTimeFormat('en-CA', {
             timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit'
         }).format(probe).split('-');
         var naiveUTC = Date.UTC(+ymd[0], +ymd[1] - 1, +ymd[2], 7, 0, 0);
-        var candidate = new Date(naiveUTC - tzOffset(new Date(naiveUTC)));
-        if (candidate.getTime() > now.getTime()) target = candidate;
+        return new Date(naiveUTC - tzOffset(new Date(naiveUTC)));
     }
-    if (!target) return;
+
+    // The session worth talking about: the one under way, else the next to
+    // start. The in-progress case is the whole reason this isn't just "next
+    // start" - at 07:30 on a Friday the next start is six days out, and a
+    // banner counting down to next week while people are in the room is the
+    // one moment this component must not get wrong.
+    function resolve(nowMs) {
+        for (var d = 0; d < 8; d++) {
+            var start = sessionOn(new Date(nowMs + d * 86400000));
+            if (!start) continue;
+            var t = start.getTime();
+            if (nowMs < t) return { live: false, start: start };
+            if (nowMs < t + DURATION_MS) return { live: true, start: start };
+        }
+        return null;
+    }
+
+    var state = resolve(Date.now());
+    if (!state) return;
 
     var viewerTZ = '';
     try { viewerTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
     var isPacific = viewerTZ === TZ;
 
-    // Banner: name the actual upcoming date, then the viewer's local clock time.
-    if (nextEls.length) {
-        var when = new Intl.DateTimeFormat('en-US', {
-            timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric'
-        }).format(target) + ' at 7:00 AM PT';
-        if (!isPacific) {
-            when += ' · ' + new Intl.DateTimeFormat(undefined, {
-                hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-            }).format(target) + ' your time';
+    // Banner: name the actual upcoming date, then the viewer's local clock
+    // time. Re-rendered on a state flip so a page left open across 07:00
+    // stops advertising a session that has already started.
+    function renderBanner() {
+        if (!nextEls.length) return;
+        var when;
+        if (state.live) {
+            when = 'Happening now - 7:00 to 8:00 AM PT';
+        } else {
+            when = new Intl.DateTimeFormat('en-US', {
+                timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric'
+            }).format(state.start) + ' at 7:00 AM PT';
+            if (!isPacific) {
+                when += ' · ' + new Intl.DateTimeFormat(undefined, {
+                    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+                }).format(state.start) + ' your time';
+            }
         }
         for (var k = 0; k < nextEls.length; k++) nextEls[k].textContent = when;
     }
+    renderBanner();
+
+    if (countdown) (function () {
+        var UNITS = ['days', 'hours', 'minutes', 'seconds'];
+        var wrap = {}, num = {}, label = {};
+        for (var u = 0; u < UNITS.length; u++) {
+            var n = UNITS[u];
+            wrap[n] = countdown.querySelector('[data-unit="' + n + '"]');
+            num[n] = wrap[n] && wrap[n].querySelector('.next-session__unit-num');
+            label[n] = wrap[n] && wrap[n].querySelector('.next-session__unit-label');
+            if (!num[n] || !label[n]) return;   // markup changed - leave it hidden
+        }
+
+        function set(el, text) { if (el.textContent !== text) el.textContent = text; }
+
+        function paint(nowMs) {
+            countdown.classList.toggle('next-session__countdown--live', state.live);
+            if (state.live) return;
+            var secs = Math.floor(Math.max(0, state.start.getTime() - nowMs) / 1000);
+            var value = {
+                days: Math.floor(secs / 86400),
+                hours: Math.floor(secs % 86400 / 3600),
+                minutes: Math.floor(secs % 3600 / 60),
+                seconds: secs % 60
+            };
+            // Drop the days tile rather than show "0 days" on the last day:
+            // a zeroed leading unit reads as broken, not as "soon".
+            wrap.days.hidden = value.days === 0;
+            for (var i = 0; i < UNITS.length; i++) {
+                var n = UNITS[i];
+                set(num[n], n === 'days' || value[n] > 9 ? String(value[n]) : '0' + value[n]);
+                set(label[n], value[n] === 1 ? n.slice(0, -1) : n);
+            }
+        }
+
+        // Recompute from the clock every tick rather than decrementing a
+        // counter: background tabs throttle timers, and a machine that sleeps
+        // for an hour must wake up showing the truth, not an hour of drift.
+        function tick() {
+            var nowMs = Date.now();
+            if (nowMs >= state.start.getTime() + (state.live ? DURATION_MS : 0)) {
+                var next = resolve(nowMs);
+                if (next) {
+                    state = next;
+                    renderBanner();
+                }
+            }
+            paint(nowMs);
+        }
+
+        paint(Date.now());
+        countdown.classList.add('next-session__countdown--on');
+        setInterval(tick, 1000);
+    })();
 
     if (!els.length || isPacific) return; // already Pacific - nothing to add
     var local = new Intl.DateTimeFormat(undefined, {
         weekday: 'long', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-    }).format(target);
+    }).format(state.start);
     for (var j = 0; j < els.length; j++) {
         els[j].textContent = ' (that’s ' + local + ' your time)';
     }
