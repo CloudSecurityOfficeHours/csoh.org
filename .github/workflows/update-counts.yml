@@ -70,24 +70,45 @@ permissions:
 
 # -----------------------------------------------------------------------------
 # §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
-# Shares the deploy-pipeline lane with site-update-deploy: both push to main.
+# Its own lane. Collisions with other writers to main are handled by the
+# rebase-retry loop at the end of the job, not by a shared lock.
 # -----------------------------------------------------------------------------
 # `concurrency:` lets at most one run hold a named "group" at a time. Runs in
 # the same group queue up or cancel each other; runs in different groups are
-# unaffected. This workflow pushes commits DIRECTLY to main, which is exactly
-# what the shared `deploy-pipeline` group exists to serialize - so it joins
-# that lane rather than keeping a private lock and relying solely on the
-# `git push || (git pull --rebase && git push)` retry to survive a collision
-# with a housekeeping push. (The retry stays as a second line of defense.)
+# unaffected. This workflow pushes commits DIRECTLY to main, so it does need to
+# survive another pipeline pushing underneath it - but a shared lane turned out
+# to be the wrong instrument for that, because a lane with mismatched cancel
+# policies cancels rather than orders. See the block below for the two runs it
+# actually killed, and the retry loop in the final step for what replaced it.
 concurrency:
-  # The shared lane name. site-update-deploy uses this same string, so a count
-  # sync and a housekeeping run can never push to main simultaneously.
-  group: deploy-pipeline
-  # `false` = wait behind an in-flight housekeeping run instead of killing it.
-  # site-update-deploy joins this group with cancel-in-progress: true, which is
-  # right for content pushes superseding each other, but a weekly count sync
-  # has no newer-run to defer to - overlapping self-runs are near-impossible at
-  # this cadence - and it must never cancel housekeeping mid-push.
+  # This workflow's own lane. It used to share `deploy-pipeline` with
+  # site-update-deploy so that a count sync and a housekeeping run could never
+  # push to main simultaneously - a sound goal, implemented with a lock that
+  # cancelled this job instead of ordering it.
+  #
+  # The two joined that group with OPPOSITE cancel policies: housekeeping sets
+  # cancel-in-progress: true, which is right for content pushes superseding each
+  # other, and a lane admits one running plus one pending run. So when a single
+  # push triggered both - a commit touching tools/sync_counts.py AND any HTML -
+  # this job was the one evicted. Twice, at the identical second:
+  #
+  #   update-counts cancelled 2026-08-17T21:40:56 | housekeeping started 21:40:56
+  #   update-counts cancelled 2026-08-16T04:38:07 | housekeeping started 04:38:07
+  #
+  # Nothing corrupted, because the commit and push below are one atomic step -
+  # but the count sync silently did not happen, and a silent no-op is the exact
+  # failure mode CLAUDE.md keeps recording.
+  #
+  # Fixing it by flipping housekeeping to cancel-in-progress: false would trade
+  # this for a housekeeping backlog at 8+ pushes a day. So this workflow takes
+  # its own lane instead, and the rebase-retry at the end of the job - which was
+  # always there as a second line of defence - becomes the primary mechanism.
+  # It was hardened into a bounded loop in the same change, because a retry that
+  # tries exactly once is not a substitute for a lock.
+  group: update-counts
+  # `false` = a queued count sync waits rather than being killed. Overlapping
+  # self-runs are near-impossible at this cadence (weekly, plus a rare
+  # self-test push), so this only ever means "do not cancel me".
   cancel-in-progress: false
 
 # -----------------------------------------------------------------------------
@@ -238,11 +259,50 @@ jobs:
             git add -u
             git add img/og
             git commit -m "chore: sync site counts + refresh count share-cards"
-            # Push to main. If another pipeline pushed while we worked, the plain
-            # `git push` is rejected (non-fast-forward); the `|| ( ... )` fallback
-            # then pulls their commits with --rebase (replaying our commit on
-            # top) and pushes again. The commit is NOT marked [skip ci], so it
-            # flows through the normal deploy and the corrected counts go live.
-            git push || (git pull --rebase origin main && git push)
+            # Push to main, rebasing onto anything that landed while we worked.
+            # The commit carries no CI-skip marker, so it flows through the
+            # normal deploy and the corrected counts go live.
+            #
+            # This loop IS the serialisation now. While this workflow shared the
+            # `deploy-pipeline` lane the lock did the ordering and a single
+            # retry was a formality; the lane cancelled this job rather than
+            # ordering it (see the concurrency block above), so the lock is gone
+            # and the retry has to carry the weight on its own. One attempt is
+            # not enough for that: main takes 8+ pushes a day, so a second
+            # collision during the rebase is not exotic.
+            pushed=false
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                echo "pushed on attempt ${attempt}"
+                pushed=true
+                break
+              fi
+              echo "push rejected on attempt ${attempt} (someone else pushed first)"
+              # --rebase replays our single commit on top of theirs. A CONFLICT
+              # here is a genuine disagreement about the same lines, not a race,
+              # so abort and fail loudly rather than resolving it blindly - a
+              # count marker silently resolved the wrong way is worse than a
+              # red run.
+              if ! git pull --rebase origin main; then
+                git rebase --abort || true
+                echo "::error::Rebase onto origin/main conflicted - counts NOT pushed."
+                echo "::error::Resolve by hand, or re-run after the conflicting change settles."
+                exit 1
+              fi
+              # Back off a little so five rapid retries cannot themselves become
+              # the reason the next one collides. Not after the last attempt -
+              # there is nothing left to wait for, and a job that has already
+              # failed should not spend another 25 seconds proving it.
+              if [ "${attempt}" -lt 5 ]; then
+                sleep $(( attempt * 5 ))
+              fi
+            done
+
+            if [ "${pushed}" != "true" ]; then
+              # Assert, do not warn. A count sync that quietly gave up looks
+              # exactly like one that had nothing to do.
+              echo "::error::Could not push after 5 attempts - main is moving faster than this job can rebase."
+              exit 1
+            fi
             echo "Counts synced and pushed."
           fi
