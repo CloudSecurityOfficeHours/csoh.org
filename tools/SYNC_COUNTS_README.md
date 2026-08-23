@@ -40,6 +40,7 @@ Nothing is configured. Each number is derived from the thing it describes:
 | `og_images` | `img/og/**/*.jpg` on disk |
 | `resource_categories` | `<h2>` sections on `resources.html` |
 | `workflows` | `*.yml` files in `.github/workflows/` (the `*_README.md` docs there are not workflows) |
+| `session_digests` | `what-practitioners-think-about-*.html` (the hub page is the index, not a digest) |
 | `cards_per_category` | `.resource-card` entries within each category section (see note below) |
 | `sitemap_urls` | `<loc>` entries in `sitemap.xml` |
 | `news_banners` | `img/news-banners/*.jpg` (the `.webp` siblings are not counted twice) |
@@ -79,6 +80,7 @@ The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so 
 | `og_images` | exact | `249` |
 | `resource_categories` | exact | `6` |
 | `workflows` | exact | `21` |
+| `session_digests` | exact | `5` |
 | `sitemap_urls` | exact | `265` |
 | `news_banners` | exact | `58` |
 | `faq_pages` | exact | `64` |

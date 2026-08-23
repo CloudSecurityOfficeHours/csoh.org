@@ -570,13 +570,27 @@ beside the other doc gates:
 python3 tools/check_readme_coverage.py --check
 ```
 
-It asserts four things: every in-repo Markdown link resolves; every root page
-is named in README.md or listed in `NOT_IN_README` with a reason; every
-published subdirectory is documented; and every published subdirectory is in
-`check-broken-links.yml`'s input globs - so the next `labs/` cannot go
-uncrawled the way this one nearly did. Published subdirectories are
-**derived** by globbing for directories that contain `*.html`, not listed,
-because a hardcoded list is the bug it exists to catch.
+It asserts four things: every in-repo Markdown link resolves, across all 38
+tracked docs; every root page is named in each doc in `CATALOGS`; every
+published subdirectory is documented there *and* is in
+`check-broken-links.yml`'s input globs, so the next `labs/` cannot go
+uncrawled the way this one nearly did; and no count marker sits inside a code
+fence. Published subdirectories are **derived** by globbing for directories
+that contain `*.html`, not listed, because a hardcoded list is the bug it
+exists to catch.
+
+`CATALOGS` is README.md and DEVELOPMENT.md - the two docs carrying a full
+directory tree, which is what creates the obligation. **CONTRIBUTING.md is
+deliberately excluded**: it names ~54 pages as a "where to file things"
+shortlist and never claims to be exhaustive, so the same rule would invent 54
+findings. Its links are still checked like every doc's. A gate that cries wolf
+gets muted, and a muted gate is worth exactly what one that never fires is
+worth - keep `CATALOGS` to docs that actually promise coverage.
+
+Two page families are collapsed behind `<placeholder>` tokens
+(`cloud-security-<role>.html` and two others) with the members named in the
+adjacent comment. That is better than 22 near-duplicate tree lines, so the
+check expands those tokens rather than forcing the tree open.
 
 Two traps worth keeping in mind if you extend it:
 
@@ -586,6 +600,17 @@ Two traps worth keeping in mind if you extend it:
   the same false-confidence failure pointing the other way: a check that cries
   wolf gets muted, and a muted check is worth exactly as much as one that never
   fires.
+- **A marker inside a fenced block renders as literal text.** Fences are
+  verbatim, so a count marker in a directory tree is displayed to the reader.
+  Four were doing that in README.md and one in DEVELOPMENT.md. Counts inside a
+  fence belong to `MD_PROSE_RULES` in `sync_counts.py`; the checker now fails
+  on any new one, bar the two documented syntax examples.
+- **A prose rule pinned to one file's wording silently skips the other.** The
+  glossary rule matched README's "cloud security terms ... & cross-links" and
+  sailed straight past DEVELOPMENT.md's "cloud-security terms ... +
+  cross-links", which sat at 310 while README read 317. Match the part both
+  spellings share and capture the difference with a backreference, so neither
+  file gets its wording rewritten.
 - **The self-test is load-bearing, not decoration.** `--check` plants a
   known-bad link and a known-missing page and refuses to report clean unless
   every detector fires. This exists because the manual sweep that found the

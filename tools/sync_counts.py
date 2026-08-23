@@ -353,6 +353,7 @@ def display_values(counts: dict) -> dict:
         **{f"cat_{alias}_floor": f"{floor10(counts['cards_per_category'].get(cid, 0))}+"
            for cid, alias in CATEGORY_ALIASES.items()},
         "workflows": str(counts["workflows"]),
+        "session_digests": str(counts["session_digests"]),
         "sitemap_urls": str(counts["sitemap_urls"]),
         "news_banners": str(counts["news_banners"]),
         "faq_pages": str(counts["faq_pages"]),
@@ -401,8 +402,17 @@ def sync_html_prose(text: str, disp: dict) -> str:
 MD_PROSE_RULES = [
     (r"# \d+\+ cloud-security vendors across \d+ categories",
      "# {vendors_floor} cloud-security vendors across {vendor_categories} categories"),
-    (r"# \d+ cloud security terms with live search",
-     "# {glossary_terms} cloud security terms with live search"),
+    # README says "cloud security terms ... & cross-links"; DEVELOPMENT.md says
+    # "cloud-security terms ... + cross-links". The first version of this rule
+    # was pinned to README's exact wording and silently skipped the other file,
+    # which is the same "an audit is only as wide as its pattern" trap this repo
+    # keeps hitting. Match the part both spellings share.
+    (r"# \d+ (cloud.security) terms with live search",
+     r"# {glossary_terms} \1 terms with live search"),
+    (r"# \d+ curated resources \(largest page",
+     "# {resources} curated resources (largest page"),
+    (r"Session-digest hub . \d+ per-topic digests",
+     "Session-digest hub \u2192 {session_digests} per-topic digests"),
     (r"\(\d+\+ resources in \d+ categories\)",
      "({resources_floor} resources in {resource_categories} categories)"),
     (r"recaps \(\d+ entries, topic-by-topic\)",
@@ -524,6 +534,15 @@ def cards_per_category() -> dict:
     return out
 
 
+def session_digests() -> int:
+    """Per-topic session digests: what-practitioners-think-about-*.html.
+
+    The hub page `what-practitioners-think.html` is the index, not a digest,
+    so the `-about-` infix is what distinguishes them.
+    """
+    return len(list(REPO.glob("what-practitioners-think-about-*.html")))
+
+
 def workflow_count() -> int:
     """GitHub Actions workflow files.
 
@@ -638,6 +657,7 @@ def canonical_counts() -> dict:
         "resource_categories": resource_categories(),
         "cards_per_category": cards_per_category(),
         "workflows": workflow_count(),
+        "session_digests": session_digests(),
         "sitemap_urls": sitemap_urls(),
         "news_banners": news_banners(),
         "faq_pages": pages_matching(r'"@type"\s*:\s*"FAQPage"'),

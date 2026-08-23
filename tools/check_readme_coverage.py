@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Fail if README.md points at something that is not there, or misses a page.
+"""Fail if a catalog doc points at something absent, or misses a page.
 
 WHY THIS EXISTS
 ---------------
-Two holes, both found by hand in August 2026, both the shape this repo keeps
+Three holes, all found by hand in August 2026, all the shape this repo keeps
 re-learning: a check that cannot see a thing reports the same "clean" as a
 check that looked and found nothing.
 
-**Nothing was checking README.md's links.** lychee crawls `*.html` and the
+**Nothing was checking a Markdown link.** lychee crawls `*.html` and the
 published `*.tf`, and that is the whole input list - Markdown is not in it. So
-the 200-plus links in README.md, most of them pointing at files in this repo,
-had no gate at all. The manual sweep that found this was itself a shell loop
+README.md's 212 in-repo links had no gate at all, and across the 38 tracked
+docs it is over 400. The manual sweep that found this was itself a shell loop
 that died on a quoting error and printed "all resolve" anyway, which is how
 this file ended up with a self-test.
 
@@ -18,28 +18,42 @@ this file ended up with a self-test.
 with the nav restructure and went unmentioned in README.md entirely; nothing
 noticed, because the sweep that would have caught it globbed `*.html` and
 `*.html` does not descend. The same single-star assumption is why `'*.html'` in
-a workflow `paths:` filter silently skipped every subdirectory, and it is worth
-stating plainly: **enumerate by what the repo actually contains, not by the
-pattern you were already thinking about.**
+a workflow `paths:` filter silently skipped every subdirectory: **enumerate by
+what the repo actually contains, not by the pattern you were already thinking
+about.**
+
+**A count marker inside a code fence renders as literal text.** Fences are
+verbatim, so `<!--count:meetings-->109<!--/count-->` in a directory tree is
+displayed to every reader on GitHub. Four were doing that in README.md and one
+in DEVELOPMENT.md. Counts in a fence belong to `MD_PROSE_RULES` in
+`sync_counts.py` instead.
 
 WHAT IT ASSERTS
 ---------------
-1. Every link in README.md that points inside this repo resolves to a real
-   file - GitHub blob URLs, `https://csoh.org/` page URLs, and relative paths
-   alike.
-2. Every root-level page is named in README.md, or is listed in
-   `NOT_IN_README` with a reason.
-3. Every published subdirectory is documented in README.md *and* crawled by
-   `check-broken-links.yml`. Individual pages inside them are governed by
-   counts rather than enumeration, which is the right call at 109 recaps - but
-   the directory itself appearing nowhere is how a whole tree goes unchecked.
+1. Every in-repo Markdown link resolves, across every doc in `tracked_docs()`.
+2. Every root page is named in each doc in `CATALOGS`, matches a documented
+   `<placeholder>` glob there, or is in `NOT_IN_README` with a reason.
+3. Every published subdirectory is documented in each catalog *and* is in
+   `check-broken-links.yml`'s input globs. Pages inside them are governed by
+   counts rather than enumeration, which is right at 109 recaps - but a whole
+   directory appearing nowhere is how a tree goes uncrawled.
+4. No count marker sits inside a code fence, except the documented examples in
+   `MARKER_EXAMPLES`.
+
+`CATALOGS` is deliberately narrow. README.md and DEVELOPMENT.md each carry a
+full directory tree and so owe a coverage contract; CONTRIBUTING.md names ~54
+pages as a "where to file things" shortlist and never claims to be exhaustive.
+Holding it to the same rule would invent 54 findings, and a gate that cries
+wolf gets muted - which leaves it worth exactly what one that never fires is
+worth.
 
 THE SELF-TEST IS NOT OPTIONAL
 -----------------------------
 `--check` runs `self_test()` first and refuses to report a clean result unless
-every detector has been shown to fire on planted bad input. A checker that
-cannot fail is indistinguishable from a passing repo, and this file exists
-because that exact confusion cost real time twice.
+every detector has been shown to fire on planted bad input - and, where it
+matters, to stay quiet on planted good input. A checker that cannot fail is
+indistinguishable from a passing repo, and this file exists because that exact
+confusion cost real time. **Adding a detector means adding its planted case.**
 
     python3 tools/check_readme_coverage.py            # report
     python3 tools/check_readme_coverage.py --check    # exit 1 on any finding
@@ -55,6 +69,13 @@ from pathlib import Path, PurePosixPath
 
 REPO = Path(__file__).resolve().parent.parent
 README = REPO / "README.md"
+
+# Docs that claim to enumerate the site, and so owe a coverage check. Both
+# carry a full directory tree. CONTRIBUTING.md deliberately is NOT here: it
+# names ~54 pages as a "where to file things" shortlist and never claims to be
+# exhaustive, so holding it to this contract would invent 54 findings and teach
+# everyone to ignore the gate. Its links are still checked, like every doc's.
+CATALOGS = ("README.md", "DEVELOPMENT.md")
 
 GITHUB_BLOB = "https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/"
 GITHUB_TREE = "https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/"
@@ -136,12 +157,52 @@ def published_subdirs() -> list[str]:
     return out
 
 
-def unmentioned_root_pages(text: str) -> list[str]:
+def documented_globs(text: str) -> list[re.Pattern]:
+    """`cloud-security-<role>.html` style placeholders used to stand for a set.
+
+    Both catalogs collapse near-identical page families this way - 12 role
+    pages, 5 year-in-review periods, 5 session digests - and then name the
+    members in the adjacent comment. That is better authoring than 22 near
+    duplicate tree lines, so the check has to understand it rather than force
+    the tree to be expanded.
+    """
+    out = []
+    for tok in re.findall(r"[a-z0-9-]*<[a-z-]+>[a-z0-9-]*\.html", text):
+        out.append(re.compile("^" + re.sub(r"<[a-z-]+>", "[a-z0-9-]+", tok) + "$"))
+    return out
+
+
+def unmentioned_root_pages(text: str, optouts: dict | None = None) -> list[str]:
+    optouts = NOT_IN_README if optouts is None else optouts
+    globs = documented_globs(text)
     return sorted(
         p.name
         for p in REPO.glob("*.html")
-        if p.name not in NOT_IN_README and p.name not in text
+        if p.name not in optouts
+        and p.name not in text
+        and not any(g.match(p.name) for g in globs)
     )
+
+
+# Fenced code blocks render their contents verbatim, so a count marker inside
+# one is displayed to the reader instead of disappearing. Four were doing that
+# in README.md and one in DEVELOPMENT.md. These two lines are the exception:
+# they are documentation *showing* the syntax, and are supposed to be visible.
+MARKER_EXAMPLES = {
+    "Access <!--count:resources_floor-->480+<!--/count--> curated resources.",
+}
+
+
+def visible_markers(text: str) -> list[str]:
+    """Count markers inside a code fence, where they render as literal text."""
+    fence, out = False, []
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        if fence and "<!--count:" in line and line.strip() not in MARKER_EXAMPLES:
+            out.append(line.strip()[:90])
+    return out
 
 
 def stale_optouts() -> list[str]:
@@ -207,6 +268,24 @@ def self_test() -> list[str]:
     if not published_subdirs():
         bad.append("no published subdirectories discovered - the glob is wrong")
 
+    # A `<placeholder>` token must stand in for the family it names, and must
+    # not swallow unrelated pages - a glob that matches everything would hide
+    # exactly the gap this check exists to find.
+    globs = documented_globs("- cloud-security-<role>.html # 12 role pages")
+    if not (len(globs) == 1 and globs[0].match("cloud-security-architect.html")):
+        bad.append("placeholder glob did not expand to match its own family")
+    if globs and globs[0].match("index.html"):
+        bad.append("placeholder glob matched an unrelated page")
+
+    fenced = "```\n├── x.html  # <!--count:meetings-->9<!--/count--> recaps\n```"
+    if not visible_markers(fenced):
+        bad.append("visible-marker check missed a marker inside a code fence")
+    if visible_markers("A <!--count:meetings-->9<!--/count--> outside any fence"):
+        bad.append("visible-marker check flagged a marker in ordinary prose")
+    example = "```\n" + next(iter(MARKER_EXAMPLES)) + "\n```"
+    if visible_markers(example):
+        bad.append("visible-marker check flagged a documented syntax example")
+
     return bad
 
 
@@ -224,7 +303,6 @@ def main() -> int:
         print("\nFix the checker before believing any result from it.", file=sys.stderr)
         return 1
 
-    text = README.read_text(encoding="utf-8")
     broken_links = []
     link_total = 0
     for doc in tracked_docs():
@@ -232,19 +310,31 @@ def main() -> int:
         targets = in_repo_targets(doc.read_text(encoding="utf-8"), base=str(rel.parent) if str(rel.parent) != "." else "")
         link_total += len(targets)
         broken_links += [f"{rel}: {t}" for t in unresolved(targets)]
+    uncovered, undocumented = [], []
+    for name in CATALOGS:
+        doc = (REPO / name).read_text(encoding="utf-8")
+        uncovered += [f"{name}: {p}" for p in unmentioned_root_pages(doc)]
+        undocumented += [f"{name}: {d}/" for d in undocumented_subdirs(doc)]
+
+    visible = []
+    for doc in tracked_docs():
+        visible += [f"{doc.relative_to(REPO)}:{m}" for m in visible_markers(
+            doc.read_text(encoding="utf-8"))]
+
     findings: list[tuple[str, list[str]]] = [
         ("Markdown links pointing at files that do not exist", broken_links),
-        ("Root pages named nowhere in README.md", unmentioned_root_pages(text)),
+        ("Root pages named nowhere in a catalog doc", uncovered),
         ("Entries in NOT_IN_README that no longer exist", stale_optouts()),
-        ("Published subdirectories not documented in README.md", undocumented_subdirs(text)),
+        ("Published subdirectories not documented in a catalog doc", undocumented),
         ("Published subdirectories not crawled by check-broken-links.yml", uncrawled_subdirs()),
+        ("Count markers inside a code fence (they render as literal text)", visible),
     ]
 
     total = sum(len(v) for _, v in findings)
     print(f"Self-test passed ({len(published_subdirs())} published subdirectories: "
           f"{', '.join(published_subdirs())})")
-    print(f"Checked {link_total} in-repo links across {len(tracked_docs())} Markdown "
-          f"docs, and {len(list(REPO.glob('*.html')))} root pages against README.md.")
+    print(f"Checked {link_total} in-repo links across {len(tracked_docs())} Markdown docs, "
+          f"and {len(list(REPO.glob('*.html')))} root pages against {', '.join(CATALOGS)}.")
 
     for label, items in findings:
         if items:

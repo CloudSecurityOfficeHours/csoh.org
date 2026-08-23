@@ -81,8 +81,9 @@ csoh.org/
 ├── cspm-vs-cnapp.html               # Tool-category comparison (CSPM/CNAPP/CWPP/CIEM/DSPM)
 ├── cspm-vs-cwpp.html                # Posture vs workload protection, head to head
 ├── cnapp-vs-xdr.html                # Where CNAPP ends and XDR/CDR begins
-├── vendor-landscape.html            # <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories
-├── glossary.html                    # 310 cloud-security terms with live search + cross-links
+├── vendor-landscape.html            # 300+ cloud-security vendors across 32 categories
+├── glossary.html                    # 317 cloud-security terms with live search + cross-links
+├── topics.html                      # Complete A-Z topic index - every page in one flat list
 ├── faq.html                         # Frequently asked questions
 │
 │  ── Platform topics ──
@@ -114,7 +115,9 @@ csoh.org/
 ├── threat-research.html             # Curated cloud threat research directory (incl. supply chain)
 ├── breach-timeline.html             # Cloud breach kill chain index → `breaches/`
 ├── breach-lessons.html              # Cross-incident synthesis of recurring root causes
-├── cloud-breach-year-in-review-2025.html # The breaches that defined 2025
+├── cloud-breach-year-in-review.html # Every-year hub for the reviews below
+├── cloud-breach-year-in-review-<period>.html # 5 per-period reviews
+│                                    #   (2021-2022, 2023, 2024, 2025, 2026-h1)
 ├── kevin-mitnick.html               # Special resource page
 ├── ctfs.html                        # Cloud CTF directory
 │
@@ -156,10 +159,14 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 415 curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # 486 curated resources (largest page; auto-refreshed weekly)
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
 ├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests
+├── what-practitioners-think-about-<topic>.html # The 5 digests (ai-security,
+│                                    #   security-conferences, security-regulation,
+│                                    #   supply-chain-security, vulnerability-management)
+├── what-breaking-into-cloud-security-really-takes.html # Digest: the entry-path question
 │
 │  ── Behind the scenes ──
 ├── github-actions.html              # Learn-by-example GitHub Actions explainer
