@@ -270,9 +270,30 @@ surfaces under white text (`.filter-btn.active` at 1.92:1, `.step-number` at
 and every `.share-btn` label rendering `#6fc3ff` because
 `[data-theme="dark"] body a` at (0,1,2) outranks `.share-btn` at (0,1,0).
 
-One group is left failing on purpose: the 360 share buttons on news.html are
-white on the platforms' own brand colours, 2.83:1 to 3.62:1. Brand values, and
-no scored page uses them.
+The share buttons on news.html used to be the one group left failing on
+purpose: white on the platforms' own brand colours, 2.83:1 to 3.62:1, on the
+grounds that they are brand values and no PageSpeed-scored page uses them. Both
+were true and neither made 480 buttons readable, so they now carry the same
+hues taken down in lightness only until white clears 4.5:1. Converted to HLS
+and moving L alone, the hue shift is 0.0 degrees in all three cases:
+
+| button  | was       | now       | ratio          |
+|---------|-----------|-----------|----------------|
+| X       | `#1da1f2` | `#0b7abf` | 2.83 -> 4.60:1 |
+| Bluesky | `#0085ff` | `#0074de` | 3.62 -> 4.61:1 |
+| Reddit  | `#ff4500` | `#d83b00` | 3.44 -> 4.62:1 |
+
+LinkedIn already measured 4.88:1 and was left alone. These are text buttons -
+`main.js` writes "in", "X", a butterfly and "r/" into them - so the bar is
+1.4.3 at 4.5:1, not 1.4.11 at 3:1, and 13px/600 is not large text.
+
+Two shapes of contrast false positive are worth knowing before you chase one.
+A scan that resolves an element's background by walking to the first *opaque*
+ancestor reports 1.00:1 for anything sitting on a translucent fill of its own -
+`.ctf-month-badge` is white on `rgba(44, 62, 80, 0.92)` and renders at about
+11:1. Blend the layers instead of skipping them. The other is text over a
+sibling image layer rather than a background-image, which no computed-style
+walk can see; kevin-mitnick.html's memorial hero is the standing example.
 
 ### How to measure it without inventing failures
 
