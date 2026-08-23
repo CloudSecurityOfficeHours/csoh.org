@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.classList.add('js-enabled');
 
     domCache.searchInput = document.getElementById('searchInput');
-    domCache.categoryHeaders = document.querySelectorAll('.category-section h3');
+    domCache.categoryHeaders = document.querySelectorAll('.category-summary');
     domCache.cards = document.querySelectorAll('.resource-card');
 
     initThemeToggle();
@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 getToggleTarget(card).style.display = '';
             });
             updateVisibleCount();
+            syncCategorySections(true);
         });
     }
 
@@ -127,6 +128,9 @@ document.addEventListener('DOMContentLoaded', function() {
             domCache.searchInput.value = query;
             filterResources(query.toLowerCase());
         }
+        // #security-tools and friends have to arrive open.
+        openSectionFromHash();
+        window.addEventListener('hashchange', openSectionFromHash);
 
         // Support ?category= URL parameter for deep-linking from footer/nav
         const categoryParam = params.get('category');
@@ -155,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     filterBySection(categoryParam);
                 }
                 updateVisibleCount();
+                syncCategorySections(categoryParam === 'all');
             }, 50);
         }
 
@@ -201,42 +206,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Filter by section (ctf, tool, certification, lab, ai-security, job)
                 filterBySection(category);
             }
-            
+
             updateVisibleCount();
+            // "All" is the unfiltered state, so it closes everything rather
+            // than opening all six categories at once.
+            syncCategorySections(category === 'all');
         });
     });
 
-    // Category collapse/expand - use event delegation
-    const mainContent = document.getElementById('main-content');
-    if (mainContent) {
-        // Initialize ARIA attributes on category headers
-        document.querySelectorAll('.category-section h3').forEach(header => {
-            header.setAttribute('role', 'button');
-            header.setAttribute('tabindex', '0');
-            const isCollapsed = header.parentElement.classList.contains('collapsed');
-            header.setAttribute('aria-expanded', String(!isCollapsed));
-        });
-
-        mainContent.addEventListener('click', function(e) {
-            const header = e.target.closest('.category-section h3');
-            if (header && header.parentElement.classList.contains('category-section')) {
-                header.parentElement.classList.toggle('collapsed');
-                const isCollapsed = header.parentElement.classList.contains('collapsed');
-                header.setAttribute('aria-expanded', String(!isCollapsed));
-            }
-        });
-
-        // Keyboard support: Enter/Space to toggle
-        mainContent.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                const header = e.target.closest('.category-section h3');
-                if (header && header.parentElement.classList.contains('category-section')) {
-                    e.preventDefault();
-                    header.click();
-                }
-            }
-        });
-    }
+    // Category sections are <details> now, so opening and closing them - by
+    // pointer, by keyboard, and with JavaScript off - is the browser's job.
+    // This block used to hand-roll all three on `.category-section h3`, an
+    // element resources.html has never had: the markup uses <h2>. The feature
+    // was dead in a way nothing could surface, because a section that never
+    // collapses is indistinguishable from a section with no collapse feature.
+    labelCategoryCounts();
 
     // Card click functionality is now handled via HTML <a> wrapper
 
@@ -439,6 +423,61 @@ function filterByTagText(tagText) {
     updateVisibleCount();
 }
 
+// --- Collapsible category sections (resources.html) -------------------------
+//
+// The page opens with every category closed. 499 cards in one 91,000px
+// document is not something anyone reads top to bottom, and the search box is
+// what most visitors came for. Expanding is the browser's <details> behaviour;
+// what needs code is keeping that state honest while a filter is running.
+//
+// The rule: a section opens when it holds a card the current filter is showing,
+// and closes when it does not. With no filter, everything closes. Otherwise a
+// search would report matches the visitor cannot see, which is worse than no
+// search at all.
+
+// Card counts come from the DOM rather than the markup so they cannot drift
+// away from the cards the way a hand-typed number would.
+function labelCategoryCounts() {
+    document.querySelectorAll('.category-section').forEach(function (section) {
+        const badge = section.querySelector('.category-count');
+        if (!badge) return;
+        const n = section.querySelectorAll('.resource-card').length;
+        badge.textContent = n ? String(n) : '';
+    });
+}
+
+// Open the sections holding a visible card, close the rest. `collapseAll`
+// forces everything shut, which is what "no filter is running" means.
+function syncCategorySections(collapseAll) {
+    const sections = document.querySelectorAll('details.category-section');
+    if (!sections.length) return;
+    sections.forEach(function (section) {
+        if (collapseAll) {
+            section.open = false;
+            return;
+        }
+        const cards = section.querySelectorAll('.resource-card');
+        let anyVisible = false;
+        for (let i = 0; i < cards.length; i++) {
+            if (getToggleTarget(cards[i]).style.display !== 'none') { anyVisible = true; break; }
+        }
+        section.open = anyVisible;
+    });
+}
+
+// A link to #security-tools has to land on an open section. Browsers do open a
+// <details> when the fragment points *inside* it, but here the id is on the
+// element itself, which is not the same case.
+function openSectionFromHash() {
+    const id = (window.location.hash || '').slice(1);
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el && el.matches && el.matches('details.category-section')) {
+        el.open = true;
+        el.scrollIntoView({ block: 'start' });
+    }
+}
+
 // Map category button values to their section IDs in resources.html
 const categorySectionMap = {
     'ctf': 'ctf-challenges',
@@ -633,6 +672,9 @@ function filterResources(searchTerm) {
         });
 
         updateVisibleCount();
+        // An empty term is "no filter", which means closed, not "every section
+        // open with every card in it".
+        syncCategorySections(searchTerm === '');
     });
 }
 

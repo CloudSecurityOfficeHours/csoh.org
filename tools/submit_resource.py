@@ -215,7 +215,13 @@ def find_category_section(html_content, category_id):
         return None, None
 
     # Find the section by ID
-    section_pattern = rf'<div[^>]+class="category-section"[^>]+id="{section_id}"[^>]*>(.*)</div>'
+    # resources.html's category sections are <details> so they can collapse;
+    # they were <div> until 2026-08-23. Both are accepted because nothing here
+    # should break if one page is converted before another.
+    section_pattern = (
+        rf'<(?:div|details)[^>]+class="category-section"[^>]+id="{section_id}"[^>]*>'
+        rf'(.*)</(?:div|details)>'
+    )
     match = re.search(section_pattern, html_content, re.DOTALL)
 
     if not match:

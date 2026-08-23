@@ -188,7 +188,12 @@ TOOLTIP_RE = re.compile(r'\bdata-tooltip=["\']([^"\']*)["\']', re.IGNORECASE)
 #   ctfs / threat-research    <section class="section" id="aws-ctfs">
 #   conferences.html          <h2 id="cloud"> (cards are siblings, not nested)
 #   chat-resources.html       no grouping anchors; cards link to the page
-ANCHOR_TAG_RE = re.compile(r"<(section|div|h2)\b([^>]*)>", re.IGNORECASE)
+# `details` is here because resources.html's category sections collapse and
+# are <details class="category-section"> as of 2026-08-23. Leaving it out is
+# not an error anyone sees: the tag simply stops matching, every card on the
+# page loses its section attribution, and the index still builds. It went
+# from 7 sections to 1 that way.
+ANCHOR_TAG_RE = re.compile(r"<(section|div|details|h2)\b([^>]*)>", re.IGNORECASE)
 ID_ATTR_RE = re.compile(r'\bid=["\']([^"\']+)["\']', re.IGNORECASE)
 CLASS_ATTR_RE = re.compile(r'\bclass=["\']([^"\']*)["\']', re.IGNORECASE)
 
@@ -279,7 +284,7 @@ def card_anchors(main: str) -> list[tuple[int, str, str]]:
             h2 = H2_RE.match(main, m.start())
             heading = strip_html(h2.group(1)) if h2 else id_m.group(1)
         elif (tag == "section" and "section" in classes) or (
-            tag == "div" and "category-section" in classes
+            tag in ("div", "details") and "category-section" in classes
         ):
             # Heading is the first h2 inside the container.
             h2 = H2_RE.search(main, m.end())
