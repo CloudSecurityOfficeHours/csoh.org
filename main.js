@@ -461,6 +461,18 @@ function filterBySection(category) {
     updateVisibleCount();
 }
 
+// news.html's article cards are rewritten from the RSS feeds every week by
+// update-news.yml, so they cannot carry a hand-placed data-icon - anything
+// added here would be dropped at the next refresh. The generator does stamp a
+// stable data-category on each card, which is a far better signal than the
+// padlock the keyword classifier below falls back to. These three values are
+// news.html's alone; no other page uses them.
+const CARD_CATEGORY_ICONS = {
+    report: '\u{1F4F0}',
+    vulnerability: '\u26A0\uFE0F',
+    breach: '\u{1F6A8}'
+};
+
 function addIconsToCards() {
     // Opt-out for pages whose cards are deliberately text-only. The classifier
     // below keys off tags and title keywords and falls back to a generic
@@ -489,7 +501,16 @@ function addIconsToCards() {
         const tagEquals = (needle) => tags.some(tag => tag === needle);
 
         // Determine icon based on tags and content. Order matters - earlier matches win.
-        if (tagEquals('newsletter')) {
+        //
+        // An authored page names its own glyph and wins outright. The classifier
+        // below was written for the third-party resource directory, where every
+        // card carries a tag like "Tool" or "CTF"; on a page of our own prose
+        // cards nothing matches and all of them render the same padlock. The fix
+        // is not more title keywords - those guess, and drift the moment a
+        // heading is reworded - it is letting the page say what it means.
+        if (card.dataset.icon) {
+            icon = card.dataset.icon;
+        } else if (tagEquals('newsletter')) {
             icon = '📬';
             iconClass = 'newsletter';
         } else if (tagEquals('blog')) {
@@ -525,11 +546,13 @@ function addIconsToCards() {
         } else if (title.includes('gcp') || title.includes('google cloud')) {
             icon = '☁️';
             iconClass = 'tool';
+        } else if (CARD_CATEGORY_ICONS[card.dataset.category]) {
+            icon = CARD_CATEGORY_ICONS[card.dataset.category];
         }
         
         // Create icon element
         const iconDiv = document.createElement('div');
-        iconDiv.className = `resource-card-icon ${iconClass}`;
+        iconDiv.className = `resource-card-icon ${iconClass}`.trim();
         iconDiv.textContent = icon;
         
         // Insert icon at the beginning of the card

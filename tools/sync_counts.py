@@ -272,7 +272,11 @@ def sync_og(counts: dict, apply: bool) -> tuple[bool, list[str]]:
 
 
 # ---------------------------------------------------- cloud-security-reading-list
-READING_ITEM_RE = re.compile(r'<div class="resource-card">\s*<h3>\s*<a\s+[^>]*?href="([^"]+)"[^>]*>(.*?)</a>',
+# `[^>]*` after the class is load-bearing: a card may carry data-icon,
+# data-tooltip or data-no-preview, and pinning the pattern to the bare
+# `<div class="resource-card">` silently drops those cards from the ItemList
+# below rather than failing. A shrinking count is not an error anyone sees.
+READING_ITEM_RE = re.compile(r'<div class="resource-card"[^>]*>\s*<h3>\s*<a\s+[^>]*?href="([^"]+)"[^>]*>(.*?)</a>',
                              re.DOTALL)
 
 
