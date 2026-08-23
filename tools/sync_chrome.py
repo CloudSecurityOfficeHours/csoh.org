@@ -75,7 +75,15 @@ CANON_LOGO = '''\
 # no per-page differences: no ../ prefixing, no current-page markers. Keep the
 # 12-space indent; the button patterns below consume the existing indentation
 # so these lines control it fully.
-CANON_HAMBURGER = '            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">☰</button>'
+# Shown only below 1024px, where the nav collapses and the CTA would otherwise
+# be a tap inside the menu. Same href and same words as the one in the nav, so
+# the site still has exactly one name for this action; only one of the two is
+# ever visible, so nothing is announced twice.
+CANON_NAV_CTA_MOBILE = ('            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" '
+                        'target="_blank" rel="noopener noreferrer">'
+                        '<span class="nav-cta__lead">Get the </span>Zoom link</a>')
+
+CANON_HAMBURGER = '            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>'
 CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>'
 
 # --- Canonical menu nav (root-relative, no active markers) -------------------
@@ -134,7 +142,7 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 # Keep the 12-space indent; NAV_PATTERN below consumes the existing
 # indentation so this controls it fully.
 CANON_NAV = """\
-            <nav>
+            <nav id="site-nav" aria-label="Main">
                 <ul>
                     <li class="has-dropdown has-mega">
                       <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
@@ -333,11 +341,18 @@ CANON_FOOTER = """\
     </div>
   </footer>"""
 
-# Match the menu nav: an open `<nav>` (no class attr) wrapping a <ul>. The
-# breadcrumb uses `<nav class="breadcrumb-nav">` and won't match. Leading
-# indentation is consumed so the replacement controls indent fully.
-NAV_PATTERN = re.compile(r'(?m)^[ \t]*<nav>\s*<ul>[\s\S]*?</ul>\s*</nav>')
+# Match the menu nav: a <nav> with no class attribute, wrapping a <ul>. The
+# breadcrumb uses `<nav class="breadcrumb-nav">` and a <ol>, so it fails both
+# halves. Attributes are allowed through because the canonical nav now carries
+# `id` and `aria-label` - with the old bare-`<nav>` pattern this script would
+# have stamped them once and then stopped recognising its own output, which
+# breaks idempotency and the --check gate silently. Leading indentation is
+# consumed so the replacement controls indent fully.
+NAV_PATTERN = re.compile(
+    r'(?m)^[ \t]*<nav(?![^>]*\bclass=)[^>]*>\s*<ul>[\s\S]*?</ul>\s*</nav>')
 FOOTER_PATTERN = re.compile(r'(?m)^[ \t]*<footer>[\s\S]*?</footer>')
+# Whole-line match for the mobile CTA, so process() can remove and re-emit it.
+MOBILE_CTA_PATTERN = re.compile(r'(?m)^[ \t]*<a [^>]*class="nav-cta nav-cta--mobile"[^>]*>.*?</a>\n')
 
 # Match a whole header-button line whatever its attribute drift or glyph
 # encoding (literal vs HTML entity). The nav's dropdown buttons use different
@@ -449,11 +464,19 @@ def build_footer(path: Path) -> str:
 def process(path: Path) -> str:
     """Return 'updated', 'unchanged', or 'skipped' for one file."""
     text = path.read_text(encoding='utf-8')
-    if '<nav>' not in text or '<footer>' not in text:
+    # Test with the pattern that actually does the work, not a literal '<nav>'
+    # substring. The canonical nav carries `id` and `aria-label` now, and the
+    # substring form silently skipped all 273 pages the moment it did: the run
+    # reports skipped=273 and exits 0, which reads like a clean pass.
+    if not NAV_PATTERN.search(text) or '<footer>' not in text:
         return 'skipped'
     new = text
     new, n_logo = LOGO_PATTERN.subn(lambda m: m.group(1) + CANON_LOGO + '\n', new, count=1)
-    new, n_burger = HAMBURGER_PATTERN.subn(lambda _: CANON_HAMBURGER, new, count=1)
+    # Drop any existing mobile CTA so re-running never stacks copies, then let
+    # the hamburger replacement re-emit it immediately above the button.
+    new = MOBILE_CTA_PATTERN.sub('', new)
+    new, n_burger = HAMBURGER_PATTERN.subn(
+        lambda _: CANON_NAV_CTA_MOBILE + '\n' + CANON_HAMBURGER, new, count=1)
     new, n_toggle = THEME_TOGGLE_PATTERN.subn(lambda _: CANON_THEME_TOGGLE, new, count=1)
     new, n_nav = NAV_PATTERN.subn(lambda _: build_nav(path), new, count=1)
     new, n_foot = FOOTER_PATTERN.subn(lambda _: build_footer(path), new, count=1)
