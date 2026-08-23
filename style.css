@@ -39,6 +39,28 @@
     --bg-color: var(--white);
     --card-bg: var(--white);
     --text-muted: #5b6573;
+    /* The page's two widths. Keep them here, together, because the number that
+       matters is the relationship between them - a reading column that is a
+       small fraction of the frame around it reads as a broken page, however
+       correct its character count is.
+
+       --frame is the outer frame: header, breadcrumb, footer and .container all
+       sit in it, so the chrome and the content share one edge. 75rem, and it has
+       to stay there: at 65rem the resource directory's card grid drops from
+       three columns to two and that page grows 44% taller, which is a worse
+       trade than a wide header.
+
+       --measure is the reading column. 46rem is 736px, about 86 characters at
+       the 1.0625rem body size the running text now uses. Article pages sit at
+       --measure + 4rem = 800px inside the 1200px frame; the gap between the two
+       is what the type size closes, not a narrower column.
+
+       Both are rem and not ch on purpose. `ch` in a custom property resolves
+       against the *using* element's font rather than against :root, so a single
+       `60ch` came out 605px on a section and 733px on a .pull-quote and the
+       blocks stopped lining up, which is the thing the measure exists to fix. */
+    --frame: 75rem;
+    --measure: 46rem;
     /* Offset used for in-page anchor jumps so a linked heading lands below
        the sticky header instead of behind it. main.js refines this to the
        header's real measured height; the value here is the no-JS fallback
@@ -156,7 +178,7 @@ header {
 }
 
 .header-content {
-    max-width: 1200px;
+    max-width: var(--frame);
     margin: 0 auto;
     padding: 0 2rem;
     display: flex;
@@ -419,7 +441,7 @@ nav a:focus {
 
 /* Main Content */
 .container {
-    max-width: 1200px;
+    max-width: var(--frame);
     margin: 0 auto;
     padding: 2rem 2rem 3rem;
 }
@@ -894,7 +916,7 @@ nav a:focus {
    of it applied in production: square avatar stacked above the text, full
    container width, no separator rule, default-blue underlined links. */
 .author-card {
-    max-width: 720px;
+    max-width: var(--measure);
     margin: 3rem auto 2rem;
     padding: 1.5rem;
     border-top: 2px solid var(--border-color, #e0e0e0);
@@ -1145,35 +1167,103 @@ a.glossary-link:hover {
 }
 
 /* Reading measure -----------------------------------------------------------
-   Running prose was 142 characters per line on the homepage and about.html and
-   104 on content pages, measured at a 1440px viewport. Comfortable is 45-75 and
-   the eye starts losing the return sweep past about 90.
+   Running prose was 142 characters per line on the homepage and 104 on content
+   pages at 1440px. Comfortable is 45-75 and the return sweep starts failing
+   past about 90.
 
-   58ch, not 68ch: `ch` is the width of "0", which in this stack is 9.77px while
-   the average lowercase letter is 8.01px, so a ch-based cap renders about 1.22x
-   as many real characters as it names. Measured across the sweep, 58ch lands at
-   74 characters and 68ch at 87.
+   The first attempt at this capped the paragraphs and nothing else, which
+   fixed the measure and broke the page: a .toc or .info-box still spanned the
+   full 836px container while the text inside it stopped at 585px, and every h2
+   kept a full-width hairline rule over prose that ended 250px short. Text and
+   graphics stopped agreeing on where the page ends.
 
-   Scoped by depth rather than by class, because running text is always a direct
-   child of main or of a section here, and card, grid and table text always sits
-   deeper. Verified on resources.html: 3 elements change width and all 499
-   resource cards are untouched. The hero is outside main on every page, so its
-   centred copy is unaffected. Cost is about 4% page height. */
-main > :is(p, ul, ol, dl, blockquote),
-main > section > :is(p, ul, ol, dl, blockquote),
-main > section > details > :is(p, ul, ol, dl, blockquote),
-main > section > div > :is(p, ul, ol, dl, blockquote),
-main > div > :is(p, ul, ol, dl, blockquote) {
-    max-width: 58ch;
+   So the cap goes on the block, not the paragraph. A text-only section becomes
+   the reading column outright - heading, rule, prose, list and quote all share
+   one right edge - while a section carrying a grid keeps the full container so
+   the grid stays wide and only its intro copy takes the measure. ------------ */
+
+/* Text-only sections. The :has() test is what separates a reading section from
+   a grid band; it is deliberately alone in its own rule, because one invalid
+   selector invalidates a whole comma list, and on an engine without :has()
+   the boxes below must still be capped. Degrading here means a text section
+   renders full width, which is where it started - not broken, just wide. */
+main > section:not(:has([class*="grid"], table, .stat-strip, .ctf-calendar)) {
+    max-width: var(--measure);
+}
+
+/* Blocks that sit directly in main and hold running text. .page-meta is
+   excluded: it is one line of byline and date, and capping it wraps it. */
+main > .info-box,
+main > .toc,
+main > figure {
+    max-width: var(--measure);
+}
+
+/* The measure assumes the 1.0625rem body size that .contribute-article sets, so
+   the running text on every other page has to come up with it, or a 736px column
+   reads at 92 characters instead of 86. Applied to the blocks the measure caps
+   and not to `p` generally: card, tag and caption text is deliberately smaller
+   and sits deeper, and pulling it up to 17px would resize every card grid. */
+main > section:not(:has([class*="grid"], table, .stat-strip, .ctf-calendar)),
+main > section > :is(p, ul, ol, dl),
+main > div > :is(p, ul, ol, dl),
+main > .info-box,
+main > .toc,
+main > blockquote {
+    font-size: 1.0625rem;
+    line-height: 1.75;
+}
+
+/* Everywhere else the container stays wide and only the running text is capped:
+   inside a grid section, and inside the div-based wrappers that some pages use
+   instead of <section> - resources.html builds its categories out of
+   div.category-section, which an earlier draft of this rule missed, and its
+   intro copy went straight back to 142 characters.
+
+   A plain descendant rule rather than one scoped by depth, because card, table
+   and caption text is already far narrower than the measure, so the cap never
+   binds there. Verified on resources.html: all 499 resource cards unaffected.
+
+   .page-meta is the one exclusion. `ch` resolves against the element's own
+   font-size, so on a 0.85rem meta line 60ch is 514px, which wraps a byline that
+   fits comfortably in the 605px column. */
+main :is(p, ul, ol, dl, blockquote):not(.page-meta) {
+    max-width: var(--measure);
 }
 
 /* A capped block inside a centred container has to keep auto side margins, or
    the box narrows against the container's left edge and the centred text lands
-   left of centre. `.cta-section ul` already does this for itself further down
-   (max-width: 48rem; margin: 1rem auto 0), which is why only its <p> needed
-   the same treatment. .cta-section is on 96 pages. */
+   left of centre. .cta-section is on 96 pages. */
 main .cta-section > :is(p, ul, ol, dl, blockquote) {
     margin-inline: auto;
+}
+
+/* Break-out: things that are genuinely wider than a sentence -------------------
+   A measure is right for prose and wrong for an architecture diagram, a
+   comparison table or a shell transcript. Squeezing those into the column does
+   not make the page agree with itself, it just moves the problem: .figure-wide
+   declares max-width: 880px and its SVG spilled 275px out of a 605px box, the
+   comparison tables started scrolling sideways at 139px, and six code blocks at
+   243px. All three were readable at the old 836px container.
+
+   So they break out and centre on the same axis as the text instead. The column
+   keeps its measure, these keep their width, and both share a centre line, which
+   is what makes the result read as a decision rather than an accident. Capped at
+   880px, the widest any of them declares, and at the viewport below that.
+
+   Not scoped to article pages: a diagram on glossary.html has the same claim to
+   width as one in an article, and .page-photo is deliberately *not* in the list
+   so decorative photography stays inside the column with the text. */
+main :is(
+    .figure-wide, .arch-figure, .killchain-figure, .workflow-figure,
+    .diagram-figure, .cnapp-figure,
+    .comparison-table, .table-scroll, .matrix-table, .matrix-table--wide,
+    pre.code-block
+) {
+    width: min(880px, calc(100vw - 3rem));
+    max-width: none;
+    margin-left: 50%;
+    transform: translateX(-50%);
 }
 
 /* Wiz Championship calendar (ctfs.html).
@@ -1962,7 +2052,7 @@ footer {
    sections, and the fourth ("Developer Docs") silently wrapped onto a row of
    its own. Adding a section back will no longer break the layout. */
 .footer-content {
-    max-width: 1200px;
+    max-width: var(--frame);
     margin: 0 auto 1.5rem;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
@@ -2049,7 +2139,7 @@ footer {
 }
 
 .footer-bottom {
-    max-width: 1200px;
+    max-width: var(--frame);
     margin: 0 auto;
     padding-top: 1rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -2582,9 +2672,24 @@ footer {
    ========================================================================== */
 
 .contribute-article {
-    max-width: 900px;
+    /* The measure plus the 2rem of side padding, so the content box is exactly
+       one measure wide and the info box, table of contents, figures and author
+       card all land on the same edge as the prose. Was a flat 900px, which put
+       running text at 104 characters per line.
+
+       The type comes up with it. Narrowing the column alone is the wrong lever
+       on a page like this: an 836px column cannot reach a sane measure at 16px
+       without shrinking to something that no longer belongs under a full-width
+       header. At 1.0625rem the same 736px column reads at about 86 characters,
+       and the page keeps its proportions.
+
+       This block is declared twice in this file, byte for byte, here and again
+       under the contribute-resources tutorial section. Both carry the value, so
+       change both or neither. */
+    max-width: calc(var(--measure) + 4rem);
     margin: 0 auto;
-    line-height: 1.8;
+    font-size: 1.0625rem;
+    line-height: 1.75;
 }
 
 .contribute-article h2 {
@@ -3030,9 +3135,24 @@ footer {
    ========================================================================= */
 
 .contribute-article {
-    max-width: 900px;
+    /* The measure plus the 2rem of side padding, so the content box is exactly
+       one measure wide and the info box, table of contents, figures and author
+       card all land on the same edge as the prose. Was a flat 900px, which put
+       running text at 104 characters per line.
+
+       The type comes up with it. Narrowing the column alone is the wrong lever
+       on a page like this: an 836px column cannot reach a sane measure at 16px
+       without shrinking to something that no longer belongs under a full-width
+       header. At 1.0625rem the same 736px column reads at about 86 characters,
+       and the page keeps its proportions.
+
+       This block is declared twice in this file, byte for byte, here and again
+       under the contribute-resources tutorial section. Both carry the value, so
+       change both or neither. */
+    max-width: calc(var(--measure) + 4rem);
     margin: 0 auto;
-    line-height: 1.8;
+    font-size: 1.0625rem;
+    line-height: 1.75;
 }
 
 .contribute-article h2 {
@@ -3307,10 +3427,10 @@ footer {
 
 .cta-section ul {
     text-align: left;
-    /* 58ch, matching the reading measure above, so this list lines up with the
-       <p> that introduces it. At the old 48rem it was 768px against a 567px
-       paragraph, which read as a misalignment once the measure came in. */
-    max-width: 58ch;
+    /* Matches the reading measure, so this list lines up with the <p> that
+       introduces it. At the old 48rem it was 768px against a 605px paragraph,
+       which read as a misalignment once the measure came in. */
+    max-width: var(--measure);
     margin: 1rem auto 0;
     padding-left: 1.5rem;
 }
@@ -4121,7 +4241,7 @@ footer {
 }
 
 .breadcrumb-nav ol {
-    max-width: 1200px;
+    max-width: var(--frame);
     margin: 0 auto;
     padding: 0.55rem 2rem 0.6rem;
     list-style: none;
@@ -5347,12 +5467,28 @@ main > .incident-pager .pager-index { font-weight: 600; }
     border-bottom: 1px solid var(--border-color, #e0e0e0);
 }
 .page-meta strong { color: var(--text-color, #333); font-weight: 600; }
+/* Underlined, like every other link in running text on this site. This rule
+   used to set `text-decoration: none` and reveal the underline on hover, which
+   made colour the only distinguisher - and not much of one: #0369a1 against the
+   #64748b of the surrounding meta line measures 1.25:1, where WCAG wants 3:1
+   from a link that carries no other cue. Hover reaches neither a keyboard nor a
+   touch screen, so for those users there was no cue at all.
+
+   The site-wide prose-link rule already says all of this, and already had the
+   right answer. It could not apply here because it is wrapped in :where() to
+   carry zero specificity, so this rule at (0,1,1) beat it. That was the bug:
+   the exception outranked the fix, on 92 pages, two links each. */
 .page-meta a {
     color: var(--secondary-color, #0369a1);
-    text-decoration: none;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
     font-weight: 500;
 }
-.page-meta a:hover { text-decoration: underline; }
+
+/* Hover thickens rather than reveals, matching the prose and glossary links. */
+.page-meta a:hover,
+.page-meta a:focus-visible { text-decoration-thickness: 2px; }
 [data-theme="dark"] .page-meta {
     color: #94a3b8;
     border-bottom-color: #1e293b;
