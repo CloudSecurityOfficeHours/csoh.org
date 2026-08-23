@@ -132,14 +132,20 @@ on:
     # `python3 tools/build_search_index.py` below), so a commit is never the
     # reason it needs to ship.
     #
-    # `meetings-search-index.json` is DIFFERENT and this list used to get it
-    # wrong. It is built by `tools/build_meetings_search_index.py`, which this
-    # workflow never runs - only the housekeeping workflow
-    # (site-update-deploy.yml) does. So a stale entry in that index sits live
-    # until something else happens to ship it. That is not hypothetical: a
-    # participant's email address removed from two recap pages stayed readable
-    # in the published index afterwards, because fixing the HTML did not
-    # rebuild or redeploy the index. It is a trigger path now.
+    # `meetings-search-index.json` is kept as a trigger too, and the reason has
+    # changed. It used to be the ONLY protection: this workflow did not run
+    # `tools/build_meetings_search_index.py` - only the housekeeping workflow
+    # (site-update-deploy.yml) did - so a stale entry sat live until something
+    # else happened to ship it. That was not hypothetical: a participant's email
+    # address removed from two recap pages stayed readable in the published
+    # index afterwards, because fixing the HTML did not rebuild or redeploy the
+    # index.
+    #
+    # The build job now regenerates that index itself, before staging (see
+    # "Regenerate derived files" below), so the published copy is correct even
+    # when the committed one is not. The trigger stays anyway: widening this
+    # list is the safe direction, and an edit that touches only the index should
+    # still be able to deploy on its own.
     #
     # Widening this list is always the safe direction - a superfluous pattern
     # costs one extra deploy of identical bytes, while a missing one costs a
@@ -371,6 +377,38 @@ jobs:
           if ! echo "$out" | grep -q "Modified 0 of"; then
             echo "::warning::HTML was committed with stale SRI hashes; this build corrected them. Run update_sri.py before pushing asset changes."
           fi
+
+      # Regenerate the derived files that site-update-deploy also produces.
+      #
+      # This is the SRI "belt and braces" step above, generalised. Housekeeping
+      # and this workflow both fire on a push to main, in DIFFERENT concurrency
+      # groups, so they start in the same second and overlap for about two
+      # minutes - measured at 45 of 45 pushes on 2026-08-23. Housekeeping then
+      # commits its output with a skip-ci marker, so that commit never deploys.
+      # Whatever it generated therefore missed the publish that triggered it and
+      # waits for the next unrelated push. update_sri.py was already immune
+      # because of the step above; these two were not.
+      #
+      # Both are pure functions of files already in this checkout: no network,
+      # no credentials, no git history. Running them here costs under a second
+      # and makes dist/ self-consistent regardless of who won the race.
+      # Housekeeping still commits its copies - that commit is now just repo
+      # tidiness, and its one-deploy lag stops mattering.
+      #
+      # NOT moved here, deliberately:
+      #   - update_sitemap.py reads `git log %cs` for each file's <lastmod>.
+      #     This checkout is shallow (no fetch-depth), so every path resolves to
+      #     the single boundary commit and every date comes back identical - a
+      #     plausible wrong answer rather than an error. Making it correct needs
+      #     fetch-depth: 0, i.e. a ~355 MB clone on the deploy critical path, to
+      #     freshen an SEO hint. It stays in housekeeping, which already clones
+      #     deep.
+      #   - preview generation needs Playwright and minutes, not milliseconds.
+      - name: Regenerate derived files (belt and braces)
+        run: |
+          set -euo pipefail
+          python3 tools/build_meetings_search_index.py
+          python3 tools/update_presentations_schema.py
 
       # Run the staging script, which copies only the public files into a fresh
       # dist/ directory (see tools/stage_site.sh). dist/ is exactly what gets
@@ -1039,13 +1077,53 @@ jobs:
       # check that would have caught 2026-07-15 in CI instead of in production:
       # it re-derives each asset's SHA-384 from the bytes the edge hands back and
       # compares against the integrity= the live HTML declares for that URL.
+      # Checked at the edge AND at each origin by name.
+      #
+      # Asking https://csoh.org/ alone tests whichever origin the load balancer
+      # happened to pick. CLAUDE.md already records what that costs: the
+      # dotfile-artifact bug left /.well-known/security.txt missing from two
+      # origins out of three and returning 200 on about one request in three,
+      # "invisible to any check that fetches a URL once and sees success". A
+      # per-asset loop through the edge spreads across origins by luck, never by
+      # assertion, so a single broken origin can pass. Naming the origins turns
+      # a probability into a guarantee.
       - name: Verify live assets match their SRI hashes
+        env:
+          # The three origin hostnames, as repo Variables holding exactly the
+          # values Terraform already keeps in TF_VAR_aws_origin_host and its two
+          # siblings (the addresses of the csoh-origins LB pool). They are
+          # public endpoints, not credentials, so they are Variables - the same
+          # split as AWS_BUCKET_NAME and CLOUDFLARE_ZONE_ID.
+          #
+          # Passed in rather than looked up at runtime, because two of the three
+          # deploy identities cannot look themselves up and should not be
+          # widened so they could:
+          #   - the AWS publisher role holds only cloudfront:CreateInvalidation
+          #     (infra/terraform/aws/oidc.tf:146), not GetDistribution;
+          #   - the Azure identity holds only Storage Blob Data Contributor
+          #     (infra/terraform/azure/identity.tf:121), a data-plane role,
+          #     while `az storage account show` is a control-plane read.
+          # Granting either one extra permission to discover a public hostname
+          # would trade a real credential boundary for a lookup.
+          #
+          # Bare hostnames, with the scheme added after the value is checked.
+          # Interpolating into "https://${{ vars.X }}" instead would turn an
+          # unset Variable into the truthy string "https://", which reads as a
+          # target and fails later as an obscure connection error rather than
+          # as "nobody set this". Same reason the assertion at the end counts
+          # targets: a Variable nobody set must be a loud failure, never a
+          # quietly narrower sweep.
+          TARGETS: |
+            edge=csoh.org
+            aws=${{ vars.AWS_ORIGIN_HOST }}
+            azure=${{ vars.AZURE_ORIGIN_HOST }}
+            gcp=${{ vars.GCP_ORIGIN_HOST }}
         run: |
           set -euo pipefail
           # Give the purge a moment to take effect across the edge.
           sleep 10
           python3 - <<'PY'
-          import base64, hashlib, re, sys, urllib.request
+          import base64, hashlib, os, re, sys, urllib.request
 
           def get(url):
               req = urllib.request.Request(url, headers={"User-Agent": "csoh-deploy-verify"})
@@ -1054,32 +1132,89 @@ jobs:
               req.add_header("Cache-Control", "no-cache")
               return urllib.request.urlopen(req, timeout=30).read()
 
-          html = get("https://csoh.org/").decode("utf-8", "replace")
+          targets = []
+          missing = []
+          for line in os.environ["TARGETS"].splitlines():
+              line = line.strip()
+              if not line:
+                  continue
+              label, _, host = line.partition("=")
+              host = host.strip().rstrip("/")
+              # Tolerate a Variable that was set WITH a scheme; normalise either
+              # spelling to one form rather than producing "https://https://".
+              host = host.removeprefix("https://").removeprefix("http://")
+              if not host:
+                  missing.append(label)
+                  continue
+              targets.append((label, "https://" + host))
+
+          if missing:
+              for label in missing:
+                  print(f"::error::No origin host for '{label}'. Set the repo "
+                        f"Variable {label.upper()}_ORIGIN_HOST to that origin's "
+                        "own hostname (see the comment on this step).")
+              sys.exit(1)
 
           # Pair each versioned asset URL with the integrity= alongside it.
           pattern = re.compile(
               r'(?:href|src)="(/[^"]+\?v=[0-9a-f]+)"[^>]*integrity="sha384-([^"]+)"'
               r'|integrity="sha384-([^"]+)"[^>]*(?:href|src)="(/[^"]+\?v=[0-9a-f]+)"')
 
-          checked = failed = 0
-          for m in pattern.finditer(html):
-              url, want = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
-              got = base64.b64encode(hashlib.sha384(get("https://csoh.org" + url)).digest()).decode()
-              checked += 1
-              if got != want:
-                  failed += 1
-                  print(f"::error::SRI MISMATCH {url}\n  serving: {got}\n  HTML wants: {want}")
-              else:
-                  print(f"ok  {url}")
+          EXPECTED = 4          # edge + three origins
+          failed = 0
+          reached = 0
 
-          if not checked:
-              print("::error::No versioned assets found in the live HTML - check the selector.")
+          for label, base in targets:
+              print(f"\n=== {label}: {base}")
+              try:
+                  html = get(base + "/").decode("utf-8", "replace")
+              except Exception as exc:
+                  # An origin that cannot be reached is a failure, not a skip.
+                  # A skipped origin is the silent no-op this repo keeps paying
+                  # for; say so and fail.
+                  print(f"::error::{label} ({base}) is unreachable: {exc}")
+                  failed += 1
+                  continue
+
+              reached += 1
+              checked = 0
+              for m in pattern.finditer(html):
+                  path, want = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+                  try:
+                      body = get(base + path)
+                  except Exception as exc:
+                      print(f"::error::{label} {path} is unreachable: {exc}")
+                      failed += 1
+                      continue
+                  got = base64.b64encode(hashlib.sha384(body).digest()).decode()
+                  checked += 1
+                  if got != want:
+                      failed += 1
+                      print(f"::error::SRI MISMATCH at {label} {path}\n"
+                            f"  serving: {got}\n  HTML wants: {want}")
+                  else:
+                      print(f"  ok  {path}")
+
+              if not checked:
+                  print(f"::error::No versioned assets found in {label}'s HTML - "
+                        "check the selector.")
+                  failed += 1
+              else:
+                  print(f"  {checked} assets verified at {label}")
+
+          # Assert the sweep actually covered everything. A run that reached
+          # two origins and reported no mismatches looks identical to a clean
+          # four-target run unless this is checked.
+          if reached < EXPECTED:
+              print(f"::error::Only reached {reached} of {EXPECTED} targets - "
+                    "an origin output was empty or the host was down. This run "
+                    "did not verify what it claims to.")
               sys.exit(1)
           if failed:
-              print(f"::error::{failed} of {checked} assets do not match their SRI hash; "
-                    "browsers will refuse them and the site will render unstyled.")
+              print(f"::error::{failed} SRI problem(s) across {reached} targets; "
+                    "browsers will refuse those assets and the site renders unstyled.")
               sys.exit(1)
-          print(f"All {checked} live assets match their SRI hashes.")
+          print(f"\nAll assets match their SRI hashes at all {reached} targets.")
           PY
 
       # Same idea as the SRI check above, for the security headers.
@@ -1105,8 +1240,41 @@ jobs:
           # credential sitting in .git/config for later steps to find.
           persist-credentials: false
 
-      - name: Verify live security headers match the repo
+      # This one is ALREADY origin-aware and needs no loop: with no --samples it
+      # uses DEFAULT_SAMPLES (40) cache-busted requests specifically to reach
+      # all three origins, prints which ones it reached, and warns when it never
+      # reached Azure - the origin that depends entirely on the edge ruleset.
+      # Leave the sampling default alone; --samples 1 here would reduce it to
+      # the single-request check the SRI and robots steps just stopped being.
+      - name: Verify live security headers match the repo (edge, all origins)
         run: python3 tools/check_edge_headers.py --url https://csoh.org/
+
+      # CloudFront is the one origin whose own hostname is public AND which sets
+      # its own headers (aws_cloudfront_response_headers_policy.security, wired
+      # into default_cache_behavior). Without that policy a direct request to
+      # *.cloudfront.net returns a fully working copy of the site with no CSP,
+      # no HSTS and no X-Frame-Options, and the edge check above cannot see it,
+      # because those requests never traverse Cloudflare. Verified serving all 8
+      # headers on 2026-08-23.
+      #
+      # --samples 1 is correct HERE and only here: this URL is a single origin,
+      # so there is nothing to sample across.
+      #
+      # Azure is deliberately absent: Blob static websites cannot emit custom
+      # response headers at all, so this check would fail there by design. That
+      # origin is covered only by the edge, which is why the step above must
+      # keep its 40 samples.
+      - name: Verify security headers at the CloudFront origin
+        env:
+          AWS_ORIGIN: ${{ vars.AWS_ORIGIN_HOST }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_ORIGIN}" ]; then
+            echo "::error::Repo Variable AWS_ORIGIN_HOST is not set."
+            exit 1
+          fi
+          python3 tools/check_edge_headers.py \
+            --url "https://${AWS_ORIGIN#https://}/" --samples 1
 
       # Third edge-parity gate, same reasoning as the two above: assert that
       # what the edge serves is what this repo says.
@@ -1118,5 +1286,60 @@ jobs:
       # infra/terraform/cloudflare/ does not declare, so `terraform apply` would
       # neither report nor fix a regression. This step is the only thing that
       # would notice.
-      - name: Verify live robots.txt matches the repo
-        run: python3 tools/check_robots_parity.py --url https://csoh.org/robots.txt
+      #
+      # Unlike check_edge_headers.py, this checker makes ONE request and has no
+      # sampling of its own, so pointing it at the apex tested one origin out of
+      # three. robots.txt is ordinary published content - every origin serves
+      # its own copy - so a file that missed one publish is exactly the case to
+      # catch, and it is caught by naming each origin rather than by repeating
+      # the apex and hoping the balancer rotates.
+      - name: Verify live robots.txt matches the repo (edge and every origin)
+        env:
+          # Bare hostnames, scheme added after the check - see the same env
+          # block on the SRI step above for why, and for why these are repo
+          # Variables rather than a runtime lookup.
+          TARGETS: |
+            edge=csoh.org
+            aws=${{ vars.AWS_ORIGIN_HOST }}
+            azure=${{ vars.AZURE_ORIGIN_HOST }}
+            gcp=${{ vars.GCP_ORIGIN_HOST }}
+        run: |
+          set -euo pipefail
+          reached=0
+          failed=0
+          # No `IFS=` on purpose: the default IFS trims the leading indentation
+          # the YAML block scalar carries, so no sed pass is needed.
+          while read -r line; do
+            [ -n "${line}" ] || continue
+            label="${line%%=*}"
+            host="${line#*=}"
+            # Accept a Variable set with or without a scheme.
+            host="${host#https://}"
+            host="${host#http://}"
+            host="${host%/}"
+            if [ -z "${host}" ]; then
+              echo "::error::No origin host for '${label}'. Set the repo Variable"
+              echo "::error::$(echo "${label}" | tr '[:lower:]' '[:upper:]')_ORIGIN_HOST to that origin's own hostname."
+              failed=$((failed + 1))
+              continue
+            fi
+            echo "=== ${label}: https://${host}"
+            if python3 tools/check_robots_parity.py --url "https://${host}/robots.txt"; then
+              reached=$((reached + 1))
+            else
+              failed=$((failed + 1))
+            fi
+          done <<< "${TARGETS}"
+
+          # Same assertion as the SRI step: prove the sweep was as wide as it
+          # claims. Four green rows and two green rows read identically in a log
+          # unless the count is checked.
+          if [ "${failed}" -gt 0 ]; then
+            echo "::error::robots.txt parity failed at ${failed} target(s)."
+            exit 1
+          fi
+          if [ "${reached}" -ne 4 ]; then
+            echo "::error::Only verified ${reached} of 4 targets - this run did not check what it claims to."
+            exit 1
+          fi
+          echo "robots.txt matches the repo at the edge and all three origins."
