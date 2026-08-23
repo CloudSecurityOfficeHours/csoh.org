@@ -37,6 +37,24 @@ resource "google_cloud_run_v2_service" "site" {
   # Load Balancing) rather than by Cloud Armor on a GCLB.
   ingress = "INGRESS_TRAFFIC_ALL"
 
+  # Opt this service in to the project's Binary Authorization policy
+  # (binary_authorization.tf). `use_default = true` means "evaluate revisions
+  # against whatever the project policy says", rather than naming a per-service
+  # policy here - one policy, both services, no chance of the two drifting.
+  #
+  # The effect is that Cloud Run refuses to create a revision unless the image
+  # comes from our own Artifact Registry repository. It is checked when a
+  # revision is CREATED, not per request, so a rejection fails the deploy and
+  # leaves the currently-serving revision untouched.
+  #
+  # If you ever need to ship past the policy in an emergency, the escape hatch
+  # is `breakglass_justification` in this block: it admits the revision and
+  # writes the justification string into the audit log. Reach for it knowing
+  # that it is recorded, and take it back out afterwards.
+  binary_authorization {
+    use_default = true
+  }
+
   # Service-level scaling. This is separate from `template.scaling` (which
   # configures per-revision auto-scaling). The Cloud Run v2 API populates
   # this block with default zeros on every service whether you declare it
@@ -243,6 +261,13 @@ resource "google_cloud_run_v2_service" "site_qa" {
   # the second is more moving parts than this is worth. Do not treat Access as
   # a secrecy boundary for anything that would actually harm you if read early.
   ingress = "INGRESS_TRAFFIC_ALL"
+
+  # Same project policy as production, and that sameness is the point. QA builds
+  # the image production later runs, so a QA service allowed to run images
+  # production would reject would make the QA pass mean less than it appears to.
+  binary_authorization {
+    use_default = true
+  }
 
   scaling {
     min_instance_count = 0
