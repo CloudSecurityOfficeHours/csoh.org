@@ -21,6 +21,24 @@
     --border-color: #e2e8f0;
     --shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
     --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.10);
+    /* These three were referenced and never declared. --text-muted and
+       --card-bg always carried a fallback so they degraded to a literal, but
+       --bg-color did not: `background: var(--bg-color)` on #searchInput was
+       invalid at computed-value time, so background fell back to `transparent`
+       and the search field had no fill until it was focused. Measured on
+       resources.html before this: rgba(0, 0, 0, 0).
+
+       --bg-color and --card-bg point at --white, which the dark block already
+       redefines to #1c2530, so both follow the theme with no second
+       declaration. --text-muted does need a dark value and has one below.
+
+       --text-muted replaces six different fallback literals (#555, #666,
+       #5b6573, #64748b, #94a3b8, #475569) across 13 rules. #5b6573 is 6.2:1 on
+       --light-bg, so every one of those sites lands at or above where it was,
+       and the search placeholder rises from 2.7:1 to 6.6:1. */
+    --bg-color: var(--white);
+    --card-bg: var(--white);
+    --text-muted: #5b6573;
     /* Offset used for in-page anchor jumps so a linked heading lands below
        the sticky header instead of behind it. main.js refines this to the
        header's real measured height; the value here is the no-JS fallback
@@ -1124,6 +1142,38 @@ a.glossary-link:hover {
 
 .follow-on svg {
     vertical-align: -0.25em;
+}
+
+/* Reading measure -----------------------------------------------------------
+   Running prose was 142 characters per line on the homepage and about.html and
+   104 on content pages, measured at a 1440px viewport. Comfortable is 45-75 and
+   the eye starts losing the return sweep past about 90.
+
+   58ch, not 68ch: `ch` is the width of "0", which in this stack is 9.77px while
+   the average lowercase letter is 8.01px, so a ch-based cap renders about 1.22x
+   as many real characters as it names. Measured across the sweep, 58ch lands at
+   74 characters and 68ch at 87.
+
+   Scoped by depth rather than by class, because running text is always a direct
+   child of main or of a section here, and card, grid and table text always sits
+   deeper. Verified on resources.html: 3 elements change width and all 499
+   resource cards are untouched. The hero is outside main on every page, so its
+   centred copy is unaffected. Cost is about 4% page height. */
+main > :is(p, ul, ol, dl, blockquote),
+main > section > :is(p, ul, ol, dl, blockquote),
+main > section > details > :is(p, ul, ol, dl, blockquote),
+main > section > div > :is(p, ul, ol, dl, blockquote),
+main > div > :is(p, ul, ol, dl, blockquote) {
+    max-width: 58ch;
+}
+
+/* A capped block inside a centred container has to keep auto side margins, or
+   the box narrows against the container's left edge and the centred text lands
+   left of centre. `.cta-section ul` already does this for itself further down
+   (max-width: 48rem; margin: 1rem auto 0), which is why only its <p> needed
+   the same treatment. .cta-section is on 96 pages. */
+main .cta-section > :is(p, ul, ol, dl, blockquote) {
+    margin-inline: auto;
 }
 
 /* Wiz Championship calendar (ctfs.html).
@@ -3257,7 +3307,10 @@ footer {
 
 .cta-section ul {
     text-align: left;
-    max-width: 48rem;
+    /* 58ch, matching the reading measure above, so this list lines up with the
+       <p> that introduces it. At the old 48rem it was 768px against a 567px
+       paragraph, which read as a misalignment once the measure came in. */
+    max-width: 58ch;
     margin: 1rem auto 0;
     padding-left: 1.5rem;
 }
@@ -3479,6 +3532,7 @@ footer {
         --light-bg: #0f1419;
         --white: #1c2530;
         --border-color: #30445a;
+        --text-muted: #94a3b8;
         --shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
         --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.5);
     }
@@ -3594,6 +3648,7 @@ footer {
     --light-bg: #0f1419;
     --white: #1c2530;
     --border-color: #30445a;
+    --text-muted: #94a3b8;
     --shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
     --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
@@ -4759,10 +4814,17 @@ footer {
     margin-left: 0.5rem;
 }
 
+/* Sky-400, the same fill .hero--illustrated .btn-primary uses, so every
+   primary call to action on the site is one colour. It was
+   var(--accent-color): amber in light and coral in dark, so the most important
+   button on the site changed hue with the theme, and it sat directly beside
+   the amber .nav-coffee donate link - the two loudest things in the header,
+   in the same hue, asking for different things. Amber is now the donate
+   colour and nothing else in the header. #0b1729 on #38bdf8 is 9.4:1. */
 .nav-cta {
     display: inline-block;
-    background-color: var(--accent-color, #f59e0b);
-    color: #1a202c !important;
+    background-color: #38bdf8;
+    color: #0b1729 !important;
     padding: 0.5rem 1rem;
     border-radius: 6px;
     font-weight: 600;
@@ -4773,7 +4835,7 @@ footer {
 
 .nav-cta:hover,
 .nav-cta:focus {
-    background-color: #fbbf24;
+    background-color: #7dd3fc;
     transform: translateY(-1px);
     opacity: 1 !important;
 }
@@ -4793,9 +4855,14 @@ footer {
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
-    border: 1px solid rgba(245, 158, 11, 0.55);
+    /* Neutral, not amber. The comment above already called this link
+       "deliberately quieter", but amber-on-amber next to .nav-cta meant it
+       read as a second primary button rather than a quieter one. White at 78%
+       on the navy header is 11.4:1, so it stays perfectly legible while
+       clearly ranking below the CTA. */
+    border: 1px solid rgba(255, 255, 255, 0.28);
     border-radius: 6px;
-    color: #fcd34d !important;
+    color: rgba(255, 255, 255, 0.78) !important;
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
@@ -5471,7 +5538,17 @@ main > .incident-pager .pager-index { font-weight: 600; }
     transform: translateY(-3px);
     box-shadow: 0 14px 28px rgba(0,0,0,0.10);
     border-color: var(--card-accent);
-    outline: none;
+}
+
+/* .pillar-card is an <a>, and the block above used to end in `outline: none`,
+   so 420 of them across 37 pages answered a keyboard focus with nothing but the
+   hover treatment: a 3px lift and a border tint. Hover styling is not a focus
+   indicator - it is the same cue the pointer already gets, and a tinted border
+   against an existing border is not a state change anyone can find. Split out
+   so the ring applies on focus only and never under the pointer. */
+.pillar-card:focus-visible {
+    outline: 3px solid var(--secondary-color);
+    outline-offset: 2px;
 }
 .pillar-card:hover::before, .pillar-card:focus-visible::before { opacity: 1; }
 .pillar-icon {

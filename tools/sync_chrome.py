@@ -80,7 +80,15 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 
 # --- Canonical menu nav (root-relative, no active markers) -------------------
 # Top level: Learn / Resources / Threat Intel / Careers / Community, then the
-# Support + Join Friday Zoom pair (main.js injects "Search" ahead of them).
+# Support + primary CTA pair (main.js injects "Search" ahead of them).
+#
+# This one says "Get the Zoom link" and not "Join ..." on purpose. It is the
+# only join-shaped button on the site that leaves for the mailing-list form;
+# the two on index.html both go to sessions.html. Three labels for what looked
+# like one action ("Join Friday Zoom" / "Join Zoom Sessions" / "Join this
+# Friday") were really two actions wearing three names, so each action now
+# states what it actually does and the two that share a destination share a
+# label.
 #
 # The five top-level items are fixed by a hard width constraint, not by taste.
 # Measured at the 1024px breakpoint: logo 185px + toggle 36px + nav 786px =
@@ -281,7 +289,7 @@ CANON_NAV = """\
                       </div>
                     </li>
                     <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true">☕</span> <span class="nav-coffee-label">Support</span></a></li>
-                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Join Friday Zoom →</a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
                 </ul>
             </nav>"""
 

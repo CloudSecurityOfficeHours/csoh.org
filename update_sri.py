@@ -177,7 +177,23 @@ def main():
         print(f"Error: Required files not found: {', '.join(missing_files)}", file=sys.stderr)
         return 1
 
-    html_files = list(repo_root.rglob('*.html'))
+    # rglob descends into everything under the repo root, and that root also
+    # holds .claude/worktrees/, where Claude Code keeps one full checkout per
+    # concurrent session. Stamping those rewrote 1,221 files across five other
+    # sessions' worktrees with hashes derived from *this* checkout's style.css,
+    # which is wrong for them twice over: it dirties a tree someone else is
+    # working in, and the integrity value does not match their own asset.
+    # Nothing errored - the run just reported a larger file count, and a count
+    # is not something anyone reads as a warning.
+    #
+    # Each worktree carries its own copy of this script and stamps itself
+    # correctly, so skipping them loses nothing. .venv and node_modules are
+    # here for the same reason: not ours to rewrite.
+    skip_dirs = {'.claude', '.venv', 'node_modules', '.git', 'dist'}
+    html_files = [
+        f for f in repo_root.rglob('*.html')
+        if not skip_dirs.intersection(f.relative_to(repo_root).parts[:-1])
+    ]
 
     if not html_files:
         print("Warning: No HTML files found", file=sys.stderr)
