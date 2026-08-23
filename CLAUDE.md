@@ -1362,3 +1362,106 @@ secrecy boundary; do not stage anything there that would harm you if read early.
 Full docs, including the ten Cloudflare token permission groups, what each error
 code actually means, and the registry race between the two deploy workflows:
 `.github/workflows/QA_PIPELINE_README.md`.
+
+## Binary Authorization is enforcing, and a denied deploy fails quietly upward
+
+Cloud Run will not start a container whose image did not come out of
+`us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/`. The policy is
+`infra/terraform/gcp/binary_authorization.tf` - project-level, one per project,
+an allowlist plus a default `ALWAYS_DENY` - and both `csoh-site` and
+`csoh-site-qa` opt in with `binary_authorization { use_default = true }`.
+
+It checks **provenance, not signatures.** Nothing verifies an attestation,
+because promotion deliberately redeploys the image QA built, and a "the
+production pipeline signed this" attestor would reject exactly the artifact we
+most want it to accept. Both deploy identities also hold registry write, so the
+control does not stop a compromised deployer from pushing a bad image into our
+own repo; what it removes is running an image that never passed through the
+registry at all. cloud-deployment.html says all of this in prose.
+
+### A rejected deploy still writes the spec, and the site stays up
+
+A denied `gcloud run deploy` does not fail cleanly and leave nothing behind:
+
+- The revision **is created**, then fails. `csoh-site-qa-00011-v9v`,
+  `Ready: False`, `Container image '...' is not authorized by policy`.
+- Traffic **does not move.** The previous revision keeps serving 100%, so the
+  site is fine and every external check passes.
+- The service `spec` **is updated** to the rejected image. So the service sits
+  at `Ready: False` indefinitely, naming an image that cannot run, and nothing
+  self-heals until the next deploy that passes `--image` explicitly.
+
+`terraform apply` will not repair it either: `ignore_changes` on
+`template[0].containers[0].image` means Terraform reads the live value, compares
+it to the placeholder in the config, and has no opinion.
+
+So **"the site is up" says nothing about whether the service is healthy here**,
+and what is left broken is invisible from outside.
+
+### Testing only the deny direction proves nothing
+
+A correctly scoped policy and one that denies **everything** produce identical
+evidence when the only thing you try is a bad image. Both reject it. If the
+allowlist pattern were wrong, the first thing to find out would be the next
+production deploy, which happens automatically on a push to `main`.
+
+Verify both directions, and make the admit test a revision created *after* the
+policy landed - the ones that predate it prove nothing. Run them in this order,
+because the second is also the cleanup for the first:
+
+```sh
+# must be DENIED
+gcloud run deploy csoh-site-qa --project csoh-org-495800 --region us-central1 \
+  --image us-docker.pkg.dev/cloudrun/container/hello --quiet
+
+# must SUCCEED, and restores the spec the denied one overwrote
+gcloud run deploy csoh-site-qa --project csoh-org-495800 --region us-central1 \
+  --image us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/csoh-site:<tag> \
+  --platform managed --ingress all \
+  --service-account csoh-run-runtime@csoh-org-495800.iam.gserviceaccount.com --quiet
+```
+
+Note the shape, because it inverts the one this file records most often. The
+usual trap is an instrument reporting "nothing is there" while broken. Here the
+instrument reported a **success** - the deny fired, exactly as designed - and
+that success was equally consistent with the policy being catastrophically
+over-broad. A control that can only fail one way is not a control.
+
+### `gcloud run services describe` answers in the v1 shape
+
+- It returns Knative `serving.knative.dev/v1`, not the Cloud Run v2 shape the
+  Terraform resource is written against. So
+  `--format='value(binaryAuthorization.useDefault)'` and
+  `template.containers[0].image` come back **empty**, which reads exactly like
+  "not enabled". The real paths are
+  `metadata.annotations."run.googleapis.com/binary-authorization"` (value
+  `default`) and `spec.template.spec.containers[0].image`.
+- Cloud Run evaluates the **digest-resolved** reference, not the tag you typed:
+  the rejection names `...hello@sha256:...`. Our pattern is a repo-path prefix
+  so it holds either way, but a pattern written against tags would not.
+
+```sh
+gcloud container binauthz policy export --project csoh-org-495800
+gcloud run services describe csoh-site --project csoh-org-495800 \
+  --region us-central1 \
+  --format='value(metadata.annotations."run.googleapis.com/binary-authorization")'
+```
+
+### Two traps in the config itself
+
+- **A double star is not a single star.** In an allowlist pattern `*` matches
+  any run of characters *except* `/`, so `csoh-containers/*` silently stops
+  covering anything at a nested path; `csoh-containers/**` is what allowlists
+  the repository. Getting this wrong over-denies rather than under-enforcing,
+  which surfaces as a failed deploy instead of as a control that quietly is not
+  there. That is the only reason a wrong pattern here is survivable.
+- **`ignore_changes` does not apply on create.** Both services are declared with
+  `us-docker.pkg.dev/cloudrun/container/hello`, which this policy denies, so a
+  from-scratch apply would create them with an image the policy rejects.
+  `google_binary_authorization_policy.default` therefore carries a `depends_on`
+  naming both services: they get created under the permissive default policy
+  every project starts with, and CI replaces the placeholder on the first
+  deploy. The same trap returns if either service is ever **force-replaced**
+  (renaming or moving it does that) while the policy is enforcing - comment the
+  `binary_authorization` block out for that apply, or let the replacement land
+  and deploy through CI before re-enforcing.
