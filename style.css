@@ -3057,6 +3057,53 @@ footer {
     margin-bottom: 0.5rem;
 }
 
+/* Park the contents list in the left margin on wide screens and let it follow
+   the reader. The guides it appears on run long - cloud-security-engineer.html
+   is 8,200 words and 26,000px with 18 h2s - and the list was position:static,
+   so past the first screen there was no section context and no way to jump
+   without scrolling back to the top.
+
+   The room is already there: the article column is --measure + 4rem = 800px
+   inside a 1440px viewport, so ~320px of each margin is empty. Floating with a
+   negative margin buys that space without touching the markup on any of the 85
+   pages that carry a .toc, and because the float lands entirely outside the
+   text column no prose wraps around it.
+
+   The 1300px floor is arithmetic, not taste: the rail needs 12rem + 2rem of
+   gutter = 224px of margin, and the margin is (100vw - 800px) / 2, which only
+   reaches 224px at 1248px. 1300 leaves a little slack. Below it the rule does
+   not apply at all and the list stays the in-flow callout it has always been,
+   which is also what mobile keeps.
+
+   max-height + overflow-y matter: a sticky box taller than the viewport only
+   pins its bottom edge, and these lists reach 764px against a 900px viewport
+   once the header is subtracted. */
+@media (min-width: 1300px) {
+    .contribute-article > .toc {
+        float: left;
+        width: 12rem;
+        margin: 0 0 1.5rem calc(-12rem - 2rem);
+        padding: 1rem 1.125rem;
+        position: sticky;
+        top: calc(var(--header-height) + 1rem);
+        max-height: calc(100vh - var(--header-height) - 3rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        font-size: var(--fs-13);
+    }
+
+    .contribute-article > .toc h2,
+    .contribute-article > .toc h3 {
+        font-size: var(--fs-14);
+        margin-bottom: 0.5rem;
+    }
+
+    .contribute-article > .toc li {
+        margin-bottom: 0.375rem;
+        line-height: 1.4;
+    }
+}
+
 /* Underlined, and coloured as a link. These rendered at --primary-color, which
    is #0f172a against #1f2937 body text: a 1.22:1 difference with no underline,
    so colour was the only cue and not a perceptible one. The tinted .toc panel
@@ -4598,8 +4645,21 @@ footer {
     gap: 0;
 }
 
+/* The focus test is on the MENU, not on the <li>. It used to be
+   `.has-dropdown:focus-within > .dropdown-menu`, and the <li> contains the
+   toggle button - so the moment you clicked a toggle to CLOSE its menu, the
+   button still held focus, :focus-within was still true, and the menu stayed
+   visible with `.open` already gone. Moving the pointer away did not help
+   (focus outlives hover), so on desktop a dropdown could be opened and never
+   closed by clicking; only clicking a different element dismissed it. Mobile
+   was unaffected - the <=1023px block overrides visibility to hidden.
+
+   Scoping :focus-within to the menu keeps the behaviour it was actually there
+   for: keyboard users tabbing THROUGH the items hold their own menu open,
+   while focus parked on the toggle no longer does. Specificity is unchanged
+   at (0,3,0), so every override below still lands the same way. */
 .has-dropdown:hover > .dropdown-menu,
-.has-dropdown:focus-within > .dropdown-menu,
+.has-dropdown > .dropdown-menu:focus-within,
 .has-dropdown.open > .dropdown-menu {
     opacity: 1;
     visibility: visible;
@@ -4710,16 +4770,17 @@ footer {
         transition: max-height 0.25s ease, visibility 0s;
     }
 
-    /* Disable desktop hover-reveal on mobile */
+    /* Disable desktop hover-reveal on mobile. Mirrors the menu-scoped
+       :focus-within above so both breakpoints test the same thing. */
     .has-dropdown:hover > .dropdown-menu,
-    .has-dropdown:focus-within > .dropdown-menu {
+    .has-dropdown > .dropdown-menu:focus-within {
         opacity: 1;
         visibility: hidden;
         max-height: 0;
     }
 
     .has-dropdown.open:hover > .dropdown-menu,
-    .has-dropdown.open:focus-within > .dropdown-menu,
+    .has-dropdown.open > .dropdown-menu:focus-within,
     .has-dropdown.open > .dropdown-menu {
         visibility: visible;
         max-height: 600px;
@@ -5158,6 +5219,24 @@ main a:has(> img:only-child) {
 
 .nav-coffee-icon {
     font-size: 0.95em;
+}
+
+/* Nav glyphs (Search, Support) are inline SVG rather than emoji. Emoji are
+   drawn by the platform emoji font, which ignores `color`, so the magnifier
+   rendered as a small dark blob on the dark header and both glyphs changed
+   shape between operating systems - the one thing site chrome should not do.
+   currentColor makes these follow the link colour in both themes with no
+   dark-mode override needed, which is why there is no mirrored rule below.
+
+   Sized in em so they track the label. Both alignment properties are load
+   bearing: .nav-search-link is inline-flex on desktop (flex-shrink keeps the
+   icon from collapsing) and a plain inline box in the mobile menu
+   (vertical-align does the optical centring there). */
+.nav-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
 }
 
 /* Mobile: mega-menu flattens to the accordion pattern already used for

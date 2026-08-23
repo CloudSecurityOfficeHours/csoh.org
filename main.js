@@ -1064,7 +1064,13 @@ function injectSearchLink() {
     // Magnifying glass + visible "Search" label so the affordance reads
     // clearly on both desktop and the mobile hamburger menu. The wrapping
     // span lets CSS shorten / hide the text on tight viewports later.
-    a.innerHTML = '<span aria-hidden="true">🔍</span> <span class="nav-search-text">Search</span>';
+    //
+    // The glyph is inline SVG, not the 🔍 emoji it used to be. Emoji render
+    // through the platform emoji font, which ignores `color` - so on the dark
+    // header the magnifier came out as a small dark blob rather than a light
+    // icon, and its shape changed per operating system. currentColor makes
+    // this follow the link colour in both themes. See .nav-icon in style.css.
+    a.innerHTML = '<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/></svg> <span class="nav-search-text">Search</span>';
 
     // If the current page IS /search.html, mark the link as the current page
     // so it gets the same styling as other active nav items.
