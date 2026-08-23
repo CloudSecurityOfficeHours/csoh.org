@@ -1070,7 +1070,7 @@ function injectSearchLink() {
     // header the magnifier came out as a small dark blob rather than a light
     // icon, and its shape changed per operating system. currentColor makes
     // this follow the link colour in both themes. See .nav-icon in style.css.
-    a.innerHTML = '<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/></svg> <span class="nav-search-text">Search</span>';
+    a.innerHTML = '<svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/></svg> <span class="nav-search-text">Search</span>';
 
     // If the current page IS /search.html, mark the link as the current page
     // so it gets the same styling as other active nav items.
