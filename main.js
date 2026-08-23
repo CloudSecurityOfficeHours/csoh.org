@@ -700,37 +700,62 @@ function initHeaderHeightVar() {
 }
 
 // Dark mode
-function initThemeToggle() {
-    // Check saved preference or system preference
-    const saved = localStorage.getItem('theme');
-    if (saved === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else if (saved === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    }
+//
+// The initial stamp moved to /theme.js, which is render-blocking in <head>.
+// This file is deferred, so doing it here meant a visitor whose stored choice
+// differed from their OS painted the wrong theme first and flipped afterwards.
+//
+// Nothing here stamps data-theme for a visitor with no stored preference, and
+// that is deliberate. style.css carries the dark tokens under
+// `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }`, so leaving
+// the attribute off is what keeps the media query in control - which means an
+// OS theme change with the page open now follows immediately, where the old
+// code stamped `dark` once at load and froze it there until a reload.
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
+// The theme actually in effect, which is not always the attribute: with no
+// attribute set, CSS is following the media query and the button has to agree.
+function currentTheme() {
+    const attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark' || attr === 'light') return attr;
+    return prefersDark.matches ? 'dark' : 'light';
+}
+
+function initThemeToggle() {
     // Find the toggle button (inserted via HTML)
     const toggle = document.querySelector('.theme-toggle');
-    if (toggle) {
-        updateToggleIcon(toggle);
-        toggle.addEventListener('click', function() {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            if (isDark) {
-                document.documentElement.setAttribute('data-theme', 'light');
-                localStorage.setItem('theme', 'light');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'dark');
-                localStorage.setItem('theme', 'dark');
-            }
-            updateToggleIcon(this);
-        });
+    if (!toggle) return;
+
+    updateToggleIcon(toggle);
+
+    toggle.addEventListener('click', function () {
+        const next = currentTheme() === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try {
+            localStorage.setItem('theme', next);
+        } catch (e) {
+            /* Private mode or blocked storage: the choice holds for this page
+               and simply does not persist. Not worth failing the click over. */
+        }
+        updateToggleIcon(this);
+    });
+
+    // While no explicit choice is stored the page tracks the OS, so the icon
+    // has to track it too.
+    const onSystemChange = function () {
+        if (!document.documentElement.hasAttribute('data-theme')) {
+            updateToggleIcon(toggle);
+        }
+    };
+    if (prefersDark.addEventListener) {
+        prefersDark.addEventListener('change', onSystemChange);
+    } else if (prefersDark.addListener) {
+        prefersDark.addListener(onSystemChange);
     }
 }
 
 function updateToggleIcon(btn) {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const isDark = currentTheme() === 'dark';
     btn.textContent = isDark ? '☀️' : '🌙';
     btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
 }

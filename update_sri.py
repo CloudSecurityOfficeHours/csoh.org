@@ -26,6 +26,11 @@ from typing import Dict, List, Tuple
 ASSETS: List[Tuple[str, str, str]] = [
     ('style.css', 'link', 'href'),
     ('main.js', 'script', 'src'),
+    # Render-blocking, in <head>, before the stylesheet. Stamps data-theme
+    # so a visitor whose stored theme differs from their OS does not see a
+    # flash of the wrong one. See the file's own header for why it cannot
+    # live inside main.js or in an inline <script>.
+    ('theme.js', 'script', 'src'),
     ('chat-resources.js', 'script', 'src'),
     ('breach-timeline.css', 'link', 'href'),
     ('breach-timeline.js', 'script', 'src'),
