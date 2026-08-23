@@ -543,6 +543,57 @@ you actually ask for it:
 lychee --dump --config .lychee.toml './*.html' | head -1
 ```
 
+## lychee never sees a Markdown link, and a root-only sweep never sees a subdirectory
+
+Two blind spots, found by hand on 2026-08-22, neither of which any gate would
+ever have reported.
+
+**No gate read a Markdown link.** `check-broken-links.yml` passes lychee an
+explicit input list - `./*.html`, the four published subdirectories, and
+`./infra/terraform/*/*.tf`. Markdown is not in it and never was. README.md
+carries 200-plus links, most pointing at files in this repo, and every one of
+them was unchecked; across all 38 tracked docs it is over 400. A renamed
+script or a moved workflow would have left dead links in the one file every
+newcomer reads, indefinitely and silently.
+
+**Coverage sweeps kept getting scoped to the repo root.** `topics.html` shipped
+with the nav restructure and appeared nowhere in README.md. The ad-hoc sweep
+that eventually caught it globbed `*.html`, which does not descend - the same
+single-star assumption that made `'*.html'` in a `paths:` filter skip every
+subdirectory. A page added under `breaches/` or a whole new published
+directory would not have registered at all.
+
+`tools/check_readme_coverage.py` closes both, and runs in `validate-html.yml`
+beside the other doc gates:
+
+```sh
+python3 tools/check_readme_coverage.py --check
+```
+
+It asserts four things: every in-repo Markdown link resolves; every root page
+is named in README.md or listed in `NOT_IN_README` with a reason; every
+published subdirectory is documented; and every published subdirectory is in
+`check-broken-links.yml`'s input globs - so the next `labs/` cannot go
+uncrawled the way this one nearly did. Published subdirectories are
+**derived** by globbing for directories that contain `*.html`, not listed,
+because a hardcoded list is the bug it exists to catch.
+
+Two traps worth keeping in mind if you extend it:
+
+- **Relative links resolve against the linking document, not the repo root.**
+  `tools/*.md` link sideways (`SYNC_CHROME_README.md`) and up (`../CLAUDE.md`).
+  Resolving those from the root reported ~40 existing files as missing. That is
+  the same false-confidence failure pointing the other way: a check that cries
+  wolf gets muted, and a muted check is worth exactly as much as one that never
+  fires.
+- **The self-test is load-bearing, not decoration.** `--check` plants a
+  known-bad link and a known-missing page and refuses to report clean unless
+  every detector fires. This exists because the manual sweep that found the
+  original gap was a shell loop that died on a quoting error and printed
+  "all resolve" anyway. If you add a detector, add its planted case too -
+  otherwise the next silent breakage looks exactly like a healthy repo, which
+  is the failure this whole file keeps recording.
+
 ## The weekly docs review can be confidently, specifically wrong
 
 On 2026-08-17 the review's lead accuracy finding said `ai-ml-security.html`

@@ -90,6 +90,10 @@ on:
       - 'tools/check_crosslink_coverage.py'
       - 'tools/check_glossary_coverage.py'
       - 'tools/check_docs_consistency.py'
+      - 'tools/check_readme_coverage.py'
+      # The coverage check asserts every published subdirectory is in this
+      # crawler's input globs, so a change there changes its verdict.
+      - '.github/workflows/check-broken-links.yml'
       # Imported by check_docs_consistency.py for the canonical counts, so a
       # change to it changes that gate's verdict with nothing else in the diff.
       - 'tools/sync_counts.py'
@@ -307,6 +311,22 @@ jobs:
           set -o pipefail
           python3 tools/check_docs_consistency.py --check 2>&1 | tee check-docs-consistency.log
 
+      # Nothing else checks a Markdown link. lychee's inputs are `*.html` and
+      # the published `*.tf`; README.md's 200-plus in-repo links were crawled
+      # by no gate at all, and a root-only `*.html` sweep cannot see a page
+      # that ships inside breaches/ or meetings/.
+      #
+      # This one runs a self-test before it reports anything: it plants a
+      # known-bad link and a known-missing page and refuses to return clean
+      # unless both detectors fire. A silent pass from a broken checker reads
+      # exactly like a healthy repo, which is the failure CLAUDE.md keeps
+      # recording, so here it is an error in its own right.
+      - name: Check README coverage and Markdown links
+        id: readme-coverage
+        run: |
+          set -o pipefail
+          python3 tools/check_readme_coverage.py --check 2>&1 | tee check-readme-coverage.log
+
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
@@ -381,6 +401,7 @@ jobs:
           OUTCOME_CROSSLINK: ${{ steps.crosslink.outcome }}
           OUTCOME_GLOSSARY: ${{ steps.glossary.outcome }}
           OUTCOME_DOCS_CONSISTENCY: ${{ steps.docs-consistency.outcome }}
+          OUTCOME_README_COVERAGE: ${{ steps.readme-coverage.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
           # Inline JS that runs against GitHub's API. `github`, `context`, etc.
@@ -398,6 +419,7 @@ jobs:
               { name: 'Require crosslink coverage for every root page', outcome: process.env.OUTCOME_CROSSLINK, file: 'check-crosslink-coverage.log' },
               { name: 'Check glossary integrity and reachability', outcome: process.env.OUTCOME_GLOSSARY, file: 'check-glossary-coverage.log' },
               { name: 'Check documentation consistency', outcome: process.env.OUTCOME_DOCS_CONSISTENCY, file: 'check-docs-consistency.log' },
+              { name: 'Check README coverage and Markdown links', outcome: process.env.OUTCOME_README_COVERAGE, file: 'check-readme-coverage.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
             ];
 
