@@ -322,6 +322,111 @@ first fix looked complete, shipped, and revealed a second audit that had been
 waiting behind it the whole time. Re-run the gate after a fix rather than
 reasoning that the fix must have worked.
 
+## A fallback that returns a plausible value hides the failure it reports
+
+`addIconsToCards()` in `main.js` picks a card's glyph by matching its tags and
+title against a keyword list - `newsletter`, `ctf`, `tool`, `certification`,
+`lab`, `kubernetes`, `ai`, `aws`. It was written for the third-party resource
+directory, where every card carries a tag like "Tool" or "CTF" and the match
+almost always lands. When nothing matches it falls back:
+
+```js
+let icon = '🔐'; // default security icon
+let iconClass = '';
+```
+
+On a page of our own prose cards nothing matches. Not most of them: none. So
+every card rendered the same padlock, and because `iconClass` stayed empty they
+shared the default gradient too, identical in colour as well as glyph. **42
+cards across 9 pages** were doing this, including all 11 on `sessions.html` and
+all 7 on `threat-research.html`.
+
+The file already knew. The comment above that function documents exactly this
+for `topics.html`, which sets `data-no-card-icons` on `<main>` because "40
+identical padlocks that encode nothing" cost a row of height each. The opt-out
+was added for the one page someone happened to look at, and the identical
+failure sat unnoticed on eight others.
+
+That shape inverts the one this file records most often. The usual trap is an
+instrument reporting "nothing is there" while broken - the inert Cloudflare
+ruleset, the dropped dotfiles, lychee crawling zero URLs - and a blank report at
+least invites suspicion. **A fallback returns something that looks like an
+answer.** A padlock on a cloud security site is not obviously wrong, so 42 of
+them read as a design choice rather than as 42 consecutive failed lookups.
+
+### The repair is not more keywords
+
+More title matching guesses, and drifts the moment someone rewords a heading.
+A page states its own glyph instead, and that wins outright over the classifier:
+
+```html
+<div class="resource-card" data-icon="📝">
+```
+
+`news.html` is the exception, and it marks where the line falls.
+`update-news.yml` rewrites its cards from the feeds every week, so a hand-placed
+attribute there is dropped at the next refresh. Those cards do carry a stable
+`data-category`, so `report`/`vulnerability`/`breach` map to an icon as a last
+resort *before* the padlock - and *after* the keyword classifier, so an AI story
+still gets its own glyph rather than a generic newspaper. **Anything regenerated
+needs a rule keyed to what the generator emits, never an attribute a human
+typed.**
+
+### Adding an attribute broke a regex pinned to the bare tag
+
+`READING_ITEM_RE` in `tools/sync_counts.py` was written as:
+
+```python
+r'<div class="resource-card">\s*<h3>\s*<a\s+[^>]*?href="([^"]+)"[^>]*>(.*?)</a>'
+```
+
+Three reading-list cards gained a `data-icon`, stopped matching, and dropped out
+of that page's JSON-LD `ItemList`: **29 items down to 26**, no error, just a
+shorter list. `sync_counts.py --check` is a CI gate and caught it, which is the
+only reason this is a subsection rather than its own entry six months from now.
+
+Every other card pattern already wrote `[^>]*` after the class -
+`generate_preview.py` twice, `generate_rss.py`, `update_news.py`, and
+`sync_counts.py`'s own resource-directory rule. Two more rules in that same file
+count `class="resource-card"` as a substring rather than matching the tag, so
+they tolerate attributes for a different reason. `READING_ITEM_RE` was the sole
+outlier.
+
+**A pattern pinned to an exact tag does not fail when the markup gains an
+attribute, it matches fewer things,** which is indistinguishable from there
+being fewer things to match.
+
+### Check it by rendering and counting, with a control
+
+Grep cannot answer this. The icons are injected at runtime and exist in no file,
+so the only honest check loads the page and counts what was actually inserted:
+
+```js
+const c = {};
+document.querySelectorAll('.resource-card-icon')
+  .forEach(e => { const k = e.textContent.trim(); c[k] = (c[k] || 0) + 1; });
+console.log(document.querySelectorAll('.resource-card').length, c);
+```
+
+Three things that cost real time here:
+
+- **Run the control**, same as everywhere else in this file. Plant a card
+  matching nothing and confirm it still gets the padlock; plant one carrying a
+  `data-icon` and confirm that wins. A page with zero padlocks and a page where
+  the function threw before inserting anything look identical from outside.
+- **A stale browser lies convincingly.** A pane holding the previous
+  `main.js?v=` renders the old behaviour perfectly while the origin serves the
+  fix - which is exactly what a failed deploy looks like. Check what you are
+  running before believing the page - `document.querySelector` on the `main.js`
+  tag must report the deployed `?v=`.
+- **Iframes cannot sweep production.** `frame-src` blocks same-origin framing at
+  the edge, so a loop that iframes every page returns errors, not results.
+  localhost sends no CSP (see the inline-`<style>` section above), so run the
+  sweep there and confirm one page against production.
+
+Not every page wants icons. `topics.html` keeps its `data-no-card-icons`
+opt-out, and that is still the right answer for an index of our own pages.
+
 ## Site chrome is generated, not hand-edited
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped
