@@ -12,7 +12,7 @@
 
 ## ⭐ Featured Guides
 
-The vendor-neutral curriculum, written by practitioners. This catalog mirrors the site navigation - **Learn**, **By Cloud**, **Threat Intel**, **Careers**, and **Community** - so the README and the nav stay in step. (The nav itself is canonical in [`tools/sync_chrome.py`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/sync_chrome.py).)
+The vendor-neutral curriculum, written by practitioners. The site nav has five groups - **Learn**, **Resources**, **Threat Intel**, **Careers**, and **Community**. This catalog follows them, with one deliberate difference: **By Cloud** is a column inside Learn in the nav and its own section here, because a repo reader scanning for AWS/Azure/GCP material should not have to open a dropdown to find it. (The nav itself is canonical in [`tools/sync_chrome.py`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/sync_chrome.py).)
 
 ### Learn
 
@@ -450,11 +450,11 @@ Topic-by-topic recaps of every weekly session:
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
 
 ### 🗣️ What Practitioners Think ([`what-practitioners-think.html`](https://csoh.org/what-practitioners-think.html) + digests)
-A hub for the session-digest series: what the room actually said about a topic across many Fridays, synthesized from the recaps rather than written top-down. Current digests cover [AI security](https://csoh.org/what-practitioners-think-about-ai-security.html), [security regulation](https://csoh.org/what-practitioners-think-about-security-regulation.html), [supply-chain security](https://csoh.org/what-practitioners-think-about-supply-chain-security.html), [vulnerability management](https://csoh.org/what-practitioners-think-about-vulnerability-management.html), and [what breaking into cloud security really takes](https://csoh.org/what-breaking-into-cloud-security-really-takes.html).
+A hub for the session-digest series: what the room actually said about a topic across many Fridays, synthesized from the recaps rather than written top-down. Current digests cover [AI security](https://csoh.org/what-practitioners-think-about-ai-security.html), [security regulation](https://csoh.org/what-practitioners-think-about-security-regulation.html), [supply-chain security](https://csoh.org/what-practitioners-think-about-supply-chain-security.html), [vulnerability management](https://csoh.org/what-practitioners-think-about-vulnerability-management.html), [security conferences](https://csoh.org/what-practitioners-think-about-security-conferences.html), and [what breaking into cloud security really takes](https://csoh.org/what-breaking-into-cloud-security-really-takes.html).
 
 ### 🚩 Cloud CTFs ([`ctfs.html`](https://csoh.org/ctfs.html))
 Dedicated directory for hands-on cloud CTF challenges:
-- **52+ challenges** across AWS, Azure, GCP, Kubernetes, and AI security
+- **<!--count:ctfs-->53<!--/count--> challenges** across AWS, Azure, GCP, Kubernetes, and AI security
 - Includes the full Wiz Cloud Security Championship calendar
 - Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING_CTFS.md)
 
@@ -544,7 +544,7 @@ All <!--count:breaches-->45<!--/count--> reconstructions, one row each. Techniqu
 | [Megalodon / GitHub Actions](https://csoh.org/breaches/megalodon-github-actions.html) | 2026 | GitHub Actions | T1552.005, T1078, T1053, T1041 |
 | [Hugging Face / OpenAI Agent](https://csoh.org/breaches/huggingface-openai-agent.html) | 2026 | AI / LLM (Hugging Face) | T1588.007, T1211, T1190, T1593 |
 
-The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined this past year are collected in the **[2025 Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review-2025.html)**.
+The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 H1](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)).
 
 ### How to contribute a kill chain
 
@@ -621,6 +621,7 @@ csoh.org/
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
 ├── vendor-landscape.html       # 300+ cloud-security vendors across 32 categories
 ├── glossary.html               # 317 cloud security terms with live search & cross-links
+├── topics.html                 # Complete A-Z topic index - every page in one flat list
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 │
 │  ── Tool-category comparisons ──
@@ -654,11 +655,15 @@ csoh.org/
 ├── incident-response.html      # IR lifecycle, EC2/EKS/Lambda evidence, memory forensics
 ├── cloud-pentesting.html       # AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound
 ├── threat-research.html        # Curated cloud threat research directory
-├── ctfs.html                   # Dedicated cloud CTF directory (52+ challenges)
+├── ctfs.html                   # Dedicated cloud CTF directory (53 challenges)
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
 ├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 45 chains
+├── cloud-breach-year-in-review.html       # Every-year hub for the reviews below
+├── cloud-breach-year-in-review-2021-2022.html # 2021-2022 review
+├── cloud-breach-year-in-review-2023.html  # 2023 review
+├── cloud-breach-year-in-review-2024.html  # 2024 review
 ├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
 ├── cloud-breach-year-in-review-2026-h1.html  # 2026 first-half review (Jan-Jul 2026)
 ├── kevin-mitnick.html          # Special resource page
@@ -709,6 +714,7 @@ csoh.org/
 ├── what-practitioners-think-about-security-regulation.html
 ├── what-practitioners-think-about-supply-chain-security.html
 ├── what-practitioners-think-about-vulnerability-management.html
+├── what-practitioners-think-about-security-conferences.html
 │
 │  ── Catalogs & feeds ──
 ├── resources.html              # Main resource directory (480+ resources in 6 categories)
@@ -788,7 +794,7 @@ csoh.org/
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
 ├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
-├── .github/workflows/          # 20 CI/CD workflows (see "How Automation Works" below)
+├── .github/workflows/          # 21 CI/CD workflows (see "How Automation Works" below)
 │
 ├── seo-audits/                 # SEO audit reports + SCORECARD.md (excluded from deploy filters)
 ├── preview-mapping.json        # Metadata for resource previews
@@ -897,6 +903,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
+| `pr_security_triage.py` | Deterministic security triage of an untrusted PR diff, behind `security-impact-review.yml` | docstring |
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/RUN_SEO_AUDIT_README.md) |
 | `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_PAGESPEED_README.md) |
 | `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_LIGHTHOUSE_README.md) |
@@ -1008,7 +1015,7 @@ Edit the "Resource Categories" section in `index.html` to:
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-The table below covers the 15 core workflows; `check-mobile-layout`, `deploy-qa`, `promote-qa`, `publish-recaps`, and `weekly-docs-review` are the remaining five (QA pipeline docs: `.github/workflows/QA_PIPELINE_README.md`). Times are UTC.
+The table below covers the 15 core workflows. The remaining six are `check-mobile-layout`, `deploy-qa`, `promote-qa`, `publish-recaps`, `weekly-docs-review`, and `security-impact-review` (QA pipeline docs: [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md)). Times are UTC.
 
 **Content automation (writes to the site)**
 
@@ -1034,6 +1041,7 @@ The table below covers the 15 core workflows; `check-mobile-layout`, `deploy-qa`
 | [`validate-html.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | Yes, with a PR comment - W3C HTML5 validator |
 | [`check-url-safety.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Yes - phishing patterns, suspicious TLDs, shortener domains |
 | [`check-broken-links.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | No - lychee crawl, PR comment only (link rot is everywhere) |
+| [`security-impact-review.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/security-impact-review.yml) | PRs from anyone who is not the repo owner or `csoh-ci` | No - deterministic triage via [`tools/pr_security_triage.py`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/pr_security_triage.py), plus a review layer, posted as a PR comment |
 
 **Periodic audits (report-only, never edit the site)**
 
@@ -1055,7 +1063,7 @@ The table below covers the 15 core workflows; `check-mobile-layout`, `deploy-qa`
   `meetings/`, `portfolio/`, or `homelab/` would never trigger the workflow.
   That failure is silent: nothing errors, the push looks fine, and the change
   waits for the next unrelated commit.
-- `style.css`, `search.css`, `breach-timeline.css`
+- `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`
 - `main.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`
 - `vendor/**`, `chat-screenshots/**`, `img/**`
 - `update_sri.py`

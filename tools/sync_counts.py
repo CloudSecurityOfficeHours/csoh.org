@@ -352,6 +352,7 @@ def display_values(counts: dict) -> dict:
         "resource_categories": str(counts["resource_categories"]),
         **{f"cat_{alias}_floor": f"{floor10(counts['cards_per_category'].get(cid, 0))}+"
            for cid, alias in CATEGORY_ALIASES.items()},
+        "workflows": str(counts["workflows"]),
         "sitemap_urls": str(counts["sitemap_urls"]),
         "news_banners": str(counts["news_banners"]),
         "faq_pages": str(counts["faq_pages"]),
@@ -413,6 +414,9 @@ MD_PROSE_RULES = [
     (r"across the \d+ chains", "across the {breaches} chains"),
     (r"\(\d+ RSS feeds, runs every 3 hours\)",
      "({feeds} RSS feeds, runs every 3 hours)"),
+    (r"# \d+ CI/CD workflows", "# {workflows} CI/CD workflows"),
+    (r"cloud CTF directory \(\d+\+? challenges\)",
+     "cloud CTF directory ({ctfs} challenges)"),
 ]
 
 
@@ -520,6 +524,15 @@ def cards_per_category() -> dict:
     return out
 
 
+def workflow_count() -> int:
+    """GitHub Actions workflow files.
+
+    `.github/workflows/` also holds `*_README.md` docs, so glob the extension
+    rather than the directory.
+    """
+    return len(list((REPO / ".github" / "workflows").glob("*.yml")))
+
+
 def sitemap_urls() -> int:
     """Number of <loc> entries in sitemap.xml."""
     text = (REPO / "sitemap.xml").read_text(encoding="utf-8")
@@ -624,6 +637,7 @@ def canonical_counts() -> dict:
         "og_images": len(list((REPO / "img" / "og").rglob("*.jpg"))),
         "resource_categories": resource_categories(),
         "cards_per_category": cards_per_category(),
+        "workflows": workflow_count(),
         "sitemap_urls": sitemap_urls(),
         "news_banners": news_banners(),
         "faq_pages": pages_matching(r'"@type"\s*:\s*"FAQPage"'),
