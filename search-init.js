@@ -238,7 +238,11 @@
     function renderResults(groups, q) {
         if (!groups.length) {
             resultsList.innerHTML = '';
-            status.textContent = 'No results for "' + escapeHtml(q) + '". Try a related term, an acronym, or its expansion.';
+            // `textContent`, so NOT escapeHtml(q): the assignment already
+            // treats the string as literal text. Escaping first double-escapes,
+            // and a search for `a<b` renders as `a&lt;b` on screen. The escape
+            // is only needed on the innerHTML paths below.
+            status.textContent = 'No results for "' + q + '". Try a related term, an acronym, or its expansion.';
             return;
         }
         status.textContent = groups.length + (groups.length === 1 ? ' page' : ' pages') + ' matched.';

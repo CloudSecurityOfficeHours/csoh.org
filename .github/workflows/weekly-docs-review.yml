@@ -258,13 +258,17 @@ jobs:
       #
       # Safe here for one specific reason, and it is worth stating because
       # `id-token: write` is otherwise the permission that turns a job into a
-      # cloud credential: all three clouds pin their trust to
-      # `repo:<owner>/<repo>:environment:production` (see CLAUDE.md and
-      # infra/terraform/*/). This job declares no `environment:`, so the token
-      # it mints cannot satisfy any of those trust conditions and cannot be
-      # traded for AWS, Azure, or GCP access. Do NOT add `environment:
-      # production` to this job - that pin is the only thing standing between a
-      # web-reading model and the deployer roles.
+      # cloud credential: every cloud pins its trust to an exact `sub` claim
+      # naming a GitHub environment (see CLAUDE.md and infra/terraform/*/).
+      # This job declares no `environment:`, so the token it mints satisfies no
+      # trust condition anywhere and cannot be traded for AWS, Azure, or GCP
+      # access.
+      #
+      # Do NOT add an `environment:` line to this job - ANY value, not just
+      # `production`. GCP's attribute_condition accepts `environment:qa` as
+      # well since the QA pipeline landed, and that subject maps to the
+      # csoh-deployer-qa service account, so `environment: qa` here would hand
+      # a web-reading model a real service account rather than nothing.
       id-token: write
     steps:
       - name: Checkout repository

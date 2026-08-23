@@ -17,6 +17,30 @@
 .aws/
 .ssh/
 
+# --- Terraform working state (must never enter the image) ---
+#
+# `infra/` IS published - the .tf sources are teaching material for
+# terraform.html - so this is a carve-out for the working directories, not for
+# infra/ as a whole. Added 2026-08-23 after finding nothing here covered them.
+#
+# CI never had the problem: actions/checkout produces a clean tree and
+# .gitignore already keeps all of this out of git. The exposure is a LOCAL
+# build - `docker compose up`, which README documents as the way to run the
+# site locally, does `build: .` from the repo root. Anyone who has run
+# `terraform init` in infra/ then has ~2.4 GB of provider binaries and five
+# terraform.tfstate files in the build context, and `COPY . ` puts them in an
+# image layer. State files hold resource attributes in plaintext.
+#
+# nginx 403s these paths at request time (they sit under a dot directory), but
+# that is not the control that matters here - the Dockerfile's own comment
+# makes the point that deleted files still live in lower layers and can be
+# extracted, and these were not even being deleted.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
+
 # --- Repo metadata and CI ---
 .git
 .github

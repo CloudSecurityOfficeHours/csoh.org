@@ -1016,7 +1016,7 @@ Edit the "Resource Categories" section in `index.html` to:
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-The table below covers the 15 core workflows. The remaining six are `check-mobile-layout`, `deploy-qa`, `promote-qa`, `publish-recaps`, `weekly-docs-review`, and `security-impact-review` (QA pipeline docs: [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md)). Times are UTC.
+The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->21<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
 
 **Content automation (writes to the site)**
 
@@ -1117,17 +1117,25 @@ Builds the site once, then publishes it active/active to three cloud origins beh
 generated and static files only the deploy ships:
 - All of `site-update-deploy.yml`'s paths above (`**.html`, CSS, JS, `vendor/**`, images, screenshots)
 - `feed.xml`, `recaps.xml`, `sitemap.xml`, `robots.txt`, `llms.txt`, `humans.txt`, `manifest.json`, `csoh.ics`, `security.txt`, `.well-known/**`
-- `search-synonyms.json`, `meetings-search-index.json`, `preview-mapping.json`, `email-screenshots/**`
+- `meetings-search-index.json`, `preview-mapping.json`, `email-screenshots/**`, and `search-synonyms.json` (a build *input* to the search index rather than a published file, but an edit to it still has to reach production)
+- The five images that live at the repo root rather than under `img/`: `favicon.png`, `banner.png`, `banner.webp`, `apple-touch-icon.png`, `apple-touch-icon-precomposed.png`. `img/**` does not reach them, and until 2026-08-23 nothing else did either, so swapping the favicon or the social card never published
 - `Dockerfile`, `nginx.conf`, `nginx-security-headers.conf`, `infra/**`, `tools/stage_site.sh`, `tools/site-publish.filter`, `tools/build_search_index.py`, `.github/workflows/deploy.yml`
 - Manual trigger via the GitHub Actions tab
 
-**What it does - build once, fan out:**
-- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set - mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact so all origins serve byte-identical content.
+**Deliberately not a trigger:** `search-index.json`. It is published, but the
+build job regenerates it from site content on every run, so a commit is never
+the reason it needs to ship.
+
+**What it does - validate, build once, fan out, then verify:**
+- **validate:** runs the correctness gates before anything is published, so a
+  bad commit fails here rather than on one origin out of three.
+- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set - mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact with `include-hidden-files: true`. **Only AWS and Azure consume that artifact.** GCP builds its container from a fresh checkout instead, so the two object-storage origins and the container origin arrive at their content by different routes and are byte-identical only as long as `tools/site-publish.filter`, `.dockerignore`, and the `Dockerfile` strip list agree. That is not a theoretical concern: it is how `/.well-known/security.txt` once 404'd on two origins out of three while working fine on the third.
 - **publish-aws:** assumes an IAM role via OIDC, `aws s3 sync --delete` to the private bucket, invalidates CloudFront.
 - **publish-azure:** logs in via an Entra federated credential (OIDC), `az storage blob sync` into the `$web` static-website container.
-- **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. Auth is Workload Identity Federation - no stored key.
+- **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. The scan runs **before** the push and the deploy, so a failing image is never published. Auth is Workload Identity Federation - no stored key.
+- **purge-cloudflare:** runs only after all three origins are updated, clears the edge cache, then asserts the live site back against the repo. It re-derives every versioned asset's SRI hash from what the edge actually serves, and runs [`tools/check_edge_headers.py`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/check_edge_headers.py) to compare all eight security headers against `infra/terraform/cloudflare/rules.tf`. Either mismatch fails the deploy. This job exists because the Cloudflare ruleset carries `ignore_changes = [rules]`, so a header edit can pass `terraform apply` cleanly and ship nothing.
 
-Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo. Non-secret resource IDs come from repo Variables (see [infra/README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md)).
+Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo, and each cloud's trust is pinned to an exact `sub` claim naming a GitHub environment, so a job without `environment: production` cannot authenticate at all. Non-secret resource IDs come from repo Variables (see [infra/README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md)).
 
 **Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover. (This replaced the old GCP Global HTTPS load balancer + Cloud Armor + Cloud CDN, which were redundant with Cloudflare and cost ~$100/mo.)
 

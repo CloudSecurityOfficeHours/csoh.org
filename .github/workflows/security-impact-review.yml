@@ -123,6 +123,14 @@ jobs:
       pull-requests: read
       # Required by anthropics/claude-code-action to exchange a GitHub OIDC
       # token for short-lived Claude credentials.
+      #
+      # This is the permission that turns a job into a cloud credential, and
+      # this job reads the most hostile input in the repo. It is safe only
+      # because the job declares no `environment:`: every cloud pins its trust
+      # to an exact `sub` claim naming one, so a token minted here satisfies
+      # none of them. Do NOT add an `environment:` line - ANY value, not just
+      # `production`. GCP accepts `environment:qa` too (see CLAUDE.md), which
+      # maps to the csoh-deployer-qa service account.
       id-token: write
 
     steps:
@@ -182,6 +190,34 @@ jobs:
             --json triage.json \
             --fail-on HIGH
           echo "verdict=$(python3 -c 'import json;print(json.load(open("triage.json"))["verdict"])')" >> "$GITHUB_OUTPUT"
+
+      # Take the triage script OUT of the workspace before the model step runs.
+      #
+      # The model step below holds `Write`, and it runs with the workspace as
+      # its working directory - the same workspace that holds
+      # tools/pr_security_triage.py. The "Assemble report" step then re-runs
+      # that script. Protecting the DATA path (regenerate triage.md rather than
+      # reading back a file the model could have edited) does nothing about the
+      # CODE path: an injection that persuaded the model to rewrite the script
+      # would be executing its own Python in the assemble step.
+      #
+      # Nothing catastrophic follows from that here - this job holds no write
+      # token (`persist-credentials: false`, `contents: read`), its OIDC token
+      # cannot satisfy any cloud trust condition because it declares no
+      # `environment:`, and the verdict the gate reads was captured before the
+      # model ran. But "the blast radius is small" is a worse control than "the
+      # attack does not work", and this costs two lines.
+      - name: Snapshot the triage script outside the workspace
+        run: |
+          set -euo pipefail
+          cp tools/pr_security_triage.py "${RUNNER_TEMP}/pr_security_triage.py"
+          # Store the bare hash, not `sha256sum`'s "<hash>  <path>" line. That
+          # format makes `sha256sum -c` re-resolve the path relative to the
+          # working directory of whoever runs the check, which is a false
+          # "the file changed" warning waiting to happen the first time the two
+          # steps do not share a cwd. A bare hash compares the same anywhere.
+          sha256sum < tools/pr_security_triage.py | cut -d' ' -f1 \
+            > "${RUNNER_TEMP}/triage.sha256"
 
       # Layer 2. Narrative review. Advisory only - it never sets the verdict.
       - name: Narrative security impact review
@@ -254,7 +290,29 @@ jobs:
           # trustworthy source for the half of this comment that is supposed to
           # be immune to it. The script is deterministic and takes no network,
           # so re-running costs nothing.
-          python3 tools/pr_security_triage.py \
+          #
+          # Run the copy taken BEFORE the model step, not the one in the
+          # workspace - see the snapshot step for why. The checksum comparison
+          # is not what makes this safe (the pristine copy is); it is here so
+          # that a workspace edit is reported rather than passed over silently,
+          # which is the failure mode CLAUDE.md keeps recording.
+          #
+          # This step is `if: always()`, so it can be reached on a run that died
+          # before the snapshot was taken (a failed PR fetch, say). Fall back to
+          # the workspace copy in that case - on such a run the model step never
+          # executed either, so there is nothing to have tampered with, and a
+          # missing snapshot must not turn a recoverable run into no report.
+          TRIAGE=tools/pr_security_triage.py
+          if [ -f "${RUNNER_TEMP}/pr_security_triage.py" ]; then
+            TRIAGE="${RUNNER_TEMP}/pr_security_triage.py"
+            now=$(sha256sum < tools/pr_security_triage.py | cut -d' ' -f1)
+            was=$(cat "${RUNNER_TEMP}/triage.sha256")
+            if [ "${now}" != "${was}" ]; then
+              echo "::warning::tools/pr_security_triage.py changed during the" \
+                   "model step. Running the pre-model snapshot instead."
+            fi
+          fi
+          python3 "${TRIAGE}" \
             --diff pr.diff --meta pr.json --markdown triage.md --fail-on HIGH \
             > /dev/null || true
           {

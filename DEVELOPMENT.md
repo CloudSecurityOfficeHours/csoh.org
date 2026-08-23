@@ -230,27 +230,39 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
 | [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every site count (JSON-LD `numberOfItems`, OG-card subtitles) from the real cards and refreshes the count share-cards | N/A - commits directly |
 
-**Deploy**
+| [`publish-recaps.yml`](.github/workflows/publish-recaps.yml) | Sat 15:00 | Pulls the week's Zoom summary and opens a PR adding the meeting recap under `meetings/` | No - human merges |
+
+**Deploy and promotion**
+
+`main` is production and deploys the moment anything lands on it. `qa` is a
+staging copy on a second Cloud Run service. Neither one gates the other -
+promotion is a deliberate button press. See "The deploy pipeline, end to end"
+below for the full walk-through.
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on site files | Builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud. The final `purge-cloudflare` job clears the edge, then asserts the live site against the repo: SRI hashes, and (via `tools/check_edge_headers.py`) the security headers | N/A - direct deploy |
+| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main` on published files | Validates, builds once, fans out to publish active/active to AWS (S3+CloudFront), GCP (Cloud Run, Trivy-scanned container), and Azure (Blob `$web`); keyless OIDC per cloud, `environment: production`. The final `purge-cloudflare` job clears the edge, then asserts the live site against the repo: SRI hashes, and (via `tools/check_edge_headers.py`) the security headers | N/A - direct deploy |
+| [`deploy-qa.yml`](.github/workflows/deploy-qa.yml) | push to `qa` | Same container build, one origin. Deploys to the QA Cloud Run service as `csoh-deployer-qa` under `environment: qa`. **Deliberately has no `paths:` filter** - see the note below | N/A - direct deploy |
+| [`promote-qa.yml`](.github/workflows/promote-qa.yml) | manual only | Fast-forwards `main` to `qa` after checking that `main` is an ancestor of `qa` and that *this exact commit* had a green QA deploy. Landing on `main` is what triggers the production deploy | N/A - manual |
 
 **PR quality gates (block or warn)**
 
 | Workflow | When | What it does | Blocks PR? |
 | --- | --- | --- | --- |
+| [`security-impact-review.yml`](.github/workflows/security-impact-review.yml) | PR opened/updated by anyone other than the owner or `csoh-ci` | Two layers over the PR diff: `tools/pr_security_triage.py` applies fixed rules and sets the verdict, then a Claude Code pass writes an advisory narrative that *cannot* change it. Posts one sticky comment. Uses `pull_request_target` so it runs before the fork-approval gate - read that file's header before touching it | Run goes red; not a required check |
 | [`lint.yml`](.github/workflows/lint.yml) | every push + PR | `actionlint` + `ruff` + `yamllint` in parallel | Yes |
-| [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | W3C HTML5 validator on every `.html` file | Yes, with PR comment |
-| [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Flags phishing patterns, suspicious TLDs, shortener domains | Yes |
-| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | Lychee crawl of every link; PR comment on failures | No - link rot is everywhere |
+| [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `**.html` or `**.md` + Mon 07:00 | Far more than its name suggests. W3C HTML5 validation, plus seven repo gates: inline-script (CSP), SVG dimensions (CLS), JSON-LD, crosslink coverage, glossary integrity, docs consistency, and README/Markdown-link coverage | Yes, with PR comment |
+| [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | every PR + Mon 06:30 | Flags phishing patterns, suspicious TLDs, shortener domains | Yes |
+| [`check-mobile-layout.yml`](.github/workflows/check-mobile-layout.yml) | every PR, push to `main` on html/css/js + Mon 07:20 | Drives Playwright/Chromium at mobile widths and fails on overflow, tap-target, and layout regressions | Yes |
+| [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `**.html`/`**.tf` + Mon 06:00 | Lychee crawl of every link, including the published Terraform comments; PR comment on failures. A broken link never fails the job - a crawl that *did not run* always does | No - link rot is everywhere |
 
 **Periodic audits (report-only, never edits the site)**
 
 | Workflow | When | What it does | Where the report lands |
 | --- | --- | --- | --- |
-| [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Google PageSpeed Insights (mobile + desktop) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
+| [`check-pagespeed.yml`](.github/workflows/check-pagespeed.yml) | Mon 14:00 | Google PageSpeed Insights (mobile + desktop). Scores light mode, home page only | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
 | [`run-seo-audit.yml`](.github/workflows/run-seo-audit.yml) | Mon 14:15 | Structural SEO check across every indexable page (counted at runtime) | Appends row to `seo-audits/SCORECARD.md`; opens issue on regression |
+| [`weekly-docs-review.yml`](.github/workflows/weekly-docs-review.yml) | Mon 15:00 | Reviews a rotating quarter of the site for accuracy, neutrality, and tone. Every accuracy finding must end in a `Source:` line - read that line first, it is the triage signal | Opens a PR with the proposed edits |
 | [`check-reading-list-staleness.yml`](.github/workflows/check-reading-list-staleness.yml) | 1st of month, 07:00 | RSS-feed staleness check on `cloud-security-reading-list.html` | Opens or refreshes a sticky issue labeled `reading-list-staleness` |
 | [`check-meeting-staleness.yml`](.github/workflows/check-meeting-staleness.yml) | Mon 15:00 | Checks the newest meeting recap isn't older than the threshold | Opens or refreshes a sticky issue labeled `meeting-staleness` |
 | [`check-conference-staleness.yml`](.github/workflows/check-conference-staleness.yml) | 1st of month, 14:00 | Flags "Next:" dates on `conferences.html` that have already passed | Opens or refreshes a sticky issue labeled `conference-staleness` |
@@ -261,7 +273,65 @@ A few patterns worth knowing before you touch any of these:
 - **Auto-merge safety valve.** Workflows that auto-merge always check that the diff is restricted to a known set of files. If the bot touches anything outside that set, the PR stays open for a human.
 - **Pinned action SHAs.** All `uses:` references pin to a full commit SHA with the version as a trailing comment (`@de0fac…  # v6.0.2`). Don't replace these with tag refs.
 - **`permissions:` is `contents: read` unless a step really uses the ambient token.** Every write here (push, PR, approve, merge) goes through the App token or `CSOH_PAT`, both passed explicitly to the step that needs them, so the auto-injected `GITHUB_TOKEN` almost never needs a write scope. `normalize-urls.yml` carried `contents: write` + `pull-requests: write` that no step ever used; it is `contents: read` now, matching every other workflow in the repo. The extra scopes on `check-broken-links.yml`, `check-url-safety.yml`, and `validate-html.yml` (`pull-requests: write`) and on the three staleness workflows (`issues: write`) are real - those steps comment on PRs and manage sticky issues with the default token.
-- **`persist-credentials: false` on any checkout handed a write-scoped token.** `actions/checkout` defaults to leaving the token it was given in `.git/config` as an `http.extraheader`, readable by every later step in the job with a plain file read. Set `persist-credentials: false` whenever nothing after the clone talks to git over the network - which is the normal case here, since `peter-evans/create-pull-request` is passed the token directly. It is already set in `update-resources.yml` (the job that runs a model over fetched web pages) and in `deploy.yml`'s `purge-cloudflare` checkout.
+- **`persist-credentials: false` on any checkout handed a write-scoped token.** `actions/checkout` defaults to leaving the token it was given in `.git/config` as an `http.extraheader`, readable by every later step in the job with a plain file read. Set `persist-credentials: false` whenever nothing after the clone talks to git over the network - which is the normal case here, since `peter-evans/create-pull-request` is passed the token directly. It is already set in `update-resources.yml` (the job that runs a model over fetched web pages) and in `deploy.yml`'s `purge-cloudflare` checkout, and in both jobs of `security-impact-review.yml` and `weekly-docs-review.yml`.
+- **`id-token: write` without an `environment:` is the seatbelt, and it is easy to unfasten by accident.** Three workflows hold `id-token: write` purely so `claude-code-action` can exchange an OIDC token for Claude credentials: `update-resources.yml`, `weekly-docs-review.yml`, and `security-impact-review.yml`. None of them declares an `environment:`, and that is the only reason the token they mint cannot be traded for cloud access - every cloud pins its trust to a `sub` claim naming a specific environment. Adding *any* `environment:` value to one of those jobs breaks it open; on GCP, `qa` is now enough to reach a real service account. See CLAUDE.md, "A workflow that needs cloud credentials must declare an `environment:`".
+
+### The deploy pipeline, end to end
+
+**Production.** Push to `main` → `deploy.yml` runs `validate` → `build` → three
+publish jobs in parallel → `purge-cloudflare`. The build happens **once** and is
+handed to AWS and Azure as an artifact; GCP builds its own container from a
+fresh checkout, which is why a file missing from the artifact shows up on two
+origins out of three rather than failing cleanly. Cloudflare load-balances
+across all three, so a partial publish surfaces as a URL that works on roughly
+one request in three. When you change what gets published, verify against
+production and request it enough times to land on every origin.
+
+**QA.** Push to `qa` → `deploy-qa.yml` builds the same container and deploys it
+to a second Cloud Run service behind `qa.csoh.org`. QA is deliberately outside
+the load-balancer pool, and its Cloudflare Access gate is not a secrecy
+boundary - the origin's `*.run.app` hostname is publicly reachable. Work on QA
+in the `../csoh-qa` worktree; do not `git switch qa` in the main checkout.
+
+**Promotion.** Actions → *Promote QA to production* fast-forwards `main` to
+`qa`, which triggers the production deploy. It refuses if `main` has commits
+`qa` does not, and it requires a green QA deploy for that exact commit - which
+is why `deploy-qa.yml` has no `paths:` filter. A filtered-out commit produces no
+QA run and is therefore unpromotable.
+
+**Three things about this pipeline fail silently. All three have bitten.**
+
+1. **A `paths:` filter that does not cover a published file.** GitHub's `*` does
+   not match `/`, so `'*.html'` means root-level pages only - that is why both
+   deploy filters use `'**.html'`. The same trap catches files with no
+   directory at all: until 2026-08-23 the filter had `img/**` but nothing
+   matching `favicon.png`, `banner.png`, `banner.webp`, or the two
+   `apple-touch-icon` files, so replacing the favicon or the social card never
+   published. Nothing errors - the push just looks fine and the change waits
+   for an unrelated commit. Re-derive the published set and diff it against the
+   filter whenever you add a file:
+
+   ```sh
+   ./tools/stage_site.sh /tmp/dist && find /tmp/dist -maxdepth 1
+   ```
+
+   Widening a filter is always the safe direction: a superfluous pattern costs
+   one redundant deploy of identical bytes, a missing one costs a change that
+   never goes live.
+
+2. **The two origin content sets are defined by different mechanisms.** S3 and
+   Azure get exactly what `tools/stage_site.sh` stages through
+   `tools/site-publish.filter` (a deny-list). The GCP container gets `COPY . `
+   minus `.dockerignore`, minus the Dockerfile's `rm`/`find` list, minus
+   nginx's request-time denies. Three files have to agree, and nothing in CI
+   compares them. They *do* agree today - both sides resolve to the same 3231
+   files - but if you touch any of the three, check the other two.
+
+3. **The housekeeping workflow's commits do not deploy.** `site-update-deploy.yml`
+   re-stamps SRI, refreshes the sitemap, and generates previews, and every one
+   of its commits carries a CI-skip marker so it does not loop. Whatever it
+   fixes lands in `main` but does **not** reach production until the next real
+   deploy. Never rely on it to repair a live problem.
 
 ### How Key Features Work
 
