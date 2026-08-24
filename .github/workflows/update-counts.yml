@@ -41,17 +41,38 @@ on:
   # human can launch this manually on demand (no code change required).
   workflow_dispatch:
   # `push` fires when commits land on a branch. `branches:` narrows it to
-  # `main` and `paths:` narrows it further to just the two files below, so BOTH
-  # conditions must hold. We re-run only when the counting script or this
-  # workflow changes, because those files alter HOW the counts are computed - a
-  # fix then takes effect at once instead of waiting for next Monday. Ordinary
-  # content edits do NOT re-trigger (they are not listed in `paths:`).
+  # `main` and `paths:` narrows it further to the files below, so BOTH
+  # conditions must hold. The first two alter HOW the counts are computed, so a
+  # fix to either takes effect at once instead of waiting for next Monday.
+  #
+  # resources.html is here because it is the only count SOURCE that moves on
+  # its own. update-resources.yml opens a weekly catalog PR, and on 2026-08-24
+  # (#1579) it added 18 cards and touched nothing else - so resources rose
+  # 486 -> 503 while every marker still read 480+. The homepage, about, faq,
+  # topics, llms.txt, three docs and four OG share-cards all understated the
+  # figure until someone noticed, because a content edit did not re-trigger
+  # this workflow and the next cron was six days out. Counting the cards is
+  # cheap; being wrong in public for a week is not.
+  #
+  # This makes the workflow re-trigger on its OWN commit, which stages
+  # resources.html via `git add -u`. That terminates rather than looping: the
+  # second run finds the counts already in sync, `git diff --quiet` returns 0,
+  # and it exits without committing. The cost is one no-op run per sync, which
+  # is the right trade for not shipping stale numbers. Do NOT "fix" that by
+  # putting a CI-skip marker on the commit - the comment beside `git push`
+  # explains why it deliberately has none, and adding one would stop the
+  # corrected counts reaching production.
+  #
+  # The other count sources - meetings/, breaches/, glossary.html, ctfs.html -
+  # are still cron-only. They are edited by hand, in commits that a person is
+  # watching, so they have never drifted the way an automated PR did.
   push:
     branches:
       - main
     paths:
       - 'tools/sync_counts.py'
       - '.github/workflows/update-counts.yml'
+      - 'resources.html'
 
 # -----------------------------------------------------------------------------
 # §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
