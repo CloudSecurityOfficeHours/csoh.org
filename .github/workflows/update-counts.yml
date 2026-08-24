@@ -63,9 +63,43 @@ on:
   # explains why it deliberately has none, and adding one would stop the
   # corrected counts reaching production.
   #
-  # The other count sources - meetings/, breaches/, glossary.html, ctfs.html -
-  # are still cron-only. They are edited by hand, in commits that a person is
-  # watching, so they have never drifted the way an automated PR did.
+  # The rest of the list is the other count SOURCES, so a number cannot go
+  # stale in public just because the file behind it changed on a Tuesday. They
+  # map to canonical_counts() one for one:
+  #
+  #   meetings/**            meetings          breaches/**      breaches
+  #   glossary.html          glossary_terms    ctfs.html        ctfs
+  #   conferences.html       conferences       update_news.py   feeds
+  #   vendor-landscape.html  vendors, vendor_categories
+  #   img/news-banners/**    news_banners
+  #
+  # `meetings/**` and not `meetings/*`: GitHub's `*` stops at a `/`, which is
+  # the same trap that made '*.html' in deploy.yml skip every subdirectory.
+  #
+  # Four sources are deliberately NOT here, each for a reason worth keeping:
+  #
+  #   sitemap.xml   rewritten by housekeeping on effectively every deploy, so
+  #                 listing it would fire this job several times a day to
+  #                 recompute one marker.
+  #   img/og/**     this workflow COMMITS regenerated share-cards, so it would
+  #                 re-enter through a second path on every sync. Harmless but
+  #                 pure churn.
+  #   .github/workflows/*.yml   would fire on every CI edit; `workflows` shows
+  #                 up in two docs and nowhere a visitor reads.
+  #   **.html       long_form, faq_pages, author_card_pages and schema_types
+  #                 are computed across the whole corpus, so strictly this is
+  #                 what correctness wants - and it would also mean a counts
+  #                 run on all 8+ pushes a day. Those four are floors in prose
+  #                 rather than headline figures, so the trade is not worth it
+  #                 yet. Revisit if one of them starts appearing on a page.
+  #
+  # Adding these does NOT widen the self-trigger surface. A real counts commit
+  # (c0f71903) touched 15 files and exactly one of them - resources.html - is
+  # in this list; the others it rewrites are count CONSUMERS (index.html,
+  # about.html, faq.html, topics.html, llms.txt, the docs) and consumers are
+  # deliberately absent here. So the loop is the same one commit deep it was
+  # before, and it still ends the same way: sync_counts.py is idempotent, run
+  # two finds nothing to change, `git diff --quiet` exits 0, no commit.
   push:
     branches:
       - main
@@ -73,6 +107,14 @@ on:
       - 'tools/sync_counts.py'
       - '.github/workflows/update-counts.yml'
       - 'resources.html'
+      - 'meetings/**'
+      - 'breaches/**'
+      - 'glossary.html'
+      - 'ctfs.html'
+      - 'conferences.html'
+      - 'vendor-landscape.html'
+      - 'update_news.py'
+      - 'img/news-banners/**'
 
 # -----------------------------------------------------------------------------
 # §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
