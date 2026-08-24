@@ -195,7 +195,7 @@ csoh.org/
 ├── 403.html / 404.html              # Custom error pages (404.js powers "did you mean")
 │
 │  ── Per-breach pages and meeting recaps ──
-├── breaches/                        # 45 per-breach kill chain pages (split from breach-timeline.html)
+├── breaches/                        # 46 per-breach kill chain pages (split from breach-timeline.html)
 ├── meetings/                        # 109 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (not search-indexed)

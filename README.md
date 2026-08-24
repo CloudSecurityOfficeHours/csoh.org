@@ -79,7 +79,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 |---|---|
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from 62 sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->45<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->46<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 🛰️ [Cloud SOC & Threat Monitoring](https://csoh.org/cloud-soc.html) | Log-driven detection, native services, SIEM, detection engineering, IR |
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
@@ -494,7 +494,7 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 
 ### Current incidents covered
 
-All <!--count:breaches-->45<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
+All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
 
 | Incident | Year | Provider | Key Techniques |
 |---|---|---|---|
@@ -543,6 +543,7 @@ All <!--count:breaches-->45<!--/count--> reconstructions, one row each. Techniqu
 | [Vimeo / Anodot (ShinyHunters)](https://csoh.org/breaches/vimeo-anodot-shinyhunters.html) | 2026 | Snowflake / BigQuery | T1199, T1078.004, T1213, T1657 |
 | [Megalodon / GitHub Actions](https://csoh.org/breaches/megalodon-github-actions.html) | 2026 | GitHub Actions | T1552.005, T1078, T1053, T1041 |
 | [Hugging Face / OpenAI Agent](https://csoh.org/breaches/huggingface-openai-agent.html) | 2026 | AI / LLM (Hugging Face) | T1588.007, T1211, T1190, T1593 |
+| [Hugging Face Agent Intrusion (full timeline)](https://csoh.org/breaches/huggingface-agent-intrusion-timeline.html) | 2026 | AI / LLM (Hugging Face) | T1102.002, T1611, T1552.005, T1078.004 |
 
 The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 H1](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)).
 
@@ -659,7 +660,7 @@ csoh.org/
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
-├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 45 chains
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 46 chains
 ├── cloud-breach-year-in-review.html       # Every-year hub for the reviews below
 ├── cloud-breach-year-in-review-2021-2022.html # 2021-2022 review
 ├── cloud-breach-year-in-review-2023.html  # 2023 review
@@ -739,7 +740,7 @@ csoh.org/
 ├── google66d489593949bd4c.html # Google Search Console verification token
 │
 │  ── Subdirectory page sets ──
-├── breaches/                   # 45 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── breaches/                   # 46 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 109 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
@@ -1254,7 +1255,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->268<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->269<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1265,7 +1266,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->252<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->109<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->253<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->109<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
