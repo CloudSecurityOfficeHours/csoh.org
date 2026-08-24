@@ -93,13 +93,42 @@ that fails silently: `ASSETS` in `update_sri.py`, then the `paths:` filter of
 allow-lists of filenames, not patterns, so a commit touching only an
 unregistered asset never deploys - see the path-filter section below.
 
-Checking for this is two commands. Nothing but prose inside comments should
-match the first, and the second is what makes the local render honest:
+Checking for this is two commands. The first must print `clean`, and the second
+is what makes the local render honest:
 
 ```sh
-grep -rln '<style>' --include='*.html' .          # want: no published page
+python3 - <<'PY'
+import re, subprocess, pathlib
+files = subprocess.run(['git','ls-files','*.html'], capture_output=True, text=True).stdout.split()
+hits = [f for f in files if not f.startswith('tools/')
+        and '<style>' in re.sub(r'<!--.*?-->', '', pathlib.Path(f).read_text(errors='ignore'), flags=re.S)]
+print('\n'.join(hits) if hits else 'clean')
+PY
 curl -sI https://csoh.org/ | grep -i '^content-security-policy'
 ```
+
+That first command used to be a bare `grep -rln '<style>' --include='*.html' .`
+with the note "nothing but prose inside comments should match." Three things
+broke that, and all three are worth knowing because they generalise:
+
+- **Two matches are prose inside HTML comments** (`cloud-deployment.html`,
+  `search.html`) describing this very rule. A check whose clean state is "four
+  hits, all fine" is a check nobody will run twice, so strip comments and
+  demand zero.
+- **Two more are real `<style>` blocks that are correct**:
+  `tools/og/template.html` and `tools/og/thumb-template.html`. Playwright
+  renders them locally into JPGs, they are never served, and
+  `site-publish.filter` excludes `/tools/` regardless.
+- **`rglob` and `grep -r` descend into the git worktrees under `.claude/`**,
+  which hold full copies of the site. `git ls-files` is the honest definition
+  of "our HTML" and sidesteps worktrees, `node_modules`, and build output in
+  one move. Check `git worktree list` before believing any recursive sweep.
+
+Run the control, as everywhere else in this file: plant `<style>` into a page,
+confirm it is named, then `git checkout --` the file. Restore with git rather
+than a `cp` backup - a sweep that times out mid-run leaves the planted string
+behind, and the next baseline then reports a "finding" that is your own test.
+That happened while writing this paragraph.
 
 To actually verify a layout, re-fetch the document with that header applied
 (Playwright `route.fulfill` with a `content-security-policy` header) and test
@@ -122,12 +151,28 @@ Two general lessons, both of which cost a wrong "verified" here:
 Inline `style="..."` **attributes** fail the same way under a different
 directive, and in far greater numbers; that has its own section below.
 
-One violation left is not ours and cannot be fixed from this repo: Cloudflare
-injects its own bot-detection script (`__CF$cv$params`,
-`/cdn-cgi/challenge-platform/scripts/jsd/main.js`) into the HTML at the edge,
-and `script-src 'self'` blocks it on every page load, so those JS detections
-have never run. Changing that means the dashboard, per the
-`ignore_changes = [rules]` section below.
+This used to end with one violation that was not ours and could not be fixed
+from this repo: Cloudflare injected its own bot-detection script
+(`__CF$cv$params`, `/cdn-cgi/challenge-platform/scripts/jsd/main.js`) into the
+HTML at the edge, and `script-src 'self'` blocked it on every page load, so
+those JS detections never ran.
+
+**That injection has stopped.** Checked 2026-08-24 across six requests: no
+`__CF$cv$params`, no `challenge-platform`, no `/cdn-cgi/` script of any kind.
+The only scripts served on `/` are our three (`theme.js`, `main.js`,
+`vendor/goatcounter-count.js`). So the page now has no known CSP violations at
+all, and there is nothing here to weigh against tightening the policy.
+
+Nothing in this repo changed to cause that, which is the point: it was a
+Cloudflare-side behaviour, so it can come back the same way it went, without a
+commit and without a warning. Re-check rather than assume, and note the request
+count - a single request can miss an edge that still injects:
+
+```sh
+for i in 1 2 3 4 5 6; do
+  curl -s "https://csoh.org/?cb=$RANDOM" | grep -c 'cdn-cgi/challenge-platform'
+done   # want six zeros
+```
 
 ## `style="..."` attributes are blocked by the same policy
 
@@ -244,7 +289,7 @@ on hover instead, which never satisfied WCAG 1.4.1 (Use of Color) either:
 hover reaches neither a keyboard nor a touch screen, so for those users colour
 genuinely was the only cue.
 
-### `--text-muted` is referenced 13 times and defined zero times
+### `--text-muted` was referenced 13 times and defined zero times (resolved)
 
 Every one of those is really its fallback literal, and there are six different
 literals (`#555`, `#666`, `#5b6573`, `#64748b`, `#94a3b8`, `#475569`). Nobody
@@ -257,9 +302,32 @@ rather than merely low-contrast:
 - `.pull-quote cite`, `.author-card__kicker` and `.signature--final` were
   `#777`, 4.28:1 on `--light-bg`.
 
-**Do not "fix" this by defining `--text-muted` globally.** Some of those
-fallbacks are light-on-dark on purpose, and one definition would invert them.
-Give the specific rule a light value and a dark override instead.
+**This has since been fixed, and the fix is the opposite of what this section
+used to prescribe.** It read "do not fix this by defining `--text-muted`
+globally," on the grounds that some fallbacks were light-on-dark on purpose and
+one definition would invert them. That was true of the *literals* but not of
+the rules: the light-on-dark cases were the ones already failing. As of
+2026-08-24 `--text-muted` is defined once in `:root` as `#5b6573` (6.2:1 on
+`--light-bg`) with a `#94a3b8` dark value in **both** the
+`prefers-color-scheme` mirror and the `[data-theme="dark"]` branch, and the six
+fallback literals are gone. Every affected site landed at or above where it
+was, and the search placeholder rose from 2.7:1 to 6.6:1.
+
+Two things to know before you touch it:
+
+- **The dark values are hand-maintained.** `sync_dark_branch.py` mirrors
+  *rules*, not `:root` custom properties, so a dark token written in only one
+  of the two blocks still passes `--check`. Both copies are yours to keep in
+  step.
+- **`style.css` still carries two stale comments** near `.news-date-count` and
+  `.signature--final` claiming `--text-muted` is "defined nowhere" and that the
+  literals "are not safe to unify under one definition." Both are pre-fix
+  wording that survived the change. Believe the `:root` block, not them.
+
+The lesson worth keeping is the one about the token, not the value: **when you
+find yourself writing a third exception to a token, the token is the bug** -
+and when a note tells you not to do the obvious thing, check whether someone
+already did it and was right.
 
 ### PSI scores light mode, on the home page only
 
@@ -451,7 +519,8 @@ opt-out, and that is still the right answer for an index of our own pages.
 ## Site chrome is generated, not hand-edited
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped
-onto all ~233 pages by `tools/sync_chrome.py`. Edit the `CANON_*` constants
+onto every page by `tools/sync_chrome.py` (273 at the last run; the tool
+prints the number, so do not trust one written here). Edit the `CANON_*` constants
 there and re-run it - never hand-edit the pages, or they drift. The logo drifted
 into four shapes this way, and 126 pages silently lost their logo mark entirely.
 
@@ -632,8 +701,10 @@ URL behaving differently depending on which origin Cloudflare picked. That is
 exactly how `/.well-known/security.txt` came back 200 on about one request in
 three.
 
-They do agree today. Both sides resolve to the same **3231 files**, checked in
-both directions. If you touch any of the four, re-check the other three; the
+They do agree today: both sides resolve to the **same file count**, checked in
+both directions. (It was 3231 when this was written and 3272 on 2026-08-24 - the
+number grows with content, so what matters is that the two sides match, not the
+figure. Re-derive it, never cite it.) If you touch any of the four, re-check the other three; the
 comparison is worth scripting before you need it, and the awkward half is
 remembering that nginx's denies are part of the definition, so "in the image"
 and "served by GCP" are different sets (43 files sit in the image and 403 at
@@ -969,7 +1040,8 @@ Pillow is `generate_webp.py`'s dependency, not its own. After adding a tile,
 run `generate_webp.py img/thumbs` and then `update_sri.py`.
 
 **`img/og/` is deliberately partial on `.webp`**, and a bare run over it is a
-mistake. 90 top-level cards, 4 siblings - `ctfs`, `meetings`, `news`,
+mistake. ~90 top-level cards (91 on 2026-08-24, and rising with each new page),
+but exactly 4 siblings - `ctfs`, `meetings`, `news`,
 `threat-research` - because a sibling is only reachable where the image renders
 through a `<picture>`, and those are the four featured cards on `index.html`.
 Every other OG image is an `og:image` meta target; a meta tag carries one URL,
