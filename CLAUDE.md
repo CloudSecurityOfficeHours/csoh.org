@@ -37,9 +37,49 @@ match the `integrity=` the HTML asks for, so every rule is dropped. Confirm in
 one shot - compare what's served against what the page demands:
 
 ```sh
-curl -s https://csoh.org/ | grep -o 'style\.css?v=[0-9a-f]*'          # what the HTML wants
-curl -s "https://csoh.org/style.css?v=<that>" | openssl dgst -sha384 -binary | openssl base64 -A
-curl -s https://csoh.org/ | grep -o 'integrity="sha384-[^"]*"' | head -1
+python3 - <<'PY'
+import re, urllib.request, hashlib, base64
+h = urllib.request.urlopen("https://csoh.org/").read().decode()
+tag = next(t for t in re.findall(r'<link[^>]*>', h, re.S)
+           if 'style.css' in t and 'stylesheet' in t)
+href = re.search(r'href="([^"]+)"', tag).group(1)
+demanded = re.search(r'integrity="sha384-([^"]+)"', tag).group(1)
+served = base64.b64encode(hashlib.sha384(
+    urllib.request.urlopen("https://csoh.org" + href).read()).digest()).decode()
+print(href, "\ndemanded:", demanded, "\nserved:  ", served,
+      "\n", "MATCH" if served == demanded else "MISMATCH")
+PY
+```
+
+**This used to be three `curl | grep` lines, and the third one was wrong.** It
+ended `grep -o 'integrity="sha384-[^"]*"' | head -1`, but the first `integrity=`
+in the document belongs to `theme.js`, which is preloaded above the stylesheet.
+So it compared `style.css`'s real hash against `theme.js`'s integrity and
+printed **MISMATCH on a perfectly healthy site**. That happened on 2026-08-24
+while verifying a deploy, and for a moment it looked like production had
+shipped broken CSS.
+
+Two reasons the replacement is Python rather than a tidier pipeline: the
+`<link>` tag wraps across lines, so any line-oriented filter separates `href`
+from `integrity` and silently yields an empty string (which compares unequal
+and reads as MISMATCH too); and matching the *tag* first is what guarantees the
+two values come from the same element. **When a check pulls two values that
+must correspond, extract them from one match, never from two independent
+greps.**
+
+If you want a second opinion that needs no hashing at all, ask a browser
+whether the stylesheet actually attached - `document.styleSheets.length` is 0
+and an `Integrity` console error appears when SRI genuinely fails:
+
+```sh
+python3 -c "
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    b=p.chromium.launch(); pg=b.new_page()
+    pg.goto('https://csoh.org/', wait_until='networkidle')
+    print('sheets:', pg.evaluate('document.styleSheets.length'),
+          '| header bg:', pg.evaluate(\"getComputedStyle(document.querySelector('header')).backgroundColor\"))
+    b.close()"
 ```
 
 Two distinct causes, both fixed but worth recognising:
