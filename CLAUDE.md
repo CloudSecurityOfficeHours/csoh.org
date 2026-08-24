@@ -467,7 +467,7 @@ the real cards and files. When you write a count into a page or a doc, wrap it
 in a marker so the script owns it:
 
 ```html
-Access <!--count:resources_floor-->480+<!--/count--> curated resources.
+Access <!--count:resources_floor-->500+<!--/count--> curated resources.
 ```
 
 The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so

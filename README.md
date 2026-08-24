@@ -158,7 +158,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->480+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->500+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -359,9 +359,9 @@ Version-control fundamentals - branching, commits, pull requests, and history hy
 The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources ([`resources.html`](https://csoh.org/resources.html))
-Comprehensive catalog of **<!--count:resources_floor-->480+<!--/count--> cloud security resources** organized by 6 categories:
+Comprehensive catalog of **<!--count:resources_floor-->500+<!--/count--> cloud security resources** organized by 6 categories:
 
-#### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->60+<!--/count--> entries)
+#### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->70+<!--/count--> entries)
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
 - **AWSGoat** - Vulnerable AWS stack from INE (formerly AppSecEngineer)
 - **Kubernetes Goat** - K8s containerized application with intentional vulnerabilities
@@ -386,7 +386,7 @@ Comprehensive catalog of **<!--count:resources_floor-->480+<!--/count--> cloud s
 - **Compliance & Config Management** - Terraform, Ansible, CloudFormation
 - **Vulnerability Management** - Snyk, Qualys, Tenable, etc.
 
-#### 🎓 Certifications & Professional Development (<!--count:cat_certs_floor-->70+<!--/count--> entries)
+#### 🎓 Certifications & Professional Development (<!--count:cat_certs_floor-->80+<!--/count--> entries)
 - **AWS** - Security Specialty, Solutions Architect, Database Specialty
 - **Azure** - Security Engineer Associate, Administrator Associate
 - **Google Cloud** - Professional Cloud Security Engineer
@@ -717,7 +717,7 @@ csoh.org/
 ├── what-practitioners-think-about-security-conferences.html
 │
 │  ── Catalogs & feeds ──
-├── resources.html              # Main resource directory (480+ resources in 6 categories)
+├── resources.html              # Main resource directory (500+ resources in 6 categories)
 ├── news.html                   # Cloud security news (120+ articles)
 ├── rss.html                    # Landing page explaining the RSS feeds to subscribers
 │
