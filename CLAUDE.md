@@ -922,17 +922,47 @@ own ratio, and cover is a no-op for both. The four featured "start here"
 cards still use OG cards deliberately; at 311px they are legible and the
 extra weight suits them.
 
-Both generators need Playwright, and as of 2026-08-17 **no interpreter on this
-machine has it** - not `/usr/bin/python3` (3.9.6, and too old for the
-`Pillow==12.2.0` the workflow pins: 11.3.0 is the newest it can install), and
-not the Homebrew 3.14.7 that `python3` actually resolves to. This note
-previously said Playwright lived under `/usr/bin/python3`; it does not, and
-following that costs a detour. Build a throwaway venv instead:
+Both generators need Playwright, and **it is installed and ready - do not build
+a venv.** Verified 2026-08-24: `python3` resolves to the pyenv 3.10.0 shim,
+which imports `playwright` and `PIL` (Pillow 12.3.0), and Chromium is already
+downloaded under `~/Library/Caches/ms-playwright/`. `playwright` (pyenv shim)
+and `playwright-cli` (`/opt/homebrew/bin`) are both on `PATH` at 1.62.0. So
+`python3 tools/generate_og_images.py --pages <page>` just works.
+
+This paragraph has now been wrong in **both** directions, which is the reason
+to distrust it rather than the reason to trust this version. It once claimed
+Playwright lived under `/usr/bin/python3`; it did not. It was then rewritten on
+2026-08-17 to say no interpreter had it and to prescribe a throwaway
+`/tmp/ogvenv`; that is also no longer true, and following it costs a pointless
+venv build and a ~130 MB Chromium download. **Check before you believe any of
+it** - one command, and it either prints a path or raises:
 
 ```sh
-python3 -m venv /tmp/ogvenv && /tmp/ogvenv/bin/pip install playwright Pillow
-/tmp/ogvenv/bin/playwright install chromium
+python3 -c "import playwright, PIL; print(playwright.__file__, PIL.__version__)"
 ```
+
+The general form, and it is the same lesson this file records about DNS and
+about the weekly docs review: **a note about the state of a machine is a
+measurement with a timestamp, not a fact.** Environment notes rot silently
+because nothing tests them, so the cheap probe beats re-reading the prose.
+
+Playwright is worth reaching for well beyond the image generators, and it is
+the right tool for the two checks this file keeps asking for and that no local
+render can do honestly:
+
+- **Verifying a layout under production's CSP.** localhost sends no CSP, so
+  `route.fulfill` with a `content-security-policy` header is what makes a local
+  render honest - see the inline-`<style>` section above.
+- **Testing with scripts disabled.** `browser.new_context(java_script_enabled=False)`
+  is how you catch the `<noscript>` class of failure that hid 79 nav links.
+
+Run both against an unchanged, already-shipped page as a **control** in the
+same script. On 2026-08-24 the in-app browser pane reported horizontal overflow
+on a new breach page; the control page reported the identical overflow, which
+located the fault in the instrument (the pane measured `clientWidth` as 0)
+rather than in the page. Playwright measured both correctly at 1280px with zero
+CSP violations. A measurement you cannot reproduce on a known-good page is not
+a finding.
 
 `generate_og_images.py` imports Playwright lazily and needs nothing else;
 Pillow is `generate_webp.py`'s dependency, not its own. After adding a tile,
