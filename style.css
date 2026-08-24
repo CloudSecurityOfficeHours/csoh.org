@@ -6052,23 +6052,34 @@ main > .incident-pager .pager-index { font-weight: 600; }
 
 /* Memorial-hero: full-width photo background with overlaid name + dates.
    Used on kevin-mitnick.html. */
-/* The hero photo is 4:3 (kev-09, 960x720) and this band is far wider than it
-   is tall, so `cover` can only ever show a slice of the picture's height. At
-   the old fixed 480px that slice was 45% of the photo at 1440px wide, and
-   `object-position: center 30%` spent it on the wrong 45%: the visible band
-   started 16.5% down, which is below the top of both men's heads. Kevin's head
-   was cut just above his glasses, on his own memorial page.
+/* This band is much wider than it is tall, so a 4:3 source could only ever
+   show a slice of its height - 45% at 1440px wide - and `object-position:
+   center 30%` spent that slice on the wrong 45%, starting 16.5% down, below
+   the top of both men's heads. Kevin's head was cut just above his glasses,
+   on his own memorial page.
 
-   Height now scales with width so the slice stays roughly constant instead of
-   shrinking as the viewport grows - 42vw between a 480px floor and a 680px
-   cap, which holds the faces (about 5%-47% of the source height) fully in
-   frame from 375px through 1920px. Beyond ~2000px the band gets wide enough
-   that a 4:3 source cannot fill it without clipping again; that is the
-   picture's aspect ratio, not a value to tune, and it would need a wider crop
-   of the original to fix properly.
+   The source is now kev-09-hero, a 960x430 (2.23:1) crop of kev-09 taken from
+   the top of the frame down to just under their shoulders. Cropping costs no
+   sharpness: `cover` scales by width here, so the horizontal 960 -> viewport
+   upscale is identical either way, and the rows removed were ones the browser
+   was throwing away regardless. What it buys is that the visible slice is now
+   the part of the photograph worth seeing, which lets object-position go back
+   to plain `center`.
 
-   If you change either number, check both ends: too low and the heads clip,
-   too high and the centred title lands across their faces. */
+   Height still scales with width, 42vw between a 480px floor and a 680px cap,
+   so the slice stays roughly constant instead of shrinking as the viewport
+   grows. The faces sit at 9%-84% of the crop and stay fully in frame from
+   375px through 1920px.
+
+   Past ~2000px it still clips, and no crop fixes that: the faces span 44% of
+   the original's height, so holding them whole needs a container no wider
+   than about 3:1, while 2560x680 is 3.76:1. The lever there is hero height,
+   not the picture - and the height it would take (~1080px at 2560) is worse
+   than the clipping. Cropping took 2560px from showing 35% of the useful
+   region to about 63%; the rest is arithmetic.
+
+   If you change the clamp, check both ends: too short and the heads clip, too
+   tall and the centred title lands across their faces. */
 .memorial-hero {
     position: relative;
     width: 100%;
@@ -6089,9 +6100,13 @@ main > .incident-pager .pager-index { font-weight: 600; }
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* Not 30%: see the geometry note on .memorial-hero above. 8% keeps the top
-       of both heads inside the frame at every width the clamp covers. */
-    object-position: center 8%;
+    /* 33% and not `center`: the faces sit at 9%-84% of kev-09-hero, so they
+       are slightly high in the crop and splitting the overflow evenly clips
+       the tops of their heads once the band gets wide (it does at 1920).
+       Solving `band_top <= 9%` and `band_bot >= 84%` across every width the
+       clamp produces leaves a feasible window of 22%-44%; 33% is the middle
+       of it. Past ~2000px the window closes entirely - see .memorial-hero. */
+    object-position: center 33%;
     display: block;
 }
 .memorial-hero::after {
