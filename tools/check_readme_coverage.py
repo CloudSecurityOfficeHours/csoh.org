@@ -188,8 +188,29 @@ def unmentioned_root_pages(text: str, optouts: dict | None = None) -> list[str]:
 # one is displayed to the reader instead of disappearing. Four were doing that
 # in README.md and one in DEVELOPMENT.md. These two lines are the exception:
 # they are documentation *showing* the syntax, and are supposed to be visible.
+#
+# Matched by SHAPE, not by the number the marker currently holds. This set used
+# to store the literal `...resources_floor-->480+<!--/count-->...`, and
+# sync_counts.py rewrites markers wherever it finds them - fences included. So
+# the first time the floor moved to 500+ the two examples stopped matching the
+# exemption, and Validate HTML failed on the very commit the counts workflow
+# had just pushed. Nothing was wrong with either file; the exemption had simply
+# been pinned to a value that is designed to change.
+#
+# Same trap as READING_ITEM_RE in sync_counts.py, which was pinned to a bare
+# `<div class="resource-card">` and silently stopped matching once cards gained
+# an attribute. When you exempt something, key the exemption on the part that
+# is stable.
+MARKER_VALUE_RE = re.compile(r"(<!--count:[A-Za-z0-9_]+-->).*?(<!--/count-->)")
+
+
+def marker_shape(line: str) -> str:
+    """A marker line with its rendered value removed, for stable comparison."""
+    return MARKER_VALUE_RE.sub(r"\1\2", line.strip())
+
+
 MARKER_EXAMPLES = {
-    "Access <!--count:resources_floor-->480+<!--/count--> curated resources.",
+    marker_shape("Access <!--count:resources_floor-->480+<!--/count--> curated resources."),
 }
 
 
@@ -200,7 +221,7 @@ def visible_markers(text: str) -> list[str]:
         if line.lstrip().startswith("```"):
             fence = not fence
             continue
-        if fence and "<!--count:" in line and line.strip() not in MARKER_EXAMPLES:
+        if fence and "<!--count:" in line and marker_shape(line) not in MARKER_EXAMPLES:
             out.append(line.strip()[:90])
     return out
 
@@ -282,9 +303,22 @@ def self_test() -> list[str]:
         bad.append("visible-marker check missed a marker inside a code fence")
     if visible_markers("A <!--count:meetings-->9<!--/count--> outside any fence"):
         bad.append("visible-marker check flagged a marker in ordinary prose")
-    example = "```\n" + next(iter(MARKER_EXAMPLES)) + "\n```"
-    if visible_markers(example):
-        bad.append("visible-marker check flagged a documented syntax example")
+    # The documented syntax examples must stay exempt whatever number they
+    # currently carry - sync_counts.py rewrites markers inside fences too, so
+    # the value in these lines moves on its own. Plant two different values;
+    # both have to pass, or the exemption is pinned to a moving target again
+    # and Validate HTML breaks on the next counts commit.
+    for value in ("480+", "500+"):
+        example = (
+            "```\nAccess <!--count:resources_floor-->"
+            + value
+            + "<!--/count--> curated resources.\n```"
+        )
+        if visible_markers(example):
+            bad.append(f"visible-marker check flagged a documented syntax example ({value})")
+    # ...but the exemption must not become a blanket pass for any fenced marker.
+    if not visible_markers("```\nAccess <!--count:meetings-->9<!--/count--> curated resources.\n```"):
+        bad.append("visible-marker exemption is too broad - it matched a different marker")
 
     return bad
 
