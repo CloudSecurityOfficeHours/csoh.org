@@ -394,6 +394,7 @@ function filterBySource(slug) {
         getToggleTarget(card).style.display = card.dataset.source === slug ? '' : 'none';
     });
     if (typeof updateVisibleCount === 'function') updateVisibleCount();
+    syncCategorySections(false);
 }
 
 let previewMap = {};
@@ -421,6 +422,7 @@ function filterByTagText(tagText) {
         getToggleTarget(card).style.display = tags.includes(search) ? '' : 'none';
     });
     updateVisibleCount();
+    syncCategorySections(false);
 }
 
 // --- Collapsible category sections (resources.html) -------------------------
@@ -434,6 +436,14 @@ function filterByTagText(tagText) {
 // and closes when it does not. With no filter, everything closes. Otherwise a
 // search would report matches the visitor cannot see, which is worse than no
 // search at all.
+//
+// Every function that changes which cards are displayed calls syncCategorySections
+// itself, rather than leaving it to the click handler that invoked it. That is
+// deliberate: the category buttons used to be the only path that remembered, so
+// the ~20 tag buttons filtered 517 cards down to 105 and left all 105 inside
+// collapsed sections - the counter read "105" above six shut accordions and a
+// page that looked empty. A call site can forget; a primitive cannot. Repeat
+// calls are free, since this only assigns `open`.
 
 // Card counts come from the DOM rather than the markup so they cannot drift
 // away from the cards the way a hand-typed number would.
@@ -507,6 +517,7 @@ function filterBySection(category) {
         getToggleTarget(card).style.display = inSection ? '' : 'none';
     });
     updateVisibleCount();
+    syncCategorySections(false);
 }
 
 // news.html's article cards are rewritten from the RSS feeds every week by
