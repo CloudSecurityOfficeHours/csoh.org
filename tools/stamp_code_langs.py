@@ -87,6 +87,16 @@ OVERRIDES: dict[str, str] = {
     # its enclosing resource block. Broadening the HCL rule to catch it would
     # also swallow Python assignments, so it is named here instead.
     '85a87e511db4': 'hcl',
+    # A security-group rule listing on the interview page. `Ingress:` at the
+    # start of a line is a YAML mapping key to the heuristic, but this is a
+    # description of a rule set, not a file anyone loads.
+    '0904c9ff4b8d': 'text',
+    # update_news.py's FEEDS list, quoted on contribute.html so a contributor
+    # can see where to add a row. `FEEDS = [` has spaces around the `=`, which
+    # the bash NAME=value rule deliberately excludes and the HCL rule needs a
+    # `resource "..."` header for, so it reaches the end and lands on text.
+    '032aef2d6a34': 'python',
+    '5b5f9d81d992': 'python',
 }
 
 

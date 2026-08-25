@@ -165,6 +165,11 @@ AUTH_WALL_HOSTS = {
 AUTH_WALL_PATH_MARKERS = (
     '/login', '/signin', '/sign_in', '/sso/', '/oauth/authorize',
     '/authenticate', '/session/new', '/users/sign_in', '/accounts/login',
+    # GoatCounter sends an unauthenticated GET of the instance root to its
+    # signup form with a 303. That rewrote our own analytics endpoint on
+    # how-csoh-org-is-secured.html into `.../user/new/count`, which recorded
+    # nothing, and put the same URL into the CSP that page documents.
+    '/user/new',
     '/_layouts/15/authenticate.aspx',
 )
 
