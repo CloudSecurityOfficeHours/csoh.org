@@ -529,15 +529,44 @@
 <p>Whiteboard rounds often hand you something on a screen and ask 'what is wrong here.' Practice narrating out loud. Here are three you can drill against.</p>
 
 <h3>Artifact 1: an over-permissioned IAM policy</h3>
-<div class="code-block">{<br>&nbsp;&nbsp;&quot;Version&quot;: &quot;2012-10-17&quot;,<br>&nbsp;&nbsp;&quot;Statement&quot;: [<br>&nbsp;&nbsp;&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Sid&quot;: &quot;AppRole&quot;,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Effect&quot;: &quot;Allow&quot;,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Action&quot;: [<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;s3:*&quot;,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;iam:PassRole&quot;,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;iam:PutUserPolicy&quot;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Resource&quot;: &quot;*&quot;<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;]<br>}</div>
+<div class="code-block" data-lang="json"><pre>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AppRole",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*",
+        "iam:PassRole",
+        "iam:PutUserPolicy"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</pre></div>
 <p><strong>What a candidate should notice:</strong> this is labeled like a scoped application role but it is a privilege-escalation path. <code>iam:PutUserPolicy</code> on <code>Resource: *</code> lets this principal attach any policy to any user, including itself - that alone is a route to admin. <code>iam:PassRole</code> on <code>*</code> lets it hand any role to a service it can invoke, another escalation lever. And <code>s3:*</code> on <code>*</code> is every S3 action on every bucket, not the one bucket the app needs. The right instinct is not 'it has too many actions' but 'these specific permissions let it grant itself more,' followed by scoping each action to the exact resources from observed usage and removing the IAM-write permissions entirely unless the app genuinely provisions identities.</p>
 
 <h3>Artifact 2: a suspicious CloudTrail event</h3>
-<div class="code-block">{<br>&nbsp;&nbsp;&quot;eventTime&quot;: &quot;2026-07-05T03:14:22Z&quot;,<br>&nbsp;&nbsp;&quot;eventName&quot;: &quot;CreateAccessKey&quot;,<br>&nbsp;&nbsp;&quot;eventSource&quot;: &quot;iam.amazonaws.com&quot;,<br>&nbsp;&nbsp;&quot;sourceIPAddress&quot;: &quot;203.0.113.47&quot;,<br>&nbsp;&nbsp;&quot;userAgent&quot;: &quot;aws-cli/2.15.0 Python/3.11&quot;,<br>&nbsp;&nbsp;&quot;userIdentity&quot;: {<br>&nbsp;&nbsp;&nbsp;&nbsp;&quot;type&quot;: &quot;IAMUser&quot;,<br>&nbsp;&nbsp;&nbsp;&nbsp;&quot;userName&quot;: &quot;ci-deploy&quot;,<br>&nbsp;&nbsp;&nbsp;&nbsp;&quot;accessKeyId&quot;: &quot;AKIAEXAMPLE1&quot;<br>&nbsp;&nbsp;},<br>&nbsp;&nbsp;&quot;requestParameters&quot;: { &quot;userName&quot;: &quot;svc-backup&quot; },<br>&nbsp;&nbsp;&quot;responseElements&quot;: { &quot;accessKey&quot;: { &quot;status&quot;: &quot;Active&quot; } }<br>}</div>
+<div class="code-block" data-lang="json"><pre>{
+  "eventTime": "2026-07-05T03:14:22Z",
+  "eventName": "CreateAccessKey",
+  "eventSource": "iam.amazonaws.com",
+  "sourceIPAddress": "203.0.113.47",
+  "userAgent": "aws-cli/2.15.0 Python/3.11",
+  "userIdentity": {
+    "type": "IAMUser",
+    "userName": "ci-deploy",
+    "accessKeyId": "AKIAEXAMPLE1"
+  },
+  "requestParameters": { "userName": "svc-backup" },
+  "responseElements": { "accessKey": { "status": "Active" } }
+}</pre></div>
 <p><strong>What a candidate should notice:</strong> a service user named <code>ci-deploy</code> is creating a <em>new</em> access key for a <em>different</em> user, <code>svc-backup</code>, at 3am from an external IP. Several flags stack up: creating access keys for another identity is a classic persistence move; it is off-hours; the source IP is outside your normal CI ranges; and a CI deploy user should probably not have <code>iam:CreateAccessKey</code> at all. The right read is 'this looks like an attacker who compromised the CI user establishing durable access via a second identity.' Next steps: pivot on <code>svc-backup</code> and <code>ci-deploy</code> across the log, deactivate the newly created key, review what both did around this time, and question why <code>ci-deploy</code> had IAM-write permissions. Naming persistence-via-second-identity is the strong signal here.</p>
 
 <h3>Artifact 3: a security group rule</h3>
-<div class="code-block">Ingress: allow tcp 22 from 0.0.0.0/0<br>Ingress: allow tcp 3306 from 0.0.0.0/0<br>Egress:&nbsp; allow all to 0.0.0.0/0</div>
+<div class="code-block" data-lang="text"><pre>Ingress: allow tcp 22 from 0.0.0.0/0
+Ingress: allow tcp 3306 from 0.0.0.0/0
+Egress:  allow all to 0.0.0.0/0</pre></div>
 <p><strong>What a candidate should notice:</strong> SSH (22) and a database port (3306) are open to the entire internet, and egress is unrestricted. The database being publicly reachable is the worst of it - that is the Snowflake-style pattern where a reachable data store plus valid or brute-forced credentials equals a breach. SSH from anywhere invites credential-stuffing and exposes any host vuln. Unrestricted egress means a compromised host can freely exfiltrate and call home. A good answer scopes 22 to a bastion or an identity-aware access path, makes 3306 reachable only from the app tier's <a class="glossary-link" href="glossary.html#term-security-group">security group</a>, and constrains egress to what the workload actually needs. Reference <a href="breaches/snowflake-unc5537.html">the Snowflake incident</a> for why the exposed-datastore pattern matters.</p>
 </section>
 
