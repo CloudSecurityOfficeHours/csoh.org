@@ -15,12 +15,19 @@ from pathlib import Path
 from check_url_safety import URLSafetyChecker, resolve_urls_concurrent
 
 
-# Regions whose text is sample content rather than links: code blocks, script
-# and style bodies, and HTML comments. Blanked out before the prose URL sweep
-# in extract_urls_from_html (attribute extraction is unaffected).
-STRIP_NON_PROSE_RE = re.compile(
-    r'(?is)<pre\b.*?</pre>|<code\b.*?</code>|<script\b.*?</script>'
-    r'|<style\b.*?</style>|<!--.*?-->')
+# Regions whose text is sample content rather than links: code blocks and
+# HTML comments. Blanked out before the prose URL sweep in
+# extract_urls_from_html (attribute extraction is unaffected).
+#
+# <script> and <style> are deliberately NOT stripped, though an earlier
+# version of this did strip them. Inline scripts are banned site-wide by
+# check_no_inline_scripts.py, so the only <script> bodies here are JSON-LD -
+# and JSON-LD `sameAs` carries ~66 real external URLs (Wikipedia entity
+# pages, cloud-vendor pages, the analytics endpoint) that exist nowhere else
+# in the document. Stripping <script> silently dropped every one of them from
+# safety checking: not clickable by a reader, but consumed by crawlers and
+# part of our entity graph, so still worth checking.
+STRIP_NON_PROSE_RE = re.compile(r'(?is)<pre\b.*?</pre>|<code\b.*?</code>|<!--.*?-->')
 
 # URLs that appear ONLY inside those regions. They are sample text rather than
 # links a reader can click, so they are not safety-checked - but the count is
@@ -58,10 +65,10 @@ def extract_urls_from_html(file_path):
 
             # Find any other http/https URLs that might be in content.
             #
-            # This sweep exists to catch URLs sitting in prose rather than in
-            # an attribute. It must NOT look inside <pre>, <code>, <script>,
-            # <style>, or HTML comments: those hold sample text, not links the
-            # site offers a reader. The comment here used to claim it skipped
+            # This sweep exists to catch URLs sitting in prose rather than
+            # in an attribute. It must NOT look inside <pre>, <code>, or HTML
+            # comments: those hold sample text, not links the site offers a
+            # reader. The comment here used to claim it skipped comments and
             # script blocks and the code never did, which is how a regular
             # expression in a code block reached the safety gate.
             #
@@ -139,8 +146,7 @@ def main():
     print(f"Found {total_urls} URLs ({len(all_unique_urls)} unique) across {len(html_files)} files")
     if SKIPPED_IN_CODE:
         print(f"Not swept: {len(SKIPPED_IN_CODE)} URL-shaped strings found only "
-              "inside <pre>/<code>/<script>/<style>/comments "
-              "(sample text, not clickable links)")
+              "inside <pre>/<code>/comments (sample text, not clickable links)")
     print()
 
     # --- Phase 2: Resolve unique URLs concurrently ---
