@@ -1266,6 +1266,41 @@ Azure Blob static websites cannot emit custom response headers at all, so that
 origin still depends entirely on the edge. That gap is known and cannot be
 closed from this repo.
 
+## A cleanup rule whose condition can never be met is not a cleanup rule
+
+`artifact_registry.tf` has carried a `DELETE` policy for `tag_state = "UNTAGGED"`
+images older than 7 days since the repo was created. It was applied, live, and
+not in dry-run. On 2026-08-25 the repository held **1,071 tagged images and 4
+untagged**, 219 GB, growing ~2.4 GB/day since May, and the policy had reclaimed
+essentially nothing.
+
+Nothing was misconfigured. The two settings are individually correct and
+mutually exclusive: `immutable_tags = true` forces CI to push a **new unique
+tag** every deploy, so an image is tagged at birth and stays tagged forever.
+There is no path by which one becomes `UNTAGGED`. The rule that would have
+caught the growth was written against a state this repository can never enter.
+
+The fix is a second `DELETE` policy on `tag_state = "TAGGED"` with an age
+condition, with the `KEEP` most-recent rule as the floor. Sizing it needs the
+real push rate, not a guess - `~11 images/day` here, so 30 days settles at
+~350 images / ~70 GB instead of growing without bound:
+
+```sh
+gcloud artifacts docker images list \
+  us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers \
+  --include-tags --format='value(createTime)' | cut -c1-10 | sort | uniq -c | tail
+```
+
+Two things generalise:
+
+- **A rule that never fires and a rule that fires and finds nothing look
+  identical from outside.** Both report success forever. The tell is not in the
+  policy, it is in the inventory: count what the condition is supposed to match
+  (`tags:` empty vs non-empty) and see whether the number is plausible.
+- **Retention interacts with promotion.** `promote-qa.yml` redeploys the image
+  QA built, *by tag*, so the window has to exceed the longest gap between a QA
+  build and its promotion. A retention policy is not purely a storage decision.
+
 ## A health check is one request multiplied by every Cloudflare data center
 
 The load balancer monitor in `infra/terraform/cloudflare/load_balancer.tf` runs

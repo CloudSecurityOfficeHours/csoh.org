@@ -56,8 +56,25 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # An origin is considered healthy only if it answers with HTTP 200 (OK).
   # Anything else (errors, redirects, timeouts) counts as a failed probe.
   expected_codes = "200"
-  # How often to run the probe, in seconds - here, once per minute per origin.
-  interval = 60
+  # How often to run the probe, in seconds, PER PROBE SOURCE. This is the single
+  # biggest cost lever in the whole deployment, and it is not obvious why.
+  #
+  # The probe does not run once per interval - it runs once per interval from
+  # every Cloudflare data center inside check_regions (see the pool below).
+  # Measured from the billing data at interval=60: ~1.02M probes per origin per
+  # day, i.e. ~711 distinct probe sources. On request-billed origins that is the
+  # dominant workload. GCP Cloud Run charged 25.6M requests and 1.18M
+  # CPU-seconds over 25 days - $47.64/month - while minimum-instance CPU came to
+  # three cents, meaning the service genuinely scales to zero and simply never
+  # gets the chance. Azure bills the same probes as read operations.
+  #
+  # 300 rather than 60 cuts that fan-out fivefold. The cost is detection
+  # latency: an origin is marked down after `retries` consecutive failures, so
+  # worst-case detection goes from interval*(1+retries) = 180s to 900s. With
+  # three origins behind the load balancer that is the window in which a share
+  # of requests can hit a dead origin, which is the trade being made here
+  # deliberately - see the cost section of cloud-deployment.html.
+  interval = 300
   # How many seconds to wait for a response before giving up on a single probe.
   timeout = 5
   # If a probe fails, retry this many times before declaring the origin down.

@@ -58,13 +58,17 @@ resource "google_artifact_registry_repository" "containers" {
   # rollback even if the DELETE policy below would otherwise sweep them.
   cleanup_policies {
     # A unique label for this policy (free text). Just names the rule.
-    id = "keep-recent-30"
+    id = "keep-recent-50"
     # KEEP = protect matching images from deletion (an allow/retain rule).
     action = "KEEP"
     # Match the N newest versions in the repo and keep them.
     most_recent_versions {
-      # Retain the 30 most recently pushed image versions.
-      keep_count = 30
+      # Retain the 50 most recently pushed image versions. This is a floor that
+      # does not depend on dates: it guarantees a rollback target exists even
+      # after a quiet stretch where every image has aged past the DELETE rule
+      # below. At the measured push rate (~11/day) it is about four and a half
+      # days on its own, which is why the age-based rule does the real work.
+      keep_count = 50
     }
   }
 
@@ -86,6 +90,32 @@ resource "google_artifact_registry_repository" "containers" {
       # original author's own note spelling that out). So untagged leftovers
       # get a one-week grace period before being purged.
       older_than = "604800s" # 7d
+    }
+  }
+
+  # Policy 3: DELETE old TAGGED images -- the rule that actually reclaims space.
+  #
+  # Policy 2 above looks like it does this job and cannot. Every deploy pushes a
+  # NEW unique tag (immutable_tags = true forces that), so an image is tagged at
+  # birth and stays tagged forever; nothing ever transitions to UNTAGGED for the
+  # rule to catch. Measured on 2026-08-25: 1,071 tagged images against 4
+  # untagged, 219 GB, growing ~2.4 GB/day since May with nothing ever deleted.
+  # The policy was live and correctly configured and had removed essentially
+  # nothing -- a rule whose condition can never be met reports no error, it just
+  # never fires.
+  #
+  # 30 days at ~11 pushes/day settles at roughly 330 images (~67 GB) instead of
+  # growing without bound, and leaves a rollback window far longer than any
+  # realistic need; the KEEP rule above protects the newest 50 regardless. Note
+  # the interaction with promotion: promote-qa reuses the image QA built, by
+  # tag, so the retention window must comfortably exceed the longest gap between
+  # a QA build and its promotion.
+  cleanup_policies {
+    id     = "delete-old-tagged"
+    action = "DELETE"
+    condition {
+      tag_state  = "TAGGED"
+      older_than = "2592000s" # 30d
     }
   }
 
