@@ -15,6 +15,20 @@ from pathlib import Path
 from check_url_safety import URLSafetyChecker, resolve_urls_concurrent
 
 
+# Regions whose text is sample content rather than links: code blocks, script
+# and style bodies, and HTML comments. Blanked out before the prose URL sweep
+# in extract_urls_from_html (attribute extraction is unaffected).
+STRIP_NON_PROSE_RE = re.compile(
+    r'(?is)<pre\b.*?</pre>|<code\b.*?</code>|<script\b.*?</script>'
+    r'|<style\b.*?</style>|<!--.*?-->')
+
+# URLs that appear ONLY inside those regions. They are sample text rather than
+# links a reader can click, so they are not safety-checked - but the count is
+# printed on every run rather than dropped quietly. A check that bounds its own
+# coverage without saying so reads as "covered everything" when it did not.
+SKIPPED_IN_CODE = set()
+
+
 def extract_urls_from_html(file_path):
     """Extract all URLs from an HTML file."""
     # XML namespace URIs are identifiers, not fetchable URLs - never normalize.
@@ -42,10 +56,31 @@ def extract_urls_from_html(file_path):
             src_pattern = r'<(?:img|script|iframe|source|video|audio)[^>]+src=["\'](https?://[^"\']+)["\']'
             urls.extend(re.findall(src_pattern, content))
 
-            # Find any other http/https URLs that might be in content
-            # (but not in comments or script blocks)
+            # Find any other http/https URLs that might be in content.
+            #
+            # This sweep exists to catch URLs sitting in prose rather than in
+            # an attribute. It must NOT look inside <pre>, <code>, <script>,
+            # <style>, or HTML comments: those hold sample text, not links the
+            # site offers a reader. The comment here used to claim it skipped
+            # script blocks and the code never did, which is how a regular
+            # expression in a code block reached the safety gate.
+            #
+            # howto/regex-for-security.html teaches URL-matching patterns, so
+            # it contains strings like `https://[a-z]+\.example\.com$`. That
+            # matches the pattern below, and urlparse then reads the `[` as
+            # the start of an IPv6 literal and raises. The gate fails closed on
+            # a URL it cannot parse - which is the right call for a real URL -
+            # so an unparseable *example* blocked the whole housekeeping run.
+            #
+            # href/src extraction above deliberately still runs over the whole
+            # document, so a real link inside a <pre> is checked either way and
+            # no actual link loses coverage here.
             url_pattern = r'https?://[^\s<>"\']+[^\s<>"\'.,;:!?)]'
-            urls.extend(re.findall(url_pattern, content))
+            prose = STRIP_NON_PROSE_RE.sub(' ', content)
+            prose_urls = re.findall(url_pattern, prose)
+            urls.extend(prose_urls)
+            SKIPPED_IN_CODE.update(
+                set(re.findall(url_pattern, content)) - set(prose_urls) - set(urls))
 
     except Exception as e:
         print(f"  Warning: Error reading {file_path}: {e}")
@@ -102,6 +137,10 @@ def main():
 
     total_urls = sum(len(u) for u in file_urls.values())
     print(f"Found {total_urls} URLs ({len(all_unique_urls)} unique) across {len(html_files)} files")
+    if SKIPPED_IN_CODE:
+        print(f"Not swept: {len(SKIPPED_IN_CODE)} URL-shaped strings found only "
+              "inside <pre>/<code>/<script>/<style>/comments "
+              "(sample text, not clickable links)")
     print()
 
     # --- Phase 2: Resolve unique URLs concurrently ---
