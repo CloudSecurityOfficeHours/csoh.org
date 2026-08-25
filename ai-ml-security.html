@@ -501,6 +501,7 @@
                 <li><a href="#prompt-injection">Prompt injection deep-dive</a></li>
                 <li><a href="#agentic">Agentic AI security</a></li>
                 <li><a href="#supply-chain">Model supply chain</a></li>
+                <li><a href="#generated-code">Securing AI-generated code</a></li>
                 <li><a href="#training-data">Training data security</a></li>
                 <li><a href="#inference">Inference endpoint security</a></li>
                 <li><a href="#vector-db">Vector DB &amp; embedding security</a></li>
@@ -524,6 +525,7 @@
             <ul>
                 <li><strong>Using AI to learn / do cloud security.</strong> Prompt patterns for studying for the <a class="glossary-link" href="glossary.html#term-cloud-security-certifications">CCSP</a>, generating <a class="glossary-link" href="glossary.html#term-terraform">Terraform</a>, summarizing <a class="glossary-link" href="glossary.html#term-cloudtrail">CloudTrail</a>, drafting policy. That's <a href="ai-learning.html">the AI Learning page</a>.</li>
                 <li><strong>Securing AI workloads themselves.</strong> Models, training data, inference endpoints, agents, vector stores, MLOps (machine-learning operations) pipelines. <strong>That's this page.</strong></li>
+                <li><strong>Securing what AI writes.</strong> The code, <a class="glossary-link" href="glossary.html#term-iac">IaC</a>, and config an assistant emits into your repository. It sits awkwardly between the other two - it is not an AI workload, and it is not a productivity question either, because the artifact is ordinary production code with an unusual provenance. <strong>This page owns it,</strong> in <a href="#generated-code">Securing AI-generated code</a> below.</li>
             </ul>
             <p>The first is a productivity question. The second is a security-architecture question - what new attack surface arrives when your application stack includes a foundation model, an agent that can call tools, a RAG pipeline, or a model trained on data you can't fully audit. Everything below is about that second question, vendor-neutral, with the same opinion-bearing voice the rest of this site uses.</p>
         </section>
@@ -686,6 +688,41 @@
             <p>The Supply-chain Levels for Software Artifacts framework is being extended for AI - provenance for training data, training-run attestation, weights signing, and a build-integrity story that maps to the same SLSA levels (1 through 4) used elsewhere. <a class="glossary-link" href="glossary.html#term-csa">CSA</a>'s <a href="https://cloudsecurityalliance.org/research/publications/" target="_blank" rel="noopener noreferrer">AI Resilience working group</a> and the OpenSSF AI/ML SIG are publishing reference patterns.</p>
             <h3>Private model registry</h3>
             <p>Every cloud has one: <a href="https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html" target="_blank" rel="noopener noreferrer">SageMaker Model Registry</a>, <a href="https://learn.microsoft.com/en-us/azure/machine-learning/?view=azureml-api-2&viewFallbackFrom=azureml-api-2concept-model-management-and-deployment%3Fview%3Dazureml-api-2" target="_blank" rel="noopener noreferrer">Azure ML Model Registry</a>, <a href="https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/introduction" target="_blank" rel="noopener noreferrer">Gemini Enterprise Model Registry</a>, plus open-source <a href="https://mlflow.org/" target="_blank" rel="noopener noreferrer">MLflow</a>. Make the registry the single <a class="glossary-link" href="glossary.html#term-ingress">ingress</a> point: external models get scanned, approved, signed, and re-published there before any workload pulls them. The model registry is to MLOps what the container registry is to SRE.</p>
+        </section>
+
+        <section id="generated-code">
+            <h2>Securing AI-generated code</h2>
+            <p>The section above is about models entering your stack. This one is the mirror image: <strong>code entering your repository because a model wrote it.</strong> Same supply-chain question, different artifact, and far less mature tooling.</p>
+            <p>This is the most-discussed topic on the Friday call that had the least written about it anywhere, so the treatment here leans on what the room has actually tested rather than on vendor material.</p>
+
+            <h3>What the community measured</h3>
+            <p>Across two consecutive sessions (<a href="meetings/2026-08-14.html">2026-08-14</a> and <a href="meetings/2026-08-21.html">2026-08-21</a>), Jay presented original research on code generation across GPT, Gemini, and Claude, prompting each for ordinary business logic - salary calculation, performance scoring, eligibility decisions. Three findings, in ascending order of how much they should worry you:</p>
+            <ul>
+                <li><strong>Models emit discriminatory logic without being asked to.</strong> Generated code branched on protected attributes in ways that would be unlawful to deploy in several jurisdictions. Nobody prompted for it.</li>
+                <li><strong>The behaviour tracks model weight and price.</strong> Larger reasoning models did measurably better; the cheaper, lighter models commonly wired into automated pipelines did worse. That is the wrong way round, because the cheap model is the one running unattended at volume.</li>
+                <li><strong>Security tooling did not detect any of it.</strong> This is the finding that matters for a security team. The output is syntactically clean, dependency-free, and vulnerability-free by every scanner's definition. There is no CVE, no tainted flow, no unsafe function call. <a class="glossary-link" href="glossary.html#term-sast">SAST</a> has nothing to grip.</li>
+            </ul>
+            <p>The origin is training data rather than explicit programming, which is why prompt-level fixes do not resolve it and why it reappears across vendors. Treat "our assistant would not do that" as a hypothesis to test against your own prompts, not as a property of the tool.</p>
+
+            <h3>The rest of the threat surface</h3>
+            <p>Beyond the correctness-shaped problems above, four failure modes are worth naming because each defeats a different existing control:</p>
+            <ul>
+                <li><strong>Hallucinated dependencies.</strong> A model confidently imports a package that does not exist. <a class="glossary-link" href="glossary.html#term-slopsquatting">Slopsquatting</a> is the attack that follows: register the hallucinated name and wait. <a class="glossary-link" href="glossary.html#term-sca">SCA</a> and <a class="glossary-link" href="glossary.html#term-sbom">SBOM</a> tooling catches this only once the package is real and known-bad, which is the wrong side of the race.</li>
+                <li><strong>Confidently outdated patterns.</strong> Training cutoffs mean deprecated APIs, superseded crypto defaults, and old <a class="glossary-link" href="glossary.html#term-iac">IaC</a> idioms come back with full authorial confidence. <a class="glossary-link" href="glossary.html#term-terraform">Terraform</a> and Dockerfiles are where this showed up most on the call.</li>
+                <li><strong>Review capacity, not generation capacity, is now the constraint.</strong> The call kept returning to this: generation scaled and human review did not, so the bottleneck moved rather than disappeared. A team merging more code than it can meaningfully read has not become faster, it has become less certain.</li>
+                <li><strong>Provenance disappears on commit.</strong> Once merged, generated code is indistinguishable from hand-written code. You cannot go back and re-review "everything the assistant wrote in Q3" unless you recorded it at the time.</li>
+            </ul>
+
+            <h3>What to actually do</h3>
+            <ul>
+                <li><strong>Record provenance at commit time.</strong> A trailer, a label, or a bot annotation on any pull request that is substantially model-authored. It costs nothing now and is the only thing that makes a retrospective review possible later.</li>
+                <li><strong>Scan pull requests, not releases.</strong> The review window is the last point where a human is still looking. IBM's use of Concert Secure Coder against pull requests came up on the <a href="meetings/2026-07-17.html">2026-07-17 call</a> as one working shape for this.</li>
+                <li><strong>Resolve dependencies against an allowlisted internal mirror.</strong> A hallucinated package name should fail to resolve rather than reach the public registry. This is the same control that answers <a class="glossary-link" href="glossary.html#term-dependency-confusion">dependency confusion</a>, and it is the single highest-leverage item here.</li>
+                <li><strong>Require human review for logic touching protected attributes.</strong> Compensation, hiring, eligibility, pricing, and scoring. Scanners do not cover this and, on the evidence above, will not soon. Name the code paths that need eyes and make that policy rather than culture.</li>
+                <li><strong>Pin the model tier for unattended pipelines.</strong> If cheap models are worse, the automated path that runs without a reviewer is exactly where the cheap model does not belong.</li>
+                <li><strong>Do not let generated <a class="glossary-link" href="glossary.html#term-iac">IaC</a> bypass policy-as-code.</strong> Whatever gate you run against hand-written Terraform runs unchanged here. Generated infrastructure is not a new category for admission control, and treating it as one is how the exception gets carved.</li>
+            </ul>
+            <p>The honest summary: this is the least-solved area on the page. The controls above are the ones that work today, and none of them are detection. See <a href="cloud-security-appsec-engineer.html">the AppSec engineer role</a> for where this work usually lands.</p>
         </section>
 
         <section id="training-data">
