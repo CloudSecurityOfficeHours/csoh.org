@@ -1,16 +1,26 @@
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('searchInput');
     const showAllBtn = document.getElementById('showAllBtn');
-    const cards = document.querySelectorAll('.card-link');
+    // Select the cards, not their wrappers. Unlinking a dead resource strips
+    // its <a class="card-link"> and leaves a bare .resource-card (commit
+    // 11a4f4c1 did this to five of them), which a '.card-link' selector cannot
+    // see at all - so such a card matched no filter, stayed visible under every
+    // one of them, and never reached the search suggestion index.
+    const cards = document.querySelectorAll('.resource-card');
     const filterBtns = document.querySelectorAll('.filter-btn');
     let activeFilter = null;
     let activeDateFilter = { type: 'none', startDate: null, endDate: null };
 
     function filterCards() {
         const query = searchInput.value.toLowerCase();
-        cards.forEach(function(card) {
-            var text = card.textContent.toLowerCase();
-            var cardEl = card.querySelector('.resource-card');
+        cards.forEach(function(cardEl) {
+            // Hide the wrapper where there is one and the card itself where
+            // there is not: hiding a card inside a still-visible anchor would
+            // leave an empty clickable tile sitting in the grid.
+            var parent = cardEl.parentElement;
+            var card = (parent && parent.classList.contains('card-link'))
+                ? parent : cardEl;
+            var text = cardEl.textContent.toLowerCase();
             var cat = cardEl.dataset.category;
             var person = cardEl.dataset.person;
             var cardDate = cardEl.dataset.date;
@@ -170,10 +180,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var seen = new Set();
         var suggestions = [];
 
-        cards.forEach(function(cardLink) {
-            var card = cardLink.querySelector('.resource-card');
-            if (!card) return;
-
+        cards.forEach(function(card) {
             var titleEl = card.querySelector('h3');
             var title = titleEl ? titleEl.textContent.trim() : '';
             if (title && !seen.has(title.toLowerCase())) {
