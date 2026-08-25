@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -382,7 +382,7 @@
         <section id="model">
             <h2>Streams versus projections</h2>
             <p>Almost every jq confusion traces back to one idea. <strong>jq filters produce a stream, not a value.</strong></p>
-<div class="code-block"><pre>echo '{"a":[1,2,3]}' | jq '.a'      # one output: the array  [1,2,3]
+<div class="code-block" data-lang="bash"><pre>echo '{"a":[1,2,3]}' | jq '.a'      # one output: the array  [1,2,3]
 echo '{"a":[1,2,3]}' | jq '.a[]'    # THREE outputs: 1, then 2, then 3
 echo '{"a":[1,2,3]}' | jq '[.a[]]'  # collect the stream back into one array</pre></div>
             <p>Those square brackets in the third line are not decoration. Any time a jq expression produces something that looks almost right but repeated, or almost right but unwrapped, the answer is usually a missing pair of collecting brackets. <code>select()</code>, <code>map()</code>, <code>group_by()</code> and friends all become obvious once you know which of them expect a stream and which expect an array.</p>
@@ -394,7 +394,7 @@ echo '{"a":[1,2,3]}' | jq '[.a[]]'  # collect the stream back into one array</pr
 
             <h3>1. Build the sample data</h3>
             <p>This is a trimmed CloudTrail-shaped file. Everything below runs against it, so no cloud account and no credentials are needed.</p>
-<div class="code-block"><pre>mkdir -p ~/jq-lab &amp;&amp; cd ~/jq-lab
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/jq-lab &amp;&amp; cd ~/jq-lab
 
 cat &gt; events.json &lt;&lt;'EOF'
 {"Records":[
@@ -417,7 +417,7 @@ cat &gt; events.json &lt;&lt;'EOF'
 EOF</pre></div>
 
             <h3>2. jq: navigate, then filter</h3>
-<div class="code-block"><pre>jq '.Records | length' events.json          # 5
+<div class="code-block" data-lang="bash"><pre>jq '.Records | length' events.json          # 5
 
 # .Records[] streams each record; select() passes through only the
 # ones where its condition is true and emits nothing for the rest.
@@ -429,7 +429,7 @@ jq -r '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' ev
             <p><code>select()</code> is the workhorse. Read <code>select(cond)</code> as a gate in the pipe: the value goes through unchanged if <code>cond</code> is true, and vanishes otherwise.</p>
 
             <h3>3. jq: build new objects</h3>
-<div class="code-block"><pre># Construct an object per record. The keys are yours to name.
+<div class="code-block" data-lang="bash"><pre># Construct an object per record. The keys are yours to name.
 jq '[.Records[]
      | select(.errorCode != null)
      | {when: .eventTime, what: .eventName, who: .userIdentity.arn, from: .sourceIPAddress}]' \
@@ -438,7 +438,7 @@ jq '[.Records[]
 
             <h3>4. jq: the query you will actually run</h3>
             <p>"Who is generating repeated access denials, and from where." This is a real triage question and it is four operators.</p>
-<div class="code-block"><pre>jq -r '
+<div class="code-block" data-lang="bash"><pre>jq -r '
   [.Records[] | select(.errorCode != null)]      # collect failures into an array
   | group_by(.userIdentity.arn)                  # array of arrays, one per principal
   | map({arn: .[0].userIdentity.arn, denials: length})
@@ -448,7 +448,7 @@ jq '[.Records[]
             <p>Note the shape change at each step: stream, array, array of arrays, array of objects, then back to a stream of strings for printing. <code>group_by</code> requires a sorted array and sorts for you, and it hands each group to <code>map</code> as a list, which is why <code>.[0]</code> is how you get at the shared key.</p>
 
             <h3>5. jq: emit something another tool can read</h3>
-<div class="code-block"><pre># @csv quotes and comma-joins an array. Pair it with -r or you get
+<div class="code-block" data-lang="bash"><pre># @csv quotes and comma-joins an array. Pair it with -r or you get
 # a JSON string containing escaped quotes, which no spreadsheet wants.
 jq -r '.Records[]
        | select(.errorCode != null)
@@ -461,7 +461,7 @@ jq -r '[.Records[].sourceIPAddress] | unique | join(", ")' events.json</pre></di
 
             <h3>6. JMESPath: the same questions, different language</h3>
             <p>Everything below works as an AWS CLI <code>--query</code> value. To practise without a cloud account, evaluate against the same file:</p>
-<div class="code-block"><pre>pip3 install jmespath        # brings the reference implementation
+<div class="code-block" data-lang="bash"><pre>pip3 install jmespath        # brings the reference implementation
 
 python3 - &lt;&lt;'PY'
 import json, jmespath
@@ -482,7 +482,7 @@ PY</pre></div>
             </div>
 
             <h3>7. Against a real AWS CLI</h3>
-<div class="code-block"><pre># Public S3 buckets is not one call, so this is the shape you want:
+<div class="code-block" data-lang="bash"><pre># Public S3 buckets is not one call, so this is the shape you want:
 # a client-side query per bucket, driven by a jq-produced list.
 aws s3api list-buckets --query 'Buckets[].Name' --output text
 
@@ -502,7 +502,7 @@ aws ec2 describe-instances \
 
             <h3>8. The combination that gets used most</h3>
             <p>In practice the strongest move is not choosing between them. It is <code>--output json</code> piped into jq, using JMESPath only for the trivial cases.</p>
-<div class="code-block"><pre># --output text collapses nulls to the string "None" and flattens nested
+<div class="code-block" data-lang="bash"><pre># --output text collapses nulls to the string "None" and flattens nested
 # lists with tabs, so columns silently misalign the moment a field is
 # empty. For anything you intend to parse, take JSON and use jq.
 aws iam list-users --output json \
@@ -517,7 +517,7 @@ aws iam list-users --output json \
                 <p>Using <code>events.json</code>, print one line per distinct source IP address, showing the IP and the number of events from it, most active first.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>jq -r '
+<div class="code-block" data-lang="bash"><pre>jq -r '
   [.Records[]]
   | group_by(.sourceIPAddress)
   | map({ip: .[0].sourceIPAddress, n: length})
@@ -534,7 +534,7 @@ aws iam list-users --output json \
                 <p>Translate this jq filter into JMESPath: <code>.Records[] | select(.userIdentity.type == "IAMUser") | .userIdentity.arn</code>. Then say what is different about the output.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>Records[?userIdentity.type=='IAMUser'].userIdentity.arn</pre></div>
+<div class="code-block" data-lang="text"><pre>Records[?userIdentity.type=='IAMUser'].userIdentity.arn</pre></div>
                     <p>Note the single quotes. Double quotes would make <code>IAMUser</code> a field name and silently return an empty list.</p>
                     <p>The output difference is the whole distinction between the two languages. jq emits four separate JSON strings, one per line, which a shell loop can consume directly. JMESPath returns a single JSON array. That is why <code>--query</code> pairs with <code>--output text</code> so often: the CLI has to flatten the array back into lines for you, because the language cannot.</p>
                 </details>
@@ -543,11 +543,11 @@ aws iam list-users --output json \
             <div class="exercise">
                 <span class="exercise__label">Exercise 3</span>
                 <p>A colleague reports that this command "returns nothing, so we have no running instances". They are looking at an account with forty running instances. What is wrong?</p>
-<div class="code-block"><pre>aws ec2 describe-instances --query 'Reservations[].Instances[?State.Name == "running"].InstanceId'</pre></div>
+<div class="code-block" data-lang="bash"><pre>aws ec2 describe-instances --query 'Reservations[].Instances[?State.Name == "running"].InstanceId'</pre></div>
                 <details>
                     <summary>Show the answer</summary>
                     <p><code>"running"</code> is a quoted identifier, so the filter compares <code>State.Name</code> against a field named <code>running</code>, finds nothing there, and the comparison is never true. The fix is <code>'running'</code>, and in a shell that means escaping or switching the outer quoting:</p>
-<div class="code-block"><pre>aws ec2 describe-instances \
+<div class="code-block" data-lang="bash"><pre>aws ec2 describe-instances \
   --query "Reservations[].Instances[?State.Name == 'running'].InstanceId"</pre></div>
                     <p>Worth sitting with the failure mode rather than just the fix. An empty result and a correct result look identical from the outside, and the reasonable interpretation of "no output" is "no matching resources". Before believing any empty result from a query language, run the query with the filter removed and confirm the data is there at all. Confirm the instrument works before trusting what it says is absent.</p>
                 </details>
@@ -558,7 +558,7 @@ aws iam list-users --output json \
                 <p>Write a jq filter that finds any IAM policy statement granting <code>"Action": "*"</code>, handling the fact that <code>Action</code> may be a string or an array of strings. Test it against both shapes.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre># The trick is to normalise first. In jq, wrapping a value in an array
+<div class="code-block" data-lang="bash"><pre># The trick is to normalise first. In jq, wrapping a value in an array
 # and flattening is the idiomatic "make this a list either way".
 cat &gt; policy.json &lt;&lt;'EOF'
 {"Statement":[
@@ -629,7 +629,7 @@ jq -r '.Statement[]
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

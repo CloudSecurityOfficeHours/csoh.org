@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -397,7 +397,7 @@
                 <li><code>has(x.field)</code> tests presence, which is not the same as testing truth.</li>
             </ul>
             <p>That last one is the thing to internalise first. Reading a field that is not there is an <em>error</em> in CEL, not a false and not a null. An error propagates and the whole expression fails, which in Kubernetes admission means the policy's <code>failurePolicy</code> decides your fate. <code>has()</code> before you dereference an optional field is not defensive style, it is the difference between a working policy and one that fails open or blocks every deployment.</p>
-<div class="code-block"><pre># Errors, if any container omits securityContext:
+<div class="code-block" data-lang="cel"><pre># Errors, if any container omits securityContext:
 object.spec.containers.all(c, c.securityContext.runAsNonRoot == true)
 
 # Correct: presence-check first. && short-circuits, so the right-hand
@@ -411,7 +411,7 @@ object.spec.containers.all(c,
 
             <h3>1. Get an evaluator you can iterate in</h3>
             <p>Writing CEL by pushing YAML at a cluster and reading admission errors is a miserable loop. Evaluate expressions locally first.</p>
-<div class="code-block"><pre>mkdir -p ~/cel-lab &amp;&amp; cd ~/cel-lab
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/cel-lab &amp;&amp; cd ~/cel-lab
 pip3 install cel-python
 
 cat &gt; pod.json &lt;&lt;'EOF'
@@ -436,7 +436,7 @@ EOF
 python3 cel.py 'object.spec.replicas &lt;= 5'</pre></div>
 
             <h3>2. The syntax, in one pass</h3>
-<div class="code-block"><pre>python3 cel.py \
+<div class="code-block" data-lang="bash"><pre>python3 cel.py \
   'object.metadata.name == "web"' \
   'object.spec.replicas &gt; 5 &amp;&amp; object.spec.replicas &lt; 20' \
   '"team" in object.metadata.labels' \
@@ -447,7 +447,7 @@ python3 cel.py 'object.spec.replicas &lt;= 5'</pre></div>
             <p>C-like, and mostly unsurprising. Strings are double-quoted or single-quoted, <code>in</code> tests map keys and list membership, and there is a ternary. The standard library gives you <code>startsWith</code>, <code>endsWith</code>, <code>contains</code>, <code>matches</code> (a regular expression, RE2 flavoured, so no lookaround), <code>size</code>, and duration and timestamp arithmetic.</p>
 
             <h3>3. Macros, which is where real policies live</h3>
-<div class="code-block"><pre>python3 cel.py \
+<div class="code-block" data-lang="bash"><pre>python3 cel.py \
   'object.spec.containers.all(c, has(c.resources) &amp;&amp; has(c.resources.limits))' \
   'object.spec.containers.exists(c, c.image.endsWith(":latest"))' \
   'object.spec.containers.map(c, c.name)' \
@@ -457,7 +457,7 @@ python3 cel.py 'object.spec.replicas &lt;= 5'</pre></div>
 
             <h3>4. Write a real ValidatingAdmissionPolicy</h3>
             <p>This is native Kubernetes admission control, generally available since Kubernetes 1.30. No webhook, no controller, no certificate rotation.</p>
-<div class="code-block"><pre>apiVersion: admissionregistration.k8s.io/v1
+<div class="code-block" data-lang="yaml"><pre>apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: "require-resource-limits.csoh.org"
@@ -486,7 +486,7 @@ spec:
           !c.image.endsWith(":latest"))
       message: "image tags must be pinned; :latest is not a version"</pre></div>
             <p>The policy on its own does nothing. It needs a <strong>binding</strong>, and the separation is the good part: one policy, several bindings, each scoped differently and each choosing its own enforcement strength.</p>
-<div class="code-block"><pre>apiVersion: admissionregistration.k8s.io/v1
+<div class="code-block" data-lang="yaml"><pre>apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: "require-resource-limits-prod.csoh.org"
@@ -513,7 +513,7 @@ spec:
             <p>That two-binding pattern is how you roll a policy out without an outage. Bind it as <code>[Warn, Audit]</code> everywhere first, read the <a class="glossary-link" href="../glossary.html#term-cloudtrail">audit log</a> for a week to find out what it would have blocked, and only then add a <code>Deny</code> binding scoped to the namespaces you have cleaned up.</p>
 
             <h3>5. Try it on a throwaway cluster</h3>
-<div class="code-block"><pre>kind create cluster --name cel-lab       # any recent Kubernetes; VAP is GA in 1.30+
+<div class="code-block" data-lang="bash"><pre>kind create cluster --name cel-lab       # any recent Kubernetes; VAP is GA in 1.30+
 kubectl apply -f policy.yaml
 
 kubectl create namespace prod
@@ -526,7 +526,7 @@ kind delete cluster --name cel-lab</pre></div>
 
             <h3>6. Two other places the same expressions turn up</h3>
             <p><strong>CRD field validation.</strong> The same CEL, attached to a schema, so an invalid custom resource is rejected on write with no controller involved:</p>
-<div class="code-block"><pre>openAPIV3Schema:
+<div class="code-block" data-lang="yaml"><pre>openAPIV3Schema:
   type: object
   properties:
     spec:
@@ -542,7 +542,7 @@ kind delete cluster --name cel-lab</pre></div>
           message: "retention may be increased but never reduced"
           optionalOldSelf: false</pre></div>
             <p><strong>Google Cloud IAM conditions.</strong> Same language, completely different variables, and a genuinely useful control:</p>
-<div class="code-block"><pre># Grant applies only during a maintenance window, and only to one bucket.
+<div class="code-block" data-lang="cel"><pre># Grant applies only during a maintenance window, and only to one bucket.
 request.time &lt; timestamp("2026-09-01T00:00:00Z") &amp;&amp;
 resource.type == "storage.googleapis.com/Bucket" &amp;&amp;
 resource.name.startsWith("projects/_/buckets/acme-backups")</pre></div>
@@ -550,7 +550,7 @@ resource.name.startsWith("projects/_/buckets/acme-backups")</pre></div>
 
             <h3>7. The authorizer variable</h3>
             <p>Kubernetes admission hands your expression an <code>authorizer</code>, which lets a policy ask the API server's own <a class="glossary-link" href="../glossary.html#term-rbac">RBAC</a> a question. This is unusual and worth knowing about, because it lets you write "this is allowed, but only for principals who already hold a specific permission" without maintaining a parallel list of who those are.</p>
-<div class="code-block"><pre>validations:
+<div class="code-block" data-lang="yaml"><pre>validations:
   - expression: &gt;-
       !object.spec.template.spec.hostNetwork ||
       authorizer.group('policy.csoh.org').resource('hostnetwork')
@@ -568,7 +568,7 @@ resource.name.startsWith("projects/_/buckets/acme-backups")</pre></div>
                 <p>Write one expression that is true only when every container both sets <code>runAsNonRoot: true</code> and does not run privileged. Remember that <code>securityContext</code> is optional.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>python3 cel.py 'object.spec.containers.all(c,
+<div class="code-block" data-lang="bash"><pre>python3 cel.py 'object.spec.containers.all(c,
   has(c.securityContext) &amp;&amp;
   c.securityContext.runAsNonRoot == true &amp;&amp;
   (!has(c.securityContext.privileged) || c.securityContext.privileged == false))'</pre></div>
@@ -593,12 +593,12 @@ resource.name.startsWith("projects/_/buckets/acme-backups")</pre></div>
                 <p>Write a validation that permits a Deployment's replica count to increase but never decrease. Which admission variable do you need, and what breaks on CREATE?</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>validations:
+<div class="code-block" data-lang="yaml"><pre>validations:
   - expression: &gt;-
       object.spec.replicas &gt;= oldObject.spec.replicas
     message: "replica count may not be reduced"</pre></div>
                     <p><code>oldObject</code> is only populated for UPDATE and DELETE. On CREATE it is null, so dereferencing it errors. Two fixes, and the second is the better habit:</p>
-<div class="code-block"><pre># Guard inside the expression
+<div class="code-block" data-lang="yaml"><pre># Guard inside the expression
 - expression: &gt;-
     oldObject == null || object.spec.replicas &gt;= oldObject.spec.replicas
 
@@ -616,14 +616,14 @@ matchConstraints:
             <div class="exercise">
                 <span class="exercise__label">Exercise 4</span>
                 <p>Take this Rego rule and express it as a CEL validation. Then name one thing the Rego version can do that the CEL version cannot.</p>
-<div class="code-block"><pre>deny contains msg if {
+<div class="code-block" data-lang="rego"><pre>deny contains msg if {
     some c in input.request.object.spec.containers
     not startswith(c.image, "ghcr.io/acme/")
     msg := sprintf("image %v is not from the approved registry", [c.image])
 }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>validations:
+<div class="code-block" data-lang="yaml"><pre>validations:
   - expression: &gt;-
       object.spec.containers.all(c, c.image.startsWith("ghcr.io/acme/"))
     message: "all images must come from ghcr.io/acme/"</pre></div>
@@ -685,7 +685,7 @@ matchConstraints:
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -377,13 +377,13 @@
             <h2>Step-by-step</h2>
 
             <h3>1. Confirm CloudTrail is landing in S3</h3>
-<div class="code-block"><pre>aws cloudtrail describe-trails --query 'trailList[].{name:Name,bucket:S3BucketName}'   # list each trail and the bucket it writes to
+<div class="code-block" data-lang="bash"><pre>aws cloudtrail describe-trails --query 'trailList[].{name:Name,bucket:S3BucketName}'   # list each trail and the bucket it writes to
 aws s3 ls s3://&lt;your-trail-bucket&gt;/AWSLogs/&lt;account-id&gt;/CloudTrail/ --recursive | head   # --recursive walks the prefix; head shows just the first few objects</pre></div>
             <p>You should see gzip'd JSON objects partitioned by region and date. If nothing is there yet, generate some activity (a few CLI calls) and wait a few minutes - CloudTrail delivers in batches.</p>
 
             <h3>2. Create the Athena table with partition projection</h3>
             <p>Partition projection lets Athena compute partitions from the S3 path pattern, so you never run <code>MSCK REPAIR</code> or add partitions by hand. Run this DDL in the Athena console (swap in your bucket, account, and regions):</p>
-<div class="code-block"><pre>-- EXTERNAL = the data stays in S3; this only defines a schema Athena reads through.
+<div class="code-block" data-lang="sql"><pre>-- EXTERNAL = the data stays in S3; this only defines a schema Athena reads through.
 CREATE EXTERNAL TABLE cloudtrail_logs (
   eventVersion STRING,
   userIdentity STRUCT&lt;                        -- userIdentity is nested JSON, so it maps to a STRUCT you dot into (useridentity.arn)
@@ -420,7 +420,7 @@ TBLPROPERTIES (
             <p>If the schema ever drifts, the fastest fix is the console: <strong>CloudTrail &rarr; Event history &rarr; Create Athena table</strong> generates a matching DDL for your trail. The key idea to internalise: <code>requestParameters</code> and <code>responseElements</code> arrive as JSON <em>strings</em>, so you parse them with <code>json_extract_scalar</code>, not struct access.</p>
 
             <h3>3. Baseline: who is doing what?</h3>
-<div class="code-block"><pre>SELECT useridentity.arn AS who, eventname, count(*) AS n   -- who did what, and how many times
+<div class="code-block" data-lang="sql"><pre>SELECT useridentity.arn AS who, eventname, count(*) AS n   -- who did what, and how many times
 FROM cloudtrail_logs
 WHERE date &gt;= date_format(current_date - interval '1' day, '%Y/%m/%d')   -- last 1 day; formatted to match the partition (yyyy/MM/dd)
 GROUP BY 1, 2            -- group by the 1st and 2nd selected columns (who, eventname)
@@ -432,46 +432,46 @@ LIMIT 50;               -- cap the result at 50 rows</pre></div>
             <p>Each query below is a detection. Read the "why it matters" line, then run it against your telemetry.</p>
 
             <p><strong>Root account activity</strong> - the root user should almost never make API calls.</p>
-<div class="code-block"><pre>SELECT eventtime, eventname, sourceipaddress
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, eventname, sourceipaddress
 FROM cloudtrail_logs
 WHERE useridentity.type = 'Root'      -- the account root user, which should almost never call the API
   AND eventtype = 'AwsApiCall'        -- ignore console-login/service events, keep real API actions
   AND date &gt;= date_format(current_date - interval '7' day, '%Y/%m/%d');   -- last 7 days (partition-bounded, so it's cheap)</pre></div>
             <p><strong>Console login without MFA</strong> - a successful sign-in with no second factor.</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn, sourceipaddress
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, sourceipaddress
 FROM cloudtrail_logs
 WHERE eventname = 'ConsoleLogin'                                            -- a sign-in to the web console
   AND json_extract_scalar(additionaleventdata, '$.MFAUsed') = 'No'         -- reach into the JSON string: no second factor
   AND json_extract_scalar(responseelements, '$.ConsoleLogin') = 'Success'; -- and the login actually succeeded</pre></div>
             <p><strong>Access key created</strong> - a common persistence step (Pacu and manual privesc both do this).</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn AS actor,                                       -- who created the key
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn AS actor,                                       -- who created the key
        json_extract_scalar(responseelements, '$.accessKey.userName') AS target_user -- and which user it was created FOR
 FROM cloudtrail_logs
 WHERE eventname = 'CreateAccessKey';   -- actor != target_user is the tell: someone minting a key on another user (persistence)</pre></div>
             <p><strong>CloudTrail tampering</strong> - matches Stratus <code>aws.defense-evasion.cloudtrail-stop</code>. Someone blinding the logs is a high-severity signal.</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn, eventname, requestparameters
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, eventname, requestparameters
 FROM cloudtrail_logs
 WHERE eventname IN ('StopLogging','DeleteTrail','UpdateTrail','PutEventSelectors');   -- any change that could disable or narrow logging = someone blinding the logs</pre></div>
             <p><strong>Security group opened to the world</strong> - ingress from <code>0.0.0.0/0</code>.</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn, requestparameters
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, requestparameters
 FROM cloudtrail_logs
 WHERE eventname = 'AuthorizeSecurityGroupIngress'   -- a new inbound firewall rule was added
   AND requestparameters LIKE '%0.0.0.0/0%';         -- LIKE %..% substring-matches the "open to the whole internet" CIDR</pre></div>
             <p><strong>S3 bucket made public</strong> - matches Stratus <code>aws.exfiltration.s3-backdoor-bucket-policy</code>.</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn, eventname, requestparameters
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, eventname, requestparameters
 FROM cloudtrail_logs
 WHERE eventname IN ('PutBucketPolicy','PutBucketAcl')    -- someone changed a bucket's policy or ACL
   AND (requestparameters LIKE '%AllUsers%'               -- the three ways "public" shows up in the request JSON:
        OR requestparameters LIKE '%"Principal":"*"%'     --   the AllUsers ACL group,
        OR requestparameters LIKE '%"Principal":{"AWS":"*"}%');   --   or a wildcard principal (either JSON shape)</pre></div>
             <p><strong>Secret read from SSM or Secrets Manager</strong> - the quiet collection step GuardDuty often ignores. This is the detection the offensive lab proved you needed.</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn, eventname,
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, eventname,
        json_extract_scalar(requestparameters, '$.name') AS param,       -- SSM: which parameter was read
        json_extract_scalar(requestparameters, '$.secretId') AS secret   -- Secrets Manager: which secret was read
 FROM cloudtrail_logs
 WHERE eventname IN ('GetParameter','GetParameters','GetSecretValue');   -- the read APIs for SSM and Secrets Manager - the quiet collection step</pre></div>
             <p><strong>Instance credentials used off-instance</strong> - the heuristic behind GuardDuty's <code>InstanceCredentialExfiltration</code>. An assumed role that belongs to an EC2 instance profile, but whose calls come from a non-AWS source IP, means the role's credentials walked out of the instance.</p>
-<div class="code-block"><pre>SELECT eventtime, useridentity.arn, sourceipaddress, eventname
+<div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, sourceipaddress, eventname
 FROM cloudtrail_logs
 WHERE useridentity.type = 'AssumedRole'     -- a call made with temporary role credentials
   AND useridentity.arn LIKE '%i-%'          -- role session named for an instance id (i-0abc...) = an EC2 instance profile
@@ -479,7 +479,7 @@ WHERE useridentity.type = 'AssumedRole'     -- a call made with temporary role c
   AND sourceipaddress NOT IN ('CHANGE-ME-your-lab-egress-ip');   -- ...and isn't your own known egress IP -> the creds walked off the box</pre></div>
             <h3>5. Make them portable with Sigma</h3>
             <p><a href="https://github.com/SigmaHQ/sigma" target="_blank" rel="noopener noreferrer">Sigma</a> is a vendor-neutral detection format: write the logic once, convert it to whatever backend your SIEM speaks. Here is the CloudTrail-tampering detection as a Sigma rule:</p>
-<div class="code-block"><pre>title: CloudTrail Logging Disabled       # human-readable name for the rule
+<div class="code-block" data-lang="yaml"><pre>title: CloudTrail Logging Disabled       # human-readable name for the rule
 id: 4d2a12ab-9e3f-4b1a-8c77-lab-example  # a unique id (normally a real UUID)
 status: experimental                     # maturity: experimental -> test -> stable
 logsource:                               # which logs this rule applies to
@@ -509,7 +509,7 @@ tags:                                    # MITRE ATT&amp;CK mapping for this beh
             </ul>
 
             <h3>8. Cost and teardown</h3>
-<div class="code-block"><pre>-- Athena bills per TB scanned; partitioned WHERE clauses keep it to pennies.
+<div class="code-block" data-lang="sql"><pre>-- Athena bills per TB scanned; partitioned WHERE clauses keep it to pennies.
 DROP TABLE cloudtrail_logs;   -- removes only the Athena schema - the underlying S3 logs are untouched
 -- then empty and delete the trail bucket if you are done with the account (that deletes the actual log data)</pre></div>
             <p>The one sneaky cost here is CloudTrail <em>data events</em> (S3 object-level, Lambda invocations) - they are voluminous and billable. Leave them off unless a specific detection needs them.</p>
@@ -561,7 +561,7 @@ DROP TABLE cloudtrail_logs;   -- removes only the Athena schema - the underlying
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

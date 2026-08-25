@@ -56,10 +56,10 @@
     <link rel="dns-prefetch" href="https://developer.hashicorp.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -346,7 +346,7 @@
                 <li><strong><code>terraform apply</code></strong> - make the changes from the plan. Terraform records what it created in a <em>state file</em> so it knows what it owns next time.</li>
             </ul>
             <p>The thing that makes it <em>declarative</em>: you don't write "create a bucket." You write "a bucket named X should exist," and Terraform decides whether that means create it, change it, or do nothing. Here's the absolute minimum - a single AWS <a class="glossary-link" href="glossary.html#term-s3">S3</a> bucket:</p>
-            <div class="code-block"><pre>terraform {
+            <div class="code-block" data-lang="hcl"><pre>terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -456,7 +456,7 @@ resource "aws_s3_bucket" "example" {
 
             <h3 id="anatomy-1">The <code>terraform {}</code> block - configuring the tool</h3>
             <p>This block configures Terraform <em>itself</em>, not any cloud. It pins versions and says where state lives, so every laptop and every CI run behaves identically:</p>
-            <div class="code-block"><pre>terraform {
+            <div class="code-block" data-lang="hcl"><pre>terraform {
   required_version = "&gt;= 1.6.0"
 
   required_providers {
@@ -475,7 +475,7 @@ resource "aws_s3_bucket" "example" {
 
             <h3 id="anatomy-2">Providers - the plugins that talk to each cloud</h3>
             <p>A <em>provider</em> is the plugin that translates HCL into a specific platform's API calls. You declare which ones you need (above) and configure them (below):</p>
-            <div class="code-block"><pre>provider "aws" {
+            <div class="code-block" data-lang="hcl"><pre>provider "aws" {
   region              = var.aws_region
   allowed_account_ids = [var.aws_account_id]   # safety tripwire
 }</pre></div>
@@ -494,7 +494,7 @@ resource "aws_s3_bucket" "example" {
         <section id="tour">
             <h2>A tour of CSOH's four stacks</h2>
             <p>The entire site is static, served active/active from three clouds behind Cloudflare. That shape is described in <a href="cloud-deployment.html">How We Deploy</a>; here we're reading the Terraform that builds it. The code lives in four independent stacks under <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/tree/main/infra/terraform" target="_blank" rel="noopener noreferrer"><code>infra/terraform/</code></a>:</p>
-            <div class="code-block"><pre>infra/terraform/
+            <div class="code-block" data-lang="text"><pre>infra/terraform/
   aws/          S3 (private) + CloudFront/OAC + GitHub OIDC role
   azure/        Storage account + $web static website + federated cred
   gcp/          Cloud Run + Artifact Registry + Workload Identity Federation
@@ -506,7 +506,7 @@ resource "aws_s3_bucket" "example" {
 
             <h3>Keyless deploys: the security centerpiece</h3>
             <p>The file worth reading twice is <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/oidc.tf" target="_blank" rel="noopener noreferrer"><code>aws/oidc.tf</code></a>. It sets up deploys with <strong>no long-lived cloud secret in the repo at all</strong>. Instead, GitHub Actions proves its identity to AWS with a short-lived, signed OIDC token, and AWS hands back temporary credentials. The trust is scoped tighter than most people's first attempt:</p>
-            <div class="code-block"><pre>condition {
+            <div class="code-block" data-lang="hcl"><pre>condition {
   test     = "StringEquals"
   variable = "token.actions.githubusercontent.com:sub"
   values   = ["repo:${var.github_owner}/${var.github_repo}:environment:production"]
@@ -515,7 +515,7 @@ resource "aws_s3_bucket" "example" {
 
             <h3>Mapping a claim is not the same as checking it</h3>
             <p>All three clouds pin that <em>same</em> subject string, and the reason is worth saying out loud: trusting the repository alone would let any workflow in the repo mint deploy credentials - including scheduled jobs that read untrusted web pages and never go near the production environment. "Only this repo" is not the same statement as "only this deploy job." GCP's attribute condition therefore requires two claims, not one:</p>
-            <div class="code-block"><pre>attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' &amp;&amp; assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production'"</pre></div>
+            <div class="code-block" data-lang="hcl"><pre>attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' &amp;&amp; assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production'"</pre></div>
             <p>and the IAM binding underneath it names that one identity - <code>principal://.../subject/repo:&lt;owner&gt;/&lt;repo&gt;:environment:production</code> - instead of matching a group with <code>principalSet://.../attribute.repository/&lt;owner&gt;/&lt;repo&gt;</code>. The difference is the whole point of the two URL forms: <code>principalSet://</code> matches every federated identity sharing a mapped attribute, <code>principal://</code> names exactly one subject. The attribute condition is the hard gate that rejects a bad token outright, so the member is defense in depth - but having both say the same thing is what makes the file honest to read.</p>
             <p>Two lessons here generalize well past this one file, and Terraform will warn you about neither:</p>
             <ul>
@@ -526,7 +526,7 @@ resource "aws_s3_bucket" "example" {
 
             <h3>A resource, start to finish</h3>
             <p>From <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/s3.tf" target="_blank" rel="noopener noreferrer"><code>aws/s3.tf</code></a>, the private origin bucket and one of its settings:</p>
-            <div class="code-block"><pre>resource "aws_s3_bucket" "site" {
+            <div class="code-block" data-lang="hcl"><pre>resource "aws_s3_bucket" "site" {
   bucket = var.bucket_name
 }
 
@@ -541,7 +541,7 @@ resource "aws_s3_bucket_versioning" "site" {
             <h3>Headers at the origin, not only at the edge</h3>
             <p>The site's security headers - CSP, <a class="glossary-link" href="glossary.html#term-hsts">HSTS</a>, <code>X-Frame-Options</code> and the rest - are declared once at Cloudflare in <code>cloudflare/rules.tf</code> and added to every response on the way out. That covers normal traffic. It leaves a different question open: what does an origin serve when it is reached <em>directly</em>? That is a real path, not a hypothetical, because a CloudFront distribution has its own public <code>*.cloudfront.net</code> hostname.</p>
             <p><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/aws/cloudfront.tf" target="_blank" rel="noopener noreferrer"><code>aws/cloudfront.tf</code></a> answers it with an <code>aws_cloudfront_response_headers_policy</code>, referenced from the distribution's <code>default_cache_behavior</code> so the origin sets its own headers:</p>
-            <div class="code-block"><pre>resource "aws_cloudfront_response_headers_policy" "security" {
+            <div class="code-block" data-lang="hcl"><pre>resource "aws_cloudfront_response_headers_policy" "security" {
   name = "csoh-security-headers"
 
   security_headers_config {
@@ -574,7 +574,7 @@ resource "aws_s3_bucket_versioning" "site" {
 
             <h3>The edge stack: build redirect targets, don't rewrite them</h3>
             <p>The Cloudflare stack is the odd one out - no servers, just rules - and <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/terraform/cloudflare/rules.tf" target="_blank" rel="noopener noreferrer"><code>cloudflare/rules.tf</code></a> holds the one that sends <code>www.csoh.org</code> to the apex domain. The destination is computed, and what it is computed <em>from</em> is the entire lesson:</p>
-            <div class="code-block"><pre>target_url {
+            <div class="code-block" data-lang="hcl"><pre>target_url {
   expression = "concat(\"https://csoh.org\", http.request.uri.path)"
 }</pre></div>
             <p>Scheme and host are constants. Only the path comes from the request, and <code>preserve_query_string = true</code> just above carries any <code>?query=string</code> across. The tidier-looking alternative - take the inbound URL and pattern-replace the <code>www.</code> out of it - is a trap, because the destination then inherits whatever the client supplied, including the scheme. Redirect rules run in the dynamic-redirect phase, <em>before</em> "Always Use HTTPS" gets a say, and the matching expression (<code>http.host eq "www.csoh.org"</code>) matches plaintext HTTP exactly as happily as HTTPS. A replacement pattern anchored on <code>https://</code> would not match an <code>http://</code> request at all, and a replace that matches nothing returns its input unchanged - which is a 301 pointing at the request's own URL. Assembling the target from constants plus one specific field cannot produce that class of bug. This one lands at the edge after <code>terraform -chdir=infra/terraform/cloudflare apply</code>.</p>
@@ -692,7 +692,7 @@ resource "aws_s3_bucket_versioning" "site" {
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

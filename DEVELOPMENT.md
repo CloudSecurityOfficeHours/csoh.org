@@ -187,6 +187,7 @@ csoh.org/
 ├── vendor/minisearch-7.1.2.min.js   # Self-hosted MiniSearch library (SRI-pinned)
 ├── tools/build_search_index.py      # Builds search-index.json from all .html files
 ├── tools/stamp_card_ids.py          # Stamps per-card deep-link ids on the card pages
+├── tools/stamp_code_langs.py        # Stamps data-lang on code blocks (label + highlighting)
 │
 │  ── Policy / about ──
 ├── about.html                       # About CSOH: mission and ethos

@@ -58,10 +58,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -348,7 +348,7 @@
                 <li><strong>steps</strong> - what to actually do (run a script, use a published Action, set an output)</li>
             </ul>
             <p>Here's the absolute minimum:</p>
-            <div class="code-block"><pre>name: Hello
+            <div class="code-block" data-lang="yaml"><pre>name: Hello
 on:
   push:
 jobs:
@@ -458,7 +458,7 @@ jobs:
 
             <h3 id="anatomy-1">§1 - Triggers (<code>on:</code>)</h3>
             <p>This workflow runs in three situations:</p>
-            <div class="code-block"><pre>on:
+            <div class="code-block" data-lang="yaml"><pre>on:
   pull_request:
     paths:
       - '**.html'
@@ -468,24 +468,24 @@ jobs:
             <p>Translation: when a PR touches any HTML file, every Monday at 07:00 UTC, or whenever someone clicks "Run workflow." The <code>paths</code> filter is the secret to a fast CI - if you only validate HTML, don't run on CSS-only PRs.</p>
 
             <h3 id="anatomy-2">§2 - Permissions</h3>
-            <div class="code-block"><pre>permissions:
+            <div class="code-block" data-lang="yaml"><pre>permissions:
   contents: read
   pull-requests: write</pre></div>
             <p>Default GitHub-Actions permissions are broader than they need to be. We pin every workflow to the minimum: read the code, post PR comments, nothing else. If a malicious dependency ever lands in one of our Actions, it can't push to the repo because we never gave it that scope.</p>
             <p><strong>The subtlety worth internalizing:</strong> <code>permissions:</code> governs the ambient <code>GITHUB_TOKEN</code> and nothing else. It does not constrain any other credential your steps happen to carry. So the question to ask is not "what does this job do?" but "what does this job do <em>with the token GitHub injected for free</em>?" If the steps that write things are handed their own token, the ambient one should be read-only no matter how much writing the job does.</p>
             <p><a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml" target="_blank" rel="noopener noreferrer">normalize-urls.yml</a> is the worked example. It pushes a branch and opens a pull request every month, so <code>contents: write</code> plus <code>pull-requests: write</code> looks obviously correct. It isn't: both of those writes are done by a separate GitHub App installation token, minted in the job and passed explicitly to <code>actions/checkout</code> and to <code>peter-evans/create-pull-request</code>. No step in that job ever uses <code>GITHUB_TOKEN</code> at all. So the block is:</p>
-            <div class="code-block"><pre>permissions:
+            <div class="code-block" data-lang="yaml"><pre>permissions:
   contents: read</pre></div>
             <p>Nothing about the job's behavior changed, and the ambient credential can no longer be used to write anything. You can audit for this yourself in about a minute: grep your workflows for <code>token:</code>, and for every step that is handed an explicit one, ask whether the <code>permissions:</code> block is still granting that same power a second time to a credential nobody is using.</p>
 
             <h3 id="anatomy-3">§3 - Concurrency</h3>
-            <div class="code-block"><pre>concurrency:
+            <div class="code-block" data-lang="yaml"><pre>concurrency:
   group: validate-html-${{ github.ref }}
   cancel-in-progress: true</pre></div>
             <p>Runs of this workflow on the same git ref (the same PR or branch) cancel each other. Push a fix, the in-flight validation stops and a fresh one starts on the new commit. Different PRs run in parallel because the group includes <code>${{ github.ref }}</code>. We learned this lesson the hard way - see "<a href="#concepts">Concepts that bite newcomers</a>".</p>
 
             <h3 id="anatomy-4">§4 - Jobs and steps</h3>
-            <div class="code-block"><pre>jobs:
+            <div class="code-block" data-lang="yaml"><pre>jobs:
   validate-html:
     runs-on: ubuntu-latest
     steps:
@@ -773,12 +773,12 @@ jobs:
 
             <h3>4. <code>git push</code> from a runner can race with concurrent runs</h3>
             <p>Even with concurrency groups, you can race against <em>other workflows</em> in different groups (or against humans). A safer push pattern:</p>
-            <div class="code-block"><pre>git push || (git pull --rebase origin main &amp;&amp; git push)</pre></div>
+            <div class="code-block" data-lang="bash"><pre>git push || (git pull --rebase origin main &amp;&amp; git push)</pre></div>
             <p>If the first push is rejected because main moved, rebase on top of the latest main and retry. We use this in every commit-and-push step in <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml" target="_blank" rel="noopener noreferrer">site-update-deploy.yml</a>.</p>
 
             <h3>5. Step outputs and conditionals</h3>
             <p>Steps can publish small key/value outputs that later steps in the same job can read:</p>
-            <div class="code-block"><pre>- name: Did anything change?
+            <div class="code-block" data-lang="yaml"><pre>- name: Did anything change?
   id: detect
   run: |
     if git diff --quiet; then
@@ -804,7 +804,7 @@ jobs:
             <h3>9. <code>actions/checkout</code> resets every file's mtime - incremental deploys break</h3>
             <p>A fresh checkout gives every file the SAME mtime: the moment it was checked out. If you're using <code>rsync</code>, <code>aws s3 sync</code>, or any other tool that decides what to upload by comparing mtimes, every run will re-upload the entire tree. Took us months to notice - the deploy was just slow.</p>
             <p>The fix is a one-liner before the deploy step: walk every tracked file and rewind its mtime to the date of its last git commit. Then your housekeeping scripts (which only write files that actually change) generate a fresh "now" mtime on exactly the files that need it, and the deploy uploads only those:</p>
-            <div class="code-block"><pre>git ls-files -z | while IFS= read -r -d '' file; do
+            <div class="code-block" data-lang="bash"><pre>git ls-files -z | while IFS= read -r -d '' file; do
   ts=$(git log -1 --format=%ct -- "$file" 2&gt;/dev/null)
   [ -n "$ts" ] &amp;&amp; touch -d "@$ts" "$file"
 done</pre></div>
@@ -929,7 +929,7 @@ done</pre></div>
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

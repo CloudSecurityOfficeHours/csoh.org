@@ -241,6 +241,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof generateSourceFilters === 'function') generateSourceFilters();
     if (typeof generateTagFilters === 'function') generateTagFilters();
     if (typeof updateVisibleCount === 'function') updateVisibleCount();
+
+    // Reading aids. Deliberately last: initHeadingAnchors() creates
+    // `a[href^="#"]` elements, and the smooth-scroll loop above binds itself
+    // to the anchors that exist when it runs. Creating them afterwards is
+    // what keeps their click handler ours.
+    initCodeBlocks();
+    initHeadingAnchors();
+    initTocScrollSpy();
+    initBackToTop();
+    initExerciseControls();
 });
 
 // Generate tag filter buttons dynamically from tags on the page
@@ -1318,3 +1328,302 @@ function initDropdownNav() {
         els[j].textContent = ' (that’s ' + local + ' your time)';
     }
 })();
+
+/* =========================================================================
+   Code-block chrome, syntax highlighting, and reading aids.
+
+   All of this is progressive enhancement layered on markup that already
+   works without it. With JavaScript off a reader still gets the code, and
+   still gets the language label, because tools/stamp_code_langs.py stamps
+   data-lang into the HTML and style.css renders it from attr(). Only the
+   copy button, the highlighting, the heading anchors, the scroll-spy, and
+   the back-to-top control need script.
+   ========================================================================= */
+
+// Languages the highlighter knows. Keep in step with KNOWN in
+// tools/stamp_code_langs.py: a language stamped there but missing here
+// renders unhighlighted, which is a soft failure, and a language here but
+// not there is simply never reached.
+const CODE_LANGS = {
+    bash: {
+        line: ['#'], str: ['"', "'"],
+        kw: ['if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done',
+             'case', 'esac', 'function', 'return', 'export', 'local', 'set', 'in']
+    },
+    yaml:   { line: ['#'], str: ['"', "'"], key: true, kw: ['true', 'false', 'null'] },
+    json:   { line: [], str: ['"'], key: true, kw: ['true', 'false', 'null'] },
+    rego:   { line: ['#'], str: ['"'],
+              kw: ['package', 'import', 'default', 'if', 'contains', 'some', 'every',
+                   'in', 'not', 'with', 'as', 'else', 'null', 'true', 'false'] },
+    hcl:    { line: ['#', '//'], str: ['"'],
+              kw: ['resource', 'provider', 'variable', 'module', 'output', 'data',
+                   'terraform', 'locals', 'for_each', 'count', 'depends_on',
+                   'lifecycle', 'true', 'false', 'null'] },
+    sql:    { line: ['--'], str: ["'"], caseless: true,
+              kw: ['select', 'from', 'where', 'group', 'by', 'order', 'limit', 'as',
+                   'and', 'or', 'not', 'in', 'join', 'left', 'right', 'inner', 'on',
+                   'create', 'external', 'table', 'drop', 'alter', 'partition',
+                   'location', 'stored', 'row', 'format', 'serde', 'with', 'msck',
+                   'repair', 'count', 'desc', 'asc', 'having', 'case', 'when',
+                   'then', 'end', 'distinct', 'union', 'insert', 'into', 'values'] },
+    python: { line: ['#'], str: ['"', "'"],
+              kw: ['import', 'from', 'def', 'class', 'return', 'if', 'elif', 'else',
+                   'for', 'while', 'in', 'not', 'and', 'or', 'is', 'None', 'True',
+                   'False', 'with', 'as', 'try', 'except', 'finally', 'lambda', 'print'] },
+    cedar:  { line: ['//'], str: ['"'],
+              kw: ['permit', 'forbid', 'when', 'unless', 'principal', 'action',
+                   'resource', 'context', 'in', 'is', 'has', 'if', 'then', 'else',
+                   'true', 'false', 'entity', 'namespace', 'appliesTo', 'type'] },
+    yara:   { line: ['//', '#'], str: ['"'],
+              kw: ['rule', 'meta', 'strings', 'condition', 'and', 'or', 'not', 'any',
+                   'all', 'of', 'them', 'for', 'at', 'in', 'filesize', 'entrypoint',
+                   'ascii', 'wide', 'nocase', 'fullword', 'xor', 'base64', 'private',
+                   'global', 'import', 'uint8', 'uint16', 'uint32'] },
+    cel:    { line: ['//', '#'], str: ['"', "'"],
+              kw: ['has', 'all', 'exists', 'exists_one', 'filter', 'map', 'size', 'in',
+                   'true', 'false', 'null', 'matches', 'startsWith', 'endsWith',
+                   'contains', 'timestamp', 'duration', 'int', 'string', 'type'] },
+    // XML needs tag/attribute structure rather than keywords, so it supplies
+    // its own ordered rules instead of the generated ones.
+    xml:    { rules: [
+                ['tok-com',  '<!--[\\s\\S]*?-->'],
+                ['tok-str',  '"(?:[^"\\\\]|\\\\.)*"'],
+                ['tok-tag',  '</?[\\w:.-]+|/?>'],
+                ['tok-attr', '[\\w:.-]+(?=\\s*=)']
+            ] }
+    // regex and text are deliberately absent: neither has tokens worth
+    // colouring, and guessing at regex structure produced worse output than
+    // leaving it plain.
+};
+
+function escapeHtmlText(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function reEscape(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Turn one code block's plain text into escaped HTML with token spans.
+// Rules are tried in order at each position, so comments and strings are
+// listed first: a `#` inside a string must not start a comment, and a
+// keyword inside a comment must not be coloured as a keyword.
+function highlightCode(text, lang) {
+    const cfg = CODE_LANGS[lang];
+    if (!cfg) return escapeHtmlText(text);
+
+    let rules = cfg.rules;
+    if (!rules) {
+        rules = [];
+        (cfg.line || []).forEach(function (m) {
+            rules.push(['tok-com', reEscape(m) + '[^\\n]*']);
+        });
+        (cfg.str || []).forEach(function (q) {
+            rules.push(['tok-str', q + '(?:\\\\.|[^' + q + '\\\\\\n])*' + q]);
+        });
+        if (cfg.key) rules.push(['tok-key', '^[ \\t]*[-\\w.$"\\[\\]]+(?=\\s*:)']);
+        if (cfg.kw) rules.push(['tok-kw', '\\b(?:' + cfg.kw.map(reEscape).join('|') + ')\\b']);
+        if (lang === 'bash') rules.push(['tok-key', '\\$\\{[^}]*\\}|\\$[A-Za-z_][\\w]*']);
+        // Numbers only, not identifiers that merely start with a digit.
+        // `\\b\\d[\\w.]*\\b` coloured the four leading hex runs of a UUID and
+        // left the rest plain, which read as damage rather than syntax.
+        rules.push(['tok-num', '\\b(?:0x[0-9a-fA-F]+|\\d+(?:\\.\\d+)*)\\b']);
+    }
+
+    let re;
+    try {
+        re = new RegExp(rules.map(function (r) { return '(' + r[1] + ')'; }).join('|'),
+                        'gm' + (cfg.caseless ? 'i' : ''));
+    } catch (e) {
+        return escapeHtmlText(text);   // a bad pattern must never eat the code
+    }
+
+    let out = '', last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) { re.lastIndex++; continue; }
+        if (m.index > last) out += escapeHtmlText(text.slice(last, m.index));
+        let cls = 'tok-punct';
+        for (let i = 1; i < m.length; i++) {
+            if (m[i] !== undefined) { cls = rules[i - 1][0]; break; }
+        }
+        out += '<span class="' + cls + '">' + escapeHtmlText(m[0]) + '</span>';
+        last = m.index + m[0].length;
+    }
+    return out + escapeHtmlText(text.slice(last));
+}
+
+// The text a reader should get when they press Copy. Reads through a clone so
+// the <br>-separated blocks on the older pages come back with real newlines
+// rather than as one run-on line, and so &nbsp; becomes a normal space.
+function codeBlockText(el) {
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('br').forEach(function (br) {
+        br.replaceWith(document.createTextNode('\n'));
+    });
+    clone.querySelectorAll('.cb-copy').forEach(function (b) { b.remove(); });
+    return clone.textContent.replace(/\u00a0/g, ' ').replace(/\s+$/, '');
+}
+
+function copyTextToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+    // Fallback for http:// origins, where the async clipboard API is absent.
+    return new Promise(function (resolve, reject) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-1000px';
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('copy failed'));
+    });
+}
+
+function initCodeBlocks() {
+    document.querySelectorAll('.code-block').forEach(function (block) {
+        const pre = block.querySelector('pre');
+        const lang = block.getAttribute('data-lang');
+
+        // Highlight before the button is added, so the button's own label can
+        // never end up inside the highlighted text.
+        if (pre && lang && CODE_LANGS[lang]) {
+            pre.innerHTML = highlightCode(pre.textContent, lang);
+        }
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cb-copy';
+        btn.textContent = 'Copy';
+        btn.setAttribute('aria-label', lang ? 'Copy ' + lang + ' snippet' : 'Copy snippet');
+        btn.addEventListener('click', function () {
+            copyTextToClipboard(codeBlockText(pre || block)).then(function () {
+                btn.textContent = 'Copied';
+                btn.setAttribute('data-state', 'done');
+            }).catch(function () {
+                btn.textContent = 'Press Ctrl+C';
+                btn.setAttribute('data-state', 'done');
+            });
+            clearTimeout(btn._t);
+            btn._t = setTimeout(function () {
+                btn.textContent = 'Copy';
+                btn.removeAttribute('data-state');
+            }, 2000);
+        });
+        block.appendChild(btn);
+    });
+}
+
+// A clickable link on each section heading. The heading text already names
+// the destination, so the glyph is aria-hidden and the link carries a label.
+function initHeadingAnchors() {
+    const scope = document.querySelector('.contribute-article');
+    if (!scope) return;
+    scope.querySelectorAll('h2[id], h3[id], section[id] > h2, section[id] > h3')
+        .forEach(function (h) {
+            const id = h.id || (h.parentElement && h.parentElement.id);
+            if (!id || h.querySelector('.head-anchor')) return;
+            const a = document.createElement('a');
+            a.className = 'head-anchor';
+            a.href = '#' + id;
+            a.textContent = '#';
+            a.setAttribute('aria-label', 'Link to this section');
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                history.replaceState(null, '', '#' + id);
+                document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                copyTextToClipboard(location.href).catch(function () {});
+            });
+            h.appendChild(a);
+        });
+}
+
+// Highlight the table-of-contents entry for the section currently on screen.
+function initTocScrollSpy() {
+    const toc = document.querySelector('.contribute-article > .toc');
+    if (!toc || !('IntersectionObserver' in window)) return;
+    const links = Array.prototype.slice.call(toc.querySelectorAll('a[href^="#"]'));
+    if (!links.length) return;
+
+    const byId = {};
+    const targets = [];
+    links.forEach(function (a) {
+        const el = document.getElementById(a.getAttribute('href').slice(1));
+        if (el) { byId[el.id] = a; targets.push(el); }
+    });
+    if (!targets.length) return;
+
+    const visible = new Set();
+    const mark = function () {
+        let current = null;
+        for (let i = 0; i < targets.length; i++) {
+            if (visible.has(targets[i].id)) { current = targets[i].id; break; }
+        }
+        links.forEach(function (a) { a.classList.remove('is-current'); });
+        if (current && byId[current]) byId[current].classList.add('is-current');
+    };
+    const io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+            if (e.isIntersecting) visible.add(e.target.id);
+            else visible.delete(e.target.id);
+        });
+        mark();
+    }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+    targets.forEach(function (t) { io.observe(t); });
+}
+
+function initBackToTop() {
+    if (!document.querySelector('.contribute-article')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'to-top';
+    btn.innerHTML = '<span aria-hidden="true">&uarr;</span>';
+    btn.setAttribute('aria-label', 'Back to top');
+    btn.addEventListener('click', function () {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        const skip = document.querySelector('.skip-link');
+        if (skip) skip.focus();
+    });
+    document.body.appendChild(btn);
+    const onScroll = function () {
+        btn.classList.toggle('is-visible', window.scrollY > 600);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+}
+
+// One control to open or close every exercise answer on the page.
+function initExerciseControls() {
+    const details = document.querySelectorAll('.exercise details');
+    if (details.length < 2) return;
+    const first = document.querySelector('.exercise');
+    if (!first || !first.parentNode) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'exercise-controls';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'exercise-toggle-all';
+    btn.setAttribute('aria-controls', 'exercises');
+
+    const sync = function () {
+        const openCount = document.querySelectorAll('.exercise details[open]').length;
+        const allOpen = openCount === details.length;
+        btn.textContent = allOpen ? 'Collapse all answers' : 'Expand all answers';
+        btn.setAttribute('aria-expanded', allOpen ? 'true' : 'false');
+    };
+    btn.addEventListener('click', function () {
+        const allOpen = document.querySelectorAll('.exercise details[open]').length === details.length;
+        details.forEach(function (d) { d.open = !allOpen; });
+        sync();
+    });
+    details.forEach(function (d) { d.addEventListener('toggle', sync); });
+
+    wrap.appendChild(btn);
+    first.parentNode.insertBefore(wrap, first);
+    sync();
+}

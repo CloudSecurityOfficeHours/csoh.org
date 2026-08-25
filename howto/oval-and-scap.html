@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -416,7 +416,7 @@
 
             <h3>One definition, shaped like a real vendor advisory</h3>
             <p>Element names and structure below match what Red Hat actually publishes; the ids and versions are illustrative.</p>
-<div class="code-block"><pre>&lt;definition class="patch" id="oval:com.redhat.rhsa:def:20231234" version="1"&gt;
+<div class="code-block" data-lang="xml"><pre>&lt;definition class="patch" id="oval:com.redhat.rhsa:def:20231234" version="1"&gt;
   &lt;metadata&gt;
     &lt;title&gt;RHSA-2023:1234: openssl security update (Important)&lt;/title&gt;
     &lt;affected family="unix"&gt;
@@ -436,7 +436,7 @@
   &lt;/criteria&gt;
 &lt;/definition&gt;</pre></div>
             <p>Follow <code>tst:20231234002</code> and you land on the test, which points at an object and a state:</p>
-<div class="code-block"><pre>&lt;!-- TEST: check="at least one" means the test passes if any installed
+<div class="code-block" data-lang="xml"><pre>&lt;!-- TEST: check="at least one" means the test passes if any installed
      package matching the object satisfies the state. --&gt;
 &lt;rpminfo_test id="oval:com.redhat.rhsa:tst:20231234002" check="at least one"
               comment="openssl is earlier than 1:3.0.7-6.el9_1" version="1"&gt;
@@ -463,7 +463,7 @@
 
             <h3>1. Get a scanner</h3>
             <p><code>oscap</code> is Linux-only, so run the lab in a container regardless of your laptop.</p>
-<div class="code-block"><pre>mkdir -p ~/oval-lab &amp;&amp; cd ~/oval-lab
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/oval-lab &amp;&amp; cd ~/oval-lab
 
 # -v mounts this directory into the container so reports survive exit.
 docker run --rm -it -v "$PWD:/work" -w /work fedora:latest bash
@@ -473,7 +473,7 @@ dnf install -y openscap-scanner scap-security-guide bzip2 libxml2 &amp;&amp; osc
             <p><code>oscap --version</code> prints the OVAL and XCCDF schema versions it supports. Read them. Content written against a newer schema than your scanner understands is a real and confusing failure mode.</p>
 
             <h3>2. Fetch a real vendor OVAL feed</h3>
-<div class="code-block"><pre># Red Hat publishes per-release OVAL streams; Debian, Ubuntu, and SUSE
+<div class="code-block" data-lang="bash"><pre># Red Hat publishes per-release OVAL streams; Debian, Ubuntu, and SUSE
 # publish equivalents. This is a large file, so expect a moment.
 curl -sSLO https://access.redhat.com/security/data/oval/v2/RHEL9/rhel-9.oval.xml.bz2
 bunzip2 -f rhel-9.oval.xml.bz2
@@ -483,7 +483,7 @@ grep -c '&lt;definition ' rhel-9.oval.xml</pre></div>
 
             <h3>3. Read one definition end to end</h3>
             <p>This is the exercise that makes the format stop feeling opaque. Pick a CVE, find its definition, then follow the id chain by hand.</p>
-<div class="code-block"><pre># Find a definition that references a CVE you care about.
+<div class="code-block" data-lang="bash"><pre># Find a definition that references a CVE you care about.
 xmllint --xpath \
   "//*[local-name()='definition'][.//*[@ref_id='CVE-2023-0286']]/@id" \
   rhel-9.oval.xml
@@ -491,13 +491,13 @@ xmllint --xpath \
 # Note local-name(): OVAL is heavily namespaced, and a plain //definition
 # XPath silently returns nothing. Empty output from a namespaced document
 # almost always means the namespace, not an absent element.</pre></div>
-<div class="code-block"><pre># Then walk the chain, substituting each id you find as you go:
+<div class="code-block" data-lang="bash"><pre># Then walk the chain, substituting each id you find as you go:
 #   definition -> criterion test_ref -> test -> object_ref + state_ref
 xmllint --xpath "//*[@id='oval:com.redhat.rhsa:tst:20231234002']" rhel-9.oval.xml</pre></div>
 
             <h3>4. Run an OVAL-only evaluation</h3>
             <p>This evaluates the feed against the running system and tells you which definitions are true, meaning which advisories apply to you.</p>
-<div class="code-block"><pre>oscap oval eval --results oval-results.xml --report oval-report.html \
+<div class="code-block" data-lang="bash"><pre>oscap oval eval --results oval-results.xml --report oval-report.html \
   rhel-9.oval.xml
 
 # The container is Fedora, not RHEL 9, so expect nearly everything to come
@@ -506,12 +506,12 @@ xmllint --xpath "//*[@id='oval:com.redhat.rhsa:tst:20231234002']" rhel-9.oval.xm
 
             <h3>5. Run a real compliance scan through XCCDF</h3>
             <p>Now the other half of SCAP. The <code>scap-security-guide</code> package installs data streams under <code>/usr/share/xml/scap/ssg/content/</code>.</p>
-<div class="code-block"><pre>ls /usr/share/xml/scap/ssg/content/
+<div class="code-block" data-lang="bash"><pre>ls /usr/share/xml/scap/ssg/content/
 
 # oscap info tells you what is inside a data stream, and crucially which
 # profiles it offers. Never guess a profile id - they are long and versioned.
 oscap info /usr/share/xml/scap/ssg/content/ssg-fedora-ds.xml</pre></div>
-<div class="code-block"><pre>oscap xccdf eval \
+<div class="code-block" data-lang="bash"><pre>oscap xccdf eval \
   --profile xccdf_org.ssgproject.content_profile_standard \
   --results-arf arf.xml \
   --report report.html \
@@ -523,7 +523,7 @@ echo $?   # 0 = all rules passed, 2 = at least one failed, 1 = the scan errored<
             </div>
 
             <h3>6. Read the results</h3>
-<div class="code-block"><pre># Open report.html in a browser for the human view. For the machine view,
+<div class="code-block" data-lang="bash"><pre># Open report.html in a browser for the human view. For the machine view,
 # pull the rule results straight out of the ARF:
 xmllint --xpath \
   "//*[local-name()='rule-result'][*[local-name()='result']='fail']/@idref" \
@@ -531,7 +531,7 @@ xmllint --xpath \
             <p>Every failing rule id maps back to an XCCDF rule with prose rationale, and that rule points at the OVAL definition that produced the verdict. When someone disputes a finding, that chain is the evidence.</p>
 
             <h3>7. Generate remediation, and read it before running it</h3>
-<div class="code-block"><pre>oscap xccdf generate fix \
+<div class="code-block" data-lang="bash"><pre>oscap xccdf generate fix \
   --profile xccdf_org.ssgproject.content_profile_standard \
   --fix-type bash \
   /usr/share/xml/scap/ssg/content/ssg-fedora-ds.xml &gt; remediate.sh
@@ -541,7 +541,7 @@ xmllint --xpath \
             <p>Generated remediation is genuinely useful and genuinely dangerous. It is derived from a baseline that knows nothing about your workload, and a STIG profile applied wholesale to a running application server will disable something that application needs. Treat the output as a reviewed pull request, never as a command to pipe into a shell.</p>
 
             <h3>8. Scan a container image instead of a host</h3>
-<div class="code-block"><pre># openscap-utils ships oscap-podman, which mounts an image's filesystem
+<div class="code-block" data-lang="bash"><pre># openscap-utils ships oscap-podman, which mounts an image's filesystem
 # and evaluates against it without starting the container.
 dnf install -y openscap-utils
 oscap-podman &lt;image-id&gt; oval eval --report image-report.html rhel-9.oval.xml</pre></div>
@@ -577,7 +577,7 @@ oscap-podman &lt;image-id&gt; oval eval --report image-report.html rhel-9.oval.x
                 <p>Take one failing rule id from your XCCDF scan and find the OVAL definition behind it. Then answer: could you have determined pass or fail by reading the XCCDF alone?</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre># The XCCDF rule carries a &lt;check-content-ref&gt; naming the OVAL definition id.
+<div class="code-block" data-lang="bash"><pre># The XCCDF rule carries a &lt;check-content-ref&gt; naming the OVAL definition id.
 xmllint --xpath "//*[local-name()='Rule'][@id='&lt;rule-id&gt;']
   //*[local-name()='check-content-ref']/@name" \
   /usr/share/xml/scap/ssg/content/ssg-fedora-ds.xml</pre></div>
@@ -593,7 +593,7 @@ xmllint --xpath "//*[local-name()='Rule'][@id='&lt;rule-id&gt;']
                     <summary>Show the answer</summary>
                     <p>Editing the data stream forks vendor content. The next release overwrites your change or, worse, does not, and you quietly drift onto a private baseline nobody can reproduce or audit. You also lose the signature on signed content.</p>
                     <p>The right mechanism is <strong>tailoring</strong>: a separate XCCDF tailoring file that selects and deselects rules and overrides variable values, referencing the original data stream without modifying it.</p>
-<div class="code-block"><pre>oscap xccdf eval \
+<div class="code-block" data-lang="bash"><pre>oscap xccdf eval \
   --profile "$PROFILE" \
   --tailoring-file my-tailoring.xml \
   /usr/share/xml/scap/ssg/content/ssg-fedora-ds.xml</pre></div>
@@ -653,7 +653,7 @@ xmllint --xpath "//*[local-name()='Rule'][@id='&lt;rule-id&gt;']
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

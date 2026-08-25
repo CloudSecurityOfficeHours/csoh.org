@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -385,7 +385,7 @@
             <p>This is why a pattern copied from a blog post into a Go service fails to compile, and why the same pattern copied into a Python validator is a denial-of-service risk. Google built RE2 specifically so that user-supplied patterns could be run safely, and services that accept regex from users (log platforms, WAF rule builders) almost always use it for exactly that reason.</p>
 
             <h3>The two failure directions, concretely</h3>
-<div class="code-block"><pre># TOO BROAD - the dot is unescaped, so it matches ANY character
+<div class="code-block" data-lang="regex"><pre># TOO BROAD - the dot is unescaped, so it matches ANY character
 https://.*.example.com          # matches https://evilXexampleYcom
 
 # TOO BROAD - no anchors, so the match can sit anywhere in the string
@@ -399,7 +399,7 @@ https://.*\.example\.com        # matches https://evil.com/?x=.example.com
         <section id="walkthrough">
             <h2>Walk-through</h2>
             <p>Build a scratch directory first. Every step below runs against these files.</p>
-<div class="code-block"><pre>mkdir -p ~/regex-lab &amp;&amp; cd ~/regex-lab
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/regex-lab &amp;&amp; cd ~/regex-lab
 
 cat &gt; sample.log &lt;&lt;'EOF'
 2026-08-20T14:03:11Z user=alice ip=203.0.113.14 action=AssumeRole result=success
@@ -417,13 +417,13 @@ doc_reference = "the AKIA prefix identifies long-term keys"
 EOF</pre></div>
 
             <h3>1. Anchors, and why they are a security control</h3>
-<div class="code-block"><pre># -E = extended regex (POSIX ERE). Without -E, grep needs backslashes
+<div class="code-block" data-lang="bash"><pre># -E = extended regex (POSIX ERE). Without -E, grep needs backslashes
 # in front of +, ?, |, (, and ) - a classic source of "why doesn't this work".
 grep -E 'denied' sample.log            # substring match, anywhere on the line
 grep -E '^2026-08-20T14:06' sample.log # ^ pins to start of line
 grep -E 'success$' sample.log          # $ pins to end of line</pre></div>
             <p>In a search, an unanchored pattern is a convenience. In a validator, an unanchored pattern is a bug, because "contains" is not "is". Prove it to yourself:</p>
-<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re
 allow = re.compile(r'https://.*\.example\.com')      # no anchors
 for url in ["https://api.example.com",
@@ -435,7 +435,7 @@ PY</pre></div>
 
             <h3>2. The Python anchor that is not an anchor</h3>
             <p>Anchoring both ends is necessary and, in Python specifically, not sufficient. <code>$</code> matches at the end of the string <em>or immediately before a trailing newline</em>.</p>
-<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re
 p = re.compile(r'^[a-z0-9-]+$')          # "a simple hostname label"
 print(bool(p.match("prod-web")))          # True  - fine
@@ -448,7 +448,7 @@ PY</pre></div>
             <p>Whether the trailing newline matters depends entirely on what consumes the value afterwards. If it lands in a header, a log line, or a generated config file, it matters a great deal. Use <code>\A</code> and <code>\Z</code> in Python when the regex is a validator rather than a search.</p>
 
             <h3>3. Character classes, quantifiers, and greed</h3>
-<div class="code-block"><pre># Extract every source IP. [0-9]{1,3} = one to three digits.
+<div class="code-block" data-lang="bash"><pre># Extract every source IP. [0-9]{1,3} = one to three digits.
 grep -oE '\bip=[0-9]{1,3}(\.[0-9]{1,3}){3}\b' sample.log
 
 # -o prints only the matched part rather than the whole line.
@@ -456,7 +456,7 @@ grep -oE '\bip=[0-9]{1,3}(\.[0-9]{1,3}){3}\b' sample.log
 # character and a non-word character. It is what stops the pattern
 # matching the middle of a longer token.</pre></div>
             <p>Quantifiers are greedy by default: they take as much as they can and then give back only if the rest of the pattern fails. Adding <code>?</code> makes them lazy, taking as little as possible. On a log line with more than one delimiter, the difference is the whole result:</p>
-<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re
 line = 'user=alice action=AssumeRole result=success'
 print(re.search(r'user=(.*) ',  line).group(1))   # greedy: 'alice action=AssumeRole'
@@ -466,7 +466,7 @@ PY</pre></div>
             <p>The third form is the one to reach for. "Everything up to the next space" stated as <code>[^ ]+</code> is unambiguous, is immune to a later change in the rest of the pattern, and does not depend on the reader remembering greed rules at 2am.</p>
 
             <h3>4. Groups, captures, and named captures</h3>
-<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re, collections
 pat = re.compile(
     r'^(?P&lt;ts&gt;\S+) user=(?P&lt;user&gt;[^ ]+) ip=(?P&lt;ip&gt;[^ ]+) '
@@ -482,21 +482,21 @@ PY</pre></div>
 
             <h3>5. Write a credential scanner</h3>
             <p>AWS access key IDs are 20 characters: a four-character prefix plus 16 uppercase alphanumerics. <code>AKIA</code> is a long-term <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> user key. <code>ASIA</code> is a temporary <a class="glossary-link" href="../glossary.html#term-sts">STS</a> credential.</p>
-<div class="code-block"><pre># First attempt - finds the keys, and also finds the two things that are not keys
+<div class="code-block" data-lang="bash"><pre># First attempt - finds the keys, and also finds the two things that are not keys
 grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' secrets.txt
 
 # Word boundaries reject the embedded case
 grep -oE '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
             <p>Run both. The first matches inside <code>XAKIAIOSFODNN7EXAMPLEX</code>, because nothing said the match had to start at a token boundary. The second does not. Neither can tell you anything about the prose line mentioning <code>AKIA</code>, because that line contains no 20-character key, which is the correct outcome and worth confirming rather than assuming.</p>
             <p>Now try the other half of an AWS credential pair, and watch the approach fall apart:</p>
-<div class="code-block"><pre># A secret access key is 40 characters of base64 alphabet. As a regex
+<div class="code-block" data-lang="bash"><pre># A secret access key is 40 characters of base64 alphabet. As a regex
 # that is nearly content-free: it matches most git hashes, most base64
 # blobs, and a good fraction of minified JavaScript.
 grep -oE '\b[A-Za-z0-9/+=]{40}\b' secrets.txt</pre></div>
             <p>This is the boundary of what regex can do, and knowing where that boundary is matters more than another hour of syntax. Real secret scanners pair a regex with something else: Shannon entropy over the candidate, a proximity requirement (the string must sit near <code>aws_secret_access_key</code>), and increasingly a live validity check against the provider. Regex finds candidates. It does not decide.</p>
 
             <h3>6. Lookaround, and living without it</h3>
-<div class="code-block"><pre># Lookahead: match a key ID only when NOT followed by more alphanumerics.
+<div class="code-block" data-lang="bash"><pre># Lookahead: match a key ID only when NOT followed by more alphanumerics.
 # Lookbehind: and not preceded by any either. PCRE / Python / Java only.
 python3 -c "
 import re
@@ -507,13 +507,13 @@ print(re.findall(r'(?&lt;![A-Z0-9])(AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])',
 rg '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt    # error: look-around not supported
 rg -P '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt # -P switches to PCRE2</pre></div>
             <p>When the engine has no lookaround, express the boundary instead of asserting it. <code>\b</code> covers most cases. Where it does not, match the surrounding character and capture only the part you want:</p>
-<div class="code-block"><pre># Instead of  (?&lt;=key = )\S+   which needs lookbehind,
+<div class="code-block" data-lang="bash"><pre># Instead of  (?&lt;=key = )\S+   which needs lookbehind,
 # match the label too and take group 1.
 rg -o 'key\s*=\s*(\S+)' -r '$1' secrets.txt   # -r rewrites output to the capture</pre></div>
 
             <h3>7. Catastrophic backtracking</h3>
             <p>A backtracking engine can be made to explore an exponential number of paths. The trigger is nested quantifiers over overlapping alternatives, followed by something that fails.</p>
-<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re, time
 evil = re.compile(r'^(a+)+$')          # nested quantifier, both greedy
 for n in (18, 20, 22, 24):
@@ -532,7 +532,7 @@ PY</pre></div>
             <div class="exercise">
                 <span class="exercise__label">Exercise 1</span>
                 <p>An internal service fetches a URL supplied by the user, and validates it with this allowlist. Give three distinct URLs that pass validation but reach a host you do not control.</p>
-<div class="code-block"><pre>re.search(r'https://.*\.internal\.example\.com', url)</pre></div>
+<div class="code-block" data-lang="python"><pre>re.search(r'https://.*\.internal\.example\.com', url)</pre></div>
                 <details>
                     <summary>Show the answer</summary>
                     <ul>
@@ -550,7 +550,7 @@ PY</pre></div>
                 <p>Write one pattern that finds AWS access key IDs in a file, matching both long-term and temporary keys, rejecting keys embedded in longer tokens, and running on ripgrep's default engine (so no lookaround). Then explain why <code>[A-Z0-9]{16}</code> and not <code>\w{16}</code>.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>rg -o '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
+<div class="code-block" data-lang="bash"><pre>rg -o '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
                     <p><code>\w</code> is <code>[A-Za-z0-9_]</code>: it admits lowercase and underscore, neither of which appears in an access key ID. Widening a character class beyond the real alphabet costs you precision in exactly the place a scanner can least afford it, because every false positive is a human being asked to rotate a credential that does not exist. Match the actual alphabet, not the convenient shorthand.</p>
                     <p>Worth noting that <code>\b</code> before <code>A</code> only asserts a boundary; if the preceding character is a word character there is no boundary and the match is correctly rejected, which is why this works without lookbehind.</p>
                 </details>
@@ -559,7 +559,7 @@ PY</pre></div>
             <div class="exercise">
                 <span class="exercise__label">Exercise 3</span>
                 <p>Which of these is a catastrophic-backtracking risk on a PCRE engine, and which is safe? Say why for each.</p>
-<div class="code-block"><pre>A:  ^(\w+\s?)*$
+<div class="code-block" data-lang="regex"><pre>A:  ^(\w+\s?)*$
 B:  ^\w+(\s\w+)*$
 C:  ^(a|ab)+c$
 D:  ^[a-z]{1,64}$</pre></div>
@@ -578,7 +578,7 @@ D:  ^[a-z]{1,64}$</pre></div>
                 <p>Using <code>sample.log</code>, write a one-liner that prints only principals with more than one denied action, and the count. Then say what your pattern would do if a username legitimately contained an <code>=</code> sign.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>grep -E 'result=denied' sample.log \
+<div class="code-block" data-lang="bash"><pre>grep -E 'result=denied' sample.log \
   | grep -oE '\buser=[^ ]+' \
   | sort | uniq -c | sort -rn \
   | awk '$1 &gt; 1'          # keep only counts above one</pre></div>
@@ -639,7 +639,7 @@ D:  ^[a-z]{1,64}$</pre></div>
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

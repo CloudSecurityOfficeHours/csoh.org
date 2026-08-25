@@ -49,10 +49,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -385,26 +385,26 @@
             <h2>Step-by-step</h2>
 
             <h3>1. Install kind and kubectl</h3>
-<div class="code-block"><pre># macOS via Homebrew (see kubernetes.io / kind.sigs.k8s.io for Linux and Windows)
+<div class="code-block" data-lang="bash"><pre># macOS via Homebrew (see kubernetes.io / kind.sigs.k8s.io for Linux and Windows)
 brew install kubectl kind        # kubectl = the cluster client; kind = "Kubernetes IN Docker", the cluster itself
 
 kind --version                   # confirm kind installed
 kubectl version --client         # --client = print only the local CLI version, don't try to reach a cluster yet</pre></div>
             <h3>2. Create a multi-node cluster</h3>
             <p><code>kind-config.yaml</code>:</p>
-<div class="code-block"><pre>kind: Cluster                       # this file describes a kind cluster
+<div class="code-block" data-lang="bash"><pre>kind: Cluster                       # this file describes a kind cluster
 apiVersion: kind.x-k8s.io/v1alpha4  # the kind config schema version (not the Kubernetes version)
 nodes:                              # each list entry becomes one Docker container running a full kubelet
   - role: control-plane             # runs the API server, scheduler, etcd - the cluster's brain
   - role: worker                    # runs your workloads (pods)
   - role: worker                    # a second worker, so you can watch pods get scheduled across nodes</pre></div>
-<div class="code-block"><pre>kind create cluster --name goat --config kind-config.yaml   # build the 3-node cluster from the file above (~30s)
+<div class="code-block" data-lang="bash"><pre>kind create cluster --name goat --config kind-config.yaml   # build the 3-node cluster from the file above (~30s)
 kubectl get nodes                          # list nodes; expect one control-plane and two workers, all "Ready"
 kubectl cluster-info --context kind-goat   # --context picks this cluster; prints the API-server URL to confirm you're wired up</pre></div>
             <p>Each "node" is a Docker container running a full kubelet. A multi-node cluster lets you observe pod scheduling and NetworkPolicy behavior that a single node hides.</p>
 
             <h3>3. Deploy Kubernetes Goat</h3>
-<div class="code-block"><pre>git clone https://github.com/madhuakula/kubernetes-goat.git   # download the deliberately-vulnerable scenarios
+<div class="code-block" data-lang="bash"><pre>git clone https://github.com/madhuakula/kubernetes-goat.git   # download the deliberately-vulnerable scenarios
 cd kubernetes-goat
 bash setup-kubernetes-goat.sh         # deploy every vulnerable workload into your cluster
 kubectl get pods                      # list pods; re-run until they all show STATUS = Running
@@ -413,7 +413,7 @@ bash access-kubernetes-goat.sh        # open kubectl port-forwards so you can re
 
             <h3>4. Scenario: secrets exposed to a pod</h3>
             <p>Walk the "Sensitive keys in codebases" and "DIND (Docker-in-Docker) exploitation" scenarios. The core lesson is how much a single compromised pod can see:</p>
-<div class="code-block"><pre># what secrets can the default service account list?
+<div class="code-block" data-lang="bash"><pre># what secrets can the default service account list?
 kubectl get secrets                                    # list Secret objects in the current namespace
 kubectl get secret &lt;name&gt; -o jsonpath='{.data}' | jq   # -o jsonpath pulls out just the .data map; pipe to jq to read it
                                                         # (values are base64 - `| base64 -d` to decode a field)
@@ -426,7 +426,7 @@ cat /var/run/secrets/kubernetes.io/serviceaccount/namespace   # which namespace 
             <p>Every pod gets a service-account token mounted at that path by default. If the pod is compromised and its service account is over-permissive, the attacker inherits those API rights. That single fact drives most in-cluster privilege escalation.</p>
 
             <h3>5. Scenario: map the RBAC blast radius</h3>
-<div class="code-block"><pre># what can this service account actually do?
+<div class="code-block" data-lang="bash"><pre># what can this service account actually do?
 kubectl auth can-i --list \                     # --list = dump every verb/resource this identity is allowed
   --as=system:serviceaccount:default:default    # --as = impersonate; format is system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;
 
@@ -436,13 +436,13 @@ kubectl auth can-i create pods \                # asks a yes/no question: can th
             <p><code>kubectl auth can-i</code> is the single most useful RBAC command. Running it <em>as</em> a service account shows you the exact blast radius of a pod compromise. If a default service account can <code>create pods</code> or <code>get secrets</code> cluster-wide, that is your finding.</p>
 
             <h3>6. Scenario: spot a container-escape path</h3>
-<div class="code-block"><pre># inspect a pod spec for the classic escape enablers
+<div class="code-block" data-lang="bash"><pre># inspect a pod spec for the classic escape enablers
 kubectl get pod &lt;pod-name&gt; -o yaml \                                         # -o yaml = dump the pod's full spec
   | grep -iE 'hostPath|privileged|hostNetwork|hostPID|securityContext' -A2   # -i case-insensitive, -E regex, -A2 show 2 lines of context</pre></div>
             <p>A <code>hostPath</code> mount of <code>/</code>, <code>privileged: true</code>, or <code>hostPID: true</code> each turns a container compromise into node compromise. Kubernetes Goat's "container escape to the host system" scenario walks the full exploitation; the grep above is how you find the same red flags in any real pod spec.</p>
 
             <h3>7. Baseline the cluster with kube-bench and kubescape</h3>
-<div class="code-block"><pre># kube-bench: runs the CIS Kubernetes Benchmark as an in-cluster Job
+<div class="code-block" data-lang="bash"><pre># kube-bench: runs the CIS Kubernetes Benchmark as an in-cluster Job
 kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml   # -f = apply the manifest straight from the URL
 kubectl wait --for=condition=complete job/kube-bench --timeout=120s   # block until the Job finishes (or 120s passes)
 kubectl logs job/kube-bench                                          # the benchmark results are written to the Job's logs
@@ -453,7 +453,7 @@ kubescape scan --format html --output kubescape-report.html   # scan the live cl
             <p>kube-bench grades the cluster against the CIS benchmark control by control; kubescape maps findings to attack frameworks and produces a shareable report. Trivy can also scan the whole cluster in one shot: <code>trivy k8s --report summary cluster</code>. Reading these reports - deciding what is a real risk versus benchmark noise on a kind cluster - is the actual skill.</p>
 
             <h3>8. Harden a namespace: Pod Security admission</h3>
-<div class="code-block"><pre>kubectl create namespace secure-app          # a fresh namespace to apply the policy to
+<div class="code-block" data-lang="bash"><pre>kubectl create namespace secure-app          # a fresh namespace to apply the policy to
 kubectl label namespace secure-app \         # Pod Security admission is switched on via namespace labels
   pod-security.kubernetes.io/enforce=restricted \   # enforce = actually block pods that violate the "restricted" profile
   pod-security.kubernetes.io/warn=restricted        # warn = also print a warning to whoever applies a bad pod
@@ -465,7 +465,7 @@ kubectl -n secure-app run bad --image=nginx \        # -n = target the labeled n
 
             <h3>9. Harden the network: default-deny</h3>
             <p><code>default-deny.yaml</code>:</p>
-<div class="code-block"><pre>apiVersion: networking.k8s.io/v1
+<div class="code-block" data-lang="yaml"><pre>apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-all
@@ -477,12 +477,12 @@ spec:
             <div class="highlight-box">
             <p><strong>Important caveat most tutorials skip:</strong> kind's default CNI (kindnet) does <em>not</em> enforce NetworkPolicy, so the policy above will appear to do nothing. To actually see traffic get denied, recreate the cluster with the default CNI disabled and install Calico or Cilium:</p>
             </div>
-<div class="code-block"><pre># add `networking: {disableDefaultCNI: true}` to kind-config.yaml, then:
+<div class="code-block" data-lang="bash"><pre># add `networking: {disableDefaultCNI: true}` to kind-config.yaml, then:
 kind create cluster --name goat --config kind-config.yaml   # rebuild the cluster with NO default network plugin
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml   # install Calico, a CNI that DOES enforce NetworkPolicy
 kubectl -n secure-app apply -f default-deny.yaml   # re-apply the policy; now traffic actually gets blocked</pre></div>
             <h3>10. Tear it down</h3>
-<div class="code-block"><pre>kind delete cluster --name goat   # destroy the cluster and its Docker containers - complete, instant, and free</pre></div>
+<div class="code-block" data-lang="bash"><pre>kind delete cluster --name goat   # destroy the cluster and its Docker containers - complete, instant, and free</pre></div>
             <p>Instant, complete, and free. Recreate the whole lab in thirty seconds whenever you want a clean slate.</p>
         </section>
 
@@ -533,7 +533,7 @@ kubectl -n secure-app apply -f default-deny.yaml   # re-apply the policy; now tr
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

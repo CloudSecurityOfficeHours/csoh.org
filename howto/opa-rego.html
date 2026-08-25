@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -384,7 +384,7 @@
 
             <h3>Undefined is not false</h3>
             <p>In most languages a boolean expression is true or false. In Rego there is a third outcome, and it is the common one: <strong>undefined</strong>. A rule whose body cannot be satisfied does not return false. It returns nothing at all.</p>
-<div class="code-block"><pre>package example
+<div class="code-block" data-lang="rego"><pre>package example
 
 # This rule is defined only when input.encrypted is exactly false.
 unencrypted if {          # `if` is mandatory in Rego v1
@@ -394,7 +394,7 @@ unencrypted if {          # `if` is mandatory in Rego v1
 
             <h3>Deny sets, not if-then-else</h3>
             <p>Idiomatic Rego does not return "allow" or "deny" from one big branch. It accumulates violations into a set, and each rule contributes independently. An empty set means nothing objected.</p>
-<div class="code-block"><pre>package example
+<div class="code-block" data-lang="rego"><pre>package example
 
 # `contains` marks this as a multi-value (set) rule. Every matching
 # input adds one more message to the set `deny`.
@@ -414,7 +414,7 @@ deny contains msg if {
             <h2>Walk-through</h2>
 
             <h3>1. Install OPA and confirm you are on 1.x</h3>
-<div class="code-block"><pre># macOS. On Linux, grab the static binary from the GitHub releases page.
+<div class="code-block" data-lang="bash"><pre># macOS. On Linux, grab the static binary from the GitHub releases page.
 brew install opa
 
 opa version        # confirm "Version: 1.x" - the syntax below needs it</pre></div>
@@ -422,15 +422,15 @@ opa version        # confirm "Version: 1.x" - the syntax below needs it</pre></d
 
             <h3>2. Your first policy, evaluated from the command line</h3>
             <p><code>bucket.rego</code>:</p>
-<div class="code-block"><pre>package storage        # the package path becomes data.storage
+<div class="code-block" data-lang="rego"><pre>package storage        # the package path becomes data.storage
 
 deny contains msg if {
     input.encryption.enabled == false
     msg := sprintf("bucket %v is not encrypted", [input.name])
 }</pre></div>
             <p><code>bucket.json</code>:</p>
-<div class="code-block"><pre>{ "name": "prod-invoices", "encryption": { "enabled": false }, "public": true }</pre></div>
-<div class="code-block"><pre># -d loads a policy file (or directory), -i loads the input document.
+<div class="code-block" data-lang="json"><pre>{ "name": "prod-invoices", "encryption": { "enabled": false }, "public": true }</pre></div>
+<div class="code-block" data-lang="bash"><pre># -d loads a policy file (or directory), -i loads the input document.
 # The final argument is the query: a path into the data tree.
 opa eval -d bucket.rego -i bucket.json 'data.storage.deny'
 
@@ -440,10 +440,10 @@ opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'</pre>
 
             <h3>3. Watch undefined bite you</h3>
             <p>Delete the whole <code>encryption</code> object from <code>bucket.json</code> so it reads <code>{"name": "prod-invoices", "public": true}</code>, then run the same command.</p>
-<div class="code-block"><pre>opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'
+<div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'
 # []   &lt;-- an empty deny set. The policy says this bucket is fine.</pre></div>
             <p>A bucket with no encryption configuration at all just passed a policy whose entire job is to require encryption. <code>input.encryption.enabled</code> is undefined, the body fails, no message is added. The fix is to stop asking "is it false" and start asking "is it not true":</p>
-<div class="code-block"><pre>deny contains msg if {
+<div class="code-block" data-lang="rego"><pre>deny contains msg if {
     not input.encryption.enabled == true        # true for false AND for missing
     msg := sprintf("bucket %v is not encrypted", [input.name])
 }</pre></div>
@@ -451,7 +451,7 @@ opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'</pre>
 
             <h3>4. Iterate over a collection</h3>
             <p>Real inputs are lists. <code>some ... in ...</code> binds a variable to each element in turn, and because the rule is a set rule, every element that satisfies the body contributes its own message.</p>
-<div class="code-block"><pre>package storage
+<div class="code-block" data-lang="rego"><pre>package storage
 
 deny contains msg if {
     some bucket in input.buckets          # iterate; `bucket` is bound per element
@@ -469,10 +469,10 @@ deny contains msg if {
 
             <h3>5. Gate a real Terraform plan with Conftest</h3>
             <p>This is where it stops being a toy. Terraform can export its plan as JSON, and that JSON is just another <code>input</code> document.</p>
-<div class="code-block"><pre>terraform plan -out=tfplan.binary            # write the plan to a file
+<div class="code-block" data-lang="bash"><pre>terraform plan -out=tfplan.binary            # write the plan to a file
 terraform show -json tfplan.binary &gt; tfplan.json   # convert it to JSON</pre></div>
             <p>The interesting key is <code>resource_changes</code>: an array where each entry has an <code>address</code>, a <code>type</code>, a <code>change.actions</code> list, and <code>change.after</code> holding the resource as it will exist. <code>policy/s3.rego</code>:</p>
-<div class="code-block"><pre>package main        # Conftest looks in `main` by default
+<div class="code-block" data-lang="rego"><pre>package main        # Conftest looks in `main` by default
 
 deny contains msg if {
     some rc in input.resource_changes
@@ -486,7 +486,7 @@ deny contains msg if {
     not rc.change.after.block_public_acls == true
     msg := sprintf("%v does not block public ACLs", [rc.address])
 }</pre></div>
-<div class="code-block"><pre># Conftest wraps OPA and knows how to read plan JSON, YAML, Dockerfiles, and more.
+<div class="code-block" data-lang="bash"><pre># Conftest wraps OPA and knows how to read plan JSON, YAML, Dockerfiles, and more.
 brew install conftest
 conftest test --policy policy/ tfplan.json
 
@@ -495,7 +495,7 @@ echo $?    # 0 = no denials, 1 = at least one. This is your CI gate.</pre></div>
             <h3>6. Unit-test the policy itself</h3>
             <p>A policy is code that decides whether other code ships. Untested, it is the least trustworthy thing in the pipeline. OPA has a test runner built in: any rule named <code>test_*</code> is a test, and it passes if it evaluates to true.</p>
             <p><code>policy/s3_test.rego</code>:</p>
-<div class="code-block"><pre>package main
+<div class="code-block" data-lang="rego"><pre>package main
 
 # `with input as` swaps in a fake document for the duration of one expression.
 test_denies_bucket_that_allows_public_acls if {
@@ -519,10 +519,10 @@ test_allows_compliant_bucket if {
         }]
     }
 }</pre></div>
-<div class="code-block"><pre>opa test policy/ -v      # -v names each test instead of printing only a tally</pre></div>
+<div class="code-block" data-lang="bash"><pre>opa test policy/ -v      # -v names each test instead of printing only a tally</pre></div>
 
             <h3>7. Format, check, and lint</h3>
-<div class="code-block"><pre>opa fmt -w policy/          # -w rewrites files in place, gofmt style
+<div class="code-block" data-lang="bash"><pre>opa fmt -w policy/          # -w rewrites files in place, gofmt style
 opa check --strict policy/  # --strict rejects unused vars, shadowed names, and
                             # other things that parse but almost always mean a bug
 
@@ -541,7 +541,7 @@ regal lint policy/</pre></div>
                 <p>Write a rule that denies any <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> instance in a Terraform plan whose <code>change.after.metadata_options.http_tokens</code> is not <code>"required"</code>. That setting is what forces <a class="glossary-link" href="../glossary.html#term-imds">IMDSv2</a>, and a missing <code>metadata_options</code> block is the default-insecure case that matters most.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>deny contains msg if {
+<div class="code-block" data-lang="rego"><pre>deny contains msg if {
     some rc in input.resource_changes
     rc.type == "aws_instance"
     "delete" not in rc.change.actions
@@ -555,7 +555,7 @@ regal lint policy/</pre></div>
             <div class="exercise">
                 <span class="exercise__label">Exercise 2</span>
                 <p>This rule never fires, no matter what you feed it. Find out why without changing the input.</p>
-<div class="code-block"><pre>deny contains msg if {
+<div class="code-block" data-lang="rego"><pre>deny contains msg if {
     some rc in input.resource_changes
     rc.type == "aws_security_group_rule"
     rc.change.after.cidr_blocks[_] == "0.0.0.0/0"
@@ -567,7 +567,7 @@ regal lint policy/</pre></div>
                     <p><code>=</code> is not <code>==</code>. A single <code>=</code> is unification, which here <em>assigns</em> 22 to a fresh binding rather than comparing against it, so that line succeeds no matter what the port is. That is not the bug that stops the rule firing, though; it is the one that would make it fire too often. Run <code>opa check --strict</code> and you get told directly.</p>
                     <p>The reason nothing fires is more mundane and more common: in a Terraform plan, <code>from_port</code> is a number and the surrounding structure is <code>cidr_blocks</code>, but real <code>aws_security_group_rule</code> resources frequently express the same thing through <code>aws_vpc_security_group_ingress_rule</code> with a <code>cidr_ipv4</code> field instead. A type filter that names a resource type your plan does not contain produces an empty iteration and therefore an empty deny set, forever, with no error.</p>
                     <p>The habit worth building: before debugging the logic, prove the iteration is finding anything at all.</p>
-<div class="code-block"><pre>opa eval --format pretty -d policy/ -i tfplan.json \
+<div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d policy/ -i tfplan.json \
   'data.main.deny'                                     # [] tells you nothing
 
 opa eval --format pretty -i tfplan.json \
@@ -590,7 +590,7 @@ opa eval --format pretty -i tfplan.json \
                 <p>Harder. Write a rule that denies when an <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> policy document grants <code>"Action": "*"</code> on <code>"Resource": "*"</code>, handling the fact that both fields may be either a string or an array of strings.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>package main
+<div class="code-block" data-lang="rego"><pre>package main
 
 # A helper that normalises "string or array of strings" into a set.
 # Two rules with the same name and different bodies: whichever one is
@@ -660,7 +660,7 @@ deny contains msg if {
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

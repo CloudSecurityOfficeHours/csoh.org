@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -411,7 +411,7 @@
             <h2>Walk-through: AWS IAM</h2>
 
             <h3>1. The grammar, and the parts that invert</h3>
-<div class="code-block"><pre>{
+<div class="code-block" data-lang="json"><pre>{
   "Version": "2012-10-17",
   "Statement": [
     {
@@ -432,14 +432,14 @@
             <p><strong>Wildcards are not regular expressions.</strong> Only <code>*</code> (any sequence) and <code>?</code> (any single character) exist. <code>s3:Get*</code> is fine; <code>s3:Get.*</code> matches nothing, and <code>[a-z]</code> is a literal bracket expression that will never match an action name.</p>
 
             <h3>2. NotAction, and why it is almost always wrong</h3>
-<div class="code-block"><pre>{
+<div class="code-block" data-lang="json"><pre>{
   "Effect": "Allow",
   "NotAction": "iam:*",
   "Resource": "*"
 }</pre></div>
             <p>Read that carefully. It does not deny IAM. It <strong>allows every action in AWS except IAM</strong>, on every resource. That includes services launched after the policy was written, which is the part that makes it unmanageable: the <a class="glossary-link" href="../glossary.html#term-blast-radius">blast radius</a> grows every time AWS ships something.</p>
             <p><code>NotAction</code> has one defensible use, in a <code>Deny</code> statement expressing "deny everything except this narrow set", which is how the standard region-restriction SCP is written:</p>
-<div class="code-block"><pre>{
+<div class="code-block" data-lang="json"><pre>{
   "Effect": "Deny",
   "NotAction": ["iam:*", "organizations:*", "sts:*", "cloudfront:*",
                 "route53:*", "support:*", "waf:*"],
@@ -458,7 +458,7 @@
                 <li><strong><code>ForAnyValue</code></strong> is true when at least one value matches. It is false when the key is absent.</li>
             </ul>
             <p>So <code>ForAllValues</code> in an <code>Allow</code> fails open. The AWS documentation carries an explicit warning on this and prescribes the fix: pair it with a <code>Null</code> check so the statement requires the key to be present.</p>
-<div class="code-block"><pre>{
+<div class="code-block" data-lang="json"><pre>{
   "Effect": "Allow",
   "Action": "ec2:DeleteTags",
   "Resource": "arn:aws:ec2:us-east-1:111122223333:instance/*",
@@ -474,7 +474,7 @@
 
             <h3>4. Test it rather than reasoning about it</h3>
             <p>Given how many layers combine, reading is not verification. AWS has three tools that answer different questions, and all three are underused.</p>
-<div class="code-block"><pre># 1. Grammar, best practice, and security warnings on a single document.
+<div class="code-block" data-lang="bash"><pre># 1. Grammar, best practice, and security warnings on a single document.
 #    Runs offline against the policy text. Start here.
 aws accessanalyzer validate-policy \
   --policy-type IDENTITY_POLICY \
@@ -500,12 +500,12 @@ aws accessanalyzer check-no-new-access \
             <h2>Walk-through: Cedar</h2>
 
             <h3>5. Install it and write a policy set</h3>
-<div class="code-block"><pre>cargo install cedar-policy-cli
+<div class="code-block" data-lang="bash"><pre>cargo install cedar-policy-cli
 cedar --version
 
 mkdir -p ~/cedar-lab &amp;&amp; cd ~/cedar-lab</pre></div>
             <p>Cedar's shape will look familiar, and the differences are the interesting part:</p>
-<div class="code-block"><pre>// policies.cedar
+<div class="code-block" data-lang="cedar"><pre>// policies.cedar
 // Members of the security group may read any bucket, but only with MFA.
 permit (
     principal in Group::"security",
@@ -526,7 +526,7 @@ when { resource.public == true };</pre></div>
             <p>Three structural choices to notice. The head is always principal, action, resource, so every policy is scoped the same way and can be indexed. <code>in</code> walks an entity hierarchy, so group membership is a first-class relation rather than something you fake with tags. And <code>forbid</code> beating <code>permit</code> is a property of the language, not of the service evaluating it.</p>
 
             <h3>6. The part IAM cannot do: a schema</h3>
-<div class="code-block"><pre>// store.cedarschema
+<div class="code-block" data-lang="cedar"><pre>// store.cedarschema
 entity Group;
 entity User in [Group];
 entity Bucket = {
@@ -538,11 +538,11 @@ action read, write appliesTo {
     resource: [Bucket],
     context: { "mfa": Bool }
 };</pre></div>
-<div class="code-block"><pre>cedar validate --schema store.cedarschema --policies policies.cedar
+<div class="code-block" data-lang="bash"><pre>cedar validate --schema store.cedarschema --policies policies.cedar
 #   policy set validation passed
 #   no errors or warnings</pre></div>
             <p>Now introduce a typo. Change <code>resource.public</code> to <code>resource.publik</code> and validate again:</p>
-<div class="code-block"><pre>  × policy set validation failed
+<div class="code-block" data-lang="text"><pre>  × policy set validation failed
   ╰─▶ for policy `policy0`, attribute `publik` on entity type `Bucket` not found
    ╭─[2:8]
  2 │ when { resource.publik == true };
@@ -554,7 +554,7 @@ action read, write appliesTo {
             </div>
 
             <h3>7. Evaluate real requests</h3>
-<div class="code-block"><pre># entities.json describes the world: who exists, what they belong to,
+<div class="code-block" data-lang="bash"><pre># entities.json describes the world: who exists, what they belong to,
 # and what attributes each resource has.
 cat &gt; entities.json &lt;&lt;'EOF'
 [
@@ -568,7 +568,7 @@ cat &gt; entities.json &lt;&lt;'EOF'
 EOF
 echo '{"mfa": true}'  &gt; ctx_mfa.json
 echo '{"mfa": false}' &gt; ctx_nomfa.json</pre></div>
-<div class="code-block"><pre># In the security group, with MFA, on a private bucket   -&gt; ALLOW
+<div class="code-block" data-lang="bash"><pre># In the security group, with MFA, on a private bucket   -&gt; ALLOW
 cedar authorize --schema store.cedarschema --policies policies.cedar \
   --entities entities.json -c ctx_mfa.json \
   -l 'User::"alice"' -a 'Action::"read"' -r 'Bucket::"private-logs"'
@@ -586,7 +586,7 @@ cedar authorize --schema store.cedarschema --policies policies.cedar \
             <div class="exercise">
                 <span class="exercise__label">Exercise 1</span>
                 <p>A role has this identity policy attached. The account is in an OU whose SCP denies all actions outside <code>eu-west-1</code>. The role also has a permissions boundary allowing only <code>s3:*</code>. What can this role actually do?</p>
-<div class="code-block"><pre>{ "Effect": "Allow", "Action": "*", "Resource": "*" }</pre></div>
+<div class="code-block" data-lang="json"><pre>{ "Effect": "Allow", "Action": "*", "Resource": "*" }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
                     <p>Every <a class="glossary-link" href="../glossary.html#term-s3">S3</a> action, in <code>eu-west-1</code> only. Nothing else.</p>
@@ -599,7 +599,7 @@ cedar authorize --schema store.cedarschema --policies policies.cedar \
             <div class="exercise">
                 <span class="exercise__label">Exercise 2</span>
                 <p>This statement was written to force <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>. Explain precisely how a request without MFA gets through, and fix it.</p>
-<div class="code-block"><pre>{
+<div class="code-block" data-lang="json"><pre>{
   "Effect": "Deny",
   "Action": "*",
   "Resource": "*",
@@ -613,7 +613,7 @@ cedar authorize --schema store.cedarschema --policies policies.cedar \
                     <p><code>aws:MultiFactorAuthPresent</code> is <strong>not present at all</strong> for requests made with long-term IAM user access keys. It is only populated for temporary credentials. So with a plain <code>Bool</code>, the condition is a no-match for exactly the credential type you were most worried about, and the deny never fires.</p>
                     <p><code>BoolIfExists</code> is therefore correct here, not the bug: it makes the deny apply when the key is absent as well as when it is false. That is the standard AWS-documented pattern for an MFA-enforcement deny.</p>
                     <p>The real problem is <code>"Action": "*"</code>. Denying everything without MFA also denies the calls a user needs to <em>set up and use</em> MFA, locking them out of self-service. The working version carves those out:</p>
-<div class="code-block"><pre>{
+<div class="code-block" data-lang="json"><pre>{
   "Effect": "Deny",
   "NotAction": [
     "iam:CreateVirtualMFADevice", "iam:EnableMFADevice",
@@ -636,7 +636,7 @@ cedar authorize --schema store.cedarschema --policies policies.cedar \
                 <p>Add a Cedar policy letting any user read a bucket they own, then extend the schema so it validates. What did the schema force you to decide that IAM would have let you leave vague?</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>// store.cedarschema - Bucket gains an owner
+<div class="code-block" data-lang="cedar"><pre>// store.cedarschema - Bucket gains an owner
 entity Bucket = {
     "public": Bool,
     "owner": User,
@@ -656,7 +656,7 @@ when { resource.owner == principal };</pre></div>
                 <p>You are refactoring a 400-line IAM policy into three smaller ones and want to prove you have not widened access. How do you get evidence rather than an opinion?</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>aws accessanalyzer check-no-new-access \
+<div class="code-block" data-lang="bash"><pre>aws accessanalyzer check-no-new-access \
   --existing-policy-document file://old.json \
   --new-policy-document file://new.json \
   --policy-type IDENTITY_POLICY</pre></div>
@@ -721,7 +721,7 @@ when { resource.owner == principal };</pre></div>
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

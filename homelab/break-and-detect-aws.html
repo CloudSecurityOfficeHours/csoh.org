@@ -49,10 +49,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -380,11 +380,11 @@
 
             <h3>1. Turn on the sensors first</h3>
             <p>Enable detection before you attack, so every action is recorded from the start.</p>
-<div class="code-block"><pre># GuardDuty: enable the detector (30-day free trial on a new account)
+<div class="code-block" data-lang="bash"><pre># GuardDuty: enable the detector (30-day free trial on a new account)
 aws guardduty create-detector --enable --region us-east-1   # a "detector" is GuardDuty's per-region sensor; --enable turns it on
 aws guardduty list-detectors                                # returns the detector id you just created - keep it handy</pre></div>
             <p>Now a CloudTrail trail delivering management events to S3. <code>trail.tf</code>:</p>
-<div class="code-block"><pre># The S3 bucket CloudTrail will write its log files into.
+<div class="code-block" data-lang="hcl"><pre># The S3 bucket CloudTrail will write its log files into.
 resource "aws_s3_bucket" "trail" {
   bucket        = "ct-lab-${data.aws_caller_identity.me.account_id}"   # account id makes the name globally unique
   force_destroy = true                                                 # let `terraform destroy` delete it even when full of logs
@@ -422,7 +422,7 @@ resource "aws_cloudtrail" "lab" {
 }</pre></div>
             <h3>2. Deploy the vulnerable stack</h3>
             <p><code>vuln.tf</code> - each resource is a real-world mistake you will recognize:</p>
-<div class="code-block"><pre># A public bucket holding fake "loot" - the target an attacker exfiltrates.
+<div class="code-block" data-lang="hcl"><pre># A public bucket holding fake "loot" - the target an attacker exfiltrates.
 resource "aws_s3_bucket" "loot" {
   bucket        = "exports-lab-${data.aws_caller_identity.me.account_id}"
   force_destroy = true
@@ -473,7 +473,7 @@ output "leaked_secret_access_key" {
   value     = aws_iam_access_key.legacy.secret
   sensitive = true                     # sensitive = hide it from normal CLI output
 }</pre></div>
-<div class="code-block"><pre>terraform init                    # download providers (run once per project)
+<div class="code-block" data-lang="bash"><pre>terraform init                    # download providers (run once per project)
 terraform apply -auto-approve     # create the trail + vulnerable stack; -auto-approve skips the prompt
 echo "top-secret export data" &gt; loot.txt   # make a decoy file to plant in the public bucket
 # Upload it. $(...) runs terraform output to fetch the real bucket name; if that fails,
@@ -481,7 +481,7 @@ echo "top-secret export data" &gt; loot.txt   # make a decoy file to plant in th
 aws s3 cp loot.txt s3://$(terraform output -raw loot_bucket 2&gt;/dev/null || echo exports-lab-CHANGEME)/</pre></div>
             <h3>3. Attack path 1 - manual recon with the leaked key</h3>
             <p>Configure a profile with the leaked key (as if you found it in a public git repo), then walk the recon-to-collection chain:</p>
-<div class="code-block"><pre># Load the leaked key into this shell's environment (as if you'd found it in a public repo).
+<div class="code-block" data-lang="bash"><pre># Load the leaked key into this shell's environment (as if you'd found it in a public repo).
 export AWS_ACCESS_KEY_ID=$(terraform output -raw leaked_access_key_id)       # -raw = print the value with no quotes/formatting
 export AWS_SECRET_ACCESS_KEY=$(terraform output -raw leaked_secret_access_key)
 unset AWS_PROFILE   # make sure these env vars win, not some admin profile in ~/.aws/config
@@ -498,7 +498,7 @@ aws ssm get-parameter --name /lab/db_password --with-decryption \   # --with-dec
             <p>Each command is one link in a real kill chain: <em>credential access</em> (the leaked key), <em>discovery</em> (enumerating what it can do), and <em>collection</em> (reading the bucket and the decrypted secret). This is exactly how the majority of cloud breaches begin - see the <a href="../breach-timeline.html">breach kill chains</a> for the production versions.</p>
 
             <h3>4. Attack path 2 - automated enumeration with Pacu</h3>
-<div class="code-block"><pre>pip install pacu
+<div class="code-block" data-lang="bash"><pre>pip install pacu
 pacu                               # launches Pacu's own interactive shell (its own prompt, not bash)
 # inside the Pacu shell:
 #   import_keys --import-aws-cli   # pull the leaked creds from your AWS CLI config into Pacu (or set them manually)
@@ -508,7 +508,7 @@ pacu                               # launches Pacu's own interactive shell (its 
             <p><a href="https://github.com/RhinoSecurityLabs/pacu" target="_blank" rel="noopener noreferrer">Pacu</a> is the AWS exploitation framework. <code>iam__privesc_scan</code> is the highlight: it takes the permissions you enumerated and tells you <em>how</em> to escalate to admin from them - the same reasoning an attacker (or a good IAM reviewer) applies to an over-permissive policy.</p>
 
             <h3>5. Attack path 3 - detonate ATT&amp;CK techniques with Stratus Red Team</h3>
-<div class="code-block"><pre>brew install stratus-red-team          # or grab a binary from the releases page
+<div class="code-block" data-lang="bash"><pre>brew install stratus-red-team          # or grab a binary from the releases page
 stratus list                            # browse the catalog; each entry maps to a MITRE ATT&amp;CK technique
 
 # detonate a few - each command spins up its own prerequisites, performs the technique,
@@ -521,7 +521,7 @@ stratus cleanup --all                   # ALWAYS run this - it deletes the insta
             <p><a href="https://github.com/DataDog/stratus-red-team" target="_blank" rel="noopener noreferrer">Stratus Red Team</a> is purpose-built to test detections: each technique maps to a MITRE ATT&amp;CK ID and produces the exact telemetry a real attacker would. You are generating a labeled dataset of malicious activity in your own account.</p>
 
             <h3>6. Read the GuardDuty findings</h3>
-<div class="code-block"><pre># Grab the detector id into a shell variable so the next two commands can reuse it.
+<div class="code-block" data-lang="bash"><pre># Grab the detector id into a shell variable so the next two commands can reuse it.
 DETECTOR=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text)   # --query pulls the first id out of the JSON
 aws guardduty list-findings --detector-id "$DETECTOR"        # list finding IDs GuardDuty has raised
 aws guardduty get-findings --detector-id "$DETECTOR" \       # fetch the full detail for one finding...
@@ -537,7 +537,7 @@ aws guardduty get-findings --detector-id "$DETECTOR" \       # fetch the full de
         <div class="highlight-box">
             <p><strong>Tear it all down.</strong> The most important step. Run it before you close the laptop:</p>
         </div>
-<div class="code-block"><pre>stratus cleanup --all             # remove anything Stratus created (do this first - Terraform doesn't know about it)
+<div class="code-block" data-lang="bash"><pre>stratus cleanup --all             # remove anything Stratus created (do this first - Terraform doesn't know about it)
 terraform destroy -auto-approve   # tear down the trail + vulnerable stack you built
 # sanity-check the console: no running EC2, no public bucket, no stray access keys
 # The || fallback prints a friendly message once the user (and its keys) is gone.
@@ -588,7 +588,7 @@ aws iam list-access-keys --user-name legacy-app 2&gt;/dev/null || echo "user gon
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

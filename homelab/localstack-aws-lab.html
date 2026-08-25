@@ -49,10 +49,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -379,7 +379,7 @@
             <h2>Step-by-step</h2>
 
             <h3>1. Install LocalStack and the CLI wrappers</h3>
-<div class="code-block"><pre># Three pip packages, one command. What each one gives you:
+<div class="code-block" data-lang="bash"><pre># Three pip packages, one command. What each one gives you:
 #   localstack       - the CLI that starts and stops the mock-cloud container
 #   awscli-local     - installs `awslocal`, an `aws` wrapper pre-pointed at LocalStack
 #   terraform-local  - installs `tflocal`, the same idea for Terraform
@@ -391,12 +391,12 @@ awslocal --version      # prints the underlying aws-cli version that awslocal wr
             <p><code>awslocal</code> is a one-line wrapper that calls the real <code>aws</code> CLI with <code>--endpoint-url=http://localhost:4566</code> injected, so you never have to type the endpoint. <code>tflocal</code> does the same for Terraform: it auto-points every AWS provider at LocalStack. Both call the tools you already have, so you can always fall back to <code>aws --endpoint-url=http://localhost:4566 &hellip;</code> directly.</p>
 
             <h3>2. Start LocalStack</h3>
-<div class="code-block"><pre>localstack start -d          # start the mock cloud; -d = detached, so it runs in the background and frees your shell
+<div class="code-block" data-lang="bash"><pre>localstack start -d          # start the mock cloud; -d = detached, so it runs in the background and frees your shell
 localstack status services   # print a table of every emulated service (s3, iam, lambda, ...) and whether each is 'available'</pre></div>
             <p>You will see a table of services (<code>s3</code>, <code>iam</code>, <code>lambda</code>, <code>sqs</code>, &hellip;) marked <code>available</code>. LocalStack pulls its Docker image on first run, so give it a minute. Tail logs with <code>localstack logs -f</code>; stop it later with <code>localstack stop</code>.</p>
 
             <h3>3. Your first calls against the mock cloud</h3>
-<div class="code-block"><pre># LocalStack never checks credentials, but the AWS CLI refuses to run without *some* value set.
+<div class="code-block" data-lang="bash"><pre># LocalStack never checks credentials, but the AWS CLI refuses to run without *some* value set.
 # These three exports satisfy that requirement; the literal string "test" is the community convention.
 export AWS_ACCESS_KEY_ID=test          # any non-empty value works
 export AWS_SECRET_ACCESS_KEY=test      # never a real secret - this is a throwaway mock
@@ -414,9 +414,9 @@ awslocal s3 ls s3://lab-bucket/              # ls = list the bucket's contents; 
 
             <h3>4. Deploy infrastructure with Terraform</h3>
             <p>Create a working directory and a provider file. <code>tflocal</code> wires the endpoints for you:</p>
-<div class="code-block"><pre>mkdir -p ~/localstack-lab &amp;&amp; cd ~/localstack-lab   # -p = no error if it exists; &amp;&amp; = only cd in if mkdir succeeded</pre></div>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/localstack-lab &amp;&amp; cd ~/localstack-lab   # -p = no error if it exists; &amp;&amp; = only cd in if mkdir succeeded</pre></div>
             <p><code>main.tf</code>:</p>
-<div class="code-block"><pre>terraform {
+<div class="code-block" data-lang="hcl"><pre>terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"   # pull the official AWS provider from the Terraform registry
@@ -437,11 +437,11 @@ provider "aws" {
   skip_metadata_api_check     = true   # don't probe the EC2 instance-metadata endpoint
   skip_requesting_account_id  = true   # don't call sts:GetCallerIdentity to learn the account id
 }</pre></div>
-<div class="code-block"><pre>tflocal init    # download the AWS provider plugin into .terraform/ (run once per project, or after changing versions)
+<div class="code-block" data-lang="bash"><pre>tflocal init    # download the AWS provider plugin into .terraform/ (run once per project, or after changing versions)
 tflocal plan    # dry run: print exactly what Terraform *would* create, without touching anything yet</pre></div>
             <h3>5. Build a deliberately-vulnerable stack</h3>
             <p>Now add resources that mirror the classic real-world misconfigurations. Append to <code>main.tf</code>:</p>
-<div class="code-block"><pre># 1) A bucket that is public to the world - the classic data-leak setup.
+<div class="code-block" data-lang="hcl"><pre># 1) A bucket that is public to the world - the classic data-leak setup.
 resource "aws_s3_bucket" "public_data" {
   bucket = "customer-exports-lab"        # the bucket's globally-unique name
 }
@@ -492,11 +492,11 @@ resource "aws_iam_user_policy" "app_admin" {
 resource "aws_iam_access_key" "app" {
   user = aws_iam_user.app.name
 }</pre></div>
-<div class="code-block"><pre>tflocal apply -auto-approve   # actually create the resources; -auto-approve skips the interactive "yes" prompt</pre></div>
+<div class="code-block" data-lang="bash"><pre>tflocal apply -auto-approve   # actually create the resources; -auto-approve skips the interactive "yes" prompt</pre></div>
             <p>Everything you just wrote is a real finding you will meet in production: a bucket policy with <code>Principal: "*"</code>, an access block that blocks nothing, a wildcard <code>Action: "*"</code> IAM policy, and a static access key that never rotates. LocalStack Community will happily <em>create</em> all of it (it just will not <em>enforce</em> the IAM half) - which is exactly what you want for practising the build-and-scan loop.</p>
 
             <h3>6. Poke at what you built</h3>
-<div class="code-block"><pre># Stage a fake "loot" file in the public bucket...
+<div class="code-block" data-lang="bash"><pre># Stage a fake "loot" file in the public bucket...
 echo "aws_secret_access_key=AKIAFAKE..." &gt; creds.txt      # a decoy secret, not a real key
 awslocal s3 cp creds.txt s3://customer-exports-lab/
 # ...then fetch it over plain HTTP with NO credentials. The request succeeding is the whole point:
@@ -512,7 +512,7 @@ awslocal iam get-user-policy --user-name legacy-app-user --policy-name app-admin
 
             <h3>7. Catch the issues with IaC scanning</h3>
             <p>This is where a local lab genuinely shines: static scanners find every one of these problems from the Terraform files alone - no deploy, no cloud, no cost.</p>
-<div class="code-block"><pre># Checkov - a policy-as-code scanner that reads Terraform statically (no deploy, no cloud, no cost)
+<div class="code-block" data-lang="bash"><pre># Checkov - a policy-as-code scanner that reads Terraform statically (no deploy, no cloud, no cost)
 python3 -m pip install --user checkov
 checkov -d .        # -d = scan every .tf file in this directory; prints a PASS/FAIL line per check
 
@@ -522,7 +522,7 @@ trivy config .      # scan the current directory's infrastructure-as-code for th
             <p>Read the output. Checkov flags <code>CKV_AWS_*</code> IDs for the public bucket, the wildcard IAM policy, the missing default encryption, and more. Map each finding back to the exact resource you wrote, fix them one at a time, and re-scan until the run is clean. That loop - write, scan, remediate, re-scan - is precisely what an AppSec / IaC engineer does on every pull request. See the <a href="../ci-cd.html">CI/CD security</a> page for wiring the same scan into a pipeline.</p>
 
             <h3>8. Tear it down</h3>
-<div class="code-block"><pre>tflocal destroy -auto-approve   # delete everything Terraform created; -auto-approve skips the confirmation prompt
+<div class="code-block" data-lang="bash"><pre>tflocal destroy -auto-approve   # delete everything Terraform created; -auto-approve skips the confirmation prompt
 localstack stop                 # stop the container - community-edition state lives in RAM, so this wipes it clean</pre></div>
             <p>Community-edition state lives in memory, so stopping the container wipes everything. That is a feature: every session starts from a clean slate.</p>
         </section>
@@ -582,7 +582,7 @@ localstack stop                 # stop the container - community-edition state l
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>

