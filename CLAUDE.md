@@ -556,6 +556,76 @@ Three things that cost real time here:
 Not every page wants icons. `topics.html` keeps its `data-no-card-icons`
 opt-out, and that is still the right answer for an index of our own pages.
 
+## A search result can be a dead link without being a broken one
+
+Search for "OPA", click the first result, land on a page that appears not to
+contain it. Nothing 404s. Every URL in `search-index.json` resolves, every
+anchor exists, and a sweep of all 2,481 docs against production returned zero
+findings on both counts - twice, before and after. The link was fine. It just
+did not go where it said.
+
+`build_search_index.py` emits one doc per resource card so a search by name
+finds it, but a card had no `id` of its own, so `emit_card_docs()` fell back to
+the nearest preceding **category** anchor. `/resources.html#security-tools`
+holds 83 cards. The OPA card sat **6,396px below the landing viewport** - about
+eight screens - with nothing on the way down to suggest the page held it. 647
+of the 666 card results shared their anchor with more than five other cards;
+499 landed in a category of 60 to 106.
+
+Two things made it worse than a plain wrong link. `.category-section` became
+`<details>`, closed by default, on 2026-08-23, so without JavaScript the
+section did not even open - the reader landed on a collapsed accordion. And
+the *other* results on the page were fine, because a glossary hit deep links
+to `#term-opa`, which is one definition and lands exactly. So the failure was
+invisible next to eight working results.
+
+The fix is `tools/stamp_card_ids.py`: every card carries
+`id="card-<slug-of-its-h3>"`, and the search result links to that. `card_slug()`
+lives in `build_search_index.py` and both sides call it, so a retitled card
+re-slugs in the HTML and in the index at once. `validate-html.yml` gates on
+`--check`.
+
+Three things worth keeping:
+
+- **The indexer reads the id out of the HTML rather than recomputing it.** A
+  card added by hand and never stamped keeps the old category link. Recomputing
+  would have pointed it at an anchor that is not in the file - turning a coarse
+  link into a genuinely broken one, which is the whole failure this fixes.
+- **`outline-width` computes to `3px` whether or not there is an outline.** The
+  first verification asserted on it and passed on a card with
+  `outline-style: none`. Assert on `outline-style`; the control that catches
+  this is measuring an element you know is *not* targeted.
+- **Browsers now auto-open a `<details>` when the fragment points inside it.**
+  Chromium does it with JavaScript disabled, which is why the card link works
+  no-JS where the category link never did. It is not universal, so
+  `openSectionFromHash()` still opens the ancestor section by hand - and
+  re-scrolls, because the browser's own fragment scroll already ran against the
+  collapsed layout and settled somewhere meaningless.
+
+The shape is the one this file records about the padlock icons, one step
+further on. There, a fallback returned something that looked like an answer.
+Here the fallback returned something that **passed every check we had**: link
+resolves, anchor exists, page 200s. A URL validator cannot see this, because
+the defect is the distance between where the link lands and what it promised.
+Measure that distance instead - count the card results that are **not** pointed
+at a card. Want zero:
+
+```sh
+python3 -c "
+import json
+docs = json.load(open('search-index.json'))['docs']
+bad = [d['url'] for d in docs if d['type'] == 'resource' and '#card-' not in d['url']]
+print(len(bad), 'card results not deep-linked to their own card')
+"
+```
+
+Run the control before believing that zero: drop one card's `id` with `sed`,
+rebuild the index, and confirm the number moves. **The first version of this
+check counted card results *sharing* an anchor, and that control is what
+exposed it** - one unstamped card falls back alone, shares its anchor with
+nobody, and the count stays at 0. It only ever fired once the damage was
+already plural, which is the weaker half of the failure it was written for.
+
 ## Site chrome is generated, not hand-edited
 
 The nav, footer, logo block, and the hamburger/theme-toggle buttons are stamped

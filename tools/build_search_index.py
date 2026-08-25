@@ -39,6 +39,7 @@ import html
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Iterable
 
@@ -180,6 +181,11 @@ CARD_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 TOOLTIP_RE = re.compile(r'\bdata-tooltip=["\']([^"\']*)["\']', re.IGNORECASE)
+# The card's own opening <a> tag, so its id="" can be read back out. Sliced
+# from the start of a CARD_RE match rather than matched independently: the
+# two values have to come from the same element or they describe different
+# cards.
+CARD_OPEN_TAG_RE = re.compile(r"<a\b[^>]*>", re.IGNORECASE)
 
 # Anchor candidates that a card can be attributed to, so a result can deep
 # link to the card's category instead of the top of a long page. The card
@@ -266,6 +272,52 @@ def emit_page_level(rel_url: str, raw: str, ptype: str) -> dict | None:
     }
 
 
+def card_slug(name: str) -> str:
+    """Stable per-card anchor id, derived from the card's <h3> text.
+
+    Both this file and tools/stamp_card_ids.py go through here, so the id
+    stamped into the HTML and the id the index links to cannot drift: a
+    retitled card re-slugs in both places at once.
+    """
+    ascii_name = (
+        unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    slug = slug[:60].rstrip("-")
+    return f"card-{slug}" if slug else ""
+
+
+def card_slots(main: str) -> list[tuple["re.Match[str]", str, str]]:
+    """Every card on a page as (match, wanted_id, current_id).
+
+    `wanted_id` is what the card should carry; `current_id` is what its <a>
+    carries today (empty when unstamped). Duplicate titles - the same tool
+    listed under two categories - get a -2, -3 suffix in document order, so
+    the ids stay unique per page without anyone hand-picking them.
+    """
+    used: set[str] = set()
+    out: list[tuple["re.Match[str]", str, str]] = []
+    for m in CARD_RE.finditer(main):
+        h3 = H3_RE.search(m.group(2))
+        wanted = card_slug(strip_html(h3.group(1))) if h3 else ""
+        if wanted:
+            # Suffix against what has actually been handed out, not against a
+            # per-base counter: a page holding "Foo", "Foo" and "Foo 2" would
+            # give the third card the same id the second one just took.
+            base, n = wanted, 1
+            while wanted in used:
+                n += 1
+                wanted = f"{base}-{n}"
+            used.add(wanted)
+        open_tag = CARD_OPEN_TAG_RE.match(main, m.start())
+        current = ""
+        if open_tag:
+            id_m = ID_ATTR_RE.search(open_tag.group(0))
+            current = id_m.group(1) if id_m else ""
+        out.append((m, wanted, current))
+    return out
+
+
 def card_anchors(main: str) -> list[tuple[int, str, str]]:
     """Offsets of the anchors a card can be attributed to, as
     (offset, id, heading), sorted by offset so a card can scan for the
@@ -303,7 +355,7 @@ def emit_card_docs(filename: str, main: str, page_title_: str) -> Iterable[dict]
     is a page-level doc truncated to 2400 chars, so a search for a
     resource by name (e.g. "Tumeryk") finds nothing at all."""
     anchors = card_anchors(main)
-    for n, m in enumerate(CARD_RE.finditer(main)):
+    for n, (m, _wanted_id, card_id) in enumerate(card_slots(main)):
         href = html.unescape(m.group(1).strip())
         card_html = m.group(2)
         h3 = H3_RE.search(card_html)
@@ -328,7 +380,14 @@ def emit_card_docs(filename: str, main: str, page_title_: str) -> Iterable[dict]
                 break
             anchor, section = aid, heading
 
-        url = f"/{filename}#{anchor}" if anchor else f"/{filename}"
+        # Prefer the card's own id. The category anchor is a fallback that
+        # is correct and nearly useless: #security-tools holds 83 cards, so
+        # a result promising "Open Policy Agent (OPA)" landed the reader
+        # 6,400px above it with no way to tell the page was not simply
+        # missing the thing they clicked. Read the id off the HTML rather
+        # than recomputing it, so an unstamped card degrades to the old
+        # category link instead of to an anchor that does not exist.
+        url = f"/{filename}#{card_id or anchor}" if (card_id or anchor) else f"/{filename}"
         yield {
             "id": f"{filename}#card-{n}",
             "url": url,

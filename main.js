@@ -465,17 +465,26 @@ function syncCategorySections(collapseAll) {
     });
 }
 
-// A link to #security-tools has to land on an open section. Browsers do open a
-// <details> when the fragment points *inside* it, but here the id is on the
-// element itself, which is not the same case.
+// A link to #security-tools has to land on an open section, and a search
+// result's link to #card-open-policy-agent-opa has to land on the card - which
+// sits inside one of those sections and is closed until something opens it.
+// Browsers have started auto-opening a <details> when the fragment points
+// *inside* it, but that is not everywhere yet, and it never covered the first
+// case at all: there the id is on the element itself, which is not the same
+// case. Either way the browser's own fragment scroll has already run against
+// the collapsed layout, so wherever it settled describes a page that no longer
+// exists once the section opens - scroll again afterwards.
 function openSectionFromHash() {
     const id = (window.location.hash || '').slice(1);
     if (!id) return;
     const el = document.getElementById(id);
-    if (el && el.matches && el.matches('details.category-section')) {
-        el.open = true;
-        el.scrollIntoView({ block: 'start' });
-    }
+    if (!el || !el.matches || !el.closest) return;
+    const section = el.matches('details.category-section')
+        ? el
+        : el.closest('details.category-section');
+    if (!section) return;
+    section.open = true;
+    el.scrollIntoView({ block: 'start' });
 }
 
 // Map category button values to their section IDs in resources.html

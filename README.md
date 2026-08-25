@@ -878,6 +878,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | Script | What it does | Docs |
 |---|---|---|
 | `build_search_index.py` | Builds `search-index.json` (one entry per `<section id>` + glossary term) | docstring |
+| `stamp_card_ids.py` | Stamps a deep-link `id` on every resource card, so a search result lands on the card and not on its 83-card category | docstring |
 | `build_meetings_search_index.py` | Builds `meetings-search-index.json` over full recap text | docstring |
 | `generate_rss.py` | Rebuilds `feed.xml` from `news.html` | docstring |
 | `generate_recaps_rss.py` | Builds `recaps.xml`, the meeting-recap RSS feed | docstring |
