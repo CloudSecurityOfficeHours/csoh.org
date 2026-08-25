@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Check all URLs across every HTML file on the site for safety
-(root plus breaches/, meetings/, portfolio/, and homelab/ subdirectories).
+(root plus breaches/, meetings/, portfolio/, homelab/, and howto/ subdirectories).
 
 Three-phase pipeline:
   1. Extract  - collect all URLs from every HTML file (root + subdirs), deduplicate
@@ -77,6 +77,7 @@ def main():
         + list(workspace_root.glob('meetings/*.html'))
         + list(workspace_root.glob('portfolio/*.html'))
         + list(workspace_root.glob('homelab/*.html'))
+        + list(workspace_root.glob('howto/*.html'))
     )
 
     print("=" * 80)

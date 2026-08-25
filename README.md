@@ -97,6 +97,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 | 🎓 [Cloud Security Certifications](https://csoh.org/cloud-security-certifications.html) | CCSK, CCSP, AWS, Azure, GCP, CKS compared side by side |
 | 🎓 [Cloud Security Degree Programs](https://csoh.org/cloud-security-degree-programs.html) | Academic paths, what to look for, named US/international universities |
 | 🧰 [Cloud Security Home Lab](https://csoh.org/cloud-security-home-lab.html) | Free-tier setups, budget guardrails, kill-switches |
+| 🧑‍🏫 [Cloud Security How-To Guides](https://csoh.org/cloud-security-how-to.html) | OPA, regex, OVAL, jq, CEL, Sigma, YARA, IAM - explanation, walk-through, exercises (guides below) |
 | 🛠️ [Portfolio Projects](https://csoh.org/cloud-security-portfolio-projects.html) | Build-it-yourself projects that prove skills to hiring managers (walkthroughs below) |
 | 📖 [Cloud Security Reading List](https://csoh.org/cloud-security-reading-list.html) | Books, blogs, podcasts, newsletters & people to follow - staleness-checked monthly |
 | 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
@@ -219,6 +220,9 @@ A hub of build-it-yourself projects that demonstrate real cloud-security skill t
 
 ### 🪜 Breaking Into Cloud Security ([`breaking-into-cloud-security.html`](https://csoh.org/breaking-into-cloud-security.html))
 The realistic transition from IT support / help desk into cloud security: what actually transfers, what you have to build from scratch, and the sequence that works. This page absorbed three earlier entry-path pages (`is-cloud-security-a-good-career.html`, `get-into-cloud-security-no-experience.html`, `help-desk-to-cloud-security.html`); the old URLs 301 in `.htaccess` and `retire_merged_career_pages.py` repointed every in-site link so there is no redirect hop.
+
+### 🧑‍🏫 Cloud Security How-To Guides ([`cloud-security-how-to.html`](https://csoh.org/cloud-security-how-to.html), `howto/`)
+Hands-on guides to the small languages cloud security actually runs on, each following the same shape: what the thing is and the one idea that makes it click, a copy-and-run walk-through, then exercises with worked answers. Covers regex as a security control, jq and JMESPath, AWS IAM policy evaluation plus Cedar, OPA and Rego, CEL, Sigma and YARA, and OVAL and SCAP. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; unlike `homelab/` these **are** search-indexed and glossary cross-linked, because they are explanatory pages that attract search traffic from people meeting a term for the first time.
 
 ### 🧪 Cloud Security Home Lab Walk-throughs (`homelab/`)
 Deep, command-line-level lab walkthroughs that go further than the home-lab overview page: break-and-detect on AWS, a CloudTrail → SIEM detection pipeline, a Kubernetes security lab, and a LocalStack AWS lab. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; deliberately **not** in the site search index.
@@ -690,6 +694,7 @@ csoh.org/
 ├── cloud-security-degree-programs.html # Academic paths and university programs (FAQ schema)
 ├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
 ├── cloud-security-home-lab.html # Free-tier setups, budget guardrails, kill-switches
+├── cloud-security-how-to.html  # How-to guides hub (guides in howto/)
 ├── cloud-security-interview-questions.html # Interview questions with model answers
 ├── cloud-security-resume-guide.html # Resume structure, phrasing, and what hiring managers scan for
 ├── cloud-security-reading-list.html # Curated reading list (staleness-checked monthly)
@@ -744,6 +749,7 @@ csoh.org/
 ├── meetings/                   # 109 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
+├── howto/                      # 7 language how-to guides (OPA, regex, OVAL, jq, CEL, Sigma/YARA, IAM)
 │
 │  ── Shared assets ──
 ├── style.css                   # Main stylesheet (responsive design + dark mode)
@@ -1249,14 +1255,14 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->91<!--/count--> pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->92<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->269<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->277<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1267,7 +1273,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->253<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->109<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->261<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->109<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

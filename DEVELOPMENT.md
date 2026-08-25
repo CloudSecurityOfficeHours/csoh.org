@@ -145,6 +145,7 @@ csoh.org/
 ├── cloud-security-interview-questions.html # Interview questions with model answers
 ├── cloud-security-resume-guide.html # Resume structure and phrasing
 ├── cloud-security-home-lab.html     # Free-tier setups, budget guardrails, kill-switches
+├── cloud-security-how-to.html       # Hub for 7 language how-to guides (in `howto/`)
 ├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
 ├── cloud-security-portfolio-projects.html # Hub for 7 portfolio walkthroughs (in `portfolio/`)
 ├── mentorship.html                  # Community mentorship program
@@ -200,6 +201,8 @@ csoh.org/
 ├── meetings/                        # 109 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (not search-indexed)
+├── howto/                           # 7 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
+│                                    #   CEL, Sigma/YARA, IAM+Cedar (search-indexed, cross-linked)
 │
 │  ── Shared assets ──
 ├── style.css                        # All site styles (includes dark mode)
@@ -427,6 +430,7 @@ If you changed shared files (`style.css`, `main.js`), verify these pages:
 - `http://localhost:8091/cloud-security-degree-programs.html` -- Academic paths + universities (FAQ schema)
 - `http://localhost:8091/cloud-security-careers.html` -- Roles, salaries, interviews, portfolio (FAQ schema)
 - `http://localhost:8091/cloud-security-home-lab.html` -- Free-tier setups, budget guardrails
+- `http://localhost:8091/cloud-security-how-to.html` -- How-to guides hub (CollectionPage + ItemList)
 - `http://localhost:8091/cloud-security-best-practices.html` -- Controls checklist
 - `http://localhost:8091/shared-responsibility-model.html` -- Provider vs. customer split
 - `http://localhost:8091/cspm-vs-cnapp.html` -- Tool category comparison
@@ -662,14 +666,14 @@ When you add a new HTML page, do all of the following - none are automated:
    ```bash
    python3 tools/crosslink_pages.py
    ```
-   Only root-level pages are listed explicitly; `breaches/*.html` and `meetings/*.html` are auto-discovered via `SUBDIR_PATTERNS`. `portfolio/` and `homelab/` are deliberately **not** cross-linked - if you add a third subdirectory that should be, add its glob there.
+   Only root-level pages are listed explicitly; `breaches/*.html` and `meetings/*.html` are auto-discovered via `SUBDIR_PATTERNS`. `portfolio/` and `homelab/` are deliberately **not** cross-linked; `howto/*.html` **is**, because those pages are explanatory rather than pure command-line walk-throughs. If you add another subdirectory, decide deliberately and add its glob there.
 10. **If your new page has external `card-link` URLs** (resource cards with screenshots), add it to the `pages` list near the bottom of `tools/generate_preview.py` so the deploy workflow auto-generates preview images for those URLs.
 11. **Add the page to the `PAGES` list in `tools/generate_og_images.py`** with a short title, subtitle, and badge, then run `python3 tools/generate_og_images.py --pages yourpage.html`. This produces a 1200×630 social-card JPG at `img/og/yourpage.jpg` and rewrites the page's `og:image`/`twitter:image` meta tags. Without this step the page falls back to `banner.png` (1200×400, wrong aspect ratio).
 12. **Rebuild the search index** so the page is findable at `/search.html`:
     ```bash
     python3 tools/build_search_index.py
     ```
-    Root-level pages are picked up automatically (minus `EXCLUDE_FILES`); `breaches/` and `meetings/` are indexed page-level via `SUBDIR_TYPES`. `portfolio/` and `homelab/` are intentionally excluded.
+    Root-level pages are picked up automatically (minus `EXCLUDE_FILES`); `breaches/`, `meetings/`, and `howto/` are indexed page-level via `SUBDIR_TYPES` (`howto/` uses type `guide`, which the search UI labels "Guide"). `portfolio/` and `homelab/` are intentionally excluded.
 13. **Re-sync the site chrome and counts**:
     ```bash
     python3 tools/sync_chrome.py     # nav + header buttons + footer

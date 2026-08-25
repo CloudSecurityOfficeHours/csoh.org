@@ -13,7 +13,7 @@ legitimate per-page differences preserved (both apply to the nav/footer only;
 the header buttons are the same two lines on every page):
 
   1. `../` path prefixes on pages inside breaches/, meetings/, portfolio/,
-     and homelab/.
+     and homelab/ and howto/.
   2. The current-page markers (`aria-current="page"` on the active link and
      the `active` class on its dropdown toggle).
 
@@ -172,6 +172,7 @@ CANON_NAV = """\
                           <span class="mega-heading">Build It</span>
                           <ul>
                             <li class="mega-featured"><a href="cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
                             <li><a href="github-actions.html">GitHub Actions</a></li>
                             <li><a href="terraform.html">Terraform</a></li>
                             <li><a href="version-control.html">Git &amp; Version Control</a></li>
@@ -443,6 +444,8 @@ def active_href_for(path: Path) -> str | None:
         return 'cloud-security-portfolio-projects.html'
     if parent == 'homelab':
         return 'cloud-security-home-lab.html'
+    if parent == 'howto':
+        return 'cloud-security-how-to.html'
     # Every per-year review highlights the series hub in the nav, the same way
     # a breaches/ page highlights the kill-chain index.
     if path.name.startswith('cloud-breach-year-in-review-'):
@@ -451,13 +454,13 @@ def active_href_for(path: Path) -> str | None:
 
 
 def build_nav(path: Path) -> str:
-    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio', 'homelab')
+    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio', 'homelab', 'howto')
     nav = mark_active(CANON_NAV, active_href_for(path))
     return add_prefix(nav) if is_sub else nav
 
 
 def build_footer(path: Path) -> str:
-    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio', 'homelab')
+    is_sub = path.parent.name in ('breaches', 'meetings', 'portfolio', 'homelab', 'howto')
     return add_prefix(CANON_FOOTER) if is_sub else CANON_FOOTER
 
 
@@ -495,6 +498,7 @@ def main() -> None:
     paths.extend((REPO / 'meetings').glob('*.html'))
     paths.extend((REPO / 'portfolio').glob('*.html'))
     paths.extend((REPO / 'homelab').glob('*.html'))
+    paths.extend((REPO / 'howto').glob('*.html'))
 
     tally = {'updated': 0, 'unchanged': 0, 'skipped': 0}
     skipped: list[str] = []

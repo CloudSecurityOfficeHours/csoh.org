@@ -67,7 +67,7 @@ ALT_RE = re.compile(r'\balt="([^"]*)"', re.IGNORECASE)
 #
 # Adding a new subdirectory of pages? Add it here too. The full list of places a
 # new page directory has to be registered is in DEVELOPMENT.md.
-AUDITED_SUBDIRS = ("breaches", "portfolio", "meetings", "homelab")
+AUDITED_SUBDIRS = ("breaches", "portfolio", "meetings", "homelab", "howto")
 
 
 def discover_pages() -> list[Path]:

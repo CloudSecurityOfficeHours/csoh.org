@@ -154,6 +154,7 @@ TARGET_PAGES = [
     "cloud-breach-year-in-review-2026-h1.html",
     "cloud-security-degree-programs.html",
     "cloud-security-home-lab.html",
+    "cloud-security-how-to.html",
     "cloud-security-interview-questions.html",
     "cloud-security-portfolio-projects.html",
     "cloud-security-reading-list.html",
@@ -200,6 +201,7 @@ DELIBERATELY_UNLINKED = {
 SUBDIR_PATTERNS = [
     "breaches/*.html",
     "meetings/*.html",
+    "howto/*.html",
 ]
 
 SKIP_BLOCK_TAGS = (

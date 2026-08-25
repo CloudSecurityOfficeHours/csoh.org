@@ -125,6 +125,7 @@ TYPE_TAGS: dict[str, str] = {
 SUBDIR_TYPES: list[tuple[str, str]] = [
     ("breaches", "breach"),
     ("meetings", "meeting"),
+    ("howto", "guide"),
 ]
 
 # ----- HTML parsing ------------------------------------------------------

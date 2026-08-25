@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Regex as a security control, not a search trick: allowlist bypasses, credential scanning, RE2 versus backtracking, ReDoS, and exercises.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="regex for security, regular expressions security, redos catastrophic backtracking, re2 vs pcre, aws access key regex, secret scanning regex, log parsing regex">
+    <title>Regex for cloud security: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/regex-for-security.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/regex-for-security.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/regex-for-security.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Regex for security work, hands-on - CSOH">
+    <meta property="og:description" content="Regex as a security control, not a search trick: allowlist bypasses, credential scanning, RE2 versus backtracking, ReDoS, and exercises.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="regex">
+    <meta property="article:tag" content="regular expressions">
+    <meta property="article:tag" content="redos">
+    <meta property="article:tag" content="secret scanning">
+    <meta property="article:tag" content="detection engineering">
+    <meta property="article:tag" content="log parsing">
+    <meta property="og:url" content="https://csoh.org/howto/regex-for-security.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/regex-for-security.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Regex for security work, hands-on">
+    <meta name="twitter:description" content="Regex as a security control, not a search trick: allowlist bypasses, credential scanning, RE2 versus backtracking, ReDoS, and exercises.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/regex-for-security.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
+    <link rel="preload" href="/style.css?v=779aa538" as="style"
+        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="stylesheet" href="/style.css?v=779aa538"
+        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Regex for security work, hands-on",
+      "description": "Regex as a security control, not a search trick: allowlist bypasses, credential scanning, RE2 versus backtracking, ReDoS, and exercises.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-08-24",
+      "dateModified": "2026-08-24",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Build a scratch lab",
+          "text": "Create a sample log file and a file of candidate secrets to run every pattern against."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Anchor patterns used as validators",
+          "text": "Show how an unanchored allowlist regex is bypassed, and pin both ends of the pattern."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Use \\A and \\Z in Python",
+          "text": "Demonstrate that $ also matches before a trailing newline, and switch validators to \\A and \\Z."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Control quantifier greed",
+          "text": "Compare greedy, lazy, and explicit negated character classes when extracting fields from a log line."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Capture fields with named groups",
+          "text": "Parse the log with (?P<name>...) groups and count repeated denials per principal."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Write a credential scanner",
+          "text": "Match AWS access key IDs with word boundaries, then see why a 40-character secret key resists regex alone."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Work without lookaround",
+          "text": "Rewrite lookbehind-dependent patterns for RE2 engines such as Go, Rust, and ripgrep's default mode."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Measure catastrophic backtracking",
+          "text": "Time a nested-quantifier pattern against growing input and apply the three standard mitigations."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Regex for security work, hands-on",
+          "item": "https://csoh.org/howto/regex-for-security.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources.html?category=tool">Security Tools</a></li>
+                        <li><a href="../resources.html?category=lab">Labs &amp; Training</a></li>
+                        <li><a href="../resources.html?category=certification">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources.html?category=ai-security">AI Security</a></li>
+                        <li><a href="../resources.html?category=job">Job Search</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Regex for security</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Regex for security work, hands-on</h1>
+        <p>A regex that is subtly too broad is an allowlist bypass. One that is subtly too narrow is a detection that never fires. Both failures are silent. Here is how to write patterns you can defend.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner to intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal with <code>grep</code> and <code>python3</code>; <code>ripgrep</code> is useful but optional</p>
+        </div>
+
+        <section id="intro">
+            <h2>Why regex is a security topic and not a text-editing trick</h2>
+            <p>Almost everyone in this field learns just enough regular expression syntax to search a log file, and then stops. That is a reasonable place to stop if a regex is only ever a search. It is a bad place to stop the moment a regex becomes a <em>control</em>, and in cloud security it becomes a control constantly.</p>
+            <p>A regex decides whether a URL is on your allowlist. A regex decides whether a string in a commit is a leaked credential. A regex is what a <a class="glossary-link" href="../glossary.html#term-sigma">Sigma</a> rule compiles down to inside your <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a>, what a <a class="glossary-link" href="../glossary.html#term-waf">WAF</a> matches request bodies against, what a CloudWatch Logs metric filter counts, and what a <a class="glossary-link" href="../glossary.html#term-dlp">DLP</a> scanner calls a Social Security number. In every one of those places a regex that is subtly too broad is an alert storm or a false block, and a regex that is subtly too narrow is a detection that silently never fires.</p>
+            <p>The skill this page is trying to build is not "write a regex". It is the habit of asking two questions about every pattern you meet: <strong>what does this match that I did not intend, and what does it fail to match that I did intend?</strong> Both of those failures are quiet. Neither one produces an error message.</p>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">Two engines, two sets of rules</a></li>
+                <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>Two engines, two sets of rules</h2>
+            <p>Before any syntax, know which family of engine you are writing for, because it changes both what you are allowed to write and what happens under attack.</p>
+            <ul>
+                <li><strong>Backtracking engines</strong> (PCRE, Perl, Python's <code>re</code>, Java, .NET, JavaScript, most SIEM query languages) try alternatives and reverse out of dead ends. They support lookahead, lookbehind, and backreferences. They can also take exponential time on a hostile input.</li>
+                <li><strong>Finite-automaton engines</strong> (RE2, Go's <code>regexp</code>, the Rust <code>regex</code> crate, and therefore ripgrep by default) match in time linear in the input length, always. The price is that lookahead, lookbehind, and backreferences do not exist, because they cannot be expressed in the model.</li>
+            </ul>
+            <p>This is why a pattern copied from a blog post into a Go service fails to compile, and why the same pattern copied into a Python validator is a denial-of-service risk. Google built RE2 specifically so that user-supplied patterns could be run safely, and services that accept regex from users (log platforms, WAF rule builders) almost always use it for exactly that reason.</p>
+
+            <h3>The two failure directions, concretely</h3>
+<div class="code-block"><pre># TOO BROAD - the dot is unescaped, so it matches ANY character
+https://.*.example.com          # matches https://evilXexampleYcom
+
+# TOO BROAD - no anchors, so the match can sit anywhere in the string
+https://.*\.example\.com        # matches https://evil.com/?x=.example.com
+
+# TOO NARROW - anchored and escaped, but assumes lowercase and no port
+^https://[a-z]+\.example\.com$  # misses https://API.example.com:8443</pre></div>
+            <p>All three of these are plausible-looking, and the first two are the shape of a real <a class="glossary-link" href="../glossary.html#term-ssrf">server-side request forgery</a> allowlist bypass. The third is the shape of a detection rule that quietly covers less than the author thought.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through</h2>
+            <p>Build a scratch directory first. Every step below runs against these files.</p>
+<div class="code-block"><pre>mkdir -p ~/regex-lab &amp;&amp; cd ~/regex-lab
+
+cat &gt; sample.log &lt;&lt;'EOF'
+2026-08-20T14:03:11Z user=alice ip=203.0.113.14 action=AssumeRole result=success
+2026-08-20T14:03:12Z user=bob ip=198.51.100.7 action=GetObject result=denied
+2026-08-20T14:05:40Z user=svc-deploy ip=10.0.4.19 action=PutBucketPolicy result=success
+2026-08-20T14:06:02Z user=mallory ip=203.0.113.99 action=ListBuckets result=denied
+2026-08-20T14:06:03Z user=mallory ip=203.0.113.99 action=ListBuckets result=denied
+EOF
+
+cat &gt; secrets.txt &lt;&lt;'EOF'
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+temp_key = ASIAIOSFODNN7EXAMPLE
+not_a_key = XAKIAIOSFODNN7EXAMPLEX
+doc_reference = "the AKIA prefix identifies long-term keys"
+EOF</pre></div>
+
+            <h3>1. Anchors, and why they are a security control</h3>
+<div class="code-block"><pre># -E = extended regex (POSIX ERE). Without -E, grep needs backslashes
+# in front of +, ?, |, (, and ) - a classic source of "why doesn't this work".
+grep -E 'denied' sample.log            # substring match, anywhere on the line
+grep -E '^2026-08-20T14:06' sample.log # ^ pins to start of line
+grep -E 'success$' sample.log          # $ pins to end of line</pre></div>
+            <p>In a search, an unanchored pattern is a convenience. In a validator, an unanchored pattern is a bug, because "contains" is not "is". Prove it to yourself:</p>
+<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+import re
+allow = re.compile(r'https://.*\.example\.com')      # no anchors
+for url in ["https://api.example.com",
+            "https://evil.com/?redirect=.example.com",
+            "https://api.example.com.attacker.net"]:
+    print(bool(allow.search(url)), url)
+PY</pre></div>
+            <p>All three come back <code>True</code>. The second and third are the ones that get written up as an incident.</p>
+
+            <h3>2. The Python anchor that is not an anchor</h3>
+            <p>Anchoring both ends is necessary and, in Python specifically, not sufficient. <code>$</code> matches at the end of the string <em>or immediately before a trailing newline</em>.</p>
+<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+import re
+p = re.compile(r'^[a-z0-9-]+$')          # "a simple hostname label"
+print(bool(p.match("prod-web")))          # True  - fine
+print(bool(p.match("prod-web\n")))        # True  - surprising
+print(bool(p.match("prod-web\nrm -rf /")))# False - the dot rule saves you here
+
+q = re.compile(r'\A[a-z0-9-]+\Z')        # \A and \Z admit no newline at all
+print(bool(q.match("prod-web\n")))        # False - what you meant
+PY</pre></div>
+            <p>Whether the trailing newline matters depends entirely on what consumes the value afterwards. If it lands in a header, a log line, or a generated config file, it matters a great deal. Use <code>\A</code> and <code>\Z</code> in Python when the regex is a validator rather than a search.</p>
+
+            <h3>3. Character classes, quantifiers, and greed</h3>
+<div class="code-block"><pre># Extract every source IP. [0-9]{1,3} = one to three digits.
+grep -oE '\bip=[0-9]{1,3}(\.[0-9]{1,3}){3}\b' sample.log
+
+# -o prints only the matched part rather than the whole line.
+# \b is a word boundary: a zero-width assertion between a word
+# character and a non-word character. It is what stops the pattern
+# matching the middle of a longer token.</pre></div>
+            <p>Quantifiers are greedy by default: they take as much as they can and then give back only if the rest of the pattern fails. Adding <code>?</code> makes them lazy, taking as little as possible. On a log line with more than one delimiter, the difference is the whole result:</p>
+<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+import re
+line = 'user=alice action=AssumeRole result=success'
+print(re.search(r'user=(.*) ',  line).group(1))   # greedy: 'alice action=AssumeRole'
+print(re.search(r'user=(.*?) ', line).group(1))   # lazy:   'alice'
+print(re.search(r'user=([^ ]+)', line).group(1))  # explicit: 'alice'  &lt;-- prefer this
+PY</pre></div>
+            <p>The third form is the one to reach for. "Everything up to the next space" stated as <code>[^ ]+</code> is unambiguous, is immune to a later change in the rest of the pattern, and does not depend on the reader remembering greed rules at 2am.</p>
+
+            <h3>4. Groups, captures, and named captures</h3>
+<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+import re, collections
+pat = re.compile(
+    r'^(?P&lt;ts&gt;\S+) user=(?P&lt;user&gt;[^ ]+) ip=(?P&lt;ip&gt;[^ ]+) '
+    r'action=(?P&lt;action&gt;[^ ]+) result=(?P&lt;result&gt;\w+)$')
+denials = collections.Counter()
+for line in open('sample.log'):
+    m = pat.match(line.strip())
+    if m and m['result'] == 'denied':
+        denials[(m['user'], m['ip'])] += 1
+print(denials)      # repeated denials by principal and source IP
+PY</pre></div>
+            <p><code>(?P&lt;name&gt;...)</code> is a named capture group. <code>(?:...)</code> groups without capturing, which you want whenever a group exists only so a quantifier can apply to it. Naming groups is the difference between a parser you can read next year and a wall of <code>group(4)</code>.</p>
+
+            <h3>5. Write a credential scanner</h3>
+            <p>AWS access key IDs are 20 characters: a four-character prefix plus 16 uppercase alphanumerics. <code>AKIA</code> is a long-term <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> user key. <code>ASIA</code> is a temporary <a class="glossary-link" href="../glossary.html#term-sts">STS</a> credential.</p>
+<div class="code-block"><pre># First attempt - finds the keys, and also finds the two things that are not keys
+grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' secrets.txt
+
+# Word boundaries reject the embedded case
+grep -oE '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
+            <p>Run both. The first matches inside <code>XAKIAIOSFODNN7EXAMPLEX</code>, because nothing said the match had to start at a token boundary. The second does not. Neither can tell you anything about the prose line mentioning <code>AKIA</code>, because that line contains no 20-character key, which is the correct outcome and worth confirming rather than assuming.</p>
+            <p>Now try the other half of an AWS credential pair, and watch the approach fall apart:</p>
+<div class="code-block"><pre># A secret access key is 40 characters of base64 alphabet. As a regex
+# that is nearly content-free: it matches most git hashes, most base64
+# blobs, and a good fraction of minified JavaScript.
+grep -oE '\b[A-Za-z0-9/+=]{40}\b' secrets.txt</pre></div>
+            <p>This is the boundary of what regex can do, and knowing where that boundary is matters more than another hour of syntax. Real secret scanners pair a regex with something else: Shannon entropy over the candidate, a proximity requirement (the string must sit near <code>aws_secret_access_key</code>), and increasingly a live validity check against the provider. Regex finds candidates. It does not decide.</p>
+
+            <h3>6. Lookaround, and living without it</h3>
+<div class="code-block"><pre># Lookahead: match a key ID only when NOT followed by more alphanumerics.
+# Lookbehind: and not preceded by any either. PCRE / Python / Java only.
+python3 -c "
+import re
+print(re.findall(r'(?&lt;![A-Z0-9])(AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])',
+                 open('secrets.txt').read()))"
+
+# ripgrep defaults to the Rust regex engine, which has no lookaround.
+rg '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt    # error: look-around not supported
+rg -P '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt # -P switches to PCRE2</pre></div>
+            <p>When the engine has no lookaround, express the boundary instead of asserting it. <code>\b</code> covers most cases. Where it does not, match the surrounding character and capture only the part you want:</p>
+<div class="code-block"><pre># Instead of  (?&lt;=key = )\S+   which needs lookbehind,
+# match the label too and take group 1.
+rg -o 'key\s*=\s*(\S+)' -r '$1' secrets.txt   # -r rewrites output to the capture</pre></div>
+
+            <h3>7. Catastrophic backtracking</h3>
+            <p>A backtracking engine can be made to explore an exponential number of paths. The trigger is nested quantifiers over overlapping alternatives, followed by something that fails.</p>
+<div class="code-block"><pre>python3 - &lt;&lt;'PY'
+import re, time
+evil = re.compile(r'^(a+)+$')          # nested quantifier, both greedy
+for n in (18, 20, 22, 24):
+    s = "a" * n + "!"                  # the "!" guarantees the match fails
+    t = time.perf_counter()
+    evil.search(s)
+    print(n, f"{time.perf_counter() - t:.3f}s")
+PY</pre></div>
+            <p>Each extra character roughly doubles the time. At 24 characters you are already waiting; at 40 the process is effectively hung. An attacker who controls the input to a validator, a log parser, or a WAF rule gets a CPU exhaustion primitive for free, and it is one of the few denial-of-service bugs that survives autoscaling, because every worker is equally stuck.</p>
+            <p>Three defences, in order of preference: use a finite-automaton engine for anything touching untrusted input; avoid nesting a quantifier inside a quantified group when the inner alternatives can match the same text; and where neither is possible, impose a length cap on the input <em>before</em> the regex sees it.</p>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>An internal service fetches a URL supplied by the user, and validates it with this allowlist. Give three distinct URLs that pass validation but reach a host you do not control.</p>
+<div class="code-block"><pre>re.search(r'https://.*\.internal\.example\.com', url)</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <ul>
+                        <li><code>https://evil.test/?x=.internal.example.com</code> - no anchors, so the required text can appear anywhere, including in a query string.</li>
+                        <li><code>https://api.internal.example.com.evil.test/</code> - no end anchor, so the allowed suffix is only a prefix of the real host.</li>
+                        <li><code>https://evil.test/#https://api.internal.example.com</code> - same unanchored problem, this time in the fragment.</li>
+                    </ul>
+                    <p>A fourth exists if the code uses <code>re.search</code> with a <code>^</code> added but no <code>$</code>: <code>https://a.internal.example.com@evil.test/</code> abuses userinfo in the authority. That one is worth knowing because it defeats a pattern that <em>looks</em> properly anchored.</p>
+                    <p>The real lesson is the last one: a URL is a structured value and a regex sees a flat string. Parse it with a URL parser, then compare the parsed host with <code>==</code> or a suffix check on a real hostname. Reach for regex only after the structure is already recovered.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>Write one pattern that finds AWS access key IDs in a file, matching both long-term and temporary keys, rejecting keys embedded in longer tokens, and running on ripgrep's default engine (so no lookaround). Then explain why <code>[A-Z0-9]{16}</code> and not <code>\w{16}</code>.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block"><pre>rg -o '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
+                    <p><code>\w</code> is <code>[A-Za-z0-9_]</code>: it admits lowercase and underscore, neither of which appears in an access key ID. Widening a character class beyond the real alphabet costs you precision in exactly the place a scanner can least afford it, because every false positive is a human being asked to rotate a credential that does not exist. Match the actual alphabet, not the convenient shorthand.</p>
+                    <p>Worth noting that <code>\b</code> before <code>A</code> only asserts a boundary; if the preceding character is a word character there is no boundary and the match is correctly rejected, which is why this works without lookbehind.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>Which of these is a catastrophic-backtracking risk on a PCRE engine, and which is safe? Say why for each.</p>
+<div class="code-block"><pre>A:  ^(\w+\s?)*$
+B:  ^\w+(\s\w+)*$
+C:  ^(a|ab)+c$
+D:  ^[a-z]{1,64}$</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p><strong>A is dangerous.</strong> <code>\s?</code> is optional, so <code>(\w+\s?)*</code> can split a run of word characters between the inner and outer quantifiers in exponentially many ways. Feed it 30 word characters and a <code>!</code> and it hangs.</p>
+                    <p><strong>C is dangerous</strong> for the same structural reason: <code>a</code> and <code>ab</code> overlap, so a long run of <code>a</code> and <code>b</code> that ultimately fails to reach <code>c</code> can be partitioned many ways.</p>
+                    <p><strong>B is safe.</strong> The inner group must consume at least one whitespace character before each subsequent word, so there is exactly one way to partition any given input. This is the standard rewrite for A, and it is worth internalising: make each repetition start with something that cannot be produced by the previous one.</p>
+                    <p><strong>D is safe</strong> and also shows the cheapest mitigation there is. A bounded quantifier caps the work regardless of engine.</p>
+                    <p>Confirm rather than trust the reasoning. The timing loop from step 7 works on all four, and a pattern that stays flat as <code>n</code> grows is genuinely safe in a way that reading it cannot prove.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>Using <code>sample.log</code>, write a one-liner that prints only principals with more than one denied action, and the count. Then say what your pattern would do if a username legitimately contained an <code>=</code> sign.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block"><pre>grep -E 'result=denied' sample.log \
+  | grep -oE '\buser=[^ ]+' \
+  | sort | uniq -c | sort -rn \
+  | awk '$1 &gt; 1'          # keep only counts above one</pre></div>
+                    <p><code>[^ ]+</code> is greedy up to the next space, so a username containing <code>=</code> is captured correctly, but a username containing a <em>space</em> would be truncated and would silently split into two apparent principals. Delimiter-based extraction always inherits the delimiter's ambiguity.</p>
+                    <p>That is the argument for parsing structured logs as structure. <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> is JSON; running a regex over the raw JSON text to pull out <code>userIdentity.arn</code> works right up until a field contains a quote or a brace, at which point it fails in a way no test caught. Use <a href="jq-and-jmespath.html">jq</a> for JSON and save regex for the places where the data really is flat text.</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>An unanchored pattern used as a validator.</strong> "Contains" is not "is". Anchor both ends, and in Python use <code>\A</code> and <code>\Z</code> rather than <code>^</code> and <code>$</code>.</li>
+                <li><strong>An unescaped dot inside a hostname.</strong> <code>\.</code> is a literal dot; a bare <code>.</code> is any character. In a domain allowlist that difference is the entire control.</li>
+                <li><strong>Assuming the engine supports lookaround.</strong> Go, Rust, ripgrep's default mode, and anything built on RE2 do not. The pattern does not degrade, it fails to compile, which is at least loud. The quieter version is a colleague deleting the lookaround to make it compile.</li>
+                <li><strong>Testing only strings that should match.</strong> Same failure as testing only the deny direction of a policy: a pattern that matches everything passes every positive test.</li>
+                <li><strong>Case sensitivity taken for granted.</strong> Hostnames are case-insensitive, HTTP header names are case-insensitive, and Windows paths are case-insensitive. A detection anchored to lowercase misses the trivially obvious evasion.</li>
+                <li><strong>Regex over structured data.</strong> JSON, XML, and URLs have parsers. A regex over their serialised form is correct until the first quote, escape, or nested brace.</li>
+                <li><strong>Forgetting <code>.</code> excludes newline.</strong> A multi-line payload slips past a single-line pattern, and turning on the dot-matches-newline flag to fix it often makes a greedy quantifier swallow the rest of the file.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="sigma-and-yara.html">Sigma and YARA</a> put these patterns to work in detection rules, where the two failure directions become false positives and missed detections.</li>
+                <li><a href="jq-and-jmespath.html">jq and JMESPath</a> for the structured-data half of the job, which is most of it in cloud.</li>
+                <li><a href="../detection-engineering.html">Detection engineering</a> for how a pattern becomes a tested, versioned rule.</li>
+                <li><a href="../data-security.html">Data security</a> for where credential and PII scanning fits in a wider programme.</li>
+                <li><a href="https://regex101.com/" target="_blank" rel="noopener noreferrer">regex101</a> explains a pattern token by token and shows a step count, which makes backtracking visible. Set the flavour to match your target engine, or the explanation is confidently about a different language.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=57c1912e" integrity="sha384-CH/DlQFLpbqaJzgrw09Hl8Tv6H7g8JAuRKsFr2k+x8Vszfr/dlqF95pxz3fRHCpo"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

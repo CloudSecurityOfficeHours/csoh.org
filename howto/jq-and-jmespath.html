@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Query JSON the way cloud security demands: jq streams and select, JMESPath filter projections, the AWS CLI --query traps, and exercises.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="jq tutorial, jmespath tutorial, aws cli query, jq cloudtrail, jq select group_by, jmespath filter projection, aws cli output text, gcloud filter format">
+    <title>jq and JMESPath for cloud security: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/jq-and-jmespath.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/jq-and-jmespath.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/jq-and-jmespath.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="jq and JMESPath, hands-on - CSOH">
+    <meta property="og:description" content="Query JSON the way cloud security demands: jq streams and select, JMESPath filter projections, the AWS CLI --query traps, and exercises.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="jq">
+    <meta property="article:tag" content="jmespath">
+    <meta property="article:tag" content="aws cli">
+    <meta property="article:tag" content="json parsing">
+    <meta property="article:tag" content="cloudtrail">
+    <meta property="article:tag" content="cloud security tooling">
+    <meta property="og:url" content="https://csoh.org/howto/jq-and-jmespath.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/jq-and-jmespath.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="jq and JMESPath, hands-on">
+    <meta name="twitter:description" content="Query JSON the way cloud security demands: jq streams and select, JMESPath filter projections, the AWS CLI --query traps, and exercises.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/jq-and-jmespath.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=1431f6af" integrity="sha384-yBNS5EG1WmkupCLiVXXQOZHJcnrwaQCpPekQbFPY2xXT63psnOE6rSbtuCriyQqC"></script>
+    <link rel="preload" href="/style.css?v=779aa538" as="style"
+        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+    <link rel="stylesheet" href="/style.css?v=779aa538"
+        integrity="sha384-LrHoiYYanguI/nNaUAigCg5Qnda2hTfXwj7aTx41D+ZmO1xAT6LPwh+6dDUitkM/">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "jq and JMESPath, hands-on",
+      "description": "Query JSON the way cloud security demands: jq streams and select, JMESPath filter projections, the AWS CLI --query traps, and exercises.",
+      "totalTime": "PT90M",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-08-24",
+      "dateModified": "2026-08-24",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Build the sample data",
+          "text": "Create a trimmed CloudTrail-shaped events.json so every example runs without a cloud account."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Navigate and filter with jq",
+          "text": "Use .Records[], select(), and -r to pull the principals behind every access denial."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Reshape output into new objects",
+          "text": "Construct {when, what, who} objects so downstream scripts survive upstream schema changes."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Group and count",
+          "text": "Combine group_by, map, and sort_by to rank principals by repeated denials."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Emit CSV and TSV",
+          "text": "Use @csv, @tsv, and @sh with -r to hand results to another tool safely."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Write the same queries in JMESPath",
+          "text": "Use filter projections, multiselect hashes, and the backtick literal versus single-quote string distinction."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Query a real AWS CLI",
+          "text": "Apply --query to describe-instances and understand why it is client-side while --filters is server-side."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Combine both",
+          "text": "Pipe --output json into jq rather than parsing --output text, which collapses nulls and flattens nested lists."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "jq and JMESPath, hands-on",
+          "item": "https://csoh.org/howto/jq-and-jmespath.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources.html?category=tool">Security Tools</a></li>
+                        <li><a href="../resources.html?category=lab">Labs &amp; Training</a></li>
+                        <li><a href="../resources.html?category=certification">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources.html?category=ai-security">AI Security</a></li>
+                        <li><a href="../resources.html?category=job">Job Search</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">jq and JMESPath</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>jq and JMESPath, hands-on</h1>
+        <p>Cloud security is JSON wrangling. Two query languages cover almost all of it, they look alike, and they share nothing. Learn both properly, including the traps that return an empty result instead of an error.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> <code>jq</code> and a terminal. No cloud account: the lab uses a sample file.</p>
+        </div>
+
+        <section id="intro">
+            <h2>The two query languages you will use every single day</h2>
+            <p>Cloud security work is, mechanically, JSON wrangling. Every CLI returns JSON. Every API returns JSON. <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> policies are JSON, <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> events are JSON, <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> plans are JSON, and every scanner you run emits JSON. The bottleneck between "the data exists" and "I know the answer" is almost always a query you could not quite write.</p>
+            <p>There are two languages worth knowing, and confusing them is the single most common source of wasted time here, because they look similar and share nothing.</p>
+            <ul>
+                <li><strong>jq</strong> is a standalone tool and a genuinely powerful language. It streams: a filter takes JSON values in and emits JSON values out, possibly more or fewer than it received. Use it anywhere you have a file or a pipe.</li>
+                <li><strong>JMESPath</strong> is a specification with implementations in many languages, which is exactly why AWS embedded it. It is what <code>--query</code> means in the AWS CLI and in the Azure CLI. It is a pure projection language: one input document, one output value, no streaming.</li>
+            </ul>
+            <p>Google Cloud is the odd one out and uses neither: <code>gcloud</code> has its own <code>--filter</code> and <code>--format</code> syntax. Knowing that up front saves you trying JMESPath against <code>gcloud</code> and concluding you have forgotten how to write it.</p>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">Streams versus projections</a></li>
+                <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>Streams versus projections</h2>
+            <p>Almost every jq confusion traces back to one idea. <strong>jq filters produce a stream, not a value.</strong></p>
+<div class="code-block"><pre>echo '{"a":[1,2,3]}' | jq '.a'      # one output: the array  [1,2,3]
+echo '{"a":[1,2,3]}' | jq '.a[]'    # THREE outputs: 1, then 2, then 3
+echo '{"a":[1,2,3]}' | jq '[.a[]]'  # collect the stream back into one array</pre></div>
+            <p>Those square brackets in the third line are not decoration. Any time a jq expression produces something that looks almost right but repeated, or almost right but unwrapped, the answer is usually a missing pair of collecting brackets. <code>select()</code>, <code>map()</code>, <code>group_by()</code> and friends all become obvious once you know which of them expect a stream and which expect an array.</p>
+            <p>JMESPath has no equivalent concept. An expression takes one document and returns one JSON value, always. That constraint is why it is safe to embed in a CLI flag and why it is considerably less capable: there is no way to express "emit a line per element" because there are no lines and no emitting.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through</h2>
+
+            <h3>1. Build the sample data</h3>
+            <p>This is a trimmed CloudTrail-shaped file. Everything below runs against it, so no cloud account and no credentials are needed.</p>
+<div class="code-block"><pre>mkdir -p ~/jq-lab &amp;&amp; cd ~/jq-lab
+
+cat &gt; events.json &lt;&lt;'EOF'
+{"Records":[
+ {"eventTime":"2026-08-20T14:03:11Z","eventName":"AssumeRole","errorCode":null,
+  "sourceIPAddress":"203.0.113.14",
+  "userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice"}},
+ {"eventTime":"2026-08-20T14:03:12Z","eventName":"GetObject","errorCode":"AccessDenied",
+  "sourceIPAddress":"198.51.100.7",
+  "userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob"}},
+ {"eventTime":"2026-08-20T14:05:40Z","eventName":"PutBucketPolicy","errorCode":null,
+  "sourceIPAddress":"10.0.4.19",
+  "userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/deploy/i-123"}},
+ {"eventTime":"2026-08-20T14:06:02Z","eventName":"ListBuckets","errorCode":"AccessDenied",
+  "sourceIPAddress":"203.0.113.99",
+  "userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/mallory"}},
+ {"eventTime":"2026-08-20T14:06:03Z","eventName":"ListBuckets","errorCode":"AccessDenied",
+  "sourceIPAddress":"203.0.113.99",
+  "userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/mallory"}}
+]}
+EOF</pre></div>
+
+            <h3>2. jq: navigate, then filter</h3>
+<div class="code-block"><pre>jq '.Records | length' events.json          # 5
+
+# .Records[] streams each record; select() passes through only the
+# ones where its condition is true and emits nothing for the rest.
+jq '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json
+
+# -r = raw output: print strings unquoted, which is what you want
+# the moment the output feeds another command.
+jq -r '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json</pre></div>
+            <p><code>select()</code> is the workhorse. Read <code>select(cond)</code> as a gate in the pipe: the value goes through unchanged if <code>cond</code> is true, and vanishes otherwise.</p>
+
+            <h3>3. jq: build new objects</h3>
+<div class="code-block"><pre># Construct an object per record. The keys are yours to name.
+jq '[.Records[]
+     | select(.errorCode != null)
+     | {when: .eventTime, what: .eventName, who: .userIdentity.arn, from: .sourceIPAddress}]' \
+   events.json</pre></div>
+            <p>Reshaping at the edge of a pipeline matters more than it looks. A downstream script that consumes <code>{who, what, when}</code> keeps working when AWS adds fields, moves things around, or you switch to a different source of the same facts.</p>
+
+            <h3>4. jq: the query you will actually run</h3>
+            <p>"Who is generating repeated access denials, and from where." This is a real triage question and it is four operators.</p>
+<div class="code-block"><pre>jq -r '
+  [.Records[] | select(.errorCode != null)]      # collect failures into an array
+  | group_by(.userIdentity.arn)                  # array of arrays, one per principal
+  | map({arn: .[0].userIdentity.arn, denials: length})
+  | sort_by(-.denials)                           # negate to sort descending
+  | .[] | "\(.denials)\t\(.arn)"                 # \(...) is string interpolation
+' events.json</pre></div>
+            <p>Note the shape change at each step: stream, array, array of arrays, array of objects, then back to a stream of strings for printing. <code>group_by</code> requires a sorted array and sorts for you, and it hands each group to <code>map</code> as a list, which is why <code>.[0]</code> is how you get at the shared key.</p>
+
+            <h3>5. jq: emit something another tool can read</h3>
+<div class="code-block"><pre># @csv quotes and comma-joins an array. Pair it with -r or you get
+# a JSON string containing escaped quotes, which no spreadsheet wants.
+jq -r '.Records[]
+       | select(.errorCode != null)
+       | [.eventTime, .eventName, .sourceIPAddress, .userIdentity.arn]
+       | @csv' events.json
+
+# @tsv, @sh (shell-quoted), @base64, and @uri exist too. @sh is the one
+# that saves you when a value contains a space or a quote.
+jq -r '[.Records[].sourceIPAddress] | unique | join(", ")' events.json</pre></div>
+
+            <h3>6. JMESPath: the same questions, different language</h3>
+            <p>Everything below works as an AWS CLI <code>--query</code> value. To practise without a cloud account, evaluate against the same file:</p>
+<div class="code-block"><pre>pip3 install jmespath        # brings the reference implementation
+
+python3 - &lt;&lt;'PY'
+import json, jmespath
+doc = json.load(open('events.json'))
+print(jmespath.search("Records[?errorCode=='AccessDenied'].userIdentity.arn", doc))
+print(jmespath.search("length(Records[?errorCode!=`null`])", doc))
+print(jmespath.search(
+    "Records[?errorCode!=`null`].{when: eventTime, what: eventName, who: userIdentity.arn}", doc))
+PY</pre></div>
+            <p>Three pieces of syntax carry most of the weight:</p>
+            <ul>
+                <li><code>[?expr]</code> is a filter projection. It is the <code>select()</code> equivalent.</li>
+                <li><code>{a: x, b: y}</code> is a multiselect hash, the object-construction equivalent.</li>
+                <li>Backticks enclose <strong>JSON literals</strong>: <code>`null`</code>, <code>`true`</code>, <code>`100`</code>. Single quotes enclose <strong>string literals</strong>: <code>'running'</code>.</li>
+            </ul>
+            <div class="highlight-box">
+            <p><strong>Double quotes in JMESPath do not mean what you think.</strong> <code>"ListBuckets"</code> is a <em>quoted identifier</em>, that is, a field name, not a string. So <code>[?eventName == "ListBuckets"]</code> compares the event name against the value of a field called <code>ListBuckets</code>, which does not exist, and returns an empty list. No error, no warning, just nothing. Use single quotes for strings, always.</p>
+            </div>
+
+            <h3>7. Against a real AWS CLI</h3>
+<div class="code-block"><pre># Public S3 buckets is not one call, so this is the shape you want:
+# a client-side query per bucket, driven by a jq-produced list.
+aws s3api list-buckets --query 'Buckets[].Name' --output text
+
+# EC2 instances without IMDSv2 enforced.
+aws ec2 describe-instances \
+  --query 'Reservations[].Instances[?MetadataOptions.HttpTokens!=`required`].[InstanceId,PrivateIpAddress]' \
+  --output text
+
+# IAM users whose access keys are old. --filters is SERVER side; --query
+# is CLIENT side. Mixing them up matters, see below.
+aws ec2 describe-instances \
+  --filters 'Name=instance-state-name,Values=running' \
+  --query 'Reservations[].Instances[].InstanceId'</pre></div>
+            <div class="highlight-box">
+            <p><strong><code>--query</code> is client-side, and that is a security-relevant fact, not a performance footnote.</strong> The API returns every record and the CLI throws away what your query excluded. You are still billed for the calls, your CloudTrail still records that you read everything, and <code>--query</code> grants you nothing and restricts you from nothing. If you need the API itself to return less, that is <code>--filters</code> on the services that support it, and it is a different flag with different syntax.</p>
+            </div>
+
+            <h3>8. The combination that gets used most</h3>
+            <p>In practice the strongest move is not choosing between them. It is <code>--output json</code> piped into jq, using JMESPath only for the trivial cases.</p>
+<div class="code-block"><pre># --output text collapses nulls to the string "None" and flattens nested
+# lists with tabs, so columns silently misalign the moment a field is
+# empty. For anything you intend to parse, take JSON and use jq.
+aws iam list-users --output json \
+  | jq -r '.Users[] | [.UserName, .CreateDate] | @tsv'</pre></div>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>Using <code>events.json</code>, print one line per distinct source IP address, showing the IP and the number of events from it, most active first.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block"><pre>jq -r '
+  [.Records[]]
+  | group_by(.sourceIPAddress)
+  | map({ip: .[0].sourceIPAddress, n: length})
+  | sort_by(-.n)
+  | .[] | "\(.n)\t\(.ip)"
+' events.json</pre></div>
+                    <p>If your first attempt produced the counts but in the wrong order, you probably wrote <code>sort_by(.n) | reverse</code>, which is also correct. <code>sort_by(-.n)</code> is shorter and is the idiom you will see in other people's filters.</p>
+                    <p>If it produced nothing at all, check whether you dropped the collecting brackets around <code>.Records[]</code>. <code>group_by</code> needs an array; handed a stream it operates on each element separately and every group has exactly one member.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>Translate this jq filter into JMESPath: <code>.Records[] | select(.userIdentity.type == "IAMUser") | .userIdentity.arn</code>. Then say what is different about the output.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block"><pre>Records[?userIdentity.type=='IAMUser'].userIdentity.arn</pre></div>
+                    <p>Note the single quotes. Double quotes would make <code>IAMUser</code> a field name and silently return an empty list.</p>
+                    <p>The output difference is the whole distinction between the two languages. jq emits four separate JSON strings, one per line, which a shell loop can consume directly. JMESPath returns a single JSON array. That is why <code>--query</code> pairs with <code>--output text</code> so often: the CLI has to flatten the array back into lines for you, because the language cannot.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>A colleague reports that this command "returns nothing, so we have no running instances". They are looking at an account with forty running instances. What is wrong?</p>
+<div class="code-block"><pre>aws ec2 describe-instances --query 'Reservations[].Instances[?State.Name == "running"].InstanceId'</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p><code>"running"</code> is a quoted identifier, so the filter compares <code>State.Name</code> against a field named <code>running</code>, finds nothing there, and the comparison is never true. The fix is <code>'running'</code>, and in a shell that means escaping or switching the outer quoting:</p>
+<div class="code-block"><pre>aws ec2 describe-instances \
+  --query "Reservations[].Instances[?State.Name == 'running'].InstanceId"</pre></div>
+                    <p>Worth sitting with the failure mode rather than just the fix. An empty result and a correct result look identical from the outside, and the reasonable interpretation of "no output" is "no matching resources". Before believing any empty result from a query language, run the query with the filter removed and confirm the data is there at all. Confirm the instrument works before trusting what it says is absent.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>Write a jq filter that finds any IAM policy statement granting <code>"Action": "*"</code>, handling the fact that <code>Action</code> may be a string or an array of strings. Test it against both shapes.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block"><pre># The trick is to normalise first. In jq, wrapping a value in an array
+# and flattening is the idiomatic "make this a list either way".
+cat &gt; policy.json &lt;&lt;'EOF'
+{"Statement":[
+  {"Effect":"Allow","Action":"*","Resource":"*"},
+  {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject"],"Resource":"*"},
+  {"Effect":"Allow","Action":["iam:*","*"],"Resource":"*"}
+]}
+EOF
+
+jq -r '.Statement[]
+       | select(.Effect == "Allow")
+       | select([.Action] | flatten | index("*"))
+       | "wildcard action: \(.Action)"' policy.json</pre></div>
+                    <p><code>[.Action] | flatten</code> turns both a bare string and an array into a flat array, and <code>index("*")</code> returns the position of the first match or <code>null</code>. <code>select()</code> treats <code>null</code> as false, so the statement passes through only when the wildcard is genuinely present.</p>
+                    <p>The equivalent normalise-then-compare pattern appears in the <a href="opa-rego.html">Rego page</a> for the same reason: the IAM document schema is polymorphic in several places, and any tool that reads it has to handle both shapes or it will miss findings on whichever shape it did not consider.</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Double quotes in JMESPath.</strong> They mean "field name", not "string". The failure is silent and reads as an empty environment.</li>
+                <li><strong>Forgetting <code>-r</code> in jq.</strong> Without it every string is emitted with quotes, and the next command in the pipe treats those quotes as part of the value.</li>
+                <li><strong>Missing collecting brackets.</strong> <code>group_by</code>, <code>sort_by</code>, <code>unique</code>, and <code>add</code> want an array. Given a stream they run per element and quietly return something plausible.</li>
+                <li><strong>Assuming <code>--query</code> limits what you retrieved.</strong> It filters after the fact. It is not an access control, not a cost control, and not a way to avoid reading data you should not read.</li>
+                <li><strong>Parsing <code>--output text</code>.</strong> Nulls become the literal string <code>None</code> and nested structures flatten into tabs, so columns shift whenever a field is empty. Take JSON and parse it properly.</li>
+                <li><strong>Trying JMESPath on <code>gcloud</code>.</strong> Different language entirely: <code>--filter</code> and <code>--format</code>, with their own syntax.</li>
+                <li><strong>Believing an empty result.</strong> The strongest habit on this page: when a query returns nothing, re-run it with the filter removed. A broken query and an empty account are indistinguishable until you check.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="regex-for-security.html">Regex for security</a> for the flat-text half of the job, and for why you should not regex your way through JSON.</li>
+                <li><a href="iam-policy-languages.html">IAM policy languages</a>, where Exercise 4's polymorphic <code>Action</code> field is only the first of several surprises.</li>
+                <li><a href="opa-rego.html">OPA and Rego</a> for when a query becomes a policy that has to run in a pipeline.</li>
+                <li><a href="../cloud-soc.html">Cloud SOC</a> and <a href="../incident-response.html">incident response</a> for the triage questions these filters exist to answer at speed.</li>
+                <li><a href="https://jqlang.github.io/jq/manual/" target="_blank" rel="noopener noreferrer">The jq manual</a> and <a href="https://jmespath.org/tutorial.html" target="_blank" rel="noopener noreferrer">the JMESPath tutorial</a>, which has a live evaluator on the page.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=57c1912e" integrity="sha384-CH/DlQFLpbqaJzgrw09Hl8Tv6H7g8JAuRKsFr2k+x8Vszfr/dlqF95pxz3fRHCpo"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
