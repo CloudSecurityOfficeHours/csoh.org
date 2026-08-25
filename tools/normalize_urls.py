@@ -143,9 +143,84 @@ def is_shortener(url):
         return False
 
 
+# A redirect that lands on a sign-in form says something about *our crawler's*
+# auth state, not about the link. Following one rewrites a real destination
+# into a login URL carrying that resolve session's throwaway tokens - Google's
+# `dsh`/`ifkv`, Atlassian's `orgId`, GitHub's `return_to` - which expire within
+# minutes. So the "normalized" link is then broken for everyone, permanently,
+# including the readers who could have opened the original.
+#
+# This is the same shape as the bot-challenge guard in is_meaningful_redirect:
+# an auth wall is a property of the fetch, not a canonical destination.
+#
+# Hosts whose only job is authentication. Landing here is always a wall.
+AUTH_WALL_HOSTS = {
+    'accounts.google.com', 'id.atlassian.com', 'auth.atlassian.com',
+    'login.microsoftonline.com', 'login.live.com', 'account.live.com',
+    'signin.aws.amazon.com', 'login.salesforce.com', 'login.okta.com',
+}
+
+# Sign-in paths on hosts that also serve real content, so the host alone
+# cannot decide (github.com/login, gitlab.com/users/sign_in, SharePoint).
+AUTH_WALL_PATH_MARKERS = (
+    '/login', '/signin', '/sign_in', '/sso/', '/oauth/authorize',
+    '/authenticate', '/session/new', '/users/sign_in', '/accounts/login',
+    '/_layouts/15/authenticate.aspx',
+)
+
+# "Come back here once you have signed in" parameters. Requiring one is what
+# separates a login *wall* from a page that merely lives at a /login path -
+# github.com/Azure/login is a repository, and must stay resolvable.
+AUTH_RETURN_PARAMS = {
+    'continue', 'followup', 'return_to', 'returnurl', 'returnto',
+    'redirect_uri', 'redirect_to', 'redirecturl', 'next', 'goto',
+    'destination', 'relaystate', 'samlrequest',
+}
+
+
+def is_auth_wall(url):
+    """Return True if `url` is a sign-in page rather than a real destination.
+
+    Deliberately errs toward True. A false positive costs one un-normalized
+    redirect - the original URL stays, and still works. A false negative
+    writes an expired login URL into the page, which never works again.
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    host = (parsed.hostname or '').lower()
+    if any(host == h or host.endswith('.' + h) for h in AUTH_WALL_HOSTS):
+        return True
+
+    path = parsed.path.lower().rstrip('/')
+    # The whole path IS the sign-in form (zoom.us/signin, github.com/login).
+    # No return parameter needed - there is nothing else this page can be.
+    if path in AUTH_WALL_PATH_MARKERS:
+        return True
+    # Otherwise the marker is only a hint, and needs corroborating: it has to
+    # be a login path AND carry a "return here after sign-in" parameter.
+    if not any(marker in path for marker in AUTH_WALL_PATH_MARKERS):
+        return False
+
+    try:
+        params = {k.lower() for k in parse_qs(parsed.query,
+                                              keep_blank_values=True)}
+    except Exception:
+        return False
+    return bool(params & AUTH_RETURN_PARAMS)
+
+
 def is_meaningful_redirect(original, resolved):
     """Return True if the redirect is worth normalizing (not just noise)."""
     if original == resolved:
+        return False
+
+    # Never follow a redirect onto a sign-in form. This has to sit above the
+    # shortener rule below: a shortener expanding onto an auth wall is exactly
+    # the case where "always expand" would write the broken URL.
+    if is_auth_wall(resolved):
         return False
 
     # Always expand shortener domains
@@ -327,6 +402,7 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
         'scheme_upgraded': [],
         'redirect_resolved': [],
         'skipped_bot_blocked': [],
+        'skipped_auth_wall': [],
         'skipped_error': [],
         'skipped_trivial': [],
         'skipped_unsafe_destination': [],
@@ -447,7 +523,10 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
                     (original_url, cleaned_url, resolved))
                 replacements[original_url] = resolved
             else:
-                if resolved != cleaned_url:
+                if resolved != cleaned_url and is_auth_wall(resolved):
+                    categories['skipped_auth_wall'].append(
+                        (original_url, cleaned_url, resolved))
+                elif resolved != cleaned_url:
                     categories['skipped_trivial'].append(
                         (original_url, cleaned_url, resolved))
                 # Still apply param-strip / scheme-upgrade
@@ -519,6 +598,18 @@ def print_report(replacements, categories, file_changes, dry_run):
         print(f"Skipped (trivial redirect): {len(categories['skipped_trivial'])}")
         for orig, cleaned, resolved in categories['skipped_trivial']:
             print(f"  {cleaned} -> {resolved}")
+        print()
+
+    if categories['skipped_auth_wall']:
+        print(f"Skipped (redirects to a sign-in wall): "
+              f"{len(categories['skipped_auth_wall'])}")
+        print("  These links were LEFT AS-IS on purpose. The destination is a "
+              "login\n  form with single-use tokens, not a real page - see "
+              "is_auth_wall().")
+        for orig, cleaned, resolved in categories['skipped_auth_wall']:
+            print(f"  {cleaned}")
+            print(f"    -> (wall) {resolved[:110]}"
+                  f"{'...' if len(resolved) > 110 else ''}")
         print()
 
     if categories['skipped_bot_blocked']:
