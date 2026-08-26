@@ -511,7 +511,7 @@ def check_glossary_orphans(pages: list[Path]) -> list[Finding]:
     html = glossary.read_text(encoding="utf-8")
 
     try:
-        from glossary_terms import PAGE_DENYLIST, derive_keys
+        from glossary_terms import PAGE_DENYLIST, derive_keys, key_regex
     except ImportError:  # pragma: no cover - the parser is a sibling module
         return []
 
@@ -538,7 +538,7 @@ def check_glossary_orphans(pages: list[Path]) -> list[Finding]:
         if slug in linked:
             continue
         for key in keys:
-            if re.search(rf"(?<![A-Za-z0-9]){re.escape(key)}(?![A-Za-z0-9])", corpus):
+            if re.search(rf"(?<![A-Za-z0-9]){key_regex(key)}(?![A-Za-z0-9])", corpus):
                 actionable.append((slug, key))
                 break
 

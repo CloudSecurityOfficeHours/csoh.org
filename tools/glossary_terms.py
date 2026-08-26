@@ -77,6 +77,51 @@ def slugify(text: str) -> str:
     return "term-" + text if text else "term-unknown"
 
 
+# A headword key is unescaped text; the pages it is matched against are HTML.
+# So a key containing "&", "<" or ">" can only ever match a page that spelled
+# the character WRONG. "MITRE ATT&CK" is the standing example: the glossary
+# defines it, 41 mentions sit in linkable prose across 17 pages, and the key
+# matched exactly one of them - the single page that wrote a bare "&" instead
+# of "&amp;". Both cross-linkers and the orphan check in
+# check_docs_consistency.py were blind to the other 40, and to six other keys
+# in the same shape ("Identity & Access Management", "Command & Control",
+# "Governance, Risk & Compliance", "Digital Forensics & Incident Response",
+# and two from "Blue/Green & Canary Deploys").
+#
+# This is the trap this repo keeps recording, in its nastiest form: escaping
+# that one bare "&" would have made the finding disappear while leaving the
+# term unlinked everywhere. The check would have gone green because it could
+# no longer see the problem, not because the problem was gone.
+#
+# So build the pattern from the key rather than from re.escape() alone, and let
+# each character match either spelling. The matched span is written back into
+# the link verbatim, so a page keeps its "&amp;" and stays well-formed.
+_ENTITY_ALTERNATIVES = {
+    "&": r"(?:&amp;|&)",
+    "<": r"(?:&lt;|<)",
+    ">": r"(?:&gt;|>)",
+}
+
+
+def key_regex(key: str) -> str:
+    """Regex source matching `key` in HTML, either escaped or literal.
+
+    Use this instead of re.escape() anywhere a glossary key is matched against
+    page markup. For a key with no entity-worthy character it is exactly
+    re.escape(key), so nothing else changes.
+    """
+    return "".join(_ENTITY_ALTERNATIVES.get(c, re.escape(c)) for c in key)
+
+
+def match_key(word: str) -> str:
+    """Normalise a span matched by key_regex() back to key form for lookup.
+
+    key_to_slug is built from unescaped headwords, so a span captured as
+    "MITRE ATT&amp;CK" has to be unescaped before it will find its slug.
+    """
+    return unescape(word)
+
+
 def is_acronym(key: str) -> bool:
     """All-uppercase, 2-8 chars, no spaces - match these case-sensitively.
 

@@ -38,6 +38,8 @@ from glossary_terms import (  # noqa: E402
     derive_keys as _derive_keys,
     is_acronym,
     slugify,
+    key_regex,
+    match_key,
 )
 
 
@@ -291,14 +293,14 @@ def build_term_regexes(keys: list[str]) -> list[tuple[re.Pattern[str], bool]]:
     patterns: list[tuple[re.Pattern[str], bool]] = []
     if case_sensitive_keys:
         sorted_keys = sorted(case_sensitive_keys, key=lambda k: -len(k))
-        pieces = [re.escape(k) for k in sorted_keys]
+        pieces = [key_regex(k) for k in sorted_keys]
         patterns.append((
             re.compile(r"(?<![A-Za-z0-9])(" + "|".join(pieces) + r")(?![A-Za-z0-9])"),
             True,
         ))
     if case_insensitive_keys:
         sorted_keys = sorted(case_insensitive_keys, key=lambda k: -len(k))
-        pieces = [re.escape(k) for k in sorted_keys]
+        pieces = [key_regex(k) for k in sorted_keys]
         patterns.append((
             re.compile(
                 r"(?<![A-Za-z0-9])(" + "|".join(pieces) + r")(?![A-Za-z0-9])",
@@ -466,7 +468,10 @@ def _link_chunk(
             continue
 
         end, word = best
-        slug = key_to_slug.get(word.lower())
+        # match_key: a span captured as "MITRE ATT&amp;CK" has to be
+        # unescaped before it will find its slug. The link text keeps the
+        # original spelling; only the lookup is normalised.
+        slug = key_to_slug.get(match_key(word).lower())
         out.append(text[cursor:earliest])
         if slug and slug not in linked_slugs:
             out.append(

@@ -36,6 +36,8 @@ from glossary_terms import (  # noqa: E402
     derive_keys,
     is_acronym,
     slugify,
+    key_regex,
+    match_key,
 )
 
 __all__ = ["DENYLIST", "derive_keys", "slugify", "main"]
@@ -84,7 +86,7 @@ def add_dt_ids(content: str) -> tuple[str, dict[str, str], dict[str, str]]:
 def build_term_regex(keys: list[str]) -> re.Pattern[str]:
     """Build one big alternation regex that matches any key, longest first."""
     sorted_keys = sorted(keys, key=lambda k: -len(k))
-    pieces = [re.escape(k) for k in sorted_keys]
+    pieces = [key_regex(k) for k in sorted_keys]
     # Use a non-word lookbehind/ahead for boundaries that work with hyphens
     # and ampersands in keys (e.g. "Pass-the-Hash", "MITRE ATT&CK").
     return re.compile(
@@ -173,7 +175,13 @@ def _link_text(
             seen_in_sentence = set()
 
         word = m.group(1)
-        slug = key_to_slug.get(word.lower())
+        # match_key: key_regex() lets a key with "&" match the "&amp;" a page
+        # actually contains, so the captured span has to be unescaped before it
+        # will find its slug. Skipping this does not merely fail to link - the
+        # span is still consumed, so a shorter key inside it ("MITRE" within
+        # "MITRE ATT&amp;CK") silently loses the link it used to have.
+        lookup = match_key(word).lower()
+        slug = key_to_slug.get(lookup)
         if not slug or slug == self_slug:
             continue
         # The alternation is case-insensitive so ordinary multi-word terms match
@@ -181,7 +189,7 @@ def _link_text(
         # Without this, "FIRST" (Forum of Incident Response and Security Teams)
         # linked every ordinary "first" in the glossary, which is why the word
         # had to sit in the denylist and why that entry was unreachable.
-        original = key_to_original.get(word.lower())
+        original = key_to_original.get(lookup)
         if original and is_acronym(original) and word != original:
             continue
         if slug in seen_in_sentence:
