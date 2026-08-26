@@ -753,7 +753,13 @@ csoh.org/
 │
 │  ── Shared assets ──
 ├── style.css                   # Main stylesheet (responsive design + dark mode)
-├── main.js                     # Shared interactive features (search, filter, sort, dark mode)
+├── main.js                     # Shared interactive features: search, filter, sort, dark-mode
+│                               #   toggle, card icons, tooltips, code-block copy buttons and
+│                               #   highlighting, heading anchors, TOC scroll-spy, back-to-top
+├── theme.js                    # Render-blocking, in <head> above the stylesheet: stamps
+│                               #   data-theme before first paint so a stored theme that
+│                               #   differs from the OS does not flash. Stamped by
+│                               #   tools/add_theme_script.py and gated in CI
 ├── chat-resources.js           # chat-resources.html-specific filtering/search
 ├── meetings.js                 # meetings.html-specific index + filters + speaker filter
 ├── glossary.js                 # glossary.html-specific search/filter
@@ -909,8 +915,9 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_crosslink_coverage.py` | Every root page is either cross-linked or explicitly opted out - `crosslink_pages.py` skips unlisted pages silently, so omissions never surfaced | docstring |
 | `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
 | `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DOCS_CONSISTENCY_README.md) |
-| `check_readme_coverage.py` | Every in-repo Markdown link resolves (403 of them, across 38 docs - lychee reads none); every root page is named in README.md and DEVELOPMENT.md; every published subdirectory is documented *and* crawled; no count marker sits inside a code fence. Self-tests before reporting, so a broken detector fails loudly instead of passing quietly | docstring |
+| `check_readme_coverage.py` | Every in-repo Markdown link resolves (over 400 of them, across every tracked doc - lychee reads none, and the tool prints the real counts, so do not trust one written here); every root page is named in README.md and DEVELOPMENT.md; every published subdirectory is documented *and* crawled; no count marker sits inside a code fence. Self-tests before reporting, so a broken detector fails loudly instead of passing quietly | docstring |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
+| `add_theme_script.py` | Stamps the render-blocking `theme.js` tag into every page's `<head>`, above the stylesheet. A page that misses it renders a flash of the wrong theme for any visitor whose stored choice differs from their OS, which is invisible in a screenshot and in every static check. `--check` for CI | docstring |
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
 | `pr_security_triage.py` | Deterministic security triage of an untrusted PR diff, behind `security-impact-review.yml` | docstring |
@@ -1074,7 +1081,7 @@ The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five
   That failure is silent: nothing errors, the push looks fine, and the change
   waits for the next unrelated commit.
 - `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`
-- `main.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`
+- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`
 - `vendor/**`, `chat-screenshots/**`, `img/**`
 - `update_sri.py`
 - Manual trigger via the GitHub Actions tab
@@ -1091,11 +1098,27 @@ deploy of identical bytes, a missing one costs a change that never goes live.
 - Regenerates the `VideoObject` JSON-LD on `presentations.html` (using `update_presentations_schema.py`)
 - Rebuilds the meetings.html search index
 - Refreshes `<lastmod>` dates in `sitemap.xml` from git history (using `update_sitemap.py`)
+- Checks that every news source has an on-disk banner image (using `check_news_banners.py`)
 - Generates preview images for new resources in `resources.html` (using `generate_preview.py`)
-- Optimizes generated images
+- Optimizes generated images, generates their WebP siblings, and syncs the HTML preview paths back into `preview-mapping.json`
 - Each step that mutates files commits the change back to `main` (with `[skip ci]` markers) so the next workflow run sees fresh state
 
 **Why this is separate from the deploy:** these housekeeping commits carry `[skip ci]`, so they do NOT trigger `deploy.yml` (that would loop). `deploy.yml` runs independently from the original content push that started this workflow; the housekeeping commits land in `main` and ship with the next deploy. Splitting them keeps each workflow's responsibility narrow.
+
+**The two workflows race, and the deploy re-derives what it can rather than
+losing it.** Both fire on the same push in different concurrency groups, so
+they start in the same second and overlap for about two minutes (45 of 45
+pushes measured). Housekeeping then commits with a CI-skip marker, so anything
+it generated missed the publish that triggered it. `update_sri.py` was always
+immune because the build re-stamps SRI itself; since 2026-08-23 the build also
+regenerates the meetings search index and the presentations `VideoObject`
+schema before staging, so `dist/` is self-consistent whichever workflow wins.
+`update_sitemap.py` is deliberately **not** moved: it reads `git log %cs`, and
+on the deploy's shallow checkout every path would resolve to the boundary
+commit and every date would come back identical - a plausible wrong answer
+rather than an error. Correctness there needs `fetch-depth: 0`, a ~355 MB clone
+on the deploy path, to freshen an SEO hint. It stays where the clone is already
+deep, and its output ships with the next deploy.
 
 **News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `deploy.yml` ships it.
 

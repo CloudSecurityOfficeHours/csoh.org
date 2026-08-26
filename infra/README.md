@@ -121,6 +121,35 @@ three origins are current, purges the edge, then re-derives every versioned
 asset's SHA-384 from what the edge actually serves and fails the deploy on a
 mismatch.
 
+`publish-gcp` is the only origin that ships a container, and it is the only one
+with an admission control in front of it. **Binary Authorization is enforcing**
+at the project level (`infra/terraform/gcp/binary_authorization.tf`): an
+allowlist of `us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/**`
+plus a default `ALWAYS_DENY`, opted into by both `csoh-site` and `csoh-site-qa`
+with `binary_authorization { use_default = true }`. Cloud Run will not start an
+image that did not come out of that repository. Three things about it are easy
+to get wrong:
+
+- **It checks provenance, not signatures.** A project has exactly one default
+  policy and Cloud Run accepts only that one, so requiring an attestation would
+  require it on QA too, where images are born before anything has approved them.
+- **`**` is not `*`.** In an allowlist pattern `*` stops at `/`, so
+  `csoh-containers/*` silently stops covering anything at a nested path. Getting
+  this wrong over-denies, which surfaces as a failed deploy rather than as a
+  control that quietly is not there.
+- **`ignore_changes` does not apply on create.** Both services are declared with
+  the `hello` placeholder image, which this policy denies, so the policy resource
+  carries a `depends_on` naming both services. The same trap returns if either
+  service is ever force-replaced while the policy is enforcing.
+
+A denied deploy does not fail cleanly: the revision is created and fails,
+traffic stays on the previous revision (so the site stays up), and the service
+spec is still updated to the rejected image, leaving the service `Ready: False`
+until the next passing deploy. `terraform apply` will not repair it either,
+because `ignore_changes` covers the image. **Verify both directions** when you
+touch the policy - a correctly scoped allowlist and one that denies everything
+produce identical evidence if the only thing you try is a bad image.
+
 Every cloud authenticates with **keyless OIDC** - no long-lived cloud secrets
 in the repo. Non-secret resource IDs are read from **repo Variables**
 (Settings → Secrets and variables → Actions → Variables), populated from the
@@ -134,6 +163,25 @@ Terraform outputs below:
 | `AZURE_CLIENT_ID` | `azure github_client_id` |
 | `AZURE_STORAGE_ACCOUNT` | `azure storage_account_name` |
 | `CLOUDFLARE_ZONE_ID` | Cloudflare dashboard → Overview (an identifier, not a secret) |
+| `AWS_ORIGIN_HOST` | `aws  cloudfront_domain` |
+| `AZURE_ORIGIN_HOST` | `azure static_website_host` |
+| `GCP_ORIGIN_HOST` | `gcp  cloud_run_service_url` (a scheme is tolerated and stripped) |
+
+The last three are the per-origin verification targets, and they are required
+even though nothing publishes through them. `deploy.yml`'s SRI and robots.txt
+gates used to ask `https://csoh.org/` only, which the load balancer routes to
+one origin of three, so a file missing from a single origin had roughly a
+2-in-3 chance of passing. That is the `/.well-known/security.txt` failure
+CLAUDE.md records. Both gates now sweep the edge plus all three origins by
+name and assert they reached all four.
+
+They are Variables rather than a runtime lookup because two of the three
+deploy identities cannot look themselves up: the AWS role holds only
+`cloudfront:CreateInvalidation`, and the Azure identity holds only Storage
+Blob Data Contributor, a data-plane role. Widening either one to discover a
+public hostname would trade a credential boundary for a lookup. An unset
+Variable names itself and exits 1, so a sweep that narrows fails loudly rather
+than reporting clean over fewer origins.
 
 One **Secret** is also required: `CLOUDFLARE_API_TOKEN`, used only by the
 `purge-cloudflare` job. Cloudflare has no OIDC federation, so this is the one
@@ -593,17 +641,46 @@ python3 tools/check_edge_headers.py --samples 1 \
 
 ## Cost
 
-| Component | Approx. monthly |
-|---|---|
-| Cloudflare Load Balancing add-on (Free plan + LB) | ~$5-7 |
-| AWS S3 + CloudFront (free-tier egress) | ~$0-1 |
-| GCP Cloud Run (scale-to-zero) + Artifact Registry | ~$0-1 |
-| Azure Blob static website | ~$0-1 |
-| GCS Terraform state | <$1 |
-| **Total** | **~$8-12/mo** (down from ~$100) |
+These are **billing-API figures, not estimates.** The table this replaced read
+"~$8-12/mo total" with Azure and Cloud Run at "~$0-1" each. Every one of those
+was a guess that nobody had checked against a bill, and they were wrong by one
+to two orders of magnitude. Keep the `Source` column, and keep the word
+`measured` honest: an estimate in this table is a to-do, not a rounding.
 
-The bulk of the old cost was the GCP Global HTTPS Load Balancer (two
-forwarding rules) + Cloud Armor - redundant with Cloudflare's edge.
+| Component | Per month | Source |
+|---|---|---|
+| GCP Cloud Run (production origin) | $47.64 | measured |
+| Azure Blob static website | $20.06 | measured |
+| GCP Artifact Registry | $19.60 | measured, and rising |
+| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | billed |
+| AWS S3 + CloudFront | $0.00 | measured - $28.33 of usage, exactly offset by credits |
+| Terraform state (GCS) + GCP logging | $0.00 | measured - inside the free tier |
+| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | measured |
+| **Total** | **~$97/mo** | ~$126 when the AWS credits lapse |
+
+**Almost none of that is traffic.** The top three lines are dominated by the
+load-balancer health probe, which runs from every Cloudflare data center rather
+than once per interval: ~1.02M probes per origin per day at `interval = 60`.
+Cloud Run booked 25.6M requests and 1.18M CPU-seconds over 25 days against three
+cents of minimum-instance CPU, meaning it genuinely scales to zero and simply
+never gets the chance; Azure bills the same probes as read operations, and its
+bill is essentially all transactions with no meaningful storage line. Artifact
+Registry is the only line with a slope, growing ~2.4 GB/day because its DELETE
+policy targets a state the repository can never enter.
+
+Two fixes for this are **committed and not yet applied** (`73f884db`,
+2026-08-25): `interval = 300`, worth ~$50/month across Cloud Run and Azure at
+the cost of failover detection going from 180s to 900s worst case; and a
+tagged-image retention rule, worth ~$13/month, whose first apply deletes 726
+images (~145 GB) irreversibly. Until `terraform apply` runs, the table above is
+still what you are paying. Re-measure rather than editing these numbers by hand
+- CLAUDE.md carries the Cost Management API call for Azure, and note that
+`az consumption usage list` returns rows with every cost field null.
+
+The bulk of the *old* cost, before the Cloudflare cutover, was the GCP Global
+HTTPS Load Balancer (two forwarding rules) + Cloud Armor - redundant with
+Cloudflare's edge. That saving was real; it is the ~$100/mo this stack replaced,
+not evidence that the current stack is cheap.
 
 ## Trade-offs vs. the old GCP stack
 

@@ -207,7 +207,11 @@ csoh.org/
 │
 │  ── Shared assets ──
 ├── style.css                        # All site styles (includes dark mode)
-├── main.js                          # Search, filtering, sorting, dark mode toggle
+├── main.js                          # Search, filtering, sorting, dark-mode toggle, card icons,
+│                                    #   tooltips, code-block copy/highlighting, heading anchors,
+│                                    #   TOC scroll-spy, back-to-top
+├── theme.js                         # Render-blocking anti-flash script, in <head> above the
+│                                    #   stylesheet (stamped by tools/add_theme_script.py)
 ├── chat-resources.js                # Chat-resources page-specific JS
 ├── meetings.js                      # Meeting recaps filtering + speaker filter
 ├── glossary.js                      # Glossary page live search
@@ -345,6 +349,8 @@ QA run and is therefore unpromotable.
 - CSS: Also supports `@media (prefers-color-scheme: dark)` for automatic OS detection
 - JS: Toggle button in `main.js` sets `data-theme` attribute on the `<html>` element
 - Preference is saved to `localStorage`
+- JS: `theme.js` is a separate, **render-blocking** script in `<head>`, above the stylesheet. It reads that `localStorage` value and stamps `data-theme` before first paint. Without it a visitor whose stored choice differs from their OS sees a flash of the wrong theme, because `main.js` loads at the end of `<body>` and the `prefers-color-scheme` branch has already painted by the time it runs
+- It cannot live inside `main.js` (too late) or in an inline `<script>` (the CSP drops it, see below), which is why it is a third file rather than a few lines somewhere else. `tools/add_theme_script.py` stamps the tag into every page and `validate-html.yml` gates on `--check`, so a new page cannot ship without it
 
 **Hover Tooltips** (resources.html)
 - Each `.resource-card` has a `data-tooltip` attribute with an extended 2-3 sentence description
@@ -360,6 +366,22 @@ QA run and is therefore unpromotable.
 - Filters by text input (title, description, tags) and category buttons
 - Tag-based filtering with toggle buttons
 - All client-side, no server needed
+
+**Code Blocks** (every page that carries one)
+- The markup is `<div class="code-block" data-lang="..."><pre>...</pre></div>`. `tools/stamp_code_langs.py` classifies each block and writes the `data-lang`; `validate-html.yml` gates on `--check`, so a new block cannot ship unlabelled
+- The **language label is CSS**, not an element: `.code-block[data-lang]::before` renders `attr(data-lang)`. A reader with JavaScript off still sees whether a block is shell or a policy file. Only the copy button needs script. Same reasoning as the `<noscript>` nav fallback - localhost and a modern browser are not the only ways this site gets read
+- `initCodeBlocks()` in `main.js` adds the copy button and runs `highlightCode()`, a ~120-line dependency-free highlighter covering bash, yaml, json, rego, hcl, sql, python, xml, cedar, yara, and cel. Its `LANGS` list must stay in step with the stamper's, and `--check` fails on a language `main.js` cannot render
+- Copy puts the exact code on the clipboard with none of the button's own text in it. Highlighting alters no character of any block (verified across 67 blocks against the raw HTML)
+- **Do not add a regex heuristic to the classifier.** Every version of one also matched shell scripts, scanner output, and a directory tree. Six blocks are named in `OVERRIDES` instead, keyed by a hash of their content, so editing such a block fails `--check` loudly rather than silently dropping its override
+- Code blocks **scroll** rather than wrap, since wrapped code misrepresents it. Inline `<code>` in prose does break, which is a separate rule - it had none at all until 2026-08-25 and a long dotted path pushed the document to 459px against a 375px viewport
+- 34 older `<br>`-based blocks are deliberately unstamped: three of them are not code at all (an email template, a resume line, a feed URL), so a language label would be a lie. They still get a copy button
+
+**Reading Aids** (`main.js`, all progressive enhancement)
+- `initHeadingAnchors()` adds a linkable anchor to each section heading
+- `initTocScrollSpy()` highlights the current section in a page's table of contents
+- `initBackToTop()` adds the back-to-top control
+- `initExerciseControls()` adds one button that opens or closes every exercise answer on the `howto/` guides
+- All four enhance markup that already worked without them; none is required for the page to be readable
 
 **SRI Hashes & Cache Busting**
 - Every CSS/JS file has a `integrity="sha384-..."` attribute for security
@@ -768,7 +790,8 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | File | What it does | When to edit |
 |------|-------------|--------------|
 | `style.css` | All site styles | Changing appearance or layout |
-| `main.js` | Search, filters, dark mode, interactions | Changing site behavior |
+| `main.js` | Search, filters, dark mode, card icons, tooltips, code-block copy + highlighting, heading anchors, TOC scroll-spy, back-to-top | Changing site behavior |
+| `theme.js` | Render-blocking anti-flash theme stamp in `<head>` | Rarely -- stamped by `tools/add_theme_script.py`, gated in CI |
 | `resources.html` | Resource cards and categories | Adding/editing resources |
 | `news.html` | News article display | **Don't edit** -- auto-generated |
 | `feed.xml` | RSS feed | **Don't edit** -- auto-generated |
@@ -784,7 +807,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |
 | `sitemap.xml` | XML sitemap for search engines | **Don't edit** -- lastmod refreshed automatically |
-| `update_sri.py` | SRI hash generator. The `ASSETS` list is the source of truth: `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search.css`, `search-init.js`, `vendor/goatcounter-count.js`. Any new shared asset must be added there or it ships uncached-busted and unhashed | Adding a shared CSS/JS asset; otherwise **don't edit** -- runs in CI |
+| `update_sri.py` | SRI hash generator. The `ASSETS` list is the source of truth: `style.css`, `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `noscript.css`, `search.css`, `search-init.js`, `vendor/goatcounter-count.js`. Any new shared asset must be added there or it ships uncached-busted and unhashed | Adding a shared CSS/JS asset; otherwise **don't edit** -- runs in CI |
 | `tools/check_edge_headers.py` | Edge security-header drift gate. Parses the header name/value pairs out of the `set_security_headers` rule in `infra/terraform/cloudflare/rules.tf` and asserts each one against what the live site actually returns, failing on anything missing or changed. It exists because that ruleset carries `lifecycle { ignore_changes = [rules] }` (a cloudflare v4 provider workaround), which makes the resource inert: you can tighten the CSP in Git, get a clean `terraform apply`, and ship nothing. Those headers are also the only source of CSP/HSTS for the Azure origin, which cannot set response headers itself | Run it (`python3 tools/check_edge_headers.py`, or `--url <origin>` for one origin) after any edge-header change, since `terraform apply` will not tell you. It is a **CI gate in the `purge-cloudflare` job of `deploy.yml`**, so drift fails the deploy. Delete the whole script once the cloudflare v5 provider upgrade lets `ignore_changes` go |
 | `tools/add_meeting.py` | Publishes a meeting recap from a note export: writes `meetings/YYYY-MM-DD.html`, inserts the card on `meetings.html`, rewires the pager links on both chronological neighbors, and updates `sitemap.xml` + `meetings-search-index.json` | Changing recap structure. Note the `scrub_emails()` guard in `clean_text()` (the shared funnel for both the HTML and Markdown parsers): Zoom summaries name people by display name, and some people's display name is their work email address, so any address in recap prose is replaced with "one attendee" (`@csoh.org` is exempt). It **warns and continues** rather than failing, so a publish is never blocked -- read the warning and substitute a first name if one is appropriate |
 | `vendor/` | Self-hosted third-party browser libraries (MiniSearch, GoatCounter), SRI-pinned because the CSP is `script-src 'self'`. `goatcounter-count.js` is deliberately patched, not pristine | **Read [vendor/README.md](vendor/README.md) first.** A re-vendor must re-apply the local modifications and re-run `update_sri.py` |

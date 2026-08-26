@@ -359,10 +359,20 @@ Two things to know before you touch it:
   *rules*, not `:root` custom properties, so a dark token written in only one
   of the two blocks still passes `--check`. Both copies are yours to keep in
   step.
-- **`style.css` still carries two stale comments** near `.news-date-count` and
-  `.signature--final` claiming `--text-muted` is "defined nowhere" and that the
-  literals "are not safe to unify under one definition." Both are pre-fix
-  wording that survived the change. Believe the `:root` block, not them.
+- **The two stale `style.css` comments this section used to warn about are
+  gone** (checked 2026-08-25). They sat near `.news-date-count` and
+  `.signature--final` and claimed `--text-muted` was "defined nowhere" and that
+  the literals were "not safe to unify under one definition." `.signature--final`
+  now carries no such comment, and `.news-date-count`'s was rewritten into a
+  *live* warning worth reading before you touch it: do not swap that rule for
+  `var(--text-muted)` just because the light values match, because the dark
+  overrides put it back to translucent white on purpose while the token resolves
+  to `#94a3b8`. A comment near `.author-card__kicker` now records the same
+  correction explicitly. This entry is kept because the failure it records is
+  the one this file keeps hitting from the other direction: **a note about the
+  state of the code is a measurement with a timestamp**, and telling a reader to
+  distrust code that has since been fixed costs them the same detour as trusting
+  code that has since broken.
 
 The lesson worth keeping is the one about the token, not the value: **when you
 find yourself writing a third exception to a token, the token is the bug** -
@@ -625,6 +635,39 @@ check counted card results *sharing* an anchor, and that control is what
 exposed it** - one unstamped card falls back alone, shares its anchor with
 nobody, and the count stays at 0. It only ever fired once the damage was
 already plural, which is the weaker half of the failure it was written for.
+
+## A redirect onto a login page describes our crawler, not the link
+
+`normalize_urls.py` resolves redirects and writes the final URL back into the
+HTML. That is correct for a shortener or a moved page and catastrophic for an
+auth wall: the login URL it lands on carries **that resolve session's throwaway
+tokens** - Google's `dsh`/`ifkv`, Atlassian's `orgId`, GitHub's `return_to` -
+which expire within minutes. So the "normalized" link is then broken for
+everyone, permanently, including the readers who could have opened the original.
+
+Eight links were rewritten this way before it was caught on 2026-08-25. Six were
+contribution CTAs pointing at a GitHub sign-in page instead of our pre-filled
+issue forms (`contribute.html`, `contribute-resources.html`, `faq.html`); the
+other two were a CSP reference and an analytics URL on
+`how-csoh-org-is-secured.html`.
+
+`is_auth_wall()` now sits beside the existing bot-challenge guard, and above the
+shortener rule - "always expand a shortener" is exactly what would write the
+broken URL. It errs toward flagging, and the asymmetry is the point: a false
+positive costs one un-normalized redirect **that still works**, a false negative
+costs a link that never works again. Skips print under their own report heading
+rather than being filed as "trivial", so they are visible in the PR.
+
+The shape is the one this file records about search results landing on the wrong
+anchor, one step worse. There, a link resolved but did not deliver what it
+promised. Here **the tool succeeded, reported success, and produced a URL that
+200s for the crawler and is dead for every reader.** No link checker can see it:
+lychee follows the same redirect and gets the same 200. The only tell is that
+the destination is a login form.
+
+To add a host, extend `AUTH_WALL_HOSTS` in `tools/normalize_urls.py` (hosts
+whose only job is authentication, where landing there is always a wall) rather
+than pattern-matching the path.
 
 ## Site chrome is generated, not hand-edited
 
@@ -1281,7 +1324,11 @@ There is no path by which one becomes `UNTAGGED`. The rule that would have
 caught the growth was written against a state this repository can never enter.
 
 The fix is a second `DELETE` policy on `tag_state = "TAGGED"` with an age
-condition, with the `KEEP` most-recent rule as the floor. Sizing it needs the
+condition, with the `KEEP` most-recent rule raised from 30 to 50 as the floor.
+**It is committed and not yet applied** (`73f884db`, 2026-08-25), so until
+`terraform apply` runs, the numbers above are still what the repository is
+doing, and the first apply deletes 726 images (~145 GB) in one irreversible
+pass. Both currently-deployed images sit well inside the window. Sizing it needs the
 real push rate, not a guess - `~11 images/day` here, so 30 days settles at
 ~350 images / ~70 GB instead of growing without bound:
 
@@ -1306,8 +1353,27 @@ Two things generalise:
 The load balancer monitor in `infra/terraform/cloudflare/load_balancer.tf` runs
 against **all three origins from every Cloudflare data center**. At `interval =
 60` that worked out to roughly 757 probe sources per cycle, about **1.09M probes
-per origin per day**. Whatever that probe fetches, you are buying it a million
-times a day.
+per origin per day** (re-measured from the billing data on 2026-08-25 as ~711
+sources and ~1.02M probes; treat both as the same order, not as a discrepancy).
+Whatever that probe fetches, you are buying it a million times a day.
+
+> **PENDING, not live.** `73f884db` (2026-08-25) sets `interval = 300` in Git, a
+> fivefold cut worth ~$50/month across Cloud Run and Azure. **It has not been
+> applied.** `terraform apply` against this stack is handed over separately, so
+> until that happens the live monitor is still at 60 and every figure below
+> still describes production. The same commit's Artifact Registry retention
+> policy is pending on the same apply - see the section above, and note that
+> applying it deletes 726 images (~145 GB) in one irreversible pass.
+>
+> The cost of the change is failover latency: an origin is marked down after
+> `retries` consecutive failures, so worst-case detection goes from
+> `interval*(1+retries)` = 180s to 900s. With three origins that is the window
+> in which a share of requests can hit a dead one. Deliberate trade.
+>
+> When the apply lands, delete this block and rewrite the paragraph above in the
+> past tense. Do not assume from the file that it is live - `terraform plan`
+> is the check, and this repo already records a ruleset that plans clean and
+> ships nothing.
 
 It used to fetch `GET /`. Azure Blob static websites cannot gzip, so each probe
 shipped the full uncompressed `index.html`: 52,425 bytes, against 11,193
