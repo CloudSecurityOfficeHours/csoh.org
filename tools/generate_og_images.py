@@ -549,7 +549,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/huggingface-agent-intrusion-timeline.html",
      "Hugging Face Agent Intrusion 2026 Kill Chain",
-     "A self-built agent message board, Artifactory zero-days, and 17,600 reconstructed actions inside production.",
+     "~1,200 agents built their own message board. They already had the answer they broke in to steal.",
      "Breach Kill Chain"),
     ("breaches/huggingface-openai-agent.html",
      "Hugging Face / OpenAI Agent 2026 Kill Chain",
