@@ -1325,17 +1325,32 @@ caught the growth was written against a state this repository can never enter.
 
 The fix is a second `DELETE` policy on `tag_state = "TAGGED"` with an age
 condition, with the `KEEP` most-recent rule raised from 30 to 50 as the floor.
-**It is committed and not yet applied** (`73f884db`, 2026-08-25), so until
-`terraform apply` runs, the numbers above are still what the repository is
-doing, and the first apply deletes 726 images (~145 GB) in one irreversible
-pass. Both currently-deployed images sit well inside the window. Sizing it needs the
-real push rate, not a guess - `~11 images/day` here, so 30 days settles at
-~350 images / ~70 GB instead of growing without bound:
+Committed in `73f884db` (2026-08-25) and **applied 2026-08-28**. The live repo
+now carries `keep-recent-50`, `delete-old-tagged` (30d), and the original
+`delete-old-untagged` (7d). Both currently-deployed images sit well inside the
+window. Sizing it needs the real push rate, not a guess - `~11 images/day`
+here, so 30 days settles at ~350 images / ~70 GB instead of growing without
+bound:
 
 ```sh
 gcloud artifacts docker images list \
   us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers \
   --include-tags --format='value(createTime)' | cut -c1-10 | sort | uniq -c | tail
+```
+
+**Applying it is not the same as reclaiming anything, and the gap is wide enough
+to mislead.** Cleanup policies run on Artifact Registry's own schedule, not at
+apply time. Hours after the apply the repo still held **1,104 images and ~247
+GB, oldest 2026-05-08** - the pre-fix inventory exactly, under a policy that was
+already live. So the two questions have two different instruments: read
+`cleanupPolicies` and `updateTime` to learn the policy landed, and the image
+count to learn whether it has run. The first sweep is still ahead, and it
+deletes ~726 images (~145 GB) in one irreversible pass.
+
+```sh
+gcloud artifacts repositories describe csoh-containers \
+  --project csoh-org-495800 --location us-central1 --format=json \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["updateTime"]); print(list(d["cleanupPolicies"]))'
 ```
 
 Two things generalise:
@@ -1355,25 +1370,30 @@ against **all three origins from every Cloudflare data center**. At `interval =
 60` that worked out to roughly 757 probe sources per cycle, about **1.09M probes
 per origin per day** (re-measured from the billing data on 2026-08-25 as ~711
 sources and ~1.02M probes; treat both as the same order, not as a discrepancy).
-Whatever that probe fetches, you are buying it a million times a day.
+Whatever that probe fetches, you were buying it a million times a day.
 
-> **PENDING, not live.** `73f884db` (2026-08-25) sets `interval = 300` in Git, a
-> fivefold cut worth ~$50/month across Cloud Run and Azure. **It has not been
-> applied.** `terraform apply` against this stack is handed over separately, so
-> until that happens the live monitor is still at 60 and every figure below
-> still describes production. The same commit's Artifact Registry retention
-> policy is pending on the same apply - see the section above, and note that
-> applying it deletes 726 images (~145 GB) in one irreversible pass.
->
-> The cost of the change is failover latency: an origin is marked down after
-> `retries` consecutive failures, so worst-case detection goes from
-> `interval*(1+retries)` = 180s to 900s. With three origins that is the window
-> in which a share of requests can hit a dead one. Deliberate trade.
->
-> When the apply lands, delete this block and rewrite the paragraph above in the
-> past tense. Do not assume from the file that it is live - `terraform plan`
-> is the check, and this repo already records a ruleset that plans clean and
-> ships nothing.
+`73f884db` cut `interval` to 300, and it **went live 2026-08-28**, so the
+current rate is about a fifth of those figures. Every number in this section
+predates that change and is kept because it is what was measured; re-derive
+rather than scale them by hand. The saving was **predicted** at ~$50/month
+across Cloud Run and Azure and has not been confirmed in billing - the export
+windows all end before the change.
+
+What was bought with it is failover latency. An origin is marked down after
+`retries` consecutive failures, so worst-case detection is
+`interval*(1+retries)`, which moved from 180s to 900s. With three origins that
+is the window in which a share of requests can hit a dead one. Deliberate
+trade, and the reason not to cut the interval further.
+
+Confirm the live value from Cloudflare rather than from the file - this repo
+already records a ruleset that plans clean and ships nothing. Map the token
+first, as in the two-tokens section above:
+
+```sh
+curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$TF_VAR_account_id/load_balancers/monitors" \
+  | python3 -c 'import json,sys; [print(m["method"], m["interval"], m["retries"]) for m in json.load(sys.stdin)["result"]]'
+```
 
 It used to fetch `GET /`. Azure Blob static websites cannot gzip, so each probe
 shipped the full uncompressed `index.html`: 52,425 bytes, against 11,193
