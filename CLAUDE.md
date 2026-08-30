@@ -1325,9 +1325,29 @@ caught the growth was written against a state this repository can never enter.
 
 The fix is a second `DELETE` policy on `tag_state = "TAGGED"` with an age
 condition, with the `KEEP` most-recent rule raised from 30 to 50 as the floor.
-Committed in `73f884db` (2026-08-25) and **applied 2026-08-28**. The live repo
-now carries `keep-recent-50`, `delete-old-tagged` (30d), and the original
-`delete-old-untagged` (7d). Both currently-deployed images sit well inside the
+Committed in `73f884db` (2026-08-25) and applied 2026-08-28. **It deleted
+nothing, for a completely different reason, and that is the real lesson here.**
+Artifact Registry's documentation says it plainly, three times on one page: "If
+a repository has immutable tags enabled, tagged artifacts can't be deleted." So
+`immutable_tags = true` did not merely make the UNTAGGED rule unmatchable, it
+made *any* delete rule unexecutable. The fix for a rule that could never match
+was a rule that could never run.
+
+The tell was a `FAILED_PRECONDITION` on a hand-run delete - `cannot delete tag
+914cd2f33910. The repository has enabled tag immutability` - which is the same
+wall the policy hits silently. **A manual attempt at what an automated rule does
+is the cheapest way to make a silent failure speak**, and it is worth reaching
+for before theorising about schedules; the theory here was that the background
+job simply had not run yet, and it was wrong.
+
+`immutable_tags = false` since 2026-08-30 is what makes retention possible at
+all. The two settings are a package: re-enable immutability and the sweep breaks
+again, silently, with all three policies still listed and still reporting
+success. What replaced the tag guarantee is digest pinning in `deploy.yml` and
+`deploy-qa.yml` - both resolve the tag and pass `path@sha256:...` to `gcloud run
+deploy` - so a moved tag cannot change the bytes a revision runs. The live repo
+carries `keep-recent-50`, `delete-old-tagged` (30d), and `delete-old-untagged`
+(7d). Both currently-deployed images sit well inside the
 window. Sizing it needs the real push rate, not a guess - `~11 images/day`
 here, so 30 days settles at ~350 images / ~70 GB instead of growing without
 bound:
@@ -1339,13 +1359,19 @@ gcloud artifacts docker images list \
 ```
 
 **Applying it is not the same as reclaiming anything, and the gap is wide enough
-to mislead.** Cleanup policies run on Artifact Registry's own schedule, not at
-apply time. Hours after the apply the repo still held **1,104 images and ~247
-GB, oldest 2026-05-08** - the pre-fix inventory exactly, under a policy that was
-already live. So the two questions have two different instruments: read
-`cleanupPolicies` and `updateTime` to learn the policy landed, and the image
-count to learn whether it has run. The first sweep is still ahead, and it
-deletes ~726 images (~145 GB) in one irreversible pass.
+to mislead.** Cleanup policies also run on Artifact Registry's own schedule
+rather than at apply time ("changes take effect within approximately one day"),
+so a fresh policy legitimately does nothing for a while - which is exactly the
+explanation that made the immutable-tags cause easy to miss for two days. Read
+`cleanupPolicies` and `updateTime` to learn the policy landed; read the image
+count to learn whether it has run. **Do not accept "the scheduler has not got to
+it" past its stated window** - at that point it is a hypothesis competing with a
+real defect, and the delete-by-hand probe above distinguishes them in one call.
+
+Audit logs will not help. `artifactregistry.googleapis.com` DATA_WRITE logging
+is off by default and this project sets no `auditConfigs`, so a query for
+cleanup deletions returns zero rows whether or not the sweep ran. Control it by
+asking for a push you know happened; the answer is also zero.
 
 ```sh
 gcloud artifacts repositories describe csoh-containers \

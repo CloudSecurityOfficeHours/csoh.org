@@ -35,14 +35,28 @@ resource "google_artifact_registry_repository" "containers" {
 
   # Docker-specific settings for the repository.
   docker_config {
-    # Make image tags IMMUTABLE: once a tag (e.g. ":abc123") points at an
-    # image, it can never be moved to a different image or overwritten. This is
-    # a security/integrity guarantee -- it prevents "tag hijacking" where a tag
-    # silently changes underneath you, and guarantees that what CI tested is
-    # byte-for-byte what Cloud Run later runs. Because of this, CI must push a
-    # NEW unique tag for every deploy (typically the git commit SHA) rather
-    # than reusing one like ":latest".
-    immutable_tags = true
+    # Image tags are MUTABLE here, and that is a deliberate trade rather than
+    # an oversight. Artifact Registry's documentation is explicit: "If a
+    # repository has immutable tags enabled, tagged artifacts can't be
+    # deleted." Every deploy pushes a NEW unique tag (the git commit SHA), so
+    # an image is tagged at birth and stays tagged forever -- which makes
+    # immutable tags and ANY deletion-based retention mutually exclusive on
+    # this repository. It ran the other way until 2026-08-30 and reached 1,112
+    # images / ~247 GB with nothing ever reclaimed. See the cleanup policies
+    # below, and note that BOTH delete rules were inert under the old setting.
+    #
+    # What replaced the guarantee. Immutable tags promised that a tag could not
+    # be moved after the fact. That promise now comes from digests instead:
+    # deploy.yml and deploy-qa.yml resolve the tag to a sha256 digest and pass
+    # THAT to `gcloud run deploy`, and Binary Authorization evaluates the
+    # digest-resolved reference either way. A tag moved after a deploy cannot
+    # change the bytes that are running.
+    #
+    # What is genuinely weaker: a lost push race is now a silent overwrite
+    # rather than a loud rejection. Both deploy workflows check for the tag
+    # before pushing, so they do not fight in the normal case, and the digest
+    # pinning above bounds the damage when they do.
+    immutable_tags = false
   }
 
   # Cleanup policies are automatic housekeeping rules that delete (or protect)
@@ -53,7 +67,7 @@ resource "google_artifact_registry_repository" "containers" {
   # You can declare a block like this more than once on the same resource;
   # Terraform treats each "cleanup_policies { ... }" as a separate policy.
   #
-  # Policy 1: always KEEP the 30 most recent image versions, so the current
+  # Policy 1: always KEEP the 50 most recent image versions, so the current
   # deploy plus a healthy window of previous ones stay available for instant
   # rollback even if the DELETE policy below would otherwise sweep them.
   cleanup_policies {
@@ -96,20 +110,31 @@ resource "google_artifact_registry_repository" "containers" {
   # Policy 3: DELETE old TAGGED images -- the rule that actually reclaims space.
   #
   # Policy 2 above looks like it does this job and cannot. Every deploy pushes a
-  # NEW unique tag (immutable_tags = true forces that), so an image is tagged at
-  # birth and stays tagged forever; nothing ever transitions to UNTAGGED for the
-  # rule to catch. Measured on 2026-08-25: 1,071 tagged images against 4
-  # untagged, 219 GB, growing ~2.4 GB/day since May with nothing ever deleted.
-  # The policy was live and correctly configured and had removed essentially
-  # nothing -- a rule whose condition can never be met reports no error, it just
-  # never fires.
+  # NEW unique tag, so an image is tagged at birth and stays tagged forever;
+  # nothing ever transitions to UNTAGGED for the rule to catch. Measured on
+  # 2026-08-25: 1,071 tagged images against 4 untagged, 219 GB, growing ~2.4
+  # GB/day since May with nothing ever deleted. The policy was live and
+  # correctly configured and had removed essentially nothing -- a rule whose
+  # condition can never be met reports no error, it just never fires.
+  #
+  # THIS RULE WAS INERT TOO, FOR TWO DAYS, AND FOR A DIFFERENT REASON. It was
+  # added on 2026-08-25 to fix Policy 2 and applied on 2026-08-28, and deleted
+  # nothing, because the repository still had immutable_tags = true and
+  # Artifact Registry will not delete a tagged artifact under that setting. So
+  # the fix for a rule that could never match was a rule that could never
+  # execute, and both reported success the entire time. The tell was the same
+  # in both cases and it was never in the policy: the inventory did not move.
+  # Setting immutable_tags = false (see docker_config above) is what makes this
+  # rule capable of doing anything at all -- the two settings are a package,
+  # and re-enabling immutability silently re-breaks retention.
   #
   # 30 days at ~11 pushes/day settles at roughly 330 images (~67 GB) instead of
   # growing without bound, and leaves a rollback window far longer than any
   # realistic need; the KEEP rule above protects the newest 50 regardless. Note
-  # the interaction with promotion: promote-qa reuses the image QA built, by
-  # tag, so the retention window must comfortably exceed the longest gap between
-  # a QA build and its promotion.
+  # the interaction with promotion: promote-qa reuses the image QA built, found
+  # by tag and then deployed by digest, so the retention window must comfortably
+  # exceed the longest gap between a QA build and its promotion. Deleting that
+  # image breaks promotion regardless of which reference names it.
   cleanup_policies {
     id     = "delete-old-tagged"
     action = "DELETE"

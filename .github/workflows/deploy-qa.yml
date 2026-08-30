@@ -18,10 +18,14 @@
 #
 # HOW PROMOTION WORKS, and why this workflow is what makes it safe. The image is
 # tagged csoh-site:<short-sha> in the SAME Artifact Registry repo production
-# uses. That repo sets immutable_tags, and deploy.yml's push step skips a tag
-# that already exists. So when a commit tested here is later fast-forwarded onto
-# `main`, production computes the identical tag, finds it already present, and
-# deploys THE EXACT BYTES THIS WORKFLOW PUSHED rather than rebuilding them.
+# uses, and deploy.yml's push step skips a tag that already exists. So when a
+# commit tested here is later fast-forwarded onto `main`, production computes the
+# identical tag, finds it already present, resolves it to a digest, and deploys
+# THE EXACT BYTES THIS WORKFLOW PUSHED rather than rebuilding them. That repo ran
+# with immutable_tags until 2026-08-30, which used to be what guaranteed the tag
+# still named those bytes; retention required turning it off (see
+# infra/terraform/gcp/artifact_registry.tf), so the guarantee is now the digest
+# both workflows deploy by.
 # Promotion is therefore "ship the artifact you tested", not "rebuild and hope".
 #
 # That property is load bearing, and it breaks the moment this workflow and
@@ -67,7 +71,7 @@ concurrency:
   # passes leaves an origin serving new CSS beside HTML naming the old hash, and
   # SRI then blocks the asset and the site renders unstyled. None of that shape
   # exists here: a Cloud Run rollout is one atomic revision switch, Artifact
-  # Registry tags are immutable so a half-finished push cannot corrupt a tag, and
+  # a half-finished push cannot corrupt a tag (a push publishes atomically), and
   # there is no edge cache to poison (rules.tf bypasses cache for qa.csoh.org).
   # So superseding an in-flight QA deploy is safe, and while iterating you want
   # the newest push to win rather than queue behind two stale ones.
@@ -259,9 +263,10 @@ jobs:
             --ignorefile .trivyignore.yaml \
             "${{ steps.tag.outputs.image }}"
 
-      # Artifact Registry has immutable_tags=true, so re-pushing an existing tag
-      # fails. This makes reruns idempotent, and also handles the case where a
-      # commit is pushed to `qa` twice.
+      # Re-pushing an existing tag overwrites it silently now that the repo runs
+      # with immutable_tags = false (retention requires it). This check is what
+      # keeps reruns idempotent, and it also handles the case where a commit is
+      # pushed to `qa` twice.
       - name: Push container image (skip if already in registry)
         run: |
           set -euo pipefail
@@ -271,12 +276,27 @@ jobs:
             docker push "${{ steps.tag.outputs.image }}"
           fi
 
+      # Same reasoning as deploy.yml: resolve to a digest so a concurrent push
+      # of this tag cannot change what actually rolls out.
+      - name: Resolve image digest
+        id: digest
+        run: |
+          set -euo pipefail
+          ref=$(gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" \
+                  --format='value(image_summary.fully_qualified_digest)')
+          case "$ref" in
+            *@sha256:*) ;;
+            *) echo "::error::No digest resolved for ${{ steps.tag.outputs.image }} (got '$ref')"; exit 1 ;;
+          esac
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "Deploying by digest: ${ref}"
+
       - name: Deploy to Cloud Run (QA)
         run: |
           gcloud run deploy "${{ env.SERVICE }}" \
             --project "${{ env.PROJECT_ID }}" \
             --region "${{ env.REGION }}" \
-            --image "${{ steps.tag.outputs.image }}" \
+            --image "${{ steps.digest.outputs.ref }}" \
             --platform managed \
             --ingress all \
             --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \

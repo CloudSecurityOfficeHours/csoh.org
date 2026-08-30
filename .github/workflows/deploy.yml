@@ -920,8 +920,13 @@ jobs:
             --ignorefile .trivyignore.yaml \
             "${{ steps.tag.outputs.image }}"
 
-      # Artifact Registry has immutable_tags=true, so re-pushing an existing tag
-      # fails outright. The check at the top of this job decides whether we
+      # Re-pushing an existing tag is a silent overwrite now that the repo runs
+      # with immutable_tags = false (retention requires it; see
+      # infra/terraform/gcp/artifact_registry.tf). It used to fail outright,
+      # which is the failure this step was originally written around. The
+      # existence check below is therefore load-bearing rather than merely
+      # tidy, and the digest resolution after it is what makes a lost race
+      # harmless. The check at the top of this job decides whether we
       # built or pulled; this step re-asks the same question immediately before
       # pushing, because the answer can CHANGE while the job runs.
       #
@@ -958,6 +963,33 @@ jobs:
             docker push "${{ steps.tag.outputs.image }}"
           fi
 
+      # Pin the deploy to a DIGEST rather than the tag.
+      #
+      # With mutable tags, "deploy the tag" is a time-of-check/time-of-use gap:
+      # the step above confirms the tag is present, and between that moment and
+      # `gcloud run deploy` a concurrent run of the same commit could move it.
+      # Resolving here and deploying the sha256 collapses that window, so the
+      # bytes this job verified are the bytes that run. Cloud Run resolves the
+      # digest anyway - Binary Authorization evaluates the digest-resolved
+      # reference - so this makes explicit what was already happening, and
+      # restores the guarantee immutable tags used to provide.
+      - name: Resolve image digest
+        id: digest
+        run: |
+          set -euo pipefail
+          # `fully_qualified_digest` is the whole `path@sha256:...` reference,
+          # so there is no string-building here to get subtly wrong.
+          ref=$(gcloud artifacts docker images describe "${{ steps.tag.outputs.image }}" \
+                  --format='value(image_summary.fully_qualified_digest)')
+          # An unknown --format path returns EMPTY rather than failing, which
+          # would hand `gcloud run deploy` an empty --image. Assert instead.
+          case "$ref" in
+            *@sha256:*) ;;
+            *) echo "::error::No digest resolved for ${{ steps.tag.outputs.image }} (got '$ref')"; exit 1 ;;
+          esac
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "Deploying by digest: ${ref}"
+
       # Roll out a new Cloud Run revision running the image we just pushed.
       # Cloud Run scales to zero when idle and back up on demand. Flags below
       # (kept above the command so a comment never lands between
@@ -975,7 +1007,7 @@ jobs:
           gcloud run deploy "${{ env.SERVICE }}" \
             --project "${{ env.PROJECT_ID }}" \
             --region "${{ env.REGION }}" \
-            --image "${{ steps.tag.outputs.image }}" \
+            --image "${{ steps.digest.outputs.ref }}" \
             --platform managed \
             --ingress all \
             --service-account "csoh-run-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \

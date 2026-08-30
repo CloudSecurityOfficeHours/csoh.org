@@ -49,11 +49,13 @@ prints exactly which commits are missing. The fix is always to bring `main` into
 ## Why promotion ships the bytes you tested
 
 `deploy-qa.yml` builds `csoh-site:<short-sha>` and pushes it to the **same**
-Artifact Registry repo production uses. That repo sets `immutable_tags`, and
-`publish-gcp` skips the push when the tag already exists. So when a tested
-commit reaches `main`, production derives the identical tag, finds the image
-present, pulls it, and deploys it - no rebuild, no artifact-passing machinery
-between the two workflows.
+Artifact Registry repo production uses, and `publish-gcp` skips the push when
+the tag already exists. So when a tested commit reaches `main`, production
+derives the identical tag, finds the image present, resolves it to a sha256
+digest, and deploys that digest - no rebuild, no artifact-passing machinery
+between the two workflows. The digest matters: the repo no longer sets
+`immutable_tags`, because Artifact Registry cannot delete tagged artifacts while
+it does and retention was worth more than the tag guarantee.
 
 This only holds while the two workflows produce identical images. **Do not add
 QA-only container settings.** Anything QA-specific belongs at the Cloudflare
@@ -80,8 +82,8 @@ say so.
 be cancelled mid-flight: its publish jobs upload assets first and HTML second
 across three origins, and a cancel between those passes leaves an origin serving
 new CSS beside HTML naming the old hash, which SRI then blocks. None of that
-exists in QA - a Cloud Run rollout is one atomic revision switch, Artifact
-Registry tags are immutable so a half-finished push cannot corrupt anything, and
+exists in QA - a Cloud Run rollout is one atomic revision switch, a
+half-finished push cannot corrupt a tag because a push publishes atomically, and
 `qa.csoh.org` bypasses the edge cache. While iterating you want the newest push
 to win.
 
@@ -157,15 +159,21 @@ while attached, so they have to be detached by updating the app first. They also
 collide on `precedence` with the Terraform-managed policy.
 
 **The registry race.** `deploy-qa.yml` and `publish-gcp` build the same commit
-into the same immutable tag, so pushing a commit to `main` and `qa` at once
-makes them race. Production lost once: it checked the registry (empty), spent
-two minutes building and scanning, and by the time it pushed, the QA run had
-published the tag. The push was rejected, `Deploy to Cloud Run` was skipped, and
-GCP sat a commit behind AWS and Azure with `purge-cloudflare` skipped - the
-split-origin state where about one request in three serves stale content, from a
-workflow that looked like it had simply failed. `publish-gcp` now re-checks
-immediately before pushing and treats an existing tag as success. **Re-running
-the failed job is the repair**, and it takes the promotion path.
+into the same tag, so pushing a commit to `main` and `qa` at once makes them
+race. Production lost once: it checked the registry (empty), spent two minutes
+building and scanning, and by the time it pushed, the QA run had published the
+tag. Tags were immutable then, so the push was rejected, `Deploy to Cloud Run`
+was skipped, and GCP sat a commit behind AWS and Azure with `purge-cloudflare`
+skipped - the split-origin state where about one request in three serves stale
+content, from a workflow that looked like it had simply failed. `publish-gcp`
+now re-checks immediately before pushing and treats an existing tag as success.
+**Re-running the failed job is the repair**, and it takes the promotion path.
+
+Tags are no longer immutable, so that same race now ends in a silent overwrite
+rather than a rejection - the louder failure was the friendlier one. Two things
+bound it: both workflows still check before pushing, and both deploy the digest
+the tag resolves to rather than the tag, so whatever wins the race cannot change
+the bytes a running revision was built from.
 
 ## The Cloudflare token
 

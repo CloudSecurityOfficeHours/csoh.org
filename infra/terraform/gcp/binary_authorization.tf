@@ -9,8 +9,8 @@
 # image did not come out of our own Artifact Registry repository.
 #
 # WHY NOW, AND NOT BEFORE. This project used to have one Cloud Run service and
-# one deploy identity, and the honest answer was that Trivy plus immutable tags
-# plus a WIF-pinned pusher already covered the realistic risk. The QA pipeline
+# one deploy identity, and the honest answer was that Trivy plus a WIF-pinned
+# pusher already covered the realistic risk. The QA pipeline
 # changed the arithmetic: there are now two services (csoh-site, csoh-site-qa)
 # and two deploy service accounts, and `csoh-deployer-qa` can create revisions
 # without holding project-wide run.admin. More identities that can deploy means
