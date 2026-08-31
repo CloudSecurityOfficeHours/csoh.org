@@ -160,7 +160,7 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 504 curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # 522 curated resources (largest page; auto-refreshed weekly)
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
 ├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests

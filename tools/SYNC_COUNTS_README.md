@@ -61,7 +61,7 @@ are filed under two categories. Both figures are correct; they answer different 
 **3. `<!--count:...-->` prose markers**, in both HTML pages and Markdown docs. Wrap a number in a marker and it becomes self-maintaining:
 
 ```html
-Access <!--count:resources_floor-->500+<!--/count--> curated resources.
+Access <!--count:resources_floor-->520+<!--/count--> curated resources.
 ```
 
 The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so `README.md` can use them too - **except inside a fenced code block**, which renders its contents verbatim and will display the marker to the reader. Four counts in README.md's directory tree were doing exactly that; those are handled by `MD_PROSE_RULES` instead (see item 4). Available keys:
