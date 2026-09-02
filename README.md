@@ -24,7 +24,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
-| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->321<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
+| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->326<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
 #### Workloads & Platform
@@ -181,7 +181,7 @@ Our recommended learning sequence:
 1. **Get the Lay of the Land**: [What is Cloud Security?](https://csoh.org/what-is-cloud-security.html) - vendor-neutral pillar overview of the field
 2. **Follow the Roadmap**: [Cloud Security Learning Path](https://csoh.org/learning-path.html) - beginner → advanced with milestones, free labs, study targets
 3. **Master the Fundamentals**: [Best Practices](https://csoh.org/cloud-security-best-practices.html) and the [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html)
-4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->321<!--/count--> terms, every cross-reference hyperlinked
+4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->326<!--/count--> terms, every cross-reference hyperlinked
 5. **Get Hands-On**: [CTF Challenges](https://csoh.org/ctfs.html) and [Resources](https://csoh.org/resources.html) for practice
 6. **Choose a Certification**: [Cloud Security Certifications guide](https://csoh.org/cloud-security-certifications.html) - CCSK, CCSP, AWS, Azure, GCP, CKS
 7. **Read Real Breaches**: [Breach Kill Chains](https://csoh.org/breach-timeline.html) - see how attacks actually happen
@@ -277,6 +277,9 @@ Cloud identity is the #1 root-cause category in breach reports. This page covers
 
 ### 🤖 Non-Human Identity ([`non-human-identity.html`](https://csoh.org/non-human-identity.html))
 The identity class that now outnumbers humans by an order of magnitude: service accounts, workload identities, API keys, tokens, and increasingly AI agents. Discovery, ownership, lifecycle, rotation, and why the usual IAM playbook doesn't transfer cleanly.
+
+### 🧑 Human Risk ([`human-risk.html`](https://csoh.org/human-risk.html))
+The behavioural layer, grounded in five 2026 Friday sessions. Why job title and seniority predict click behaviour poorly, how phishing, business email compromise, help-desk vishing, phishing-as-a-service and AI-assisted campaigns actually arrive, why a stolen cloud session defeats controls that assume a technical failure, and which signals you already collect (non-interactive sign-ins, mailbox-rule changes, help-desk resets, EDR unsafe-browsing) will find them. FAQ schema.
 
 ### 🛡️ Zero Trust Architecture ([`zero-trust.html`](https://csoh.org/zero-trust.html))
 NIST SP 800-207 explained, the BeyondCorp origin story, the seven tenets, PDP/PEP/Policy Engine, ZTNA vs VPN, microsegmentation (host-based vs network-based vs service-mesh), continuous verification, CISA Zero Trust Maturity Model, and per-cloud patterns for AWS / Azure / GCP. Explicitly debunks "Zero Trust as a product."
@@ -467,7 +470,7 @@ Plain-English landing page for both feeds - `feed.xml` (cloud-security news, ref
 
 ### 📖 Glossary ([`glossary.html`](https://csoh.org/glossary.html))
 A plain-English glossary of cloud-security acronyms and concepts:
-- **<!--count:glossary_terms-->321<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
+- **<!--count:glossary_terms-->326<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
 - **Live search** filters terms and definitions as you type, hiding sections with no matches
 - **Cross-linked**: every glossary term mentioned in any other definition is automatically hyperlinked to its entry - see `tools/crosslink_glossary.py`
 - Targeted terms (arrived via `#term-...` anchor) get a yellow highlight so the reader can immediately spot them
@@ -625,7 +628,7 @@ csoh.org/
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
 ├── vendor-landscape.html       # 300+ cloud-security vendors across 32 categories
-├── glossary.html               # 321 cloud security terms with live search & cross-links
+├── glossary.html               # 326 cloud security terms with live search & cross-links
 ├── topics.html                 # Complete A-Z topic index - every page in one flat list
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 │
@@ -645,6 +648,7 @@ csoh.org/
 │  ── Security domains ──
 ├── iam.html                    # IAM & cloud identity, RBAC/ABAC, workload identity, priv-esc
 ├── non-human-identity.html     # Non-human identity (NHI): service accounts, keys, agents
+├── human-risk.html             # Human risk: social engineering, BEC, vishing, behaviour data
 ├── zero-trust.html             # NIST SP 800-207, BeyondCorp, CISA Maturity Model, ZTNA
 ├── network-security.html       # VPC design, private endpoints, egress, WAF, DDoS, SASE/ZTNA
 ├── data-security.html          # Envelope encryption, BYOK/HSM, secrets management, rotation
@@ -1263,11 +1267,11 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->64<!--/count--> pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->65<!--/count--> pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
-- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->321<!--/count--> individual terms
+- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->326<!--/count--> individual terms
 
 **Entity schema** - who/what is responsible for the content:
 - ✅ **Organization** - CSOH itself, with founding date, contact point, sameAs links, search action
@@ -1279,25 +1283,25 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->92<!--/count--> pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->93<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->278<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->279<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
 - ✅ **`security.txt`** (RFC 9116) for vulnerability disclosure, at both `/.well-known/security.txt` and `/security.txt`
 - ✅ Site-wide **canonical URLs** to consolidate ranking signals
-- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->321<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
+- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->326<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
 
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->262<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->110<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->263<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->110<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

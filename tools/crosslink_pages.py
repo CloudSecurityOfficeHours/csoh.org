@@ -135,6 +135,7 @@ TARGET_PAGES = [
     # never visited - so check this file whenever a top-level page is added.
     "mcp-security.html",
     "non-human-identity.html",
+    "human-risk.html",
     "what-practitioners-think.html",
     "what-practitioners-think-about-ai-security.html",
     "what-practitioners-think-about-security-conferences.html",

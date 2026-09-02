@@ -82,7 +82,7 @@ csoh.org/
 ├── cspm-vs-cwpp.html                # Posture vs workload protection, head to head
 ├── cnapp-vs-xdr.html                # Where CNAPP ends and XDR/CDR begins
 ├── vendor-landscape.html            # 300+ cloud-security vendors across 32 categories
-├── glossary.html                    # 321 cloud-security terms with live search + cross-links
+├── glossary.html                    # 326 cloud-security terms with live search + cross-links
 ├── topics.html                      # Complete A-Z topic index - every page in one flat list
 ├── faq.html                         # Frequently asked questions
 │
@@ -97,6 +97,7 @@ csoh.org/
 │  ── Discipline topics ──
 ├── iam.html                         # IAM & cloud identity, RBAC/ABAC, workload identity, priv-esc paths
 ├── non-human-identity.html          # NHI: service accounts, keys, tokens, AI agents
+├── human-risk.html                  # Human risk: social engineering, BEC, vishing, behaviour data
 ├── zero-trust.html                  # NIST SP 800-207, BeyondCorp, CISA Maturity Model
 ├── network-security.html            # VPC, private endpoints, egress controls, WAF/DDoS, SASE/ZTNA
 ├── data-security.html               # KMS, envelope encryption, BYOK/HSM, secrets, key rotation
