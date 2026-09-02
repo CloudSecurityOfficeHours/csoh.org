@@ -66,6 +66,13 @@ PAGE_EXTRA_DENYLIST = {
     "kev", "key", "keys", "log", "logs", "policies", "policy", "purple",
     "red", "role", "roles", "scope", "secret", "secrets", "session",
     "sessions", "subnet", "tag", "tags", "user", "users", "vault",
+    # Two unrelated meanings, both all-caps and both live on this site: the
+    # glossary defines Common Platform Enumeration, while conferences.html and
+    # resources.html use CPE for the Continuing Professional Education credits
+    # that trainings award. Case-sensitive acronym matching cannot separate
+    # them. The long form "Common Platform Enumeration" is a key in its own
+    # right and is unambiguous, so the entry is still reachable from page prose.
+    "cpe",
 }
 
 PAGE_DENYLIST = BASE_DENYLIST | PAGE_EXTRA_DENYLIST

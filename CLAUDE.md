@@ -1147,11 +1147,16 @@ cards still use OG cards deliberately; at 311px they are legible and the
 extra weight suits them.
 
 Both generators need Playwright, and **it is installed and ready - do not build
-a venv.** Verified 2026-08-24: `python3` resolves to the pyenv 3.10.0 shim,
-which imports `playwright` and `PIL` (Pillow 12.3.0), and Chromium is already
-downloaded under `~/Library/Caches/ms-playwright/`. `playwright` (pyenv shim)
-and `playwright-cli` (`/opt/homebrew/bin`) are both on `PATH` at 1.62.0. So
-`python3 tools/generate_og_images.py --pages <page>` just works.
+a venv.** What has moved is *which interpreter has it*. Re-measured 2026-09-01:
+bare `python3` is now Homebrew's 3.14.7 at `/opt/homebrew/bin/python3`, and that
+one does **not** import `playwright`. The interpreters that do are
+`/Users/shawn/.pyenv/versions/3.10.0/bin/python3` (the one with Chromium already
+downloaded under `~/Library/Caches/ms-playwright/`) and `/usr/bin/python3`. So
+spell the interpreter out rather than trusting `python3`:
+
+```sh
+/Users/shawn/.pyenv/versions/3.10.0/bin/python3 tools/generate_og_images.py --pages <page>
+```
 
 This paragraph has now been wrong in **both** directions, which is the reason
 to distrust it rather than the reason to trust this version. It once claimed

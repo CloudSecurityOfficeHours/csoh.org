@@ -24,7 +24,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
-| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->317<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
+| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->321<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
 #### Workloads & Platform
@@ -181,7 +181,7 @@ Our recommended learning sequence:
 1. **Get the Lay of the Land**: [What is Cloud Security?](https://csoh.org/what-is-cloud-security.html) - vendor-neutral pillar overview of the field
 2. **Follow the Roadmap**: [Cloud Security Learning Path](https://csoh.org/learning-path.html) - beginner → advanced with milestones, free labs, study targets
 3. **Master the Fundamentals**: [Best Practices](https://csoh.org/cloud-security-best-practices.html) and the [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html)
-4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->317<!--/count--> terms, every cross-reference hyperlinked
+4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->321<!--/count--> terms, every cross-reference hyperlinked
 5. **Get Hands-On**: [CTF Challenges](https://csoh.org/ctfs.html) and [Resources](https://csoh.org/resources.html) for practice
 6. **Choose a Certification**: [Cloud Security Certifications guide](https://csoh.org/cloud-security-certifications.html) - CCSK, CCSP, AWS, Azure, GCP, CKS
 7. **Read Real Breaches**: [Breach Kill Chains](https://csoh.org/breach-timeline.html) - see how attacks actually happen
@@ -467,7 +467,7 @@ Plain-English landing page for both feeds - `feed.xml` (cloud-security news, ref
 
 ### 📖 Glossary ([`glossary.html`](https://csoh.org/glossary.html))
 A plain-English glossary of cloud-security acronyms and concepts:
-- **<!--count:glossary_terms-->317<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
+- **<!--count:glossary_terms-->321<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
 - **Live search** filters terms and definitions as you type, hiding sections with no matches
 - **Cross-linked**: every glossary term mentioned in any other definition is automatically hyperlinked to its entry - see `tools/crosslink_glossary.py`
 - Targeted terms (arrived via `#term-...` anchor) get a yellow highlight so the reader can immediately spot them
@@ -625,7 +625,7 @@ csoh.org/
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
 ├── vendor-landscape.html       # 300+ cloud-security vendors across 32 categories
-├── glossary.html               # 317 cloud security terms with live search & cross-links
+├── glossary.html               # 321 cloud security terms with live search & cross-links
 ├── topics.html                 # Complete A-Z topic index - every page in one flat list
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 │
@@ -1267,7 +1267,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
-- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->317<!--/count--> individual terms
+- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->321<!--/count--> individual terms
 
 **Entity schema** - who/what is responsible for the content:
 - ✅ **Organization** - CSOH itself, with founding date, contact point, sameAs links, search action
@@ -1292,7 +1292,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
 - ✅ **`security.txt`** (RFC 9116) for vulnerability disclosure, at both `/.well-known/security.txt` and `/security.txt`
 - ✅ Site-wide **canonical URLs** to consolidate ranking signals
-- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->317<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
+- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->321<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
 
 ### Social previews
 

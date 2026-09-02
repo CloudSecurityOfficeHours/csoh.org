@@ -246,9 +246,14 @@ def og_rules(counts: dict) -> list[tuple[str, str]]:
     """(regex, replacement) pairs for count-bearing OG-card strings."""
     meetings = counts["meetings"]
     res_floor = floor10(counts["resources"])
-    # Note: glossary "N+ terms" is deliberately NOT managed here - the glossary
-    # has more <dt> ids (aliases) than visible terms, so an auto floor would
-    # overclaim. The safe "300+" is left as authored.
+    # Note: glossary "N+ terms" is deliberately NOT managed here. The original
+    # reason was that the glossary had more <dt> ids (aliases) than visible
+    # terms, so an auto floor would overclaim. Measured 2026-09-01 and that is
+    # no longer true: 321 <dt> with term- ids against 321 <dd>, no alias
+    # headwords at all, so glossary_terms_floor is honest and the markers on
+    # glossary.html and about.html use it. These OG-card strings stay
+    # hand-authored only because regenerating a card is an image build, not a
+    # text edit - not because the count is untrustworthy.
     return [
         (r'(\d+)\+ resources', f'{res_floor}+ resources'),
         (r'"(\d+)\+ Cloud Security Resources"', f'"{res_floor}+ Cloud Security Resources"'),
@@ -388,6 +393,11 @@ HTML_PROSE_RULES = [
     (r"\d+\+ entry Resources Directory", "{resources_floor} entry Resources Directory"),
     (r"broad catalog \(\d+\+\)", "broad catalog ({resources_floor})"),
     (r"\d+\+ links, vendor-neutral", "{resources_floor} links, vendor-neutral"),
+    # faq.html mirrors its visible answers into an FAQPage JSON-LD block, where an
+    # HTML comment would be literal text inside the JSON string. The visible copy
+    # of this sentence carries a <!--count:feeds--> marker; this rule keeps the
+    # schema copy in step with it.
+    (r"\d+ trusted RSS feeds", "{feeds} trusted RSS feeds"),
 ]
 
 
