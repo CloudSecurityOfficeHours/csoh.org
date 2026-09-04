@@ -221,7 +221,7 @@ csoh.org/
 │                                    #   - read vendor/README.md before re-vendoring
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection, live edge-header verification)
-├── .github/workflows/      # CI/CD pipelines (20 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy, check-mobile-layout, deploy-qa, promote-qa, publish-recaps, weekly-docs-review)
+├── .github/workflows/      # CI/CD pipelines (21 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy, check-mobile-layout, security-impact-review, deploy-qa, promote-qa, publish-recaps, weekly-docs-review)
 └── update_news.py          # News aggregation from 62 RSS feeds
 ```
 
