@@ -373,13 +373,13 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
     )
     headline_json = json.dumps(headline)
     out = re.sub(
-        r'"headline":\s*"[^"]+",',
+        r'"headline":\s*"(?:[^"\\]|\\.)+",',
         lambda mm: f'"headline": {headline_json},',
         out, count=1,
     )
     desc_json = json.dumps(meta_desc)
     out = re.sub(
-        r'"description":\s*"[^"]*"',
+        r'"description":\s*"(?:[^"\\]|\\.)*"',
         lambda mm: f'"description": {desc_json}',
         out, count=1,
     )
