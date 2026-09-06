@@ -1301,7 +1301,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->263<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->111<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->264<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->111<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
