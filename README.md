@@ -84,7 +84,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 | 🕵️ [Detection Engineering](https://csoh.org/detection-engineering.html) | Sigma, ATT&CK Cloud Matrix, detection-as-code, SIEM/lake/XDR |
 | 🚨 [Incident Response & Forensics](https://csoh.org/incident-response.html) | IR lifecycle, EC2/EKS/Lambda evidence, memory forensics, runbooks |
 | 🎯 [Cloud Pentesting & Red Teaming](https://csoh.org/cloud-pentesting.html) | AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound, MITRE ATT&CK Cloud |
-| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 52+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
+| 🚩 [CTF Challenges](https://csoh.org/ctfs.html) | 53+ hands-on cloud CTFs across AWS / Azure / GCP / Kubernetes / AI |
 
 ### Careers
 
