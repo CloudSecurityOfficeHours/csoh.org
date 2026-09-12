@@ -193,6 +193,43 @@ def parse_date(value: str) -> Optional[dt.datetime]:
     return None
 
 
+# Feeds sometimes stamp an item in the future: a scheduled-publish date leaks
+# into pubDate, or a CMS gets the month wrong. Six hours absorbs ordinary
+# timezone and clock skew without accepting a wrong day.
+FUTURE_DATE_GRACE = dt.timedelta(hours=6)
+
+
+def clamp_future_date(published: str, source_name: str) -> str:
+    """Replace a feed date lying in the future with the time we read it.
+
+    Taken verbatim, a future date is permanent and self-perpetuating:
+    parse_existing_cards() reads it back out of news.html on the next run, and
+    an already-published URL is skipped before its feed item is looked at
+    again, so a publisher's later correction never reaches us. Entries are
+    also sorted newest-first before the max_articles cut, so the card is
+    pinned to the top of the page until real time catches up.
+
+    Two live instances, both sitting at the top of news.html: ReversingLabs
+    served 2026-09-30 for a post its own feed now dates 2026-08-26, and
+    Huntress serves 2026-09-15 for a post that is already published.
+
+    "Now" is the honest substitute. The item is in the feed, so it is out.
+    """
+    published = (published or "").strip()
+    parsed = parse_date(published)
+    if parsed is None:
+        return published
+    now = dt.datetime.now(dt.timezone.utc)
+    if parsed <= now + FUTURE_DATE_GRACE:
+        return published
+    print(
+        f"Warning: {source_name} dated an item {parsed.isoformat()} in the "
+        f"future; using {now.isoformat()} instead.",
+        file=sys.stderr,
+    )
+    return format_datetime(now)
+
+
 def _word_match(keyword: str, text: str) -> bool:
     """Match keyword in text using word boundaries for short keywords."""
     if len(keyword) <= 3:
@@ -283,7 +320,10 @@ def parse_rss(xml_text: str, source_name: str) -> List[Dict[str, str]]:
                 if rel == "alternate":
                     link = link_el.attrib.get("href", "")
                     break
-            published = entry.findtext(f"{ns}published") or entry.findtext(f"{ns}updated") or ""
+            published = clamp_future_date(
+                entry.findtext(f"{ns}published") or entry.findtext(f"{ns}updated") or "",
+                source_name,
+            )
             summary = entry.findtext(f"{ns}summary") or entry.findtext(f"{ns}content") or ""
             items.append({
                 "title": title,
@@ -298,7 +338,9 @@ def parse_rss(xml_text: str, source_name: str) -> List[Dict[str, str]]:
     for item in root.findall(".//item"):
         title = (item.findtext("title") or "").strip()
         link = (item.findtext("link") or "").strip()
-        published = (item.findtext("pubDate") or item.findtext("date") or "").strip()
+        published = clamp_future_date(
+            item.findtext("pubDate") or item.findtext("date") or "", source_name
+        )
         summary = item.findtext("description") or item.findtext("summary") or ""
         items.append({
             "title": title,
