@@ -92,6 +92,13 @@ on:
       - 'tools/check_docs_consistency.py'
       - 'tools/check_readme_coverage.py'
       - 'tools/add_theme_script.py'
+      # The news date gate reads feed.xml as well as news.html, and
+      # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
+      # here reads has to be able to trigger the step - see the
+      # 0559db56 note above.
+      - 'feed.xml'
+      - 'tools/check_news_dates.py'
+      - 'update_news.py'
       # The coverage check asserts every published subdirectory is in this
       # crawler's input globs, so a change there changes its verdict.
       - '.github/workflows/check-broken-links.yml'
@@ -366,6 +373,22 @@ jobs:
           set -o pipefail
           python3 tools/add_theme_script.py --check 2>&1 | tee check-theme-script.log
 
+      # A publisher that leaks a scheduled-publish date into its RSS used to
+      # land it on the page permanently: entries sort newest-first before the
+      # max_articles cut, so a future-dated card is pinned to slot 1 and
+      # cannot be evicted until real time passes it, and the page re-stamps
+      # its own bad value from the HTML every three hours. ReversingLabs sat
+      # at September 30 and Huntress at September 15 for weeks, in the cards,
+      # the JSON-LD ItemList and feed.xml, with every gate here green - no
+      # link checker or HTML validator has an opinion about a date.
+      # --check runs the self-test first, as the control, and the ceiling is
+      # imported from update_news.py so the gate cannot drift from the clamp.
+      - name: Reject future publish dates (news freshness gate)
+        id: news-dates
+        run: |
+          set -o pipefail
+          python3 tools/check_news_dates.py --check 2>&1 | tee check-news-dates.log
+
       # Step 4 - Run the actual W3C validator. This action wraps the Nu
       # HTML Checker (the same engine validator.w3.org uses).
       - name: Validate HTML5
@@ -441,6 +464,7 @@ jobs:
           OUTCOME_GLOSSARY: ${{ steps.glossary.outcome }}
           OUTCOME_DOCS_CONSISTENCY: ${{ steps.docs-consistency.outcome }}
           OUTCOME_README_COVERAGE: ${{ steps.readme-coverage.outcome }}
+          OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
           # Inline JS that runs against GitHub's API. `github`, `context`, etc.
@@ -459,6 +483,7 @@ jobs:
               { name: 'Check glossary integrity and reachability', outcome: process.env.OUTCOME_GLOSSARY, file: 'check-glossary-coverage.log' },
               { name: 'Check documentation consistency', outcome: process.env.OUTCOME_DOCS_CONSISTENCY, file: 'check-docs-consistency.log' },
               { name: 'Check README coverage and Markdown links', outcome: process.env.OUTCOME_README_COVERAGE, file: 'check-readme-coverage.log' },
+              { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
             ];
 
