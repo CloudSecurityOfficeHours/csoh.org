@@ -27,7 +27,9 @@ dates are date-only, so they are compared against (now + grace).date();
 timestamps in the JSON-LD and the feed are compared against now + grace
 directly. This gate always runs later than the clamp did, so its `now` is
 larger and its ceiling only ever wider - it cannot invent a finding the
-clamp would have prevented.
+clamp would have prevented. That argument is about the wall clock main()
+uses. The self-test keeps no clock of its own; it runs at the newest date the
+files carry, for the reason given in self_test().
 
 Usage:
     python3 tools/check_news_dates.py            # report findings
@@ -41,7 +43,7 @@ import os
 import re
 import sys
 from email.utils import parsedate_to_datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NEWS_HTML = os.path.join(REPO_ROOT, "news.html")
@@ -128,6 +130,34 @@ def _parse_iso(value: str):
     return None
 
 
+def _newest_date(news_text: str, feed_text: str) -> Optional[dt.datetime]:
+    """Return the latest date on any surface, in UTC, or None if none parses.
+
+    Parses exactly as the checkers do, and skips what does not parse because
+    the control reports it. UTC is load-bearing: the feed plants are written
+    with a literal +0000, so a clock carrying a feed item's +0530 would plant
+    a time five and a half hours away from the one intended.
+    """
+    stamps: List[dt.datetime] = []
+    for m in CARD_DATE_RE.finditer(news_text):
+        try:
+            day = dt.datetime.strptime(m.group(1).strip(), "%B %d, %Y")
+        except ValueError:
+            continue
+        stamps.append(day.replace(tzinfo=dt.timezone.utc))
+    for m in JSONLD_DATE_RE.finditer(news_text):
+        parsed = _parse_iso(m.group(2).strip())
+        if parsed is not None:
+            stamps.append(parsed)
+    for m in FEED_DATE_RE.finditer(feed_text):
+        try:
+            parsed = parsedate_to_datetime(m.group(2).strip())
+        except (TypeError, ValueError):
+            continue
+        stamps.append(parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc))
+    return max(stamps).astimezone(dt.timezone.utc) if stamps else None
+
+
 def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
     """Plant a known-bad date on every surface and require each detector to fire.
 
@@ -138,9 +168,24 @@ def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
     dates the clamp is designed to accept, and a gate that cries wolf gets
     muted. If you add a detector, add its planted case here.
     """
-    now = dt.datetime(2026, 9, 12, 12, 0, tzinfo=dt.timezone.utc)
+    # The clock is the newest date the files already carry, never a literal.
+    # It was hardcoded to 2026-09-12 12:00, the morning this gate landed, so
+    # the control asserted that nothing on the page was dated after 18:00 that
+    # day. The page is re-rendered every three hours and its dates only move
+    # forward: the first run to ingest a later article (PR #1696, 21:05) failed
+    # here with nothing wrong on the page, as would every run after it. The
+    # card plant below carried the same flaw a year out, as a literal
+    # September 30, 2027.
+    #
+    # Judging real dates against real time is main()'s job, and it names the
+    # offending value and the remedy. A control that did it too would fail
+    # first and blame the checker for the content. Deriving the clock also
+    # keeps every positive plant later than any real date, so a planted
+    # finding can never equal a real one and be subtracted out with `base`.
+    now = _newest_date(news_text, feed_text) or dt.datetime.now(dt.timezone.utc)
     inside = now + grace - dt.timedelta(minutes=5)
     outside = now + grace + dt.timedelta(hours=2)
+    far = now + dt.timedelta(days=365)
     ok = True
 
     def report(name: str, passed: bool, detail: str = "") -> None:
@@ -148,9 +193,10 @@ def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
         ok &= passed
         print(f"  [{'PASS' if passed else 'FAIL'}] {name}{(': ' + detail) if detail and not passed else ''}")
 
-    # Control: the real files, as committed, must be clean at a `now` that is
-    # at or past their newest date. Without this the positives below prove
-    # only that the regexes match something, not that the site is healthy.
+    # Control: at that clock nothing can be in the future, so what this proves
+    # is that every date the files really carry parses - the formats
+    # update_news.py actually writes, such as a feed item's non-UTC offset,
+    # and not only the ones the plants below are built from.
     base = check_news_html(news_text, now, grace) + check_feed_xml(feed_text, now, grace)
     report("control: committed news.html and feed.xml are clean",
            not base, f"{len(base)} unexpected finding(s): {base[:3]}")
@@ -158,7 +204,7 @@ def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
     cases = [
         ("card date far in the future",
          lambda t: t.replace('<p class="article-date">',
-                             '<p class="article-date">September 30, 2027</p><p class="article-date">', 1),
+                             f'<p class="article-date">{far.strftime("%B %d, %Y")}</p><p class="article-date">', 1),
          check_news_html, news_text, True),
         ("card date unparseable",
          lambda t: t.replace('<p class="article-date">',
