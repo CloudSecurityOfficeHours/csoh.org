@@ -10,8 +10,9 @@ notices, because the URL resolves perfectly - that is the whole point of it.
 
 This exists because it happened. `chat-resources.html` republished the CSOH
 Signal group invite twice (2025-12-19 and 2026-02-13), plus a Signal
-direct-contact link and two Telegram private invites, all harvested from the
-group chat by the resource-card pipeline. Meanwhile `community.html` said:
+direct-contact link and the CSOH Telegram group invite, once whole and once
+truncated, all harvested from the group chat by the resource-card pipeline.
+Meanwhile `community.html` said:
 "It's not posted publicly on purpose; we'd rather you join after a Friday
 Zoom or a quick email exchange than have it ingested by every recruiter
 scraper on the internet." Both statements were live at the same time, for
@@ -130,12 +131,18 @@ def self_test() -> int:
     mid-run would leave the planted string behind for the next baseline to
     "find".
     """
+    # Synthetic tokens only, never a real invite: this file is public on
+    # GitHub. The first version used the live CSOH Telegram invite and
+    # prefixes of the real Signal links, so the gate itself republished them.
+    # URLs are assembled at runtime so a repo-wide grep for invite links does
+    # not match this file.
+    fake = "EXAMPLE0example0EXAMPLE0example0"
     must_match = [
-        ("Signal group invite", "https://signal.group/#CjQKILfX3UXp4LI1F_F4MyQ"),
-        ("Signal direct-contact link", "https://signal.me/#eu/TbiCghgfpJLzeO_ow-rmR6W0"),
-        ("Telegram private invite", "https://t.me/+Ht22n3iTuOlmY2Yx"),
-        ("Telegram private invite", "https://t.me/joinchat/AAAAAEjkH2mBv"),
-        ("WhatsApp group invite", "https://chat.whatsapp.com/BxQ12mKp09zC"),
+        ("Signal group invite", "https://signal.group/" + "#" + fake),
+        ("Signal direct-contact link", "https://signal.me/" + "#eu/" + fake),
+        ("Telegram private invite", "https://t.me/" + "+" + fake[:16]),
+        ("Telegram private invite", "https://t.me/" + "joinchat/" + fake),
+        ("WhatsApp group invite", "https://chat.whatsapp.com/" + fake),
     ]
     must_not_match = [
         "https://discord.gg/cloudsec",              # public server invite
