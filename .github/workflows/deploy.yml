@@ -281,6 +281,18 @@ jobs:
       - name: Validate JSON-LD (structured-data gate)
         run: python3 tools/check_jsonld.py
 
+      # A private join link (Signal group, Telegram +token, WhatsApp) that
+      # reaches production cannot be recalled: it is scraped and archived
+      # within the hour, and the only real remedy is rotating the invite in
+      # the app. So this blocks publishing, not just merging - it is the one
+      # class of finding where "we can fix it in the next deploy" is false.
+      # The self-test runs first: a detector that silently stopped matching
+      # would otherwise report a clean site forever.
+      - name: Refuse private invite links (privacy gate)
+        run: |
+          python3 tools/check_private_invites.py --self-test
+          python3 tools/check_private_invites.py --check
+
   # ---------------------------------------------------------------------------
   # Build the public file set once. tools/build_search_index.py regenerates
   # /search-index.json, then tools/stage_site.sh produces dist/ - the exact

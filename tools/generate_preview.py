@@ -35,6 +35,23 @@ TARGET_HEIGHT = 300
 SCREENSHOT_TIMEOUT = 30  # seconds
 MIN_PREVIEW_SIZE_KB = 8  # Real Playwright screenshots ~10-22KB; placeholders ~3KB
 
+def is_private_invite(url: str) -> bool:
+    """True for members-only join links (Signal group, Telegram +token, ...).
+
+    Screenshotting one of these renders its "Join Group" landing page and
+    publishes the invite twice over: in the card href and in an image named
+    after the URL. The patterns live in check_private_invites.py so the CI
+    gate and this pipeline can never disagree about what counts as private;
+    if that import ever breaks, fail closed rather than start screenshotting
+    invite links again.
+    """
+    try:
+        from check_private_invites import PATTERNS
+    except ImportError:  # pragma: no cover - defensive
+        return url.startswith(('https://signal.group/', 'https://signal.me/'))
+    return any(pattern.search(url) for _kind, pattern, _why in PATTERNS)
+
+
 # URLs that consistently fail to produce useful previews - bot detection,
 # JS-heavy SPAs that render blank, login walls, etc. The --check command
 # will skip these so they don't block the deploy workflow on every run.
@@ -809,7 +826,9 @@ def extract_urls_from_resources_html():
 
     urls_needing_previews = [
         u for u in all_urls
-        if u not in PREVIEW_IGNORE_URLS and not check_existing_preview(u)
+        if u not in PREVIEW_IGNORE_URLS
+        and not is_private_invite(u)
+        and not check_existing_preview(u)
     ]
     return urls_needing_previews
 

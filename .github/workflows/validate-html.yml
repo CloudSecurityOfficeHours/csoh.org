@@ -111,6 +111,7 @@ on:
       - 'tools/check_jsonld.py'
       - 'tools/check_no_inline_scripts.py'
       - 'tools/check_svg_dimensions.py'
+      - 'tools/check_private_invites.py'
       - '.github/workflows/validate-html.yml'
   # `schedule` runs the workflow on a timer using cron syntax (five fields:
   # minute, hour, day-of-month, month, day-of-week; `*` means "every").
@@ -363,6 +364,19 @@ jobs:
         run: |
           set -o pipefail
           python3 tools/stamp_card_ids.py --check 2>&1 | tee check-card-ids.log
+
+      # The resource-card pipeline harvests links out of the community chat,
+      # so a members-only join link can arrive as an ordinary card: that is
+      # how the CSOH Signal invite came to be published on chat-resources.html
+      # while community.html said it is deliberately never posted publicly.
+      # No link checker catches this, because the URL resolves perfectly.
+      # The self-test runs first, as the control: "no matches" from a detector
+      # that stopped matching is indistinguishable from a clean site.
+      - name: Refuse private invite links (privacy gate)
+        run: |
+          set -o pipefail
+          python3 tools/check_private_invites.py --self-test 2>&1 | tee check-private-invites.log
+          python3 tools/check_private_invites.py --check 2>&1 | tee -a check-private-invites.log
 
       # theme.js has to be in <head> on every page or that page flashes the
       # wrong theme for anyone whose stored choice differs from their OS. The
