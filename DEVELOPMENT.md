@@ -510,6 +510,13 @@ weekly `documentation-review` tracking issue for a human, and nothing it does
 ever deletes a file. See [docs/EDITORIAL_STANDARDS.md](docs/EDITORIAL_STANDARDS.md)
 for the standard it enforces.
 
+One check is report-only for now. `python3 tools/check_faq_jsonld_parity.py`
+lists FAQ answers and glossary definitions whose JSON-LD copy no longer matches
+the visible page. That copy is what a search engine shows, so when you edit a
+visible FAQ answer or a glossary `<dd>`, update its JSON-LD twin in the same
+commit. It is not in CI yet because its first run found a backlog; a gate that
+fails on day one gets muted.
+
 Three more checks run post-merge rather than on the PR, but are worth running
 locally if you touched what they cover:
 
