@@ -1370,10 +1370,10 @@ success. What replaced the tag guarantee is digest pinning in `deploy.yml` and
 `deploy-qa.yml` - both resolve the tag and pass `path@sha256:...` to `gcloud run
 deploy` - so a moved tag cannot change the bytes a revision runs. The live repo
 carries `keep-recent-50`, `delete-old-tagged` (30d), and `delete-old-untagged`
-(7d). Both currently-deployed images sit well inside the
-window. Sizing it needs the real push rate, not a guess - `~11 images/day`
-here, so 30 days settles at ~350 images / ~70 GB instead of growing without
-bound:
+(7d). Sizing it needs the real push rate, not a guess, and the rate moves: ~11
+images/day in August and ~6 in September, at ~0.19 GiB of unique layers each,
+so 30 days settles near ~180 images / ~35 GiB rather than the ~350 / ~70 GB this
+paragraph first predicted:
 
 ```sh
 gcloud artifacts docker images list \
@@ -1412,6 +1412,37 @@ Two things generalise:
   QA built, *by tag*, so the window has to exceed the longest gap between a QA
   build and its promotion. A retention policy is not purely a storage decision.
 
+### The same shape on AWS, where credits hide it
+
+Found 2026-09-13, and growing since at least June (53 GB on 30 June).
+`infra/terraform/aws/s3.tf` enables versioning on the origin bucket as "a cheap
+rollback/forensics trail", and the bucket has **no lifecycle configuration at
+all**. `aws s3 sync` in `deploy.yml` uploads any file whose local mtime is newer
+than the S3 copy, and a fresh CI checkout makes every file newer, so every
+deploy re-uploads the whole site and every upload turns the previous object into
+a noncurrent version that is kept forever.
+
+Measured: **3,288 live objects / 255 MB, against 2.77M object versions /
+233.65 GB**, growing ~20K versions and ~1.4 GB a day - one full copy of the site
+per deploy. That is ~$5.40/month of storage and ~$3 of PUTs, rising, and the
+bill reads $0.00 because AWS credits cancel it. Nothing reported it: the bill
+was zero, the site was healthy, and "cheap" in the comment was true when it was
+written.
+
+Same lesson as the registry, sharper: **versioning is a retention decision, and
+a retention decision with no expiry is unbounded growth.** Bound it with a
+`noncurrent_version_expiration` sized to the rollback you would actually use,
+rather than turning versioning off. `BucketSizeBytes` counts noncurrent versions
+and a listing does not, so compare the two:
+
+```sh
+aws s3 ls s3://csoh-org-site-origin --recursive --summarize | tail -2
+aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes \
+  --dimensions Name=BucketName,Value=csoh-org-site-origin Name=StorageType,Value=StandardStorage \
+  --start-time "$(date -u -v-3d +%FT%TZ)" --end-time "$(date -u +%FT%TZ)" \
+  --period 86400 --statistics Average --region us-east-1
+```
+
 ## A health check is one request multiplied by every Cloudflare data center
 
 The load balancer monitor in `infra/terraform/cloudflare/load_balancer.tf` runs
@@ -1421,12 +1452,22 @@ per origin per day** (re-measured from the billing data on 2026-08-25 as ~711
 sources and ~1.02M probes; treat both as the same order, not as a discrepancy).
 Whatever that probe fetches, you were buying it a million times a day.
 
-`73f884db` cut `interval` to 300, and it **went live 2026-08-28**, so the
-current rate is about a fifth of those figures. Every number in this section
-predates that change and is kept because it is what was measured; re-derive
-rather than scale them by hand. The saving was **predicted** at ~$50/month
-across Cloud Run and Azure and has not been confirmed in billing - the export
-windows all end before the change.
+`73f884db` cut `interval` to 300, and it **went live 2026-08-25 at 19:46 UTC**,
+which is the monitor's `modified_on`. This section said 2026-08-28 for two
+weeks; that was when the value was first *read back*, next to the registry
+apply, and the billing data sides with Cloudflare rather than with the note.
+The other numbers above predate the change and are kept because they are what
+was measured.
+
+The saving was predicted at ~$50/month and is now **confirmed in billing**
+(re-measured 2026-09-13: 1-12 September against 11-24 August, each monthly free
+allowance applied once). Cloud Run requests went from ~1.03M to ~209K a day,
+4.9x, and its line from $42.59 to $9.95/month; Azure's probe operations from
+$13.04 to $2.76; CloudFront from $18.26 of usage in August to $0.00 in
+September, now inside its 10M-request always-free tier. That is ~$43/month of
+billed spend plus CloudFront usage that credits were covering. Cloud Run CPU
+fell only 2.8x, because it bills busy instance time rather than requests, and a
+probe every ~0.4s still keeps one vCPU busy ~4.7 hours a day.
 
 What was bought with it is failover latency. An origin is marked down after
 `retries` consecutive failures, so worst-case detection is
@@ -1471,7 +1512,12 @@ There is no meaningful "data stored" line at all - a few hundred MB costs
 approximately nothing. **Azure runs ~$18/month, and essentially all of it is
 transactions**: probe reads from every Cloudflare data center, plus write and
 list operations from every deploy re-uploading ~3,200 files. July and August
-agree on that figure independently ($17.60 and a $17.70 run rate).
+agree on that figure independently ($17.60 and a $17.70 run rate). That was at
+`interval = 60`. Re-measured 2026-09-13 at 300 it is **$5.63/month**: $2.84 of
+writes and $2.76 of `All Other Operations`, which is the meter Azure bills a
+`HEAD` under (the probe charge moved there from `Hot Read Operations` on the day
+of the HEAD switch). The writes roughly halved on their own, because deploys
+did.
 
 Two things follow. The fan-out rule in this section is about **operation counts
 as much as bytes** - shrinking the payload to 372 bytes did nothing to the
@@ -1534,11 +1580,60 @@ had none. `terraform plan -refresh-only` surfaces the drift; a normal plan
 refreshes first so it self-corrects in memory, but do not trust a state read on
 its own after a failed apply.
 
+**As of 2026-09-13 the file and the edge still disagree, and have since
+2026-08-09.** `load_balancer.tf` sets `check_regions = ["ENAM", "WEU"]`; the
+live pool returns `check_regions: null` with `modified_on` 2026-05-29, so no
+pool change has ever reached Cloudflare. The value in Git reads like
+configuration and is not. It is also the largest lever left: Cloudflare's docs
+say each selected region probes "from three separate data centers in that
+region", so two regions is 6 sources, while the live rate (~209K probes per
+origin per day over 288 cycles) works out to ~725, i.e. every data center.
+That gap is nearly all of what Cloud Run and Azure's probe meter still bill.
+Whether two regions fits this plan is unknown until someone applies it:
+`-target` the pool, and if `1002` comes back, one region is still 3 sources.
+Read the pool, not the file:
+
+```sh
+curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$TF_VAR_account_id/load_balancers/pools" \
+  | python3 -c 'import json,sys; [print(p["name"], p.get("check_regions"), p["modified_on"]) for p in json.load(sys.stdin)["result"]]'
+```
+
 The general lesson, which applies past health checks: **anything on a timer
 against an origin is a unit cost multiplied by a fan-out you did not choose.**
 At this probe rate every 1 KB added to `index.html` was worth about $3/month,
 which is not a tradeoff anyone would have accepted if it had been visible. Ask
 what the fan-out is before asking whether the payload is small.
+
+## Re-measuring cost: three ways a correct query returns a wrong number
+
+The cost tables in `cloud-deployment.html` and `infra/README.md` are re-derived
+from billing data, never edited by hand; `infra/README.md` carries the queries.
+Last done 2026-09-13 (~$97/month down to ~$27). The sources are the GCP BigQuery
+billing export (dataset `csoh_cost`, about a day behind), the Azure Cost
+Management API (above; expect minutes of 429s), and AWS Cost Explorer (needs
+`aws login`). Cloudflare cannot be read from this machine: the Terraform token
+returns `10000` on both subscription endpoints, so that line is a dashboard
+figure, and says so.
+
+- **Scale gross cost, then subtract the free allowance once.** Cloud Run's CPU
+  and memory allowances arrive as credits that are used up in the first days of
+  each month (2026-09-01 to 09-09 billed $0.00 net). Scaling a September
+  window's *net* cost counts the allowance ~2.5 times and reads ~$2/month;
+  scaling gross and ignoring the allowance reads $15.41. The bill is $9.95. At
+  August's volume the second mistake was only worth ~$5, which is how it sat in
+  the old table unnoticed.
+- **Cost Explorer's recent days move.** The 11-24 August window read
+  $28.33/month of AWS usage when it was measured on 2026-08-25, with its last
+  days under a week old, and reads $34.31 on 2026-09-13. Leave a margin between
+  a window's end and the query, or call the figure provisional.
+- **A flat monthly line can hide a slope.** Artifact Registry and the S3 bucket
+  both grew for months under numbers that looked stable, or read $0.00. Read
+  the inventory (image count, `BucketSizeBytes`) next to the dollars.
+
+And nothing alerts on any of it: there are no AWS Budgets, no Azure budgets,
+and `billingbudgets.googleapis.com` is not enabled on the GCP project. Every
+cost event so far was found by a person, weeks after it began.
 
 ## Cache rules match on file extension, and the last match wins
 

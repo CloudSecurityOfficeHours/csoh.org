@@ -80,8 +80,9 @@ resource "google_artifact_registry_repository" "containers" {
       # Retain the 50 most recently pushed image versions. This is a floor that
       # does not depend on dates: it guarantees a rollback target exists even
       # after a quiet stretch where every image has aged past the DELETE rule
-      # below. At the measured push rate (~11/day) it is about four and a half
-      # days on its own, which is why the age-based rule does the real work.
+      # below. At August's push rate (~11/day) that was about four and a half
+      # days on its own, and at September's (~6/day) about eight, which is why
+      # the age-based rule does the real work.
       keep_count = 50
     }
   }
@@ -128,9 +129,11 @@ resource "google_artifact_registry_repository" "containers" {
   # rule capable of doing anything at all -- the two settings are a package,
   # and re-enabling immutability silently re-breaks retention.
   #
-  # 30 days at ~11 pushes/day settles at roughly 330 images (~67 GB) instead of
-  # growing without bound, and leaves a rollback window far longer than any
-  # realistic need; the KEEP rule above protects the newest 50 regardless. Note
+  # 30 days at ~11 pushes/day would settle at roughly 330 images (~67 GB); at
+  # September's ~6/day and ~0.19 GiB of unique layers per image it is nearer 180
+  # images (~35 GiB). Either way it stops growing without bound, and leaves a
+  # rollback window far longer than any realistic need; the KEEP rule above
+  # protects the newest 50 regardless. Note
   # the interaction with promotion: promote-qa reuses the image QA built, found
   # by tag and then deployed by digest, so the retention window must comfortably
   # exceed the longest gap between a QA build and its promotion. Deleting that

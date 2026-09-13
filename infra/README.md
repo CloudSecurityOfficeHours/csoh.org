@@ -647,35 +647,89 @@ was a guess that nobody had checked against a bill, and they were wrong by one
 to two orders of magnitude. Keep the `Source` column, and keep the word
 `measured` honest: an estimate in this table is a to-do, not a rounding.
 
-| Component | Per month | Source |
-|---|---|---|
-| GCP Cloud Run (production origin) | $47.64 | measured |
-| Azure Blob static website | $20.06 | measured |
-| GCP Artifact Registry | $19.60 | measured, and rising |
-| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | billed |
-| AWS S3 + CloudFront | $0.00 | measured - $28.33 of usage, exactly offset by credits |
-| Terraform state (GCS) + GCP logging | $0.00 | measured - inside the free tier |
-| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | measured |
-| **Total** | **~$97/mo** | ~$126 when the AWS credits lapse |
+Last measured **2026-09-13**: daily cost over 1-12 September 2026, scaled to a
+30.44-day month with each provider's monthly free allowance applied once. `Was`
+is the 11-24 August window this table showed before. That window did not apply
+the allowance, which flatters Cloud Run's drop by about $5 (like for like it was
+$42.59).
 
-**Almost none of that is traffic.** The top three lines are dominated by the
-load-balancer health probe, which runs from every Cloudflare data center rather
-than once per interval: ~1.02M probes per origin per day at `interval = 60`.
-Cloud Run booked 25.6M requests and 1.18M CPU-seconds over 25 days against three
-cents of minimum-instance CPU, meaning it genuinely scales to zero and simply
-never gets the chance; Azure bills the same probes as read operations, and its
-bill is essentially all transactions with no meaningful storage line. Artifact
-Registry is the only line with a slope, growing ~2.4 GB/day because its DELETE
-policy targets a state the repository can never enter.
+| Component | Now | Was | Source |
+|---|---|---|---|
+| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, last confirmed 2026-08-23 (no token here can read billing) |
+| GCP Cloud Run (production origin) | $9.95 | $47.64 | measured |
+| Azure Blob static website | $5.63 | $20.06 | measured |
+| GCP Artifact Registry | $1.69 | $19.60 | measured, refilling until 2026-09-27 |
+| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $7.90 of usage (was $28.33), offset by credits |
+| Terraform state (GCS), GCP logging, billing export | $0.00 | $0.00 | measured - inside the free tier |
+| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | $0.00 | measured |
+| **Total** | **~$27/mo** | ~$97/mo | ~$35 when the AWS credits lapse (was ~$126) |
 
-Two fixes for this are **committed and not yet applied** (`73f884db`,
-2026-08-25): `interval = 300`, worth ~$50/month across Cloud Run and Azure at
-the cost of failover detection going from 180s to 900s worst case; and a
-tagged-image retention rule, worth ~$13/month, whose first apply deletes 726
-images (~145 GB) irreversibly. Until `terraform apply` runs, the table above is
-still what you are paying. Re-measure rather than editing these numbers by hand
-- CLAUDE.md carries the Cost Management API call for Azure, and note that
-`az consumption usage list` returns rows with every cost field null.
+**What moved it**, read from the providers rather than from the commits:
+
+- **Health-probe interval 60 -> 300**, live 2026-08-25 19:46 UTC (the monitor's
+  `modified_on`, not the 2026-08-28 these docs used to give). Cloud Run requests
+  fell from ~1.03M/day to ~209K/day, 4.9x; Azure's probe operations from $13.04
+  to $2.76/month; CloudFront from $18.26 of usage in August to $0.00 in
+  September, because ~6.4M requests a month now fits its 10M-request always-free
+  tier. Predicted at ~$50/month; measured at ~$43 of billed spend, plus the
+  CloudFront usage that credits were covering.
+- **Registry retention**, possible only once `immutable_tags = false` landed on
+  2026-08-30. Billed storage fell from 231.6 GiB on 08-29 to 4.8 GiB on 08-31.
+  That is deeper than the policy as written deletes (CLAUDE.md has the detail),
+  so the 30-day rule is first tested on 2026-09-21 and 2026-09-27.
+- **Fewer deploys**: ~11 a day in August, ~6 in September, which on its own
+  roughly halved Azure write operations and S3 uploads.
+
+**What is left is almost all probes and deploys, and three things are not
+done:**
+
+1. **`check_regions` is in Git and has never been live.** `load_balancer.tf`
+   has asked for `["ENAM", "WEU"]` since 2026-08-09, but the live pool reports
+   `check_regions: null` and was last modified 2026-05-29. Three regions was
+   rejected as over this plan's limit (`validation failed (1002)`), and two has
+   never reached the edge. Cloudflare probes from three data centers per
+   selected region, so two regions is 6 probe sources against the ~725 measured
+   now (209K probes a day over 288 five-minute cycles): nearly all of Cloud
+   Run's $9.95 and Azure's $2.76 probe line. Apply the pool on its own (map the
+   token first, per CLAUDE.md), and if `1002` comes back, try a single region:
+
+   ```sh
+   terraform -chdir=infra/terraform/cloudflare apply -target=cloudflare_load_balancer_pool.origins
+   ```
+
+2. **S3 keeps every version of every deploy.** Versioning is on with no
+   lifecycle rule, and `aws s3 sync` re-uploads every file on every deploy, so
+   the live site is 3,288 objects / 255 MB while the bucket holds 2.77M versions
+   / 233 GB, growing ~1.4 GB a day. About $5.40/month of storage and $3 of PUTs,
+   billed as $0.00 because credits cancel it. A `noncurrent_version_expiration`
+   rule bounds it without giving up the rollback trail.
+3. **Nothing alerts on cost.** There are no AWS Budgets, no Azure budgets, and
+   the GCP Billing Budget API is not enabled on the project. Every cost event in
+   this stack's history was found by hand, weeks after it began: the GCP credits
+   ending on 2026-07-28, $119.77 of Azure egress in July, the registry's growth,
+   and the S3 versions above.
+
+Re-measure rather than editing these numbers by hand. CLAUDE.md carries the Cost
+Management API call for Azure (expect minutes of 429s before it answers), and
+note that `az consumption usage list` returns rows with every cost field null.
+For GCP and AWS:
+
+```sh
+# GCP: daily net cost by service, about a day behind. The export table's name
+# embeds the billing account ID; `bq ls csoh-org-495800:csoh_cost` shows it.
+bq query --nouse_legacy_sql "SELECT DATE(usage_start_time, 'America/Los_Angeles') d,
+  service.description s, ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount)
+  FROM UNNEST(credits) c), 0)), 2) net
+  FROM \`csoh-org-495800.csoh_cost.<export table>\`
+  WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
+  GROUP BY 1, 2 ORDER BY 1, 2"
+
+# AWS: usage against credits, per day (macOS date). Needs `aws login`, costs
+# $0.01 a call, and its most recent days can still move after you read them.
+aws ce get-cost-and-usage --granularity DAILY --metrics UnblendedCost \
+  --time-period Start=$(date -v1d +%F),End=$(date -v+1d +%F) \
+  --group-by Type=DIMENSION,Key=RECORD_TYPE
+```
 
 The bulk of the *old* cost, before the Cloudflare cutover, was the GCP Global
 HTTPS Load Balancer (two forwarding rules) + Cloud Armor - redundant with

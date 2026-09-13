@@ -42,8 +42,9 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # HEAD, not GET. A GET made Cloudflare download the ENTIRE homepage from every
   # origin on every probe, and the probe runs from every Cloudflare data center
   # (see check_regions on the pool below) - roughly 1.09M probes per origin per
-  # day. Azure Blob static websites cannot gzip, so each of those probes shipped
-  # the full uncompressed index.html (52 KB, vs 11 KB gzipped): ~57 GB/day of
+  # day at the 60s interval of the time. Azure Blob static websites cannot gzip,
+  # so each of those probes shipped the full uncompressed index.html (52 KB, vs
+  # 11 KB gzipped): ~57 GB/day of
   # billed egress, ~$120/month, for bytes that were downloaded and discarded.
   # HEAD returns headers only (verified: Azure answers 200 with a 0-byte body),
   # so it still proves the origin is alive and serving 200s. Nothing is lost by
@@ -74,6 +75,11 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # three origins behind the load balancer that is the window in which a share
   # of requests can hit a dead origin, which is the trade being made here
   # deliberately - see the cost section of cloud-deployment.html.
+  #
+  # Confirmed in billing (re-measured 2026-09-13): live since 2026-08-25, after
+  # which Cloud Run requests fell from ~1.03M to ~209K per day (4.9x) and its
+  # line from ~$43 to ~$10 a month, Azure's probe operations from ~$13 to
+  # ~$2.76, and CloudFront dropped inside its 10M-request always-free tier.
   interval = 300
   # How many seconds to wait for a response before giving up on a single probe.
   timeout = 5
@@ -118,13 +124,23 @@ resource "cloudflare_load_balancer_pool" "origins" {
   # find it).
   #
   # Leaving it unset means "probe from EVERY Cloudflare data center", which is
-  # what we were doing: ~757 probe sources per 60s cycle, ~1.09M probes per
-  # origin per day. Even as a HEAD that is ~33M billed storage transactions a
-  # month on Azure (~$13). Three regions covering where the audience actually is
-  # gives the same failure signal at a fraction of the probe volume.
+  # what the live pool still does: ~757 probe sources per 60s cycle and ~1.09M
+  # probes per origin per day at the old interval, ~725 sources and ~209K probes
+  # a day at interval = 300 (measured 2026-09-13). Even as a HEAD that was ~33M
+  # billed storage operations a month on Azure (~$13), and it is still ~$2.76.
+  # For each region listed here, Cloudflare probes from three data centers in
+  # that region, so two regions is six probe sources rather than ~725, with the
+  # same failure signal.
   #
-  # Region codes: WNAM/ENAM = Western/Eastern North America, WEU = Western
-  # Europe. Full list:
+  # NOT LIVE. This value has been in Git since 2026-08-09 and has never reached
+  # Cloudflare: the live pool reports check_regions = null and was last modified
+  # 2026-05-29. Three regions was rejected as over this plan's limit
+  # ("validation failed (1002)"), and two has not been applied since. Read the
+  # live pool before trusting this line (CLAUDE.md has the call), and if a
+  # targeted apply returns 1002 again, one region is still three sources.
+  #
+  # Region codes: ENAM = Eastern North America, WEU = Western Europe (WNAM is
+  # Western North America). Full list:
   # https://developers.cloudflare.com/load-balancing/reference/region-mapping-api
   check_regions = ["ENAM", "WEU"]
   # The pool is considered "up" only while at least this many origins are
