@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-15">
-    <meta property="article:modified_time" content="2026-05-15">
+    <meta property="article:modified_time" content="2026-09-13">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Cloud Security Topics">
     <meta property="article:tag" content="containers">
@@ -79,7 +79,7 @@
         }
       },
       "datePublished": "2026-05-15",
-      "dateModified": "2026-05-15",
+      "dateModified": "2026-09-13",
       "mainEntityOfPage": "https://csoh.org/containers.html",
       "about": {
         "@type": "Thing",
@@ -430,7 +430,7 @@
 
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-15">Last updated <strong>2026-05-15</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/containers.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-09-13">Last updated <strong>2026-09-13</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/containers.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
             <p><strong>The 30-second version:</strong> A <strong>container</strong> is a Linux process (or set of processes) isolated by <em>namespaces</em> and <em>cgroups</em>, packaged with its dependencies into an immutable image. Multiple containers share <em>one host kernel</em> - so the boundary is real but thin. In the cloud, containers run on a VM whose instance metadata service hands out the VM's <a class="glossary-link" href="glossary.html#term-iam">IAM</a> credentials. A compromised container that can reach IMDS gets the whole VM's cloud permissions.</p>
@@ -488,7 +488,7 @@
             <p>It is not. Or more precisely: a container is a <em>process-isolation</em> boundary, not a <em><a class="glossary-link" href="glossary.html#term-tenant">tenant</a>-isolation</em> boundary. The difference matters.</p>
             <p>If you run two of <em>your own</em> microservices in two containers on the same VM, the isolation is fine for most purposes - the kernel keeps their namespaces separate, cgroups keep one from starving the other. That's process isolation. It works.</p>
             <p>If you run two <em>different customers'</em> code in two containers on the same VM, the isolation is not fine. A kernel <a class="glossary-link" href="glossary.html#term-cve">CVE</a> affects both. A misconfigured capability on one container can let it inspect or modify the other. A noisy-neighbor exploit (Spectre, Foreshadow) can leak data across the shared CPU cache. That's a tenant boundary, and the container abstraction was not designed for it.</p>
-            <p>The cloud providers know this. That's why <a href="https://aws.amazon.com/fargate/" target="_blank" rel="noopener noreferrer">AWS Fargate</a>, <a href="https://learn.microsoft.com/en-us/azure/container-apps/" target="_blank" rel="noopener noreferrer">Azure Container Apps</a>, <a href="https://cloud.google.com/run" target="_blank" rel="noopener noreferrer">Cloud Run</a>, and similar managed services run each workload in its own micro-VM (<a href="https://firecracker-microvm.github.io/" target="_blank" rel="noopener noreferrer">Firecracker</a> or equivalent). The container API is preserved; the actual isolation is at the VM level, where the hypervisor is the boundary.</p>
+            <p>The cloud providers know this, and their managed container services put the tenant boundary below the container, though not all in the same place. <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-security-considerations.html" target="_blank" rel="noopener noreferrer">AWS Fargate</a> runs each task in its own isolated virtual environment that shares no CPU, memory, ephemeral storage, or network interface with other tasks. <a href="https://docs.cloud.google.com/run/docs/securing/security" target="_blank" rel="noopener noreferrer">Cloud Run</a> sandboxes every instance behind a boundary enforced by a virtual machine monitor, with a second, software kernel layer; its first-generation execution environment is based on gVisor and its second-generation one on Linux microVMs. <a href="https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/service/container-apps" target="_blank" rel="noopener noreferrer">Azure Container Apps</a> draws the boundary at the environment: apps that share one environment get no hardware or network isolation from each other, so Microsoft's multitenancy guidance for code you don't trust is a separate environment per tenant, and for running untrusted code on demand, <a href="https://learn.microsoft.com/en-us/azure/container-apps/sessions" target="_blank" rel="noopener noreferrer">dynamic sessions</a> isolate each session with Hyper-V. The container API looks the same on all three; check where the boundary sits before two tenants share one.</p>
             <p>If you self-host on EKS / AKS / GKE / vanilla VMs, you control where containers land. If two workloads should not share a kernel - different trust levels, customer multi-tenancy, regulated data - use sandbox runtimes (<a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gVisor</a>, <a href="https://katacontainers.io/" target="_blank" rel="noopener noreferrer">Kata Containers</a>) or pin them to different node pools. The platform won't do this for you.</p>
         </section>
 
@@ -532,8 +532,8 @@
             <p>Even without the privileged flag, specific capabilities are dangerous: <code>CAP_SYS_ADMIN</code>, <code>CAP_SYS_PTRACE</code>, <code>CAP_SYS_MODULE</code>, <code>CAP_NET_ADMIN</code>, <code>CAP_DAC_READ_SEARCH</code>. Drop all capabilities by default and add back only what the workload needs.</p>
             <h3>HostPath / hostPID / hostNetwork / hostIPC</h3>
             <p>Mounting <code>/</code> (or <code>/var/run/docker.sock</code>) from the host into the container is direct escape. So is <code>hostPID: true</code> (you can signal host processes) and <code>hostNetwork: true</code> (you see and bind host interfaces, including the IMDS interface). Admission controllers should reject these by default in production.</p>
-            <h3>Kernel CVEs</h3>
-            <p>Because the host kernel is shared, a kernel vulnerability is a container-escape vulnerability. Notable examples: <a href="https://nvd.nist.gov/vuln/detail/cve-2022-0492" target="_blank" rel="noopener noreferrer">CVE-2022-0492</a> (cgroups v1 release_agent), <a href="https://nvd.nist.gov/vuln/detail/cve-2022-0185" target="_blank" rel="noopener noreferrer">CVE-2022-0185</a> (filesystem context heap overflow), <a href="https://labs.snyk.io/resources/leaky-vessels-docker-runc-container-breakout-vulnerabilities/" target="_blank" rel="noopener noreferrer">Leaky Vessels</a> (runc / Docker, 2024), Dirty Pipe. The defense is keeping host kernels patched - which on managed services is the cloud's job, on self-managed nodes is yours.</p>
+            <h3>Kernel and runtime CVEs</h3>
+            <p>Because the host kernel is shared, a kernel vulnerability is a container-escape vulnerability. Notable examples: <a href="https://nvd.nist.gov/vuln/detail/cve-2022-0492" target="_blank" rel="noopener noreferrer">CVE-2022-0492</a> (cgroups v1 release_agent), <a href="https://nvd.nist.gov/vuln/detail/cve-2022-0185" target="_blank" rel="noopener noreferrer">CVE-2022-0185</a> (filesystem context heap overflow), and Dirty Pipe. Container runtimes sit on the same boundary, and their bugs are not kernel bugs: the <a href="https://labs.snyk.io/resources/leaky-vessels-docker-runc-container-breakout-vulnerabilities/" target="_blank" rel="noopener noreferrer">Leaky Vessels</a> flaws disclosed in January 2024 were in runc (<a href="https://github.com/opencontainers/runc/security/advisories/GHSA-xr7r-f8xq-vfvv" target="_blank" rel="noopener noreferrer">CVE-2024-21626</a>, fixed in runc 1.1.12) and BuildKit, so patching the kernel does not close them. The defense is keeping host kernels and container runtimes patched - which on managed services is the cloud's job, on self-managed nodes is yours.</p>
             <h3>Misconfigured docker.sock</h3>
             <p>A container that can talk to <code>/var/run/docker.sock</code> can ask the daemon to start a new container - privileged, with the host root mounted. Used in numerous public breaches (Tesla 2018, various crypto-jacking incidents). Never mount the docker socket into anything other than <a class="glossary-link" href="glossary.html#term-ci-cd">CI</a>/admin tooling, and even then, isolate.</p>
             <h3>Defense in layers</h3>
@@ -745,9 +745,9 @@
                         </tr>
                         <tr>
                             <th scope="row">Sandboxed runtime</th>
-                            <td>Fargate (Firecracker micro-VM)</td>
-                            <td>Container Apps (managed isolation), AKS Confidential Containers</td>
-                            <td>Cloud Run (gVisor), GKE Sandbox (gVisor)</td>
+                            <td>Fargate (an isolated virtual environment per task)</td>
+                            <td>Container Apps dynamic sessions (Hyper-V), AKS Pod Sandboxing (Kata Containers)</td>
+                            <td>Cloud Run (instance sandbox enforced by a VMM; gVisor or microVM execution environment), GKE Sandbox (gVisor)</td>
                         </tr>
                         <tr>
                             <th scope="row">Admission/signing enforcement</th>
