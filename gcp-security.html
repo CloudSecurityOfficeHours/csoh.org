@@ -143,7 +143,7 @@
           "name": "What is VPC Service Controls?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "VPC Service Controls (VPC SC) is GCP's service perimeter - a logical boundary that surrounds Google-managed services (Cloud Storage, BigQuery, Pub/Sub, and others) and blocks data movement across the perimeter regardless of IAM. It is the killer feature for data exfiltration prevention on GCP. A compromised credential inside the perimeter cannot copy data to a personal GCS bucket outside the perimeter, even with full IAM permissions, because the perimeter denies the API call at the service edge. There is no AWS or Azure equivalent that operates at the same layer."
+            "text": "VPC Service Controls is a logical perimeter around Google-managed services that prevents data movement across the boundary regardless of IAM. A compromised credential inside the perimeter cannot copy data to a personal GCS bucket outside the perimeter, even with full IAM permissions, because the perimeter denies the API call at the service edge. There is no AWS or Azure equivalent that operates at the same layer; this is the single most distinctive primitive in GCP security."
           }
         },
         {
@@ -151,7 +151,7 @@
           "name": "Should I use Security Command Center Premium or Enterprise?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Standard is free and gives you Security Health Analytics and a basic posture view. Premium adds Event Threat Detection, Container Threat Detection, Web Security Scanner, attack-path analysis, and broader posture coverage. Enterprise is the rebranded SecOps/Chronicle integration - same posture features as Premium plus a full SIEM/SOAR stack powered by Chronicle SecOps and Mandiant threat intel, billed on data ingest. Pick Premium if you already have a SIEM you trust; pick Enterprise if you want Google's SecOps stack to be your SIEM and want Mandiant-backed detections."
+            "text": "Standard is free and gives you Security Health Analytics and a basic posture view. Premium adds Event Threat Detection, Container Threat Detection, Web Security Scanner, and attack-path analysis. Enterprise is Premium plus the full Chronicle SecOps SIEM/SOAR stack with Mandiant threat intelligence, billed on data ingest. Pick Premium if you already have a SIEM you trust; pick Enterprise if you want Google's SecOps stack to be your SIEM."
           }
         },
         {
@@ -159,31 +159,23 @@
           "name": "How does Workload Identity Federation work?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Workload Identity Federation lets workloads outside GCP (on AWS, Azure, GitHub Actions, Kubernetes, or anything that issues OIDC tokens) assume a GCP service account without a long-lived service-account key. The external identity provider issues a signed token; GCP validates it against a workload identity pool / provider configuration; GCP returns a short-lived access token for a specific service account. This is the right answer to 'how do I avoid hardcoded service account JSON keys in my CI?' and is the GCP equivalent of AWS IAM Roles Anywhere or Azure Workload Identity."
+            "text": "Workload Identity Federation lets workloads outside GCP - on AWS, Azure, GitHub Actions, Kubernetes, or anything that issues OIDC tokens - assume a GCP service account without a long-lived service-account JSON key. The external identity provider issues a signed token; GCP validates it against a workload identity pool configuration; GCP returns a short-lived access token for a specific SA. It is the right answer to \"how do I avoid SA-key leaks?\" and is the GCP equivalent of AWS IAM Roles Anywhere or Azure Workload Identity."
           }
         },
         {
           "@type": "Question",
-          "name": "What's the difference between Chronicle and Splunk?",
+          "name": "What's Chronicle vs Splunk?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Chronicle (now Google SecOps, bundled into SCC Enterprise) is Google's cloud-native SIEM, built on the same infrastructure as Search and BigQuery, with flat-fee data ingest (no per-GB pricing surprises) and tight integration with Mandiant threat intel and the broader Google Cloud stack. Splunk is the incumbent, on-prem-origin SIEM with the deepest ecosystem of integrations, the most mature search language (SPL), and per-GB ingest pricing that scales painfully at high volume. Chronicle wins on TCO and on Google-cloud-native data; Splunk wins on third-party connectors and search flexibility. Many large orgs run both."
+            "text": "Chronicle (now Google SecOps, inside SCC Enterprise) is Google's cloud-native SIEM with flat-fee ingest pricing, YARA-L detections, and tight integration with Mandiant threat intel. Splunk is the incumbent SIEM with the deepest ecosystem of integrations and the most mature search language (SPL), but per-GB ingest pricing that scales painfully at high volume. Chronicle wins on TCO and on Google-cloud-native data; Splunk wins on third-party connector breadth and search flexibility."
           }
         },
         {
           "@type": "Question",
-          "name": "What is Assured Workloads?",
+          "name": "Is the default Compute Engine service account a problem?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Assured Workloads is GCP's way of carving out a folder of compliance-controlled projects inside your normal commercial GCP organization - no separate tenant required. You pick a compliance regime (FedRAMP Moderate or High, IL2/IL4/IL5, ITAR, HIPAA, CJIS, Canadian Protected B) and Google enforces the matching constraints automatically: data-residency, personnel access, encryption, and service availability. It is the GCP analog to AWS GovCloud or Azure Government, but in-place rather than in a separate cloud."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Is the default Compute Engine service account actually a problem?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes. By default every Compute Engine VM and Cloud Run service in a project runs as the Compute Engine default service account, which historically had the project Editor role. Editor is roughly 'modify almost anything in the project' - including reading data, creating resources, and impersonating other service accounts. Newer projects have a constraint that demotes the default SA, but legacy projects still have Editor on the default and your workloads inherit it. The fix is to disable automatic role grants (constraints/iam.automaticIamGrantsForDefaultServiceAccounts), bind every workload to a least-privilege service account, and treat the default SA as deprecated."
+            "text": "Yes. By default every Compute VM and Cloud Run service in a project runs as the Compute Engine default SA, which historically has the project Editor role. Editor is roughly \"modify almost anything in the project\" - including reading data and impersonating other SAs. Newer projects have a constraint that demotes the default SA, but legacy projects still have Editor. Fix: enable constraints/iam.automaticIamGrantsForDefaultServiceAccounts, bind every workload to a least-privilege SA, and treat the default SA as deprecated."
           }
         },
         {
@@ -191,7 +183,15 @@
           "name": "How does BeyondCorp relate to Zero Trust on GCP?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "BeyondCorp is Google's internal zero-trust model from 2011, productized as BeyondCorp Enterprise. It pairs Identity-Aware Proxy (IAP) for context-aware access to internal apps with Access Context Manager for policy. The model: never trust the network, always verify identity + device + context per request. GCP customers can adopt the same pattern - IAP fronting internal apps, Access Context Manager defining the policy, Endpoint Verification proving device posture - without buying a third-party ZTNA. It is one of GCP's biggest native advantages over the other clouds."
+            "text": "BeyondCorp is Google's internal zero-trust model from 2011, productized as BeyondCorp Enterprise. It pairs Identity-Aware Proxy (IAP) for context-aware access to internal apps with Access Context Manager for policy. The model: never trust the network, always verify identity + device + context per request. GCP customers can adopt the same pattern - IAP fronting internal apps, ACM defining the policy, Endpoint Verification proving device posture - without buying a third-party ZTNA. See the zero-trust page."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is Assured Workloads, and when do I need it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Assured Workloads carves out a folder of compliance-controlled projects inside your commercial GCP organization, with Google automatically enforcing the matching constraints (data-residency, personnel access, encryption, service availability). Pick a regime (FedRAMP Moderate/High, IL2/IL4/IL5, ITAR, HIPAA, CJIS, Canadian Protected B). Use it whenever you have a regulated workload that needs those constraints; it's the in-place alternative to a separate GovCloud-style tenant."
           }
         }
       ]

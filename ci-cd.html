@@ -118,31 +118,63 @@
           "name": "What is the difference between CI and CD?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Continuous Integration (CI) is the practice of merging code changes into a shared branch frequently - each merge triggers an automated build and test run so problems surface within minutes instead of days. Continuous Delivery (CD) extends that pipeline so every passing build is automatically packaged and deployable; a human still clicks a button to release. Continuous Deployment goes one step further: every passing build is automatically released to production. The acronym 'CD' covers both - context decides which."
+            "text": "Continuous Integration (CI) is the build/test side - merging code changes frequently and verifying each merge automatically. Continuous Delivery (CD) is the deploy side - every passing build is automatically packaged and shippable, with a human gating the final release. Continuous Deployment automates the final step too: every passing build goes to production. \"CI/CD\" as a phrase covers all of it."
           }
         },
         {
           "@type": "Question",
-          "name": "Should I use long-lived cloud access keys in CI?",
+          "name": "Should I use the cloud's native CI/CD or a third-party tool?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Use OIDC federation. GitHub Actions, GitLab CI, CircleCI, Buildkite, and most modern CI systems can present a short-lived OIDC token that AWS, Azure, and GCP accept in exchange for short-lived cloud credentials. The cloud-side trust is scoped to your repository and branch. There are zero secrets to rotate, zero secrets to leak, and the audit trail tells you which workflow run did what. Long-lived access keys in CI are now considered a legacy pattern - virtually every leak postmortem from the last five years features one."
+            "text": "For most teams, GitHub Actions (or your existing CI) for build/test and the cloud's native primitives for deploy targets is the right answer. The cloud-native CI services (CodePipeline, Azure DevOps, Cloud Build) are credible but rarely a reason to leave a tool your team already uses. The exception is regulated environments where keeping the entire pipeline inside the cloud account boundary simplifies compliance."
           }
         },
         {
           "@type": "Question",
-          "name": "How do canary and blue/green deployments differ?",
+          "name": "Do I need progressive delivery for a small project?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Blue/green keeps two complete environments - the live one (blue) and the new one (green). You deploy to green, smoke-test it, then flip 100% of traffic from blue to green in a single cutover. Rollback is instant: flip back. Canary deploys the new version alongside the old and shifts a small fraction of traffic to it (1%, then 5%, then 25%, then 100%). You watch error rates and latency at each step and auto-roll-back on regression. Blue/green is simpler but doubles infrastructure cost during deploys; canary is cheaper but needs reliable metrics and an automated rollback signal."
+            "text": "Not on day one. A static site or a single-team prototype can do all-at-once deploys safely - the blast radius is small and the rollback is fast. Reach for canary or blue/green when the cost of a bad deploy (real users seeing errors, real money lost) is higher than the cost of running the extra capacity."
           }
         },
         {
           "@type": "Question",
-          "name": "What is GitOps and is it the same as CI/CD?",
+          "name": "How does GitOps fit in?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "GitOps is a CD pattern: the desired state of your infrastructure or application lives in a Git repository, and a controller running inside the target environment continuously reconciles reality with that state. CI still builds and tests artifacts - but instead of CI pushing changes to the cluster, CI updates the Git repo and the in-cluster controller pulls them in. The benefit is that the cluster never trusts the CI runner; it trusts only itself and the Git repo. Argo CD and Flux are the dominant Kubernetes implementations."
+            "text": "GitOps is a CD pattern, not a replacement for CI. CI still builds and tests artifacts; CI commits the desired state (image tag, manifest) into a Git repo; an in-cluster controller (Argo CD, Flux) pulls and reconciles. The win is that the target cluster never trusts the CI runner - only itself and the Git repo - so a compromised CI cannot directly push into the cluster."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What about secrets - do I still need a secret store with OIDC?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. OIDC removes cloud credentials from CI, but workloads still need third-party API keys, database passwords, signing keys. Those live in Secrets Manager / Key Vault / Secret Manager and are fetched by the workload at runtime - not stored in the pipeline. CI only ever has the cloud role needed to reference the secret, never the secret itself."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How fast should my pipeline be?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The DORA elite benchmark is lead time under one hour from commit to production. For most cloud workloads, that's achievable: 5-10 minutes of CI, 5-10 minutes of deploy + verify, the rest in queue. If your pipeline is over an hour, the problem is usually serialized stages that could run in parallel, or a verification stage waiting on a flaky external dependency."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I do CI/CD without containers?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The pipeline pattern is independent of the artifact type. Lambda zips, VM images (Packer), unikernels, static site bundles, Terraform plans - all flow through the same eight stages. Containers happen to be the dominant artifact today because they unify build + runtime; the CI/CD shape is older than containers and survives them."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does this relate to zero trust?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The pipeline operationalizes zero trust at the deploy layer. \"Verify explicitly\" is OIDC federation - every deploy is a fresh authentication with a fresh subject claim. \"Least privilege\" is per-environment deploy roles with permission boundaries. \"Assume breach\" is auditability - every change traces to a commit, a reviewer, and a run id, so a compromise has a finite, observable blast radius."
           }
         }
       ]

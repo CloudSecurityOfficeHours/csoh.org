@@ -141,34 +141,50 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is the difference between Kubernetes and managed Kubernetes?",
+          "name": "Do I need Kubernetes at all?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Kubernetes is the open-source orchestrator. 'Managed Kubernetes' is a cloud-hosted version (EKS on AWS, AKS on Azure, GKE on Google) where the cloud runs the control plane - etcd, API server, scheduler, controller manager - and you run only the worker nodes (or, in fully-managed modes like GKE Autopilot and EKS Auto Mode, the cloud runs those too). The Kubernetes API surface is the same; the operational responsibility moves to the cloud. The shared-responsibility split is what makes this a security topic - see the Shared Responsibility section on this page."
+            "text": "Often, no. If you have one or two workloads, a serverless container service (Cloud Run, Fargate, Container Apps) gives you containerized deployment without operating a cluster. The decision point is around 5-10 distinct workloads with shared infrastructure needs (service-to-service identity, scheduled jobs, multi-region rollout). Below that, Kubernetes is overhead; above it, the operational model pays back."
           }
         },
         {
           "@type": "Question",
-          "name": "Is a Kubernetes cluster a security boundary?",
+          "name": "EKS vs AKS vs GKE - which is \"most secure\"?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A namespace inside a cluster is not a security boundary - it's an organizational one. RBAC and NetworkPolicy can make it more boundary-like, but pods in different namespaces still share the same kernel on whatever node they happen to land on. The cluster itself can be a security boundary if you treat the cloud account it lives in as the actual perimeter - separate cluster per environment (prod, staging, sandbox) is the standard pattern for workloads with different trust levels. Do not mix prod and untrusted workloads in one cluster."
+            "text": "The Kubernetes API surface is the same on all three. GKE has historically led on built-in defaults - Workload Identity, Binary Authorization, GKE Sandbox, Autopilot - but EKS and AKS have closed the gap and offer equivalents. The bigger driver is \"which cloud do you already live in?\" - running EKS from an Azure organization or GKE from AWS adds federation complexity you don't need."
           }
         },
         {
           "@type": "Question",
-          "name": "What is workload identity in Kubernetes?",
+          "name": "Should I use Helm?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Workload identity is the mechanism by which a Kubernetes pod gets short-lived cloud credentials scoped to itself rather than inheriting the broad role attached to the worker node. AWS calls it IAM Roles for Service Accounts (IRSA) and EKS Pod Identity; Azure calls it AKS Workload Identity (federated to Entra); GCP calls it Workload Identity Federation. All three work the same way: the pod presents a signed Kubernetes service-account token to the cloud, which trusts the cluster's OIDC issuer and returns a short-lived cloud credential. This is the single most important Kubernetes-on-cloud security control - it breaks the chain from 'compromised pod' to 'node IAM role.'"
+            "text": "For deploying off-the-shelf software (a database operator, an ingress controller), Helm is the lingua franca and you'll use it whether you like it or not. For your own workloads, Helm or Kustomize or raw YAML are all defensible. The security-relevant choice is \"are these manifests in git, reviewed, and deployed by a pipeline\" - not which tool generated them."
           }
         },
         {
           "@type": "Question",
-          "name": "Why do people say Kubernetes is hard to secure?",
+          "name": "What about GitOps?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Because the default posture is permissive. Pods can talk to any pod by default. Service accounts get a token mounted automatically. The cluster API server has its own RBAC that can grant access to everything. Worker nodes share a kernel across all pods on them. Add multiple namespaces, third-party operators, helm charts you didn't write, and a CNI plugin you barely understand - and the configuration surface is enormous. None of this is unfixable, but the default config is the worst case and security has to be opted into deliberately at every layer."
+            "text": "GitOps controllers (Argo CD, Flux) pull desired state from a Git repo and reconcile it into the cluster. Two big security wins: the cluster never trusts the CI runner (only itself and the Git repo), and every cluster change is in git history. For production workloads, GitOps is the right deploy model in 2026. See the CI/CD page for how it sits next to the build pipeline."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Are CRDs (custom resources) a security risk?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The CRD itself is data - it doesn't run code. But CRDs are usually paired with operators (controllers) that do run code, often with broad cluster permissions. Auditing CRD-bearing operators for RBAC scope and image provenance is the same exercise as auditing any third-party software with cluster-level access."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does this relate to zero trust?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Kubernetes plus a service mesh is one of the cleanest places to put zero-trust principles into production. mTLS between every workload (verify explicitly), per-pod workload identity (least privilege), default-deny network policy (assume breach), continuous runtime visibility (verify continuously). The cluster gives you the primitives; the configuration is the work."
           }
         }
       ]

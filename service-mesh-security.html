@@ -108,7 +108,7 @@
           "name": "Do I need a service mesh?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Probably not on day one, and possibly never. A service mesh earns its operational cost when you have enough services that pinning identity, encrypting east-west traffic, applying L7 authorization, and observing service-to-service behavior all become important at the same time. Below ten or so services that talk to each other, the same outcomes are cheaper to reach with NetworkPolicy, application-level mTLS via SDK or cert-manager, and per-service tracing. Once you cross fifty services, multi-team ownership, and any meaningful regulatory requirement around encryption-in-transit between services, the math flips and the mesh starts paying off. The honest answer is: pilot one before you commit, pick the smallest mesh that fits, and budget for the operational tax it adds."
+            "text": "Probably not on day one, and possibly never. A mesh earns its operational cost when you have enough services that pinning identity, encrypting east-west traffic, applying L7 authorization, and observing service-to-service behavior all become important at the same time. Below ten or so services that talk to each other, the same outcomes are cheaper to reach with NetworkPolicy, application-level mTLS via SDK or cert-manager, and per-service tracing. Once you cross fifty services, multi-team ownership, and any meaningful regulatory requirement around encryption-in-transit between services, the math flips. Pilot one before you commit, pick the smallest mesh that fits, and budget for the operational tax it adds."
           }
         },
         {
@@ -116,15 +116,15 @@
           "name": "Istio vs Linkerd - which should I pick?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Linkerd if you want the smallest, fastest path to mTLS and basic policy with the least operational surface. Linkerd's Rust micro-proxy is dramatically lighter than Envoy, its config surface is small, and CNCF graduated status makes the project a safe bet. Istio if you need everything - rich L7 traffic management, JWT validation, sophisticated authorization, multi-cluster federation, an integrated ingress story (Gateway API), and the ambient data plane option. Istio's config surface is the price of that flexibility. Both are CNCF projects and both ship strong defaults; pick on operational appetite, not on feature checklist marketing."
+            "text": "Linkerd if you want the smallest, fastest path to mTLS and basic policy with the least operational surface. Istio if you need everything - rich L7 traffic management, JWT validation, sophisticated authorization, multi-cluster federation, the ambient data plane option. Both are CNCF graduated; pick on operational appetite, not on feature checklist marketing."
           }
         },
         {
           "@type": "Question",
-          "name": "Is sidecar-less (ambient mesh or eBPF) ready for production?",
+          "name": "Is sidecar-less ready for production?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes, with caveats. Cilium Service Mesh (eBPF-based, no sidecar) has been in production at significant scale for several years and is GA. Istio Ambient was declared GA at Istio 1.22 and continues to mature - many teams have moved production workloads to it specifically to escape the sidecar operational tax. The caveats: ambient's L7 features (HTTP-level authorization, JWT validation) require a separate per-namespace 'waypoint proxy', so the operational model is two-tier; some advanced Istio features still lag in ambient mode; and the failure modes are different from sidecar (node-level rather than pod-level blast radius). The trajectory is unambiguous, though - new mesh deployments in 2026 default to sidecarless unless there's a specific reason not to."
+            "text": "Yes, with caveats. Cilium Service Mesh has been in production at significant scale for several years and is GA. Istio Ambient was declared GA at 1.22 and continues to mature; many teams have moved production workloads to it specifically to escape sidecar operational tax. The caveats: ambient's L7 features require a separate per-namespace waypoint proxy; some advanced Istio features still lag in ambient; the failure modes are different from sidecar (node-level rather than pod-level blast radius)."
           }
         },
         {
@@ -132,7 +132,7 @@
           "name": "Does Cilium replace my mesh AND my CNI?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes, and that's the pitch. Cilium is a CNI (the pod-networking layer), a Kubernetes-aware NetworkPolicy engine with L7 enforcement, a service mesh (mTLS, identity, L7 routing, no sidecar), and a deep observability tool (Hubble) - one eBPF data plane underneath all of it. The trade-off is concentration: one project owns more of the stack than was traditionally true. The upside is fewer moving parts and a single mental model. The downside is fewer escape hatches if you need a behavior the project hasn't shipped. For most clusters in 2026, the simplification is worth it - Cilium has CNCF graduated status, Isovalent (the originator) was acquired by Cisco, and the production track record is at hyperscaler scale."
+            "text": "Yes, and that's the pitch. Cilium is a CNI, a NetworkPolicy engine with L7 enforcement, a service mesh (mTLS, identity, L7 routing, no sidecar), and a deep observability tool (Hubble) - one eBPF data plane underneath all of it. The trade-off is concentration: one project owns more of the stack than was traditionally true. The upside is fewer moving parts. For most new clusters in 2026, the simplification is worth it."
           }
         },
         {
@@ -140,7 +140,7 @@
           "name": "Service mesh vs API gateway - when do I need which?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "API gateway lives at the edge of the cluster (north-south traffic): authentication of external callers, rate limiting, API key management, request transformation, WAF, traffic from clients into the cluster. Service mesh lives inside the cluster (east-west traffic): mTLS between services, workload-identity-based authorization, retries and circuit breaking between services, observability of service-to-service calls. The line blurs at the ingress: Istio's Gateway API integration and Envoy-based gateways like Emissary or Kong make the same proxy do both jobs in some architectures. The right question is rarely 'which one' - it's 'what concerns live at what layer', and the answer usually involves both."
+            "text": "API gateway lives at the edge of the cluster (north-south traffic). Service mesh lives inside the cluster (east-west traffic). The right question is rarely \"which one\" - it's \"what concerns live at what layer\", and the answer usually involves both. See the comparison above."
           }
         },
         {
@@ -148,15 +148,15 @@
           "name": "What is SPIFFE/SPIRE and why does it matter?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "SPIFFE (Secure Production Identity Framework For Everyone) is an open standard for workload identity - every workload gets a cryptographically verifiable identity (an SVID, Secure Verifiable Identity Document) instead of relying on a shared secret or a network position. SPIRE is the reference implementation. The reason it matters: every modern service mesh's mTLS is grounded in a workload-identity model, and SPIFFE is the standard that makes those identities portable across mesh implementations, cloud providers, and even across organizations (federation). If you've ever wondered 'what's actually in the certificate the mesh is issuing?' - that's an SVID, and the trust domain (spiffe://example.org/...) is the SPIFFE concept underneath."
+            "text": "SPIFFE is the open standard for workload identity - every workload gets a cryptographically verifiable identity instead of relying on a shared secret or a network position. SPIRE is the reference implementation. Every modern mesh's mTLS is grounded in a workload-identity model, and SPIFFE makes those identities portable across mesh implementations, cloud providers, and even organizations (federation). See the deep-dive above."
           }
         },
         {
           "@type": "Question",
-          "name": "Doesn't strict mTLS break legacy services that don't speak it?",
+          "name": "Doesn't strict mTLS break legacy services?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes, which is why every production-grade mesh ships a permissive transition mode. Istio's PeerAuthentication has a PERMISSIVE mode that accepts both mTLS and plaintext on the same port; Linkerd's mTLS is opt-out for legacy ingress; Cilium's mTLS is per-policy. The migration pattern is: enable mesh injection / participation cluster-wide in PERMISSIVE; verify with telemetry that traffic is using mTLS; flip to STRICT namespace-by-namespace once each is clean. Skipping the permissive step and going straight to STRICT is one of the top-three mesh outages - the mesh works, the legacy CI runner doesn't, and the war room is unhappy."
+            "text": "Yes, which is why every production-grade mesh ships a permissive transition mode. Enable mesh-wide PERMISSIVE; verify via telemetry that traffic is using mTLS; flip to STRICT namespace-by-namespace once each is clean. Skipping the permissive step is one of the top-three mesh outages."
           }
         }
       ]

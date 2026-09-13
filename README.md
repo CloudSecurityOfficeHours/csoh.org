@@ -920,7 +920,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
 | `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DOCS_CONSISTENCY_README.md) |
 | `check_readme_coverage.py` | Every in-repo Markdown link resolves (over 400 of them, across every tracked doc - lychee reads none, and the tool prints the real counts, so do not trust one written here); every root page is named in README.md and DEVELOPMENT.md; every published subdirectory is documented *and* crawled; no count marker sits inside a code fence. Self-tests before reporting, so a broken detector fails loudly instead of passing quietly | docstring |
-| `check_faq_jsonld_parity.py` | FAQPage answers and glossary DefinedTerm descriptions that say something the visible page does not. The JSON-LD copy is the text a search engine shows, and three docs-review findings in September 2026 were corrections that never reached it. Report-only and not yet a CI gate; self-tests before reporting | docstring |
+| `check_faq_jsonld_parity.py` | FAQPage answers and glossary DefinedTerm descriptions must match the visible text they copy, word for word. The JSON-LD copy is the text a search engine shows, and three docs-review findings in September 2026 were corrections that never reached it. `--fix` regenerates every copy from its page; `--check` for CI. Self-tests before reporting | docstring |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
 | `add_theme_script.py` | Stamps the render-blocking `theme.js` tag into every page's `<head>`, above the stylesheet. A page that misses it renders a flash of the wrong theme for any visitor whose stored choice differs from their OS, which is invisible in a screenshot and in every static check. `--check` for CI | docstring |
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
@@ -1268,7 +1268,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->65<!--/count--> pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->63<!--/count--> pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps

@@ -138,34 +138,42 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "Is a container a security boundary?",
+          "name": "Are Docker, containerd, and Kubernetes the same thing?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A container is a process-isolation boundary, not a strong security boundary. Containers on the same host share a kernel - a kernel vulnerability, a misconfigured capability, or a privileged container can let a process inside one container affect another or the host. Treat the host (the VM the container runs on) as the real boundary; treat the container as a lightweight isolation layer that needs hardening on top. If you need a hard tenant boundary, use sandboxed runtimes (gVisor, Kata Containers, Firecracker) or separate VMs."
+            "text": "No. Docker is a developer-facing tool (CLI + daemon) that builds and runs containers. containerd is the lower-level runtime that actually starts processes; Docker uses it under the hood, and so does Kubernetes. Kubernetes is an orchestrator - it decides which containers run where, across many hosts. You can run containers without Kubernetes (ECS, Cloud Run, plain Docker); you can't run Kubernetes without a container runtime."
           }
         },
         {
           "@type": "Question",
-          "name": "What is a container escape?",
+          "name": "What's the difference between containers and VMs?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A container escape is any technique that lets code running inside a container affect the host or other containers on it. The most common paths: a process running as root in a container with a host filesystem mount, a container with --privileged or CAP_SYS_ADMIN, a kernel vulnerability the container kernel shares with the host (e.g. CVE-2022-0492 cgroups, dirty pipe, leaky vessels), or a container with hostPID/hostNetwork that can see and signal host processes. The fix is layered: drop capabilities, run as non-root, enforce seccomp/AppArmor profiles, and patch the host kernel."
+            "text": "A VM has its own kernel; a container shares the host's. VMs boot in seconds with hundreds of MB of memory overhead; containers start in milliseconds with no kernel overhead. VMs are a strong isolation boundary (hypervisor); containers are a weaker one (kernel namespaces). The cloud's \"best of both\" answer is the micro-VM - Firecracker, Kata - which gives the container API on top of a fast hypervisor."
           }
         },
         {
           "@type": "Question",
-          "name": "Why is the instance metadata service (IMDS) dangerous for containers?",
+          "name": "Is rootless Docker enough?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Containers running on a cloud VM share the host's network namespace by default, which means they can reach the instance metadata service at 169.254.169.254 and request the VM's IAM credentials. A compromised container can pivot from 'I can run code in one container' to 'I have the entire VM's cloud permissions.' This is identity chaining, and it's how the Capital One breach worked. The fix on AWS is IMDSv2 with hop-limit 1 (so containers can't reach it through the host), or - better - give each workload its own scoped identity via IRSA / Workload Identity / managed-identity-per-pod, and block IMDS access from workloads entirely."
+            "text": "It helps a lot - the daemon no longer runs as root, and a container compromise is no longer \"the daemon's root.\" But it's not a silver bullet: the kernel is still shared, kernel CVEs still escape, the workload still needs to drop capabilities and run as a non-root user inside the container. Rootless removes one big foot-gun; the rest of the hardening still applies."
           }
         },
         {
           "@type": "Question",
-          "name": "Are managed container services more secure than self-hosted?",
+          "name": "How is \"containerless\" / serverless different?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Generally yes - Cloud Run, Fargate, Container Apps, and similar managed services run each workload in a per-customer micro-VM (Firecracker on AWS, similar on the others). The kernel boundary is hardened, the host is patched by the cloud, and the user can't misconfigure --privileged. The tradeoff is reduced control: no DaemonSets, no privileged sidecars, no kernel modules. For most application workloads that's a feature, not a limitation."
+            "text": "Cloud Run, Container Apps, Fargate, App Runner - these run your container image, but the platform manages the host, the kernel, the runtime sandboxing, and the scaling. You don't have a node to log into. The trade-off is reduced control (no DaemonSets, no privileged sidecars) for significantly less security surface to manage. For most application workloads, this is the right default in 2026."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does this relate to zero trust?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Containers operationalize zero trust at the workload layer when you do this right: per-workload identity (verify explicitly), default-deny networking (least privilege), mTLS between services (verify continuously), runtime detection (assume breach). The container is a unit of identity, not just a unit of deployment."
           }
         }
       ]

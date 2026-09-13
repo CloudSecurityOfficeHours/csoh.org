@@ -138,10 +138,10 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is the difference between a SOC analyst and a detection engineer?",
+          "name": "What's the difference between a SOC analyst and a detection engineer?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A SOC analyst consumes detections - they triage the alerts a rule fires, decide whether the activity is malicious, and escalate to incident response. A detection engineer builds detections - they research a technique, write the rule that catches it, tune out the false positives, deploy it through CI/CD, and validate it against simulated attacks. The roles overlap on tuning and on understanding the environment, but the detection engineer's day is mostly editing rule files in a Git repo and reading API documentation; the analyst's day is mostly working through a queue. Mature programs separate them; small programs combine them on one team that swaps between modes."
+            "text": "The analyst consumes alerts; the engineer builds the rules that produce them. The analyst's day is a queue and a clock - triage minutes per alert and time-to-acknowledge. The engineer's day is a Git repo, an ATT&CK coverage map, and a CI/CD pipeline pushing rule changes to one or more SIEMs. The roles cooperate constantly - the analyst's \"this rule's noisy\" or \"I'm seeing this pattern again\" is the engineer's backlog - but they think differently and the disciplines benefit from being staffed separately at any reasonable scale."
           }
         },
         {
@@ -149,7 +149,7 @@
           "name": "Which cloud logs do I actually need to enable?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "At minimum: an organization-level audit trail (CloudTrail org trail in AWS, Activity Log diagnostic settings in Azure, Cloud Audit Logs at the org node in GCP). Then identity provider sign-in logs (Entra ID sign-ins and audit logs, Okta system log, AWS IAM Identity Center). Then VPC / network flow logs at least on production VPCs. Then the platform-native threat detection findings - GuardDuty, Defender for Cloud, Security Command Center Premium. Data-plane / data-access logging (CloudTrail data events, GCP Data Access logs, Azure resource-specific diagnostic settings) is the expensive one - enable selectively on the resources that hold real data. Skipping data-plane is the single biggest detection blind spot in most cloud programs."
+            "text": "The non-negotiable set: an organization-level audit trail (CloudTrail org trail / Activity Log Diagnostic Settings / Cloud Audit Logs at the org node); identity-provider sign-in and audit logs (Entra, Okta, IAM Identity Center, Workspace); VPC / network flow logs on production VPCs; and the platform-native threat-detection findings (GuardDuty, Defender for Cloud, Security Command Center Premium). The expensive one - data-plane / data-access logs - should be enabled deliberately on resources holding real customer data, scoped tightly. Skipping data-plane is the single most common cloud detection blind spot."
           }
         },
         {
@@ -157,7 +157,7 @@
           "name": "Is Sigma worth learning if my SIEM has its own query language?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes - for portability. Sigma is YAML, vendor-neutral, and converts to Splunk SPL, KQL, Elastic queries, Panther Python, Sumo Logic, and a dozen other backends via Sigmac (and the modern pySigma toolchain). The SigmaHQ public rule library is a free starting catalog you can adapt. The native query language is still where final tuning happens - Sigma converters can produce slow or imprecise queries on complex rules - but writing the canonical rule in Sigma and treating the vendor-specific output as a build artifact protects you from SIEM migrations and gives you a portable detection library."
+            "text": "Yes - for portability. Sigma is the closest the industry has to a vendor-neutral detection format. Writing the canonical rule in Sigma and compiling to your SIEM's native language with pySigma protects you from SIEM migrations and gives you a portable detection library. The vendor language is still where final performance tuning happens; the Sigma source is where the rule lives in your repo."
           }
         },
         {
@@ -165,7 +165,7 @@
           "name": "How is detection-as-code different from compliance-as-code?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Both put rules in Git and deploy them through CI/CD. The artifacts differ: compliance-as-code rules ask 'is this resource configured correctly right now?' and evaluate against configuration state (an S3 bucket, an IAM policy). Detection-as-code rules ask 'did something bad just happen?' and evaluate against streaming events (a CloudTrail record, an Entra sign-in). The workflows look almost identical - branch, PR, test, deploy, version - but the test harness for detections has to replay sample logs against the rule, where the test harness for compliance can use IaC fixtures. Programs that have nailed one find the other much easier to adopt."
+            "text": "Both put rules in Git and deploy through CI/CD. The difference is the input data: compliance-as-code (see the GRC page) evaluates configuration state - is this S3 bucket configured correctly right now? Detection-as-code evaluates streaming events - did this CloudTrail event indicate malicious activity? The workflows look almost identical and the team skills transfer; the test harnesses and the evaluation engines differ."
           }
         },
         {
@@ -173,7 +173,7 @@
           "name": "Why does GCP Data Access logging matter so much?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "GCP's Cloud Audit Logs are split into four streams: Admin Activity (free, always on), System Event (free, always on), Policy Denied (free, opt-in), and Data Access (paid, off by default for most services). Data Access is the stream that records reads of customer data - a service account listing objects in a sensitive bucket, querying a sensitive BigQuery table, decrypting a KMS key. Without it, the audit trail tells you who changed permissions but not who actually read the data. Most cloud breaches involve data access; turning the stream off saves money and blinds the detection program. Enable it deliberately on the projects that hold real data, scope it tight, and budget for the volume."
+            "text": "GCP's Cloud Audit Logs split into Admin Activity (free, always on), System Event (free, always on), Policy Denied (free, opt-in), and Data Access (paid, off by default). Data Access is the stream that records reads of customer data - a service account listing objects in a sensitive bucket, querying a sensitive BigQuery table, decrypting a KMS key. Most cloud breaches involve data access; turning the stream off saves money and blinds the detection program. Enable it deliberately on the projects that hold real data; budget for the volume."
           }
         },
         {
@@ -181,7 +181,7 @@
           "name": "Should I build on a SIEM or a data lake?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "SIEM (Splunk, Sentinel, Chronicle/Google SecOps, Elastic, QRadar) gives you a turnkey detection pipeline - ingest, parse, normalize, store, alert, dashboard - with the cost model and licensing of a packaged product. Data lake (Snowflake, Databricks, BigQuery, S3 + Athena/Iceberg) gives you cheaper long-term storage and arbitrary analytics, plus a 'security data lake' tool on top (Anvilogic, Hunters, Query.ai, Panther, Snowflake's own Horizon) to do the SIEM-shaped work. The 2026 reality: most large programs run both - a SIEM for the high-value real-time detections, a data lake for everything else, with the detection-as-code repo deploying rules to both backends. Small programs pick one and live with the trade-off."
+            "text": "Most large 2026 programs run both: a SIEM (Sentinel, Splunk, Chronicle, Elastic) for the real-time, high-value correlations the SOC depends on, and a data lake (Snowflake, Databricks, BigQuery, S3 + Iceberg) with a security-analytics layer (Anvilogic, Hunters, Query.ai, Panther) for the cheaper long-tail and forensic querying. Small programs pick one and accept the trade-off - usually a cloud-native SIEM for speed-of-stand-up."
           }
         },
         {
@@ -189,7 +189,7 @@
           "name": "How do I validate that my detections actually work?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Three complementary techniques. Unit tests: replay a sample log event against the rule and assert it fires (or doesn't). Atomic Red Team and Stratus Red Team: execute real attack techniques in a test environment and verify the corresponding detection lights up - Stratus is the cloud-specific one and ships dozens of AWS / Azure / GCP techniques as one-command executions. Purple-team exercises: a red team operates in the live environment under controlled conditions while the detection team watches; gaps surface immediately. Without at least one of these running continuously, you have a rule library, not a detection program - and you'll discover the gaps during an actual incident."
+            "text": "Three layers, complementary. Unit tests: replay a sample event against the rule and assert it fires (or doesn't). Stratus Red Team: execute real cloud attack techniques on a schedule and verify the corresponding detection lights up. Purple teaming: a red team operates in the live environment with the detection team watching, on a quarterly cadence. Without at least one of these running continuously, you have a rule library, not a detection program."
           }
         }
       ]

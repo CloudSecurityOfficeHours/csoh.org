@@ -105,34 +105,42 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is a serverless function?",
+          "name": "Is \"serverless\" the same as \"FaaS\"?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A serverless function is a piece of code that the cloud runs in response to an event - an HTTP request, a queue message, a file upload, a scheduled timer - without you provisioning, patching, or managing the server underneath. The cloud handles allocation, scaling, OS patching, and runtime upgrades; you upload code and an event configuration. AWS Lambda, Azure Functions, and Google Cloud Functions are the dominant offerings."
+            "text": "Functions-as-a-service is the specific form this page covers - Lambda, Azure Functions, Cloud Functions. Serverless is the marketing umbrella that also includes serverless containers (Cloud Run, Fargate, Container Apps), serverless databases (DynamoDB on-demand, Aurora Serverless, Cloud Spanner), and a growing list of \"no infrastructure to manage\" services. This page is FaaS-specific; the Containers page covers the serverless-container variants."
           }
         },
         {
           "@type": "Question",
-          "name": "Is serverless more secure than running a container or VM?",
+          "name": "Should I write everything as serverless functions?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "In some dimensions, yes - the cloud handles the OS, the runtime, the host-level patching, and the workload runs in a per-invocation micro-VM (Firecracker on Lambda, similar on the others), so kernel-level attack surface and patching toil basically disappear. In other dimensions it's worse: the attack surface shifts to identity (functions accumulate IAM permissions), event triggers (malicious payloads from S3, SQS, EventBridge, public function URLs), supply chain (every npm/pip package becomes a runtime risk), and cost-as-DoS. Serverless trades classic infra risks for cloud-specific ones."
+            "text": "No. Functions are great for event-driven, intermittent, mostly stateless workloads that finish in under 15 minutes. They get expensive at high sustained throughput, awkward for long-running work, and lock you to one cloud's event-source wiring. The \"rebuild everything as Lambdas\" pattern from 2018 burned a lot of teams - most have since migrated steady-state services back to containers, kept serverless for the parts where it actually fits."
           }
         },
         {
           "@type": "Question",
-          "name": "What is denial of wallet?",
+          "name": "How is cold-start security-relevant?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Denial of wallet is the serverless equivalent of denial of service: instead of taking your application offline, an attacker drives up your invocation count or compute time until your cloud bill is the problem. Public function URLs, unrate-limited APIs in front of functions, and recursive event loops (a function writes to S3 which triggers itself) are the classic vectors. Defenses are the same as the cost-control playbook: per-function concurrency limits, throttles at the API gateway, budget alarms, and reserved concurrency caps."
+            "text": "Two ways. First, every cold start re-loads all dependencies - meaning a compromised dependency activates on every cold start (not just at deploy). Second, init-time code paths (loading secrets, opening connections) run differently from steady-state warm code paths - bugs that only happen during init can be harder to catch."
           }
         },
         {
           "@type": "Question",
-          "name": "Can a serverless function be exploited the same way a web app can?",
+          "name": "Can a function be exploited like a regular web app?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Injection vulnerabilities, deserialization bugs, path traversal, server-side request forgery, broken access control - every OWASP class applies to function code. The execution environment is shorter-lived and the IAM blast radius is usually narrower, but the application-layer bugs are the same. Add event-source-specific injection (a malicious S3 object key, a poisoned SQS message body) as a category that doesn't exist for traditional web servers."
+            "text": "Yes. Injection, deserialization, broken access control, SSRF - every OWASP-class issue applies. The execution environment is shorter-lived and the IAM blast radius is usually narrower, but the application-layer surface is the same. Add event-source-specific injection as an extra category that doesn't exist for traditional servers."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does this relate to zero trust?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Serverless makes some zero-trust principles trivially easy and others harder. Per-invocation isolation and per-function identity are zero trust by default - \"verify explicitly\" and \"least privilege\" come almost for free. What's harder: network-level segmentation (the platform abstracts the network away) and continuous verification (no host to inspect, no agent to run, so you depend on the platform's telemetry and your own logging)."
           }
         }
       ]
