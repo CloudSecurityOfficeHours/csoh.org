@@ -1415,12 +1415,12 @@ Two things generalise:
 ### The same shape on AWS, where credits hide it
 
 Found 2026-09-13, and growing since at least June (53 GB on 30 June).
-`infra/terraform/aws/s3.tf` enables versioning on the origin bucket as "a cheap
-rollback/forensics trail", and the bucket has **no lifecycle configuration at
+`infra/terraform/aws/s3.tf` enabled versioning on the origin bucket as "a cheap
+rollback/forensics trail", and the bucket had **no lifecycle configuration at
 all**. `aws s3 sync` in `deploy.yml` uploads any file whose local mtime is newer
 than the S3 copy, and a fresh CI checkout makes every file newer, so every
-deploy re-uploads the whole site and every upload turns the previous object into
-a noncurrent version that is kept forever.
+deploy re-uploads the whole site and every upload turned the previous object
+into a noncurrent version that was kept forever.
 
 Measured: **3,288 live objects / 255 MB, against 2.77M object versions /
 233.65 GB**, growing ~20K versions and ~1.4 GB a day - one full copy of the site
@@ -1430,12 +1430,70 @@ was zero, the site was healthy, and "cheap" in the comment was true when it was
 written.
 
 Same lesson as the registry, sharper: **versioning is a retention decision, and
-a retention decision with no expiry is unbounded growth.** Bound it with a
-`noncurrent_version_expiration` sized to the rollback you would actually use,
-rather than turning versioning off. `BucketSizeBytes` counts noncurrent versions
-and a listing does not, so compare the two:
+a retention decision with no expiry is unbounded growth.** The general fix is a
+`noncurrent_version_expiration` sized to the rollback you would actually use.
+This bucket went further, and **versioning is now suspended** (2026-09-13),
+because it needs no rollback trail of its own: every deploy rebuilds it from
+git, so reverting the commit is the rollback. Keep versioning and size the
+expiry instead wherever a bucket holds the only copy of its data. Do not
+re-enable it here; the reasoning is in the comments in `s3.tf`.
+
+`s3.tf` now declares `status = "Suspended"` and an
+`aws_s3_bucket_lifecycle_configuration` that keeps only the current copy:
+noncurrent versions expire after 1 day, delete markers go once nothing is under
+them, and incomplete multipart uploads are aborted. It is applied by hand, like
+every stack here, so check whether it is live rather than trusting this line.
+`NoSuchLifecycleConfiguration` means it is not:
 
 ```sh
+aws s3api get-bucket-lifecycle-configuration --bucket csoh-org-site-origin
+```
+
+Five things here are easy to get wrong:
+
+- **The console change came first, and `s3.tf` still said `"Enabled"`.** The
+  next `terraform apply` of the AWS stack would have quietly switched versioning
+  back on. A console edit to a Terraform-managed resource is not a change, it is
+  drift that the next apply reverts.
+- **`"Disabled"` is not an off switch.** A bucket that has ever been versioned
+  can never return to unversioned. `"Suspended"` is the only off, and provider
+  5.100.0 rejects `Enabled`/`Suspended` -> `Disabled` at plan time.
+- **Suspending deletes nothing, and creates one last full copy.** The copies
+  that were current at the switch keep their real version IDs, so the first
+  deploy afterwards turns every one of them into a noncurrent version. A one-off
+  prune run before that deploy leaves a whole site's worth behind; the lifecycle
+  rule catches it a day later.
+- **Never prune with a delete script.** `aws s3 sync --delete` leaves a delete
+  marker over a removed page's old versions. Delete a marker while versions
+  still sit under it, which any loop that handles markers first or dies partway
+  will do, and the removed page is served again from the AWS origin.
+  `help-desk-to-cloud-security.html` had 385 versions under its marker. The
+  rule's `expired_object_delete_marker` only removes a marker once nothing is
+  left under it.
+- **Suspending stops the storage slope, not the uploads.** The ~$3/month of
+  PUTs continues, because every deploy still re-uploads every file.
+  `--size-only` is not the fix: re-stamping `?v=` and `integrity=` changes a page
+  without changing its byte count, so those pages would be skipped and the AWS
+  origin would serve old HTML against new assets - the SRI failure at the top of
+  this file.
+
+One plan line looks wrong and is not: `days = 0` beside
+`expired_object_delete_marker = true`. S3 rejects `Days` together with
+`ExpiredObjectDeleteMarker`, but provider 5.100.0 turns a zero into null before
+sending (`ZeroInt32AsNull` in `lifecycleExpirationModel.Expand`), so the request
+is valid.
+
+S3 runs lifecycle rules about once a day and stops billing a version once it
+qualifies, but removing millions of objects is asynchronous and can lag. So
+check one key before the totals: `favicon.png` had 957 noncurrent versions on
+2026-09-13 and should reach 0. If it has not a week after the apply, treat that
+as a defect rather than a slow scheduler, the same call as the registry above.
+After that, the listing (current objects only) and `BucketSizeBytes` (every
+version) should converge:
+
+```sh
+aws s3api list-object-versions --bucket csoh-org-site-origin --prefix favicon.png \
+  --query '{noncurrent: length(Versions[?!IsLatest] || `[]`), deleteMarkers: length(DeleteMarkers || `[]`)}'
 aws s3 ls s3://csoh-org-site-origin --recursive --summarize | tail -2
 aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes \
   --dimensions Name=BucketName,Value=csoh-org-site-origin Name=StorageType,Value=StandardStorage \

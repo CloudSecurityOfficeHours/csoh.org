@@ -697,12 +697,22 @@ done:**
    terraform -chdir=infra/terraform/cloudflare apply -target=cloudflare_load_balancer_pool.origins
    ```
 
-2. **S3 keeps every version of every deploy.** Versioning is on with no
-   lifecycle rule, and `aws s3 sync` re-uploads every file on every deploy, so
-   the live site is 3,288 objects / 255 MB while the bucket holds 2.77M versions
-   / 233 GB, growing ~1.4 GB a day. About $5.40/month of storage and $3 of PUTs,
-   billed as $0.00 because credits cancel it. A `noncurrent_version_expiration`
-   rule bounds it without giving up the rollback trail.
+2. **S3 kept every version of every deploy, and the fix is in Git but not yet
+   live.** Versioning was on with no lifecycle rule, and `aws s3 sync`
+   re-uploads every file on every deploy, so on 2026-09-13 the live site was
+   3,288 objects / 255 MB while the bucket held 2.77M versions / 233 GB, growing
+   ~1.4 GB a day: about $5.40/month of storage and $3 of PUTs, billed as $0.00
+   because credits cancel it. Versioning was suspended that day rather than
+   bounded with an expiry, because every deploy rebuilds the bucket from git and
+   git is the rollback, and `s3.tf` now adds a lifecycle rule that keeps only the
+   current copy of each file. `NoSuchLifecycleConfiguration` from
+   `aws s3api get-bucket-lifecycle-configuration` means it is still not applied.
+   Apply it on its own (export AWS credentials first, per CLAUDE.md). The storage
+   goes within a few days of that, and the PUTs stay, because the re-uploads do:
+
+   ```sh
+   terraform -chdir=infra/terraform/aws apply -target=aws_s3_bucket_versioning.site -target=aws_s3_bucket_lifecycle_configuration.site
+   ```
 3. **Nothing alerts on cost.** There are no AWS Budgets, no Azure budgets, and
    the GCP Billing Budget API is not enabled on the project. Every cost event in
    this stack's history was found by hand, weeks after it began: the GCP credits
