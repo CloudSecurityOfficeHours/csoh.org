@@ -677,13 +677,13 @@ $42.59).
   2026-08-30. A hand-run delete that day took billed storage from 231.6 GiB on
   08-29 to 4.8 GiB on 08-31; the retention rule never did (CLAUDE.md has why).
   Retention now keeps the newest 10 images plus anything under a day old,
-  committed 2026-09-13 and applied by hand.
+  applied 2026-09-13 with 99 images in the repository.
 - **Fewer deploys**: ~11 a day in August, ~6 in September, which on its own
   roughly halved Azure write operations and S3 uploads.
 
-**What is left is almost all probes and deploys.** Two more fixes were applied
-the day this was measured, and two more changes are committed but not yet
-applied: the ten-image registry retention above, and budget alerts.
+**What is left is almost all probes and deploys.** Four more changes were
+applied the day this was measured: the S3 and probe-region fixes below, the
+ten-image registry retention above, and budget alerts on all three clouds.
 
 **S3 kept every version of every deploy, and that was fixed on 2026-09-13.**
 Versioning was on with no lifecycle rule, and `aws s3 sync` re-uploads every
@@ -711,22 +711,21 @@ one or two a minute after. That rate was nearly all of Cloud Run's $9.95 and
 Azure's $2.76 probe line; as with the S3 fix, the table keeps the measured
 figures until a bill shows the difference.
 
-**Budget alerts are committed and not yet applied.** Until now nothing alerted
-on cost, and every cost event in this stack's history was found by hand, weeks
-after it began: the GCP credits ending on 2026-07-28, $119.77 of Azure egress
-in July, the registry's growth, and the S3 versions above. Each stack now has a
-`budget.tf` with a $10 monthly budget that emails `var.budget_alert_emails`
-(default `admin@csoh.org`) on actual spend and when the provider forecasts the
-month will pass $10. The AWS one counts cost after credits, so its 10% alert is
-the first dollar billed once the $17.55 of credit is gone. Apply each on its
-own; GCP needs its two billing APIs enabled a minute before the budget can
-plan (CLAUDE.md has the traps and the checks):
+**Budget alerts are live on all three clouds, since 2026-09-13.** Until then
+nothing alerted on cost, and every cost event in this stack's history was found
+by hand, weeks after it began: the GCP credits ending on 2026-07-28, $119.77 of
+Azure egress in July, the registry's growth, and the S3 versions above. Each
+stack has a `budget.tf` with a $10 monthly budget that emails
+`var.budget_alert_emails` (default `admin@csoh.org`) on actual spend and when
+the provider forecasts the month will pass $10. The AWS one counts cost after
+credits, so its 10% alert is the first dollar billed once the $17.55 of credit
+is gone. Its forecast does not net out credits, so a forecast email can arrive
+while nothing is billed. CLAUDE.md has the traps and the commands that read all
+three back. Rebuilding the GCP stack from scratch needs its two billing APIs
+enabled a minute before the budget can plan:
 
 ```sh
-eval "$(aws configure export-credentials --format env)"; terraform -chdir=infra/terraform/aws apply -target=aws_budgets_budget.monthly
-terraform -chdir=infra/terraform/azure apply -target=azurerm_consumption_budget_subscription.monthly
 terraform -chdir=infra/terraform/gcp apply -target='google_project_service.apis["billingbudgets.googleapis.com"]' -target='google_project_service.apis["cloudbilling.googleapis.com"]'
-terraform -chdir=infra/terraform/gcp apply -target=google_billing_budget.monthly -target=google_artifact_registry_repository.containers
 ```
 
 Re-measure rather than editing these numbers by hand. CLAUDE.md carries the Cost

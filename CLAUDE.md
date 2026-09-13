@@ -1370,8 +1370,8 @@ success. What replaced the tag guarantee is digest pinning in `deploy.yml` and
 `deploy-qa.yml` - both resolve the tag and pass `path@sha256:...` to `gcloud run
 deploy` - so a moved tag cannot change the bytes a revision runs. The repo
 now carries `keep-recent-10`, `delete-old-tagged` (1d), and `delete-old-untagged`
-(1d), committed 2026-09-13 and applied by hand, so read the live policy rather
-than this line. Ten is deliberate: an old image has no use here beyond a quick
+(1d), applied 2026-09-13 and read back live that day, though the live policy is
+still the thing to read, not this line. Ten is deliberate: an old image has no use here beyond a quick
 rollback, and redeploying an older commit rebuilds it. Before that it was
 `keep-recent-50` with 30 days, sized on the real push rate (~11 images/day in
 August, ~6 in September, at ~0.19 GiB of unique layers each). Count what is
@@ -1402,9 +1402,9 @@ rule was never observed deleting anything, and it has now been replaced rather
 than tested: keep the newest 10, and delete everything else once it is a day
 old.
 
-Once that is applied, the first sweep is the observation to make. Within about
-a day the image count should fall from ~100 to about 10 plus the last day's
-pushes, and QA's 08-22 image goes with it. That is safe for the service - "Cloud
+It was applied at 17:21 UTC on 2026-09-13 with 99 images in the repository, so
+the first sweep is the observation to make. Within about a day the count should
+fall to about 10 plus the last day's pushes, and QA's 08-22 image goes with it. That is safe for the service - "Cloud
 Run keeps this copy of the container image as long as it is used by a serving
 revision" - and it does not break promotion either: `deploy.yml` finds no tag
 for an aged-out build, rebuilds the commit from source, and scans what it built.
@@ -1714,9 +1714,9 @@ figure, and says so.
 Until 2026-09-13 nothing alerted on any of it, and every cost event was found by
 a person, weeks after it began. Each cloud stack now has a `budget.tf`: $10 a
 month, alerting `var.budget_alert_emails` (default `admin@csoh.org`) on actual
-spend and when the provider forecasts the month will pass the limit. They are
-applied by hand, so confirm they exist before relying on them. Three things
-about them are not obvious:
+spend and when the provider forecasts the month will pass the limit. All three
+were applied and read back live on 2026-09-13; confirm they still exist before
+relying on them. Four things about them are not obvious:
 
 - **The AWS budget counts cost after credits, on purpose.** It reads $0.00
   while credits last ($17.55 left on 2026-09-13), so its 10% alert is a
@@ -1730,6 +1730,12 @@ about them are not obvious:
   admin); project Owner is not enough.
 - **The Azure budget's `start_date` cannot move.** Changing it replaces the
   budget and discards its history.
+- **AWS forecasts spend before credits, so a forecast email can arrive while
+  nothing is billed.** Read back on 2026-09-13, the budget showed $0.00 actual
+  (credits included) against a $10.27 forecast, which still carries August's
+  usage and the old S3 storage. That same blindness to credits is what makes it
+  the one alert that sees usage the credits hide - the S3 bucket's failure - so
+  it stays.
 
 ```sh
 aws budgets describe-budgets --account-id 038416307420 --query 'Budgets[].BudgetName'
