@@ -334,8 +334,9 @@ QA run and is therefore unpromotable.
    `tools/site-publish.filter` (a deny-list). The GCP container gets `COPY . `
    minus `.dockerignore`, minus the Dockerfile's `rm`/`find` list, minus
    nginx's request-time denies. Three files have to agree, and nothing in CI
-   compares them. They *do* agree today - both sides resolve to the same 3231
-   files - but if you touch any of the three, check the other two.
+   compares them. They *do* agree today - both sides resolve to the same file
+   count - but if you touch any of the three, check the other two. Re-derive
+   the count rather than citing a figure here; it grows with content.
 
 3. **The housekeeping workflow's commits do not deploy.** `site-update-deploy.yml`
    re-stamps SRI, refreshes the sitemap, and generates previews, and every one
@@ -804,7 +805,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/update_presentations_schema.py` | Regenerates `VideoObject` JSON-LD on `presentations.html` | **Don't edit** -- runs in CI on every deploy |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
-| `glossary.html` | Cloud-security glossary (310 terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
+| `glossary.html` | Cloud-security glossary (326 terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |
 | `sitemap.xml` | XML sitemap for search engines | **Don't edit** -- lastmod refreshed automatically |
