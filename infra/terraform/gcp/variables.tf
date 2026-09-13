@@ -118,3 +118,15 @@ variable "github_branch" {
   type        = string
   default     = "main"
 }
+
+# Where the monthly cost budget in budget.tf sends its alerts. A list, so more
+# than one person can be told. The default is the admin@csoh.org mailbox this
+# domain already publishes as its contact (security.txt, the CAA iodef record,
+# DMARC reports) rather than a personal address: it is public already, and it
+# keeps a person's inbox out of a public repository. Override it with e.g.
+#   TF_VAR_budget_alert_emails='["you@example.com"]'
+variable "budget_alert_emails" {
+  description = "Email addresses that receive the monthly cost budget alerts (budget.tf)."
+  type        = list(string)
+  default     = ["admin@csoh.org"]
+}

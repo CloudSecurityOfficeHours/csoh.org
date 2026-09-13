@@ -95,3 +95,19 @@ provider "google-beta" {
   project = var.project_id
   region  = var.region
 }
+
+# A second, ALIASED copy of the google provider, used only by budget.tf.
+# Budgets live on the billing account rather than in a project, and Google
+# still wants every such call to name a "quota project" to count it against. A
+# person's application-default credentials may not carry one, so this copy
+# names ours explicitly: billing_project picks the project, and
+# user_project_override = true makes the provider send it with each request.
+# Resources opt in with `provider = google.billing`, so nothing else in this
+# stack changes how it talks to Google.
+provider "google" {
+  alias                 = "billing"
+  project               = var.project_id
+  region                = var.region
+  billing_project       = var.project_id
+  user_project_override = true
+}

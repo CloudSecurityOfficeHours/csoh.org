@@ -67,23 +67,24 @@ resource "google_artifact_registry_repository" "containers" {
   # You can declare a block like this more than once on the same resource;
   # Terraform treats each "cleanup_policies { ... }" as a separate policy.
   #
-  # Policy 1: always KEEP the 50 most recent image versions, so the current
-  # deploy plus a healthy window of previous ones stay available for instant
-  # rollback even if the DELETE policy below would otherwise sweep them.
+  # Policy 1: always KEEP the 10 most recent image versions, so the current
+  # deploy plus a few previous ones stay available for a quick rollback even
+  # though the DELETE policies below would otherwise sweep them.
   cleanup_policies {
     # A unique label for this policy (free text). Just names the rule.
-    id = "keep-recent-50"
+    id = "keep-recent-10"
     # KEEP = protect matching images from deletion (an allow/retain rule).
     action = "KEEP"
     # Match the N newest versions in the repo and keep them.
     most_recent_versions {
-      # Retain the 50 most recently pushed image versions. This is a floor that
-      # does not depend on dates: it guarantees a rollback target exists even
-      # after a quiet stretch where every image has aged past the DELETE rule
-      # below. At August's push rate (~11/day) that was about four and a half
-      # days on its own, and at September's (~6/day) about eight, which is why
-      # the age-based rule does the real work.
-      keep_count = 50
+      # Retain the 10 most recently pushed image versions. This is a floor that
+      # does not depend on dates: rollback targets exist even after a quiet
+      # stretch where every image has aged past the DELETE rules below. Ten is
+      # deliberate (2026-09-13): an old image has no use here beyond a quick
+      # rollback, and redeploying an older commit rebuilds its image anyway. At
+      # September's push rate (~6/day) ten is a day or two of deploys. It was
+      # 50, with a 30-day DELETE window, before that.
+      keep_count = 10
     }
   }
 
@@ -101,10 +102,10 @@ resource "google_artifact_registry_repository" "containers" {
       # (like the live deploy) are never touched by this rule.
       tag_state = "UNTAGGED"
       # ...and only once they are older than this age. The value is a duration
-      # string in seconds; 604800s = 7 days (the trailing "# 7d" is the
-      # original author's own note spelling that out). So untagged leftovers
-      # get a one-week grace period before being purged.
-      older_than = "604800s" # 7d
+      # string in seconds; 86400s = 1 day (the trailing "# 1d" spells that
+      # out). A day of grace covers an image caught mid-push; nothing here needs
+      # an untagged image kept any longer. (It was 7 days until 2026-09-13.)
+      older_than = "86400s" # 1d
     }
   }
 
@@ -129,21 +130,23 @@ resource "google_artifact_registry_repository" "containers" {
   # rule capable of doing anything at all -- the two settings are a package,
   # and re-enabling immutability silently re-breaks retention.
   #
-  # 30 days at ~11 pushes/day would settle at roughly 330 images (~67 GB); at
-  # September's ~6/day and ~0.19 GiB of unique layers per image it is nearer 180
-  # images (~35 GiB). Either way it stops growing without bound, and leaves a
-  # rollback window far longer than any realistic need; the KEEP rule above
-  # protects the newest 50 regardless. Note
-  # the interaction with promotion: promote-qa reuses the image QA built, found
-  # by tag and then deployed by digest, so the retention window must comfortably
-  # exceed the longest gap between a QA build and its promotion. Deleting that
-  # image breaks promotion regardless of which reference names it.
+  # With a one-day age and the KEEP rule above, the repository holds its newest
+  # 10 images plus anything pushed in the last day: about 2 GiB on a normal day,
+  # at ~0.19 GiB of unique layers per image. It reached 219 GB in August, and
+  # what finally brought it down on 2026-08-30 was a hand-run delete, not this
+  # rule, which still had a 30-day window then.
+  #
+  # Note the interaction with promotion: promote-qa reuses the image QA built,
+  # found by tag and then deployed by digest. Once that image has aged out,
+  # deploy.yml finds no tag, rebuilds the commit from source, and scans what it
+  # built. Nothing fails, but the promotion no longer ships the exact bytes QA
+  # tested - so promote soon after QA passes, or raise keep_count above.
   cleanup_policies {
     id     = "delete-old-tagged"
     action = "DELETE"
     condition {
       tag_state  = "TAGGED"
-      older_than = "2592000s" # 30d
+      older_than = "86400s" # 1d
     }
   }
 

@@ -655,11 +655,11 @@ $42.59).
 
 | Component | Now | Was | Source |
 |---|---|---|---|
-| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, last confirmed 2026-08-23 (no token here can read billing) |
+| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, confirmed in the dashboard 2026-09-13 (no token here can read billing) |
 | GCP Cloud Run (production origin) | $9.95 | $47.64 | measured |
 | Azure Blob static website | $5.63 | $20.06 | measured |
-| GCP Artifact Registry | $1.69 | $19.60 | measured, refilling until 2026-09-27 |
-| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $7.90 of usage (was $28.33), offset by credits |
+| GCP Artifact Registry | $1.69 | $19.60 | measured; retention now keeps the newest 10 images |
+| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $7.90 of usage (was $28.33), offset by credits; $17.55 of credit left on 2026-09-13 |
 | Terraform state (GCS), GCP logging, billing export | $0.00 | $0.00 | measured - inside the free tier |
 | Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | $0.00 | measured |
 | **Total** | **~$27/mo** | ~$97/mo | ~$35 when the AWS credits lapse (was ~$126) |
@@ -673,15 +673,17 @@ $42.59).
   September, because ~6.4M requests a month now fits its 10M-request always-free
   tier. Predicted at ~$50/month; measured at ~$43 of billed spend, plus the
   CloudFront usage that credits were covering.
-- **Registry retention**, possible only once `immutable_tags = false` landed on
-  2026-08-30. Billed storage fell from 231.6 GiB on 08-29 to 4.8 GiB on 08-31.
-  That is deeper than the policy as written deletes (CLAUDE.md has the detail),
-  so the 30-day rule is first tested on 2026-09-21 and 2026-09-27.
+- **Registry cleanup**, possible only once `immutable_tags = false` landed on
+  2026-08-30. A hand-run delete that day took billed storage from 231.6 GiB on
+  08-29 to 4.8 GiB on 08-31; the retention rule never did (CLAUDE.md has why).
+  Retention now keeps the newest 10 images plus anything under a day old,
+  committed 2026-09-13 and applied by hand.
 - **Fewer deploys**: ~11 a day in August, ~6 in September, which on its own
   roughly halved Azure write operations and S3 uploads.
 
 **What is left is almost all probes and deploys.** Two more fixes were applied
-the day this was measured, and one thing is still not done.
+the day this was measured, and two more changes are committed but not yet
+applied: the ten-image registry retention above, and budget alerts.
 
 **S3 kept every version of every deploy, and that was fixed on 2026-09-13.**
 Versioning was on with no lifecycle rule, and `aws s3 sync` re-uploads every
@@ -709,11 +711,23 @@ one or two a minute after. That rate was nearly all of Cloud Run's $9.95 and
 Azure's $2.76 probe line; as with the S3 fix, the table keeps the measured
 figures until a bill shows the difference.
 
-**Still not done: nothing alerts on cost.** There are no AWS Budgets, no Azure
-budgets, and the GCP Billing Budget API is not enabled on the project. Every
-cost event in this stack's history was found by hand, weeks after it began: the
-GCP credits ending on 2026-07-28, $119.77 of Azure egress in July, the
-registry's growth, and the S3 versions above.
+**Budget alerts are committed and not yet applied.** Until now nothing alerted
+on cost, and every cost event in this stack's history was found by hand, weeks
+after it began: the GCP credits ending on 2026-07-28, $119.77 of Azure egress
+in July, the registry's growth, and the S3 versions above. Each stack now has a
+`budget.tf` with a $10 monthly budget that emails `var.budget_alert_emails`
+(default `admin@csoh.org`) on actual spend and when the provider forecasts the
+month will pass $10. The AWS one counts cost after credits, so its 10% alert is
+the first dollar billed once the $17.55 of credit is gone. Apply each on its
+own; GCP needs its two billing APIs enabled a minute before the budget can
+plan (CLAUDE.md has the traps and the checks):
+
+```sh
+eval "$(aws configure export-credentials --format env)"; terraform -chdir=infra/terraform/aws apply -target=aws_budgets_budget.monthly
+terraform -chdir=infra/terraform/azure apply -target=azurerm_consumption_budget_subscription.monthly
+terraform -chdir=infra/terraform/gcp apply -target='google_project_service.apis["billingbudgets.googleapis.com"]' -target='google_project_service.apis["cloudbilling.googleapis.com"]'
+terraform -chdir=infra/terraform/gcp apply -target=google_billing_budget.monthly -target=google_artifact_registry_repository.containers
+```
 
 Re-measure rather than editing these numbers by hand. CLAUDE.md carries the Cost
 Management API call for Azure (expect minutes of 429s before it answers), and

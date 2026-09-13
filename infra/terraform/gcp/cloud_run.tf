@@ -240,9 +240,11 @@ resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
 # repo at the tag csoh-site:<short-sha>. deploy.yml's push step skips a tag that
 # is already present and then deploys the digest that tag resolves to, so
 # promoting a commit to `main` redeploys the EXACT bytes QA tested rather than
-# rebuilding them from source. That property only holds while the two services stay
-# configuration-identical, so resist adding QA-only container settings here:
-# anything QA-specific belongs at the Cloudflare edge, not in the image.
+# rebuilding them from source. That property only holds while QA's image is
+# still in the registry, which keeps its newest 10 (a later promotion rebuilds
+# the commit instead), and while the two services stay configuration-identical,
+# so resist adding QA-only container settings here: anything QA-specific belongs
+# at the Cloudflare edge, not in the image.
 resource "google_cloud_run_v2_service" "site_qa" {
   project = var.project_id
   # Distinct service name, hence a distinct *.run.app URL. Everything else

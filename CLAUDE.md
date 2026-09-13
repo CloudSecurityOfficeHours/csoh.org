@@ -1368,12 +1368,14 @@ all. The two settings are a package: re-enable immutability and the sweep breaks
 again, silently, with all three policies still listed and still reporting
 success. What replaced the tag guarantee is digest pinning in `deploy.yml` and
 `deploy-qa.yml` - both resolve the tag and pass `path@sha256:...` to `gcloud run
-deploy` - so a moved tag cannot change the bytes a revision runs. The live repo
-carries `keep-recent-50`, `delete-old-tagged` (30d), and `delete-old-untagged`
-(7d). Sizing it needs the real push rate, not a guess, and the rate moves: ~11
-images/day in August and ~6 in September, at ~0.19 GiB of unique layers each,
-so 30 days settles near ~180 images / ~35 GiB rather than the ~350 / ~70 GB this
-paragraph first predicted:
+deploy` - so a moved tag cannot change the bytes a revision runs. The repo
+now carries `keep-recent-10`, `delete-old-tagged` (1d), and `delete-old-untagged`
+(1d), committed 2026-09-13 and applied by hand, so read the live policy rather
+than this line. Ten is deliberate: an old image has no use here beyond a quick
+rollback, and redeploying an older commit rebuilds it. Before that it was
+`keep-recent-50` with 30 days, sized on the real push rate (~11 images/day in
+August, ~6 in September, at ~0.19 GiB of unique layers each). Count what is
+actually there:
 
 ```sh
 gcloud artifacts docker images list \
@@ -1391,24 +1393,23 @@ count to learn whether it has run. **Do not accept "the scheduler has not got to
 it" past its stated window** - at that point it is a hypothesis competing with a
 real defect, and the delete-by-hand probe above distinguishes them in one call.
 
-**Re-measured 2026-09-13, and the reclaim was deeper than the policy.** Billed
+**Re-measured 2026-09-13: the reclaim was a person, not the policy.** Billed
 storage fell from 231.6 GiB on 08-29 to 4.8 GiB on 08-31, and the line from
-$19.60 to $1.69/month. But the repository now holds 98 images, all pushed on or
-after 08-28 except one, and `keep-recent-50` alone should have protected several
-dozen older images. The one survivor is `csoh-site:a273b4dba9c2`, pushed 08-22,
-which is exactly the image `csoh-site-qa` still runs. That looks like a hand-run
-delete that spared deployed images rather than the sweep, though nobody has
-confirmed which. Either way **the 30-day rule has still never been observed
-deleting anything**, and two dates test it:
+$19.60 to $1.69/month, but `keep-recent-50` alone should have protected several
+dozen of the images that went. Shawn confirmed deleting them by hand, sparing
+the one QA was running (`csoh-site:a273b4dba9c2`, pushed 08-22). So the 30-day
+rule was never observed deleting anything, and it has now been replaced rather
+than tested: keep the newest 10, and delete everything else once it is a day
+old.
 
-- **2026-09-21**: QA's image turns 30 days old, is not among the newest 50, and
-  should be deleted while `csoh-site-qa` is still serving it. That is safe for
-  the service - "Cloud Run keeps this copy of the container image as long as it
-  is used by a serving revision" - but promoting that build would fail, since
-  `promote-qa` finds QA's image in the registry by tag. QA was last deployed
-  2026-08-23; any push to `qa` moves it onto a fresh image.
-- **2026-09-27**: the 08-28 images turn 30 days old. The count should level off
-  near ~180, and storage climbs ~1.2 GiB/day until then.
+Once that is applied, the first sweep is the observation to make. Within about
+a day the image count should fall from ~100 to about 10 plus the last day's
+pushes, and QA's 08-22 image goes with it. That is safe for the service - "Cloud
+Run keeps this copy of the container image as long as it is used by a serving
+revision" - and it does not break promotion either: `deploy.yml` finds no tag
+for an aged-out build, rebuilds the commit from source, and scans what it built.
+What a late promotion loses is the exact bytes QA tested, which is the trade
+that keeping ten images makes.
 
 Audit logs will not help. `artifactregistry.googleapis.com` DATA_WRITE logging
 is off by default and this project sets no `auditConfigs`, so a query for
@@ -1710,9 +1711,34 @@ figure, and says so.
   both grew for months under numbers that looked stable, or read $0.00. Read
   the inventory (image count, `BucketSizeBytes`) next to the dollars.
 
-And nothing alerts on any of it: there are no AWS Budgets, no Azure budgets,
-and `billingbudgets.googleapis.com` is not enabled on the GCP project. Every
-cost event so far was found by a person, weeks after it began.
+Until 2026-09-13 nothing alerted on any of it, and every cost event was found by
+a person, weeks after it began. Each cloud stack now has a `budget.tf`: $10 a
+month, alerting `var.budget_alert_emails` (default `admin@csoh.org`) on actual
+spend and when the provider forecasts the month will pass the limit. They are
+applied by hand, so confirm they exist before relying on them. Three things
+about them are not obvious:
+
+- **The AWS budget counts cost after credits, on purpose.** It reads $0.00
+  while credits last ($17.55 left on 2026-09-13), so its 10% alert is a
+  tripwire: the first dollar AWS bills means the credits are gone.
+- **The GCP budget needs two APIs before it can even plan.** It looks up the
+  project's billing account through a data source, which needs
+  `cloudbilling.googleapis.com`, and the budget itself needs
+  `billingbudgets.googleapis.com`. Apply those two `google_project_service`
+  entries first, wait a minute, then the budget. Creating it also needs a
+  billing role on the billing account (the ADC identity here is its billing
+  admin); project Owner is not enough.
+- **The Azure budget's `start_date` cannot move.** Changing it replaces the
+  budget and discards its history.
+
+```sh
+aws budgets describe-budgets --account-id 038416307420 --query 'Budgets[].BudgetName'
+az consumption budget list --query '[].name' -o tsv
+curl -s -H "Authorization: Bearer $(gcloud auth application-default print-access-token)" \
+  -H "x-goog-user-project: csoh-org-495800" \
+  "https://billingbudgets.googleapis.com/v1/billingAccounts/$(gcloud billing projects describe csoh-org-495800 --format='value(billingAccountName)' | cut -d/ -f2)/budgets" \
+  | python3 -c 'import json,sys; [print(b["displayName"]) for b in json.load(sys.stdin).get("budgets", [])]'
+```
 
 ## Cache rules match on file extension, and the last match wins
 

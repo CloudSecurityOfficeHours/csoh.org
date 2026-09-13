@@ -54,6 +54,13 @@ locals {
     # Secret Manager: secure storage for secrets. Enabled for availability even
     # though the static site itself stores no secrets here.
     "secretmanager.googleapis.com",
+    # Cloud Billing Budget API: creates and reads the monthly cost budget in
+    # budget.tf. Budgets live on the billing account, but the calls are counted
+    # against this project, so the API has to be switched on here.
+    "billingbudgets.googleapis.com",
+    # Cloud Billing API: lets budget.tf look up which billing account this
+    # project is linked to, instead of writing that ID into a public repo.
+    "cloudbilling.googleapis.com",
   ]
 }
 

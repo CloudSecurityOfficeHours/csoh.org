@@ -15,6 +15,13 @@
 # tag alone would be a promise nothing enforces. So promotion reuses the tested artifact without any
 # artifact-passing machinery between the two workflows.
 #
+# UNLESS THE IMAGE HAS AGED OUT. The registry keeps only its newest 10 images,
+# plus anything under a day old (infra/terraform/gcp/artifact_registry.tf).
+# Promote a QA build after more pushes than that and deploy.yml finds no tag,
+# rebuilds the commit from source, and scans what it built. Nothing fails, but
+# what ships is a rebuild of the tested commit rather than the tested bytes, so
+# promote soon after QA passes.
+#
 # THE ONE INVARIANT: `main` must be an ancestor of `qa`. It is checked below and
 # the promotion is refused otherwise, because a non-fast-forward push here would
 # silently discard commits from main. That matters more in this repo than in
@@ -177,9 +184,10 @@ jobs:
             else
               echo "\`main\` fast-forwarded to \`${{ steps.refs.outputs.qa_short }}\`."
               echo
-              echo "This fires **Deploy** automatically. That run will rebuild the"
-              echo "image, find the identical tag already in Artifact Registry from"
-              echo "the QA build, skip the push, and deploy the exact bytes QA"
-              echo "tested. Watch it in the Actions tab."
+              echo "This fires **Deploy** automatically. If the QA build's image is"
+              echo "still in Artifact Registry (it keeps the newest 10), that run"
+              echo "deploys the exact bytes QA tested; if it has aged out, the run"
+              echo "rebuilds this commit from source and scans it. Watch it in the"
+              echo "Actions tab."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
