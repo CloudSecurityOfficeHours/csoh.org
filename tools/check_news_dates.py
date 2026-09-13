@@ -31,6 +31,11 @@ clamp would have prevented. That argument is about the wall clock main()
 uses. The self-test keeps no clock of its own; it runs at the newest date the
 files carry, for the reason given in self_test().
 
+A surface that yields no date at all fails the run before either clock is
+consulted. A regex that stops matching reports no finding, which is also what
+a clean page reports, so zero is treated as the gate going blind rather than
+as a count: see unread_surfaces().
+
 Usage:
     python3 tools/check_news_dates.py            # report findings
     python3 tools/check_news_dates.py --check    # self-test, then report; exit 1 on any finding
@@ -65,12 +70,43 @@ def _load_grace() -> dt.timedelta:
     return module.FUTURE_DATE_GRACE
 
 
+# One regex per surface. A surface added here also needs a row in
+# unread_surfaces() and a rewrite in self_test(), or a markup change can leave
+# it matching nothing while every check stays green.
 CARD_DATE_RE = re.compile(r'<p class="article-date">([^<]+)</p>')
 JSONLD_DATE_RE = re.compile(r'"(datePublished|dateModified)": "([^"]+)"')
 FEED_DATE_RE = re.compile(r"<(pubDate|lastBuildDate)>([^<]+)</\1>")
 
 # Finding = (surface, offending value, why)
 Finding = Tuple[str, str, str]
+
+
+def unread_surfaces(news_text: str, feed_text: str) -> List[Finding]:
+    """Return a finding for each surface whose regex matches no date at all.
+
+    The checkers judge only what their regex matches, so markup that stops
+    matching yields no finding, and no finding is also what a clean surface
+    yields. On 2026-09-12, with every card date rewritten as
+    <p class="article-date"><time>September 12, 2026</time></p> and the first
+    set to September 30, --check exited 0 and printed "0 news cards" as though
+    that were a count. The self-test passed too. Its plants insert well-formed
+    elements of their own, so they fire as long as the anchor string they are
+    inserted beside survives, whatever the real dates around them have become.
+    With feed.xml's dates wrapped in CDATA instead, it passed the same way.
+
+    Zero is never a real answer. update_news.py writes a date on every card,
+    a datePublished and dateModified on every JSON-LD article plus a
+    dateModified on the ItemList, and a lastBuildDate in every feed, and its
+    main() exits before writing anything when it has no entries. A surface
+    that yields nothing means this gate has stopped reading it.
+    """
+    surfaces = (
+        ("news.html card dates", "CARD_DATE_RE", CARD_DATE_RE, news_text),
+        ("news.html JSON-LD dates", "JSONLD_DATE_RE", JSONLD_DATE_RE, news_text),
+        ("feed.xml dates", "FEED_DATE_RE", FEED_DATE_RE, feed_text),
+    )
+    return [(surface, regex.pattern, f"{name} matched no date, so nothing on this surface was checked")
+            for surface, name, regex, text in surfaces if regex.search(text) is None]
 
 
 def check_news_html(text: str, now: dt.datetime, grace: dt.timedelta) -> List[Finding]:
@@ -234,6 +270,26 @@ def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
         report(name, bool(found) == should_fire,
                f"expected {'a finding' if should_fire else 'no finding'}, got {found[:2]}")
 
+    # The plants above fire whenever their anchor string survives, so all of
+    # them passed on 2026-09-12 against a page where CARD_DATE_RE read no real
+    # card. These rewrite the real markup instead, the way a change to
+    # update_news.py could, and require unread_surfaces() to name the surface
+    # rewritten and nothing else.
+    rewrites = [
+        ("card dates wrapped in <time> are named unread", "news.html card dates",
+         CARD_DATE_RE.sub(r'<p class="article-date"><time>\1</time></p>', news_text), feed_text),
+        ("JSON-LD written without spaces is named unread", "news.html JSON-LD dates",
+         JSONLD_DATE_RE.sub(r'"\1":"\2"', news_text), feed_text),
+        ("feed dates wrapped in CDATA are named unread", "feed.xml dates",
+         news_text, FEED_DATE_RE.sub(r"<\1><![CDATA[\2]]></\1>", feed_text)),
+    ]
+    for name, surface, news, feed in rewrites:
+        if (news, feed) == (news_text, feed_text):
+            report(name, False, "rewrote nothing - no real date matched, so this detector is untested")
+            continue
+        named = [s for s, _, _ in unread_surfaces(news, feed)]
+        report(name, named == [surface], f"expected only {surface!r} to be named, got {named}")
+
     return ok
 
 
@@ -251,6 +307,23 @@ def main(argv=None) -> int:
     with open(FEED_XML, encoding="utf-8") as f:
         feed_text = f.read()
 
+    # Before the self-test and the report, in every mode, because neither means
+    # anything on a surface that yields no date: the plants fire regardless and
+    # the report counts zero as clean. See unread_surfaces().
+    unread = unread_surfaces(news_text, feed_text)
+    if unread:
+        print(f"{len(unread)} surface(s) matched no date, so this gate read nothing there:",
+              file=sys.stderr)
+        for surface, pattern, why in unread:
+            # Unquoted: a repr doubles every backslash, which misstates the regex.
+            print(f"  {surface}: {why}\n    pattern: {pattern}", file=sys.stderr)
+        print("\nThe markup changed shape under the regex, or the file is damaged. If "
+              "update_news.py now writes these dates differently, update the regex here to "
+              "match. For card dates, change ARTICLE_DATE_RE in update_news.py with it: "
+              "parse_existing_cards() reads that markup back on every run and silently "
+              "drops every card it cannot read.", file=sys.stderr)
+        return 1
+
     if args.check or args.self_test:
         print(f"Self-test (grace = {grace}, imported from update_news.py):")
         if not self_test(news_text, feed_text, grace):
@@ -266,11 +339,12 @@ def main(argv=None) -> int:
     findings = (check_news_html(news_text, now, grace)
                 + check_feed_xml(feed_text, now, grace))
     cards = len(CARD_DATE_RE.findall(news_text))
+    stamps = len(JSONLD_DATE_RE.findall(news_text))
     items = len(FEED_DATE_RE.findall(feed_text))
 
     if not findings:
-        print(f"OK: no future publish date in {cards} news cards or {items} feed dates "
-              f"(ceiling {(now + grace).isoformat(timespec='seconds')}).")
+        print(f"OK: no future publish date in {cards} news cards, {stamps} JSON-LD dates "
+              f"or {items} feed dates (ceiling {(now + grace).isoformat(timespec='seconds')}).")
         return 0
 
     print(f"{len(findings)} future or malformed publish date(s):", file=sys.stderr)
