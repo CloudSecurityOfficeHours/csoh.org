@@ -696,6 +696,24 @@ The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so
 `README.md` uses them too. `python3 tools/sync_counts.py --check` is a CI gate.
 Full docs: `tools/SYNC_COUNTS_README.md`.
 
+## FAQ and glossary JSON-LD is generated from the visible text
+
+Every FAQPage block copies its page's visible FAQ word for word, and every
+glossary DefinedTerm description copies its `<dd>`. Edit the visible prose and
+regenerate the copies; never edit the JSON-LD by hand:
+
+```sh
+python3 tools/check_faq_jsonld_parity.py --fix
+```
+
+`--check` is a CI gate in `validate-html.yml`. The copy is the text a search
+engine lifts into a snippet, so a stale one is what a searcher reads before
+ever opening the page. Until 2026-09-12 the copies were mirrored by hand, and
+the first report found 124 FAQ answers on 26 pages carrying sentences their
+page did not. Three corrections from a single docs review had reached only the
+visible prose. Where the tool looks for the visible FAQ, and the cases it
+refuses to guess about, are in its docstring.
+
 ## `/.well-known/` is deliberately carved out of the dotfile deny
 
 `.well-known` starts with a dot, so the blanket hidden-path rules want to 403 it

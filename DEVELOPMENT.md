@@ -494,7 +494,7 @@ python3 tools/normalize_urls.py --apply
 # redirect resolution is IP-dependent.
 ```
 
-The three structural gates below run inside `validate-html.yml` alongside the W3C
+The structural gates below run inside `validate-html.yml` alongside the W3C
 validator and **fail** the PR. They are stdlib-only and take about a second each:
 
 ```bash
@@ -502,6 +502,7 @@ python3 tools/check_no_inline_scripts.py  # the strict CSP forbids inline <scrip
 python3 tools/check_svg_dimensions.py     # width/height on every <svg> with a viewBox
 python3 tools/check_jsonld.py             # every ld+json block must parse
 python3 tools/check_docs_consistency.py --check   # dates, punctuation, count claims
+python3 tools/check_faq_jsonld_parity.py --check  # FAQ and glossary JSON-LD match the page
 ```
 
 `check_docs_consistency.py --check` fails only on what it can fix itself; run
@@ -510,12 +511,12 @@ weekly `documentation-review` tracking issue for a human, and nothing it does
 ever deletes a file. See [docs/EDITORIAL_STANDARDS.md](docs/EDITORIAL_STANDARDS.md)
 for the standard it enforces.
 
-One check is report-only for now. `python3 tools/check_faq_jsonld_parity.py`
-lists FAQ answers and glossary definitions whose JSON-LD copy no longer matches
-the visible page. That copy is what a search engine shows, so when you edit a
-visible FAQ answer or a glossary `<dd>`, update its JSON-LD twin in the same
-commit. It is not in CI yet because its first run found a backlog; a gate that
-fails on day one gets muted.
+`check_faq_jsonld_parity.py --check` fails when a FAQPage answer or a glossary
+DefinedTerm description differs from the visible text it copies. That copy is
+what a search engine shows, and it is generated rather than written: edit the
+visible FAQ or the `<dd>`, run `python3 tools/check_faq_jsonld_parity.py --fix`,
+and commit the result. Run it with no flags first to see what `--fix` will
+change, including any JSON-LD-only claim it is about to drop.
 
 Three more checks run post-merge rather than on the PR, but are worth running
 locally if you touched what they cover:

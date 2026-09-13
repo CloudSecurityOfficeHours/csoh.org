@@ -91,6 +91,7 @@ on:
       - 'tools/check_glossary_coverage.py'
       - 'tools/check_docs_consistency.py'
       - 'tools/check_readme_coverage.py'
+      - 'tools/check_faq_jsonld_parity.py'
       - 'tools/add_theme_script.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
@@ -325,6 +326,24 @@ jobs:
           set -o pipefail
           python3 tools/check_docs_consistency.py --check 2>&1 | tee check-docs-consistency.log
 
+      # FAQ and glossary JSON-LD must copy the visible text word for word.
+      # Each FAQPage answer and glossary DefinedTerm description repeats prose
+      # from the same page, and that copy is what a search engine lifts into a
+      # snippet. Mirrored by hand, the copies drifted: the first run of this
+      # check found 124 FAQ answers on 26 pages carrying sentences their page
+      # did not. They are generated now, so a failure here means "run
+      # tools/check_faq_jsonld_parity.py --fix and commit the result", unless
+      # the output names markup the tool refused to guess about.
+      #
+      # It self-tests before reporting. Unconditional for the same reason as
+      # 3c-3e: an edit to the extractor changes the verdict with no HTML in the
+      # diff.
+      - name: Check FAQ and glossary JSON-LD match the page
+        id: faq-parity
+        run: |
+          set -o pipefail
+          python3 tools/check_faq_jsonld_parity.py --check 2>&1 | tee check-faq-parity.log
+
       # Nothing else checks a Markdown link. lychee's inputs are `*.html` and
       # the published `*.tf`; README.md's 200-plus in-repo links were crawled
       # by no gate at all, and a root-only `*.html` sweep cannot see a page
@@ -480,6 +499,7 @@ jobs:
           OUTCOME_CROSSLINK: ${{ steps.crosslink.outcome }}
           OUTCOME_GLOSSARY: ${{ steps.glossary.outcome }}
           OUTCOME_DOCS_CONSISTENCY: ${{ steps.docs-consistency.outcome }}
+          OUTCOME_FAQ_PARITY: ${{ steps.faq-parity.outcome }}
           OUTCOME_README_COVERAGE: ${{ steps.readme-coverage.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
@@ -499,6 +519,7 @@ jobs:
               { name: 'Require crosslink coverage for every root page', outcome: process.env.OUTCOME_CROSSLINK, file: 'check-crosslink-coverage.log' },
               { name: 'Check glossary integrity and reachability', outcome: process.env.OUTCOME_GLOSSARY, file: 'check-glossary-coverage.log' },
               { name: 'Check documentation consistency', outcome: process.env.OUTCOME_DOCS_CONSISTENCY, file: 'check-docs-consistency.log' },
+              { name: 'Check FAQ and glossary JSON-LD match the page', outcome: process.env.OUTCOME_FAQ_PARITY, file: 'check-faq-parity.log' },
               { name: 'Check README coverage and Markdown links', outcome: process.env.OUTCOME_README_COVERAGE, file: 'check-readme-coverage.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
