@@ -18,8 +18,19 @@ resource "aws_s3_bucket" "site" {
   bucket = var.bucket_name
 }
 
-# Versioning gives us a cheap rollback/forensics trail: a bad publish can
-# be restored object-by-object, and accidental deletes are recoverable.
+# Versioning is SUSPENDED, on purpose. It was "Enabled" until 2026-09-13, as a
+# rollback trail, and it turned out to be an unbounded one. Versioning makes S3
+# keep every past copy of a file, and the deploy re-uploads the whole site on
+# every run (a fresh CI checkout gives every file a new timestamp, so
+# `aws s3 sync` treats all of them as changed). So each deploy stored one more
+# full copy of the site: by September 2026 that was ~2.77 million old versions,
+# ~234 GB, behind a 255 MB site, with nothing set to ever expire them.
+#
+# This bucket does not need a rollback trail of its own, because every deploy
+# rebuilds it from git: to roll back, revert the commit and let the deploy run.
+# (Keeping versioning with a short expiry would also have stopped the growth,
+# but it buys a rollback window that git already provides.)
+#
 # In Terraform, the many settings of an S3 bucket are split across several
 # small, separate resources (versioning, encryption, public-access, etc.),
 # each pointing back at the one bucket via its `bucket` argument. This is the
@@ -30,9 +41,64 @@ resource "aws_s3_bucket_versioning" "site" {
   # bucket first, then this.
   bucket = aws_s3_bucket.site.id
   versioning_configuration {
-    # "Enabled" makes S3 keep every past version of an object instead of
-    # overwriting it in place - that is the rollback/forensics trail above.
+    # "Suspended" makes a new upload replace the file in place instead of
+    # keeping the old copy. It is the only way to switch versioning off: once
+    # a bucket has ever been versioned, S3 can never make it unversioned again,
+    # and "Disabled" (valid only for a bucket that never was) is rejected.
+    # Suspending does not delete the copies already stored. The lifecycle rule
+    # below does that.
+    status = "Suspended"
+  }
+}
+
+# A lifecycle configuration tells S3 to act on objects by age, on its own
+# daily schedule: no script to run, and no charge for the deletes. This one
+# keeps ONLY the current copy of each file. It clears the old versions stored
+# while versioning was on, plus one last batch: the copies that were current at
+# the moment of the switch become old versions the first time a deploy
+# replaces them.
+#
+# Why a rule instead of a one-off delete script: when the deploy removes a
+# page, a versioned bucket keeps its old copies and puts a "delete marker" on
+# top to hide them. Delete the marker while old copies still sit underneath,
+# which the obvious script does, and the removed page comes back online. This
+# rule removes a marker only once nothing is left under it.
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  # Apply these rules to the site bucket.
+  bucket = aws_s3_bucket.site.id
+  # The rules below act on old versions, so configure the versioning setting
+  # first, then this.
+  depends_on = [aws_s3_bucket_versioning.site]
+
+  rule {
+    # A label for the rule, shown in the S3 console.
+    id = "keep-only-current-version"
+    # Switches THIS rule on. (Nothing to do with bucket versioning, which is
+    # the "Suspended" status above.)
     status = "Enabled"
+    # An empty filter matches every object in the bucket.
+    filter {}
+
+    # A "noncurrent" version is an old copy that a newer upload replaced.
+    # Delete each one a day after it was replaced, the shortest S3 allows.
+    # S3 stops billing for a copy as soon as it qualifies, even if the actual
+    # delete lands a little later.
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+
+    # Remove a delete marker once every old copy under it is gone, so a page
+    # the deploy removed leaves nothing behind.
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    # Large uploads arrive in parts, and an interrupted one leaves invisible,
+    # billed parts behind. Clear them after a day. Housekeeping: the site's
+    # files are small, so there are normally none.
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
   }
 }
 
