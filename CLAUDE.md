@@ -1391,6 +1391,25 @@ count to learn whether it has run. **Do not accept "the scheduler has not got to
 it" past its stated window** - at that point it is a hypothesis competing with a
 real defect, and the delete-by-hand probe above distinguishes them in one call.
 
+**Re-measured 2026-09-13, and the reclaim was deeper than the policy.** Billed
+storage fell from 231.6 GiB on 08-29 to 4.8 GiB on 08-31, and the line from
+$19.60 to $1.69/month. But the repository now holds 98 images, all pushed on or
+after 08-28 except one, and `keep-recent-50` alone should have protected several
+dozen older images. The one survivor is `csoh-site:a273b4dba9c2`, pushed 08-22,
+which is exactly the image `csoh-site-qa` still runs. That looks like a hand-run
+delete that spared deployed images rather than the sweep, though nobody has
+confirmed which. Either way **the 30-day rule has still never been observed
+deleting anything**, and two dates test it:
+
+- **2026-09-21**: QA's image turns 30 days old, is not among the newest 50, and
+  should be deleted while `csoh-site-qa` is still serving it. That is safe for
+  the service - "Cloud Run keeps this copy of the container image as long as it
+  is used by a serving revision" - but promoting that build would fail, since
+  `promote-qa` finds QA's image in the registry by tag. QA was last deployed
+  2026-08-23; any push to `qa` moves it onto a fresh image.
+- **2026-09-27**: the 08-28 images turn 30 days old. The count should level off
+  near ~180, and storage climbs ~1.2 GiB/day until then.
+
 Audit logs will not help. `artifactregistry.googleapis.com` DATA_WRITE logging
 is off by default and this project sets no `auditConfigs`, so a query for
 cleanup deletions returns zero rows whether or not the sweep ran. Control it by
@@ -1503,12 +1522,14 @@ aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSize
 
 ## A health check is one request multiplied by every Cloudflare data center
 
-The load balancer monitor in `infra/terraform/cloudflare/load_balancer.tf` runs
-against **all three origins from every Cloudflare data center**. At `interval =
-60` that worked out to roughly 757 probe sources per cycle, about **1.09M probes
-per origin per day** (re-measured from the billing data on 2026-08-25 as ~711
-sources and ~1.02M probes; treat both as the same order, not as a discrepancy).
-Whatever that probe fetches, you were buying it a million times a day.
+The load balancer monitor in `infra/terraform/cloudflare/load_balancer.tf` ran
+against **all three origins from every Cloudflare data center** until
+2026-09-13, when `check_regions` finally reached the pool (see the end of this
+section). At `interval = 60` that worked out to roughly 757 probe sources per
+cycle, about **1.09M probes per origin per day** (re-measured from the billing
+data on 2026-08-25 as ~711 sources and ~1.02M probes; treat both as the same
+order, not as a discrepancy). Whatever that probe fetches, you were buying it a
+million times a day.
 
 `73f884db` cut `interval` to 300, and it **went live 2026-08-25 at 19:46 UTC**,
 which is the monitor's `modified_on`. This section said 2026-08-28 for two
@@ -1638,18 +1659,18 @@ had none. `terraform plan -refresh-only` surfaces the drift; a normal plan
 refreshes first so it self-corrects in memory, but do not trust a state read on
 its own after a failed apply.
 
-**As of 2026-09-13 the file and the edge still disagree, and have since
-2026-08-09.** `load_balancer.tf` sets `check_regions = ["ENAM", "WEU"]`; the
-live pool returns `check_regions: null` with `modified_on` 2026-05-29, so no
-pool change has ever reached Cloudflare. The value in Git reads like
-configuration and is not. It is also the largest lever left: Cloudflare's docs
-say each selected region probes "from three separate data centers in that
-region", so two regions is 6 sources, while the live rate (~209K probes per
-origin per day over 288 cycles) works out to ~725, i.e. every data center.
-That gap is nearly all of what Cloud Run and Azure's probe meter still bill.
-Whether two regions fits this plan is unknown until someone applies it:
-`-target` the pool, and if `1002` comes back, one region is still 3 sources.
-Read the pool, not the file:
+**For five weeks the file and the edge disagreed.** From 2026-08-09
+`load_balancer.tf` set `check_regions = ["ENAM", "WEU"]`, while the live pool
+returned `check_regions: null` with `modified_on` 2026-05-29: no pool change had
+ever reached Cloudflare, and the value in Git read like configuration and was
+not. It was also the largest lever left. Cloudflare's docs say each selected
+region probes "from three separate data centers in that region", while the live
+rate (~209K probes per origin per day over 288 cycles) worked out to ~725
+sources, i.e. every data center. On 2026-09-13 two regions failed with the same
+`1002` as three, and **`["ENAM"]` applied: this plan accepts exactly one
+region**, three probe sources, ~860 probes a day per origin. Cloud Run's request
+log dropped from ~146 probes a minute to one or two at 16:40 UTC, the minute of
+the pool's `modified_on`. Read the pool, not the file:
 
 ```sh
 curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \

@@ -88,10 +88,11 @@ half-finished push cannot corrupt a tag because a push publishes atomically, and
 to win.
 
 **QA is not in the Cloudflare load balancer pool.** Pool members are
-health-checked from every Cloudflare data center - roughly 1.09M probes per
-origin per day at the original 60-second interval, which is what produced a
-$119.77 Azure bandwidth bill in July 2026, and still ~209K a day at today's 300.
-A QA origin inside the pool would be probed around the clock and could never
+health-checked around the clock. Until 2026-09-13 that was from every Cloudflare
+data center - roughly 1.09M probes per origin per day at the original 60-second
+interval, which is what produced a $119.77 Azure bandwidth bill in July 2026,
+and still ~209K a day at 300. It is now three data centers, a probe about every
+100 seconds, which is still enough that a QA origin inside the pool could never
 scale to zero. It is a plain proxied DNS record plus a Worker instead.
 
 ## What exists

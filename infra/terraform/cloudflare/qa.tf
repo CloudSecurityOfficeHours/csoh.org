@@ -10,14 +10,15 @@
 # serving stale QA pages.
 #
 # WHAT THIS FILE DELIBERATELY DOES NOT DO. It does not add QA to the Load
-# Balancer in load_balancer.tf. Pool members are health-checked from every
-# Cloudflare data center - about 757 probe sources per cycle, ~1.09M probes per
-# origin per day at the original 60s interval and still ~209K a day at 300 -
-# which is the thing that turned a 52 KB index.html into a $119.77 Azure
-# bandwidth bill in July 2026. A QA origin inside the pool would be probed
-# around the clock, could never scale to zero, and would quietly cost more than
-# production does. A plain proxied DNS record has none of that behaviour:
-# nothing reaches the origin until a human loads the page.
+# Balancer in load_balancer.tf. Pool members are health-checked around the
+# clock. Until 2026-09-13 that was from every Cloudflare data center - about 757
+# probe sources per cycle, ~1.09M probes per origin per day at the original 60s
+# interval and still ~209K a day at 300 - which is the thing that turned a 52 KB
+# index.html into a $119.77 Azure bandwidth bill in July 2026. It is now three
+# data centers, a probe about every 100 seconds, and a QA origin inside the pool
+# would still be woken all day and never scale to zero. A plain proxied DNS
+# record has none of that behaviour: nothing reaches the origin until a human
+# loads the page.
 
 # A single DNS record pointing qa.csoh.org at the QA Cloud Run service.
 #

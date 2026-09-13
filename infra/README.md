@@ -680,8 +680,8 @@ $42.59).
 - **Fewer deploys**: ~11 a day in August, ~6 in September, which on its own
   roughly halved Azure write operations and S3 uploads.
 
-**What is left is almost all probes and deploys.** One more fix was applied the
-day this was measured, and two things are still not done.
+**What is left is almost all probes and deploys.** Two more fixes were applied
+the day this was measured, and one thing is still not done.
 
 **S3 kept every version of every deploy, and that was fixed on 2026-09-13.**
 Versioning was on with no lifecycle rule, and `aws s3 sync` re-uploads every
@@ -696,25 +696,24 @@ read back live the same day, the bucket reports `Suspended` and carries
 PUTs stay, because the re-uploads do. The table keeps the measured $7.90 until
 a bill shows the difference.
 
-1. **`check_regions` is in Git and has never been live.** `load_balancer.tf`
-   has asked for `["ENAM", "WEU"]` since 2026-08-09, but the live pool reports
-   `check_regions: null` and was last modified 2026-05-29. Three regions was
-   rejected as over this plan's limit (`validation failed (1002)`), and two has
-   never reached the edge. Cloudflare probes from three data centers per
-   selected region, so two regions is 6 probe sources against the ~725 measured
-   now (209K probes a day over 288 five-minute cycles): nearly all of Cloud
-   Run's $9.95 and Azure's $2.76 probe line. Apply the pool on its own (map the
-   token first, per CLAUDE.md), and if `1002` comes back, try a single region:
+**The probes come from one region, also since 2026-09-13.** `check_regions`
+had asked for two regions in `load_balancer.tf` since 2026-08-09 and had never
+reached the edge: the live pool still reported `check_regions: null`, last
+modified 2026-05-29, which means every data center - ~725 probe sources and
+~209K probes a day per origin. Three regions (2026-08-09) and then two
+(2026-09-13) were both rejected with `validation failed (1002)`, so this Load
+Balancing plan accepts one, and `["ENAM"]` applied. Cloudflare probes from
+three data centers per selected region, so that is ~860 probes a day per origin.
+Cloud Run's request log showed it at once: ~146 probes a minute until 16:40 UTC,
+one or two a minute after. That rate was nearly all of Cloud Run's $9.95 and
+Azure's $2.76 probe line; as with the S3 fix, the table keeps the measured
+figures until a bill shows the difference.
 
-   ```sh
-   terraform -chdir=infra/terraform/cloudflare apply -target=cloudflare_load_balancer_pool.origins
-   ```
-
-2. **Nothing alerts on cost.** There are no AWS Budgets, no Azure budgets, and
-   the GCP Billing Budget API is not enabled on the project. Every cost event in
-   this stack's history was found by hand, weeks after it began: the GCP credits
-   ending on 2026-07-28, $119.77 of Azure egress in July, the registry's growth,
-   and the S3 versions above.
+**Still not done: nothing alerts on cost.** There are no AWS Budgets, no Azure
+budgets, and the GCP Billing Budget API is not enabled on the project. Every
+cost event in this stack's history was found by hand, weeks after it began: the
+GCP credits ending on 2026-07-28, $119.77 of Azure egress in July, the
+registry's growth, and the S3 versions above.
 
 Re-measure rather than editing these numbers by hand. CLAUDE.md carries the Cost
 Management API call for Azure (expect minutes of 429s before it answers), and

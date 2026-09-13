@@ -124,25 +124,28 @@ resource "cloudflare_load_balancer_pool" "origins" {
   # find it).
   #
   # Leaving it unset means "probe from EVERY Cloudflare data center", which is
-  # what the live pool still does: ~757 probe sources per 60s cycle and ~1.09M
-  # probes per origin per day at the old interval, ~725 sources and ~209K probes
-  # a day at interval = 300 (measured 2026-09-13). Even as a HEAD that was ~33M
-  # billed storage operations a month on Azure (~$13), and it is still ~$2.76.
-  # For each region listed here, Cloudflare probes from three data centers in
-  # that region, so two regions is six probe sources rather than ~725, with the
-  # same failure signal.
+  # what the live pool did from 2026-05-29 until this line was applied on
+  # 2026-09-13: ~757 probe sources per 60s cycle and ~1.09M probes per origin
+  # per day at the old interval, ~725 sources and ~209K probes a day at
+  # interval = 300. Even as a HEAD that was ~33M billed storage operations a
+  # month on Azure (~$13), and still ~$2.76 at 300. For each region listed here,
+  # Cloudflare probes from three data centers in that region, so one region is
+  # three probe sources, not ~725. Measured at the apply: Cloud Run's request
+  # log went from ~146 probes a minute to one or two, within a minute.
   #
-  # NOT LIVE. This value has been in Git since 2026-08-09 and has never reached
-  # Cloudflare: the live pool reports check_regions = null and was last modified
-  # 2026-05-29. Three regions was rejected as over this plan's limit
-  # ("validation failed (1002)"), and two has not been applied since. Read the
-  # live pool before trusting this line (CLAUDE.md has the call), and if a
-  # targeted apply returns 1002 again, one region is still three sources.
+  # ONE REGION, because that is all this Load Balancing plan accepts. Three
+  # regions (2026-08-09) and then two (2026-09-13) were both rejected with "the
+  # number of probe regions exceeds the allowed maximum: validation failed
+  # (1002)", and neither reached the pool. The trade: probes from one region can
+  # mark an origin down over a network problem between that region and the
+  # origin, and cannot see a problem that only other regions have. With three
+  # origins in one pool, and that same pool as the fallback, that is acceptable.
+  # Read the live pool before trusting this line (CLAUDE.md has the call).
   #
-  # Region codes: ENAM = Eastern North America, WEU = Western Europe (WNAM is
-  # Western North America). Full list:
+  # Region codes: ENAM = Eastern North America (WNAM is Western North America,
+  # WEU is Western Europe). Full list:
   # https://developers.cloudflare.com/load-balancing/reference/region-mapping-api
-  check_regions = ["ENAM", "WEU"]
+  check_regions = ["ENAM"]
   # The pool is considered "up" only while at least this many origins are
   # healthy. 1 means: as long as any single cloud is alive, keep serving. The
   # whole site stays online even if two of the three clouds go down.

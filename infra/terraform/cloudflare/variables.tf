@@ -91,12 +91,12 @@ variable "azure_origin_host" {
 #     terraform -chdir=../gcp output -raw cloud_run_qa_service_url
 #
 # Note what this variable is NOT used for. It is deliberately absent from the
-# Load Balancer pool in load_balancer.tf: pool members are health-checked from
-# every Cloudflare data center, roughly 1.09M probes per origin per day at the
-# original 60s interval (still ~209K at 300), which is what produced a $119.77
-# Azure bandwidth bill. QA is reached by a plain proxied DNS record (qa.tf) plus
-# a Host-header rewrite (rules.tf) instead, so it is never probed and can scale
-# to zero.
+# Load Balancer pool in load_balancer.tf: pool members are health-checked around
+# the clock, which until 2026-09-13 meant from every Cloudflare data center,
+# roughly 1.09M probes per origin per day at the original 60s interval (still
+# ~209K at 300), and produced a $119.77 Azure bandwidth bill. QA is reached by a
+# plain proxied DNS record (qa.tf) plus a Host-header rewrite (rules.tf)
+# instead, so it is never probed and can scale to zero.
 variable "gcp_qa_origin_host" {
   description = "GCP Cloud Run *.run.app hostname for the QA service (no scheme)."
   type        = string
