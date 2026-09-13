@@ -73,7 +73,7 @@ declares pages it deliberately does not link. It runs in `validate-html.yml`.
    python3 tools/crosslink_glossary.py
    ```
 
-3. If the total term count crosses a round number, update the search-bar placeholder text and the `<span id="visibleTerms">` initial count in `glossary.html`. Both currently read `301` (the placeholder is `Search 300+ terms`).
+3. Run `python3 tools/sync_counts.py`. It owns every place `glossary.html` states its own size: the `<!--count:glossary_terms_floor-->` markers, and, through `HTML_PROSE_RULES`, the `<title>`, the meta and Open Graph descriptions, the search-bar placeholder, and the `<span id="visibleTerms">` initial count. Do not edit those numbers by hand; `sync_counts.py --check` is a CI gate and will flag a hand-typed one.
 
 ## Adjusting the denylist
 

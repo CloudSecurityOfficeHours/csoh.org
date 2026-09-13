@@ -90,7 +90,7 @@ The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so 
 
 **When you write a count into a page or a doc, wrap it in a marker.** An unmarked number is one nobody will remember to update.
 
-**4. Count phrases where a marker cannot go** - inside `content="..."` meta/Open Graph attributes and inside JSON-LD, where an HTML comment would render as literal text or break the JSON. These are handled by a short list of deliberately narrow regexes (`HTML_PROSE_RULES`), each of which only ever matches a count already spelled as `<number>+ <phrase>`. Adding a new phrasing means adding a rule; the patterns are intentionally not generic.
+**4. Count phrases where a marker cannot go** - inside `content="..."` meta/Open Graph attributes and inside JSON-LD, where an HTML comment would render as literal text or break the JSON. These are handled by a short list of deliberately narrow regexes (`HTML_PROSE_RULES`), each of which only ever matches a count already spelled as `<number>+ <phrase>`. `glossary.html` has the most of these, because its `<title>`, meta and Open Graph descriptions, and search placeholder all quote its own size; its `visibleTerms` counter is the one rule that matches a bare number, pinned to that single `<span>`. Adding a new phrasing means adding a rule; the patterns are intentionally not generic.
 
 **5. `llms.txt`** - plain text, so regex rather than markers. Markdown docs get the same treatment via `MD_PROSE_RULES`, for counts that sit inside a fenced code block where a marker would render as literal text - README.md's directory tree is the case that forced this. Same discipline as the HTML rules: each pattern is anchored to the words around the number, never generic.
 

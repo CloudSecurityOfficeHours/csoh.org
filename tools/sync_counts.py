@@ -398,6 +398,21 @@ HTML_PROSE_RULES = [
     # of this sentence carries a <!--count:feeds--> marker; this rule keeps the
     # schema copy in step with it.
     (r"\d+ trusted RSS feeds", "{feeds} trusted RSS feeds"),
+    # glossary.html states its own size where a marker cannot sit: the <title>,
+    # three content="..." descriptions, the search box's placeholder attribute,
+    # and the no-JS starting value of its "N terms shown" counter. The chart on
+    # the same page already carried <!--count:glossary_terms_floor-->, so before
+    # these rules the body said 320+ while every snippet a search engine shows
+    # said 300+. Each pattern is pinned to its neighbouring words so it cannot
+    # rewrite another page's "N+ terms".
+    (r"Cloud Security Glossary: \d+\+ Terms in Plain English",
+     "Cloud Security Glossary: {glossary_terms_floor} Terms in Plain English"),
+    (r"zero trust, SBOM and \d+\+ terms - searchable",
+     "zero trust, SBOM and {glossary_terms_floor} terms - searchable"),
+    (r"glossary of cloud security terms - \d+\+ definitions covering",
+     "glossary of cloud security terms - {glossary_terms_floor} definitions covering"),
+    (r'placeholder="Search \d+\+ terms - try', 'placeholder="Search {glossary_terms_floor} terms - try'),
+    (r'<span id="visibleTerms">\d+</span>', '<span id="visibleTerms">{glossary_terms}</span>'),
 ]
 
 
@@ -460,6 +475,7 @@ def sync_llms(disp: dict, apply: bool) -> tuple[bool, list[str]]:
         (r"\d+\+ curated tools", f"{disp['resources_floor']} curated tools"),
         (r"\d+\+ weekly sessions", f"{disp['meetings_floor']} weekly sessions"),
         (r"\d+ vendor-neutral sources", f"{disp['feeds']} vendor-neutral sources"),
+        (r"\d+\+ terms in plain English", f"{disp['glossary_terms_floor']} terms in plain English"),
     ]
     changed = []
     for pat, rep in rules:

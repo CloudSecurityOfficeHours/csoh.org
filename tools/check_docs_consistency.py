@@ -102,6 +102,11 @@ COUNT_EXCEPTIONS = {
     # prose asserting a number look identical to a regex, which is the standing
     # reason count findings are reported rather than auto-fixed.
     ("tools/DOCS_CONSISTENCY_README.md", "24"): "explains the dedupe, not a total",
+    # "Marcello noting that 562 vendors were transacted in 2025" - a market
+    # statistic a participant quoted in the session, not our vendor landscape.
+    # A recap records what was said, so the number is not ours to correct, and
+    # rewriting it to the site's vendor floor would falsify the record.
+    ("meetings/2026-08-21.html", "562"): "a participant's market statistic in a recap, not a CSOH inventory count",
 }
 
 # Glossary entries nothing links to are usually a signal, but these are the
