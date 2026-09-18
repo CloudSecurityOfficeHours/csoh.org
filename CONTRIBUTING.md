@@ -250,7 +250,7 @@ FEEDS = [
 **How to find RSS feeds:**
 - Look for an RSS icon on the website
 - Try common URLs: `yoursite.com/feed` or `yoursite.com/feed.xml`
-- Use a [Feed Finder tool](https://www.feedly.com/) to discover feeds
+- Use [Feedly](https://www.feedly.com/) to discover feeds
 
 ---
 
