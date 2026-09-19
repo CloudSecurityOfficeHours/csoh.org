@@ -161,7 +161,7 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 559 curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # 558 curated resources (largest page; auto-refreshed weekly)
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
 ├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests
@@ -200,7 +200,7 @@ csoh.org/
 │
 │  ── Per-breach pages and meeting recaps ──
 ├── breaches/                        # 46 per-breach kill chain pages (split from breach-timeline.html)
-├── meetings/                        # 112 per-meeting recap pages (split from meetings.html)
+├── meetings/                        # 113 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (not search-indexed)
 ├── howto/                           # 7 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
