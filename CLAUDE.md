@@ -714,6 +714,95 @@ page did not. Three corrections from a single docs review had reached only the
 visible prose. Where the tool looks for the visible FAQ, and the cases it
 refuses to guess about, are in its docstring.
 
+## A session's recording and its VideoObject are written as a pair, or not at all
+
+`tools/sync_recap_videos.py` reads each talk's card on `presentations.html` and
+stamps two things onto the recap of the session it came from: the visible
+"Watch the presentation" link under the quick-recap callout, and a
+`VideoObject` block in `<head>`. Never one without the other, and never by
+hand. `--check` is a CI gate in `validate-html.yml`, and the tool also runs as
+a fixer in `deploy.yml` and `site-update-deploy.yml`.
+
+The pairing is a correctness requirement rather than a tidiness preference.
+Google's structured-data policy asks that markup describe content the page
+actually shows, so a `VideoObject` on a page with no visible video reference is
+not merely redundant - it is the mismatch that earns a manual action. The
+inverse is the gap this fixed: **twelve recaps carried a recording that the
+page gave the reader no route to** (measured 2026-09-20 against 113 recaps and
+15 cards; re-derive rather than citing those). The talk was described in
+exactly one place, a card on a different page, and nothing carried it back.
+
+Three things about the design that are easy to undo by accident:
+
+- **The source is the cards, not the schema block.** This tool and
+  `update_presentations_schema.py` are siblings parsing the same markup, not a
+  chain: this one imports the other's extractor and serializer but never reads
+  the block it writes. So neither has to run first, and a stale schema block on
+  the presentations page cannot propagate into the recaps. Keep that property;
+  an ordering dependency here would be invisible until it mattered.
+- **`.meeting-recording` carries no CSS on purpose.** The styling is all on the
+  inner `.card-action`, which already has `[data-theme="dark"]` rules - which
+  is why this needed no stylesheet change, and therefore no SRI re-stamp and no
+  `sync_dark_branch.py` run. The class is the generator's replace hook.
+- **The tool owns the whole span between the quick-recap `</p>` and the tags
+  `<div>`.** That span is whitespace on every recap without a recording, which
+  is what makes owning it outright safe: re-running cannot accumulate
+  duplicates, and a card withdrawn from the presentations page loses its link
+  again. Markup there that the tool did not generate is replaced *with a
+  warning naming the page*, and a recap missing either anchor raises rather
+  than being skipped.
+
+### An idempotency bug does not exist on the first run
+
+The first version of this tool passed a careful read of its own regex and was
+wrong. `REGION_RE`'s closing group took a leading `\s*`:
+
+```python
+r'(.*?)'                                           # the owned span
+r'(\s*<div class="resource-tags meeting-tags">)'   # wrong
+r'(<div class="resource-tags meeting-tags">)'      # right
+```
+
+On the **first** pass that `\s*` matched only the div's indentation, and the
+output was perfect. On the **second** it also took the newline the inserted
+paragraph ended with, so the owned span no longer included it and the
+replacement added another: the region grew a blank line every run. The tool
+that writes a file and the tool that re-reads its own output are the same
+code taking different paths through it, and only one of those paths runs the
+first time you try it.
+
+Three of the four planted self-test cases caught this. Nothing about reading
+the pattern would have, and a single run would have looked flawless. **Run any
+generator twice before believing it** - the second run is the only one that
+tests the parsing of what the first one wrote. The tool now re-emits the div's
+own indentation read back off the end of the owned span, so the shape is
+preserved rather than reconstructed.
+
+### Checking it
+
+`--check` self-tests against four planted cases and refuses to report a verdict
+if any detector stays silent, so a clean result means the machinery was shown
+to work on that run. Believe it anyway only after planting a real defect:
+
+```sh
+python3 tools/sync_recap_videos.py --check; echo "want 0: $?"
+python3 - <<'PY'
+import re, pathlib
+p = pathlib.Path('meetings/2025-05-23.html'); s = p.read_text()
+p.write_text(re.sub(r'<p class="meeting-recording">.*?</p>\n\s*', '            ', s, count=1))
+PY
+python3 tools/sync_recap_videos.py --check; echo "want 1: $?"
+git checkout -- meetings/2025-05-23.html
+```
+
+Restore with `git checkout --`, not a copied backup: a sweep that dies partway
+leaves the planted defect behind, and the next baseline then reports a finding
+that is your own test. This file records that happening once already.
+
+Cards whose date has no recap page are **reported on every run**, not skipped
+(three of them today, all non-Friday sessions). Full docs:
+`tools/SYNC_RECAP_VIDEOS_README.md`.
+
 ## `/.well-known/` is deliberately carved out of the dotfile deny
 
 `.well-known` starts with a dot, so the blanket hidden-path rules want to 403 it
