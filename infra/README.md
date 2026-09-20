@@ -647,25 +647,32 @@ was a guess that nobody had checked against a bill, and they were wrong by one
 to two orders of magnitude. Keep the `Source` column, and keep the word
 `measured` honest: an estimate in this table is a to-do, not a rounding.
 
-Last measured **2026-09-13**: daily cost over 1-12 September 2026, scaled to a
+Last measured **2026-09-20**: daily cost over 14-19 September 2026, scaled to a
 30.44-day month with each provider's monthly free allowance applied once. `Was`
-is the 11-24 August window this table showed before. That window did not apply
-the allowance, which flatters Cloud Run's drop by about $5 (like for like it was
-$42.59).
+is the 1-12 September window this table showed before, i.e. after the probe
+interval was cut to five minutes but before the four fixes of 2026-09-13.
+August, for scale, was ~$97/month.
 
 | Component | Now | Was | Source |
 |---|---|---|---|
 | Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, confirmed in the dashboard 2026-09-13 (no token here can read billing) |
-| GCP Cloud Run (production origin) | $9.95 | $47.64 | measured |
-| Azure Blob static website | $5.63 | $20.06 | measured |
-| GCP Artifact Registry | $1.69 | $19.60 | measured; retention now keeps the newest 10 images |
-| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $7.90 of usage (was $28.33), offset by credits; $17.55 of credit left on 2026-09-13 |
+| Azure Blob static website | $2.86 | $5.63 | measured - $2.59 of deploy writes, $0.22 of probe operations |
+| GCP Artifact Registry | $0.25 | $1.69 | measured - 13 images, ~3 GiB |
+| GCP Cloud Run (production origin) | $0.02 | $9.95 | measured - a month now fits the free allowance; the 2 cents are egress |
+| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $2.63 of usage (was $7.90), offset by credits; ~$16.70 of credit left on 2026-09-20 |
 | Terraform state (GCS), GCP logging, billing export | $0.00 | $0.00 | measured - inside the free tier |
 | Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | $0.00 | measured |
-| **Total** | **~$27/mo** | ~$97/mo | ~$35 when the AWS credits lapse (was ~$126) |
+| **Total** | **~$13/mo** | ~$27/mo | ~$16 when the AWS credits lapse; ~$97/mo in August |
 
 **What moved it**, read from the providers rather than from the commits:
 
+- **The four changes of 2026-09-13, re-measured on 2026-09-20.** Probes to one
+  region took Cloud Run from $9.95 to $0.02 (requests ~209K/day to ~2,700, of
+  which only ~860 are probes) and Azure's probe meter from $2.76 to $0.22. The
+  S3 lifecycle rule took the bucket from 233 GB to 0.51 GB and AWS usage from
+  $7.90 to $2.63. Registry retention took 99 images to 13, and $1.69 to $0.25.
+  All three budgets are live and none has tripped: the AWS one now forecasts
+  $1.64 against its $10 limit, where it forecast $10.27 the day it was made.
 - **Health-probe interval 60 -> 300**, live 2026-08-25 19:46 UTC (the monitor's
   `modified_on`, not the 2026-08-28 these docs used to give). Cloud Run requests
   fell from ~1.03M/day to ~209K/day, 4.9x; Azure's probe operations from $13.04
@@ -681,9 +688,12 @@ $42.59).
 - **Fewer deploys**: ~11 a day in August, ~6 in September, which on its own
   roughly halved Azure write operations and S3 uploads.
 
-**What is left is almost all probes and deploys.** Four more changes were
-applied the day this was measured: the S3 and probe-region fixes below, the
-ten-image registry retention above, and budget alerts on all three clouds.
+**What is left is the Cloudflare subscription and the deploys.** The four
+changes applied on 2026-09-13 (the S3 and probe-region fixes below, the
+ten-image registry retention above, and budget alerts on all three clouds) are
+applied and now measured. Of the ~$3 a month that is not Cloudflare, most is
+write and PUT operations: six deploys a day re-uploading the whole site to two
+object stores.
 
 **S3 kept every version of every deploy, and that was fixed on 2026-09-13.**
 Versioning was on with no lifecycle rule, and `aws s3 sync` re-uploads every
@@ -694,9 +704,10 @@ it. Versioning was suspended rather than bounded with an expiry, because every
 deploy rebuilds the bucket from git and git is the rollback, and `s3.tf` adds a
 lifecycle rule that keeps only the current copy of each file. Both are applied:
 read back live the same day, the bucket reports `Suspended` and carries
-`keep-only-current-version`. The storage goes once the rule has run, and the
-PUTs stay, because the re-uploads do. The table keeps the measured $7.90 until
-a bill shows the difference.
+`keep-only-current-version`. The rule ran the same day: 233 GB to 2.3 GB overnight,
+0.51 GB since 09-14, and favicon.png's 957 old copies down to the one the last
+deploy displaced. AWS usage fell from $7.90 to $2.63 a month, which is now
+almost all PUTs, because the re-uploads continue.
 
 **The probes come from one region, also since 2026-09-13.** `check_regions`
 had asked for two regions in `load_balancer.tf` since 2026-08-09 and had never
@@ -707,9 +718,9 @@ modified 2026-05-29, which means every data center - ~725 probe sources and
 Balancing plan accepts one, and `["ENAM"]` applied. Cloudflare probes from
 three data centers per selected region, so that is ~860 probes a day per origin.
 Cloud Run's request log showed it at once: ~146 probes a minute until 16:40 UTC,
-one or two a minute after. That rate was nearly all of Cloud Run's $9.95 and
-Azure's $2.76 probe line; as with the S3 fix, the table keeps the measured
-figures until a bill shows the difference.
+one or two a minute after. A week later the bill agrees: Cloud Run $9.95 ->
+$0.02, Azure's probe meter $2.76 -> $0.22, and 36 probes in a sampled hour,
+which is the ~860 a day that three data centers produce.
 
 **Budget alerts are live on all three clouds, since 2026-09-13.** Until then
 nothing alerted on cost, and every cost event in this stack's history was found
@@ -720,7 +731,9 @@ stack has a `budget.tf` with a $10 monthly budget that emails
 the provider forecasts the month will pass $10. The AWS one counts cost after
 credits, so its 10% alert is the first dollar billed once the $17.55 of credit
 is gone. Its forecast does not net out credits, so a forecast email can arrive
-while nothing is billed. CLAUDE.md has the traps and the commands that read all
+while nothing is billed; it forecast $10.27 the day it was created and $1.64 a
+week later, so that was an artefact of August's usage rather than a standing
+false positive. CLAUDE.md has the traps and the commands that read all
 three back. Rebuilding the GCP stack from scratch needs its two billing APIs
 enabled a minute before the budget can plan:
 

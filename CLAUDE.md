@@ -1402,9 +1402,10 @@ rule was never observed deleting anything, and it has now been replaced rather
 than tested: keep the newest 10, and delete everything else once it is a day
 old.
 
-It was applied at 17:21 UTC on 2026-09-13 with 99 images in the repository, so
-the first sweep is the observation to make. Within about a day the count should
-fall to about 10 plus the last day's pushes, and QA's 08-22 image goes with it. That is safe for the service - "Cloud
+It was applied at 17:21 UTC on 2026-09-13 with 99 images in the repository, and
+the first sweep is the only time a rule here has been *observed* deleting
+anything: on 2026-09-20 the repository holds **13 images, ~3 GiB and
+$0.25/month**, with nothing in it older than two days. That is safe for the service - "Cloud
 Run keeps this copy of the container image as long as it is used by a serving
 revision" - and it does not break promotion either: `deploy.yml` finds no tag
 for an aged-out build, rebuilds the commit from source, and scans what it built.
@@ -1506,8 +1507,10 @@ is valid.
 S3 runs lifecycle rules about once a day and stops billing a version once it
 qualifies, but removing millions of objects is asynchronous and can lag. So
 check one key before the totals: `favicon.png` had 957 noncurrent versions on
-2026-09-13 and should reach 0. If it has not a week after the apply, treat that
-as a defect rather than a slow scheduler, the same call as the registry above.
+2026-09-13 and one on 2026-09-20, the copy the last deploy displaced, while
+`BucketSizeBytes` went 233 GB -> 2.3 GB overnight -> 0.51 GB from 09-14. If a
+later check finds either high again, treat that as a defect rather than a slow
+scheduler, the same call as the registry above.
 After that, the listing (current objects only) and `BucketSizeBytes` (every
 version) should converge:
 
@@ -1671,7 +1674,11 @@ sources, i.e. every data center. On 2026-09-13 two regions failed with the same
 `1002` as three, and **`["ENAM"]` applied: this plan accepts exactly one
 region**, three probe sources, ~860 probes a day per origin. Cloud Run's request
 log dropped from ~146 probes a minute to one or two at 16:40 UTC, the minute of
-the pool's `modified_on`. Read the pool, not the file:
+the pool's `modified_on`. Re-measured 2026-09-20: 36 probes in a sampled hour,
+864 a day, and the Cloud Run line down to $0.02/month. Note what that does to
+the old finding that 97.8% of origin requests were the monitor - it is now about
+11%, and the rest is readers, bots and our own deploy checks. Read the pool, not
+the file:
 
 ```sh
 curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -1689,7 +1696,7 @@ what the fan-out is before asking whether the payload is small.
 
 The cost tables in `cloud-deployment.html` and `infra/README.md` are re-derived
 from billing data, never edited by hand; `infra/README.md` carries the queries.
-Last done 2026-09-13 (~$97/month down to ~$27). The sources are the GCP BigQuery
+Last done 2026-09-20 (~$27/month down to ~$13, and ~$97 in August). The sources are the GCP BigQuery
 billing export (dataset `csoh_cost`, about a day behind), the Azure Cost
 Management API (above; expect minutes of 429s), and AWS Cost Explorer (needs
 `aws login`). Cloudflare cannot be read from this machine: the Terraform token
@@ -1735,7 +1742,8 @@ relying on them. Four things about them are not obvious:
   (credits included) against a $10.27 forecast, which still carries August's
   usage and the old S3 storage. That same blindness to credits is what makes it
   the one alert that sees usage the credits hide - the S3 bucket's failure - so
-  it stays.
+  it stays. By 2026-09-20 the same budget forecast $1.64, so the ALARM was an
+  artefact of August's usage rather than a standing false positive.
 
 ```sh
 aws budgets describe-budgets --account-id 038416307420 --query 'Budgets[].BudgetName'
