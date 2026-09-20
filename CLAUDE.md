@@ -714,6 +714,64 @@ page did not. Three corrections from a single docs review had reached only the
 visible prose. Where the tool looks for the visible FAQ, and the cases it
 refuses to guess about, are in its docstring.
 
+## A recap's discussion topics render open, and `offsetHeight` cannot tell you so
+
+Every per-meeting page put its entire body - 2 to 11 `<h3>` topics, 3,900-odd
+characters on a recent one - inside `<details class="meeting-topics">` behind
+a pill reading "Show N discussion topics". A reader who never clicked got the
+quick-recap paragraph and 24 characters of button label. As of 2026-09-20 the
+wrapper is a plain `<div>` on all 113 recaps and in `add_meeting.py`; the
+`<h3>`/`<p>` styling and the `border-top` divider are unchanged.
+
+The wrapper is kept rather than dropped because `.meeting-topics > p` is what
+separates topic paragraphs from the quick-recap paragraph above them. And
+every rule stays scoped under `.meeting-page`, because **`faq.html` borrows
+the same class name** for its 34-item FAQ accordion, where `<details>` is the
+right control and must stay collapsible. `faq.html` carries no `.meeting-page`,
+and that is the only thing keeping the two apart - an unscoped
+`.meeting-topics` rule would hit both.
+
+### Two instruments that lie about collapsed content
+
+Both cost real time here, and both are the shape this file keeps recording.
+
+- **`el.offsetHeight > 0` is true for a child of a *closed* `<details>`.** The
+  first verification asserted `h3.every(e => e.offsetHeight > 0)` and reported
+  **the fixed page and the deliberately re-collapsed page as equally visible**
+  - a control that can only pass. `checkVisibility()` and the wrapper's
+  `innerText.length` both discriminate cleanly: 3927 chars and `true` open, 24
+  chars and `false` closed.
+- **Swapping a stylesheet under Playwright silently disables it.** Comparing
+  `faq.html` against the old CSS via `route.fulfill` served bytes whose hash
+  did not match the page's `integrity=`, so the browser dropped the sheet
+  entirely and the "before" snapshot was an *unstyled* page - every summary
+  `rgb(0,0,0)` at full container width. That reads as "my change broke the
+  FAQ". Strip `integrity="..."` from the HTML in the same route handler, and
+  assert `document.styleSheets.length` in both runs before comparing anything.
+
+### `git checkout --` restores to HEAD, not to your working tree
+
+This file twice tells you to undo a planted test case with `git checkout --`
+rather than a `cp` backup, because a sweep that dies mid-run leaves the plant
+behind. That is right when your baseline is committed and **wrong while you
+are mid-change**: here it discarded the uncommitted fix on
+`meetings/2026-09-18.html` and restored the original `<details>`, after which
+the next probe measured the old markup and every number looked inexplicable.
+Copy the file to the scratchpad first and restore from that copy while the
+work is uncommitted; go back to `git checkout --` once it is committed.
+
+Make the plant assert that it changed something, so a no-op plant cannot be
+mistaken for a passing control - the second probe above "passed" only because
+its `str.replace` found nothing to replace and wrote the file back unchanged:
+
+    a = s.replace('<div class="meeting-topics">', '<details ...>', 1)
+    assert a != s, "plant did nothing - the fix is not on disk"
+
+Nothing else on a recap page is hidden: the only other `aria-hidden` /
+`display:none` on those pages is nav chrome. Both search indexes shed the
+button label as a side effect (113 docs each), so rebuild
+`build_search_index.py` and `build_meetings_search_index.py`.
+
 ## A session's recording and its VideoObject are written as a pair, or not at all
 
 `tools/sync_recap_videos.py` reads each talk's card on `presentations.html` and

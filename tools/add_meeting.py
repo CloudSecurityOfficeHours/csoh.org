@@ -265,16 +265,13 @@ def render_article_body(meeting: dict, headline: str) -> str:
         f"            <h3>{h.escape(hd)}</h3>\n            <p>{h.escape(bd)}</p>\n"
         for hd, bd in meeting["topics"]
     )
-    n = len(meeting["topics"])
-    summary_label = f"Show {n} discussion topics" if n != 1 else "Show discussion topic"
     return (
         f'<h2><time datetime="{iso}">{h.escape(human)}</time> - {h.escape(headline)}</h2>\n'
         f'            <p><strong>Quick recap.</strong> {h.escape(meeting["recap"])}</p>\n'
         f'            <div class="resource-tags meeting-tags">{tag_spans}</div>\n'
-        f'            <details class="meeting-topics">\n'
-        f'                <summary>{summary_label}</summary>\n'
+        f'            <div class="meeting-topics">\n'
         f'{topic_html}'
-        f'            </details>\n'
+        f'            </div>\n'
         f'            <p class="small"><a href="../meetings.html">↑ All meeting recaps</a></p>'
     )
 
