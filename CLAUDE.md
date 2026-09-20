@@ -772,6 +772,74 @@ Nothing else on a recap page is hidden: the only other `aria-hidden` /
 button label as a side effect (113 docs each), so rebuild
 `build_search_index.py` and `build_meetings_search_index.py`.
 
+## Zoom's summary ends with an attendee roster, and it welds onto the last topic
+
+Zoom AI Companion closes every summary with a horizontal rule and a
+participant list:
+
+    ---
+    **Attendees:** Shawn Nunley (Organizer), Brian Smith (External), ...
+
+Neither line is a heading, so both of `add_meeting.py`'s parsers hand the
+pair to whichever topic came last, and `" ".join(body)` welds it onto the end
+of that paragraph. It then renders as literal dashes and asterisks, because
+the parser escapes rather than interprets markdown. Three recaps shipped that
+way before it was caught on 2026-09-20 - 2026-09-04, -09-11 and -09-18,
+**130 display names** between them, including people's device names ("OG work
+Iphone", "Edmond's iPad"), employer tags, and third-party notetaker bots that
+had joined the call.
+
+`backfill_zoom_summaries.py` already strips Zoom's other trailing artifacts -
+"Next steps", per-attendee action items, music chitchat - but not this one,
+and it is not the only route in: the usual workflow is an `.eml` summary fed
+straight to `add_meeting.py`, which those strippers never see. So the guard
+lives in `add_meeting.py`, where every path funnels through, beside
+`scrub_emails`. Do not add a second copy to `build_markdown`; this file
+records elsewhere what two implementations of one rule cost.
+
+It warns rather than failing, matching `scrub_emails`, so a late-Friday
+publish is never blocked - but read the warning, because a roster is the one
+thing on a recap that no reader asked for and no gate downstream will catch.
+
+### The pattern is anchored on the colon, and 2024-11-22 is why
+
+"Attendees" is an ordinary English word, and it is in a real session title:
+`meetings/2024-11-22.html` is **"New Attendees and Wiz Implementation"**. A
+match on the bare word truncates that page's `<h3>` and its title. The guard
+requires `Attendees:` or `Participants:` with the colon adjacent, so the
+title survives - as do the two genuine uses in prose on
+`what-practitioners-think-about-security-conferences.html` and
+`...-vulnerability-management.html` ("Attendees described a shift...",
+"Attendees flagged a three-day patching expectation").
+
+`Present:` was considered and deliberately left out. There is no evidence
+Zoom emits it, and it is the alternative most likely to truncate a real
+sentence. **The asymmetry here is the opposite of the auth-wall guard's**: a
+missed roster is visible on the page and fixable, while a false positive
+silently deletes the tail of a paragraph nobody will re-read.
+
+Test it by where the text can enter and what must survive, not by whether the
+pattern fires - five roster spellings drop, six benign controls stay. The
+controls are the half that matters; a guard that cries wolf gets muted, and
+this one deletes content when it fires.
+
+### Two ways the cleanup itself misreported
+
+- **Applying the guard to raw HTML needs paragraph scoping.** Its `.*$` runs
+  to end-of-string under `DOTALL`, which on a whole page eats everything after
+  the roster. Run it per `<p>` body and assert the result is a **prefix** of
+  the input, so a guard that rewrites rather than truncates is caught.
+- **A dict-shaped index read only its first entry.** The check
+  `d if isinstance(d, list) else list(d.values())[0]` reported
+  `meetings-search-index.json` clean while it still held all three rosters;
+  the file then shrank by 3.3 KB on rebuild, which is the only reason it came
+  to light. Count substrings over the whole file before trusting a structured
+  walk over it.
+
+`search-index.json` never carried the names - its per-page text truncates at
+2400 chars and the roster sits past that - but `meetings-search-index.json`
+did. Rebuild both after touching recap prose.
+
 ## A session's recording and its VideoObject are written as a pair, or not at all
 
 `tools/sync_recap_videos.py` reads each talk's card on `presentations.html` and

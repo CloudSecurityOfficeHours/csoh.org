@@ -101,6 +101,113 @@ def scrub_emails(s: str) -> str:
     )
 
 
+# Zoom appends a participant roster to the very end of its AI summary, under
+# a horizontal rule:
+#
+#     ---
+#     **Attendees:** Shawn Nunley (Organizer), Brian Smith (External), ...
+#
+# Neither line is a heading, so both parsers hand the pair to whichever topic
+# came last, where `" ".join(body)` welds it onto the end of that paragraph
+# and it renders as literal dashes and asterisks. Three recaps shipped that
+# way (2026-09-04, -11, -18): 130 display names, including people's device
+# names ("OG work Iphone", "Edmond's iPad"), employer tags, and third-party
+# notetaker bots.
+#
+# This is the same failure class as scrub_emails above - a Zoom display name
+# reaching the page - but deliberate rather than incidental: the roster is a
+# list of names and nothing else. Publishing attendees is a choice this site
+# has not made, and privacy.html says so.
+#
+# Anchored on the colon, because "Attendees" is a real English word that has
+# appeared in a session title: 2024-11-22 is "New Attendees and Wiz
+# Implementation", and it must survive untouched.
+ROSTER_RE = re.compile(
+    r"\s*(?:[-*_]{3,}\s*)?(?:\*\*|__)?\s*(?:Attendees|Participants)\s*"
+    r"(?:\*\*|__)?\s*:\s*.*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def strip_participant_roster(s: str) -> str:
+    """Drop a trailing participant roster from a recap paragraph.
+
+    Warns rather than failing, matching scrub_emails: a late-Friday publish is
+    never blocked, but the names do not reach the page. If a roster ever does
+    belong on a recap, add it deliberately rather than by letting this through.
+    """
+    m = ROSTER_RE.search(s)
+    if not m:
+        return s
+    names = len([p for p in m.group(0).split("),") if p.strip()])
+    print(
+        f"  ! dropped a trailing participant roster (~{names} names) from recap "
+        f"text; CSOH recaps do not publish attendee lists"
+    )
+    return s[: m.start()].rstrip()
+
+# Planted cases for strip_participant_roster, run by --self-test.
+#
+# The controls are the load-bearing half. This guard DELETES the tail of a
+# paragraph when it fires, so a false positive costs content silently, while
+# a missed roster is visible on the page. Every benign case below is real:
+# the first two are the wording of meetings/2024-11-22.html, whose session is
+# titled "New Attendees and Wiz Implementation", and the third and fourth are
+# live prose on what-practitioners-think-about-security-conferences.html and
+# ...-vulnerability-management.html.
+ROSTER_CASES: list[tuple[str, str, bool]] = [
+    # (label, input, must the guard cut it?)
+    ("Zoom's shape: rule + bold label",
+     "Real discussion. --- **Attendees:** Ann A (Organizer), Bo B (External)", True),
+    ("bold label, no rule",
+     "Real discussion. **Attendees:** Ann A (Organizer), Bo B (External)", True),
+    ("bare label",
+     "Real discussion. Attendees: Ann A (Organizer), Bo B (External)", True),
+    ("underscore emphasis",
+     "Real discussion. ___ __Attendees:__ Ann A (Organizer), Bo B (External)", True),
+    ("Participants: variant",
+     "Real discussion. --- **Participants:** Ann A (Organizer), Bo B (External)", True),
+    # --- controls: none of these may be touched ---
+    ("2024-11-22 session title",
+     "New Attendees and Wiz Implementation", False),
+    ("2024-11-22 topic prose",
+     "The meeting began with introductions from new attendees.", False),
+    ("live prose: 'Attendees described a shift'",
+     "It was about RSA. Attendees described a shift where both vendors and "
+     "buyers rethought the week.", False),
+    ("live prose: 'Attendees flagged'",
+     "Attendees flagged a three-day patching expectation for critical CVEs.", False),
+    ("'Participants' followed by a verb, colon later in the sentence",
+     "Participants raised questions about shared responsibility models: the "
+     "cost implications matter.", False),
+    ("a horizontal rule with no roster after it",
+     "Real discussion. --- And more discussion after it.", False),
+    ("'Present:' is deliberately NOT matched",
+     "Real discussion. --- **Present:** Ann, Bo", False),
+]
+
+
+def run_self_test() -> int:
+    """Prove both directions of the roster guard before anyone trusts it."""
+    failures = []
+    for label, text, should_cut in ROSTER_CASES:
+        out = strip_participant_roster(text)
+        cut = out != text
+        if cut != should_cut:
+            failures.append(f"{label}: cut={cut}, wanted {should_cut}")
+        elif cut and not text.startswith(out):
+            failures.append(f"{label}: guard rewrote instead of truncating")
+        print(f"  {'CUT ' if cut else 'keep'}  {label}")
+    n_cut = sum(1 for c in ROSTER_CASES if c[2])
+    print()
+    if failures:
+        for f in failures:
+            print(f"  FAIL: {f}", file=sys.stderr)
+        return 1
+    print(f"✓ roster guard: {len(ROSTER_CASES)} cases correct "
+          f"({n_cut} cut, {len(ROSTER_CASES) - n_cut} benign controls)")
+    return 0
+
 def clean_text(s: str) -> str:
     for before, after in ENTITY_FIXES:
         s = s.replace(before, after)
@@ -149,7 +256,7 @@ def parse_html_note(raw: str) -> dict:
     topics: list[tuple[str, str]] = []
     recap = ""
     for heading, body_html in sections:
-        body_text = clean_text(strip_tags(body_html))
+        body_text = strip_participant_roster(clean_text(strip_tags(body_html)))
         if TITLE_RE.search(heading):
             continue
         if heading.lower() in ("quick recap", "summary") and not recap:
@@ -196,7 +303,7 @@ def parse_markdown_note(raw: str) -> dict:
     recap = ""
     topics: list[tuple[str, str]] = []
     for heading, body in sections:
-        body_text = clean_text(" ".join(body))
+        body_text = strip_participant_roster(clean_text(" ".join(body)))
         if TITLE_RE.search(heading):
             continue
         if heading.lower() in ("quick recap", "summary") and not recap:
@@ -694,7 +801,13 @@ def regenerate_recaps_feed() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Publish a CSOH meeting recap.")
-    parser.add_argument("note", type=Path, help="Path to the Apple Notes export (HTML or text)")
+    parser.add_argument("note", type=Path, nargs="?",
+                        help="Path to the Apple Notes export (HTML or text)")
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run the roster-guard cases and exit; publishes nothing.",
+    )
     parser.add_argument(
         "--headline",
         type=str,
@@ -715,6 +828,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.self_test:
+        return run_self_test()
+
+    if args.note is None:
+        parser.error("a note path is required unless --self-test is given")
     if not args.note.exists():
         print(f"Error: {args.note} not found", file=sys.stderr)
         return 1
