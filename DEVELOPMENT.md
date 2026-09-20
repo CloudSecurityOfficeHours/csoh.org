@@ -811,6 +811,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/check_all_site_urls.py` | Site-wide URL safety scanner | Running local safety audits |
 | `tools/update_sitemap.py` | Refreshes `<lastmod>` dates in `sitemap.xml` from git history | **Don't edit** -- runs in CI and alongside `update_news.py` |
 | `tools/update_presentations_schema.py` | Regenerates `VideoObject` JSON-LD on `presentations.html` | **Don't edit** -- runs in CI on every deploy |
+| `tools/sync_recap_videos.py` | Carries each recorded session's link and `VideoObject` from its `presentations.html` card onto its recap in `meetings/` | **Don't edit** -- runs in CI on every deploy; gated by `--check` in `validate-html.yml` |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
 | `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->326<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |

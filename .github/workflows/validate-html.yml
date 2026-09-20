@@ -93,6 +93,13 @@ on:
       - 'tools/check_readme_coverage.py'
       - 'tools/check_faq_jsonld_parity.py'
       - 'tools/add_theme_script.py'
+      # The recap-recording gate reads the cards on presentations.html
+      # (covered by `**.html`) through update_presentations_schema.py's
+      # extractor, so an edit to either tool changes the verdict with no
+      # HTML in the diff. Same rule as everywhere else in this list:
+      # anything a step reads has to be able to trigger the step.
+      - 'tools/sync_recap_videos.py'
+      - 'tools/update_presentations_schema.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step - see the
@@ -383,6 +390,23 @@ jobs:
         run: |
           set -o pipefail
           python3 tools/stamp_card_ids.py --check 2>&1 | tee check-card-ids.log
+
+      # A recorded session's recap has to carry both the visible link to the
+      # recording and the VideoObject describing it, derived from that talk's
+      # card on presentations.html. Both or neither: a VideoObject on a page
+      # that shows no video is the structured-data mismatch Google issues
+      # manual actions for, so the tool writes the pair together and this
+      # gate fails if either half drifts from the card.
+      #
+      # Unconditional, like 3c-3e: the verdict depends on presentations.html
+      # and on the extractor, so an edit to either changes it with no recap
+      # page in the diff. It self-tests against four planted cases before
+      # reporting, and refuses to report at all if any detector stays silent.
+      - name: Assert every recorded session's recap links its recording
+        id: recap-videos
+        run: |
+          set -o pipefail
+          python3 tools/sync_recap_videos.py --check 2>&1 | tee check-recap-videos.log
 
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link can arrive as an ordinary card: that is

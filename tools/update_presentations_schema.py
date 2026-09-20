@@ -195,21 +195,27 @@ def build_items(videos):
     return items
 
 
-def render_block(items) -> str:
+def render_block(items, marker: str = MARKER) -> str:
+    """Serialize a VideoObject @graph as an indented JSON-LD <script> block.
+
+    `marker` is a parameter because sync_recap_videos.py emits the same shape
+    into the recap pages under its own marker comment. One serializer means the
+    two pages cannot drift into different formatting for the same data.
+    """
     schema = {"@context": "https://schema.org", "@graph": items}
     payload = json.dumps(schema, indent=2, ensure_ascii=False).replace("</", "<\\/")
     indented = "\n".join(("    " + line) if line else line for line in payload.split("\n"))
     return (
-        f"    {MARKER}\n"
+        f"    {marker}\n"
         f'    <script type="application/ld+json">\n'
         f"{indented}\n"
         f"    </script>\n"
     )
 
 
-def inject(html_text: str, block: str) -> str:
+def inject(html_text: str, block: str, marker: str = MARKER) -> str:
     existing = re.compile(
-        rf"\s*{re.escape(MARKER)}\s*<script type=\"application/ld\+json\">.*?</script>\n?",
+        rf"\s*{re.escape(marker)}\s*<script type=\"application/ld\+json\">.*?</script>\n?",
         re.DOTALL,
     )
     if existing.search(html_text):

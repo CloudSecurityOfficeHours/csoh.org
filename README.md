@@ -884,6 +884,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |
 | `inject_goatcounter.py` | Stamps the GoatCounter analytics tag onto every page | docstring |
 | `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
+| `sync_recap_videos.py` | Carries each recorded session's link and `VideoObject` from its `presentations.html` card onto its recap in `meetings/` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_RECAP_VIDEOS_README.md) |
 | `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SITEMAP_README.md) |
 | `normalize_urls.py` | Strips tracking params, upgrades http→https, resolves redirects | docstring |
 | `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md) |
@@ -1101,6 +1102,7 @@ deploy of identical bytes, a missing one costs a change that never goes live.
 - Checks URL safety - blocks normalization if unsafe URLs are detected (using `check_all_site_urls.py`)
 - Normalizes URLs - strips tracking parameters, upgrades HTTP to HTTPS, resolves redirects (using `normalize_urls.py`)
 - Regenerates the `VideoObject` JSON-LD on `presentations.html` (using `update_presentations_schema.py`)
+- Syncs each recorded session's link and video schema onto its recap (using `sync_recap_videos.py`)
 - Rebuilds the meetings.html search index
 - Refreshes `<lastmod>` dates in `sitemap.xml` from git history (using `update_sitemap.py`)
 - Checks that every news source has an on-disk banner image (using `check_news_banners.py`)

@@ -380,6 +380,29 @@ jobs:
             echo "Presentations schema changes committed"
           fi
 
+      # Carry each recorded session's link and VideoObject onto its recap
+      # page, from the same cards the step above reads. It runs after that
+      # step for readability only - it parses the cards, not the generated
+      # block, so neither depends on the other having run. It must run
+      # BEFORE the search index below, which reads the recap bodies this
+      # step edits.
+      - name: Sync recap recording links and video schema
+        id: recap_videos
+        run: |
+          python3 tools/sync_recap_videos.py
+          if git diff --quiet -- meetings/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No recap recording changes"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add meetings/
+            git commit -m "chore: sync recap recording links and video schema [skip ci]"
+            git push || (git pull --rebase origin main && git push)
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Recap recording changes committed"
+          fi
+
       # Rebuild the meetings full-text search index. The meetings.html
       # search input lazily fetches /meetings-search-index.json so users
       # can match against the FULL recap body (speakers, topics buried in

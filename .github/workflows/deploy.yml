@@ -121,6 +121,16 @@ on:
       - 'tools/build_search_index.py'
       - 'tools/site-publish.filter'
       - 'tools/stage_site.sh'
+      # These two run in the build and write into the published pages:
+      # sync_recap_videos.py stamps each recorded session's link and
+      # VideoObject onto its recap, through update_presentations_schema.py's
+      # card extractor. Edit either alone and the output changes with no
+      # .html in the commit, so without these the change would sit in main
+      # until some unrelated push carried it live - the silent half of the
+      # path-filter trap in CLAUDE.md. Widening costs one redundant deploy
+      # of identical bytes.
+      - 'tools/sync_recap_videos.py'
+      - 'tools/update_presentations_schema.py'
       - '.github/workflows/deploy.yml'
       # `meetings-search-index.json` IS a trigger, unlike its sibling below.
       # See the note - it is not rebuilt by this workflow, so a commit really is
@@ -421,6 +431,9 @@ jobs:
           set -euo pipefail
           python3 tools/build_meetings_search_index.py
           python3 tools/update_presentations_schema.py
+          # Reads the same presentations.html cards, not the block the line
+          # above writes, so the order of these two is not load-bearing.
+          python3 tools/sync_recap_videos.py
 
       # Run the staging script, which copies only the public files into a fresh
       # dist/ directory (see tools/stage_site.sh). dist/ is exactly what gets
