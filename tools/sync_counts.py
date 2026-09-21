@@ -413,6 +413,13 @@ HTML_PROSE_RULES = [
      "glossary of cloud security terms - {glossary_terms_floor} definitions covering"),
     (r'placeholder="Search \d+\+ terms - try', 'placeholder="Search {glossary_terms_floor} terms - try'),
     (r'<span id="visibleTerms">\d+</span>', '<span id="visibleTerms">{glossary_terms}</span>'),
+    # breach-lessons.html names the breach count in five places that share one
+    # phrase: its <title>, og:title, twitter:title, the JSON-LD headline and its
+    # <h1>. A marker comment cannot sit in <title> (RCDATA renders it as literal
+    # text) and would break the JSON, so one narrow rule owns all five at once.
+    # The body prose spells the number out ("forty-six ...") in a dozen places
+    # and is deliberately written that way; those are left to a human.
+    (r"Lessons From \d+ Cloud Breaches", "Lessons From {breaches} Cloud Breaches"),
 ]
 
 
