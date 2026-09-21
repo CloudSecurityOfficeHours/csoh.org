@@ -78,6 +78,10 @@ Track audit scores over time. Add a new row each time `/seo-audit` is run. Lower
 | 2026-09-13 | **99** | 100 | 99 | 100 | 100 | 100 | 0 | 6 | [report](2026-09-13.md) |
 | 2026-09-14 | **99** | 100 | 99 | 100 | 100 | 100 | 0 | 6 | [report](2026-09-14.md) |
 | 2026-09-14 | **99** | 100 | 98 | 100 | 98 | 100 | 0 | 2 | [report](2026-09-14-auto-1.md) |
+| 2026-09-21 | **99** | 100 | 98 | 100 | 98 | 100 | 0 | 2 | [report](2026-09-21.md) |
+| 2026-09-21 | **100** | 100 | 100 | 100 | 98 | 100 | 0 | 0 | [report](2026-09-21-auto-1.md) |
+| 2026-09-21 | **100** | 100 | 100 | 100 | 100 | 100 | 0 | 0 | [report](2026-09-21-auto-2.md) |
+| 2026-09-21 | **99** | 100 | 98 | 100 | 100 | 100 | 0 | 2 | [report](2026-09-21-auto-3.md) |
 
 ## PageSpeed Insights - homepage (https://csoh.org/)
 
@@ -120,6 +124,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-08-24 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.24s · CLS 0.027 · TBT 0ms · FCP 1.05s |
 | 2026-08-31 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.26s · CLS 0.027 · TBT 2ms · FCP 1.20s |
 | 2026-09-14 | 98 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.24s · CLS 0.000 · TBT 0ms · FCP 1.21s |
+| 2026-09-21 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.24s · CLS 0.000 · TBT 0ms · FCP 1.21s |
 
 ## How to use
 

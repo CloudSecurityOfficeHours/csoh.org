@@ -193,8 +193,9 @@ jobs:
             --meta pr.json \
             --markdown triage.md \
             --json triage.json \
-            --fail-on HIGH
-          echo "verdict=$(python3 -c 'import json;print(json.load(open("triage.json"))["verdict"])')" >> "$GITHUB_OUTPUT"
+            --fail-on HIGH || true
+          verdict="$(python3 -c 'import json,pathlib;p=pathlib.Path("triage.json");print(json.loads(p.read_text()).get("verdict","missing") if p.exists() else "missing")')"
+          echo "verdict=${verdict}" >> "$GITHUB_OUTPUT"
 
       # Take the triage script OUT of the workspace before the model step runs.
       #
@@ -227,7 +228,7 @@ jobs:
       # Layer 2. Narrative review. Advisory only - it never sets the verdict.
       - name: Narrative security impact review
         continue-on-error: true
-        uses: anthropics/claude-code-action@d75b94d5ad426cb8546e6628b6f5f19b84e5cce1  # v1.0.216
+        uses: anthropics/claude-code-action@4036a180cf690f49529f5d8c79c998855287f590  # v1.0.230
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # No Bash of any kind, so this step cannot start a shell; no WebFetch
