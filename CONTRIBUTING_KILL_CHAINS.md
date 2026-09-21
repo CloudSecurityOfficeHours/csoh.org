@@ -34,10 +34,6 @@ These incidents have solid post-mortems and haven't been added yet. Pick one up!
 
 | Incident | Year | Provider | Where to find the source |
 |---|---|---|---|
-| Salesloft / Drift OAuth token theft (UNC6395) | 2025 | SaaS / Salesforce | Google Threat Intelligence (Mandiant) blog - the canonical SaaS OAuth supply-chain breach, 700+ orgs |
-| Codefinger S3 SSE-C ransomware | 2025 | AWS S3 | Halcyon threat research - uniquely cloud-native ransomware using customer-supplied encryption keys |
-| tj-actions/changed-files action compromise | 2025 | GitHub Actions | StepSecurity and Wiz analyses - CI/CD action supply-chain compromise |
-| Midnight Blizzard (APT29) Microsoft corporate | 2024 | Azure / Entra | Microsoft MSRC blog - password-spray into a legacy tenant, then OAuth app abuse |
 | Sisense customer credential compromise | 2024 | Cloud BI | CISA advisory - cascading cloud-BI supply-chain exposure |
 
 ---
