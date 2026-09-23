@@ -130,8 +130,10 @@ Note: For forked PRs, preview images are generated but may not be pushed back au
 
 #### Step 8: Generation and Insertion
 ```
-📝 Generating and Inserting HTML
-✅ Successfully updated resources.html!
+📝 Reading resources-ctf-challenges.html...
+💾 Writing updated resources-ctf-challenges.html...
+🔧 Stamping the card id and refreshing counts...
+✅ Successfully updated resources-ctf-challenges.html!
 ```
 
 #### Step 9: Git Operations
@@ -180,15 +182,21 @@ You do not need to run any SRI or preview scripts manually - just submit your re
 
 ### 📋 Smart Category Selection
 
-Choose from 6 main categories:
+Each category is its own page, `resources-<category>.html`, and the menu is
+read from `CATEGORY_META` in `tools/sync_counts.py`, so it always matches the
+site:
 1. CTF Challenges & Vulnerable Environments
 2. Hands-On Labs & Training Platforms
 3. Security Tools & Platforms
 4. Certifications & Professional Development
-5. AI Security Resources
-6. Job Search Resources
+5. AI Security & LLM Protection
+6. Job Search & Career Development
+7. Cloud Security Newsletters
 
-The script automatically inserts your resource in the correct HTML section.
+The script appends your card to that page's resource grid, leading with the
+category's own tag, then runs `stamp_card_ids.py` and `sync_counts.py` so the
+card gets its `id` and every count on the site stays current. Both have
+`--check` gates in CI. It refuses a URL that is already on any category page.
 
 ### 🏷️ Comprehensive Tag System
 
@@ -225,9 +233,9 @@ Automatically:
 
 ### Category Section Not Found
 ```
-❌ Could not find section for category: CTF Challenges
+❌ Could not find the resource grid in resources-ctf-challenges.html
 ```
-**Solution:** The HTML structure may have changed. Add the resource manually or report the issue.
+**Solution:** The page's markup may have changed. Add the resource manually (the tool prints the card HTML first) or report the issue.
 
 ## Examples
 

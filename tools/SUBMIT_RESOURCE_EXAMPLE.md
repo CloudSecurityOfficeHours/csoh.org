@@ -54,8 +54,9 @@ Select the main category for this resource:
   2. Hands-On Labs & Training Platforms
   3. Security Tools & Platforms
   4. Certifications & Professional Development
-  5. AI Security Resources
-  6. Job Search Resources
+  5. AI Security & LLM Protection
+  6. Job Search & Career Development
+  7. Cloud Security Newsletters
   Your selection: 3
 
 ──────────────────────────────────────────────────────────────────────
@@ -132,9 +133,10 @@ Generated HTML:
         </div>
     </a>
 
-📝 Reading /Users/shawn/Documents/GitHub/csoh.org/resources.html...
-💾 Writing updated resources.html...
-✅ Successfully updated resources.html!
+📝 Reading resources-security-tools.html...
+💾 Writing updated resources-security-tools.html...
+🔧 Stamping the card id and refreshing counts...
+✅ Successfully updated resources-security-tools.html!
 
 ──────────────────────────────────────────────────────────────────────
   Step 7: Creating Git Branch and Commit
