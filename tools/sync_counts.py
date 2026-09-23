@@ -417,9 +417,18 @@ HTML_PROSE_RULES = [
     # phrase: its <title>, og:title, twitter:title, the JSON-LD headline and its
     # <h1>. A marker comment cannot sit in <title> (RCDATA renders it as literal
     # text) and would break the JSON, so one narrow rule owns all five at once.
-    # The body prose spells the number out ("forty-six ...") in a dozen places
-    # and is deliberately written that way; those are left to a human.
     (r"Lessons From \d+ Cloud Breaches", "Lessons From {breaches} Cloud Breaches"),
+    # The same page states the count in six more places a marker cannot reach:
+    # three content="..." descriptions, the JSON-LD Article description, and the
+    # two FAQPage answer strings. Its nine *visible* uses carry ordinary markers
+    # instead, which is why these patterns cannot match them - a marker splits
+    # the text with comments, so "Across these <!--...-->46<!--/...--> kill
+    # chains" is not "Across these 46 kill chains". Keep it that way: one site,
+    # one owner. check_faq_jsonld_parity strips comments before comparing, so
+    # the marker in a visible answer stays invisible to that gate.
+    (r"\d+ real cloud breach kill chains", "{breaches} real cloud breach kill chains"),
+    (r"Across these \d+ kill chains", "Across these {breaches} kill chains"),
+    (r"turns \d+ stories into a short", "turns {breaches} stories into a short"),
 ]
 
 
