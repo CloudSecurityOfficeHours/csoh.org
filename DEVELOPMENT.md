@@ -241,7 +241,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
 | [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
-| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each section of `resources.html`; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is `resources.html` only |
+| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the six `resources-*.html` category pages; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is `resources-*.html` only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - auto-approved, human merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
 | [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every site count (JSON-LD `numberOfItems`, OG-card subtitles) from the real cards and refreshes the count share-cards | N/A - commits directly |
@@ -360,19 +360,20 @@ QA run and is therefore unpromotable.
 - JS: `theme.js` is a separate, **render-blocking** script in `<head>`, above the stylesheet. It reads that `localStorage` value and stamps `data-theme` before first paint. Without it a visitor whose stored choice differs from their OS sees a flash of the wrong theme, because `main.js` loads at the end of `<body>` and the `prefers-color-scheme` branch has already painted by the time it runs
 - It cannot live inside `main.js` (too late) or in an inline `<script>` (the CSP drops it, see below), which is why it is a third file rather than a few lines somewhere else. `tools/add_theme_script.py` stamps the tag into every page and `validate-html.yml` gates on `--check`, so a new page cannot ship without it
 
-**Hover Tooltips** (resources.html)
+**Hover Tooltips** (the six `resources-*.html` category pages)
 - Each `.resource-card` has a `data-tooltip` attribute with an extended 2-3 sentence description
 - A single reusable `<div class="resource-tooltip">` is appended to `<body>` by `initTooltips()` in `main.js`
 - Event delegation on `#main-content` (mouseover/mousemove/mouseout) with a 300ms show delay
 - Tooltip positions near the cursor and flips direction when close to viewport edges
 - Hidden on touch devices via `@media (hover: none) and (pointer: coarse)`
 - Dark mode styled via `[data-theme="dark"] .resource-tooltip`
-- Tooltip text is NOT included in search/filter - only `data-tooltip` attribute, not visible DOM text
+- Tooltip text is NOT used by the in-page filter, but `build_search_index.py` *does* index it (`TOOLTIP_RE` in `emit_card_docs`), so a term that appears only in a tooltip is findable from site search and not from the box on the page itself
+- The tooltip is mouse-only: `initTooltips()` binds mouseover/mousemove/mouseout and nothing else, and `aria-describedby` is set only while hovering. Touch users are excluded by CSS on purpose, keyboard users by omission. It is ~170 KB of attribute text across the six pages, which every visitor downloads and only pointer users can read
 
-**Search & Filtering** (resources.html)
-- `main.js` reads resource cards from the DOM
-- Filters by text input (title, description, tags) and category buttons
-- Tag-based filtering with toggle buttons
+**Search & Filtering** (two different mechanisms since the 2026-09-23 split)
+- *On a category page*: `main.js` reads that page's cards from the DOM and filters on title, description and tags. The input keeps `id="searchInput"` precisely so this existing code attaches with no change
+- *On the `resources.html` hub*: there are no cards to filter, so `resources-hub.js` searches **across all six categories** by fetching `resources-index.json` (a compact row per card, ~42 KB brotli, loaded lazily on first focus) and rendering matches. Its input is `#resourceSearch`, deliberately a different id so `main.js`'s card filter does not bind to a page with no cards
+- `resources-hub.js` also forwards old `/resources.html#card-<slug>` deep links to whichever category page now holds that card, using the same file. A fragment never reaches the server, so this cannot be a redirect
 - All client-side, no server needed
 
 **Code Blocks** (every page that carries one)
@@ -411,10 +412,10 @@ QA run and is therefore unpromotable.
 - See [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md) for the discovery rules and known limitations
 
 **Resources Auto-Refresh** (`.github/workflows/update-resources.yml`)
-- Mondays at 14:00 UTC, `anthropics/claude-code-action@v1` invokes Claude with a structured prompt to research and add 2-3 new resources to each of the six `resources.html` sections (CTF, Labs, Tools, Certs, AI Security, Job Search)
+- Mondays at 14:00 UTC, `anthropics/claude-code-action@v1` invokes Claude with a structured prompt to research and add 2-3 new resources to each of the six `resources-*.html` category pages (CTF, Labs, Tools, Certs, AI Security, Job Search)
 - Auth: `CLAUDE_CODE_OAUTH_TOKEN` (subscription quota, not API billing) + the `csoh-ci` GitHub App for write-scoped PRs + `CSOH_PAT` to approve the bot's own PR so auto-merge can satisfy the "1 required approval" rule
 - The model checks for duplicates by grepping for URL + name before adding, follows the existing resource-card HTML pattern, and bumps the `<span id="visibleCount">` counter
-- **Auto-merge only fires when the diff is purely `resources.html`.** If Claude touches anything else, the PR stays open with a banner asking for human review - important safety valve
+- **Auto-merge only fires when the diff is purely the six `resources-*.html` category pages** - `resources.html` itself is excluded, because the hub's counts are generated and a card added there would be both misplaced and overwritten.** If Claude touches anything else, the PR stays open with a banner asking for human review - important safety valve
 - **The `--allowedTools` list must not contain any shell entry.** It is currently `Read,Edit,Glob,Grep,WebSearch,WebFetch` - every entry an in-process tool, no `Bash(...)` pattern of any kind. Two removals got it there. `Bash(python3:*)` went first: that pattern matches `python3 -c '<anything>'`, which is arbitrary code execution and makes the rest of the allowlist decorative. `Bash(grep:*)` and `Bash(wc:*)` went second, and that is the less obvious lesson - `grep` takes a path like nearly every Unix command, so `Bash(grep:*)` was a read primitive over the entire runner filesystem including `/proc/self/environ`. The built-in `Grep` tool that remains searches the checked-out workspace and is not a shell. This step reads pages it does not control (`WebFetch` / `WebSearch`) in a job that also holds `id-token: write` and the `csoh-ci` App token, so a prompt injection in a fetched page is a realistic path to those credentials. If a future prompt genuinely needs Python, add a checked-in script to `tools/` and allowlist that exact path - never the interpreter
 - **The `csoh-ci` App token is minted *after* the Claude step, not before it.** The mint step sits immediately above `create-pull-request`, so the repo-write credential does not exist on the runner while the model is reading the open web. Moving it to the top of the job, which is where mint steps usually go, silently removes that protection
 - **The job's `actions/checkout` sets `persist-credentials: false`** so the App token isn't left in `.git/config` for the model's step to read. This is safe because `peter-evans/create-pull-request` is handed the token explicitly. Don't drop it while re-arranging the job
@@ -450,7 +451,8 @@ After starting the local server (`python3 -m http.server 8091`), check these:
 If you changed shared files (`style.css`, `main.js`), verify these pages:
 
 - `http://localhost:8091/index.html` -- Homepage
-- `http://localhost:8091/resources.html` -- Resources (search, filters, tags)
+- `http://localhost:8091/resources.html` -- Resource hub (cross-category search, category cards)
+- `http://localhost:8091/resources-security-tools.html` -- One category page (in-page filter, tags)
 - `http://localhost:8091/news.html` -- News articles
 - `http://localhost:8091/chat-resources.html` -- Chat resources (separate JS)
 - `http://localhost:8091/glossary.html` -- Glossary (separate JS, search + cross-links)
@@ -677,7 +679,7 @@ Every `<img>` needs descriptive attributes - search engines and Core Web Vitals 
 
 When you add a new HTML page, do all of the following - none are automated:
 
-1. Copy an existing page that's structurally similar (e.g., `what-is-cloud-security.html` for an article-style pillar page; `resources.html` for a card directory).
+1. Copy an existing page that's structurally similar (e.g., `what-is-cloud-security.html` for an article-style pillar page; `resources-security-tools.html` for a card directory).
 2. Write a < 155-char meta description, front-loaded with cloud-security keywords.
 3. Use a `Topic - Cloud Security Office Hours` title.
 4. Set `<link rel="canonical" href="https://csoh.org/yourpage.html">`.
@@ -808,7 +810,8 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `style.css` | All site styles | Changing appearance or layout |
 | `main.js` | Search, filters, dark mode, card icons, tooltips, code-block copy + highlighting, heading anchors, TOC scroll-spy, back-to-top | Changing site behavior |
 | `theme.js` | Render-blocking anti-flash theme stamp in `<head>` | Rarely -- stamped by `tools/add_theme_script.py`, gated in CI |
-| `resources.html` | Resource cards and categories | Adding/editing resources |
+| `resources-*.html` | Resource cards, one page per category | Adding/editing resources |
+| `resources.html` | The category hub: search plus six generated category cards | Rarely - its counts are generated |
 | `news.html` | News article display | **Don't edit** -- auto-generated |
 | `feed.xml` | RSS feed | **Don't edit** -- auto-generated |
 | `update_news.py` | News feed aggregation script | Adding/removing RSS sources |

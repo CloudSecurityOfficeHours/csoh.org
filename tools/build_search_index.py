@@ -552,11 +552,19 @@ def write_resources_index(docs: list[dict]) -> None:
         page, _, frag = url.partition("#")
         if not frag.startswith("card-"):
             continue
+        # The doc text is card body + tooltip + host, and the body starts with
+        # the card's own <h3>. Left alone, every hub result reads "Amazon EKS
+        # Workshop Amazon EKS Workshop Hands-on workshop for..." - the name
+        # twice, because the heading is rendered above the blurb as well.
+        name = d.get("heading", "")
+        text = d.get("text", "")
+        if name and text.startswith(name):
+            text = text[len(name):].lstrip(" -:\u2013\u2014")
         rows.append({
             "s": frag[len("card-"):],          # slug, for the hash shim
             "p": page.lstrip("/"),             # page that now holds it
-            "n": d.get("heading", ""),         # display name
-            "t": d.get("text", "")[:240],      # searchable blurb
+            "n": name,                         # display name
+            "t": text[:240],                   # searchable blurb
         })
     rows.sort(key=lambda r: r["s"])
     RESOURCES_INDEX_PATH.write_text(

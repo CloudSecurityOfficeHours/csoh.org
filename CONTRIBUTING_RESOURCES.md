@@ -10,8 +10,8 @@ Welcome! This guide will walk you through **adding a new resource** to our commu
 > 🤖 **Heads up: there's a weekly bot too.** Every Monday at 14:00 UTC, an
 > automated workflow (`.github/workflows/update-resources.yml`) uses Claude
 > Code to research and propose 2-3 new resources for each of the six
-> `resources.html` sections. The bot opens a PR for review - if the diff is
-> purely `resources.html`, the PR auto-merges; otherwise it waits for a
+> `resources-*.html` category pages. The bot opens a PR for review - if the
+> diff is purely those pages, the PR auto-merges; otherwise it waits for a
 > human. **Your human-submitted PRs are still very welcome** - they
 > complement the bot, never conflict with it. The bot intentionally errs on
 > the side of well-known, well-documented sources; humans tend to surface
@@ -184,12 +184,33 @@ If you want to provide your own, save a JPG under ~150 KB with a clear name (e.g
 
 ### Step 4: Edit the Resources HTML File
 
+### Which file do I edit?
+
+Until September 2026 every resource lived in one `resources.html`. It reached
+572 cards and 936 KB, so each category is now its own page and `resources.html`
+is just a hub that links to them. **Add your resource to the category page, not
+to the hub** - the hub's contents are generated, so an edit there is overwritten.
+
+| Category | File |
+|---|---|
+| CTF Challenges & Vulnerable Environments | `resources-ctf-challenges.html` |
+| Hands-On Labs & Training Platforms | `resources-labs-training.html` |
+| Security Tools & Platforms | `resources-security-tools.html` |
+| Certifications & Professional Development | `resources-certifications.html` |
+| AI Security & LLM Protection | `resources-ai-security.html` |
+| Job Search & Career Development | `resources-job-search.html` |
+
+You don't need to touch counts, headings or the structured-data block at the
+top of the page. `tools/sync_counts.py` recalculates every count from the cards
+themselves, and `tools/stamp_card_ids.py` gives your new card the `id` that
+site search links to.
+
 **Don't be scared!** HTML is just text with special labels. Here's what you need to do:
 
-1. Go to [resources.html](resources.html) on GitHub (or use your code editor)
-2. Find the section for your resource's category
+1. Pick the page for your resource's category (the table just above)
+2. Open it on GitHub, or in your code editor
 3. Copy an **existing resource card** (we'll show you how)
-4. Paste it and change the details
+4. Paste it inside that page's `<div class="resource-grid">` and change the details
 
 **Here's what a resource card looks like:**
 
@@ -283,9 +304,9 @@ You don't need to install anything or learn command-line. Here's the easiest way
 
 #### Step B: Edit the Files
 
-1. In **your fork**, click on `resources.html`
+1. In **your fork**, click on the `resources-*.html` page for your category
 2. Click the pencil icon ✏️ to edit
-3. Find where you want to add your resource (scroll to the right category section)
+3. Find where you want to add your resource, inside `<div class="resource-grid">`
 4. Paste your resource card (see Step 4 above)
 5. Scroll down and click **"Commit changes"**
 6. Add a message like: "Add [Resource Name] to resources"
@@ -356,7 +377,7 @@ Total URLs checked: 1,018
   ❌ Unsafe:      0 (0%)
 
 ⚠️  SUSPICIOUS URL:
-📄 resources.html
+📄 resources-security-tools.html
    http://example.com/resource
    - Uses HTTP (not HTTPS) - may be insecure
 ```
@@ -441,7 +462,7 @@ Places to find cloud security careers.
 
 ## 💡 Pro Tips
 
-1. **Check if it already exists:** Search `resources.html` to make sure your resource isn't already there
+1. **Check if it already exists:** Search **all six** `resources-*.html` pages - a resource filed under another category is still a duplicate
 2. **Write clear descriptions:** Pretend you're explaining this to a friend who's new to cloud security
 3. **Tag appropriately:** Pick tags that help people find it (be specific!)
 4. **Test your link:** Make sure the URL you're adding actually works
