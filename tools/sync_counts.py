@@ -52,6 +52,8 @@ CATEGORY_META = {
                     "Securing AI/ML systems and LLM applications, prompt-injection defenses, and AI governance"),
     "job-search": ("Job Search & Career Development",
                    "Job boards, hiring platforms, and career resources for cloud security roles"),
+    "newsletters": ("Cloud Security Newsletters",
+                    "Weekly newsletters that curate cloud security research, tools, detection engineering and industry news"),
 }
 
 # Short display-key aliases for the six resource categories, so a marker reads
@@ -63,6 +65,7 @@ CATEGORY_ALIASES = {
     "certifications": "certs",
     "ai-security": "ai",
     "job-search": "jobs",
+    "newsletters": "news",
 }
 
 CARD_RE = re.compile(

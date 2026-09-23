@@ -78,6 +78,7 @@ CARD_PAGES: set[str] = {
     "resources-certifications.html",
     "resources-ai-security.html",
     "resources-job-search.html",
+    "resources-newsletters.html",
     "ctfs.html",
     "conferences.html",
     "threat-research.html",
@@ -103,6 +104,7 @@ PAGE_LEVEL_ONLY: set[str] = {
     "resources-certifications.html",
     "resources-ai-security.html",
     "resources-job-search.html",
+    "resources-newsletters.html",
     "contribute-resources.html",
     "sessions.html",
 }

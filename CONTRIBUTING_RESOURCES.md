@@ -199,6 +199,7 @@ to the hub** - the hub's contents are generated, so an edit there is overwritten
 | Certifications & Professional Development | `resources-certifications.html` |
 | AI Security & LLM Protection | `resources-ai-security.html` |
 | Job Search & Career Development | `resources-job-search.html` |
+| Cloud Security Newsletters | `resources-newsletters.html` |
 
 You don't need to touch counts, headings or the structured-data block at the
 top of the page. `tools/sync_counts.py` recalculates every count from the cards
@@ -462,7 +463,7 @@ Places to find cloud security careers.
 
 ## 💡 Pro Tips
 
-1. **Check if it already exists:** Search **all six** `resources-*.html` pages - a resource filed under another category is still a duplicate
+1. **Check if it already exists:** Search **every** `resources-*.html` page - a resource filed under another category is still a duplicate
 2. **Write clear descriptions:** Pretend you're explaining this to a friend who's new to cloud security
 3. **Tag appropriately:** Pick tags that help people find it (be specific!)
 4. **Test your link:** Make sure the URL you're adding actually works

@@ -191,6 +191,7 @@ CANON_NAV = """\
                         <li><a href="ctfs.html">CTF Challenges</a></li>
                         <li><a href="resources.html?category=ai-security">AI Security</a></li>
                         <li><a href="resources.html?category=job">Job Search</a></li>
+                        <li><a href="resources-newsletters.html">Newsletters</a></li>
                         <li><a href="cloud-security-reading-list.html">Reading List</a></li>
                         <li><a href="chat-resources.html">Chat Resources</a></li>
                         <li><a href="contribute-resources.html">Add a Resource</a></li>

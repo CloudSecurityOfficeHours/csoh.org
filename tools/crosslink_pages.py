@@ -62,6 +62,7 @@ TARGET_PAGES = [
     "resources-certifications.html",
     "resources-ai-security.html",
     "resources-job-search.html",
+    "resources-newsletters.html",
     "ctfs.html",
     "threat-research.html",
     "breach-timeline.html",

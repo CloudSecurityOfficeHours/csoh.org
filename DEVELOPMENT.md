@@ -161,13 +161,14 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # Resource hub: cross-category search + six category cards
+├── resources.html                   # Resource hub: cross-category search + one card per category
 ├── resources-ctf-challenges.html  # CTF Challenges & Vulnerable Environments
 ├── resources-labs-training.html   # Hands-On Labs & Training Platforms
 ├── resources-security-tools.html  # Security Tools & Platforms
 ├── resources-certifications.html  # Certifications & Professional Development
 ├── resources-ai-security.html     # AI Security & LLM Protection
 ├── resources-job-search.html      # Job Search & Career Development
+├── resources-newsletters.html     # Cloud Security Newsletters
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
 ├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests
@@ -372,7 +373,7 @@ QA run and is therefore unpromotable.
 
 **Search & Filtering** (two different mechanisms since the 2026-09-23 split)
 - *On a category page*: `main.js` reads that page's cards from the DOM and filters on title, description and tags. The input keeps `id="searchInput"` precisely so this existing code attaches with no change
-- *On the `resources.html` hub*: there are no cards to filter, so `resources-hub.js` searches **across all six categories** by fetching `resources-index.json` (a compact row per card, ~42 KB brotli, loaded lazily on first focus) and rendering matches. Its input is `#resourceSearch`, deliberately a different id so `main.js`'s card filter does not bind to a page with no cards
+- *On the `resources.html` hub*: there are no cards to filter, so `resources-hub.js` searches **across every category** by fetching `resources-index.json` (a compact row per card, ~42 KB brotli, loaded lazily on first focus) and rendering matches. Its input is `#resourceSearch`, deliberately a different id so `main.js`'s card filter does not bind to a page with no cards
 - `resources-hub.js` also forwards old `/resources.html#card-<slug>` deep links to whichever category page now holds that card, using the same file. A fragment never reaches the server, so this cannot be a redirect
 - All client-side, no server needed
 

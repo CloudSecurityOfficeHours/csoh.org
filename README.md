@@ -159,7 +159,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->550+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->600+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -366,7 +366,7 @@ Version-control fundamentals - branching, commits, pull requests, and history hy
 The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources ([`resources.html`](https://csoh.org/resources.html))
-Comprehensive catalog of **<!--count:resources_floor-->550+<!--/count--> cloud security resources** organized by 6 categories:
+Comprehensive catalog of **<!--count:resources_floor-->600+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->7<!--/count--> categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->80+<!--/count--> entries)
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -376,7 +376,7 @@ Comprehensive catalog of **<!--count:resources_floor-->550+<!--/count--> cloud s
 - **Blue Team Labs** - Hands-on security scenarios
 - ...and the rest of the section (OWASP, HackTheBox, TryHackMe, etc.)
 
-#### 🧪 Hands-On Labs & Training Platforms (<!--count:cat_labs_floor-->70+<!--/count--> entries)
+#### 🧪 Hands-On Labs & Training Platforms (<!--count:cat_labs_floor-->80+<!--/count--> entries)
 - **Cybr** - Free AWS security labs
 - **Digital Cloud Training** - Comprehensive challenge labs
 - **AWS Well-Architected Labs** - Official AWS security training
@@ -385,7 +385,7 @@ Comprehensive catalog of **<!--count:resources_floor-->550+<!--/count--> cloud s
 - **Pwned Labs** - Realistic penetration testing scenarios
 - ...and the rest of the section
 
-#### 🛡️ Security Tools & Platforms (<!--count:cat_tools_floor-->90+<!--/count--> entries)
+#### 🛡️ Security Tools & Platforms (<!--count:cat_tools_floor-->110+<!--/count--> entries)
 - **CNAPP (Cloud Native Application Protection)** - Runtime protection tools
 - **CSPM (Cloud Security Posture Management)** - Configuration & compliance scanning
 - **KSPM (Kubernetes Security Posture Management)** - K8s-specific security
@@ -402,7 +402,7 @@ Comprehensive catalog of **<!--count:resources_floor-->550+<!--/count--> cloud s
 - **General Security** - CISSP, CEH, SC-300, AZ-305
 - **Bootcamps & Prep Courses** - Pwned Labs, AWSome Day, etc.
 
-#### 🤖 AI Security & LLM Protection (<!--count:cat_ai_floor-->110+<!--/count--> entries)
+#### 🤖 AI Security & LLM Protection (<!--count:cat_ai_floor-->120+<!--/count--> entries)
 - **AI Security Tools** - Trend Micro Workload Security, etc.
 - **AI Vulnerable Environments** - AIGoat, AI Security CTFs
 - **AI Security Research** - Papers, whitepapers, research resources
@@ -412,6 +412,10 @@ Comprehensive catalog of **<!--count:resources_floor-->550+<!--/count--> cloud s
 - **Resume Services** - Resume optimization platforms
 - **Interview Prep** - Technical interview guides
 - **Career Development** - Mentorship, networking resources
+
+#### 📬 Cloud Security Newsletters (<!--count:cat_news-->5<!--/count--> entries)
+- **Weekly roundups** - tl;dr sec, CloudSecList, Vulnerable U
+- **Specialist newsletters** - Detection Engineering Weekly, Latio Pulse
 
 #### 📰 Cloud Security News (120+ Articles)
 - **Latest articles** sorted by publication date (newest first)
@@ -727,13 +731,14 @@ csoh.org/
 ├── what-practitioners-think-about-security-conferences.html
 │
 │  ── Catalogs & feeds ──
-├── resources.html              # Resource hub: search + the six category pages below
+├── resources.html              # Resource hub: search + the category pages below
 ├── resources-ctf-challenges.html # CTF Challenges & Vulnerable Environments
 ├── resources-labs-training.html # Hands-On Labs & Training Platforms
 ├── resources-security-tools.html # Security Tools & Platforms
 ├── resources-certifications.html # Certifications & Professional Development
 ├── resources-ai-security.html # AI Security & LLM Protection
 ├── resources-job-search.html # Job Search & Career Development
+├── resources-newsletters.html # Cloud Security Newsletters
 ├── news.html                   # Cloud security news (120+ articles)
 ├── rss.html                    # Landing page explaining the RSS feeds to subscribers
 │
@@ -1300,7 +1305,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->288<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->289<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1311,7 +1316,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->274<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->113<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->275<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->113<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

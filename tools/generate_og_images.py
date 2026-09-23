@@ -45,7 +45,7 @@ OG_VIEWPORT = {"width": 1200, "height": 630}
 PAGES = [
     ("index.html",
      "Cloud Security, Vendor-Neutral",
-     "2,000+ practitioners. 550+ resources. Free weekly Zoom. No trackers.",
+     "2,000+ practitioners. 600+ resources. Free weekly Zoom. No trackers.",
      "Community"),
     ("what-is-cloud-security.html",
      "What is Cloud Security?",
@@ -88,7 +88,7 @@ PAGES = [
      "Version control from first principles, then our real git workflow - branches, pull requests, secrets out of history.",
      "Tutorial"),
     ("resources.html",
-     "550+ Cloud Security Resources",
+     "600+ Cloud Security Resources",
      "CTFs, labs, tools, certifications, and AI-security resources - curated by the CSOH community.",
      "Directory"),
     # The six category pages resources.html became a hub for. No counts in
@@ -117,6 +117,10 @@ PAGES = [
     ("resources-job-search.html",
      "Cloud Security Jobs & Careers",
      "Job boards, hiring platforms and career resources for cloud security roles.",
+     "Directory"),
+    ("resources-newsletters.html",
+     "Cloud Security Newsletters",
+     "Weekly newsletters that curate cloud security research, tools and industry news.",
      "Directory"),
     ("ctfs.html",
      "Cloud Security CTF Challenges",
