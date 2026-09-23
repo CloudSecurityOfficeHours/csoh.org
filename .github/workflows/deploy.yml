@@ -132,6 +132,7 @@ on:
       # path-filter trap in CLAUDE.md. Widening costs one redundant deploy
       # of identical bytes.
       - 'tools/sync_recap_videos.py'
+      - 'tools/sync_next_session.py'
       - 'tools/update_presentations_schema.py'
       - '.github/workflows/deploy.yml'
       # `meetings-search-index.json` IS a trigger, unlike its sibling below.
@@ -345,6 +346,20 @@ jobs:
       # This step uses `run:` to execute shell. The `|` makes the value a
       # multi-line block: every following indented line is one line of a Bash
       # script run on the runner.
+      # Name the NEXT Friday session, in the visible banner on index.html and
+      # sessions.html and in sessions.html's Event JSON-LD, which Google will
+      # not accept without a `startDate`. This has to run in the build rather
+      # than being gated in CI: the committed date goes stale every Friday with
+      # no commit to blame, so a --check gate would fail weekly for a reason
+      # nobody caused. Stamping here means whatever gets published names the
+      # session that was next at publish time, however old the checkout's copy
+      # is. It runs before the search index below, which reads the page text
+      # this step rewrites.
+      - name: Stamp the next session date
+        run: |
+          set -euo pipefail
+          python3 tools/sync_next_session.py
+
       - name: Build search index
         run: |
           # Make the script fail fast and loudly: -e exit on any error,
@@ -851,6 +866,16 @@ jobs:
       # Skipped on a promotion, for the same reason as the search index above:
       # deploy-qa.yml ran this identical step before pushing the image, so the
       # stored bytes already carry corrected hashes.
+      # Same reason as the re-stamp below and the search index above: this job
+      # builds from the raw checkout, not from the corrected dist/ artifact, so
+      # without this the GCP origin would serve last week's session date while
+      # AWS and Azure serve this week's - on roughly one request in three.
+      - name: Stamp the next session date
+        if: steps.registry.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          python3 tools/sync_next_session.py
+
       - name: Re-stamp SRI hashes (belt and braces)
         if: steps.registry.outputs.exists == 'false'
         run: |

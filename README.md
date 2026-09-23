@@ -891,6 +891,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `inject_goatcounter.py` | Stamps the GoatCounter analytics tag onto every page | docstring |
 | `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
 | `sync_recap_videos.py` | Carries each recorded session's link and `VideoObject` from its `presentations.html` card onto its recap in `meetings/` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_RECAP_VIDEOS_README.md) |
+| `sync_next_session.py` | Stamps the next Friday session's date into the visible banner on `index.html` / `sessions.html` and into `sessions.html`'s `Event` JSON-LD, read from `csoh.ics` | docstring |
 | `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SITEMAP_README.md) |
 | `normalize_urls.py` | Strips tracking params, upgrades http→https, resolves redirects | docstring |
 | `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md) |

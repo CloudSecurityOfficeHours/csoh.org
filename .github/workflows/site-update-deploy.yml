@@ -80,6 +80,8 @@ on:
       - 'search-init.js'
       - 'vendor/**'
       - 'update_sri.py'
+      - 'csoh.ics'
+      - 'tools/sync_next_session.py'
   # Manual trigger from the Actions tab.
   # `workflow_dispatch:` adds a "Run workflow" button so a human can launch
   # this run on demand (e.g. to regenerate previews) without pushing a commit.
@@ -403,6 +405,32 @@ jobs:
             git push || (git pull --rebase origin main && git push)
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Recap recording changes committed"
+          fi
+
+      # Keep the repo's copy of the next-session date honest. The deploy build
+      # stamps this too, so production is correct either way; what this step
+      # buys is a source tree that does not sit a week behind what the site
+      # serves. It commits at most once a week, when the date actually rolls.
+      #
+      # This is a fixer here and nowhere a gate: the committed date expires on
+      # its own every Friday at 08:00 PT with no commit to blame, so
+      # `--check` in CI would fail weekly for something nobody did. See the
+      # tool's docstring.
+      - name: Stamp the next session date
+        id: next_session
+        run: |
+          python3 tools/sync_next_session.py
+          if git diff --quiet -- index.html sessions.html; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Next session date already current"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add index.html sessions.html
+            git commit -m "chore: stamp the next session date [skip ci]"
+            git push || (git pull --rebase origin main && git push)
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Next session date committed"
           fi
 
       # Rebuild the meetings full-text search index. The meetings.html

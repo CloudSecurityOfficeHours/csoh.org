@@ -845,6 +845,69 @@ this one deletes content when it fires.
 2400 chars and the roster sits past that - but `meetings-search-index.json`
 did. Rebuild both after touching recap prose.
 
+## The weekly session's Event markup is dated, and Google will not take it virtual
+
+`startDate` is a **required** property of Google's `Event` type, and
+`eventSchedule` is not a substitute for it: the word appears **zero** times in
+`developers.google.com/search/docs/appearance/structured-data/event` (checked
+2026-09-23 against the raw page, not a summary of it). index.html carried an
+`Event` whose only timing was a weekly `Schedule`, so it had been ineligible
+since it was written - present, valid JSON, and describing nothing Google reads.
+
+`tools/sync_next_session.py` now stamps the next occurrence, from `csoh.ics`,
+into two places at once: the `[data-next-session]` banners on index.html and
+sessions.html, and `sessions.html`'s `Event` `startDate`/`endDate`. One tool
+writes both because Google asks that markup restate visible content, and two
+tools writing the visible date and the marked-up date is two things that can
+drift.
+
+**The Event lives on sessions.html only.** Google asks that each event have a
+unique URL, so the same session marked up on two pages is two events. index.html
+keeps the visible banner and the countdown and carries no `Event` at all.
+
+### It cannot earn the rich result, and the fix for that is not available
+
+The session is Zoom-only, and that page now says: "Virtual experiences that have
+no real-world component aren't supported. Events must take place in a physical
+location." `VirtualLocation` and `OnlineEventAttendanceMode` appear **zero**
+times on it - Google documented online events during 2020-2022 and has since
+dropped them. The markup keeps both anyway, because they are the honest
+schema.org description of what happens and other consumers read them, and
+validator.schema.org returns 0 errors / 0 warnings on the block.
+
+**So do not "fix" the missing `location.address` by inventing a venue.** A
+`Place` with an address the session does not have is markup that contradicts the
+page, which is what earns a manual action rather than a rich result. Everything
+Google lists as required or recommended is present *except* a physical address,
+and that gap is the event, not an oversight.
+
+Google's own Rich Results Test now requires a signed-in account even for the
+code-snippet tab, so it could not be run here. `validator.schema.org` needs no
+sign-in and checks schema.org syntax only - it will not tell you whether Google
+would accept the shape.
+
+### No `--check` gate, deliberately
+
+The committed date expires every Friday at 08:00 PT with no commit to blame, so
+a gate on it would fail weekly for something nobody did - and this file already
+records what a gate that cries wolf is worth. Freshness comes from running the
+tool as a **fixer** in the deploy build instead, so what gets published names
+the session that was next at publish time. It runs in `deploy.yml` twice, once
+in the `build` job and once in the GCP image job, because that job bakes its
+image from the raw checkout rather than from `dist/`; one copy would leave one
+origin in three serving last week's date. `site-update-deploy.yml` runs it too,
+which keeps the repo's copy from sitting a week behind the site.
+
+The one hole left: `promote-qa.yml` redeploys the image QA built, so a promotion
+days after its QA build ships that build's date. Promotions are manual and rare,
+and the next ordinary deploy corrects it.
+
+`--self-test` plants a stale value in each of the four stamped spots, demands
+each be caught, and then runs the stamper twice demanding the second pass be a
+no-op. The DST cases are in there as well - 07:00 Pacific is never near a
+switch, but the *offset written into the markup* changes twice a year, and
+`-07:00` in January is a wrong answer rather than an error.
+
 ## A session's recording and its VideoObject are written as a pair, or not at all
 
 `tools/sync_recap_videos.py` reads each talk's card on `presentations.html` and
