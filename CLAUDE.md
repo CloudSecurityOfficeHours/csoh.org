@@ -133,6 +133,11 @@ that fails silently: `ASSETS` in `update_sri.py`, then the `paths:` filter of
 allow-lists of filenames, not patterns, so a commit touching only an
 unregistered asset never deploys - see the path-filter section below.
 
+**Three is the count for CSS and JS only.** A new `.json` file needs two more,
+in `tools/site-publish.filter` and `nginx.conf`, and both refuse it *after* a
+green deploy rather than before one - see "A new JSON file has two more
+allow-lists" below.
+
 Checking for this is two commands. The first must print `clean`, and the second
 is what makes the local render honest:
 
@@ -1071,6 +1076,71 @@ silently *raises* the pattern count, which can only hide misses; and `wf[True]`
 is not a typo, it is YAML reading the unquoted key `on` as a boolean, so
 `wf['on']` is a `KeyError` and the tempting `.get('on', {})` returns empty and
 reports zero uncovered files on a filter it never read.
+
+## A new JSON file has two more allow-lists, and both refuse it after a green deploy
+
+The inline-`<style>` section above says a new asset is registered in three
+places. That is true of CSS and JS and wrong for JSON, which is gated twice
+more:
+
+- **`tools/site-publish.filter`** blocks `*.json` and allows four by name
+  (`manifest`, `preview-mapping`, `meetings-search-index`, `search-index`).
+  rsync never stages an unlisted one, so S3 and Azure never receive it.
+- **`nginx.conf`** denies `\.json$` and allows the same four by exact
+  `location`. The GCP container therefore *has* the file in its image and
+  refuses to serve it.
+
+The filter is a deny-list everywhere else, which is what makes this
+surprising: `.tf`, `.woff2` and `.webp` all publish by default, and JSON is
+the one extension carved back out.
+
+`resources-index.json` shipped without either entry on 2026-09-23. It had
+been registered in `update_sri.py` and both `paths:` filters - the documented
+list - so every gate passed, the deploy went green, and the resources hub's
+search box and its forwarding of old `#card-<slug>` links were both dead in
+production. Nothing local could see it: localhost serves the repo directly
+and neither allow-list exists there, the same environment gap as the CSP
+sections at the top of this file.
+
+**The tell is the pair of status codes.** A file that is simply missing 404s
+everywhere. This one returned 404 from two origins and **403** from the third,
+which is not one fault behaving inconsistently - it is two separate mechanisms
+refusing for two different reasons, which is exactly what two independent
+allow-lists look like from outside. Read a mixed 404/403 as "more than one
+thing is saying no."
+
+Ask for a file you know is published as the control, or a blocked JSON reads
+as a site-wide problem rather than a missing entry:
+
+```sh
+for i in $(seq 1 12); do
+  printf '%s ' "$(curl -s -o /dev/null -w '%{http_code}' \
+    "https://csoh.org/<file>.json?cb=$RANDOM")"
+done; echo                                        # want twelve 200s
+curl -s -o /dev/null -w 'control %{http_code}\n' \
+  "https://csoh.org/search-index.json?cb=$RANDOM"  # want 200
+```
+
+Locally, staging answers it before a deploy does, and the second half is the
+half that matters - it proves the allow-list was *extended* rather than opened:
+
+```sh
+./tools/stage_site.sh /tmp/dist && ls /tmp/dist/<file>.json
+echo '{}' > zz-plant.json && ./tools/stage_site.sh /tmp/dist2
+ls /tmp/dist2/zz-plant.json 2>/dev/null && echo "ALLOW-LIST IS OPEN"
+rm -f zz-plant.json
+```
+
+`nginx -t` needs a running Docker daemon, which this machine often does not
+have. An exact `location =` beats the regex deny whatever the order, the same
+rule the `^~ /.well-known/` carve-out relies on, so a copy of one of the four
+working blocks is safe - but say so rather than implying nginx checked it.
+
+The general form, and it is the one this file keeps recording from a new
+angle: **a documented checklist is a measurement of the cases someone hit, not
+of the cases that exist.** The three-places list was written for a stylesheet
+and was complete for stylesheets. Nothing about following it correctly would
+have revealed that JSON has five.
 
 ## Two origins are built one way and the third another
 
