@@ -15,7 +15,7 @@ Features:
 
 Usage:
     python3 tools/generate_preview.py <url> [output_filename]  # one URL
-    python3 tools/generate_preview.py --check resources.html   # report missing
+    python3 tools/generate_preview.py --check   # report missing
     python3 tools/generate_preview.py --batch-auto             # fill all gaps
     python3 tools/generate_preview.py --fix-html               # repair <img> src paths
 """
@@ -73,6 +73,11 @@ PREVIEW_IGNORE_URLS = {
     'https://orca.security/resources/blog/',
     'https://www.philvenables.com/',
     'https://www.cloudsecuritypodcast.tv/',
+    # Resource cards whose capture was a bot wall or consent dialog
+    # ("Access Denied", "Verification Required", a cookie modal).
+    'https://www.bls.gov/ooh/computer-and-information-technology/information-security-analysts.htm',
+    'https://www.monster.com/',
+    'https://www.iso.org/standard/77304.html',
 }
 
 
@@ -666,13 +671,7 @@ def fix_html_image_paths():
         mapping = json.load(f)
 
     repo_root = Path(__file__).parent.parent
-    pages = [
-        repo_root / 'resources.html',
-        repo_root / 'ctfs.html',
-        repo_root / 'threat-research.html',
-        repo_root / 'conferences.html',
-        repo_root / 'cloud-security-reading-list.html',
-    ]
+    pages = card_pages(repo_root)
 
     # Match a full resource-card block (anchor through the closing </a>)
     # in either of the two layouts the site uses. The DOTALL flag lets `.`
@@ -681,7 +680,7 @@ def fix_html_image_paths():
         # Resources / CTFs / threat-research / conferences: card-link wraps
         # the whole card and points to the external URL.
         re.compile(
-            r'(<a\s+href="(?P<url>[^"]+)"[^>]*class="card-link"[^>]*>'
+            r'(<a\b[^>]*?\bhref="(?P<url>[^"]+)"[^>]*class="card-link"[^>]*>'
             r'(?P<body>.*?)'
             r'</a>)',
             re.DOTALL,
@@ -790,22 +789,36 @@ def fix_html_image_paths():
     return total_rewrites
 
 
-def extract_urls_from_resources_html():
-    """Extract card-link URLs from pages that render preview images without good previews."""
-    import re
+def card_pages(repo_root):
+    """Pages whose cards carry preview images.
 
-    repo_root = Path(__file__).parent.parent
-    pages = [
-        repo_root / 'resources.html',
+    The resource cards live in the resources-<category>.html pages;
+    resources.html is a generated search hub with no cards of its own.
+    They are globbed rather than listed so a new category page is picked
+    up without an edit here. When this list named only resources.html,
+    every card added after the split got an <img> pointing at a preview
+    that was never captured, and --check reported all clear.
+    """
+    return sorted(repo_root.glob('resources-*.html')) + [
         repo_root / 'ctfs.html',
         repo_root / 'threat-research.html',
         repo_root / 'conferences.html',
         repo_root / 'cloud-security-reading-list.html',
     ]
+
+
+def extract_urls_from_resources_html():
+    """Extract card-link URLs from pages that render preview images without good previews."""
+    import re
+
+    repo_root = Path(__file__).parent.parent
+    pages = card_pages(repo_root)
     # Match either `<a class="card-link" href="...">` (resources/ctfs/etc.)
     # or `<h3><a href="...">` inside a .resource-card (reading-list pattern).
     patterns = [
-        re.compile(r'<a\s+href="([^"]+)"[^>]*class="card-link"'),
+        # `[^>]*?` before href: stamp_card_ids.py puts id="card-..." first,
+        # and a pattern pinned to `<a href` then matched no card at all.
+        re.compile(r'<a\b[^>]*?\bhref="([^"]+)"[^>]*class="card-link"'),
         re.compile(r'<div\s+class="resource-card"[^>]*>\s*<h3>\s*<a\s+href="([^"]+)"', re.DOTALL),
     ]
 
@@ -837,7 +850,7 @@ def main():
     if len(sys.argv) < 2:
         print("Usage:")
         print("  python3 tools/generate_preview.py <url> [output_filename]")
-        print("  python3 tools/generate_preview.py --check resources.html")
+        print("  python3 tools/generate_preview.py --check")
         print("  python3 tools/generate_preview.py --batch urls.txt")
         print("  python3 tools/generate_preview.py --fix-html")
         return 1
