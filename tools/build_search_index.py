@@ -69,7 +69,15 @@ EXCLUDE_FILES: set[str] = {
 # Bucket Blunder"). They are the bulk of the index's weight and the least
 # useful thing to match on.
 CARD_PAGES: set[str] = {
-    "resources.html",
+    # resources.html was split into six category pages on 2026-09-23; the hub
+    # itself now holds only six category cards, which are navigation rather
+    # than resources, so it is no longer a card page.
+    "resources-ctf-challenges.html",
+    "resources-labs-training.html",
+    "resources-security-tools.html",
+    "resources-certifications.html",
+    "resources-ai-security.html",
+    "resources-job-search.html",
     "ctfs.html",
     "conferences.html",
     "threat-research.html",
@@ -89,6 +97,12 @@ PAGE_LEVEL_ONLY: set[str] = {
     "conferences.html",
     "ctfs.html",
     "resources.html",
+    "resources-ctf-challenges.html",
+    "resources-labs-training.html",
+    "resources-security-tools.html",
+    "resources-certifications.html",
+    "resources-ai-security.html",
+    "resources-job-search.html",
     "contribute-resources.html",
     "sessions.html",
 }
@@ -520,6 +534,39 @@ def load_synonyms() -> dict[str, list[str]]:
     return norm
 
 
+# resources.html is a hub of six category pages, and needs two things the big
+# index cannot cheaply give it: a slug -> page lookup, so an old
+# /resources.html#card-<slug> link can be forwarded to whichever page now holds
+# that card, and something small enough to fetch for in-page search. Reusing
+# search-index.json for either would mean pulling ~3.7 MB to answer a redirect.
+# One compact file serves both, so there is a single thing to keep in sync.
+RESOURCES_INDEX_PATH = REPO / "resources-index.json"
+
+
+def write_resources_index(docs: list[dict]) -> None:
+    rows = []
+    for d in docs:
+        url = d.get("url", "")
+        if d.get("type") != "resource" or not url.startswith("/resources-"):
+            continue
+        page, _, frag = url.partition("#")
+        if not frag.startswith("card-"):
+            continue
+        rows.append({
+            "s": frag[len("card-"):],          # slug, for the hash shim
+            "p": page.lstrip("/"),             # page that now holds it
+            "n": d.get("heading", ""),         # display name
+            "t": d.get("text", "")[:240],      # searchable blurb
+        })
+    rows.sort(key=lambda r: r["s"])
+    RESOURCES_INDEX_PATH.write_text(
+        json.dumps({"version": 1, "cards": rows}, ensure_ascii=False,
+                   separators=(",", ":")),
+        encoding="utf-8")
+    print(f"resources-index.json: {len(rows)} cards, "
+          f"{RESOURCES_INDEX_PATH.stat().st_size / 1024:.1f} KB")
+
+
 def main() -> int:
     docs: list[dict] = []
     for path in sorted(REPO.glob("*.html")):
@@ -552,6 +599,8 @@ def main() -> int:
         json.dumps(out, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+    write_resources_index(docs)
+
     size_kb = OUT_PATH.stat().st_size / 1024
     print(
         f"search-index.json: {len(docs)} docs, "

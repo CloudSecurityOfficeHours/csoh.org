@@ -195,23 +195,28 @@ jobs:
           # (newlines preserved) and passed through as one multi-line string.
           # The text below is that prompt's content, not YAML config.
           prompt: |
-            You are updating the cloud security resources catalog at
-            resources.html. The file is large (~3,800 lines); read it in
-            chunks rather than all at once.
+            You are updating the cloud security resources catalog. It used
+            to be one 936 KB page; since 2026-09-23 each category is its own
+            file. resources.html is now only a hub of six category cards and
+            must NOT be edited - its counts are generated.
 
-            Goal: add 2-3 new resources to EACH of the six category sections.
-            Sections (and their HTML ids):
-              - CTF Challenges          → id="ctf-challenges"
-              - Labs & Training         → id="labs-training"
-              - Security Tools          → id="security-tools"
-              - Certifications          → id="certifications"
-              - AI Security             → id="ai-security"
-              - Job Search              → id="job-search"
+            Goal: add 2-3 new resources to EACH of the six category pages:
+              - CTF Challenges          → resources-ctf-challenges.html
+              - Labs & Training         → resources-labs-training.html
+              - Security Tools          → resources-security-tools.html
+              - Certifications          → resources-certifications.html
+              - AI Security             → resources-ai-security.html
+              - Job Search              → resources-job-search.html
+
+            Each page holds one <section class="category-section"> whose
+            <div class="resource-grid"> contains the cards. Add new cards
+            inside that grid, matching the surrounding markup exactly.
 
             Hard requirements:
-              1. NO DUPLICATES. Before adding a resource, grep resources.html
-                 for its URL and name. If either already appears, pick a
-                 different resource.
+              1. NO DUPLICATES. Before adding a resource, grep ALL SIX
+                 resources-*.html pages for its URL and name - a resource
+                 already filed under another category is still a duplicate.
+                 If either already appears, pick a different resource.
               2. Use legitimate, well-known, vendor-neutral sources. No
                  affiliate links. No obscure or sketchy sites. Prefer
                  official URLs (vendor sites, GitHub orgs, .gov/.edu).
@@ -249,18 +254,22 @@ jobs:
                 does, not on marketing claims.
 
             Process:
-              1. Skim resources.html to learn the structure and existing
-                 entries in each section.
+              1. Skim each resources-*.html page to learn the structure and
+                 the entries already there.
               2. For each category, brainstorm 4-6 candidate resources,
                  verify they're not already present, then pick the best
                  2-3 to add.
-              3. Make all edits to resources.html.
-              4. Update the visibleCount span.
+              3. Make all edits inside the resource-grid of the matching
+                 resources-*.html page.
+              4. Do not hand-edit any count, heading total or JSON-LD block:
+                 `python3 tools/sync_counts.py` regenerates every one of them,
+                 and `tools/stamp_card_ids.py` assigns each new card its id.
               5. Do a final pass: grep for the URLs you added to confirm
                  they appear exactly once each.
 
-            Do not modify any file other than resources.html. Do not
-            commit or push - the workflow handles that.
+            Do not modify any file other than the six resources-*.html
+            category pages - in particular not resources.html, which is
+            generated. Do not commit or push - the workflow handles that.
 
       # Mint a short-lived installation token from the csoh-ci GitHub App so
       # the create-PR step has push access AND the PR can trigger downstream
@@ -337,13 +346,15 @@ jobs:
           echo "Changed files:"
           echo "$files"
 
-          # Safety check: Claude was told to only edit resources.html. If it
-          # touched anything else, surface that in the PR so a human catches
-          # it. We don't fail the run - the PR review is the gate.
-          # `grep -v` keeps lines that do NOT match; the regex `^resources\.html$`
-          # matches that exact filename. So this `if` is true when at least one
-          # changed file is something OTHER than resources.html.
-          if echo "$files" | grep -v '^resources\.html$' >/dev/null; then
+          # Safety check: Claude was told to edit only the six category pages.
+          # If it touched anything else, surface that in the PR so a human
+          # catches it. We don't fail the run - the PR review is the gate.
+          # `grep -v` keeps lines that do NOT match, so this `if` is true when
+          # at least one changed file is something other than a category page.
+          # resources.html itself is NOT allowed: it is a hub of six category
+          # cards whose counts sync_counts.py owns, so a card added there would
+          # be both in the wrong place and overwritten on the next sync.
+          if echo "$files" | grep -vE '^resources-(ctf-challenges|labs-training|security-tools|certifications|ai-security|job-search)\.html$' >/dev/null; then
             # Something unexpected changed - record it so the PR body warns a
             # human and auto-merge stays off.
             echo "unexpected_files=true" >> "$GITHUB_OUTPUT"
@@ -379,7 +390,7 @@ jobs:
           # unexpected files changed it inserts a warning, otherwise an
           # "auto-merge enabled" note.
           body: |
-            Automated weekly refresh of `resources.html`.
+            Automated weekly refresh of the six `resources-*.html` category pages.
 
             Claude researched and proposed new entries for each of the six
             category sections (CTF, Labs & Training, Security Tools,
@@ -388,7 +399,7 @@ jobs:
             Preview images will be auto-generated by `site-update-deploy`
             after merge.
 
-            ${{ steps.changes.outputs.unexpected_files == 'true' && '⚠️  **Heads up:** Claude touched files other than `resources.html`. Auto-merge is disabled on this PR - please review the diff carefully before merging.' || 'Auto-merge enabled - only `resources.html` was changed.' }}
+            ${{ steps.changes.outputs.unexpected_files == 'true' && '⚠️  **Heads up:** Claude touched files other than the `resources-*.html` category pages. Auto-merge is disabled on this PR - please review the diff carefully before merging.' || 'Auto-merge enabled - only the `resources-*.html` category pages changed.' }}
           # Always reuse this fixed branch name for the PR. Reusing one branch
           # means a new run updates the existing PR instead of piling up new
           # ones week after week.

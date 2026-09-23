@@ -727,7 +727,13 @@ csoh.org/
 ├── what-practitioners-think-about-security-conferences.html
 │
 │  ── Catalogs & feeds ──
-├── resources.html              # Main resource directory (550+ resources in 6 categories)
+├── resources.html              # Resource hub: search + the six category pages below
+├── resources-ctf-challenges.html # CTF Challenges & Vulnerable Environments
+├── resources-labs-training.html # Hands-On Labs & Training Platforms
+├── resources-security-tools.html # Security Tools & Platforms
+├── resources-certifications.html # Certifications & Professional Development
+├── resources-ai-security.html # AI Security & LLM Protection
+├── resources-job-search.html # Job Search & Career Development
 ├── news.html                   # Cloud security news (120+ articles)
 ├── rss.html                    # Landing page explaining the RSS feeds to subscribers
 │
@@ -1293,7 +1299,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->282<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->288<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`

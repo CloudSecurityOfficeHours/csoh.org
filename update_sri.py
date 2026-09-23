@@ -37,6 +37,9 @@ ASSETS: List[Tuple[str, str, str]] = [
     ('meetings.js', 'script', 'src'),
     ('glossary.js', 'script', 'src'),
     ('404.js', 'script', 'src'),
+    # resources.html hub: cross-category search + forwarding for the old
+    # /resources.html#card-<slug> deep links the category split left behind.
+    ('resources-hub.js', 'script', 'src'),
     # Rules that apply only when JavaScript is off. Referenced from a
     # <noscript> link rather than an inline block, because CSP drops
     # inline <style>. See the file's own header.

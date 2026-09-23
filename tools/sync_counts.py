@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import html as html_lib
+import functools
 import json
 import re
 import sys
@@ -145,7 +146,7 @@ def _collectionpage_block(categories: list[str], floor: int) -> str:
         '              "@type": "WebPage",\n'
         f"              \"name\": {json.dumps(CATEGORY_META[cid][0], ensure_ascii=False)},\n"
         f"              \"description\": {json.dumps(CATEGORY_META[cid][1], ensure_ascii=False)},\n"
-        f'              "url": "https://csoh.org/resources.html#{cid}"\n'
+        f'              "url": "https://csoh.org/resources-{cid}.html"\n'
         "            }\n"
         "          }"
         for i, cid in enumerate(categories, start=1)
@@ -179,21 +180,61 @@ def _collectionpage_block(categories: list[str], floor: int) -> str:
 
 
 def rebuild_resources(html: str) -> str:
-    """Replace the CollectionPage block and the standalone ItemList block."""
-    resources = unique_resources(html)
-    categories = present_categories(html)
-    floor = floor10(len(resources))
+    """resources.html is a hub: its CollectionPage enumerates the six category
+    pages and nothing else. The 558-entry ItemList that used to sit beside it
+    described cards this page no longer holds - each category page now carries
+    an ItemList of its own, written by rebuild_category_page()."""
+    floor = floor10(len(unique_resources(all_category_html())))
+    categories = present_category_pages()
     for m in LDJSON_RE.finditer(html):
         try:
             obj = json.loads(m.group(1))
         except json.JSONDecodeError:
             continue
-        if not isinstance(obj, dict):
-            continue
-        if obj.get("@type") == "CollectionPage":
+        if isinstance(obj, dict) and obj.get("@type") == "CollectionPage":
             html = html.replace(m.group(0), _collectionpage_block(categories, floor), 1)
-        elif obj.get("@type") == "ItemList":
-            html = html.replace(m.group(0), _resource_itemlist_block(resources), 1)
+    return html
+
+
+def rebuild_category_page(cid: str, html: str) -> str:
+    """One category page's ItemList, enumerating its own cards in page order.
+
+    Deliberately NOT deduped: unique_resources() drops a URL filed under two
+    categories, which is right for the site-wide total and wrong here, where
+    the list has to match what this page actually shows or numberOfItems
+    contradicts the markup beneath it."""
+    items = []
+    for m in re.finditer(r'id="(card-[^"]+)"(?:.*?)<h3>(.*?)</h3>', html, re.S):
+        name = html_lib.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        if name:
+            items.append((f"https://csoh.org/resources-{cid}.html#{m.group(1)}", name))
+    name, desc = CATEGORY_META[cid]
+    block = (
+        '<script type="application/ld+json">\n'
+        "{\n"
+        '  "@context": "https://schema.org",\n'
+        '  "@type": "ItemList",\n'
+        f"  \"name\": {json.dumps(name, ensure_ascii=False)},\n"
+        f"  \"description\": {json.dumps(desc, ensure_ascii=False)},\n"
+        f'  "numberOfItems": {len(items)},\n'
+        '  "itemListElement": [\n'
+        + ",\n".join(
+            "    {\n"
+            '      "@type": "ListItem",\n'
+            f'      "position": {i},\n'
+            f"      \"url\": {json.dumps(u, ensure_ascii=False)},\n"
+            f"      \"name\": {json.dumps(n, ensure_ascii=False)}\n"
+            "    }"
+            for i, (u, n) in enumerate(items, start=1))
+        + "\n  ]\n}\n    </script>"
+    )
+    for m in LDJSON_RE.finditer(html):
+        try:
+            obj = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("@type") == "ItemList":
+            return html.replace(m.group(0), block, 1)
     return html
 
 
@@ -360,6 +401,10 @@ def display_values(counts: dict) -> dict:
         "og_images": str(counts["og_images"]),
         "resource_categories": str(counts["resource_categories"]),
         **{f"cat_{alias}_floor": f"{floor10(counts['cards_per_category'].get(cid, 0))}+"
+           for cid, alias in CATEGORY_ALIASES.items()},
+        # Exact counts too: a category card on the hub says "81 resources", where
+        # a floored "80+" would be oddly coy about a number we know precisely.
+        **{f"cat_{alias}": str(counts['cards_per_category'].get(cid, 0))
            for cid, alias in CATEGORY_ALIASES.items()},
         "workflows": str(counts["workflows"]),
         "session_digests": str(counts["session_digests"]),
@@ -548,14 +593,31 @@ def long_form_count() -> int:
     return total
 
 
-def resource_categories() -> int:
-    """Top-level category sections on resources.html.
+def category_page(cid: str) -> Path:
+    """The page that holds one category's cards.
 
-    Unlike vendor-landscape.html, this page has no front or back matter in
-    `<h2>`, so every one is a category.
+    Until 2026-09-23 all six lived in resources.html as <details> sections and
+    every count here was a slice of that one file. They are now six pages and
+    resources.html is a hub, so anything counting cards must read the pages -
+    counting <h2> on the hub would return its two layout headings.
     """
-    text = (REPO / "resources.html").read_text(encoding="utf-8")
-    return len(re.findall(r"<h2[^>]*>", text))
+    return REPO / f"resources-{cid}.html"
+
+
+def present_category_pages() -> list[str]:
+    """Category ids whose page exists, in CATEGORY_META order."""
+    return [cid for cid in CATEGORY_META if category_page(cid).exists()]
+
+
+def all_category_html() -> str:
+    """Every category page concatenated, for site-wide dedupe by URL."""
+    return "\n".join(category_page(cid).read_text(encoding="utf-8")
+                     for cid in present_category_pages())
+
+
+def resource_categories() -> int:
+    """How many resource categories the site publishes."""
+    return len(present_category_pages())
 
 
 def cards_per_category() -> dict:
@@ -566,17 +628,10 @@ def cards_per_category() -> dict:
     two categories, so the six section totals sum to more than `resources`. That is
     correct for both - they answer different questions.
     """
-    text = (REPO / "resources.html").read_text(encoding="utf-8")
-    starts = []
-    for cid in CATEGORY_META:
-        m = re.search(r'id="%s"' % re.escape(cid), text)
-        if m:
-            starts.append((m.start(), cid))
-    starts.sort()
     out = {}
-    for i, (pos, cid) in enumerate(starts):
-        end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
-        out[cid] = len(re.findall(r'"resource-card"', text[pos:end]))
+    for cid in present_category_pages():
+        text = category_page(cid).read_text(encoding="utf-8")
+        out[cid] = len(re.findall(r'"resource-card"', text))
     return out
 
 
@@ -686,10 +741,9 @@ def vendor_landscape() -> tuple[int, int]:
 
 
 def canonical_counts() -> dict:
-    res_html = (REPO / "resources.html").read_text(encoding="utf-8")
     gloss = (REPO / "glossary.html").read_text(encoding="utf-8")
     return {
-        "resources": len(unique_resources(res_html)),
+        "resources": len(unique_resources(all_category_html())),
         "meetings": len(list((REPO / "meetings").glob("*.html"))),
         "breaches": len(list((REPO / "breaches").glob("*.html"))),
         "feeds": feeds_count(),
@@ -727,6 +781,11 @@ def md_files() -> list[Path]:
 MANAGED = {
     "resources.html": rebuild_resources,
     "cloud-security-reading-list.html": rebuild_reading_list,
+    # Each category page's ItemList is generated from its own cards. functools
+    # .partial rather than a lambda in the loop, so each entry binds its own cid
+    # instead of all six closing over the last one.
+    **{f"resources-{cid}.html": functools.partial(rebuild_category_page, cid)
+       for cid in CATEGORY_META},
 }
 
 

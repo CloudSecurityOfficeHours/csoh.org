@@ -161,7 +161,13 @@ csoh.org/
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
 ├── presentations.html               # Recorded presentation archive
 ├── chat-resources.html              # Community-shared URLs from Zoom chat
-├── resources.html                   # 558 curated resources (largest page; auto-refreshed weekly)
+├── resources.html                   # Resource hub: cross-category search + six category cards
+├── resources-ctf-challenges.html  # CTF Challenges & Vulnerable Environments
+├── resources-labs-training.html   # Hands-On Labs & Training Platforms
+├── resources-security-tools.html  # Security Tools & Platforms
+├── resources-certifications.html  # Certifications & Professional Development
+├── resources-ai-security.html     # AI Security & LLM Protection
+├── resources-job-search.html      # Job Search & Career Development
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
 ├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests

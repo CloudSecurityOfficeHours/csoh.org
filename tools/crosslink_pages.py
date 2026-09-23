@@ -56,6 +56,12 @@ GLOSSARY_FILE = REPO_ROOT / "glossary.html"
 TARGET_PAGES = [
     "index.html",
     "resources.html",
+    "resources-ctf-challenges.html",
+    "resources-labs-training.html",
+    "resources-security-tools.html",
+    "resources-certifications.html",
+    "resources-ai-security.html",
+    "resources-job-search.html",
     "ctfs.html",
     "threat-research.html",
     "breach-timeline.html",
