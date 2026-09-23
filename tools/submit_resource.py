@@ -15,24 +15,41 @@ Usage:
 
 import sys
 import re
+import html
 import subprocess
 from pathlib import Path
 from check_url_safety import URLSafetyChecker
+from sync_counts import CATEGORY_META
 
-# Category mappings
+REPO = Path(__file__).resolve().parent.parent
+
+# Categories come from sync_counts.CATEGORY_META, the same table that builds
+# the hub and every category page's ItemList. Until 2026-09-23 this file kept
+# its own list of six and wrote into resources.html, which by then was a
+# card-less hub: the section lookup found nothing and the tool gave up. Reading
+# the shared table means a new category page needs no edit here.
 CATEGORIES = {
-    '1': ('ctf-challenges', 'CTF Challenges & Vulnerable Environments'),
-    '2': ('labs-training', 'Hands-On Labs & Training Platforms'),
-    '3': ('security-tools', 'Security Tools & Platforms'),
-    '4': ('certifications', 'Certifications & Professional Development'),
-    '5': ('ai-security', 'AI Security Resources'),
-    '6': ('job-search', 'Job Search Resources'),
+    str(i): (cid, name)
+    for i, (cid, (name, _desc)) in enumerate(CATEGORY_META.items(), start=1)
+}
+
+# The coloured lead tag each category page puts first on its cards, as
+# (css class, label). A category missing here still works; its cards just
+# lead with the plain tags the contributor picked.
+CATEGORY_LEAD_TAG = {
+    'ctf-challenges': ('ctf', 'CTF'),
+    'labs-training': ('lab', 'Labs &amp; Training'),
+    'security-tools': ('tool', 'Tool'),
+    'certifications': ('certification', 'Certification'),
+    'ai-security': ('ai-security', 'AI Security'),
+    'job-search': ('job', 'Job Board'),
+    'newsletters': ('newsletter', 'Newsletter'),
 }
 
 # Available tags
 AVAILABLE_TAGS = [
     'AWS', 'Azure', 'GCP', 'Kubernetes', 'Multi-Cloud',
-    'CTF', 'Labs & Training', 'Tool', 'Certification', 'Job Search',
+    'CTF', 'Labs & Training', 'Tool', 'Certification', 'Job Search', 'Newsletter',
     'Vulnerability Testing', 'Penetration Testing', 'Cloud Scanning',
     'Secrets Management', 'Compliance', 'AI Security', 'IAM', 'DevSecOps',
     'NEW 2026', 'Free', 'Paid', 'Open Source'
@@ -120,7 +137,7 @@ def select_tags():
         print(f"    {i}. {tag}")
 
     print("\n  Resource Type Tags:")
-    types = ['CTF', 'Labs & Training', 'Tool', 'Certification', 'Job Search']
+    types = ['CTF', 'Labs & Training', 'Tool', 'Certification', 'Job Search', 'Newsletter']
     for i, tag in enumerate(types, len(platforms) + 1):
         print(f"    {i}. {tag}")
 
@@ -158,32 +175,40 @@ def select_tags():
         except (ValueError, IndexError):
             print("  ❌ Invalid selection. Please use numbers separated by commas.\n")
 
-def create_resource_html(name, url, description, tags, tooltip=''):
-    """Generate the HTML for a resource card."""
-    tags_html = '\n            '.join([f'<span class="tag">{tag}</span>' for tag in tags])
+def create_resource_html(name, url, description, tags, tooltip='', category_id=None):
+    """Generate the HTML for a resource card, matching the category pages."""
+    esc = lambda t: html.escape(t, quote=True)
+    spans = []
+    lead = CATEGORY_LEAD_TAG.get(category_id)
+    if lead:
+        spans.append(f'<span class="tag {lead[0]}">{lead[1]}</span>')
+    lead_label = html.unescape(lead[1]) if lead else None
+    for tag in tags:
+        if tag != lead_label:
+            spans.append(f'<span class="tag">{esc(tag)}</span>')
+    tags_html = '\n'.join(' ' * 32 + t for t in spans)
 
-    tooltip_attr = ''
-    if tooltip:
-        escaped = tooltip.replace('&', '&amp;').replace('"', '&quot;')
-        tooltip_attr = f' data-tooltip="{escaped}"'
+    tooltip_attr = f' data-tooltip="{esc(tooltip)}"' if tooltip else ''
 
-    # Predict the preview image filename using the same logic as generate_preview.py.
-    # The image may not exist yet at submission time; onerror hides the broken element.
+    # Predict the preview filename with generate_preview.py's own logic. The
+    # image may not exist yet; CI captures it. No onerror= fallback: the
+    # production CSP is script-src 'self', which blocks inline handlers, so
+    # it never ran there anyway. A bare <img> rather than <picture>, because
+    # no WebP exists yet; generate_webp.py + wrap_img_webp.py add it.
     img_filename = _predict_preview_filename(url)
-    alt_text = f"{name} preview".replace('"', '&quot;')
 
-    html = f'''    <a href="{url}" target="_blank" class="card-link" rel="noopener noreferrer">
-        <div class="resource-card"{tooltip_attr}>
-            <img src="img/previews/{img_filename}" alt="{alt_text}" class="resource-preview" loading="lazy" decoding="async" onerror="this.style.display='none'">
-            <h3>{name}</h3>
-            <p>{description}</p>
-            <div class="resource-tags">
-                {tags_html}
-            </div>
-        </div>
-    </a>'''
-
-    return html
+    return (
+        f'<a href="{esc(url)}" class="card-link" target="_blank" rel="noopener noreferrer">\n'
+        f'                        <div class="resource-card"{tooltip_attr}>\n'
+        f'                            <img src="img/previews/{img_filename}" alt="{esc(name)} preview" class="resource-preview" loading="lazy" decoding="async">\n'
+        f'                            <h3>{esc(name)}</h3>\n'
+        f'                            <p>{esc(description)}</p>\n'
+        f'                            <div class="resource-tags">\n'
+        f'{tags_html}\n'
+        f'                            </div>\n'
+        f'                        </div>\n'
+        f'                    </a>'
+    )
 
 
 def _predict_preview_filename(url):
@@ -198,36 +223,49 @@ def _predict_preview_filename(url):
     filename = filename[:100]
     return f"{filename}.jpg"
 
-def find_category_section(html_content, category_id):
-    """Find the section for a specific category in the HTML."""
-    # Map category IDs to section IDs in resources.html
-    section_map = {
-        'ctf-challenges': 'ctf-challenges',
-        'labs-training': 'labs-training',
-        'security-tools': 'security-tools',
-        'certifications': 'certifications',
-        'ai-security': 'ai-security',
-        'job-search': 'job-search',
-    }
+def category_page(category_id):
+    """The file that holds this category's cards."""
+    return REPO / f'resources-{category_id}.html'
 
-    section_id = section_map.get(category_id)
-    if not section_id:
-        return None, None
 
-    # Find the section by ID
-    # resources.html's category sections are <details> so they can collapse;
-    # they were <div> until 2026-08-23. Both are accepted because nothing here
-    # should break if one page is converted before another.
-    section_pattern = (
-        rf'<(?:div|details)[^>]+class="category-section"[^>]+id="{section_id}"[^>]*>'
-        rf'(.*)</(?:div|details)>'
-    )
-    match = re.search(section_pattern, html_content, re.DOTALL)
+# The end of the one resource grid on a category page: the last card's </a>
+# (or the opening tag, on an empty page), then the grid, the category-content
+# wrapper and the section closing. Anchoring on the whole tail is what makes
+# "insert after the last card" unambiguous.
+GRID_END_RE = re.compile(
+    r'(</a>|<div class="resource-grid">)(\s*</div>\s*</div>\s*</section>)'
+)
 
-    if not match:
-        return None, None
 
-    return match.start(), match.end()
+def insert_card(content, card_html):
+    """Return content with card_html appended to the resource grid, or None."""
+    matches = list(GRID_END_RE.finditer(content))
+    if len(matches) != 1:
+        return None
+    m = matches[0]
+    return content[:m.end(1)] + card_html + content[m.start(2):]
+
+
+def find_existing(url):
+    """Category pages that already carry a card for this exact URL."""
+    needle = f'href="{html.escape(url, quote=True)}"'
+    return [p.name for p in sorted(REPO.glob('resources-*.html'))
+            if needle in p.read_text(encoding='utf-8')]
+
+
+def run_generators():
+    """Stamp the card id and refresh every count, as CI's gates expect.
+
+    stamp_card_ids.py --check and sync_counts.py --check both run in CI, so a
+    card committed without these fails the PR even though it renders fine.
+    """
+    for script in ('stamp_card_ids.py', 'sync_counts.py'):
+        result = subprocess.run([sys.executable, str(REPO / 'tools' / script)],
+                                cwd=REPO, capture_output=True, text=True)
+        if result.returncode != 0:
+            return False, f"{script} failed:\n{result.stdout}{result.stderr}"
+    return True, ''
+
 
 def git_command(args, capture_output=True):
     """Run a git command and return the result."""
@@ -266,8 +304,20 @@ def create_branch_and_commit(resource_name):
     if not success:
         return False, f"Failed to create branch: {output}"
 
-    # Add the modified file
-    success, output = git_command(['add', 'resources.html'])
+    # The tree was clean when the tool started (check_git_status), so every
+    # change is ours: the category page, the counts sync_counts.py refreshed
+    # across the site, and any preview image and mapping entry. Stage those
+    # paths by name rather than with -A.
+    # -z, and not through git_command(): that strips stdout, which eats the
+    # leading space of the first " M path" entry and shifts its path by one.
+    status = subprocess.run(['git', 'status', '--porcelain', '-z', '--untracked-files=all'],
+                            cwd=REPO, capture_output=True, text=True)
+    if status.returncode != 0:
+        return False, f"Failed to read git status: {status.stderr}"
+    paths = [entry[3:] for entry in status.stdout.split('\0') if len(entry) > 3]
+    if not paths:
+        return False, "Nothing to commit"
+    success, output = git_command(['add', '--'] + paths)
     if not success:
         return False, f"Failed to stage changes: {output}"
 
@@ -340,6 +390,15 @@ def main():
                 continue
 
         print("✅ URL is safe!")
+
+        existing = find_existing(url)
+        if existing:
+            print(f"⚠️  This URL is already listed on: {', '.join(existing)}")
+            retry = input("Try a different URL? (y/n): ").strip().lower()
+            if retry != 'y':
+                print("\n⛔ Exiting.")
+                return 1
+            continue
         break
 
     # Step 3: Get description
@@ -415,48 +474,34 @@ def main():
     # Step 8: Generate HTML and update file
     print_section("Step 8: Generating and Inserting HTML")
 
-    resource_html = create_resource_html(name, url, description, tags, tooltip)
+    resource_html = create_resource_html(name, url, description, tags, tooltip, category_id)
     print("Generated HTML:")
     print(resource_html)
 
-    # Read resources.html
-    workspace_root = Path(__file__).parent.parent
-    resources_file = workspace_root / 'resources.html'
-
-    if not resources_file.exists():
-        print(f"\n❌ Could not find resources.html at {resources_file}")
+    page = category_page(category_id)
+    if not page.exists():
+        print(f"\n❌ Could not find {page.name}")
+        print("You may need to add the resource manually; the HTML is above.")
         return 1
 
-    print(f"\n📝 Reading {resources_file}...")
-    with open(resources_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    # Find the category section
-    start, end = find_category_section(content, category_id)
-    if start is None:
-        print(f"\n❌ Could not find section for category: {category_name}")
-        print("You may need to add the resource manually.")
-        print("\nGenerated HTML has been saved. You can copy it from above.")
+    print(f"\n📝 Reading {page.name}...")
+    new_content = insert_card(page.read_text(encoding='utf-8'), resource_html)
+    if new_content is None:
+        print(f"\n❌ Could not find the resource grid in {page.name}")
+        print("You may need to add the resource manually; the HTML is above.")
         return 1
 
-    # Find the last </a> before </section> to insert before
-    section_content = content[start:end]
-    last_card_end = section_content.rfind('</a>')
+    print(f"💾 Writing updated {page.name}...")
+    page.write_text(new_content, encoding='utf-8')
 
-    if last_card_end == -1:
-        print("\n❌ Could not find insertion point in section")
+    print("🔧 Stamping the card id and refreshing counts...")
+    ok, err = run_generators()
+    if not ok:
+        print(f"❌ {err}")
+        print(f"The card is in {page.name}; fix the error above, then commit.")
         return 1
 
-    # Insert the new resource after the last card
-    insertion_point = start + last_card_end + 4  # After </a>
-    new_content = content[:insertion_point] + '\n\n' + resource_html + content[insertion_point:]
-
-    # Write back
-    print("💾 Writing updated resources.html...")
-    with open(resources_file, 'w', encoding='utf-8') as f:
-        f.write(new_content)
-
-    print("✅ Successfully updated resources.html!")
+    print(f"✅ Successfully updated {page.name}!")
 
     # Step 9: Create git branch and commit
     print_section("Step 9: Creating Git Branch and Commit")
@@ -464,7 +509,7 @@ def main():
     success, branch_name = create_branch_and_commit(name)
     if not success:
         print(f"❌ {branch_name}")
-        print("\nThe resource has been added to resources.html, but git operations failed.")
+        print(f"\nThe resource has been added to {category_page(category_id).name}, but git operations failed.")
         print("You'll need to commit and push manually.")
         return 1
 

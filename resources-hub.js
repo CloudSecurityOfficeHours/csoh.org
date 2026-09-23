@@ -59,6 +59,27 @@
         }).catch(function () { /* stay on the hub; the categories are right there */ });
     }
 
+    /* ---- forwarding old /resources.html?category=<name> links ------------ */
+    // Before the split the nav and the homepage filtered this page with
+    // ?category=. They now link each category page directly, but bookmarks,
+    // search results and other sites still carry the old form, and without
+    // this they land on the hub with the filter silently ignored.
+    var CATEGORY_PAGES = {
+        'ctf': 'resources-ctf-challenges.html',
+        'lab': 'resources-labs-training.html',
+        'tool': 'resources-security-tools.html',
+        'certification': 'resources-certifications.html',
+        'ai-security': 'resources-ai-security.html',
+        'job': 'resources-job-search.html',
+        'newsletter': 'resources-newsletters.html'
+    };
+
+    function forwardCategory() {
+        var params = new URLSearchParams(window.location.search);
+        var page = CATEGORY_PAGES[params.get('category')];
+        if (page) window.location.replace('/' + page);
+    }
+
     /* ---- cross-category search ------------------------------------------ */
     var input = document.getElementById('resourceSearch');
     var results = document.getElementById('searchResults');
@@ -133,6 +154,7 @@
                                { once: true });
     }
 
+    forwardCategory();
     forwardHash();
     window.addEventListener('hashchange', forwardHash);
 }());
