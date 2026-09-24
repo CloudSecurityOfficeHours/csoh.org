@@ -2,10 +2,9 @@
 """Carry each session's recording onto its meeting recap page.
 
 A talk lives on `presentations.html` as a card: date, title, blurb, YouTube
-link. Until now nothing carried that back to `meetings/YYYY-MM-DD.html`, so a
-reader who landed on the recap of a session that *was* recorded had no route to
-the recording, and the recap's JSON-LD described an Article with no video in
-it. This writes both, from the one source:
+link. This carries it back to `meetings/YYYY-MM-DD.html`, so a reader who
+lands on the recap of a recorded session has a route to the recording. It
+writes both, from the one source:
 
 - a visible `<p class="meeting-recording">` link under the quick-recap callout;
 - a `VideoObject` JSON-LD block in `<head>`, same shape and same serializer as
@@ -27,8 +26,8 @@ are siblings reading the same markup, not a chain, so neither has to run before
 the other and a stale schema block on that page cannot propagate here.
 
 Matching is by date: a card titled "September 18, 2026: ..." belongs to
-`meetings/2026-09-18.html`. Three of the fifteen cards carry dates with no
-recap page (they are not Friday sessions); those are reported, not an error.
+`meetings/2026-09-18.html`. A card whose date has no recap page (not a
+Friday session) is reported, not an error.
 
 The owned region
 ----------------
@@ -44,8 +43,7 @@ On the recap side this tool owns two spans and nothing else:
 2. The marker-delimited JSON-LD block in `<head>`.
 
 A recap missing either anchor raises rather than being skipped. A skipped page
-and a page with nothing to do look identical in the output otherwise, which is
-the failure this repo keeps recording.
+and a page with nothing to do would otherwise look identical in the output.
 
 Why `@graph` even for a single video
 ------------------------------------
@@ -92,9 +90,8 @@ MARKER = "<!-- Structured Data - Session Recording (VideoObject) -->"
 # indentation is read back off the end of it and re-emitted. Letting the
 # closing group take a leading `\s*` instead looks equivalent and is not: on
 # the first pass that group matches only the indent, on the second it also
-# takes the newline the inserted paragraph ended with, so the region grew a
-# blank line per run. The self-test caught it; nothing about reading the
-# pattern would have.
+# takes the newline the inserted paragraph ended with, so the region would grow
+# a blank line per run. The self-test's second pass guards this.
 REGION_RE = re.compile(
     r'(<h2><time datetime="(\d{4}-\d{2}-\d{2})">.*?</h2>\s*<p>.*?</p>\n)'
     r"(.*?)"

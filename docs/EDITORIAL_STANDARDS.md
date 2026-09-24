@@ -3,11 +3,9 @@
 What "correct" means for prose on csoh.org, so that a review can reach the same
 verdict twice.
 
-These rules were already being applied - they lived in `code-of-conduct.html`,
-`README.md`, `CLAUDE.md`, and in review habit. Scattered like that, a weekly
-consistency review has nothing stable to check against, and "consistent" ends up
-meaning whatever the reviewer inferred that week. This file is the source of
-truth. `tools/check_docs_consistency.py` enforces the mechanical half; the
+A weekly consistency review needs one stable standard to check against, or
+"consistent" ends up meaning whatever the reviewer inferred that week. This file
+is the source of truth. `tools/check_docs_consistency.py` enforces the mechanical half; the
 weekly review in `.github/workflows/weekly-docs-review.yml` judges the rest.
 
 Scope is every word we ship: page prose, resource-card descriptions and

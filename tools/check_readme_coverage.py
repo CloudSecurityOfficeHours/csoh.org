@@ -3,30 +3,21 @@
 
 WHY THIS EXISTS
 ---------------
-Three holes, all found by hand in August 2026, all the shape this repo keeps
-re-learning: a check that cannot see a thing reports the same "clean" as a
-check that looked and found nothing.
+Three blind spots, each of the same shape: a check that cannot see a thing
+reports the same "clean" as a check that looked and found nothing.
 
-**Nothing was checking a Markdown link.** lychee crawls `*.html` and the
-published `*.tf`, and that is the whole input list - Markdown is not in it. So
-README.md's 212 in-repo links had no gate at all, and across the 38 tracked
-docs it is over 400. The manual sweep that found this was itself a shell loop
-that died on a quoting error and printed "all resolve" anyway, which is how
-this file ended up with a self-test.
+**lychee never sees a Markdown link.** It crawls `*.html` and the published
+`*.tf`, and that is the whole input list. The docs' hundreds of in-repo links
+need a gate of their own.
 
-**Coverage sweeps kept getting scoped to the repo root.** `topics.html` shipped
-with the nav restructure and went unmentioned in README.md entirely; nothing
-noticed, because the sweep that would have caught it globbed `*.html` and
-`*.html` does not descend. The same single-star assumption is why `'*.html'` in
-a workflow `paths:` filter silently skipped every subdirectory: **enumerate by
-what the repo actually contains, not by the pattern you were already thinking
-about.**
+**A root-only sweep never sees a subdirectory.** `*.html` does not descend, so
+coverage has to be derived from what the repo actually contains: **enumerate
+by what exists, not by the pattern you were already thinking about.**
 
 **A count marker inside a code fence renders as literal text.** Fences are
 verbatim, so `<!--count:meetings-->109<!--/count-->` in a directory tree is
-displayed to every reader on GitHub. Four were doing that in README.md and one
-in DEVELOPMENT.md. Counts in a fence belong to `MD_PROSE_RULES` in
-`sync_counts.py` instead.
+displayed to every reader on GitHub. Counts in a fence belong to
+`MD_PROSE_RULES` in `sync_counts.py` instead.
 
 WHAT IT ASSERTS
 ---------------
@@ -52,8 +43,7 @@ THE SELF-TEST IS NOT OPTIONAL
 `--check` runs `self_test()` first and refuses to report a clean result unless
 every detector has been shown to fire on planted bad input - and, where it
 matters, to stay quiet on planted good input. A checker that cannot fail is
-indistinguishable from a passing repo, and this file exists because that exact
-confusion cost real time. **Adding a detector means adding its planted case.**
+indistinguishable from a passing repo. **Adding a detector means adding its planted case.**
 
     python3 tools/check_readme_coverage.py            # report
     python3 tools/check_readme_coverage.py --check    # exit 1 on any finding
@@ -108,10 +98,9 @@ def in_repo_targets(text: str, base: str = "") -> set[str]:
     `base` is the linking document's own directory, relative to the repo root.
     A relative link resolves against the document, not the root - `tools/`
     docs link to each other as `SYNC_CHROME_README.md` and up as `../CLAUDE.md`.
-    Resolving those from the root instead reported 40-odd files as missing when
-    every one of them existed, which is the same false-confidence failure in
-    the other direction: a check that cries wolf gets muted, and then it is
-    just as useless as one that never fires.
+    Resolving those from the root would report existing files as missing,
+    and a check that cries wolf gets muted, which makes it as useless as one
+    that never fires.
     """
     out: set[str] = set()
     for raw in markdown_links(text):
@@ -158,7 +147,7 @@ def published_subdirs() -> list[str]:
 
 
 def documented_globs(text: str) -> list[re.Pattern]:
-    """`cloud-security-<role>.html` style placeholders used to stand for a set.
+    """`cloud-security-<role>.html` style placeholders that stand for a set.
 
     Both catalogs collapse near-identical page families this way - 12 role
     pages, 5 year-in-review periods, 5 session digests - and then name the
@@ -185,22 +174,15 @@ def unmentioned_root_pages(text: str, optouts: dict | None = None) -> list[str]:
 
 
 # Fenced code blocks render their contents verbatim, so a count marker inside
-# one is displayed to the reader instead of disappearing. Four were doing that
-# in README.md and one in DEVELOPMENT.md. These two lines are the exception:
+# one is displayed to the reader instead of disappearing. These two lines are
+# the exception:
 # they are documentation *showing* the syntax, and are supposed to be visible.
 #
-# Matched by SHAPE, not by the number the marker currently holds. This set used
-# to store the literal `...resources_floor-->480+<!--/count-->...`, and
-# sync_counts.py rewrites markers wherever it finds them - fences included. So
-# the first time the floor moved to 500+ the two examples stopped matching the
-# exemption, and Validate HTML failed on the very commit the counts workflow
-# had just pushed. Nothing was wrong with either file; the exemption had simply
-# been pinned to a value that is designed to change.
-#
-# Same trap as READING_ITEM_RE in sync_counts.py, which was pinned to a bare
-# `<div class="resource-card">` and silently stopped matching once cards gained
-# an attribute. When you exempt something, key the exemption on the part that
-# is stable.
+# Matched by SHAPE, not by the number the marker currently holds:
+# sync_counts.py rewrites markers wherever it finds them, fences included, so
+# an exemption pinned to a literal value would break the next time the count
+# moved. When you exempt something, key the exemption on the part that is
+# stable.
 MARKER_VALUE_RE = re.compile(r"(<!--count:[A-Za-z0-9_]+-->).*?(<!--/count-->)")
 
 

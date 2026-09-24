@@ -18,12 +18,8 @@ from scratch, so the current rules apply to the whole file consistently. A
 hand-added or hand-retargeted link inside glossary.html does not survive the
 next run. Fix the headword or the rules instead.
 
-(This docstring used to claim the opposite - that existing wrappers were
-"preserved and treated as already-linked". They never were. Anyone who trusted
-it and hand-fixed a link here would have watched the fix vanish silently.)
-
 Term parsing lives in glossary_terms.py, shared with crosslink_pages.py so the
-two cannot drift apart again.
+two cannot drift apart.
 """
 import re
 import sys
@@ -179,7 +175,7 @@ def _link_text(
         # actually contains, so the captured span has to be unescaped before it
         # will find its slug. Skipping this does not merely fail to link - the
         # span is still consumed, so a shorter key inside it ("MITRE" within
-        # "MITRE ATT&amp;CK") silently loses the link it used to have.
+        # "MITRE ATT&amp;CK") silently loses its link.
         lookup = match_key(word).lower()
         slug = key_to_slug.get(lookup)
         if not slug or slug == self_slug:
@@ -187,8 +183,7 @@ def _link_text(
         # The alternation is case-insensitive so ordinary multi-word terms match
         # however they are capitalised, but an acronym key must match exactly.
         # Without this, "FIRST" (Forum of Incident Response and Security Teams)
-        # linked every ordinary "first" in the glossary, which is why the word
-        # had to sit in the denylist and why that entry was unreachable.
+        # would link every ordinary "first" in the glossary.
         original = key_to_original.get(lookup)
         if original and is_acronym(original) and word != original:
             continue

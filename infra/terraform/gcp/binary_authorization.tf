@@ -8,25 +8,22 @@
 # policy adds the missing half: Cloud Run refuses to start a revision whose
 # image did not come out of our own Artifact Registry repository.
 #
-# WHY NOW, AND NOT BEFORE. This project used to have one Cloud Run service and
-# one deploy identity, and the honest answer was that Trivy plus a WIF-pinned
-# pusher already covered the realistic risk. The QA pipeline
-# changed the arithmetic: there are now two services (csoh-site, csoh-site-qa)
-# and two deploy service accounts, and `csoh-deployer-qa` can create revisions
-# without holding project-wide run.admin. More identities that can deploy means
-# the set of things "a deploy" could mean got wider, and this narrows it back.
+# WHY IT IS WORTH HAVING HERE. There are two services (csoh-site,
+# csoh-site-qa) and two deploy service accounts, and `csoh-deployer-qa` can
+# create revisions without holding project-wide run.admin. More identities
+# that can deploy means a wider set of things "a deploy" could mean; this
+# narrows it back.
 #
 # WHAT THIS IS NOT. It is admission control on image PROVENANCE, not signature
-# verification. Nothing here checks a cryptographic attestation, because with
-# `evaluation_mode = REQUIRE_ATTESTATION` we would also have to decide WHO is
-# allowed to sign - and the answer for this pipeline is genuinely awkward. QA
-# builds the image that production later runs (see deploy-qa.yml: production
-# recomputes the same tag, finds it present, and skips the rebuild), so the
-# textbook policy of "production only runs what the production pipeline signed"
-# would reject exactly the artifact we deliberately promote. Signing is still
-# worth adding; it is just a bigger change than this one, and it needs the
-# attestor to trust both pipelines. See cloud-deployment.html, "What we didn't
-# do", which says so in those words.
+# verification (`evaluation_mode = REQUIRE_ATTESTATION`). Two constraints keep
+# it that way. Cloud Run accepts only the project's DEFAULT policy, and a
+# project has exactly one, so one rule governs csoh-site and csoh-site-qa
+# together: requiring an attestation would require it on QA too, where images
+# are born before anything has approved them. And a signature would be gated
+# on the same boundary as registry write (a job that can enter the
+# `production` or `qa` environment), so it adds a second lock that opens with
+# the same key. That changes the day the builder and the deployer stop being
+# the same job. See cloud-deployment.html, "What we didn't do".
 #
 # HOW THIS FAILS. Deploy-time, loudly, and without touching the live site. Cloud
 # Run evaluates the policy when a revision is CREATED, not when a request is

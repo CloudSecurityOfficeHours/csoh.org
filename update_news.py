@@ -209,10 +209,6 @@ def clamp_future_date(published: str, source_name: str) -> str:
     also sorted newest-first before the max_articles cut, so the card is
     pinned to the top of the page until real time catches up.
 
-    Two live instances, both sitting at the top of news.html: ReversingLabs
-    served 2026-09-30 for a post its own feed now dates 2026-08-26, and
-    Huntress serves 2026-09-15 for a post that is already published.
-
     "Now" is the honest substitute. The item is in the feed, so it is out.
     """
     published = (published or "").strip()
@@ -722,9 +718,8 @@ def build_collection_schema(entries: List[Dict[str, str]], newest_iso: str, limi
     # Escape every HTML-significant character before this JSON goes inside a
     # <script type="application/ld+json"> block on news.html.
     #
-    # This used to escape only `</`, which stops a literal `</script>` from
-    # terminating the block but not much else. An HTML parser also ends the
-    # block's contents at a `<!--` comment opener, so feed-controlled text
+    # Escaping only `</` is not enough: it stops a literal `</script>` from
+    # terminating the block, but an HTML parser also ends the block's contents at a `<!--` comment opener, so feed-controlled text
     # containing `<!--` followed by `<script` anywhere later in the same block
     # is enough to swallow the rest of the page. Feed titles and summaries are
     # attacker-influenceable (a compromised vendor blog, a hijacked feed host,
@@ -735,7 +730,7 @@ def build_collection_schema(entries: List[Dict[str, str]], newest_iso: str, limi
     # `\uXXXX` is a valid JSON string escape, so consumers (Google, schema.org
     # validators, anything doing json.loads) still see the original characters -
     # the structured data is unchanged. Only the HTML parser is affected, and it
-    # now sees nothing it can act on.
+    # sees nothing it can act on.
     out = json.dumps(schema, indent=2, ensure_ascii=False)
     return (
         out.replace("<", "\\u003c")
@@ -906,8 +901,8 @@ def select_with_source_cap(
     """Take the newest max_articles entries, at most per_source_cap per source.
 
     Guards against a feed that re-stamps its whole back catalog with a handful
-    of recent dates. Mitiga, for one, served 100 items carrying just three
-    publish dates, which took 26 of 120 cards on a straight newest-first cut.
+    of recent dates, which on a straight newest-first cut would take a large
+    share of the page.
 
     Expects entries pre-sorted newest-first. If the cap leaves the page short
     (a quiet news day, or too few sources reporting), the over-cap remainder
@@ -986,9 +981,8 @@ def build_entries(
     collected: List[Dict[str, str]] = []
     today_fallback: List[Dict[str, str]] = []
 
-    # Both network phases below run concurrently. They used to be serial, which
-    # cost ~22 minutes per run for ~4,800 redirect lookups at ~110s of actual
-    # CPU. The work is identical, just no longer one-at-a-time.
+    # Both network phases below run concurrently: thousands of redirect
+    # lookups are almost all network wait, not CPU.
     with ThreadPoolExecutor(max_workers=FEED_WORKERS) as pool:
         feed_xml = list(pool.map(lambda f: fetch_feed(f["url"]), FEEDS))
 

@@ -10,9 +10,9 @@
 # the result. So nobody has to remember to bump a count by hand.
 #
 # It commits directly to main (like site-update-deploy.yml) using the csoh-ci
-# App token, which is on the branch-protection bypass list. The commit is
-# NOT marked [skip ci], so it flows through the normal deploy so the corrected
-# counts actually go live.
+# App token, which is on the branch-protection bypass list. The commit
+# carries no CI-skip marker, so it flows through the normal deploy and the
+# corrected counts actually go live.
 # =============================================================================
 
 # This whole file is a "workflow": a GitHub Actions automation that runs when
@@ -46,12 +46,9 @@ on:
   # fix to either takes effect at once instead of waiting for next Monday.
   #
   # resources.html is here because it is the only count SOURCE that moves on
-  # its own. update-resources.yml opens a weekly catalog PR, and on 2026-08-24
-  # (#1579) it added 18 cards and touched nothing else - so resources rose
-  # 486 -> 503 while every marker still read 480+. The homepage, about, faq,
-  # topics, llms.txt, three docs and four OG share-cards all understated the
-  # figure until someone noticed, because a content edit did not re-trigger
-  # this workflow and the next cron was six days out. Counting the cards is
+  # its own: update-resources.yml's weekly catalog PR adds cards and touches
+  # nothing else, so without this trigger every resource count on the site
+  # would understate the figure until the next cron. Counting the cards is
   # cheap; being wrong in public for a week is not.
   #
   # This makes the workflow re-trigger on its OWN commit, which stages
@@ -73,8 +70,7 @@ on:
   #   vendor-landscape.html  vendors, vendor_categories
   #   img/news-banners/**    news_banners
   #
-  # `meetings/**` and not `meetings/*`: GitHub's `*` stops at a `/`, which is
-  # the same trap that made '*.html' in deploy.yml skip every subdirectory.
+  # `meetings/**` and not `meetings/*`: GitHub's `*` stops at a `/`.
   #
   # Four sources are deliberately NOT here, each for a reason worth keeping:
   #
@@ -90,28 +86,25 @@ on:
   #                 are computed across the whole corpus, so strictly this is
   #                 what correctness wants - and it would also mean a counts
   #                 run on all 8+ pushes a day. Those four are floors in prose
-  #                 rather than headline figures, so the trade is not worth it
-  #                 yet. Revisit if one of them starts appearing on a page.
+  #                 rather than headline figures, so the trade is not worth it.
+  #                 Revisit if one of them starts appearing on a page.
   #
-  # Adding these does NOT widen the self-trigger surface. A real counts commit
-  # (c0f71903) touched 15 files and exactly one of them - resources.html - is
-  # in this list; the others it rewrites are count CONSUMERS (index.html,
-  # about.html, faq.html, topics.html, llms.txt, the docs) and consumers are
-  # deliberately absent here. So the loop is the same one commit deep it was
-  # before, and it still ends the same way: sync_counts.py is idempotent, run
-  # two finds nothing to change, `git diff --quiet` exits 0, no commit.
+  # These do NOT widen the self-trigger surface. Of the files a counts commit
+  # rewrites, only resources.html is in this list; the rest are count
+  # CONSUMERS (index.html, about.html, faq.html, topics.html, llms.txt, the
+  # docs), and consumers are deliberately absent here. So the loop is one
+  # commit deep: sync_counts.py is idempotent, run two finds nothing to
+  # change, `git diff --quiet` exits 0, no commit.
   #
   # It DOES fire far more often than "when content changes", and the reason is
   # worth knowing before you reach for the excludes above. update_sri.py
   # restamps the asset hash into every page, so ANY edit to style.css or
-  # main.js rewrites all 272 HTML files - 7fbe4362 was a two-line CSS change
-  # and touched 159 files in this list. Path filters cannot tell a content
-  # edit from a re-stamp, so in practice this job runs on most commits and
-  # no-ops. That is the real cost of listing HTML here, and it is why the
-  # `**.html` exclusion above buys less than its note claims: the churn it
-  # avoids largely arrives anyway. Kept regardless - a no-op run is cheap and
-  # a stale public number is not - but do not read the excludes as "this only
-  # runs when a count really moved".
+  # main.js rewrites every HTML file, including the ones in this list. Path
+  # filters cannot tell a content edit from a re-stamp, so in practice this
+  # job runs on most commits and no-ops, and the `**.html` exclusion above
+  # buys less than it seems. That is fine - a no-op run is cheap and a stale
+  # public number is not - but do not read the excludes as "this only runs
+  # when a count really moved".
   push:
     branches:
       - main
@@ -151,35 +144,16 @@ permissions:
 # `concurrency:` lets at most one run hold a named "group" at a time. Runs in
 # the same group queue up or cancel each other; runs in different groups are
 # unaffected. This workflow pushes commits DIRECTLY to main, so it does need to
-# survive another pipeline pushing underneath it - but a shared lane turned out
-# to be the wrong instrument for that, because a lane with mismatched cancel
-# policies cancels rather than orders. See the block below for the two runs it
-# actually killed, and the retry loop in the final step for what replaced it.
+# survive another pipeline pushing underneath it; the retry loop in the final
+# step handles that, not a shared lane (see below).
 concurrency:
-  # This workflow's own lane. It used to share `deploy-pipeline` with
-  # site-update-deploy so that a count sync and a housekeeping run could never
-  # push to main simultaneously - a sound goal, implemented with a lock that
-  # cancelled this job instead of ordering it.
-  #
-  # The two joined that group with OPPOSITE cancel policies: housekeeping sets
-  # cancel-in-progress: true, which is right for content pushes superseding each
-  # other, and a lane admits one running plus one pending run. So when a single
-  # push triggered both - a commit touching tools/sync_counts.py AND any HTML -
-  # this job was the one evicted. Twice, at the identical second:
-  #
-  #   update-counts cancelled 2026-08-17T21:40:56 | housekeeping started 21:40:56
-  #   update-counts cancelled 2026-08-16T04:38:07 | housekeeping started 04:38:07
-  #
-  # Nothing corrupted, because the commit and push below are one atomic step -
-  # but the count sync silently did not happen, and a silent no-op is the exact
-  # failure mode CLAUDE.md keeps recording.
-  #
-  # Fixing it by flipping housekeeping to cancel-in-progress: false would trade
-  # this for a housekeeping backlog at 8+ pushes a day. So this workflow takes
-  # its own lane instead, and the rebase-retry at the end of the job - which was
-  # always there as a second line of defence - becomes the primary mechanism.
-  # It was hardened into a bounded loop in the same change, because a retry that
-  # tries exactly once is not a substitute for a lock.
+  # This workflow's own lane. Do not share `deploy-pipeline` with
+  # site-update-deploy: housekeeping sets cancel-in-progress: true, and a lane
+  # admits one running plus one pending run, so a push that triggered both
+  # would silently cancel this job instead of ordering it. Flipping
+  # housekeeping to cancel-in-progress: false would instead build a backlog at
+  # 8+ pushes a day. So this workflow takes its own lane, and the bounded
+  # rebase-retry loop at the end of the job is what serialises its push.
   group: update-counts
   # `false` = a queued count sync waits rather than being killed. Overlapping
   # self-runs are near-impossible at this cadence (weekly, plus a rare
@@ -318,16 +292,13 @@ jobs:
             # the matching noreply email) so the history reads cleanly.
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            # Stage EVERYTHING the sync may have rewritten. This used to be an
-            # explicit list ('*.html', the OG script, img/og), and the list
-            # went stale: sync_counts.py also owns count markers in CLAUDE.md,
-            # README.md, tools/SYNC_COUNTS_README.md, and llms.txt. On a run
-            # where ONLY those had drifted, nothing got staged and the
-            # `git commit` below failed with "no changes added to commit"
-            # (2026-07-29); on runs where HTML drifted too, their updates were
-            # silently dropped from the commit instead. `git add -u` stages
-            # every modified tracked file - nothing else in this job writes to
-            # the working tree, so that set is exactly what sync_counts.py and
+            # Stage EVERYTHING the sync may have rewritten. Do not replace
+            # this with an explicit list: sync_counts.py also owns count
+            # markers in CLAUDE.md, README.md, tools/SYNC_COUNTS_README.md,
+            # and llms.txt, and a list that misses one either drops those
+            # updates or fails the commit with "no changes added to commit".
+            # `git add -u` stages every modified tracked file - nothing else
+            # in this job writes to the working tree, so that set is exactly what sync_counts.py and
             # generate_og_images.py touched. The explicit img/og add still
             # picks up any brand-new (untracked) share-card JPGs, which -u
             # alone would miss.
@@ -338,13 +309,9 @@ jobs:
             # The commit carries no CI-skip marker, so it flows through the
             # normal deploy and the corrected counts go live.
             #
-            # This loop IS the serialisation now. While this workflow shared the
-            # `deploy-pipeline` lane the lock did the ordering and a single
-            # retry was a formality; the lane cancelled this job rather than
-            # ordering it (see the concurrency block above), so the lock is gone
-            # and the retry has to carry the weight on its own. One attempt is
-            # not enough for that: main takes 8+ pushes a day, so a second
-            # collision during the rebase is not exotic.
+            # This loop IS the serialisation (see the concurrency block above).
+            # One attempt is not enough: main takes 8+ pushes a day, so a
+            # second collision during the rebase is not exotic.
             pushed=false
             for attempt in 1 2 3 4 5; do
               if git push; then

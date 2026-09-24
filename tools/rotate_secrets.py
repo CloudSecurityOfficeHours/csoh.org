@@ -11,16 +11,12 @@ cannot federate, and that tail is the part nobody remembers to rotate because
 there is no forcing function - nothing breaks, nothing warns, the tokens just
 get older.
 
-Two failure modes this script is built around, both of which have already
-happened in this repo:
+Two failure modes this script is built around:
 
-1. **The inventory drifts away from reality, silently.** SECURITY.md carried a
-   row for `SSH_PRIVATE_KEY` marked "live but unreferenced - flagged for
-   removal, still present", re-confirmed by hand on 2026-07-26. It is not
-   present; it had already been deleted. A hand-maintained list of secrets is
-   exactly as trustworthy as the last time somebody diffed it against the API,
-   so this script does that diff on every run and *fails* rather than prints.
-   (See "A silent count is a failure mode" in CLAUDE.md.)
+1. **The inventory drifts away from reality, silently.** A hand-maintained
+   list of secrets is exactly as trustworthy as the last time somebody diffed
+   it against the API, so this script does that diff on every run and *fails*
+   rather than prints. (A silent count is a failure mode; see CLAUDE.md.)
 
 2. **A rotation half-lands and nobody notices until CI breaks.** Writing a new
    value into an Actions secret gives no feedback whatsoever: `gh secret set`
@@ -41,9 +37,9 @@ those steps is how you end up with CI holding a credential nobody has tested.
 
 EVERY VERIFY CARRIES A CONTROL
 ------------------------------
-CLAUDE.md's DNS section states the general rule this file leans on hardest: *an
-instrument that reports "nothing is there" is indistinguishable from a broken
-instrument until you point it at something you know is there.* A check that a
+The rule this file leans on hardest: *an instrument that reports "nothing is
+there" is indistinguishable from a broken instrument until you point it at
+something you know is there.* A check that a
 token works is worthless if the probe would have passed anyway - if `claude`
 silently fell back to your local session auth, if an unauthenticated request to
 that Google API returns 200 regardless, if the call you made needs no
@@ -401,8 +397,8 @@ def list_repo_secrets() -> dict[str, dt.datetime] | None:
 def list_org_secrets() -> dict[str, dt.datetime] | None:
     """Returns None when the local gh token lacks admin:org - which is normal.
 
-    Reporting "no org secrets" would be a lie of exactly the shape CLAUDE.md
-    warns about, so the caller renders this as *unknown* instead.
+    Reporting "no org secrets" would be a lie, so the caller renders this as
+    *unknown* instead.
     """
     p = run(["gh", "api", f"orgs/{OWNER}/actions/secrets", "--paginate"])
     if p.returncode != 0:
@@ -423,13 +419,11 @@ def actual_scope(cred: "Credential", repo_secrets: dict | None = None) -> str:
     A repo-level secret shadows an org-level one of the same name. So if the
     registry claims org and the value is actually set on the repo, writing to
     the org updates something nothing reads: `gh secret set` succeeds, the
-    audit looks clean, and CI keeps using the old value. That is the same
-    silent-no-op shape as the inert Cloudflare ruleset in CLAUDE.md.
+    audit looks clean, and CI keeps using the old value.
 
-    This is not hypothetical. `ZOOM_*` were declared org-level here on the
-    strength of SECURITY.md's description of the org secrets, and are in fact
-    repo-level. The write target follows what the API reports, and `audit`
-    reports the disagreement rather than quietly papering over it.
+    So the write target follows what the API reports (`ZOOM_*`, for example,
+    are repo-level), and `audit` reports any disagreement with the registry
+    rather than quietly papering over it.
     """
     if repo_secrets is None:
         repo_secrets = list_repo_secrets()
@@ -766,8 +760,8 @@ def cf_verify(ctx: "Ctx", token: str) -> list[Check]:
     auth = {"Authorization": f"Bearer {token}"}
     checks: list[Check] = []
 
-    # /user/tokens/verify reports "active" regardless of scope - CLAUDE.md
-    # records this specifically. So the positive check is the real operation:
+    # /user/tokens/verify reports "active" regardless of scope, so the
+    # positive check is the real operation:
     # purge one harmless file, which is exactly what deploy.yml does.
     r = http("POST", f"{CF_API}/zones/{zone}/purge_cache",
              headers=auth, body={"files": [CF_PURGE_PROBE]})
@@ -1228,8 +1222,7 @@ class Ctx:
 def referenced_secrets() -> dict[str, set[str]]:
     """Map secret name -> workflow files that consume it.
 
-    Derived, never hand-listed. SECURITY.md's inventory drifted precisely
-    because it was maintained by hand; this cannot.
+    Derived, never hand-listed, so it cannot drift.
 
     Full-line YAML comments are skipped: six workflows explain the
     `${{ secrets.NAME }}` syntax in prose, and a naive grep counts NAME as a

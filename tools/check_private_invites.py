@@ -8,15 +8,9 @@ invite, a WhatsApp group invite. Publishing one silently converts "vetted,
 members-only" into "open to anyone who reads the page", and no link checker
 notices, because the URL resolves perfectly - that is the whole point of it.
 
-This exists because it happened. `chat-resources.html` republished the CSOH
-Signal group invite twice (2025-12-19 and 2026-02-13), plus a Signal
-direct-contact link and the CSOH Telegram group invite, once whole and once
-truncated, all harvested from the group chat by the resource-card pipeline.
-Meanwhile `community.html` said:
-"It's not posted publicly on purpose; we'd rather you join after a Friday
-Zoom or a quick email exchange than have it ingested by every recruiter
-scraper on the internet." Both statements were live at the same time, for
-months, and both were served from csoh.org.
+The main route in is the resource-card pipeline, which harvests links from
+the group chat, while `community.html` promises the invite is deliberately
+not posted publicly.
 
 What is NOT flagged, deliberately:
 
@@ -132,9 +126,7 @@ def self_test() -> int:
     "find".
     """
     # Synthetic tokens only, never a real invite: this file is public on
-    # GitHub. The first version used the live CSOH Telegram invite and
-    # prefixes of the real Signal links, so the gate itself republished them.
-    # URLs are assembled at runtime so a repo-wide grep for invite links does
+    # GitHub, and a real token here would republish it. URLs are assembled at runtime so a repo-wide grep for invite links does
     # not match this file.
     fake = "EXAMPLE0example0EXAMPLE0example0"
     must_match = [

@@ -64,7 +64,7 @@ are filed under two categories. Both figures are correct; they answer different 
 Access <!--count:resources_floor-->640+<!--/count--> curated resources.
 ```
 
-The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so `README.md` can use them too - **except inside a fenced code block**, which renders its contents verbatim and will display the marker to the reader. Four counts in README.md's directory tree were doing exactly that; those are handled by `MD_PROSE_RULES` instead (see item 4). Available keys:
+The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so `README.md` can use them too - **except inside a fenced code block**, which renders its contents verbatim and will display the marker to the reader. Counts in README.md's directory tree are handled by `MD_PROSE_RULES` instead (see item 4). Available keys:
 
 | Key | Renders as | Example |
 |---|---|---|

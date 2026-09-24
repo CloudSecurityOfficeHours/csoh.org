@@ -98,13 +98,11 @@ variable "github_repo" {
 # The single git branch (here `main`) that is meant to perform real deploys,
 # so a push to a random feature branch can't ship to production.
 #
-# NOT REFERENCED BY THE WIF TRUST - and deliberately so. This variable was
-# declared but never used, which read as though branch enforcement existed on
-# the GCP leg when it did not: wif.tf gated only on `assertion.repository`, so
-# any workflow on any branch could mint deployer credentials. That is fixed in
-# wif.tf by pinning `assertion.sub` to
-# `repo:<owner>/<repo>:environment:production`, matching aws/oidc.tf and
-# azure/identity.tf.
+# NOT REFERENCED BY THE WIF TRUST - and deliberately so. Do not read its
+# presence as branch enforcement: the enforcement is in wif.tf, which pins
+# `assertion.sub` to `repo:<owner>/<repo>:environment:production` (matching
+# aws/oidc.tf and azure/identity.tf). Gating on `assertion.repository` alone
+# would let any workflow on any branch mint deployer credentials.
 #
 # Enforcing the ENVIRONMENT rather than the ref is the stronger choice: the
 # `production` GitHub Environment is itself restricted to `main` by a

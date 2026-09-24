@@ -90,9 +90,9 @@ def _placeholder_marker_path(preview_path):
 def is_preview_good(preview_path):
     """Return True if the preview file exists and is not a generated placeholder.
 
-    We used to also require a minimum file size, but real Playwright screenshots
-    of sparse pages (grep.app, offline pages, etc.) can legitimately be 1-4 KB.
-    We now distinguish placeholders by a sidecar marker written at generation
+    File size is not a usable signal: real Playwright screenshots of sparse
+    pages (grep.app, offline pages, etc.) can legitimately be 1-4 KB. So
+    placeholders are distinguished by a sidecar marker written at generation
     time - any file without a marker is trusted.
     """
     full_path = Path(__file__).parent.parent / preview_path
@@ -132,8 +132,7 @@ def _is_svg(data, content_type):
     Pillow can't open SVG, so accepting one writes vector markup to a .jpg
     path: optimize_image() then fails, the raw bytes stay, and the card
     renders broken (served as image/jpeg, decoded as XML). The size guard
-    above doesn't catch it - therecord.media's og:image is a 5KB Illustrator
-    logo, comfortably over the minimum. Sniff the bytes as well as the
+    above doesn't catch it, since an SVG logo can be well over the minimum. Sniff the bytes as well as the
     Content-Type, since some CDNs serve SVG as application/octet-stream.
     """
     if 'svg' in content_type:
@@ -795,9 +794,9 @@ def card_pages(repo_root):
     The resource cards live in the resources-<category>.html pages;
     resources.html is a generated search hub with no cards of its own.
     They are globbed rather than listed so a new category page is picked
-    up without an edit here. When this list named only resources.html,
-    every card added after the split got an <img> pointing at a preview
-    that was never captured, and --check reported all clear.
+    up without an edit here. A category page missing from this list would
+    get <img> tags pointing at previews that were never captured, and
+    --check would still report all clear.
     """
     return sorted(repo_root.glob('resources-*.html')) + [
         repo_root / 'ctfs.html',

@@ -56,13 +56,9 @@ on:
     #     ./tools/stage_site.sh /tmp/dist && find /tmp/dist -maxdepth 1
     #
     # NOTE ON `**.html` vs `*.html`: GitHub's `*` does NOT match `/`, so
-    # `'*.html'` means *root-level HTML only*. This list used to say `'*.html'`,
-    # which meant a commit touching only breaches/, meetings/, portfolio/, or
-    # homelab/ pages never triggered a deploy. Commit 874a813c ("point retired
-    # MITRE technique IDs at their current pages") is a real instance: it edited
-    # only per-breach pages, so it did not publish. Usually this was masked -
-    # add_meeting.py edits root meetings.html alongside the new recap - which is
-    # exactly why it went unnoticed. `**.html` matches at any depth.
+    # `'*.html'` means *root-level HTML only*, and a commit touching only
+    # breaches/, meetings/, portfolio/, or homelab/ pages would never deploy.
+    # `**.html` matches at any depth.
     paths:
       # --- pages (any depth: root + breaches/ + meetings/ + portfolio/ + homelab/)
       - '**.html'
@@ -99,14 +95,11 @@ on:
       - 'img/**'
       - 'chat-screenshots/**'
       - 'email-screenshots/**'
-      # The five image files that live at the repo ROOT rather than under img/.
-      # `img/**` does not reach them and nothing else in this list matched, so
-      # until 2026-08-23 a commit that only swapped the favicon or the social
-      # banner never published - the same silent shape as the `'*.html'` bug
-      # this list's header describes. They are not incidental: favicon.png is
-      # referenced by 272 pages, banner.png by 270 and banner.webp by 186 (the
-      # og:image on every page), and the two apple-touch icons are fetched by
-      # iOS from the root by convention, so nothing links to them at all.
+      # The five image files that live at the repo ROOT rather than under img/,
+      # which `img/**` does not reach. favicon.png and the banners are used on
+      # nearly every page (banner.webp is the og:image), and the two
+      # apple-touch icons are fetched by iOS from the root by convention, so
+      # nothing links to them at all.
       # Verify this list still covers everything published with:
       #   ./tools/stage_site.sh /tmp/dist   # then diff against these patterns
       - 'favicon.png'
@@ -128,37 +121,22 @@ on:
       # VideoObject onto its recap, through update_presentations_schema.py's
       # card extractor. Edit either alone and the output changes with no
       # .html in the commit, so without these the change would sit in main
-      # until some unrelated push carried it live - the silent half of the
-      # path-filter trap in CLAUDE.md. Widening costs one redundant deploy
-      # of identical bytes.
+      # until some unrelated push carried it live (see "Path filters must
+      # cover everything `stage_site.sh` publishes" in CLAUDE.md). Widening
+      # costs one redundant deploy of identical bytes.
       - 'tools/sync_recap_videos.py'
       - 'tools/sync_next_session.py'
       - 'tools/update_presentations_schema.py'
       - '.github/workflows/deploy.yml'
-      # `meetings-search-index.json` IS a trigger, unlike its sibling below.
-      # See the note - it is not rebuilt by this workflow, so a commit really is
-      # the only way a change to it reaches production.
+      # A trigger even though the build regenerates it (see "Regenerate
+      # derived files" below), so an edit that touches only the index can
+      # still deploy on its own.
       - 'meetings-search-index.json'
     #
     # Deliberately NOT a trigger: `search-index.json`. It is published, but the
     # build job regenerates it from the site content on every run (see
     # `python3 tools/build_search_index.py` below), so a commit is never the
     # reason it needs to ship.
-    #
-    # `meetings-search-index.json` is kept as a trigger too, and the reason has
-    # changed. It used to be the ONLY protection: this workflow did not run
-    # `tools/build_meetings_search_index.py` - only the housekeeping workflow
-    # (site-update-deploy.yml) did - so a stale entry sat live until something
-    # else happened to ship it. That was not hypothetical: a participant's email
-    # address removed from two recap pages stayed readable in the published
-    # index afterwards, because fixing the HTML did not rebuild or redeploy the
-    # index.
-    #
-    # The build job now regenerates that index itself, before staging (see
-    # "Regenerate derived files" below), so the published copy is correct even
-    # when the committed one is not. The trigger stays anyway: widening this
-    # list is the safe direction, and an edit that touches only the index should
-    # still be able to deploy on its own.
     #
     # Widening this list is always the safe direction - a superfluous pattern
     # costs one extra deploy of identical bytes, while a missing one costs a
@@ -197,27 +175,24 @@ concurrency:
   # check workflows use. There is only one production site, so we never want two
   # deploys publishing at once regardless of which ref triggered them.
   group: deploy
-  # This was `true`, which cancels the in-flight run. That can kill a publish
-  # part-way: on 2026-07-15 a push cancelled a run after AWS and Azure had
-  # published but before GCP, which - had that commit touched a published file -
-  # would have left two origins on new content and one on old, with Cloudflare
-  # load-balancing between them. The sharper version: the publish jobs upload
+  # Keep this `false`. `true` cancels the in-flight run, which can kill a
+  # publish part-way: some origins on new content and some on old, with
+  # Cloudflare load-balancing between them. Worse, the publish jobs upload
   # assets first and HTML second, so a cancel between those two passes leaves an
-  # origin serving the new style.css next to HTML naming the old hash, i.e. the
-  # unstyled site again.
+  # origin serving the new style.css next to HTML naming the old hash, i.e. an
+  # unstyled site.
   #
   # `false` makes a newer run PEND until the current one finishes, so no job is
   # ever cancelled mid-flight. This does not let stale bytes win: the runs are
   # serialized, so the older one publishes first and the newer one publishes
   # after it - the final state is always the newest commit. Publishing older
-  # bytes after newer ones needs two runs publishing AT ONCE, which the lock is
-  # what prevents; cancelling was never what protected us there.
+  # bytes after newer ones needs two runs publishing AT ONCE, which the lock
+  # prevents.
   #
   # It also doesn't pile up. GitHub keeps at most one pending run per group and
   # cancels any previously pending one, so a burst of pushes costs one extra
   # deploy, not N - and a pending run has touched nothing, so cancelling it is
-  # free. That gives us the "supersede the stale deploy" behaviour we wanted
-  # from `true`, without the half-published origin.
+  # free.
   #
   # (A job-level cancel on `build` alone would be dead code: this lock means a
   # second run never starts while the first is running, so two builds cannot
@@ -240,11 +215,8 @@ jobs:
   # WHY THIS EXISTS. validate-html.yml runs the same checks, but it is a
   # SEPARATE workflow triggered by the same push, so it runs *alongside* this
   # one rather than in front of it. GitHub's `needs:` cannot reach across
-  # workflows. On 2026-08-10 a commit with unresolved `git stash pop` conflict
-  # markers in meetings.html was published to all three origins while
-  # validate-html was still running; the JSON-LD gate did fail, ~30 seconds
-  # after the broken page was already live. A gate that reports after the fact
-  # is a smoke alarm wired to a photo album.
+  # workflows, so without this job a broken page would be live before
+  # validate-html reported on it.
   #
   # Duplicating three fast scripts across two workflows is the deliberate
   # trade. validate-html.yml keeps the fuller treatment (html5validator, PR
@@ -263,10 +235,8 @@ jobs:
         with:
           python-version: '3.x'
 
-      # The check that would have caught the 2026-08-10 incident directly,
-      # rather than as a side effect of markers happening to land inside a
-      # JSON-LD block. Conflict markers in plain prose are just as broken and
-      # no other gate looks for them.
+      # Conflict markers in plain prose are just as broken as ones inside a
+      # JSON-LD block, and no other gate looks for them.
       #
       # Only `<<<<<<< ` and `>>>>>>> ` are matched. A bare `=======` line is
       # NOT a reliable signal: it is legitimate Markdown heading underline and
@@ -384,23 +354,12 @@ jobs:
           echo "search-index.json built: $((size / 1024)) KB"
 
       # Re-stamp SRI hashes + ?v= cache-busts before staging, so the HTML we
-      # publish always matches the assets we publish alongside it.
-      #
-      # This used to be left to whoever edited style.css/main.js remembering to
-      # run update_sri.py, with site-update-deploy.yml as the safety net. That
-      # net cannot catch anything: its fix is committed `[skip ci]`, so it lands
-      # in the repo but never reaches production. When an asset edit shipped
-      # without re-stamped hashes, this job published the new asset next to HTML
-      # still naming the old hash - browsers refuse the file on the SRI mismatch
-      # and the site renders unstyled until some unrelated push happens to
-      # trigger another deploy. Of the 46 times housekeeping has auto-fixed SRI,
-      # 30 followed a push that published mismatched HTML.
-      #
-      # Doing it here makes the artifact self-consistent by construction, so the
-      # failure mode is gone rather than merely detected. dist/ does not exist
-      # yet at this point, so the rglob only walks the source tree.
-      # site-update-deploy.yml still stamps the repo, which keeps the committed
-      # HTML tidy; correctness no longer depends on it.
+      # publish always matches the assets we publish alongside it, even when an
+      # asset edit was pushed without running update_sri.py. (Housekeeping's
+      # SRI fix is committed with a skip-ci marker, so it never deploys and
+      # cannot be the safety net.) dist/ does not exist yet at this point, so
+      # the rglob only walks the source tree. site-update-deploy.yml still
+      # stamps the repo, which keeps the committed HTML tidy.
       #
       # NOTE: this artifact only feeds AWS and Azure. publish-gcp builds its
       # image from a fresh checkout, so it runs its own copy of this step -
@@ -421,18 +380,15 @@ jobs:
       #
       # This is the SRI "belt and braces" step above, generalised. Housekeeping
       # and this workflow both fire on a push to main, in DIFFERENT concurrency
-      # groups, so they start in the same second and overlap for about two
-      # minutes - measured at 45 of 45 pushes on 2026-08-23. Housekeeping then
-      # commits its output with a skip-ci marker, so that commit never deploys.
-      # Whatever it generated therefore missed the publish that triggered it and
-      # waits for the next unrelated push. update_sri.py was already immune
-      # because of the step above; these two were not.
+      # groups, so they run at the same time, and housekeeping commits its
+      # output with a skip-ci marker that never deploys. Without this step,
+      # whatever it generated would miss the publish and wait for the next
+      # unrelated push.
       #
-      # Both are pure functions of files already in this checkout: no network,
+      # These are pure functions of files already in this checkout: no network,
       # no credentials, no git history. Running them here costs under a second
       # and makes dist/ self-consistent regardless of who won the race.
-      # Housekeeping still commits its copies - that commit is now just repo
-      # tidiness, and its one-deploy lag stops mattering.
+      # Housekeeping still commits its copies, for repo tidiness.
       #
       # NOT moved here, deliberately:
       #   - update_sitemap.py reads `git log %cs` for each file's <lastmod>.
@@ -473,14 +429,10 @@ jobs:
           path: dist/
           # REQUIRED, and easy to miss. Since v4.4 this action defaults to
           # `include-hidden-files: false` and silently drops every dot-path from
-          # the artifact - it prints a count, not an error. That quietly broke
-          # /.well-known/security.txt: stage_site.sh staged 2973 files, the
-          # artifact carried 2972, and the missing one was the security.txt at
-          # the RFC 9116 canonical location. AWS and Azure publish FROM this
-          # artifact, so both 404'd on it, while GCP - which builds from a fresh
-          # checkout, not the artifact - served it fine. The result was a path
-          # that worked on roughly one request in three, which is a far more
-          # annoying bug than a clean failure.
+          # the artifact - it prints a count, not an error. Without it
+          # /.well-known/ is missing on AWS and Azure (which publish FROM this
+          # artifact) but present on GCP (which builds from a fresh checkout),
+          # so those paths work on roughly one request in three.
           #
           # dist/ contains exactly one hidden path (.well-known/) because
           # tools/site-publish.filter excludes every other dot-path, so turning
@@ -546,7 +498,7 @@ jobs:
       # under the NEW ?v= key - and since we serve assets `immutable,
       # max-age=31536000`, that wrong answer sticks for a year. Browsers then
       # reject the stylesheet on the SRI hash mismatch and the site renders
-      # unstyled. That is exactly what happened on 2026-07-15.
+      # unstyled.
       #
       # Uploading every asset before any HTML closes the window: the new
       # ?v= URL cannot be requested until the HTML naming it exists, and by
@@ -608,17 +560,15 @@ jobs:
       # by the action's generic fallback, which advises checking `auth-type`.
       # That advice is a DEAD END: auth-type is not the problem, and the log
       # above it will show the OIDC subject claim and client-id resolving
-      # correctly. It is an Azure-side blip, and it retries clean. Real
-      # instance: run 31347298268 on 2026-08-10.
+      # correctly. It is an Azure-side blip, and it retries clean.
       #
       # Losing this job is not a no-op. publish-aws and publish-gcp still
       # succeed, so Azure alone falls behind, and Cloudflare load-balances
       # across all three origins - about one request in three then serves the
       # previous deploy. purge-cloudflare `needs:` all three publish jobs, so
       # it skips too and the edge keeps serving stale objects on top of that.
-      # Nothing repairs it until the next unrelated push. That is the same
-      # partial-origin failure shape as the dotfile-artifact bug in CLAUDE.md,
-      # and it is worth one duplicated step to avoid.
+      # Nothing repairs it until the next unrelated push, so it is worth one
+      # duplicated step to avoid.
       - name: Azure login (OIDC)
         id: azlogin
         # First attempt only. A failure here is swallowed so the retry below
@@ -698,7 +648,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # GCP: build the nginx container, Trivy-scan it, push to Artifact Registry,
-  # and deploy a Cloud Run revision. Cloud Run is now a direct Cloudflare
+  # and deploy a Cloud Run revision. Cloud Run is a direct Cloudflare
   # origin (ingress=all, no GCLB / Cloud CDN - so no cache invalidation step).
   # ---------------------------------------------------------------------------
   publish-gcp:
@@ -798,23 +748,15 @@ jobs:
           echo "image=${REF}:${SHA}" >> "$GITHUB_OUTPUT"
 
       # Ask Artifact Registry whether this exact tag already exists, BEFORE
-      # deciding whether to build. This one question reorders the whole job, and
-      # it exists to close a real gap:
-      #
-      # This job used to build unconditionally, Trivy-scan what it had just
-      # built, then skip the push when the tag was already present and deploy
-      # the REGISTRY copy. That means it scanned one set of bytes and shipped a
-      # different set. The Dockerfile runs `apk upgrade --no-cache`, so a
-      # rebuild days later genuinely differs from the stored image - the scan
-      # would pass on freshly-patched packages while the older image actually
-      # being deployed carried the CVEs.
-      #
-      # It was a narrow window when the only way a tag pre-existed was a
-      # workflow rerun minutes later. The QA promotion path widens it to however
-      # long a change sits in QA before being promoted, because deploy-qa.yml
-      # pushes the image and this job then reuses it. So: find out first, then
-      # either build (new commit) or pull (promotion), and scan whichever one is
-      # actually going to be deployed.
+      # deciding whether to build, so the bytes scanned are the bytes deployed.
+      # The Dockerfile runs `apk upgrade --no-cache`, so a rebuild days later
+      # genuinely differs from the stored image: scanning a fresh rebuild while
+      # deploying the registry copy would pass on freshly-patched packages
+      # while the image actually deployed carried the CVEs. A tag pre-exists on
+      # a rerun, and on a QA promotion (deploy-qa.yml pushes the image and this
+      # job reuses it). So: find out first, then either build (new commit) or
+      # pull (promotion), and scan whichever one is actually going to be
+      # deployed.
       #
       # `describe` exits non-zero when the tag is absent, which is the normal
       # case, so the failure is captured rather than allowed to trip errexit.
@@ -858,10 +800,8 @@ jobs:
       # corrected dist/ artifact. Without this step, a commit carrying stale
       # SRI hashes would ship corrected HTML on AWS and Azure but stale-hash
       # HTML here - browsers reject the assets on the mismatch, and the site
-      # renders unstyled on roughly one request in three, the most annoying
-      # failure shape this repo knows. The SRI verify in purge-cloudflare
-      # fetches the homepage once, so it only has a ~1-in-3 chance of landing
-      # on this origin and catching it; prevention has to happen per-origin.
+      # renders unstyled on roughly one request in three. Prevention has to
+      # happen per-origin.
       #
       # Skipped on a promotion, for the same reason as the search index above:
       # deploy-qa.yml ran this identical step before pushing the image, so the
@@ -972,36 +912,25 @@ jobs:
             --ignorefile .trivyignore.yaml \
             "${{ steps.tag.outputs.image }}"
 
-      # Re-pushing an existing tag is a silent overwrite now that the repo runs
+      # Re-pushing an existing tag is a silent overwrite, because the repo runs
       # with immutable_tags = false (retention requires it; see
-      # infra/terraform/gcp/artifact_registry.tf). It used to fail outright,
-      # which is the failure this step was originally written around. The
-      # existence check below is therefore load-bearing rather than merely
-      # tidy, and the digest resolution after it is what makes a lost race
-      # harmless. The check at the top of this job decides whether we
+      # infra/terraform/gcp/artifact_registry.tf). So the existence check below
+      # is load-bearing, and the digest resolution after it is what makes a
+      # lost race harmless. The check at the top of this job decides whether we
       # built or pulled; this step re-asks the same question immediately before
-      # pushing, because the answer can CHANGE while the job runs.
+      # pushing, because the answer can CHANGE while the job runs:
+      # deploy-qa.yml builds the same commit into the same tag in the same
+      # repository, so when a commit reaches `main` and `qa` at once, both
+      # workflows race.
       #
-      # That is not hypothetical. deploy-qa.yml builds the same commit into the
-      # same tag in the same repository, so when a commit reaches `main` and
-      # `qa` at once, both workflows race. On 2026-08-16 the production run
-      # checked the registry (empty), spent two minutes building and scanning,
-      # and by the time it pushed, the QA run had published the tag - so the
-      # push was rejected, `Deploy to Cloud Run` was skipped, and GCP was left a
-      # commit behind AWS and Azure with `purge-cloudflare` skipped on top. That
-      # is the split-origin state this repo has hit before: roughly one request
-      # in three serving stale content, from a workflow that looked like it had
-      # simply failed.
-      #
-      # Re-checking here closes it. Finding the tag present is a SUCCESS, not an
-      # error: the bytes are already where they need to be, and the run that put
-      # them there ran the same Trivy gate before pushing.
+      # Finding the tag present is a SUCCESS, not an error: the bytes are
+      # already where they need to be, and the run that put them there ran the
+      # same Trivy gate before pushing.
       #
       # Note the deliberate asymmetry with the build/pull fork above, which
       # still keys off the ORIGINAL check. Re-deciding that here would mean
-      # scanning one image and deploying another, which is the exact gap this
-      # job was restructured to close. The narrow trade is that in a lost race
-      # the locally built image is discarded unscanned-for-nothing, and the
+      # scanning one image and deploying another. The narrow trade is that in a
+      # lost race the locally built image is discarded unscanned-for-nothing, and the
       # registry copy - scanned by the QA run - is what gets deployed.
       - name: Push container image
         if: steps.registry.outputs.exists == 'false'
@@ -1023,8 +952,7 @@ jobs:
       # Resolving here and deploying the sha256 collapses that window, so the
       # bytes this job verified are the bytes that run. Cloud Run resolves the
       # digest anyway - Binary Authorization evaluates the digest-resolved
-      # reference - so this makes explicit what was already happening, and
-      # restores the guarantee immutable tags used to provide.
+      # reference - so this makes that explicit.
       - name: Resolve image digest
         id: digest
         run: |
@@ -1077,16 +1005,16 @@ jobs:
             --format='value(status.latestReadyRevisionName,status.url)'
 
   # ---------------------------------------------------------------------------
-  # Cloudflare is the CDN actually in front of all three origins, and nothing
-  # was purging it. The CloudFront invalidation in publish-aws only clears
-  # CloudFront, which visitors never touch.
+  # Cloudflare is the CDN actually in front of all three origins. The
+  # CloudFront invalidation in publish-aws only clears CloudFront, which
+  # visitors never touch.
   #
   # Normally the ?v=<content-hash> cache-buster makes a purge unnecessary: new
   # content means a new URL means a guaranteed miss. But that only holds if the
   # asset is in place before its URL is first requested. When it isn't, the
   # edge caches the OLD bytes under the NEW key with `immutable,
   # max-age=31536000` and serves them for a year; SRI then blocks the asset and
-  # the site renders unstyled (2026-07-15). The asset-before-HTML ordering in
+  # the site renders unstyled. The asset-before-HTML ordering in
   # the publish jobs prevents that; this purge is the backstop that stops any
   # such mistake from outliving the deploy.
   #
@@ -1157,20 +1085,15 @@ jobs:
           fi
           echo "Cloudflare cache purged."
 
-      # Prove the deploy is actually serving what the HTML asks for. This is the
-      # check that would have caught 2026-07-15 in CI instead of in production:
-      # it re-derives each asset's SHA-384 from the bytes the edge hands back and
-      # compares against the integrity= the live HTML declares for that URL.
-      # Checked at the edge AND at each origin by name.
+      # Prove the deploy is actually serving what the HTML asks for: re-derive
+      # each asset's SHA-384 from the bytes served and compare against the
+      # integrity= the live HTML declares for that URL. Checked at the edge AND
+      # at each origin by name.
       #
       # Asking https://csoh.org/ alone tests whichever origin the load balancer
-      # happened to pick. CLAUDE.md already records what that costs: the
-      # dotfile-artifact bug left /.well-known/security.txt missing from two
-      # origins out of three and returning 200 on about one request in three,
-      # "invisible to any check that fetches a URL once and sees success". A
-      # per-asset loop through the edge spreads across origins by luck, never by
-      # assertion, so a single broken origin can pass. Naming the origins turns
-      # a probability into a guarantee.
+      # happened to pick. A per-asset loop through the edge spreads across
+      # origins by luck, never by assertion, so a single broken origin can
+      # pass. Naming the origins turns a probability into a guarantee.
       - name: Verify live assets match their SRI hashes
         env:
           # The three origin hostnames, as repo Variables holding exactly the
@@ -1253,9 +1176,8 @@ jobs:
               try:
                   html = get(base + "/").decode("utf-8", "replace")
               except Exception as exc:
-                  # An origin that cannot be reached is a failure, not a skip.
-                  # A skipped origin is the silent no-op this repo keeps paying
-                  # for; say so and fail.
+                  # An origin that cannot be reached is a failure, not a skip:
+                  # a skipped origin would pass silently.
                   print(f"::error::{label} ({base}) is unreachable: {exc}")
                   failed += 1
                   continue
@@ -1329,7 +1251,7 @@ jobs:
       # all three origins, prints which ones it reached, and warns when it never
       # reached Azure - the origin that depends entirely on the edge ruleset.
       # Leave the sampling default alone; --samples 1 here would reduce it to
-      # the single-request check the SRI and robots steps just stopped being.
+      # a single-request check that tests one origin.
       - name: Verify live security headers match the repo (edge, all origins)
         run: python3 tools/check_edge_headers.py --url https://csoh.org/
 
@@ -1338,8 +1260,7 @@ jobs:
       # into default_cache_behavior). Without that policy a direct request to
       # *.cloudfront.net returns a fully working copy of the site with no CSP,
       # no HSTS and no X-Frame-Options, and the edge check above cannot see it,
-      # because those requests never traverse Cloudflare. Verified serving all 8
-      # headers on 2026-08-23.
+      # because those requests never traverse Cloudflare.
       #
       # --samples 1 is correct HERE and only here: this URL is a single origin,
       # so there is nothing to sample across.
@@ -1363,20 +1284,19 @@ jobs:
       # Third edge-parity gate, same reasoning as the two above: assert that
       # what the edge serves is what this repo says.
       #
-      # Cloudflare's AI Crawl Control used to prepend a managed robots.txt block
-      # ahead of ours, disallowing seven crawlers that our own robots.txt and
-      # llms.txt explicitly welcome. It was turned off on 2026-07-26. Nothing
-      # stops it being re-enabled - it is a zone-level dashboard toggle that
-      # infra/terraform/cloudflare/ does not declare, so `terraform apply` would
-      # neither report nor fix a regression. This step is the only thing that
-      # would notice.
+      # Cloudflare's AI Crawl Control can prepend a managed robots.txt block
+      # ahead of ours, disallowing crawlers that our own robots.txt and
+      # llms.txt explicitly welcome. It must stay off, and it is a zone-level
+      # dashboard toggle that infra/terraform/cloudflare/ does not declare, so
+      # `terraform apply` would neither report nor fix a regression. This step
+      # is the only thing that would notice.
       #
       # Unlike check_edge_headers.py, this checker makes ONE request and has no
-      # sampling of its own, so pointing it at the apex tested one origin out of
-      # three. robots.txt is ordinary published content - every origin serves
-      # its own copy - so a file that missed one publish is exactly the case to
-      # catch, and it is caught by naming each origin rather than by repeating
-      # the apex and hoping the balancer rotates.
+      # sampling of its own, so pointing it at the apex would test one origin
+      # out of three. robots.txt is ordinary published content - every origin
+      # serves its own copy - so a file that missed one publish is exactly the
+      # case to catch, and it is caught by naming each origin rather than by
+      # repeating the apex and hoping the balancer rotates.
       - name: Verify live robots.txt matches the repo (edge and every origin)
         env:
           # Bare hostnames, scheme added after the check - see the same env

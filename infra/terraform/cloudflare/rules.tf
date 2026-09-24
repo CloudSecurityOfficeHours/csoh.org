@@ -91,13 +91,14 @@ resource "cloudflare_ruleset" "security_headers" {
       # "object-src 'none'" bans plugins like Flash. This is the strongest single
       # defense against cross-site scripting (XSS).
       #
+      # csoh.goatcounter.com is in img-src + connect-src for the cookieless
+      # analytics beacon.
+      #
       # NOTE: the lifecycle block below sets ignore_changes = [rules], so editing
-      # this CSP value does NOT reach the edge on `terraform apply`. To actually
-      # allow the GoatCounter origin (csoh.goatcounter.com, added to img-src +
-      # connect-src for cookieless analytics), update the CSP in the Cloudflare
-      # dashboard, or temporarily drop ignore_changes for one apply. Otherwise
-      # /vendor/goatcounter-count.js loads fine but the analytics beacon is
-      # silently CSP-blocked and no hits are recorded.
+      # this CSP value does NOT reach the edge on `terraform apply`. Update the
+      # CSP in the Cloudflare dashboard, or temporarily drop ignore_changes for
+      # one apply. An unapplied edit fails silently: a script still loads, but
+      # a request to a host the live CSP lacks is blocked with no error you see.
       headers {
         name      = "Content-Security-Policy"
         operation = "set"
@@ -139,9 +140,8 @@ resource "cloudflare_ruleset" "security_headers" {
     # headers for the Azure origin - Azure Blob static websites cannot set
     # response headers at all. The GCP/nginx origin sets them independently via
     # nginx-security-headers.conf, and the AWS origin does too via
-    # aws_cloudfront_response_headers_policy.security in aws/cloudfront.tf,
-    # but only once that config is applied - until then AWS depends on the edge
-    # as well. Keep all three copies of the values in step.
+    # aws_cloudfront_response_headers_policy.security in aws/cloudfront.tf.
+    # Keep all three copies of the values in step.
     #
     # Because Terraform cannot enforce this, CI asserts it from the outside
     # instead: tools/check_edge_headers.py parses the header values out of THIS
@@ -156,8 +156,8 @@ resource "cloudflare_ruleset" "security_headers" {
 # =============================================================================
 # Legacy redirects - the edge equivalent of the .htaccess RewriteRules
 # -----------------------------------------------------------------------------
-# The /csoh/* prefix strip and the bare /index.php redirect. Rules evaluate
-# top-to-bottom; redirect is terminating. Verify with curl after apply (see the
+# www -> apex, retired pages, the old /conc8/ CMS tree, and section
+# directories. Rules evaluate top-to-bottom; redirect is terminating. Verify with curl after apply (see the
 # cutover runbook in infra/README.md).
 # =============================================================================
 # A second ruleset, this time in the request-redirect phase. These rules look at
@@ -195,18 +195,14 @@ resource "cloudflare_ruleset" "redirects" {
           # Build the destination from the PATH only, and hardcode the scheme
           # and host. Never derive it from the request's own scheme.
           #
-          # This used to be:
+          # The rule's expression matches http:// requests too, and this
+          # dynamic-redirect phase runs BEFORE "Always Use HTTPS" (zone.tf). So
+          # something like
           #   wildcard_replace(http.request.full_uri, "https://www.*", "https://$${1}")
-          # which was an infinite redirect loop on plaintext HTTP. The rule's
-          # expression (`http.host eq "www.csoh.org"`) matches http:// requests
-          # too, and this dynamic-redirect phase runs BEFORE "Always Use HTTPS"
-          # (zone.tf). On an http:// request the full_uri is
-          # "http://www.csoh.org/..." , the "https://www.*" pattern does not
-          # match, wildcard_replace returns the input unchanged, and Cloudflare
-          # 301s the request to itself - forever, in cleartext, so the browser
-          # never reaches a response that could carry the HSTS header.
-          # Verified live before the fix: `curl -I http://www.csoh.org/about.html`
-          # returned `Location: http://www.csoh.org/about.html`.
+          # does not match an http:// full_uri, returns it unchanged, and 301s
+          # the request to itself forever, in cleartext, never reaching a
+          # response that could carry HSTS. Check with
+          # `curl -I http://www.csoh.org/about.html`: Location must be https.
           #
           # preserve_query_string above carries any "?query=string".
           expression = "concat(\"https://csoh.org\", http.request.uri.path)"
@@ -215,35 +211,22 @@ resource "cloudflare_ruleset" "redirects" {
     }
   }
 
-  # --- RETIRED 2026-08-09: csoh_prefix_strip (/csoh/* -> /*) ---
-  # This dynamically stripped a "/csoh/" prefix, a layout two site generations
-  # old. It was removed to free a slot: this phase is capped at 10 rules on the
-  # Free plan, and Cloudflare rejects the entire ruleset update at 11 with
-  # "exceeded the maximum number of rules in the phase
-  # http_request_dynamic_redirect: N out of 10 (50001)" - an atomic failure, so
-  # you find out at apply, not at plan.
-  #
-  # The evidence it was dead weight: Search Console's complete "Not found (404)"
-  # export of 2026-08-09 held 224 URLs and not one was /csoh/*, and the whole
-  # property reported a single "Page with redirect". Google had no memory of
-  # that prefix at all.
-  #
-  # If /csoh/... links ever resurface, do not re-add this here - the phase is
-  # now full. Put them in a Bulk Redirect list instead (account-scoped, its own
-  # quota); that also needs Account -> Filter Lists + Rulesets on the token,
-  # which the current zone-scoped one does not have.
+  # THIS PHASE IS FULL. It is capped at 10 rules on the Free plan, and
+  # Cloudflare rejects the entire ruleset update at 11 with "exceeded the
+  # maximum number of rules in the phase http_request_dynamic_redirect: N out
+  # of 10 (50001)" - an atomic failure, so you find out at apply, not at plan.
+  # A new redirect goes in a Bulk Redirect list instead (account-scoped, its
+  # own quota); that also needs Account -> Filter Lists + Rulesets on the
+  # token, which the current zone-scoped one does not have. Merge rules that
+  # share a destination (as conc8_root does) before adding one.
 
-  # The old PHP front-controller URLs, merged into conc8_root below - both send
-  # traffic to the bare home page with identical parameters, so they do not
-  # need separate rules.
+  # The bare PHP front-controller URLs (/index.php) are handled by conc8_root
+  # below: same destination, same parameters, so no separate rule.
 
   # --- Retired career pages -> consolidated guide ---
   # Three entry-path pages were merged into breaking-into-cloud-security.html
-  # in commit dda6a39b (2026-07-20) and the source files deleted. The 301s were
-  # written into .htaccess, which nothing in this stack reads, so all three
-  # 404'd in production from the day they were removed - long enough for Google
-  # Search Console to file them under "Not found (404)". These are the real
-  # ones. Do not move them back to .htaccess.
+  # and their source files deleted. The 301s live here, not in .htaccess:
+  # nothing in this stack reads .htaccess.
   rules {
     ref         = "retired_career_pages"
     description = "3 retired career pages -> breaking-into-cloud-security.html"
@@ -268,13 +251,10 @@ resource "cloudflare_ruleset" "redirects" {
   # ---------------------------------------------------------------------------
   # The pre-static site ran Concrete CMS under /conc8/, whose front controller
   # put the page path after index.php (e.g. /conc8/index.php/blog/calendar).
-  # infra/README.md's cutover step 4 has always told you to verify a /conc8/
-  # redirect with curl, but no rule was ever written - the check would have
-  # failed if anyone had run it.
   #
   # Google still has the whole tree. The Search Console "Not found (404)" export
-  # of 2026-08-09 held 224 URLs, and 220 of them were /conc8/*. The buckets, and
-  # what each rule below covers:
+  # (as of 2026-08-09) held 224 URLs, and 220 of them were /conc8/*. The
+  # buckets, and what each rule below covers:
   #
   #   100  /conc8/index.php/cloud-security-resources/<slug>   -> conc8_resources
   #     8  /conc8/index.php/resources/<slug>                  -> conc8_resources
@@ -288,18 +268,16 @@ resource "cloudflare_ruleset" "redirects" {
   #   - /conc8/concrete/* is Concrete's own installed source tree: vendor/,
   #     src/, themes/, and browsable directory listings. Google indexed 52 of
   #     them, including a stray error_log. None of it was ever content, none of
-  #     it has a successor, and a 404 is the correct, honest answer. (That these
-  #     were publicly crawlable at all was a real exposure on the old stack; it
-  #     died with the migration to static hosting.)
+  #     it has a successor, and a 404 is the correct, honest answer.
   #   - /cdn-cgi/l/email-protection is a Cloudflare Email Obfuscation artifact,
   #     not our URL. Nothing to do.
   #
   # Every rule sets preserve_query_string = false on purpose. 88 of the 224 URLs
   # carry CMS pagination junk - ?ccm_paging_p_b2968=3&ccm_order_by_b2968=RAND(
-  # 1633498375)&... - because the block re-seeded RAND() on every render, so the
-  # old site minted a brand-new URL each time Googlebot looked at it. That is
-  # what inflated one page into 55. Carrying those params through the redirect
-  # would rebuild the same infinite crawl space on the new URLs.
+  # 1633498375)&... - because the CMS re-seeded RAND() on every render and so
+  # minted a new URL each time Googlebot looked (one page became 55). Carrying
+  # those params through the redirect would rebuild the same infinite crawl
+  # space on the new URLs.
   # ---------------------------------------------------------------------------
 
   # Exact 1:1 match - the old Mitnick page still exists at a new path.
@@ -338,8 +316,8 @@ resource "cloudflare_ruleset" "redirects" {
   }
 
   # The old blog tree: /blog/calendar, /blog/presentations,
-  # /blog/open-session-summaries, /blog/topic/207/podcasts. This is the redirect
-  # infra/README.md's cutover step 4 has always claimed to verify.
+  # /blog/open-session-summaries, /blog/topic/207/podcasts. infra/README.md's
+  # cutover step 4 verifies this one with curl.
   rules {
     ref         = "conc8_blog"
     description = "/conc8/index.php/blog/* -> /news.html"
@@ -359,11 +337,8 @@ resource "cloudflare_ruleset" "redirects" {
   # Matched by exact path (not a /conc8 prefix) so that /conc8/concrete/* falls
   # through to a 404 as described above. Query strings are ignored by an
   # http.request.uri.path test, so this one rule absorbs all 55 RAND() variants.
-  #
-  # The bare /index.php and /index.php/ spellings were folded in here on
-  # 2026-08-09 (previously the separate bare_index_php rule). Same destination,
-  # same status code, same query-string handling - one rule where there were
-  # two, which is what paid for one of the four directory redirects below.
+  # The bare /index.php and /index.php/ spellings share it: same destination,
+  # status code and query-string handling, so they cost no extra rule slot.
   rules {
     ref         = "conc8_root"
     description = "/conc8 root + bare /index.php front-controller spellings -> home"
@@ -383,14 +358,13 @@ resource "cloudflare_ruleset" "redirects" {
   # Section directories -> their index page
   # ---------------------------------------------------------------------------
   # The site is flat files, so /meetings/ has no index document and the four
-  # content subdirectories are dead URLs - the kind people type, link, and
-  # guess. Worse, they answered inconsistently: sampling /homelab/ twelve times
-  # returned a mix of 403 and 404, because S3 replies 403 (AccessDenied) for a
-  # missing key while nginx and Azure reply 404. Cloudflare load-balances
-  # across all three, so the response depended on which origin caught the
-  # request. That split is what put entries in Search Console's "Blocked due
-  # to access forbidden (403)" bucket, and it is invisible to any check that
-  # fetches a URL once.
+  # content subdirectories would be dead URLs - the kind people type, link, and
+  # guess. Worse, they would answer inconsistently: S3 replies 403
+  # (AccessDenied) for a missing key while nginx and Azure reply 404, and
+  # Cloudflare load-balances across all three, so the status depends on which
+  # origin caught the request. Search Console files the 403s under "Blocked
+  # due to access forbidden (403)", and a check that fetches a URL once cannot
+  # see the split.
   #
   # These four are separate rules rather than one wildcard_replace, because
   # only meetings/ follows the <dir>.html pattern. The targets come from
@@ -540,24 +514,22 @@ resource "cloudflare_ruleset" "cache" {
     ref         = "cache_html_xml_short"
     description = "HTML/XML/JSON/TXT + extensionless pages - 1 hour, revalidate"
     # Match by extension, PLUS the extensionless cases. That last part matters:
-    # this rule used to be `extension in {"html" "xml"}` alone, and
     # http.request.uri.path.extension is empty for "/" and for any clean URL
-    # like "/about". Those matched no cache rule at all, fell through to
-    # Cloudflare's default - which does NOT cache HTML - and returned
-    # cf-cache-status: DYNAMIC, i.e. every single request for the home page was
-    # forwarded to an origin. "json" and "txt" are here for the same reason:
-    # /search-index.json is the largest file on the site (3.5 MB) and was being
-    # served uncached on every search-page load.
+    # like "/about". Without the extensionless tests those match no cache rule,
+    # fall through to Cloudflare's default - which does NOT cache HTML - and
+    # return cf-cache-status: DYNAMIC, sending every home-page request to an
+    # origin. "json" and "txt" cover /search-index.json, the largest file on
+    # the site, loaded by every search page.
     #
     # ends_with() and eq are plain string functions, not regex - the zone is on
     # a Cloudflare plan without regex support in rule expressions, so `matches`
     # is not available here.
     #
     # The trailing "and path ne /search.html" is load-bearing. Cache rules apply
-    # the LAST matching rule, not the first, so this rule was already silently
-    # overriding the 60-second search.html rule above it: production served
-    # search.html with max-age=3600, never 60. Excluding it here restores that
-    # rule's intent and makes the outcome independent of rule ordering.
+    # the LAST matching rule, not the first, so without it this rule would
+    # override the 60-second search.html rule above it and serve search.html
+    # with max-age=3600. The exclusion makes the outcome independent of rule
+    # ordering.
     #
     # Parentheses are required: `and` binds tighter than `or`, so without them
     # the exclusion would attach only to the last `or` branch.
@@ -585,12 +557,10 @@ resource "cloudflare_ruleset" "cache" {
   # and see the old page with no indication why. QA traffic is a handful of
   # requests from a handful of people, so there is nothing to gain by caching it.
   #
-  # ON PLACEMENT, which is the trap this ruleset has already sprung once. Cache
-  # rules apply the LAST matching rule, not the first: that is how the tier 3
-  # rule silently overrode the 60-second search.html rule above it for as long
-  # as both existed, and production served search.html with max-age=3600. So the
-  # fix here is NOT to rely on this rule sitting at the bottom. Every tier above
-  # carries `and http.host ne "qa.csoh.org"`, which makes their match sets
+  # ON PLACEMENT: cache rules apply the LAST matching rule, not the first (see
+  # the search.html exclusion in tier 3). So this does NOT rely on sitting at
+  # the bottom. Every tier above carries `and http.host ne "qa.csoh.org"`,
+  # which makes their match sets
   # DISJOINT from this one - no request can satisfy both a tier rule and this
   # rule, so which one comes last stops mattering. Moving this block, or
   # inserting a fourth tier below it, cannot break QA caching. Prefer that shape

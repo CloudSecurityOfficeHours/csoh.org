@@ -33,13 +33,13 @@ resource "cloudflare_record" "dmarc" {
   #                BOTH SPF and DKIM alignment: treat it as suspicious (spam
   #                folder) rather than deliver it normally.
   #
-  #                This was `p=none` until 2026-07-25. `none` means "take no
-  #                action, deliver it anyway, just tell me about it" - a
-  #                monitoring mode intended to be temporary while you confirm
-  #                your legitimate senders pass. Left in place permanently, as
-  #                it was here, it means SPF and DKIM are published correctly
-  #                and then explicitly ignored by every receiver: anyone could
-  #                send mail as admin@csoh.org and it would land in inboxes.
+  #                Not `p=none`. `none` means "take no action, deliver it
+  #                anyway, just tell me about it" - a monitoring mode intended
+  #                to be temporary while you confirm your legitimate senders
+  #                pass. Left in place permanently, it means SPF and DKIM are
+  #                published correctly and then explicitly ignored by every
+  #                receiver: anyone could send mail as admin@csoh.org and it
+  #                would land in inboxes.
   #
   #                Deliberately NOT `p=reject` yet. Quarantine is recoverable -
   #                a false positive lands in a spam folder where the recipient

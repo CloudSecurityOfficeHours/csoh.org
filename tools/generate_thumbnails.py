@@ -6,16 +6,14 @@ Renders a CSOH-branded 480x320 (3:2) tile per card and writes it to
 
 Why this exists separately from generate_og_images.py
 -----------------------------------------------------
-Those two produce different things for different places, and conflating
-them is what caused the bug this replaced.
+Those two produce different things for different places, and must not be
+conflated.
 
 An OG image is a 1200x630 social embed: a big headline, a subtitle, a
 footer, all sized to be read at full width in a Slack or LinkedIn unfurl.
 The compact card grids on index.html and what-practitioners-think.html
-render their thumbnail 197-303px wide. Dropping an OG card into that slot
-gave a 6px subtitle, a headline that just repeated the <h3> directly
-beneath it, and - until the aspect-ratio fix - 12-18% sliced off each side
-by object-fit: cover.
+render their thumbnail 197-303px wide. An OG card in that slot gives a 6px
+subtitle and a headline that just repeats the <h3> directly beneath it.
 
 A thumbnail at 233px has one job: be recognisable at a glance and say
 which topic this is. So these tiles carry a glyph and one category word,
@@ -52,9 +50,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = REPO_ROOT / "tools" / "og" / "thumb-template.html"
 OUT_DIR = REPO_ROOT / "img" / "thumbs"
 
-# 3:2. The compact box was 160px tall at 233px wide (ratio 1.46) before this
-# change, so 1.5 keeps the grid's vertical rhythm almost exactly while being
-# a ratio we actually author to instead of one that falls out of a crop.
+# 3:2. Close to the compact grid's natural box (160px tall at 233px wide),
+# so it keeps the grid's vertical rhythm while being a ratio we actually
+# author to instead of one that falls out of a crop.
 THUMB_VIEWPORT = {"width": 480, "height": 320}
 # 3x, not 2x. The compact grid collapses to a single column below 768px, and
 # in the ~600-768px band that makes the tile ~613 CSS px wide - 1226 device px

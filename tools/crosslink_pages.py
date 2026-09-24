@@ -136,9 +136,7 @@ TARGET_PAGES = [
     "cloud-security-platform-engineer.html",
     "cloud-security-sales-engineer.html",
     "cloud-security-customer-success-engineer.html",
-    # Registered August 2026. These shipped without being added here, so they
-    # carried zero glossary cross-links while every comparable page carried
-    # 45+. Nothing errors when a page is missing from this list - it is simply
+    # Nothing errors when a page is missing from this list - it is simply
     # never visited - so check this file whenever a top-level page is added.
     "mcp-security.html",
     "non-human-identity.html",
@@ -149,9 +147,6 @@ TARGET_PAGES = [
     "what-practitioners-think-about-security-regulation.html",
     "what-practitioners-think-about-supply-chain-security.html",
     "what-practitioners-think-about-vulnerability-management.html",
-    # Also registered August 2026, same oversight as the block above. These 23
-    # had accumulated since the list was last reconciled; breach-lessons.html
-    # alone is ~9,500 words and carried a single glossary link.
     "about.html",
     "breach-lessons.html",
     "breaking-into-cloud-security.html",

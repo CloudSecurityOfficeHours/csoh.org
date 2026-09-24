@@ -49,15 +49,12 @@ GLOSSARY = REPO / "glossary.html"
 # case that is the right call: they are ordinary English words that would
 # auto-link constantly in senses unrelated to the entry.
 #
-# term-first used to be a fourth, and its removal is the pattern to imitate
-# rather than to extend this list. FIRST is the Forum of Incident Response and
-# Security Teams; the word had to be denied globally because
-# crosslink_glossary.py matched every key with re.IGNORECASE and would otherwise
-# have linked ~980 ordinary uses of "first". That was a tool limitation being
-# paid for by an entry. Both linkers now match acronym-shaped keys
-# case-sensitively, so the denylist entry could go and the term links again.
-# When something lands here, ask whether the headword is really unlinkable or
-# whether a linker is just not precise enough yet.
+# Prefer making a linker more precise over extending this list. FIRST (the
+# Forum of Incident Response and Security Teams) is the model: both linkers
+# match acronym-shaped keys case-sensitively, so it links without the ordinary
+# word "first" ever doing so. When something lands here, ask whether the
+# headword is really unlinkable or whether a linker is just not precise enough
+# yet.
 UNREACHABLE = {
     "term-image": "'Image' is an ordinary English word; denylisted",
     "term-registry": "'Registry' is an ordinary English word; denylisted",

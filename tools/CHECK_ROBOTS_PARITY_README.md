@@ -5,7 +5,7 @@ Asserts that the `robots.txt` csoh.org actually serves is the one in
 
 Exits non-zero on any difference. It **is a CI gate**: the `purge-cloudflare` job in
 [`deploy.yml`](../.github/workflows/deploy.yml) runs it on every deploy, so a regression
-fails the build. See [How it got here](#how-it-got-here).
+fails the build. See [If it starts failing](#if-it-starts-failing).
 
 ## Quick Start
 
@@ -15,8 +15,7 @@ python3 tools/check_robots_parity.py --url https://csoh.org/        # same, robo
 python3 tools/check_robots_parity.py --url http://127.0.0.1:8000/robots.txt
 ```
 
-Passing run, against production (real output, 2026-07-26, after the edge injection was
-turned off):
+Passing run, against production (real output):
 
 ```
 Checking robots.txt from robots.txt against https://csoh.org/robots.txt
@@ -49,28 +48,26 @@ response at the edge, prepending a Content-Signal preamble and a
 `# BEGIN Cloudflare Managed content` block ahead of the origin's file. That block carries
 `Disallow: /` for the crawlers the repo Allows.
 
-It was enabled on this zone until **2026-07-26**, when the toggle was turned off (see
-[How it got here](#how-it-got-here)). Both of these return `0` today, and that is the
-state this checker now defends:
+The toggle must stay off on this zone. Both of these should return `0`:
 
 ```sh
-curl -s https://csoh.org/robots.txt | grep -c 'Cloudflare Managed'   # 0 today; was 2
+curl -s https://csoh.org/robots.txt | grep -c 'Cloudflare Managed'   # want 0
 grep -c 'Cloudflare Managed' robots.txt                              # 0
 ```
 
-The `2` was the `# BEGIN` and `# END` marker pair around the injected block. The served
-file ran to 160 lines against the repo's 99; today both are 99, so a plain
+A non-zero count is the `# BEGIN` / `# END` marker pair around an injected block. The
+served and repo files should have the same line count, so a plain
 `curl -s https://csoh.org/robots.txt | wc -l` is the fastest smell test.
 
 The injection leaves the origin file untouched and still present, immediately below its
-own block. That is what makes it hard to notice: `git diff` is clean, all three origins
+own block. That makes it hard to notice: `git diff` is clean, all three origins
 serve the right bytes, `terraform plan` is clean (nothing in
 `infra/terraform/cloudflare/` declares this toggle), and only the edge disagrees.
 
 What crawlers then do is genuinely undefined. RFC 9309 says records sharing a user-agent
 token should be merged, in which case an `Allow: /` and a `Disallow: /` of equal
 specificity resolve to the least restrictive rule - but plenty of crawlers take the first
-matching group and stop. Either way the file the world reads no longer says what this repo
+matching group and stop. Either way the file the world reads does not say what this repo
 says, and the llms.txt promise becomes false.
 
 Same failure class as [`check_edge_headers.py`](CHECK_EDGE_HEADERS_README.md): a control
@@ -103,9 +100,8 @@ parser bug can never make a drifted file look clean.
 
 ## When it fails
 
-A real run against production on 2026-07-26, taken while the injection was still live and
-before the toggle was turned off, abridged (the script prints the full 60-line injected
-block in the diff; exit status 1):
+A real run against production with the injection live, abridged (the script prints the
+full 60-line injected block in the diff; exit status 1):
 
 ```
 Checking robots.txt from robots.txt against https://csoh.org/robots.txt
@@ -171,25 +167,16 @@ and an unreachable host (`error: could not fetch <url>: ...`). Unlike
 `check_edge_headers.py`, an error page is **not** something to assert against here - this
 script compares a body, and a 404 body is not a robots.txt.
 
-## How it got here
+## In CI
 
-Cloudflare's AI Crawl Control prepends a managed block to `/robots.txt` at the edge,
-Disallowing crawlers this repo's `robots.txt` deliberately Allows and `llms.txt`
-advertises. On csoh.org it was injecting 60 lines ahead of ours and Disallowing seven
-crawlers we welcome.
+It runs in the `purge-cloudflare` job, immediately after `Verify live security headers
+match the repo`. That job `needs:` all three publishers and already checks out the repo
+(with `persist-credentials: false`) for `check_edge_headers.py`.
 
-**The toggle was turned off on 2026-07-26**, and this checker was wired into `deploy.yml`
-in the same change, immediately after `Verify live security headers match the repo` in the
-`purge-cloudflare` job. That job already `needs:` all three publishers and already checks
-out the repo (with `persist-credentials: false`) for `check_edge_headers.py`, so the gate
-was a single step with no new checkout.
+When adding another checker of this shape, turn the drift off and confirm the checker
+passes before making it a gate: a gate that has never passed is an outage.
 
-The ordering mattered and is worth remembering for the next checker of this shape: while
-the injection was live the check failed against production, so adding it as a gate first
-would have broken every deploy. Turn the drift off, confirm the checker passes, then gate
-it. A gate that has never passed is not a gate, it is an outage.
-
-### If it starts failing
+## If it starts failing
 
 The toggle is zone-level and nothing in `infra/terraform/cloudflare/` declares it, so
 `terraform apply` will neither report nor fix a regression - somebody re-enabled it in the
@@ -206,8 +193,6 @@ managed robots.txt, then purge the edge cache for `/robots.txt` (a deploy's
 If the failure is instead a genuine repo edit that has not deployed yet, the fix is to
 deploy - `robots.txt` is in `deploy.yml`'s `paths:` filter, so a commit touching it
 triggers one.
-
-
 
 ## Delete this script when...
 

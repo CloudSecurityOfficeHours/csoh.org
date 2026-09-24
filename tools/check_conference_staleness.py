@@ -19,10 +19,9 @@ gentle reminder to fill them in once the organizer announces dates.
 
 There is a second, subtler kind of rot. A card whose `data-next-date` is "TBA"
 or "ongoing" is never compared against today - correctly, since there is no
-date to compare - but its *visible text* can still name one. The BSides card
-sat at data-next-date="ongoing" advertising "BSides Las Vegas is August 3-5,
-2026" four days after that had passed, and this checker reported OK the whole
-time, because it only ever looked at the attribute. So the visible text of
+date to compare - but its *visible text* can still name one (an "ongoing"
+card advertising a specific edition that has already happened), and the
+attribute alone would report OK. So the visible text of
 every non-dated card is also scanned for dates that have definitively passed,
 and a hit counts as stale. Only unambiguously past dates are flagged: a bare
 year counts as stale only once the whole year is over, and a month with no year

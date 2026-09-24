@@ -5,8 +5,7 @@ Why stamp it into the HTML rather than sniff the language in JavaScript:
 
   - The label renders from CSS `content: attr(data-lang)`, so a reader with
     JavaScript disabled still sees whether a block is shell or a policy file.
-    Runtime detection gives them nothing. That is the same reasoning behind
-    the <noscript> nav fallback described in CLAUDE.md.
+    Runtime detection gives them nothing.
   - It is reviewable in a diff and gateable in CI. A misclassification is a
     line someone can see and fix, not a heuristic firing invisibly in a
     browser.
@@ -221,8 +220,8 @@ def classify(raw: str) -> str:
 
     # Command substitution, checked only after YAML and HCL. `${...}` alone is
     # not enough: HCL interpolates with it and GitHub Actions writes `${{ }}`,
-    # so an earlier version of this rule labelled every workflow and every
-    # Terraform fragment as bash.
+    # so matching on it alone would label every workflow and every Terraform
+    # fragment as bash.
     if '$(' in body_text:
         return 'bash'
 

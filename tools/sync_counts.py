@@ -184,9 +184,8 @@ def _collectionpage_block(categories: list[str], floor: int) -> str:
 
 def rebuild_resources(html: str) -> str:
     """resources.html is a hub: its CollectionPage enumerates the six category
-    pages and nothing else. The 558-entry ItemList that used to sit beside it
-    described cards this page no longer holds - each category page now carries
-    an ItemList of its own, written by rebuild_category_page()."""
+    pages and nothing else. Each category page carries an ItemList of its
+    own, written by rebuild_category_page()."""
     floor = floor10(len(unique_resources(all_category_html())))
     categories = present_category_pages()
     for m in LDJSON_RE.finditer(html):
@@ -290,14 +289,10 @@ def og_rules(counts: dict) -> list[tuple[str, str]]:
     """(regex, replacement) pairs for count-bearing OG-card strings."""
     meetings = counts["meetings"]
     res_floor = floor10(counts["resources"])
-    # Note: glossary "N+ terms" is deliberately NOT managed here. The original
-    # reason was that the glossary had more <dt> ids (aliases) than visible
-    # terms, so an auto floor would overclaim. Measured 2026-09-01 and that is
-    # no longer true: 321 <dt> with term- ids against 321 <dd>, no alias
-    # headwords at all, so glossary_terms_floor is honest and the markers on
-    # glossary.html and about.html use it. These OG-card strings stay
-    # hand-authored only because regenerating a card is an image build, not a
-    # text edit - not because the count is untrustworthy.
+    # Note: glossary "N+ terms" OG-card strings are deliberately NOT managed
+    # here. glossary_terms_floor is honest (the markers on glossary.html and
+    # about.html use it); these strings stay hand-authored only because
+    # regenerating a card is an image build, not a text edit.
     return [
         (r'(\d+)\+ resources', f'{res_floor}+ resources'),
         (r'"(\d+)\+ Cloud Security Resources"', f'"{res_floor}+ Cloud Security Resources"'),
@@ -342,8 +337,7 @@ def reading_list_items(html: str) -> list[tuple[str, str]]:
 
 
 def rebuild_reading_list(html: str) -> str:
-    """Regenerate the reading-list ItemList so it enumerates every item card
-    (was a hand-kept '6 ways' category stub)."""
+    """Regenerate the reading-list ItemList so it enumerates every item card."""
     items = reading_list_items(html)
     entries = ",\n".join(
         f'        {{ "@type": "ListItem", "position": {i}, '
@@ -488,18 +482,16 @@ def sync_html_prose(text: str, disp: dict) -> str:
 
 # README.md's directory tree is a fenced code block, and a fence renders its
 # contents verbatim - an HTML comment inside one shows up as literal text
-# instead of disappearing. Four counts in that tree carried markers and were
-# displaying `<!--count:meetings-->107<!--/count-->` to every reader on GitHub.
-# Same constraint as llms.txt and JSON-LD, so the same answer: own the numbers
+# instead of disappearing, so a count marker there would display to every
+# reader on GitHub. Same constraint as llms.txt and JSON-LD, so the same answer: own the numbers
 # with narrow regexes anchored to the surrounding words, from outside the fence.
 MD_PROSE_RULES = [
     (r"# \d+\+ cloud-security vendors across \d+ categories",
      "# {vendors_floor} cloud-security vendors across {vendor_categories} categories"),
     # README says "cloud security terms ... & cross-links"; DEVELOPMENT.md says
-    # "cloud-security terms ... + cross-links". The first version of this rule
-    # was pinned to README's exact wording and silently skipped the other file,
-    # which is the same "an audit is only as wide as its pattern" trap this repo
-    # keeps hitting. Match the part both spellings share.
+    # "cloud-security terms ... + cross-links". A rule pinned to one file's
+    # wording would silently skip the other, so match the part both spellings
+    # share.
     (r"# \d+ (cloud.security) terms with live search",
      r"# {glossary_terms} \1 terms with live search"),
     (r"# \d+ curated resources \(largest page",
@@ -599,10 +591,9 @@ def long_form_count() -> int:
 def category_page(cid: str) -> Path:
     """The page that holds one category's cards.
 
-    Until 2026-09-23 all six lived in resources.html as <details> sections and
-    every count here was a slice of that one file. They are now six pages and
-    resources.html is a hub, so anything counting cards must read the pages -
-    counting <h2> on the hub would return its two layout headings.
+    resources.html is a hub, so anything counting cards must read the
+    category pages - counting <h2> on the hub would return its two layout
+    headings.
     """
     return REPO / f"resources-{cid}.html"
 
@@ -709,17 +700,13 @@ def vendor_landscape() -> tuple[int, int]:
 
     Unlike every other directory page here, the vendor landscape has no card
     markup to count - it is `<h2>` category sections holding
-    `<li><strong>Name</strong> - blurb</li>` entries. So the prose count was
-    never derived from anything and drifted freely: about.html claimed 350+
-    while README.md and CONTRIBUTING.md claimed 360+, and the real figure was
-    lower than both.
+    `<li><strong>Name</strong> - blurb</li>` entries, counted here.
 
     Two subtleties, both of which inflate the number if ignored:
 
-      * 24 vendors are listed under more than one category (Wiz, Aqua,
-        Chainguard, GitHub Advanced Security...), so entries total 337 while
-        distinct companies total 308. "N vendors" means companies, so the
-        unique count is what we report.
+      * Some vendors are listed under more than one category (Wiz, Aqua,
+        Chainguard, GitHub Advanced Security...). "N vendors" means companies,
+        so the unique count is what we report.
       * Each category also opens with sentence-shaped `<li><strong>...</strong>`
         caveats ("The categories aren't clean."). They are excluded by the
         trailing period, which a vendor name never has.

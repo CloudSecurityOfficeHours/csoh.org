@@ -10,15 +10,13 @@
 # everywhere and shouldn't block merges.
 #
 # It DOES fail when the crawl itself did not happen. See the "Assert the crawl
-# actually ran" step: an unparseable .lychee.toml kept this job green for
-# eleven weeks while it checked zero URLs, because "no report" and "clean
-# report" were indistinguishable to everything downstream.
+# actually ran" step: otherwise "no report" and "clean report" are
+# indistinguishable to everything downstream.
 #
-# On the weekly cron (and manual runs) there is no PR to comment on, and
-# because the job does not fail on rot, findings used to land in an artifact
-# nobody opened - the run stayed green and the rot stayed live. Those runs now
-# maintain a sticky tracking issue instead (same pattern as the staleness
-# checkers), which auto-closes once a crawl comes back clean.
+# On the weekly cron (and manual runs) there is no PR to comment on, and the
+# job does not fail on rot, so those runs maintain a sticky tracking issue
+# (same pattern as the staleness checkers), which auto-closes once a crawl
+# comes back clean.
 # =============================================================================
 
 # This whole file is a "workflow": a set of automated steps that GitHub runs
@@ -50,7 +48,6 @@ on:
     # *.tf), and 65% of its lines are teaching prose. A single `*` would not
     # do: GitHub's `*` does not match `/`, so `*.tf` would mean root-level
     # only and every file under infra/terraform/<cloud>/ would be skipped.
-    # Same trap as the `**.html` one documented in CLAUDE.md.
     paths:
       - '**.html'
       - '**.tf'
@@ -176,9 +173,8 @@ jobs:
           #
           # The last glob covers the published Terraform. Those .tf files ship
           # to the origins like any page, and they are deliberately
-          # comment-heavy teaching material (~65% comments, ~3,100 lines of
-          # prose) - so until this was added, the only prose on the site that
-          # no gate ever read was the prose written to be read. lychee treats
+          # comment-heavy teaching material, so their links need checking
+          # like any page's. lychee treats
           # an unknown extension as plaintext and extracts URLs from it, so no
           # extra tooling is needed. The URL-shaped strings in HCL that are
           # identifiers rather than destinations (CSP allowlist hosts, the OIDC
@@ -210,18 +206,15 @@ jobs:
       # Did the crawl actually happen?
       # -----------------------------------------------------------------------
       # This job is built never to fail on a broken LINK - link rot is everyone
-      # else's fault and shouldn't block a merge. But that tolerance used to
-      # extend to the crawler itself failing, and those are not the same thing.
+      # else's fault and shouldn't block a merge. The crawler itself failing is
+      # not the same thing, and must not be tolerated the same way.
       #
-      # Worked example, and the reason this step exists. On 2026-05-29 a triage
-      # commit added seven exclude entries written `"news\.ycombinator\.com"`.
-      # In TOML, `\.` inside a double-quoted string is an invalid escape, so
-      # lychee could not parse .lychee.toml and exited before crawling
-      # anything. It wrote no report. The `[Errors]` grep below found no
-      # `[Errors]` in a file that did not exist, so `has_errors` came out
-      # `false`; the sticky-issue step read the same absent report as a clean
-      # crawl and posted "The latest link crawl found no broken links."
-      # The job was green every week for eleven weeks while checking zero URLs.
+      # For example, an invalid escape in .lychee.toml (`\.` inside a TOML
+      # double-quoted string; write `\\.`) makes lychee exit before crawling
+      # anything and write no report. The `[Errors]` grep below then finds no
+      # `[Errors]` in a file that does not exist, so `has_errors` comes out
+      # `false`, and the sticky-issue step reads the absent report as a clean
+      # crawl.
       #
       # So: assert the crawl produced a real report that counted a real number
       # of links. This catches a config parse error, a lychee crash, and a glob
@@ -271,8 +264,8 @@ jobs:
           if-no-files-found: warn
 
       # On non-PR runs (the weekly cron, a manual dispatch) there is no PR to
-      # comment on, so surface findings as a sticky tracking issue instead -
-      # otherwise the crawl's whole point is defeated: the job never fails, so
+      # comment on, so surface findings as a sticky tracking issue instead.
+      # Otherwise the crawl's whole point is defeated: the job never fails, so
       # a green run with an unread artifact is indistinguishable from a clean
       # one. The shared composite action (.github/actions/sticky-issue, also
       # used by the staleness checkers) opens/updates the issue while the

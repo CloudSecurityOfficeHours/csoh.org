@@ -39,17 +39,16 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # "http", "tcp", etc.). HTTPS is used so the check exercises the same
   # encrypted path real visitors use.
   type = "https"
-  # HEAD, not GET. A GET made Cloudflare download the ENTIRE homepage from every
-  # origin on every probe, and the probe runs from every Cloudflare data center
-  # (see check_regions on the pool below) - roughly 1.09M probes per origin per
-  # day at the 60s interval of the time. Azure Blob static websites cannot gzip,
-  # so each of those probes shipped the full uncompressed index.html (52 KB, vs
-  # 11 KB gzipped): ~57 GB/day of
-  # billed egress, ~$120/month, for bytes that were downloaded and discarded.
-  # HEAD returns headers only (verified: Azure answers 200 with a 0-byte body),
-  # so it still proves the origin is alive and serving 200s. Nothing is lost by
-  # the switch because expected_body is not set, so the body was never inspected
-  # in the first place. If you ever add expected_body, this must go back to GET.
+  # HEAD, not GET. A GET makes Cloudflare download the ENTIRE homepage from
+  # every origin on every probe, multiplied by every probe source (see
+  # check_regions on the pool below). Azure Blob static websites cannot gzip,
+  # so each GET ships the full uncompressed index.html (~52 KB vs ~11 KB
+  # gzipped): with an unbounded probe fan-out that is tens of GB a day of
+  # billed egress for bytes that are downloaded and discarded. HEAD returns
+  # headers only (Azure answers 200 with a 0-byte body), so it still proves the
+  # origin is alive and serving 200s. Nothing is lost because expected_body is
+  # not set, so the body is never inspected. If you ever add expected_body,
+  # this must go back to GET.
   method = "HEAD"
   # The URL path to request on each origin. "/" is the site's home page, which
   # every origin serves, so it is a good "are you alive?" target.
@@ -62,12 +61,10 @@ resource "cloudflare_load_balancer_monitor" "site" {
   #
   # The probe does not run once per interval - it runs once per interval from
   # every Cloudflare data center inside check_regions (see the pool below).
-  # Measured from the billing data at interval=60: ~1.02M probes per origin per
-  # day, i.e. ~711 distinct probe sources. On request-billed origins that is the
-  # dominant workload. GCP Cloud Run charged 25.6M requests and 1.18M
-  # CPU-seconds over 25 days - $47.64/month - while minimum-instance CPU came to
-  # three cents, meaning the service genuinely scales to zero and simply never
-  # gets the chance. Azure bills the same probes as read operations.
+  # With check_regions unset that is ~700 probe sources, roughly 1M probes per
+  # origin per day at interval=60. On request-billed origins that becomes the
+  # dominant workload: Cloud Run bills each probe as a request and never gets
+  # to scale to zero, and Azure bills each one as a storage operation.
   #
   # 300 rather than 60 cuts that fan-out fivefold. The cost is detection
   # latency: an origin is marked down after `retries` consecutive failures, so
@@ -75,11 +72,6 @@ resource "cloudflare_load_balancer_monitor" "site" {
   # three origins behind the load balancer that is the window in which a share
   # of requests can hit a dead origin, which is the trade being made here
   # deliberately - see the cost section of cloud-deployment.html.
-  #
-  # Confirmed in billing (re-measured 2026-09-13): live since 2026-08-25, after
-  # which Cloud Run requests fell from ~1.03M to ~209K per day (4.9x) and its
-  # line from ~$43 to ~$10 a month, Azure's probe operations from ~$13 to
-  # ~$2.76, and CloudFront dropped inside its 10M-request always-free tier.
   interval = 300
   # How many seconds to wait for a response before giving up on a single probe.
   timeout = 5
@@ -123,22 +115,20 @@ resource "cloudflare_load_balancer_pool" "origins" {
   # cloudflare_load_balancer_monitor at all - look for it there and you will not
   # find it).
   #
-  # Leaving it unset means "probe from EVERY Cloudflare data center", which is
-  # what the live pool did from 2026-05-29 until this line was applied on
-  # 2026-09-13: ~757 probe sources per 60s cycle and ~1.09M probes per origin
-  # per day at the old interval, ~725 sources and ~209K probes a day at
-  # interval = 300. Even as a HEAD that was ~33M billed storage operations a
-  # month on Azure (~$13), and still ~$2.76 at 300. For each region listed here,
+  # Leaving it unset means "probe from EVERY Cloudflare data center": ~700
+  # probe sources, each probing every interval. For each region listed here,
   # Cloudflare probes from three data centers in that region, so one region is
-  # three probe sources, not ~725. Measured at the apply: Cloud Run's request
-  # log went from ~146 probes a minute to one or two, within a minute.
+  # three probe sources (~860 probes per origin per day at 300s). This is the
+  # largest cost lever on the load balancer.
   #
-  # ONE REGION, because that is all this Load Balancing plan accepts. Three
-  # regions (2026-08-09) and then two (2026-09-13) were both rejected with "the
-  # number of probe regions exceeds the allowed maximum: validation failed
-  # (1002)", and neither reached the pool. The trade: probes from one region can
-  # mark an origin down over a network problem between that region and the
-  # origin, and cannot see a problem that only other regions have. With three
+  # ONE REGION, because that is all this Load Balancing plan accepts. Two or
+  # more are rejected with "the number of probe regions exceeds the allowed
+  # maximum: validation failed (1002)". A rejected apply still writes the value
+  # into Terraform state, so state can claim regions the live pool does not
+  # have; `terraform plan -refresh-only` shows the drift. The trade: probes
+  # from one region can mark an origin down over a network problem between
+  # that region and the origin, and cannot see a problem that only other
+  # regions have. With three
   # origins in one pool, and that same pool as the fallback, that is acceptable.
   # Read the live pool before trusting this line (CLAUDE.md has the call).
   #

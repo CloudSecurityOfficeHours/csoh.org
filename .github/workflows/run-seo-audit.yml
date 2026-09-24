@@ -282,10 +282,9 @@ jobs:
       # lists modified tracked files; `git ls-files --others --exclude-standard`
       # lists brand-new untracked files (like today's report). If both are
       # empty, set has_changes=false so the PR step below is skipped - no
-      # point opening an empty PR. (An earlier version tested
-      # `-z "$(cmd1) $(cmd2)"`, whose literal space meant the string was never
-      # empty and has_changes was always true; harmless in practice only
-      # because the audit always writes a new report file.)
+      # point opening an empty PR. (Don't write this as
+      # `-z "$(cmd1) $(cmd2)"`: the literal space means the string is never
+      # empty, so has_changes would always be true.)
       #
       # Also decide whether every change is confined to seo-audits/ - the
       # approve and auto-merge steps below are gated on that, so an unexpected
@@ -319,14 +318,14 @@ jobs:
           echo "Changed files (in_scope=$in_scope):"
           echo "$files"
 
-      # A note on "[skip ci]": putting that text in a commit message tells
+      # A note on the CI-skip marker: putting it in a commit message tells
       # GitHub Actions to NOT run workflows for that commit. We deliberately
       # do NOT use it here - see why below.
       # The audit writes a new file (seo-audits/YYYY-MM-DD.md) and modifies
       # SCORECARD.md. Both live under seo-audits/, which the deploy +
       # site-housekeeping workflows' path filters exclude - so they won't
-      # be triggered by this PR's merge. No need for [skip ci] in the commit
-      # message (which would also suppress the required lint checks and
+      # be triggered by this PR's merge. No need for a CI-skip marker in the
+      # commit message (which would also suppress the required lint checks and
       # leave the PR blocked indefinitely on required-status-check report).
       # This action commits the changed files to a new branch and opens a pull
       # request for them. It runs only when has_changes was true. Its `id: cpr`
@@ -366,7 +365,7 @@ jobs:
       # an approval satisfies the Main ruleset's review requirement and
       # carries the repo owner's identity via CSOH_PAT, so an out-of-scope PR
       # must not receive it - withhold the approval too, not just the
-      # auto-merge (the same lesson update-news.yml documents).
+      # auto-merge (same rule as update-news.yml).
       - name: Auto approve
         if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.in_scope == 'true'
         run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"

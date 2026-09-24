@@ -149,9 +149,8 @@ Each step that changes a file commits and pushes it back to `main` on its own,
 with a CI-skip marker so the commit doesn't re-trigger the workflow.
 
 **This workflow does not deploy.** Publishing is `deploy.yml`'s job - it builds
-once and fans out to AWS, GCP, and Azure. The old FTPS-to-shared-host path
-(the "smart passes" this document used to describe) was retired with the move to
-multi-cloud; see [SECURITY.md → Architecture](../SECURITY.md#architecture).
+once and fans out to AWS, GCP, and Azure; see
+[SECURITY.md → Architecture](../SECURITY.md#architecture).
 
 ---
 
@@ -181,7 +180,7 @@ openssl dgst -sha384 -binary style.css | openssl base64 -A
 
 ### Authentication and secrets
 
-The workflow now uses a **GitHub App** (`csoh-ci`) rather than a long-lived PAT for committing back to `main` and managing PRs. The full model is documented in [SECURITY.md → CI/CD Authentication](../SECURITY.md#cicd-authentication). What matters here:
+The workflow uses a **GitHub App** (`csoh-ci`) rather than a long-lived PAT for committing back to `main` and managing PRs. The full model is documented in [SECURITY.md → CI/CD Authentication](../SECURITY.md#cicd-authentication). What matters here:
 
 | Secret | Where it lives | Purpose |
 |--------|---------------|---------|
@@ -189,10 +188,8 @@ The workflow now uses a **GitHub App** (`csoh-ci`) rather than a long-lived PAT 
 | `CSOH_CI_PRIVATE_KEY` | Org-level | GitHub App's RSA private key (PEM); used to sign the JWT for token minting |
 | `CSOH_PAT` | Org-level | Fine-grained PAT scoped to `csoh.org` with `Pull requests: Read & Write` only - used solely to auto-approve App-opened PRs (GitHub blocks self-approval) |
 
-`PAT_TOKEN` and `APPROVAL_PAT_TOKEN` (the previous two long-lived PATs) have been removed,
-as have `FTP_HOST` / `FTP_USER` / `FTP_PASS` - this workflow no longer deploys
-anywhere, so it needs no hosting credential at all. Publishing moved to
-`deploy.yml`, which authenticates to AWS, GCP, and Azure with keyless OIDC.
+This workflow deploys nothing, so it needs no hosting credential at all.
+Publishing is `deploy.yml`, which authenticates to AWS, GCP, and Azure with keyless OIDC.
 
 ### Pinned GitHub Actions
 

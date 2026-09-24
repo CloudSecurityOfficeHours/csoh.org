@@ -14,7 +14,7 @@ Adds anchor IDs to every `<dt>` in `glossary.html` and hyperlinks every glossary
    - Text already inside an existing `<a>` tag (no nesting).
    - Self-references (a term won't link to itself in its own definition).
    - `BASE_DENYLIST` in `glossary_terms.py`: generic single-word keys that overlap with everyday English (`public`, `private`, `hybrid`, `cloud`, `iso`, …).
-   - Acronym-shaped keys (all-caps, 2-8 chars, no spaces) are matched **case-sensitively**, the same rule `crosslink_pages.py` uses. `FIRST` links the Forum of Incident Response and Security Teams; the ordinary word `first` links nothing. Without this the key would have to be denylisted, which is what used to happen and what cost that entry every link it could have had. `crosslink_pages.py` adds more on top for page prose; the glossary keeps the shorter list because inside a definition these words are usually being used in their defined sense.
+   - Acronym-shaped keys (all-caps, 2-8 chars, no spaces) are matched **case-sensitively**, the same rule `crosslink_pages.py` uses. `FIRST` links the Forum of Incident Response and Security Teams; the ordinary word `first` links nothing. Without this the key would have to be denylisted, losing every link that entry could have. `crosslink_pages.py` adds more on top for page prose; the glossary keeps the shorter list because inside a definition these words are usually being used in their defined sense.
 
    One alias belongs to exactly one entry, and the winner is whichever `<dt>` comes first in the file - so a collision resolves by file order rather than by intent. Keep headwords disjoint, and check with the duplicate-alias snippet in [`CROSSLINK_PAGES_README.md`](CROSSLINK_PAGES_README.md#verifying) after editing them.
 
@@ -77,7 +77,7 @@ declares pages it deliberately does not link. It runs in `validate-html.yml`.
 
 ## Adjusting the denylist
 
-If a generic word ends up auto-linking from an unrelated dt (for example, the dt `Public / Private / Hybrid / Multi-Cloud` was previously linking every "public" or "private" in unrelated definitions), add the lowercased word to the `DENYLIST` set near the top of `crosslink_glossary.py` and re-run.
+If a generic word ends up auto-linking from an unrelated dt (for example, the dt `Public / Private / Hybrid / Multi-Cloud` would otherwise link every "public" or "private" in unrelated definitions), add the lowercased word to the `DENYLIST` set near the top of `crosslink_glossary.py` and re-run.
 
 Conversely, if you want a previously-denylisted word to link, remove it from the set. Be careful - common adjectives like "public" generate many false positives.
 

@@ -60,10 +60,9 @@
     }
 
     /* ---- forwarding old /resources.html?category=<name> links ------------ */
-    // Before the split the nav and the homepage filtered this page with
-    // ?category=. They now link each category page directly, but bookmarks,
-    // search results and other sites still carry the old form, and without
-    // this they land on the hub with the filter silently ignored.
+    // Bookmarks, search results and other sites still carry the old
+    // ?category= form; without this they land on the hub with the filter
+    // silently ignored.
     var CATEGORY_PAGES = {
         'ctf': 'resources-ctf-challenges.html',
         'lab': 'resources-labs-training.html',

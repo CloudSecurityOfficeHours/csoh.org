@@ -24,10 +24,8 @@ from sync_counts import CATEGORY_META
 REPO = Path(__file__).resolve().parent.parent
 
 # Categories come from sync_counts.CATEGORY_META, the same table that builds
-# the hub and every category page's ItemList. Until 2026-09-23 this file kept
-# its own list of six and wrote into resources.html, which by then was a
-# card-less hub: the section lookup found nothing and the tool gave up. Reading
-# the shared table means a new category page needs no edit here.
+# the hub and every category page's ItemList. Reading the shared table means
+# a new category page needs no edit here.
 CATEGORIES = {
     str(i): (cid, name)
     for i, (cid, (name, _desc)) in enumerate(CATEGORY_META.items(), start=1)

@@ -31,8 +31,7 @@ Usage:
 
 --check is deliberately NOT wired into CI. The committed date goes stale every
 Friday on its own, with no commit to blame, so a gate on it would fail weekly
-for a reason nobody caused - and this repo already records what a gate that
-cries wolf is worth. The freshness guarantee comes from running this as a
+for a reason nobody caused, and a gate that cries wolf gets muted. The freshness guarantee comes from running this as a
 fixer in the deploy build instead, so whatever is published carries the date
 that was next at publish time.
 """
@@ -239,9 +238,8 @@ def self_test() -> int:
     now = datetime(2026, 9, 23, 12, 0, tzinfo=tz)
     start, end = resolve(now)
 
-    # Stamp first, so each plant below is planted into a known-current file.
-    # Without this the very first run reports "plant did nothing" on a page
-    # that was merely not stamped yet - a failure of the test, not of the tool.
+    # Stamp first, so each plant below is planted into a known-current file;
+    # otherwise an unstamped page reports "plant did nothing".
     run(check=False, now=now)
 
     # Plant a stale value in each target and confirm every detector names it.

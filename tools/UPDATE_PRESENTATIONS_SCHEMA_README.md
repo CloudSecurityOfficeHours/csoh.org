@@ -21,7 +21,7 @@ Prints how many `VideoObject` entries were emitted. Idempotent - re-runs report 
    | `.resource-card--with-deck` | the anchor is **inside** the card, around the thumbnail only | siblings of that anchor |
    | `.resource-card--deck` | no video, slides only | n/a - skipped |
 
-   Anchoring on the anchor instead of the card is what used to drop the `--with-deck` cards. See "Failure Modes" below.
+   Parsing must anchor on the card, not the link: on a `--with-deck` card the `<h3>`/`<p>` are siblings of the anchor. See "Failure Modes" below.
 3. Emits a `<script type="application/ld+json">` block with `@graph` containing one `VideoObject` per video.
 4. Injects the block just before `</head>`, replacing any prior block with the same marker comment:
 
@@ -47,9 +47,7 @@ Non-YouTube cards (e.g., the "Community Contributions" section) are ignored. Onl
 
 The script refuses to emit a schema that is quietly smaller than the page.
 
-Two `.resource-card--with-deck` cards (`_xaKpSgSvzg`, `Qc5VKP7wamI`) were missing from the JSON-LD for as long as that card shape existed. The old parser matched the card-link anchor and then looked for `<h3>`/`<p>` *inside* it, which only holds for the plain shape; on a deck card those tags are siblings of the anchor, so the lookup failed and a bare `continue` dropped the card. Nothing warned, the run reported success, and the shortfall was invisible unless you counted.
-
-So `main()` now cross-checks two independently derived lists before writing anything:
+A parser that skips a card it cannot read would report success with a shorter list, and the shortfall would be invisible unless you counted. So `main()` cross-checks two independently derived lists before writing anything:
 
 - the video IDs it parsed out of the card blocks, and
 - every `class="card-link"` YouTube ID on the page, swept without reference to card structure.

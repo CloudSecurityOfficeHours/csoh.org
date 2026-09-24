@@ -10,11 +10,9 @@ python3 tools/sync_recap_videos.py --check    # CI gate; self-tests first
 
 ## Why
 
-A talk was described in exactly one place: a card on `presentations.html`.
-Nothing carried it back to the recap of the session it came from, so a reader
-who landed on `meetings/2026-09-18.html` had no route to the recording, and the
-recap's JSON-LD described an `Article` with no video in it. Twelve of the 113
-recaps were in that state.
+A recorded talk is described on a card on `presentations.html`. Without this
+tool a reader who lands on that session's recap has no route to the recording,
+and the recap's JSON-LD describes an `Article` with no video in it.
 
 ## It writes two things, always together
 
@@ -71,12 +69,11 @@ On each recap the tool owns exactly two spans:
 
 A recap missing either anchor **raises** rather than being skipped. A skipped
 page and a page with nothing to do are indistinguishable in the output
-otherwise, which is the failure mode this repo keeps recording.
+otherwise.
 
 ## `@graph` even for a single video
 
-Every block is a `@graph`, including the eleven pages with exactly one
-recording. Two talks could share a date one day, and a branch that has never
+Every block is a `@graph`, including pages with exactly one recording. Two talks could share a date one day, and a branch that has never
 executed is a branch that does not work; one code path handles 1 and N. The
 self-test exercises the N case in memory, so the path is covered rather than
 merely present.
@@ -93,13 +90,11 @@ unless every detector fires:
 | a page with no recording, given a link and schema | both removed |
 | two recordings on one date | two links, two `VideoObject`s, and reversible |
 
-This is not decoration. The first version of this tool passed a hand read of
-its own regex and **failed three of these four**: the closing group of
-`REGION_RE` took a leading `\s*`, which on the first pass matched only the
-div's indent and on the second also took the newline the inserted paragraph
-ended with, so the region grew a blank line every run. Nothing about reading
-the pattern would have found that. If you add a detector, add its planted case,
-or the next silent breakage looks exactly like a healthy repo.
+The idempotency cases matter most: a regex bug that only shows on the second
+run (for example a leading `\s*` in `REGION_RE`'s closing group, which would
+make the region grow a blank line every run) passes a hand read and a single
+run. If you add a detector, add its planted case, or the next silent breakage
+looks exactly like a healthy repo.
 
 ## Where it runs
 
@@ -112,8 +107,8 @@ or the next silent breakage looks exactly like a healthy repo.
 Both `tools/sync_recap_videos.py` and `tools/update_presentations_schema.py`
 are in `deploy.yml`'s and `validate-html.yml`'s `paths:` filters. Editing either
 alone changes the published output with no `.html` in the commit, and without
-those entries the change would sit in `main` until an unrelated push carried it
-live - the path-filter trap in [CLAUDE.md](../CLAUDE.md).
+those entries the change would not deploy on its own (see "Path filters must cover
+everything `stage_site.sh` publishes" in [CLAUDE.md](../CLAUDE.md)).
 
 ## Adding a recording
 

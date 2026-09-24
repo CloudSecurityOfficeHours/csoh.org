@@ -18,18 +18,17 @@ resource "aws_s3_bucket" "site" {
   bucket = var.bucket_name
 }
 
-# Versioning is SUSPENDED, on purpose. It was "Enabled" until 2026-09-13, as a
-# rollback trail, and it turned out to be an unbounded one. Versioning makes S3
-# keep every past copy of a file, and the deploy re-uploads the whole site on
-# every run (a fresh CI checkout gives every file a new timestamp, so
-# `aws s3 sync` treats all of them as changed). So each deploy stored one more
-# full copy of the site: by September 2026 that was ~2.77 million old versions,
-# ~234 GB, behind a 255 MB site, with nothing set to ever expire them.
+# Versioning is SUSPENDED, on purpose; do not re-enable it. Versioning makes
+# S3 keep every past copy of a file, and the deploy re-uploads the whole site
+# on every run (a fresh CI checkout gives every file a new timestamp, so
+# `aws s3 sync` treats all of them as changed). So each deploy would store one
+# more full copy of the site, and with nothing set to expire them the old
+# versions grow without bound: hundreds of GB behind a ~255 MB site.
 #
 # This bucket does not need a rollback trail of its own, because every deploy
 # rebuilds it from git: to roll back, revert the commit and let the deploy run.
-# (Keeping versioning with a short expiry would also have stopped the growth,
-# but it buys a rollback window that git already provides.)
+# (Versioning with a short expiry would also bound the growth, but it buys a
+# rollback window that git already provides.)
 #
 # In Terraform, the many settings of an S3 bucket are split across several
 # small, separate resources (versioning, encryption, public-access, etc.),
@@ -53,10 +52,10 @@ resource "aws_s3_bucket_versioning" "site" {
 
 # A lifecycle configuration tells S3 to act on objects by age, on its own
 # daily schedule: no script to run, and no charge for the deletes. This one
-# keeps ONLY the current copy of each file. It clears the old versions stored
-# while versioning was on, plus one last batch: the copies that were current at
-# the moment of the switch become old versions the first time a deploy
-# replaces them.
+# keeps ONLY the current copy of each file, including clearing any old
+# versions left from a period with versioning enabled. (Suspending creates one
+# last batch: the copies current at the switch become old versions the first
+# time a deploy replaces them.)
 #
 # Why a rule instead of a one-off delete script: when the deploy removes a
 # page, a versioned bucket keeps its old copies and puts a "delete marker" on

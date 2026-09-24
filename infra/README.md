@@ -11,7 +11,7 @@ failover); each cloud hosts an interchangeable copy of the site:
   www.csoh.org   │   • Universal SSL (edge TLS, Full strict)    │
                  │   • Load Balancer (active/active + health)   │
                  │   • Transform Rules  → security headers      │
-                 │   • Redirect Rules   → legacy /conc8, /csoh  │
+                 │   • Redirect Rules   → www, legacy /conc8    │
                  │   • Cache Rules      → edge + browser TTLs    │
                  │   • Free Managed Ruleset (WAF)               │
                  └──────┬───────────┬───────────┬──────────────┘
@@ -26,9 +26,9 @@ failover); each cloud hosts an interchangeable copy of the site:
 
 **Why this shape.** The site is 100% static, so it doesn't need a server or a
 cloud load balancer - object/static hosting on each provider costs pennies.
-The previous single-cloud design (GCP Cloud Run behind a Global HTTPS Load
-Balancer + Cloud Armor + Cloud CDN) duplicated the edge that Cloudflare
-already provides, for ~$100/mo. Spreading across three origins is *cheaper*
+A single-cloud design (GCP Cloud Run behind a Global HTTPS Load Balancer +
+Cloud Armor + Cloud CDN) would duplicate the edge that Cloudflare already
+provides, for ~$100/mo. Spreading across three origins is *cheaper*
 and turns the deploy into a working multi-cloud + keyless-OIDC lesson - see
 [cloud-deployment.html](https://csoh.org/cloud-deployment.html).
 
@@ -37,7 +37,7 @@ leg runs at **Full (strict)**:
 - **AWS** - private S3 bucket reached only via **CloudFront + OAC** (the S3
   website endpoint is HTTP-only, so we don't use it).
 - **GCP** - **Cloud Run** (scale-to-zero); its `*.run.app` URL is HTTPS and
-  free at idle. The GCLB / Cloud Armor / Cloud CDN were retired.
+  free at idle, so there is no GCP load balancer in front of it.
 - **Azure** - Storage Account **static website** (`$web`), served on its
   built-in `*.web.core.windows.net` HTTPS endpoint.
 
@@ -52,7 +52,7 @@ infra/
   terraform/
     aws/          S3 (private) + CloudFront/OAC + response-headers policy + OIDC role
     azure/        Storage account + $web static website + Entra federated cred
-    gcp/          Cloud Run + Artifact Registry + WIF (LB/Armor/CDN removed)
+    gcp/          Cloud Run + Artifact Registry + WIF + Binary Authorization
     cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules,
                   plus the DNS security records:
                     dns_caa.tf     CAA - which CAs may issue for this domain
@@ -67,28 +67,27 @@ are themselves just DNS records - forge the answer and you strip both. See
 [SECURITY.md -> DNS & Email Security](../SECURITY.md#dns--email-security) for
 what each record buys and how to verify the chain end to end.
 
-**`dns_dnssec.tf` is only half the control, and the other half was never
+**`dns_dnssec.tf` is only half the control; the other half is not
 Terraform's to do.** `cloudflare_zone_dnssec` signs the zone: `dig DNSKEY
 csoh.org` returns a KSK and a ZSK (alg 13) and `dig +dnssec csoh.org A` returns
-RRSIGs. Delegation is the separate half, done at the registry, and it is now
-live too: `dig +short DS csoh.org` returns `2371 13 2 ...`, `whois csoh.org`
-reports `DNSSEC: signedDelegation`, and both Google and Cloudflare DNS-over-HTTPS
-answer with `AD=true`. Verified 2026-08-09.
+RRSIGs. Delegation is the separate half, done at the registry, and it is live
+(as of 2026-08-09): `dig +short DS csoh.org` returns `2371 13 2 ...`,
+`whois csoh.org` reports `DNSSEC: signedDelegation`, and both Google and
+Cloudflare DNS-over-HTTPS answer with `AD=true`.
 
 **Do not submit a DS record.** One is already published, and submitting a second
 one (or one for a key that is not the current KSK) is the DNSSEC failure that
 makes a domain disappear for every validating resolver.
 
-The reason this file used to say otherwise is worth keeping: **Cloudflare being
-the registrar did not make DS submission automatic.** Believing it did left the
-zone signed but undelegated for two weeks, hidden behind a check
-(`dig +dnssec ... | grep flags:`) that returns no `ad` flag on some network paths
-even for known-good domains. Verify with a resolver that reports validation over
-HTTPS, and against a control domain, per
+**Cloudflare being the registrar does not make DS submission automatic**, so
+signing alone can leave a zone signed but undelegated. Do not check that with
+`dig +dnssec ... | grep flags:`, which returns no `ad` flag on some network
+paths even for known-good domains. Verify with a resolver that reports
+validation over HTTPS, and against a control domain, per
 [SECURITY.md -> DNS & Email Security](../SECURITY.md#dns--email-security).
 
 `prevent_destroy` on the resource is about not silently unsigning a zone the
-parent is delegating to - which, now that the DS is live, would break resolution
+parent is delegating to - which, with the DS live, would break resolution
 rather than merely drop protection. Runbook:
 [`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 4.
 
@@ -115,8 +114,8 @@ Each publish job uploads **assets first, HTML second**. A single-pass sync can
 land `index.html` (asking for `/style.css?v=NEW`) before `style.css` itself; any
 request in that window makes Cloudflare cache the OLD bytes under the NEW `?v=`
 key, and since assets are served `immutable, max-age=31536000` that wrong answer
-sticks for a year while SRI blocks the file and the site renders unstyled. That
-happened on 2026-07-15. The final `purge-cloudflare` job runs only after all
+sticks for a year while SRI blocks the file and the site renders unstyled. The
+final `purge-cloudflare` job runs only after all
 three origins are current, purges the edge, then re-derives every versioned
 asset's SHA-384 from what the edge actually serves and fails the deploy on a
 mismatch.
@@ -169,11 +168,9 @@ Terraform outputs below:
 
 The last three are the per-origin verification targets, and they are required
 even though nothing publishes through them. `deploy.yml`'s SRI and robots.txt
-gates used to ask `https://csoh.org/` only, which the load balancer routes to
-one origin of three, so a file missing from a single origin had roughly a
-2-in-3 chance of passing. That is the `/.well-known/security.txt` failure
-CLAUDE.md records. Both gates now sweep the edge plus all three origins by
-name and assert they reached all four.
+gates sweep the edge plus all three origins by name and assert they reached all
+four. Asking `https://csoh.org/` alone reaches one origin of three, so a file
+missing from a single origin would pass roughly 2 times in 3.
 
 They are Variables rather than a runtime lookup because two of the three
 deploy identities cannot look themselves up: the AWS role holds only
@@ -195,8 +192,7 @@ is exactly the failure that job exists to stop.
 
 The cache-purge token above is deliberately useless for anything else. Running
 `terraform apply` against `infra/terraform/cloudflare/` needs a **second, broader
-token**, and this is not written down anywhere else - the local `.env` holds only
-the narrow CI one, so reaching for it produces a pile of
+token**. Reaching for the narrow CI one produces a pile of
 `Authentication error (10000)` and `Unauthorized to access requested resource
 (9109)` failures that look like a broken config rather than a scope problem.
 
@@ -218,11 +214,10 @@ permissions surface a couple at a time across several runs. The complete set:
 | **Zone** → Origin Rules | Edit | the `http_request_origin` ruleset (rules.tf: the Host rewrite that routes qa.csoh.org to the QA Cloud Run service) |
 | **Account** → Access: Apps and Policies | Edit | `cloudflare_zero_trust_access_application`, `cloudflare_zero_trust_access_policy` (qa.tf: the login in front of qa.csoh.org) |
 
-The last two were added by the QA pipeline and each failed in the misleading way
-this section warns about, so they are worth a note.
+The last two each fail in the misleading way this section warns about when
+missing, so they are worth a note.
 
-**Origin Rules.** `http_request_origin` was a phase this stack had never used,
-so the token had no group covering it. Terraform reported `request is not
+**Origin Rules.** Without the group, Terraform reports `request is not
 authorized` against the ruleset resource, with every other resource in the same
 apply succeeding. Confirm the group is present before re-running an apply, which
 is faster than reading a partial apply's output:
@@ -257,7 +252,7 @@ nothing like a scope error:
 | `9109 Unauthorized to access requested resource` | token reaches it but not that object |
 | `1010` with an **empty message** | the group is present but set to Read, not Edit |
 
-That last one cost real time here. `terraform apply` prints ` (1010)` with
+The last one is the hardest to read. `terraform apply` prints ` (1010)` with
 nothing after it, and the API's `errors[].message` is genuinely empty - but the
 response body carries a separate `error` field reading `auth.forbidden`. A raw
 POST is the only way to see it, because the provider surfaces `message` only:
@@ -283,7 +278,7 @@ as `TF_VAR_account_id`, `TF_VAR_zone_id`, `TF_VAR_aws_origin_host`,
 `TF_VAR_gcp_qa_origin_host` and `TF_VAR_qa_allowed_emails` in the gitignored
 `.env` lets Terraform pick them up with no flags at all.
 
-Two cautions on that file, both learned the hard way. `qa_allowed_emails` is a
+Two cautions on that file. `qa_allowed_emails` is a
 **list**, so its environment form has to carry JSON, and it is worth
 single-quoting so the brackets are never exposed to globbing:
 
@@ -324,16 +319,15 @@ repo:CloudSecurityOfficeHours/csoh.org:environment:production
 | Azure | `azure/identity.tf` | `subject = "repo:.../csoh.org:environment:production"` |
 | GCP | `gcp/wif.tf` | `attribute_condition` on `assertion.sub` + a `principal://` IAM member |
 
-**GCP used to be the outlier.** Its `attribute_condition` gated only on
-`assertion.repository`, and the IAM member was
-`principalSet://.../attribute.repository/<owner>/<repo>`. Together that trusted
-*every* workflow in the repo, on any branch, in any (or no) environment, to
-impersonate `csoh-deployer` (`roles/run.admin` + `roles/artifactregistry.writer`).
-That includes scheduled jobs that read untrusted web pages and never enter an
-environment at all. `var.github_branch` was declared but referenced nowhere, so
-the config read as though branch enforcement existed when it did not.
+**On GCP, pinning the repository is not enough.** An `attribute_condition` on
+`assertion.repository` alone, with a
+`principalSet://.../attribute.repository/<owner>/<repo>` member, trusts *every*
+workflow in the repo, on any branch, in any (or no) environment, to impersonate
+`csoh-deployer` (`roles/run.admin` + `roles/artifactregistry.writer`) -
+including scheduled jobs that read untrusted web pages and never enter an
+environment at all.
 
-`wif.tf` now requires both claims in the `attribute_condition`, and the IAM
+So `wif.tf` requires both claims in the `attribute_condition`, and the IAM
 member is a single `principal://.../subject/repo:<owner>/<repo>:environment:production`
 (valid because `google.subject` is mapped from `assertion.sub`). The condition
 is the hard gate; the narrowed member is defense in depth. `variables.tf`
@@ -347,12 +341,13 @@ carries, and the `production` environment's own deployment branch policy
 (exactly one entry: `main`) enforces the branch transitively. So the
 environment pin is a superset of the ref pin, not an alternative to it.
 
-Only `deploy.yml`'s `publish-gcp` job uses GCP auth, and it declares
-`environment: production`. If you add a job that needs cloud credentials, it
+Only `deploy.yml`'s `publish-gcp` job uses production GCP auth, and it declares
+`environment: production`. GCP additionally accepts `environment:qa` for
+`deploy-qa.yml`, bound only to the narrowly scoped QA deployer (see
+`gcp/wif.tf`). If you add a job that needs cloud credentials, it
 must declare that environment or it will be rejected at the token exchange.
 
-**Applied 2026-07-25, re-verified 2026-07-26.** The live provider carries both
-halves of the condition; confirm with:
+Confirm the live provider carries both halves of the condition:
 
 ```bash
 terraform -chdir=infra/terraform/gcp state show \
@@ -367,7 +362,7 @@ that the two can disagree.
 
 ## Security headers are declared in three places
 
-Header values now live in three files, and they must stay in step **by hand** -
+Header values live in three files, and they must stay in step **by hand** -
 no tool compares them. Change a header in one, change it in all three:
 
 | File | Applies to | Checked by CI? |
@@ -387,16 +382,15 @@ emit custom response headers at all, so that origin depends entirely on the
 Cloudflare edge. That is a known, accepted gap - reaching the Azure origin
 directly gets you the site with no CSP and no HSTS.
 
-AWS used to have the same gap: there was no `response_headers_policy_id`
-anywhere in the AWS config, so the distribution's public `*.cloudfront.net`
-hostname served a fully functional copy of the site with no CSP, no HSTS, and
-no `X-Frame-Options`. The new policy carries the same eight headers as the edge
-ruleset - HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
+Without its response-headers policy, AWS would have the same gap: the
+distribution's public `*.cloudfront.net` hostname would serve a fully
+functional copy of the site with no CSP, no HSTS, and no `X-Frame-Options`. The
+policy carries the same eight headers as the edge ruleset - HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
 and the CSP through `security_headers_config`, plus `Permissions-Policy`,
 `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` through
 `custom_headers_config` (those three have no first-class argument in the
-resource). **Applied 2026-07-25, re-verified 2026-07-26** - a request straight to
-the distribution's `*.cloudfront.net` hostname now returns all eight:
+resource). A request straight to the distribution's `*.cloudfront.net` hostname
+returns all eight:
 
 ```bash
 python3 tools/check_edge_headers.py --samples 1 \
@@ -423,16 +417,15 @@ python3 tools/check_edge_headers.py --url <origin-url> --samples 1   # one origi
 ```
 
 **Why it samples.** The apex is a load balancer over three origins, and two of
-them (AWS via the CloudFront policy, GCP via `nginx-security-headers.conf`) now
-set these headers themselves. A response from either looks correct even if the
+them (AWS via the CloudFront policy, GCP via `nginx-security-headers.conf`) set
+these headers themselves. A response from either looks correct even if the
 Cloudflare ruleset were deleted outright, so only an Azure-served response
 actually tests the thing this script exists to test. One request gives you no
 say in which origin answers. It therefore makes 40 cache-busted requests by
 default - each with a unique query string, because a cached response would just
 re-confirm whichever origin replied first - prints the origin mix it saw, and
-warns if it never reached Azure. The default is measured, not guessed: on
-2026-07-26 two consecutive 25-sample runs reached Azure zero times, while five
-consecutive 40-sample runs all reached it. Pass `--samples 1` when checking a
+warns if it never reached Azure. The default is measured, not guessed: 25
+samples can miss Azure entirely, while 40 reached it in every trial. Pass `--samples 1` when checking a
 single origin hostname.
 
 **Scope: this checks the edge, and only the edge.** Neither
@@ -443,7 +436,7 @@ after editing its headers.
 
 It exits non-zero on any missing or drifted header, and `deploy.yml`'s
 `purge-cloudflare` job runs it right after the existing SRI verification, so
-**a deploy now fails on header drift** - whether the cause is a forgotten
+**a deploy fails on header drift** - whether the cause is a forgotten
 apply, a dashboard edit, or someone using the Cloudflare API token to weaken a
 header. Because `ignore_changes` is still there, fixing a reported drift means
 editing the header in the Cloudflare dashboard to match the repo, or dropping
@@ -489,27 +482,15 @@ terraform -chdir=infra/terraform/cloudflare apply \
 Then run the deploy workflow once (`gh workflow run "Deploy - build once, publish to AWS + GCP + Azure"`)
 so all three origins have content before any DNS points at them.
 
-## The 2026-07 security-remediation applies - done
+## Verifying the security-critical configuration
 
-Three Terraform changes landed in the repo on 2026-07-25. **All three were
-applied that day and re-verified against production on 2026-07-26**; nothing
-here is outstanding work. They were independent of each other - each touches a
-different provider and a different state prefix - so they went in one at a time,
-and each needed the usual admin session for that cloud plus GCS
-application-default credentials for the state backend.
+Three settings where a regression is easy to ship and hard to see. Each check
+says what to run and what a regression looks like. Each touches a different
+provider and state prefix, so they are independent of each other.
+[`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 1 covers the
+local toolchain traps for applying them.
 
-| Stack | Change | Live check |
-|---|---|---|
-| `gcp/` | WIF trust narrowed to `environment:production` | `attribute_condition` and the IAM member both pin the subject |
-| `cloudflare/` | `www` redirect no longer derived from the request | `http://www.csoh.org/about.html` → `https://csoh.org/about.html` |
-| `aws/` | CloudFront response-headers policy | all 8 headers present on `*.cloudfront.net` |
-
-Kept below because the *verification* is the reusable part: each entry says what
-to run and what a regression would look like. The blow-by-blow of the applies
-themselves, including the local toolchain traps that ate an afternoon, is
-[`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 1.
-
-**1. GCP - narrow the WIF trust to the production environment**
+**1. GCP - the WIF trust pins the production environment**
 (`gcp/wif.tf`, `gcp/variables.tf`; see *OIDC trust* above)
 
 ```bash
@@ -523,29 +504,27 @@ The end-to-end check is the deploy workflow: if `publish-gcp` fails at the
 environment - fix the workflow, do not widen the trust back to
 `attribute.repository`.
 
-**2. Cloudflare - fix the `www` redirect loop** (`cloudflare/rules.tf`)
+**2. Cloudflare - the `www` redirect never derives its target from the
+request** (`cloudflare/rules.tf`)
 
-The redirect's `target_url` was
-`wildcard_replace(http.request.full_uri, "https://www.*", "https://$${1}")`.
-The rule expression (`http.host eq "www.csoh.org"`) matches plaintext HTTP too,
-and the dynamic-redirect phase runs *before* "Always Use HTTPS". On an `http://`
-request the `https://www.*` pattern did not match, `wildcard_replace` returned
-its input unchanged, and Cloudflare 301'd the request to itself forever, in
-cleartext - so the browser never reached a response carrying HSTS for the `www`
-host. It is now `concat("https://csoh.org", http.request.uri.path)`: scheme and
-host hardcoded, never derived from the request, with `preserve_query_string`
-carrying the query.
+The target is `concat("https://csoh.org", http.request.uri.path)`: scheme and
+host hardcoded, with `preserve_query_string` carrying the query. The rule
+expression (`http.host eq "www.csoh.org"`) matches plaintext HTTP too, and the
+dynamic-redirect phase runs *before* "Always Use HTTPS". A target like
+`wildcard_replace(http.request.full_uri, "https://www.*", "https://$${1}")`
+does not match an `http://` request, returns its input unchanged, and 301s the
+request to itself forever, in cleartext - so the browser never reaches a
+response carrying HSTS for the `www` host.
 
 ```bash
 curl -sI http://www.csoh.org/about.html | grep -i -E 'HTTP/|^location'
-#   want: 301 with `location: https://csoh.org/about.html`   <- what it returns now
+#   want: 301 with `location: https://csoh.org/about.html`
 #   bug:  301 with `Location: http://www.csoh.org/about.html` (points at itself)
 ```
 
-Test it over **plaintext `http://`**, not `https://`. The `https://` case worked
-throughout; the loop only ever existed on the scheme the redirect derived its
-target from. A future edit to `cloudflare/rules.tf` that reintroduces
-`wildcard_replace` on `full_uri` would look fine over HTTPS and be broken again.
+Test it over **plaintext `http://`**, not `https://`. A loop like the one above
+exists only on the scheme the redirect derives its target from, so it looks
+fine over HTTPS.
 
 **3. AWS - CloudFront emits its own security headers** (`aws/cloudfront.tf`;
 see *Security headers are declared in three places* above)
@@ -557,18 +536,15 @@ python3 tools/check_edge_headers.py --samples 1 \
 ```
 
 `--samples 1` because a single origin hostname has nothing to sample - the
-multi-request default exists for the apex, which load-balances. Before the apply
-this reported the headers as missing, which is exactly the gap that was closed.
-Pointed at the Azure origin it will keep reporting them missing forever - Azure
+multi-request default exists for the apex, which load-balances. Pointed at the Azure origin it will keep reporting them missing forever - Azure
 Blob cannot set them, and the edge is the only thing that adds them there.
 
 ## Cutover (safety-gated) & rollback
 
-> **Historical.** This cutover completed in 2026 - csoh.org has served from all
-> three origins behind the Cloudflare Load Balancer since then, and the GCP
-> Global HTTPS LB / Cloud Armor / Cloud CDN are gone. The runbook is kept
-> because it is the procedure to follow if an origin is ever re-provisioned or
-> a fourth is added, and because it documents *why* the current shape exists.
+> **The cutover is complete**; csoh.org serves from all three origins behind the
+> Cloudflare Load Balancer. This is the procedure to follow if an origin is ever
+> re-provisioned or a fourth is added. References to the "old GCP LB" are the
+> previous path you keep as a rollback target while cutting over.
 
 This is production. Cut over in stages and keep the old GCP LB IP as a rollback
 target until you're confident.
@@ -641,101 +617,46 @@ python3 tools/check_edge_headers.py --samples 1 \
 
 ## Cost
 
-These are **billing-API figures, not estimates.** The table this replaced read
-"~$8-12/mo total" with Azure and Cloud Run at "~$0-1" each. Every one of those
-was a guess that nobody had checked against a bill, and they were wrong by one
-to two orders of magnitude. Keep the `Source` column, and keep the word
-`measured` honest: an estimate in this table is a to-do, not a rounding.
+These are **billing-API figures, not estimates.** Keep the `Source` column, and
+keep the word `measured` honest: an estimate in this table is a to-do, not a
+rounding.
 
-Last measured **2026-09-20**: daily cost over 14-19 September 2026, scaled to a
-30.44-day month with each provider's monthly free allowance applied once. `Was`
-is the 1-12 September window this table showed before, i.e. after the probe
-interval was cut to five minutes but before the four fixes of 2026-09-13.
-August, for scale, was ~$97/month.
+As of **2026-09-20**: daily cost over 14-19 September 2026, scaled to a
+30.44-day month with each provider's monthly free allowance applied once.
 
-| Component | Now | Was | Source |
-|---|---|---|---|
-| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, confirmed in the dashboard 2026-09-13 (no token here can read billing) |
-| Azure Blob static website | $2.86 | $5.63 | measured - $2.59 of deploy writes, $0.22 of probe operations |
-| GCP Artifact Registry | $0.25 | $1.69 | measured - 13 images, ~3 GiB |
-| GCP Cloud Run (production origin) | $0.02 | $9.95 | measured - a month now fits the free allowance; the 2 cents are egress |
-| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $2.63 of usage (was $7.90), offset by credits; ~$16.70 of credit left on 2026-09-20 |
-| Terraform state (GCS), GCP logging, billing export | $0.00 | $0.00 | measured - inside the free tier |
-| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | $0.00 | measured |
-| **Total** | **~$13/mo** | ~$27/mo | ~$16 when the AWS credits lapse; ~$97/mo in August |
+| Component | Monthly | Source |
+|---|---|---|
+| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | billed, confirmed in the dashboard (no token here can read billing) |
+| Azure Blob static website | $2.86 | measured - $2.59 of deploy writes, $0.22 of probe operations |
+| GCP Artifact Registry | $0.25 | measured - 13 images, ~3 GiB |
+| GCP Cloud Run (production origin) | $0.02 | measured - a month fits the free allowance; the 2 cents are egress |
+| AWS S3 + CloudFront | $0.00 | measured - $2.63 of usage, offset by credits |
+| Terraform state (GCS), GCP logging, billing export | $0.00 | measured - inside the free tier |
+| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | measured |
+| **Total** | **~$13/mo** | ~$16 when the AWS credits lapse |
 
-**What moved it**, read from the providers rather than from the commits:
+**What drives it.** Beyond the Cloudflare subscription, most of the rest is
+write and PUT operations: every deploy re-uploads the whole site to two object
+stores, so cost tracks deploy frequency. The levers that keep the remainder
+near zero each live in a `.tf` file, with the reasoning in its comments:
 
-- **The four changes of 2026-09-13, re-measured on 2026-09-20.** Probes to one
-  region took Cloud Run from $9.95 to $0.02 (requests ~209K/day to ~2,700, of
-  which only ~860 are probes) and Azure's probe meter from $2.76 to $0.22. The
-  S3 lifecycle rule took the bucket from 233 GB to 0.51 GB and AWS usage from
-  $7.90 to $2.63. Registry retention took 99 images to 13, and $1.69 to $0.25.
-  All three budgets are live and none has tripped: the AWS one now forecasts
-  $1.64 against its $10 limit, where it forecast $10.27 the day it was made.
-- **Health-probe interval 60 -> 300**, live 2026-08-25 19:46 UTC (the monitor's
-  `modified_on`, not the 2026-08-28 these docs used to give). Cloud Run requests
-  fell from ~1.03M/day to ~209K/day, 4.9x; Azure's probe operations from $13.04
-  to $2.76/month; CloudFront from $18.26 of usage in August to $0.00 in
-  September, because ~6.4M requests a month now fits its 10M-request always-free
-  tier. Predicted at ~$50/month; measured at ~$43 of billed spend, plus the
-  CloudFront usage that credits were covering.
-- **Registry cleanup**, possible only once `immutable_tags = false` landed on
-  2026-08-30. A hand-run delete that day took billed storage from 231.6 GiB on
-  08-29 to 4.8 GiB on 08-31; the retention rule never did (CLAUDE.md has why).
-  Retention now keeps the newest 10 images plus anything under a day old,
-  applied 2026-09-13 with 99 images in the repository.
-- **Fewer deploys**: ~11 a day in August, ~6 in September, which on its own
-  roughly halved Azure write operations and S3 uploads.
-
-**What is left is the Cloudflare subscription and the deploys.** The four
-changes applied on 2026-09-13 (the S3 and probe-region fixes below, the
-ten-image registry retention above, and budget alerts on all three clouds) are
-applied and now measured. Of the ~$3 a month that is not Cloudflare, most is
-write and PUT operations: six deploys a day re-uploading the whole site to two
-object stores.
-
-**S3 kept every version of every deploy, and that was fixed on 2026-09-13.**
-Versioning was on with no lifecycle rule, and `aws s3 sync` re-uploads every
-file on every deploy, so that day the live site was 3,288 objects / 255 MB while
-the bucket held 2.77M versions / 233 GB, growing ~1.4 GB a day: about
-$5.40/month of storage and $3 of PUTs, billed as $0.00 because credits cancel
-it. Versioning was suspended rather than bounded with an expiry, because every
-deploy rebuilds the bucket from git and git is the rollback, and `s3.tf` adds a
-lifecycle rule that keeps only the current copy of each file. Both are applied:
-read back live the same day, the bucket reports `Suspended` and carries
-`keep-only-current-version`. The rule ran the same day: 233 GB to 2.3 GB overnight,
-0.51 GB since 09-14, and favicon.png's 957 old copies down to the one the last
-deploy displaced. AWS usage fell from $7.90 to $2.63 a month, which is now
-almost all PUTs, because the re-uploads continue.
-
-**The probes come from one region, also since 2026-09-13.** `check_regions`
-had asked for two regions in `load_balancer.tf` since 2026-08-09 and had never
-reached the edge: the live pool still reported `check_regions: null`, last
-modified 2026-05-29, which means every data center - ~725 probe sources and
-~209K probes a day per origin. Three regions (2026-08-09) and then two
-(2026-09-13) were both rejected with `validation failed (1002)`, so this Load
-Balancing plan accepts one, and `["ENAM"]` applied. Cloudflare probes from
-three data centers per selected region, so that is ~860 probes a day per origin.
-Cloud Run's request log showed it at once: ~146 probes a minute until 16:40 UTC,
-one or two a minute after. A week later the bill agrees: Cloud Run $9.95 ->
-$0.02, Azure's probe meter $2.76 -> $0.22, and 36 probes in a sampled hour,
-which is the ~860 a day that three data centers produce.
-
-**Budget alerts are live on all three clouds, since 2026-09-13.** Until then
-nothing alerted on cost, and every cost event in this stack's history was found
-by hand, weeks after it began: the GCP credits ending on 2026-07-28, $119.77 of
-Azure egress in July, the registry's growth, and the S3 versions above. Each
-stack has a `budget.tf` with a $10 monthly budget that emails
-`var.budget_alert_emails` (default `admin@csoh.org`) on actual spend and when
-the provider forecasts the month will pass $10. The AWS one counts cost after
-credits, so its 10% alert is the first dollar billed once the $17.55 of credit
-is gone. Its forecast does not net out credits, so a forecast email can arrive
-while nothing is billed; it forecast $10.27 the day it was created and $1.64 a
-week later, so that was an artefact of August's usage rather than a standing
-false positive. CLAUDE.md has the traps and the commands that read all
-three back. Rebuilding the GCP stack from scratch needs its two billing APIs
-enabled a minute before the budget can plan:
+- **Health probes** (`cloudflare/load_balancer.tf`): `interval = 300` and
+  `check_regions = ["ENAM"]`, about 860 probes a day per origin. Anything on a
+  timer is multiplied by the probe fan-out, and unset `check_regions` means
+  every Cloudflare data center.
+- **S3 versioning is suspended** (`aws/s3.tf`), with a lifecycle rule that
+  keeps only the current copy. With versioning on, every deploy stores another
+  full copy of the site with nothing to expire it.
+- **Registry retention** (`gcp/artifact_registry.tf`): the newest 10 images
+  plus anything under a day old. It works only with `immutable_tags = false`.
+- **Budget alerts on all three clouds.** Each stack has a `budget.tf` with a
+  $10 monthly budget that emails `var.budget_alert_emails` (default
+  `admin@csoh.org`) on actual spend and when the provider forecasts the month
+  will pass $10. The AWS one counts cost after credits, so its 10% alert is the
+  first dollar billed once the credit is gone. Its forecast does not net out
+  credits, so a forecast email can arrive while nothing is billed. CLAUDE.md has
+  the commands that read all three back. Rebuilding the GCP stack from scratch
+  needs its two billing APIs enabled a minute before the budget can plan:
 
 ```sh
 terraform -chdir=infra/terraform/gcp apply -target='google_project_service.apis["billingbudgets.googleapis.com"]' -target='google_project_service.apis["cloudbilling.googleapis.com"]'
@@ -763,12 +684,7 @@ aws ce get-cost-and-usage --granularity DAILY --metrics UnblendedCost \
   --group-by Type=DIMENSION,Key=RECORD_TYPE
 ```
 
-The bulk of the *old* cost, before the Cloudflare cutover, was the GCP Global
-HTTPS Load Balancer (two forwarding rules) + Cloud Armor - redundant with
-Cloudflare's edge. That saving was real; it is the ~$100/mo this stack replaced,
-not evidence that the current stack is cheap.
-
-## Trade-offs vs. the old GCP stack
+## Trade-offs vs. a single-cloud GCP stack
 
 - **WAF**: Cloud Armor's tunable OWASP CRS is replaced by Cloudflare's **Free
   Managed Ruleset** (lighter coverage) + one free rate-limit rule. To restore

@@ -275,9 +275,9 @@
             for (var i = 0; i < shown; i++) {
                 var o = group.others[i];
                 var od = docsById[o.id] || o;
-                // Resource cards share their category anchor, so listing
-                // od.section would repeat the same category name. The card
-                // name is what distinguishes them.
+                // Resource cards in one category share od.section, so
+                // listing it would repeat the category name. The card name
+                // is what distinguishes them.
                 var label = od.type === 'resource'
                     ? (od.heading || od.section)
                     : (od.section || od.heading);

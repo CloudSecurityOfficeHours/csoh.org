@@ -11,14 +11,10 @@
 #
 # WHAT THIS FILE DELIBERATELY DOES NOT DO. It does not add QA to the Load
 # Balancer in load_balancer.tf. Pool members are health-checked around the
-# clock. Until 2026-09-13 that was from every Cloudflare data center - about 757
-# probe sources per cycle, ~1.09M probes per origin per day at the original 60s
-# interval and still ~209K a day at 300 - which is the thing that turned a 52 KB
-# index.html into a $119.77 Azure bandwidth bill in July 2026. It is now three
-# data centers, a probe about every 100 seconds, and a QA origin inside the pool
-# would still be woken all day and never scale to zero. A plain proxied DNS
-# record has none of that behaviour: nothing reaches the origin until a human
-# loads the page.
+# clock (three data centers, a probe about every 100 seconds; every data
+# center if check_regions is unset), so a QA origin inside the pool would be
+# woken all day and never scale to zero. A plain proxied DNS record has none
+# of that behaviour: nothing reaches the origin until a human loads the page.
 
 # A single DNS record pointing qa.csoh.org at the QA Cloud Run service.
 #
@@ -68,8 +64,7 @@ resource "cloudflare_record" "qa" {
 # current product naming, and are what the pending v5 upgrade expects - so
 # writing them this way now avoids renaming these resources twice.)
 resource "cloudflare_zero_trust_access_application" "qa" {
-  # ACCOUNT-scoped, not zone-scoped, and this is worth knowing before you spend
-  # an hour on it. Access applications can in principle be attached to either,
+  # ACCOUNT-scoped, not zone-scoped. Access applications can in principle be attached to either,
   # and attaching to the zone reads more naturally here because the app protects
   # exactly one hostname inside csoh.org. But Zero Trust is an account-level
   # product in current Cloudflare, and the zone-scoped Access API is legacy: a
@@ -77,7 +72,7 @@ resource "cloudflare_zero_trust_access_application" "qa" {
   # resource, while the same token gets `Authentication error (10000)` on the
   # zone endpoint.
   #
-  # That error is exactly the shape CLAUDE.md warns about - /user/tokens/verify
+  # See CLAUDE.md, "Two tokens": /user/tokens/verify
   # reports the token `active` regardless of scope, so an under-scoped or
   # wrong-endpoint call looks like a credential problem when it is neither. The
   # tell is that the same token succeeds on
@@ -106,13 +101,12 @@ resource "cloudflare_zero_trust_access_application" "qa" {
   # two enabled: the built-in Cloudflare account login, and the One-Time PIN
   # provider that makes the email allowlist below enforceable.
   #
-  # The failure mode is worth knowing because it is delayed. This app was
-  # created while zero identity providers existed, so the flag was accepted;
-  # enabling One-Time PIN later made the stored configuration invalid, and the
-  # next update failed with `allowed_idps must be provided and have only one
-  # identity provider for auto_redirect_to_identity to be set to true` - an
-  # error about a field nobody had touched, on an apply that changed something
-  # else entirely.
+  # The failure is delayed. The flag is validated against the identity
+  # providers that exist when the app is saved, so an app created with none
+  # accepts it; enabling a second provider later makes the stored
+  # configuration invalid, and the next update fails with `allowed_idps must be
+  # provided and have only one identity provider for auto_redirect_to_identity
+  # to be set to true` - an error about a field the apply did not touch.
   #
   # Pinning allowed_idps to the OTP provider would restore the auto-redirect,
   # but that provider was created outside Terraform (it needs a token permission
@@ -165,11 +159,8 @@ resource "cloudflare_zero_trust_access_policy" "qa_allow_listed_emails" {
   # admit anyone at a domain, which is wrong for a personal address, and Access
   # also supports country, IP range, and identity-provider group matching.
   #
-  # This was briefly `everyone = true` while One-Time PIN was not yet enabled,
-  # because an email-matching policy cannot be satisfied when no email login
-  # method exists - the login page offered only "Cloudflare" and refused any
-  # account whose address was not on the list. OTP is enabled now, so the
-  # allowlist is enforceable again.
+  # An email-matching policy can only be satisfied through an email login
+  # method, which is why One-Time PIN has to be enabled (see above).
   #
   # IF YOU EVER LOCK YOURSELF OUT: Zero Trust > Access > Applications >
   # csoh.org QA > Policies, and set the include to Everyone. That is a dashboard
@@ -192,9 +183,8 @@ resource "cloudflare_zero_trust_access_policy" "qa_allow_listed_emails" {
 # and after Access has logged the visitor in, which makes it read like a broken
 # deploy rather than a missing header.
 #
-# WHY A WORKER AND NOT AN ORIGIN RULE. An Origin Rule is the obvious tool and it
-# is what this stack tried first. Host Header Override is a PAID-PLAN feature,
-# though, and csoh.org is on the Free plan. The trap is the timing: the config
+# WHY A WORKER AND NOT AN ORIGIN RULE. An Origin Rule is the obvious tool, but
+# Host Header Override is a PAID-PLAN feature and csoh.org is on the Free plan. The trap is the timing: the config
 # validates, and `terraform plan` shows a clean create, because entitlement is
 # only checked when the ruleset is actually written. The apply then fails with
 # `not entitled to use the HostHeader override`. Plan success is not evidence

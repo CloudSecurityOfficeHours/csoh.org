@@ -62,8 +62,7 @@ ALT_RE = re.compile(r'\balt="([^"]*)"', re.IGNORECASE)
 # Every subdirectory of indexable pages. The audit is only as complete as this
 # tuple: a directory missing here is silently never checked, and since the score
 # is an average over the pages we DID audit, its absence doesn't even dent the
-# number. `homelab` was missing until 2026-07 for exactly that reason - it was
-# added after this tuple was written, and nothing flagged the omission.
+# number.
 #
 # Adding a new subdirectory of pages? Add it here too. The full list of places a
 # new page directory has to be registered is in DEVELOPMENT.md.
@@ -205,8 +204,7 @@ def build_report(results: list[dict], today: str) -> tuple[str, dict]:
     # Use the latest mobile PSI row from SCORECARD.md as the source of truth
     # for Performance and Mobile/A11y. Mobile (not desktop) because Google
     # indexes mobile-first. Median across same-day runs guards against PSI
-    # lab glitches like the 2026-05-23 desktop 38 → 100 bounce (see commit
-    # 63317d48). Falls back to the 95/96 placeholder caps if SCORECARD has
+    # lab glitches (a single run can dip far below its neighbours). Falls back to the 95/96 placeholder caps if SCORECARD has
     # no PSI data yet - keeps the script usable in a fresh repo.
     psi = latest_psi_mobile_scores()
     if psi:
@@ -295,8 +293,7 @@ def latest_psi_mobile_scores() -> tuple[int, int] | None:
     """Return (perf, a11y) from the most recent mobile PSI row(s) in
     SCORECARD.md, taking the median across same-day runs.
 
-    PSI lab tests bounce on noisy infra (the 2026-05-23 desktop run dipped
-    to 38 before snapping back to 100). Median across same-day runs is
+    PSI lab tests bounce on noisy infra. Median across same-day runs is
     more robust than `latest` while still reflecting recent state. Returns
     None when no PSI rows exist - caller falls back to placeholder caps.
     """

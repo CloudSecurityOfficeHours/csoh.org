@@ -5,16 +5,9 @@ WHY THIS EXISTS
 ---------------
 The site repeats visible prose inside structured data. Most guide pages carry
 an FAQPage block whose answers restate the visible FAQ, and glossary.html
-repeats every definition as a DefinedTerm description. Nothing kept the two
-copies in step. While fixing weekly docs-review issue #1624 on 2026-09-12,
-three separate findings turned out to be this one defect: a correction landed
-in the visible prose and never reached its JSON-LD copy.
-
-- faq.html's privacy answer still said "no analytics" in its FAQPage copy.
-- compliance-frameworks.html's CMMC answer still said Level 2 "requires a
-  C3PAO assessment" after the body described the Phase II suspension.
-- glossary.html's AI-APP DefinedTerm still called the term an "Emerging
-  category" after the visible definition had been rewritten.
+repeats every definition as a DefinedTerm description. Kept by hand, the two
+copies drift: a correction lands in the visible prose and never reaches its
+JSON-LD copy.
 
 The JSON-LD copy matters more than it looks: it is the text a search engine
 lifts into a snippet, so the stale version is the one a reader is most likely
@@ -22,11 +15,8 @@ to see without ever opening the page.
 
 THE CONVENTION: THE PAGE IS THE SOURCE, THE JSON-LD IS GENERATED
 -----------------------------------------------------------------
-This tool's first report (2026-09-12) found 124 FAQ answers on 26 pages
-carrying sentences their page did not, and fact-checking a sample of those
-sentences found 27 that were wrong or out of date. Rather than verify every
-JSON-LD-only claim, each copy is regenerated from the visible text, word for
-word:
+Rather than verify JSON-LD-only claims, each copy is regenerated from the
+visible text, word for word:
 
 - FAQPage mainEntity is the visible FAQ, in page order. A question's name is
   its <summary> or <h3> text and its answer is everything up to the next
@@ -117,7 +107,7 @@ DT_DD_RE = re.compile(r'<dt\b[^>]*\bid="([^"]+)"[^>]*>.*?</dt>\s*<dd\b[^>]*>(.*?
 
 # A trailing "Deep dive: <link>." in a glossary <dd> is navigation to the guide
 # page, not part of the definition, and DefinedTerm descriptions leave it out on
-# purpose (36 terms on 2026-09-12). Recorded here so it is a decision you can
+# purpose. Recorded here so it is a decision you can
 # disagree with rather than a silent skip.
 DD_NAVIGATION_SUFFIX_RE = re.compile(r"\s*<em>\s*Deep dive:\s*</em>.*$", re.S)
 

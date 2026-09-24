@@ -228,12 +228,8 @@ resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
 # and nothing is billed, until someone actually loads the page. Note that this
 # service is deliberately NOT added to the Cloudflare load balancer pool in
 # infra/terraform/cloudflare/load_balancer.tf. Pool members are health-checked
-# from every Cloudflare data center until 2026-09-13, which worked out to ~1.09M
-# probes per origin per day at the original 60s interval, produced a $119.77
-# Azure bandwidth bill, and at 300s was still ~209K a day - production's Cloud
-# Run line was ~$10/month of almost nothing but probes. They now come from three
-# data centers, one about every 100 seconds, which is still enough to keep a
-# scale-to-zero service from ever reaching zero. A QA origin behind a monitor
+# around the clock (three data centers, one probe about every 100 seconds),
+# which is enough to keep a scale-to-zero service from ever reaching zero. A QA origin behind a monitor
 # would never be idle, so it gets a plain proxied DNS record instead.
 #
 # THE IMAGE IS THE SAME IMAGE. Both services pull from the one Artifact Registry

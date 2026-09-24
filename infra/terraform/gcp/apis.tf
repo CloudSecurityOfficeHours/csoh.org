@@ -8,9 +8,8 @@
 # They reduce repetition and give a meaningful name to a value (here, the list
 # of API service identifiers we want enabled).
 locals {
-  # Trimmed after retiring the GCLB: compute (LB resources),
-  # certificatemanager + dns (GCP managed cert) are no longer used now that
-  # Cloud Run is a direct Cloudflare origin.
+  # No compute, certificatemanager or dns: Cloud Run is a direct Cloudflare
+  # origin, so there is no GCP load balancer or managed certificate.
   # Each string below is the unique "service name" Google uses to identify an
   # API. Enabling it is the equivalent of flipping the "Enable API" switch in
   # the Cloud Console. The list is iterated over by the resource further down.

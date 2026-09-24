@@ -259,7 +259,7 @@ Images are automatically optimized to ~85% quality and resized to 400x300px. If 
 
 ## Workflow Integration
 
-Preview generation is now part of the unified automation process:
+Preview generation is part of the unified automation process:
 
 ```mermaid
 graph LR

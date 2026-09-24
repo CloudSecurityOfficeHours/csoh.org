@@ -2,7 +2,7 @@
 
 Companion to [MANUAL_SECURITY_STEPS.md](MANUAL_SECURITY_STEPS.md). Everything here needs
 the AWS Console, a browser, and a human. None of it can be committed, and CI cannot run
-it, which is exactly why it has sat undone.
+it.
 
 ## The problem, stated plainly
 
@@ -344,10 +344,9 @@ terraform -chdir=infra/terraform/aws plan
 ```
 
 Expect a clean plan. `cloudfront.tf` deliberately omits `minimum_protocol_version` (the
-reasoning is written out at length around line 160 of that file), which is what made this
-stack converge; if you instead see the permanent `0 to add, 3 to change` churn described in
-MANUAL_SECURITY_STEPS.md section 1c, you are on an older checkout, not looking at a
-credentials problem.
+reasoning is in a comment in that file), which is what lets this stack converge; a
+permanent `0 to add, 3 to change` churn is that argument, as MANUAL_SECURITY_STEPS.md
+section 1c describes, not a credentials problem.
 
 **The safety net, and its limit.** `versions.tf` sets
 `allowed_account_ids = [var.aws_account_id]`, defaulting to `038416307420`

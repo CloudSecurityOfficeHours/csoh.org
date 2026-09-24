@@ -1,7 +1,7 @@
 # The QA pipeline
 
 A staging copy of the site at `qa.csoh.org`, and a one-button promotion from
-there to production. Built 2026-08-16.
+there to production.
 
 ```
 push to qa ──► deploy-qa.yml ──► csoh-site-qa (Cloud Run) ──► qa.csoh.org
@@ -36,9 +36,8 @@ To ship: **Actions → Promote QA to production → Run workflow**.
 ### Keep `qa` ahead of `main`, or promotion refuses
 
 `main` moves without you. `site-update-deploy.yml` pushes housekeeping commits
-directly to it, and `update-news.yml` merges PRs several times a day - it gained
-11 commits during the afternoon this pipeline was built. Housekeeping commits
-carry CI-skip markers, so they produce no workflow run at all and are easy to
+directly to it, and `update-news.yml` merges PRs several times a day.
+Housekeeping commits carry CI-skip markers, so they produce no workflow run at all and are easy to
 miss.
 
 `promote-qa.yml` requires `main` to be an ancestor of `qa`, because a
@@ -53,9 +52,9 @@ Artifact Registry repo production uses, and `publish-gcp` skips the push when
 the tag already exists. So when a tested commit reaches `main`, production
 derives the identical tag, finds the image present, resolves it to a sha256
 digest, and deploys that digest - no rebuild, no artifact-passing machinery
-between the two workflows. The digest matters: the repo no longer sets
+between the two workflows. The digest matters: the repo does not set
 `immutable_tags`, because Artifact Registry cannot delete tagged artifacts while
-it does and retention was worth more than the tag guarantee.
+it does, and retention needs to delete them.
 
 This only holds while the two workflows produce identical images. **Do not add
 QA-only container settings.** Anything QA-specific belongs at the Cloudflare
@@ -64,11 +63,10 @@ configuration-identical for the same reason.
 
 ## Decisions that look wrong and are not
 
-**`deploy-qa.yml` has no `paths:` filter.** Deliberate. This repo has twice
-shipped changes that never deployed because a filter was narrower than what
-`stage_site.sh` publishes - `'*.html'` does not match `breaches/`, so commit
-`874a813c` fixed per-breach pages and silently did not publish. A third filter
-to keep in step would be a third chance to repeat that. A redundant QA deploy
+**`deploy-qa.yml` has no `paths:` filter.** Deliberate. A filter narrower than
+what `stage_site.sh` publishes silently skips deploys (`'*.html'` does not match
+`breaches/`), and a third filter to keep in step with the production two would
+be a third chance to get that wrong. A redundant QA deploy
 costs almost nothing; a QA change that silently does not deploy costs the
 confidence the environment exists to provide.
 
@@ -88,12 +86,10 @@ half-finished push cannot corrupt a tag because a push publishes atomically, and
 to win.
 
 **QA is not in the Cloudflare load balancer pool.** Pool members are
-health-checked around the clock. Until 2026-09-13 that was from every Cloudflare
-data center - roughly 1.09M probes per origin per day at the original 60-second
-interval, which is what produced a $119.77 Azure bandwidth bill in July 2026,
-and still ~209K a day at 300. It is now three data centers, a probe about every
-100 seconds, which is still enough that a QA origin inside the pool could never
-scale to zero. It is a plain proxied DNS record plus a Worker instead.
+health-checked around the clock (a probe about every 100 seconds), which is
+enough that a QA origin inside the pool could never scale to zero, and every
+probe is a billable request. It is a plain proxied DNS record plus a Worker
+instead.
 
 ## What exists
 
@@ -117,7 +113,7 @@ Cost: nothing. Cloud Run scales to zero, the image is shared with production so
 registry storage does not grow, there are no health-check probes, Workers' free
 tier is 100k requests/day, and Zero Trust is free to 50 users.
 
-## Traps, all of which cost real time on 2026-08-16
+## Traps
 
 **Cloudflare Free cannot rewrite the Host header.** Cloud Run picks a service by
 `Host`, and this project runs two, so `qa.csoh.org` must be rewritten to the
@@ -145,10 +141,9 @@ refused with "That account does not have access". That points at the policy,
 which is correct. The tell is the login page offering exactly one method and it
 not being email.
 
-**`auto_redirect_to_identity` needs exactly one identity provider.** Enabling
-OTP gave the account two, which retroactively invalidated a flag set when there
-were zero - so a later update failed naming a field nobody had touched. It is
-not set now.
+**`auto_redirect_to_identity` needs exactly one identity provider.** With OTP
+enabled the account has two, so the flag is invalid, and an update fails naming
+that field even though nobody touched it. Leave it unset.
 
 **Dashboard edits to Access become drift that reverts.** Opening the policy by
 hand to escape a lockout works, and the next `terraform apply` silently undoes
@@ -162,20 +157,15 @@ collide on `precedence` with the Terraform-managed policy.
 
 **The registry race.** `deploy-qa.yml` and `publish-gcp` build the same commit
 into the same tag, so pushing a commit to `main` and `qa` at once makes them
-race. Production lost once: it checked the registry (empty), spent two minutes
-building and scanning, and by the time it pushed, the QA run had published the
-tag. Tags were immutable then, so the push was rejected, `Deploy to Cloud Run`
-was skipped, and GCP sat a commit behind AWS and Azure with `purge-cloudflare`
-skipped - the split-origin state where about one request in three serves stale
-content, from a workflow that looked like it had simply failed. `publish-gcp`
-now re-checks immediately before pushing and treats an existing tag as success.
-**Re-running the failed job is the repair**, and it takes the promotion path.
-
-Tags are no longer immutable, so that same race now ends in a silent overwrite
-rather than a rejection - the louder failure was the friendlier one. Two things
-bound it: both workflows still check before pushing, and both deploy the digest
-the tag resolves to rather than the tag, so whatever wins the race cannot change
-the bytes a running revision was built from.
+race: one can find the registry empty, spend minutes building and scanning, and
+find the tag already published by the other by the time it pushes. Tags are
+mutable, so a blind push would silently overwrite. Two things bound it: both
+workflows re-check immediately before pushing and treat an existing tag as
+success, and both deploy the digest the tag resolves to rather than the tag, so
+whatever wins the race cannot change the bytes a running revision was built
+from. If `publish-gcp` ever fails here and leaves GCP a commit behind the other
+origins, **re-running the failed job is the repair**, and it takes the
+promotion path.
 
 ## The Cloudflare token
 
@@ -223,9 +213,9 @@ AWS_EC2_METADATA_DISABLED=true terraform -chdir=infra/terraform/gcp apply
 terraform -chdir=infra/terraform/gcp output -raw cloud_run_qa_service_url   # strip https://
 ```
 
-Then Cloudflare, **`-target`ed**. An unscoped apply also picks up a pending
-`check_regions` change on the load balancer pool that is unrelated to QA, and a
-rejected pool apply writes bad values into state.
+Then Cloudflare, **`-target`ed**. An unscoped apply also picks up changes
+unrelated to QA (see "Two tokens" in CLAUDE.md for the DNS drift every plan
+shows), and a rejected pool apply writes bad values into state.
 
 ```sh
 set -a; . ./.env; set +a

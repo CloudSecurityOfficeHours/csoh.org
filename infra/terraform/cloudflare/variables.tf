@@ -92,11 +92,9 @@ variable "azure_origin_host" {
 #
 # Note what this variable is NOT used for. It is deliberately absent from the
 # Load Balancer pool in load_balancer.tf: pool members are health-checked around
-# the clock, which until 2026-09-13 meant from every Cloudflare data center,
-# roughly 1.09M probes per origin per day at the original 60s interval (still
-# ~209K at 300), and produced a $119.77 Azure bandwidth bill. QA is reached by a
-# plain proxied DNS record (qa.tf) plus a Host-header rewrite (rules.tf)
-# instead, so it is never probed and can scale to zero.
+# the clock and so never scale to zero. QA is reached by a plain proxied DNS
+# record plus a Host-header rewriting Worker (both in qa.tf) instead, so it is
+# never probed.
 variable "gcp_qa_origin_host" {
   description = "GCP Cloud Run *.run.app hostname for the QA service (no scheme)."
   type        = string

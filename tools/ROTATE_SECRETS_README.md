@@ -21,16 +21,12 @@ installation tokens. What remains is a short tail of secrets that genuinely
 cannot federate, and that tail never gets rotated because nothing forces it:
 no expiry warning, no failing check, no diff. The tokens just get older.
 
-Two specific failure modes shaped the design, both of which have already
-happened here.
+Two failure modes shaped the design.
 
-**The inventory drifts, silently.** `SECURITY.md` carried a row for
-`SSH_PRIVATE_KEY` marked "live but unreferenced - flagged for removal, still
-present," re-confirmed by hand on 2026-07-26. It is not present; it had already
-been deleted. A hand-maintained list of secrets is exactly as trustworthy as
-the last time somebody diffed it against the API. This script does that diff on
-every run, and fails rather than prints - `CLAUDE.md`'s "a silent count is a
-failure mode," applied to the secret inventory.
+**The inventory drifts, silently.** A hand-maintained list of secrets is exactly
+as trustworthy as the last time somebody diffed it against the API. This script
+does that diff on every run, and fails rather than prints - `CLAUDE.md`'s "a
+silent count is a failure mode," applied to the secret inventory.
 
 **A rotation half-lands and nobody notices until CI breaks.** Writing a value
 into an Actions secret gives no feedback whatsoever. `gh secret set` succeeds
@@ -57,12 +53,8 @@ scope.
 
 ## Every verification carries a control
 
-`CLAUDE.md`'s DNS section states the rule this file leans on hardest:
-
-> an instrument that reports "nothing is there" is indistinguishable from a
-> broken instrument until you point it at something you know is there.
-
-A check that a token works is worthless if the probe would have passed anyway.
+A probe that reports "nothing is wrong" is indistinguishable from a broken probe
+until you point it at something you know is wrong. A check that a token works is worthless if the probe would have passed anyway.
 So each credential is probed three ways:
 
 | Kind | Question | Why it is there |
@@ -145,13 +137,11 @@ settings page, and prints the URL.
 A repo-level secret shadows an org-level one of the same name. If the registry
 says org and the value is actually set on the repo, writing to the org updates
 something nothing reads: `gh secret set` succeeds, the audit looks clean, CI
-keeps using the old value. That is the same silent-no-op shape as the inert
-Cloudflare ruleset in `CLAUDE.md`.
+keeps using the old value.
 
 So the write target follows what the API reports, and `audit` warns when the
-registry and reality disagree rather than papering over it. This is not
-hypothetical - `ZOOM_*` were first declared org-level here on the strength of
-`SECURITY.md`'s description, and are in fact repo-level. The audit caught it.
+registry and reality disagree rather than papering over it. (`ZOOM_*`, for
+example, are repo-level.)
 
 ## The audit is assertive, not informational
 
@@ -164,8 +154,7 @@ hypothetical - `ZOOM_*` were first declared org-level here on the strength of
 - anything past its cadence
 
 The referenced set is **derived** by scanning `.github/workflows/*.yml` for
-`${{ secrets.X }}`, never hand-listed - hand-listing is what drifted in the
-first place. Full-line YAML comments are skipped, because six workflows explain
+`${{ secrets.X }}`, never hand-listed, because a hand-maintained list drifts. Full-line YAML comments are skipped, because six workflows explain
 the `${{ secrets.NAME }}` syntax in prose and a naive grep counts `NAME` as a
 secret.
 
@@ -196,8 +185,7 @@ Coverage
 ```
 
 A gate that skips checks silently is worse than no gate: the green tick gets
-read as "all of this was verified." Same failure shape as the inert Cloudflare
-ruleset and the `'*.html'` path filter in `CLAUDE.md`.
+read as "all of this was verified."
 
 The obvious fix - hand CI a PAT that can read secrets - is deliberately not
 taken. Putting a long-lived credential into CI in order to audit long-lived

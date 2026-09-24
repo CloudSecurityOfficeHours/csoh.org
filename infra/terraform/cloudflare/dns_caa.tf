@@ -16,13 +16,11 @@
 # strips these restrictions and obtains a certificate from an excluded CA.
 # =============================================================================
 
-# These records were originally created through the Cloudflare dashboard's
-# "add recommended CAA records" helper, which publishes Cloudflare's full
-# supported-CA set. They are declared here to bring them under version control
-# and stop them drifting silently, so the values below MIRROR WHAT IS ALREADY
-# LIVE rather than proposing something new. Import before the first apply (see
-# infra/MANUAL_SECURITY_STEPS.md section 3) or Terraform will create a second
-# copy of each.
+# The values below are Cloudflare's full supported-CA set, as published by the
+# dashboard's "add recommended CAA records" helper, and they MIRROR WHAT IS
+# LIVE. On a zone where the records already exist, import them before the
+# first apply (see infra/MANUAL_SECURITY_STEPS.md section 3) or Terraform will
+# create a second copy of each.
 #
 # ON THE SIZE OF THIS LIST. Five CAs is more permissive than strictly needed:
 # the certificate actually being served is from Let's Encrypt, and a minimal

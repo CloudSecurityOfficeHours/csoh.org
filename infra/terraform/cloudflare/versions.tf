@@ -1,9 +1,7 @@
 # Cloudflare edge for csoh.org - the control plane that ties the three cloud
 # origins together. This is where TLS termination, the active/active Load
 # Balancer + health checks, security headers, legacy redirects, caching, and
-# the (free) managed WAF all live. Previously most of this was the GCP load
-# balancer + Cloud Armor; it now runs at Cloudflare's edge, once, in front of
-# all three origins.
+# the (free) managed WAF all live, once, in front of all three origins.
 #
 # State shares the GCP GCS bucket under a separate prefix.
 #
@@ -33,8 +31,8 @@ terraform {
       source = "cloudflare/cloudflare"
       # "~> 4.0" is a pessimistic version constraint: allow any 4.x release
       # (4.0, 4.1, 4.9, ...) but NOT 5.0. This lets us pick up bug fixes while
-      # blocking the breaking 5.x rewrite. (MEMORY note: a v5 upgrade is pending,
-      # and the rest of this folder is written against the v4 schema.)
+      # blocking the breaking 5.x rewrite. (The rest of this folder is written
+      # against the v4 schema; moving to v5 is a deliberate upgrade.)
       version = "~> 4.0"
     }
   }

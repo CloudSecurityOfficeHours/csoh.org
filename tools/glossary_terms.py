@@ -5,20 +5,10 @@
 links them from every other page. Both need the same answer to one question:
 given a `<dt>` headword, what strings should link to it?
 
-They used to answer it with two copies of `derive_keys`, and the copies drifted
-until each carried a bug the other had already fixed:
-
-  * crosslink_glossary gated parenthetical aliases behind an "acronymish" test,
-    which crosslink_pages lacked entirely, so "Ambient Mode (Service Mesh)"
-    hijacked "Service Mesh" on every page but not inside the glossary.
-  * crosslink_pages learned that an unspaced slash is part of a name rather than
-    a separator, so "ISO/IEC 42001" is one key. crosslink_glossary still split
-    it, making bare "ISO" an alias of whichever ISO entry came first.
-
-One module, imported by both, is the fix for that class of bug rather than for
-either instance of it. (Reconciling them also retired the acronymish gate; see
-the note above derive_keys for why the denylist does that job better.) The
-denylists stay separate on purpose - see below.
+One module, imported by both, so the two linkers can never disagree about
+which strings a headword owns (two copies of `derive_keys` would drift apart,
+each fixing bugs the other still has). The denylists stay separate on
+purpose - see below.
 """
 
 from __future__ import annotations
@@ -36,13 +26,10 @@ BASE_DENYLIST = {
     "baseline",
     "registry",
     "principal",
-    # "first" used to live here. The glossary defines FIRST - the Forum of
-    # Incident Response and Security Teams, which owns CVSS and EPSS - and
-    # crosslink_glossary.py matched every key with re.IGNORECASE, so the key
-    # would have linked all ~980 ordinary uses of the word "first". Denying it
-    # was the only lever available, and it cost the entry every link it could
-    # have had. Both linkers now match acronym-shaped keys case-sensitively,
-    # so "FIRST" matches the 8 real mentions and "first" matches nothing.
+    # "first" is deliberately NOT here. The glossary defines FIRST (the Forum
+    # of Incident Response and Security Teams), and both linkers match
+    # acronym-shaped keys case-sensitively, so "FIRST" links and the ordinary
+    # word "first" never does. Denying it would cost the entry every link.
     "csp",
     "sp",
     "soc",
@@ -86,19 +73,10 @@ def slugify(text: str) -> str:
 
 # A headword key is unescaped text; the pages it is matched against are HTML.
 # So a key containing "&", "<" or ">" can only ever match a page that spelled
-# the character WRONG. "MITRE ATT&CK" is the standing example: the glossary
-# defines it, 41 mentions sit in linkable prose across 17 pages, and the key
-# matched exactly one of them - the single page that wrote a bare "&" instead
-# of "&amp;". Both cross-linkers and the orphan check in
-# check_docs_consistency.py were blind to the other 40, and to six other keys
-# in the same shape ("Identity & Access Management", "Command & Control",
-# "Governance, Risk & Compliance", "Digital Forensics & Incident Response",
-# and two from "Blue/Green & Canary Deploys").
-#
-# This is the trap this repo keeps recording, in its nastiest form: escaping
-# that one bare "&" would have made the finding disappear while leaving the
-# term unlinked everywhere. The check would have gone green because it could
-# no longer see the problem, not because the problem was gone.
+# the character WRONG. "MITRE ATT&CK" is the standing example: a naive key
+# matches only a page that wrote a bare "&" instead of "&amp;", and is blind
+# to every correctly escaped mention (as are "Identity & Access Management",
+# "Command & Control" and the other "&" headwords).
 #
 # So build the pattern from the key rather than from re.escape() alone, and let
 # each character match either spelling. The matched span is written back into
@@ -146,18 +124,14 @@ def is_acronym(key: str) -> bool:
 
 # Parenthetical aliases are accepted unconditionally, and deliberately so.
 #
-# crosslink_glossary.py used to gate them behind an "acronymish" test - accept
-# "(CNAPP)", reject "(Cloud)" - written after registering "Cloud" from
-# "Air Gap (Cloud)" wrapped the bare word 60 times across the glossary, all
-# pointing at term-air-gap. The gate works for that case but is far too blunt:
-# it requires the parenthetical to be short and all-caps, so it also threw away
-# "Kubernetes (K8s)" and every tool name in
-# "IaC Scanners (Checkov / Trivy / tfsec / KICS / Terrascan)" - 8 legitimate
-# aliases, and 29 real links across the site.
+# An "acronymish" gate (accept "(CNAPP)", reject "(Cloud)") is far too blunt:
+# it would throw away "Kubernetes (K8s)" and every tool name in
+# "IaC Scanners (Checkov / Trivy / tfsec / KICS / Terrascan)".
 #
-# The case it was defending against is already covered twice over: "cloud" is
-# in BASE_DENYLIST, so it cannot become an alias regardless; and any headword
-# that does claim a term belonging to another entry now trips the duplicate-key
+# The case such a gate defends against ("Air Gap (Cloud)" claiming the bare
+# word "Cloud") is covered twice over: "cloud" is in BASE_DENYLIST, so it
+# cannot become an alias regardless; and any headword that does claim a term
+# belonging to another entry trips the duplicate-key
 # check in CROSSLINK_PAGES_README.md, which names both entries instead of
 # silently preferring whichever appears first. A precise check plus a denylist
 # entry beats a heuristic that cannot tell "K8s" from "Cloud".

@@ -166,9 +166,8 @@ AUTH_WALL_PATH_MARKERS = (
     '/login', '/signin', '/sign_in', '/sso/', '/oauth/authorize',
     '/authenticate', '/session/new', '/users/sign_in', '/accounts/login',
     # GoatCounter sends an unauthenticated GET of the instance root to its
-    # signup form with a 303. That rewrote our own analytics endpoint on
-    # how-csoh-org-is-secured.html into `.../user/new/count`, which recorded
-    # nothing, and put the same URL into the CSP that page documents.
+    # signup form with a 303; following it would rewrite our own analytics
+    # endpoint into `.../user/new/count`, which records nothing.
     '/user/new',
     '/_layouts/15/authenticate.aspx',
 )
@@ -490,8 +489,7 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
                 # would have that markup written into every page linking to it,
                 # committed by site-update-deploy.yml, and deployed. The most
                 # realistic route in is a link whose domain expired and was
-                # re-registered, which this repo already tracks as a recurring
-                # class of dead link.
+                # re-registered.
                 #
                 # A real URL never contains these characters unescaped, so
                 # refusing them costs nothing and closes the injection.

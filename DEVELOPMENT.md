@@ -286,12 +286,12 @@ below for the full walk-through.
 
 A few patterns worth knowing before you touch any of these:
 
-- **App token vs PAT.** Writes (push, PR, approve, merge) use a `csoh-ci` GitHub App installation token, not the auto-injected `GITHUB_TOKEN` - App tokens can trigger downstream workflows on the PRs they create. `CSOH_PAT` is a separate fine-grained PAT used *only* to approve the bot's own PRs, since GitHub blocks self-approval and auto-merge doesn't honor the ruleset bypass list for the approval requirement. See the comments in `update-news.yml` for the full story.
+- **App token vs PAT.** Writes (push, PR, approve, merge) use a `csoh-ci` GitHub App installation token, not the auto-injected `GITHUB_TOKEN` - App tokens can trigger downstream workflows on the PRs they create. `CSOH_PAT` is a separate fine-grained PAT used *only* to approve the bot's own PRs, since GitHub blocks self-approval and auto-merge doesn't honor the ruleset bypass list for the approval requirement. See the comments in `update-news.yml` for details.
 - **Auto-merge safety valve.** Workflows that auto-merge always check that the diff is restricted to a known set of files. If the bot touches anything outside that set, the PR stays open for a human.
 - **Pinned action SHAs.** All `uses:` references pin to a full commit SHA with the version as a trailing comment (`@de0fac…  # v6.0.2`). Don't replace these with tag refs.
-- **`permissions:` is `contents: read` unless a step really uses the ambient token.** Every write here (push, PR, approve, merge) goes through the App token or `CSOH_PAT`, both passed explicitly to the step that needs them, so the auto-injected `GITHUB_TOKEN` almost never needs a write scope. `normalize-urls.yml` carried `contents: write` + `pull-requests: write` that no step ever used; it is `contents: read` now, matching every other workflow in the repo. The extra scopes on `check-broken-links.yml`, `check-url-safety.yml`, and `validate-html.yml` (`pull-requests: write`) and on the three staleness workflows (`issues: write`) are real - those steps comment on PRs and manage sticky issues with the default token.
-- **`persist-credentials: false` on any checkout handed a write-scoped token.** `actions/checkout` defaults to leaving the token it was given in `.git/config` as an `http.extraheader`, readable by every later step in the job with a plain file read. Set `persist-credentials: false` whenever nothing after the clone talks to git over the network - which is the normal case here, since `peter-evans/create-pull-request` is passed the token directly. It is already set in `update-resources.yml` (the job that runs a model over fetched web pages) and in `deploy.yml`'s `purge-cloudflare` checkout, and in both jobs of `security-impact-review.yml` and `weekly-docs-review.yml`.
-- **`id-token: write` without an `environment:` is the seatbelt, and it is easy to unfasten by accident.** Three workflows hold `id-token: write` purely so `claude-code-action` can exchange an OIDC token for Claude credentials: `update-resources.yml`, `weekly-docs-review.yml`, and `security-impact-review.yml`. None of them declares an `environment:`, and that is the only reason the token they mint cannot be traded for cloud access - every cloud pins its trust to a `sub` claim naming a specific environment. Adding *any* `environment:` value to one of those jobs breaks it open; on GCP, `qa` is now enough to reach a real service account. See CLAUDE.md, "A workflow that needs cloud credentials must declare an `environment:`".
+- **`permissions:` is `contents: read` unless a step really uses the ambient token.** Every write here (push, PR, approve, merge) goes through the App token or `CSOH_PAT`, both passed explicitly to the step that needs them, so the auto-injected `GITHUB_TOKEN` almost never needs a write scope. The extra scopes on `check-broken-links.yml`, `check-url-safety.yml`, and `validate-html.yml` (`pull-requests: write`) and on the three staleness workflows (`issues: write`) are real - those steps comment on PRs and manage sticky issues with the default token.
+- **`persist-credentials: false` on any checkout handed a write-scoped token.** `actions/checkout` defaults to leaving the token it was given in `.git/config` as an `http.extraheader`, readable by every later step in the job with a plain file read. Set `persist-credentials: false` whenever nothing after the clone talks to git over the network - which is the normal case here, since `peter-evans/create-pull-request` is passed the token directly. It is set in `update-resources.yml` (the job that runs a model over fetched web pages) and in `deploy.yml`'s `purge-cloudflare` checkout, and in both jobs of `security-impact-review.yml` and `weekly-docs-review.yml`.
+- **`id-token: write` without an `environment:` is the seatbelt, and it is easy to unfasten by accident.** Three workflows hold `id-token: write` purely so `claude-code-action` can exchange an OIDC token for Claude credentials: `update-resources.yml`, `weekly-docs-review.yml`, and `security-impact-review.yml`. None of them declares an `environment:`, and that is the only reason the token they mint cannot be traded for cloud access - every cloud pins its trust to a `sub` claim naming a specific environment. Adding *any* `environment:` value to one of those jobs breaks it open; on GCP, `qa` is enough to reach a real service account. See CLAUDE.md, "A workflow that needs cloud credentials must declare an `environment:`".
 
 ### The deploy pipeline, end to end
 
@@ -316,15 +316,14 @@ in the `../csoh-qa` worktree; do not `git switch qa` in the main checkout.
 is why `deploy-qa.yml` has no `paths:` filter. A filtered-out commit produces no
 QA run and is therefore unpromotable.
 
-**Three things about this pipeline fail silently. All three have bitten.**
+**Three things about this pipeline fail silently.**
 
 1. **A `paths:` filter that does not cover a published file.** GitHub's `*` does
    not match `/`, so `'*.html'` means root-level pages only - that is why both
    deploy filters use `'**.html'`. The same trap catches files with no
-   directory at all: until 2026-08-23 the filter had `img/**` but nothing
-   matching `favicon.png`, `banner.png`, `banner.webp`, or the two
-   `apple-touch-icon` files, so replacing the favicon or the social card never
-   published. Nothing errors - the push just looks fine and the change waits
+   directory at all: `img/**` does not match `favicon.png`, `banner.png`,
+   `banner.webp`, or the two `apple-touch-icon` files at the repo root, so
+   those are listed by name. Nothing errors - the push just looks fine and the change waits
    for an unrelated commit. Re-derive the published set and diff it against the
    filter whenever you add a file:
 
@@ -341,9 +340,9 @@ QA run and is therefore unpromotable.
    `tools/site-publish.filter` (a deny-list). The GCP container gets `COPY . `
    minus `.dockerignore`, minus the Dockerfile's `rm`/`find` list, minus
    nginx's request-time denies. Three files have to agree, and nothing in CI
-   compares them. They agreed when last checked - both sides resolved to the same
-   file count - but if you touch any of the three, check the other two. Re-derive
-   the count rather than citing a figure here; it grows with content.
+   compares them. If you touch any of the three, check the other two resolve to
+   the same file count. Re-derive the count rather than citing a figure; it grows
+   with content.
 
 3. **The housekeeping workflow's commits do not deploy.** `site-update-deploy.yml`
    re-stamps SRI, refreshes the sitemap, and generates previews, and every one
@@ -371,7 +370,7 @@ QA run and is therefore unpromotable.
 - Tooltip text is NOT used by the in-page filter, but `build_search_index.py` *does* index it (`TOOLTIP_RE` in `emit_card_docs`), so a term that appears only in a tooltip is findable from site search and not from the box on the page itself
 - The tooltip is mouse-only: `initTooltips()` binds mouseover/mousemove/mouseout and nothing else, and `aria-describedby` is set only while hovering. Touch users are excluded by CSS on purpose, keyboard users by omission. It is ~170 KB of attribute text across the six pages, which every visitor downloads and only pointer users can read
 
-**Search & Filtering** (two different mechanisms since the 2026-09-23 split)
+**Search & Filtering** (two different mechanisms)
 - *On a category page*: `main.js` reads that page's cards from the DOM and filters on title, description and tags. The input keeps `id="searchInput"` precisely so this existing code attaches with no change
 - *On the `resources.html` hub*: there are no cards to filter, so `resources-hub.js` searches **across every category** by fetching `resources-index.json` (a compact row per card, ~42 KB brotli, loaded lazily on first focus) and rendering matches. Its input is `#resourceSearch`, deliberately a different id so `main.js`'s card filter does not bind to a page with no cards
 - `resources-hub.js` also forwards old `/resources.html#card-<slug>` deep links to whichever category page now holds that card, using the same file. A fragment never reaches the server, so this cannot be a redirect
@@ -383,7 +382,7 @@ QA run and is therefore unpromotable.
 - `initCodeBlocks()` in `main.js` adds the copy button and runs `highlightCode()`, a ~120-line dependency-free highlighter covering bash, yaml, json, rego, hcl, sql, python, xml, cedar, yara, and cel. Its `LANGS` list must stay in step with the stamper's, and `--check` fails on a language `main.js` cannot render
 - Copy puts the exact code on the clipboard with none of the button's own text in it. Highlighting alters no character of any block (verified across 67 blocks against the raw HTML)
 - **Do not add a regex heuristic to the classifier.** Every version of one also matched shell scripts, scanner output, and a directory tree. Six blocks are named in `OVERRIDES` instead, keyed by a hash of their content, so editing such a block fails `--check` loudly rather than silently dropping its override
-- Code blocks **scroll** rather than wrap, since wrapped code misrepresents it. Inline `<code>` in prose does break, which is a separate rule - it had none at all until 2026-08-25 and a long dotted path pushed the document to 459px against a 375px viewport
+- Code blocks **scroll** rather than wrap, since wrapped code misrepresents it. Inline `<code>` in prose does break, which is a separate rule: without it a long dotted path overflows a 375px viewport
 - 34 older `<br>`-based blocks are deliberately unstamped: three of them are not code at all (an email template, a resume line, a feed URL), so a language label would be a lie. They still get a copy button
 
 **Reading Aids** (`main.js`, all progressive enhancement)
@@ -417,7 +416,7 @@ QA run and is therefore unpromotable.
 - Auth: `CLAUDE_CODE_OAUTH_TOKEN` (subscription quota, not API billing) + the `csoh-ci` GitHub App for write-scoped PRs + `CSOH_PAT` to approve the bot's own PR so auto-merge can satisfy the "1 required approval" rule
 - The model checks for duplicates by grepping for URL + name before adding, follows the existing resource-card HTML pattern, and bumps the `<span id="visibleCount">` counter
 - **Auto-merge only fires when the diff is purely the six `resources-*.html` category pages** - `resources.html` itself is excluded, because the hub's counts are generated and a card added there would be both misplaced and overwritten.** If Claude touches anything else, the PR stays open with a banner asking for human review - important safety valve
-- **The `--allowedTools` list must not contain any shell entry.** It is currently `Read,Edit,Glob,Grep,WebSearch,WebFetch` - every entry an in-process tool, no `Bash(...)` pattern of any kind. Two removals got it there. `Bash(python3:*)` went first: that pattern matches `python3 -c '<anything>'`, which is arbitrary code execution and makes the rest of the allowlist decorative. `Bash(grep:*)` and `Bash(wc:*)` went second, and that is the less obvious lesson - `grep` takes a path like nearly every Unix command, so `Bash(grep:*)` was a read primitive over the entire runner filesystem including `/proc/self/environ`. The built-in `Grep` tool that remains searches the checked-out workspace and is not a shell. This step reads pages it does not control (`WebFetch` / `WebSearch`) in a job that also holds `id-token: write` and the `csoh-ci` App token, so a prompt injection in a fetched page is a realistic path to those credentials. If a future prompt genuinely needs Python, add a checked-in script to `tools/` and allowlist that exact path - never the interpreter
+- **The `--allowedTools` list must not contain any shell entry.** It is `Read,Edit,Glob,Grep,WebSearch,WebFetch` - every entry an in-process tool, no `Bash(...)` pattern of any kind. `Bash(python3:*)` matches `python3 -c '<anything>'`, which is arbitrary code execution and makes the rest of the allowlist decorative. Less obviously, `Bash(grep:*)` or `Bash(wc:*)` would be a read primitive over the entire runner filesystem including `/proc/self/environ`, because `grep` takes a path like nearly every Unix command. The built-in `Grep` tool that remains searches the checked-out workspace and is not a shell. This step reads pages it does not control (`WebFetch` / `WebSearch`) in a job that also holds `id-token: write` and the `csoh-ci` App token, so a prompt injection in a fetched page is a realistic path to those credentials. If a future prompt genuinely needs Python, add a checked-in script to `tools/` and allowlist that exact path - never the interpreter
 - **The `csoh-ci` App token is minted *after* the Claude step, not before it.** The mint step sits immediately above `create-pull-request`, so the repo-write credential does not exist on the runner while the model is reading the open web. Moving it to the top of the job, which is where mint steps usually go, silently removes that protection
 - **The job's `actions/checkout` sets `persist-credentials: false`** so the App token isn't left in `.git/config` for the model's step to read. This is safe because `peter-evans/create-pull-request` is handed the token explicitly. Don't drop it while re-arranging the job
 - Preview images for newly-added cards are generated post-merge by `site-update-deploy.yml`
@@ -796,9 +795,9 @@ After every deploy that touches HTML structure or `.htaccess`, spot-check live U
 
 #### When the signals disagree
 
-- **Codebase scorecard says 100, PSI says a category dropped** → something at the live-site layer is being injected or rewritten that the source HTML doesn't reflect. Common culprits: Cloudflare Browser Insights injecting a beacon script (caught and disabled 2026-05-23 - Accessibility 100 → 96 was a `color-contrast` regression on `.card-action` links, surfaced because PSI tests the rendered page); Cloudflare's "Managed robots.txt" appending `Content-Signal:` directives Lighthouse's parser doesn't recognize.
+- **Codebase scorecard says 100, PSI says a category dropped** → something at the live-site layer is being injected or rewritten that the source HTML doesn't reflect. Common culprits: Cloudflare Browser Insights injecting a beacon script (keep it disabled); Cloudflare's "Managed robots.txt" appending `Content-Signal:` directives Lighthouse's parser doesn't recognize.
 
-- **Codebase scorecard says 100, GSC says traffic dropped** → something at the server/CDN/redirect layer is undoing what the HTML claims. That's how we caught the `.htaccess` `meetings.html → sessions.html` stale redirect: HTML had the right canonical, but the live site was 301'ing away from it.
+- **Codebase scorecard says 100, GSC says traffic dropped** → something at the server/CDN/redirect layer is undoing what the HTML claims, for example a stale `.htaccess` redirect 301'ing away from a page whose HTML carries the right canonical.
 
 Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The codebase scorecard tells you what *should* be true; PSI and GSC tell you what *is* true.
 
@@ -817,7 +816,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `feed.xml` | RSS feed | **Don't edit** -- auto-generated |
 | `update_news.py` | News feed aggregation script | Adding/removing RSS sources |
 | `tools/normalize_urls.py` | URL normalizer (tracking params, HTTPS upgrade, redirects) | **Don't edit** -- runs in CI |
-| `tools/url_resolution_cache.json` | Cached redirect resolutions so the per-push CI run only re-resolves *new* URLs (kept the Normalize step from re-checking ~2,650 links every run) | **Don't edit** -- CI-seeded; never commit a local copy (redirect resolution is IP-dependent, so a workstation seed can differ from CI and falsely block deploys) |
+| `tools/url_resolution_cache.json` | Cached redirect resolutions so the per-push CI run only re-resolves *new* URLs (so the Normalize step does not re-check ~2,650 links every run) | **Don't edit** -- CI-seeded; never commit a local copy (redirect resolution is IP-dependent, so a workstation seed can differ from CI and falsely block deploys) |
 | `tools/check_all_site_urls.py` | Site-wide URL safety scanner | Running local safety audits |
 | `tools/update_sitemap.py` | Refreshes `<lastmod>` dates in `sitemap.xml` from git history | **Don't edit** -- runs in CI and alongside `update_news.py` |
 | `tools/update_presentations_schema.py` | Regenerates `VideoObject` JSON-LD on `presentations.html` | **Don't edit** -- runs in CI on every deploy |

@@ -1,18 +1,16 @@
 # --------------------------------------------------------------------------
 # A monthly cost budget for this AWS account, with email alerts.
 #
-# Why this exists: every cost problem this deployment has had was found by a
-# person reading a bill, weeks after it started - GCP's promotional credits
-# ending on 2026-07-28, $119.77 of Azure egress in July, and a container
-# registry and an S3 bucket that both grew for months. A budget is the
-# cheapest instrument that speaks up on its own. AWS charges nothing for a
+# Why this exists: without it, a cost problem (credits running out, a health
+# check multiplied across every probe source, storage that grows without
+# expiry) surfaces only when a person reads a bill, weeks after it started. A
+# budget is the cheapest instrument that speaks up on its own. AWS charges nothing for a
 # budget that only sends notifications (only "action-enabled" budgets beyond
 # the first two cost money), so this one is free to run.
 #
 # What it measures. A budget counts cost AFTER credits unless told otherwise,
-# and this one keeps that default on purpose. On 2026-09-13 the account had
-# $17.55 of promotional credit left, cancelling all of its usage, so the
-# budget reads $0.00 while the credits last. That turns the first alert below
+# and this one keeps that default on purpose. While the account's promotional
+# credit lasts it cancels all usage, so the budget reads $0.00. That turns the first alert below
 # into a tripwire: the first dollar AWS actually bills means the credits have
 # run out, or something new is running.
 #

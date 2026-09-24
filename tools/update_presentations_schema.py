@@ -20,11 +20,10 @@ different places in each:
    of that anchor, not descendants.
 3. `.resource-card--deck` - slides only, no video. Skipped.
 
-This script used to match the anchor and then look for `<h3>`/`<p>` inside it,
-which only ever held for shape 1. The two shape-2 cards fell through a bare
-`continue` and were dropped from the schema with no warning, for as long as
-that shape had existed. Extraction is now anchored on the card `<div>` - one
-brace-balanced block per card, every field pulled from that same block - and
+Matching the anchor and looking for `<h3>`/`<p>` inside it holds only for
+shape 1, and would silently drop shape-2 cards. So extraction is anchored on
+the card `<div>` - one balanced block per card, every field pulled from that
+same block - and
 `main()` refuses to write a schema holding fewer VideoObjects than the page has
 YouTube card links.
 """
@@ -74,8 +73,8 @@ def youtube_card_link(tag: str) -> tuple[str, str] | None:
     """Return (url, video_id) if this `<a>` tag is a YouTube card link, else None.
 
     Both values are read out of the one tag string, so an href can never be
-    paired with a different element's class - the rule CLAUDE.md records after
-    an SRI check compared one tag's hash against another tag's integrity.
+    paired with a different element's class: when two values must
+    correspond, extract them from one match.
     """
     class_m = CLASS_ATTR_RE.search(tag)
     if not class_m or "card-link" not in class_m.group(1).split():

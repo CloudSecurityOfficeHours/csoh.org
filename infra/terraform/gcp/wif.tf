@@ -112,12 +112,12 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   # The `production` environment is itself restricted to the `main` branch, so
   # this transitively enforces the branch rule that var.github_branch describes.
   #
-  # The `qa` alternative was added for deploy-qa.yml. It follows the same shape
+  # The `qa` alternative is for deploy-qa.yml. It follows the same shape
   # deliberately: `qa` is a real GitHub Environment, restricted by its own
   # deployment branch policy to the `qa` branch, so this stays an environment
   # pin rather than a looser `assertion.ref` check. Widening it to something
-  # like a `startsWith` on the subject would re-open exactly the hole the
-  # production pin closed, because a workflow can enter an environment it was
+  # like a `startsWith` on the subject would re-open the hole the production
+  # pin closes, because a workflow can enter an environment it was
   # not built for far more easily than it can forge a claim.
   #
   # PASSING THIS CONDITION IS NOT AUTHORIZATION. It only gets a token minted
@@ -163,11 +163,11 @@ resource "google_service_account_iam_member" "deployer_wif_binding" {
   # resource), then names the exact subject
   # `repo:<owner>/<repo>:environment:production`.
   #
-  # This previously used `principalSet://.../attribute.repository/<owner>/<repo>`,
-  # which granted impersonation to ANY workflow run from the repo, on any
-  # branch, in any (or no) environment. The attribute_condition above is the
-  # hard gate and already rejects those tokens; pinning the member to the same
-  # subject is defense in depth, and mirrors the StringEquals-on-sub condition
+  # Do not widen this to `principalSet://.../attribute.repository/<owner>/<repo>`:
+  # that grants impersonation to ANY workflow run from the repo, on any branch,
+  # in any (or no) environment. The attribute_condition above is the hard gate
+  # and already rejects those tokens; pinning the member to the same subject is
+  # defense in depth, and mirrors the StringEquals-on-sub condition
   # in aws/oidc.tf and the `subject =` line in azure/identity.tf.
   member = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github.workload_identity_pool_id}/subject/repo:${var.github_owner}/${var.github_repo}:environment:production"
 }

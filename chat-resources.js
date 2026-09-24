@@ -2,10 +2,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('searchInput');
     const showAllBtn = document.getElementById('showAllBtn');
     // Select the cards, not their wrappers. Unlinking a dead resource strips
-    // its <a class="card-link"> and leaves a bare .resource-card (commit
-    // 11a4f4c1 did this to five of them), which a '.card-link' selector cannot
-    // see at all - so such a card matched no filter, stayed visible under every
-    // one of them, and never reached the search suggestion index.
+    // its <a class="card-link"> and leaves a bare .resource-card, which a
+    // '.card-link' selector cannot see: such a card would match no filter,
+    // stay visible under every one, and never reach the search suggestions.
     const cards = document.querySelectorAll('.resource-card');
     const filterBtns = document.querySelectorAll('.filter-btn');
     let activeFilter = null;
@@ -282,8 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Visibility here is a class, not element.style.display. The markup ships
     // these controls with .is-hidden because the page is served under
-    // `style-src 'self'`: an inline style="display: none" attribute is blocked
-    // outright, which left Apply and Clear rendering on page load.
+    // `style-src 'self'`, which blocks an inline style="display: none".
     function setDateControlHidden(el, hidden) {
         el.classList.toggle('is-hidden', hidden);
     }

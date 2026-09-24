@@ -6,9 +6,7 @@ Strict schema.org parsers (Google, Bing, and the LLM crawlers) reject an
 entire <script type="application/ld+json"> block when it contains invalid
 JSON - a single-quoted string, a trailing comma, an unescaped quote. The
 block then contributes *no* structured data, silently. The weekly SEO audit
-only checks that a block is *present*, so this class of bug shipped for
-months across the meetings archive (82/94 Article + 91/94 BreadcrumbList
-blocks were single-quoted and unparseable) without tripping any alarm.
+only checks that a block is *present*, so it cannot catch this.
 
 This gate parses every block with json.loads and exits non-zero on the first
 failure, printing file:line for each offender.

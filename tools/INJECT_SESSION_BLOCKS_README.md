@@ -35,10 +35,9 @@ topic page **into** recaps. Running both creates the loop.
 
 The curated card summary in `meetings.html` describes the **whole meeting**. On a
 page about one topic that is frequently filler: a session that spent forty minutes
-debriefing Black Hat surfaced on `conferences.html` as "Shawn greeted the group
-from his vacation at Disney World." The recap *selection* was right; the display
-copy was off-topic, under a heading promising the community worked the topic
-through.
+debriefing Black Hat can have a summary that opens with small talk. The recap
+*selection* is right, but the display copy would be off-topic, under a heading
+promising the community worked the topic through.
 
 So the blurb is chosen in this order:
 

@@ -25,7 +25,7 @@
 # so that if another workflow pushed a commit while this one was working,
 # this run rebases on top and tries again instead of failing.
 #
-# These housekeeping commits all carry `[skip ci]`, so they do NOT trigger
+# These housekeeping commits all carry a CI-skip marker, so they do NOT trigger
 # deploy.yml (that would loop). deploy.yml runs independently, from the same
 # original content push that triggered this workflow (both watch main with
 # path filters). The commits made here land in main so they're baked into
@@ -58,7 +58,7 @@ on:
       # `**.html` not `*.html`: GitHub's `*` does not match `/`, so `*.html`
       # would be root-level pages only and a commit touching just breaches/,
       # meetings/, portfolio/, or homelab/ would skip housekeeping entirely -
-      # no SRI stamp, no sitemap refresh. Same fix as in deploy.yml.
+      # no SRI stamp, no sitemap refresh. Same rule as in deploy.yml.
       - '**.html'
       - 'chat-screenshots/**'
       - 'img/**'
@@ -106,17 +106,19 @@ permissions:
 
 # -----------------------------------------------------------------------------
 # §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
-# One constant lock shared by every workflow that pushes commits to main.
+# One constant lock, so housekeeping runs never push to main concurrently.
 # -----------------------------------------------------------------------------
 # `concurrency:` stops two runs that share the same `group:` name from
 # executing at the same time - GitHub lets only one run per group proceed and
-# holds (or cancels) the rest. This `deploy-pipeline` group is shared by the
-# workflows that push commits DIRECTLY to main - this one and
-# update-counts.yml - so their pushes queue serially instead of racing and
-# clobbering each other.
+# holds (or cancels) the rest.
 #
-# update-news and normalize-urls are deliberately NOT in this group: they open
-# PRs on their own branches rather than pushing to main, and cancellation is a
+# update-counts.yml also pushes directly to main but is deliberately NOT in
+# this group: with this group's cancel-in-progress: true, a push that
+# triggered both would cancel the count sync. It takes its own lane and
+# serialises its push with a rebase-retry loop instead (see its §3).
+#
+# update-news and normalize-urls are deliberately NOT in this group either:
+# they open PRs on their own branches rather than pushing to main, and cancellation is a
 # property of the INCOMING run - so a content push landing here with
 # cancel-in-progress: true would kill their long feed/redirect crawls mid-run
 # if they shared the group. Each keeps its own group instead (see the §3
@@ -127,9 +129,8 @@ permissions:
 # stale SRI/sitemap state on top of a newer base.
 concurrency:
   # A fixed, constant group name (NOT keyed on `${{ github.ref }}`) means
-  # every run of every direct-to-main workflow shares this one lock. A
-  # ref-keyed group would only serialize runs on the same branch, but these
-  # workflows all push to the same `main` and would still collide; the
+  # every run shares this one lock. A ref-keyed group would only serialize
+  # runs on the same branch, but they all push to the same `main`; the
   # constant name forces them into a single serial queue.
   group: deploy-pipeline
   cancel-in-progress: true
@@ -168,8 +169,7 @@ jobs:
       # action. `id:` gives the step a handle so later steps can read its
       # outputs (e.g. `steps.app-token.outputs.token`).
       # Mint a short-lived (~1h) installation token from the csoh-ci GitHub
-      # App. Replaces the long-lived PAT_TOKEN we used to use here. We need a
-      # non-default token (not the auto-injected GITHUB_TOKEN) because the
+      # App. We need a non-default token (not the auto-injected GITHUB_TOKEN) because the
       # housekeeping steps below push commits to main and we want those to
       # trigger downstream workflows - GITHUB_TOKEN-authored commits do not.
       # The App is on the main-branch ruleset bypass list, so direct pushes
@@ -250,8 +250,8 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             # `*.html` is shell-globbed by git itself; commit ONLY HTML files.
             git add '*.html'
-            # `[skip ci]` in a commit message tells GitHub Actions NOT to
-            # trigger workflows on this commit - avoids a deploy loop.
+            # The CI-skip marker in this commit message tells GitHub Actions
+            # NOT to trigger workflows on this commit - avoids a deploy loop.
             git commit -m "chore: update SRI hashes for CSS/JS files [skip ci]"
             # If push fails (race with another deploy-pipeline run), pull
             # with rebase and retry. See file header for context.
@@ -321,10 +321,9 @@ jobs:
           # `tee` writes output to a file AND prints it. PIPESTATUS[0] is
           # the exit code of the FIRST command in the pipe (Python), not tee.
           # `--cache` backs redirect resolution with a committed JSON map so
-          # only URLs we've never resolved hit the network (the slow part was
-          # re-resolving all ~2,650 every run). The cache auto-does a full
-          # re-resolve once it's older than its TTL, so drift is still caught;
-          # safety checks on resolved destinations run every time regardless.
+          # only URLs we've never resolved hit the network. The cache auto-does
+          # a full re-resolve once it's older than its TTL, so drift is still
+          # caught; safety checks on resolved destinations run every time regardless.
           # The cache is seeded by CI on first run - never commit a local one,
           # since redirect resolution is IP-dependent.
           python3 tools/normalize_urls.py --apply \
@@ -476,8 +475,8 @@ jobs:
       # Validate that every news source banner referenced in news.html exists
       # on disk. Catches the case where update_news.py:SOURCE_SLUGS gains a
       # new entry but the matching img/news-banners/{slug}.{jpg,webp} pair
-      # was never committed - which silently broke cards before this check
-      # was added. Fails the deploy so the missing banners get generated
+      # was never committed, which silently breaks cards. Fails the deploy so
+      # the missing banners get generated
       # (see tools/generate_news_banners.py) before going live.
       - name: Check news source banners exist
         run: |
@@ -515,9 +514,9 @@ jobs:
 
       # Squeeze ONLY the JPGs the generate step just produced (strip metadata,
       # recompress at quality 85). jpegoptim is idempotent, so re-running it on
-      # the other ~630 already-optimized previews is pure wasted CI time - that
-      # was the bulk of this step's runtime. New previews show up as untracked
-      # files; a regenerated one shows as modified. Nothing else writes to
+      # the hundreds of already-optimized previews is wasted CI time. New
+      # previews show up as untracked files; a regenerated one shows as
+      # modified. Nothing else writes to
       # img/previews before this step, so git status is an exact list of what
       # the generate step touched.
       - name: Optimize images
@@ -555,8 +554,8 @@ jobs:
           python3 tools/generate_webp.py img/previews
 
       # Always sync HTML <img src> paths to preview-mapping.json, even
-      # when no new previews were generated this run - past contributors
-      # (humans or the weekly Update Resources model) often type
+      # when no new previews were generated this run - contributors
+      # (humans or the weekly Update Resources model) can type
       # made-up filenames into the HTML that drift from what the
       # screenshot generator actually writes to disk. This step is the
       # safety net that keeps them aligned. It also re-points each card's

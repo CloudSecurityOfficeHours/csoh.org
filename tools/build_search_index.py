@@ -69,9 +69,8 @@ EXCLUDE_FILES: set[str] = {
 # Bucket Blunder"). They are the bulk of the index's weight and the least
 # useful thing to match on.
 CARD_PAGES: set[str] = {
-    # resources.html was split into six category pages on 2026-09-23; the hub
-    # itself now holds only six category cards, which are navigation rather
-    # than resources, so it is no longer a card page.
+    # resources.html is a hub of six category pages; its category cards are
+    # navigation rather than resources, so it is not a card page.
     "resources-ctf-challenges.html",
     "resources-labs-training.html",
     "resources-security-tools.html",
@@ -211,11 +210,10 @@ CARD_OPEN_TAG_RE = re.compile(r"<a\b[^>]*>", re.IGNORECASE)
 #   ctfs / threat-research    <section class="section" id="aws-ctfs">
 #   conferences.html          <h2 id="cloud"> (cards are siblings, not nested)
 #   chat-resources.html       no grouping anchors; cards link to the page
-# `details` is here because resources.html's category sections collapse and
-# are <details class="category-section"> as of 2026-08-23. Leaving it out is
-# not an error anyone sees: the tag simply stops matching, every card on the
-# page loses its section attribution, and the index still builds. It went
-# from 7 sections to 1 that way.
+# `details` is here because collapsible category sections are
+# <details class="category-section">. Leaving it out is not an error anyone
+# sees: the tag simply stops matching, every card on the page loses its
+# section attribution, and the index still builds.
 ANCHOR_TAG_RE = re.compile(r"<(section|div|details|h2)\b([^>]*)>", re.IGNORECASE)
 ID_ATTR_RE = re.compile(r'\bid=["\']([^"\']+)["\']', re.IGNORECASE)
 CLASS_ATTR_RE = re.compile(r'\bclass=["\']([^"\']*)["\']', re.IGNORECASE)
@@ -398,10 +396,9 @@ def emit_card_docs(filename: str, main: str, page_title_: str) -> Iterable[dict]
             anchor, section = aid, heading
 
         # Prefer the card's own id. The category anchor is a fallback that
-        # is correct and nearly useless: #security-tools holds 83 cards, so
-        # a result promising "Open Policy Agent (OPA)" landed the reader
-        # 6,400px above it with no way to tell the page was not simply
-        # missing the thing they clicked. Read the id off the HTML rather
+        # is correct and nearly useless: a category can hold dozens of cards,
+        # landing the reader screens away from the one they clicked. Read the
+        # id off the HTML rather
         # than recomputing it, so an unstamped card degrades to the old
         # category link instead of to an anchor that does not exist.
         url = f"/{filename}#{card_id or anchor}" if (card_id or anchor) else f"/{filename}"

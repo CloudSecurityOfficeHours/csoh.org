@@ -21,11 +21,10 @@
 # uses, and deploy.yml's push step skips a tag that already exists. So when a
 # commit tested here is later fast-forwarded onto `main`, production computes the
 # identical tag, finds it already present, resolves it to a digest, and deploys
-# THE EXACT BYTES THIS WORKFLOW PUSHED rather than rebuilding them. That repo ran
-# with immutable_tags until 2026-08-30, which used to be what guaranteed the tag
-# still named those bytes; retention required turning it off (see
-# infra/terraform/gcp/artifact_registry.tf), so the guarantee is now the digest
-# both workflows deploy by.
+# THE EXACT BYTES THIS WORKFLOW PUSHED rather than rebuilding them. Tags in that
+# repo are mutable (retention requires it; see
+# infra/terraform/gcp/artifact_registry.tf), so the guarantee is the digest both
+# workflows deploy by.
 # Promotion is therefore "ship the artifact you tested", not "rebuild and hope".
 #
 # That property is load bearing, and it breaks the moment this workflow and
@@ -37,10 +36,9 @@ name: Deploy QA - publish the qa branch to the QA origin
 on:
   # Every push to `qa`, with NO `paths:` filter - deliberately unlike deploy.yml.
   #
-  # Two reasons. First, this repo has been bitten repeatedly by path filters that
-  # were narrower than what stage_site.sh actually publishes: `'*.html'` does not
-  # match `breaches/`, so commit 874a813c fixed per-breach pages and never
-  # deployed, silently. Adding a THIRD filter to keep in step with deploy.yml and
+  # Two reasons. First, a path filter narrower than what stage_site.sh actually
+  # publishes silently skips deploys (`'*.html'` does not match `breaches/`).
+  # Adding a THIRD filter to keep in step with deploy.yml and
   # site-update-deploy.yml would be a third chance to make that mistake.
   #
   # Second, the cost argument that justifies a filter in production does not
@@ -271,7 +269,7 @@ jobs:
             --ignorefile .trivyignore.yaml \
             "${{ steps.tag.outputs.image }}"
 
-      # Re-pushing an existing tag overwrites it silently now that the repo runs
+      # Re-pushing an existing tag overwrites it silently, because the repo runs
       # with immutable_tags = false (retention requires it). This check is what
       # keeps reruns idempotent, and it also handles the case where a commit is
       # pushed to `qa` twice.

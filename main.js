@@ -214,15 +214,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Category sections are <details> now, so opening and closing them - by
-    // pointer, by keyboard, and with JavaScript off - is the browser's job.
-    // This block used to hand-roll all three on `.category-section h3`, an
-    // element resources.html has never had: the markup uses <h2>. The feature
-    // was dead in a way nothing could surface, because a section that never
-    // collapses is indistinguishable from a section with no collapse feature.
+    // Category sections are <details>, so opening and closing them (by
+    // pointer, by keyboard, and with JavaScript off) is the browser's job.
     labelCategoryCounts();
 
-    // Card click functionality is now handled via HTML <a> wrapper
+    // Card clicks are handled by the HTML <a> wrapper.
 
     // Smooth scrolling for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -437,7 +433,7 @@ function filterByTagText(tagText) {
 
 // --- Collapsible category sections (resources.html) -------------------------
 //
-// The page opens with every category closed. 499 cards in one 91,000px
+// The page opens with every category closed. Hundreds of cards in one
 // document is not something anyone reads top to bottom, and the search box is
 // what most visitors came for. Expanding is the browser's <details> behaviour;
 // what needs code is keeping that state honest while a filter is running.
@@ -448,12 +444,10 @@ function filterByTagText(tagText) {
 // search at all.
 //
 // Every function that changes which cards are displayed calls syncCategorySections
-// itself, rather than leaving it to the click handler that invoked it. That is
-// deliberate: the category buttons used to be the only path that remembered, so
-// the ~20 tag buttons filtered 517 cards down to 105 and left all 105 inside
-// collapsed sections - the counter read "105" above six shut accordions and a
-// page that looked empty. A call site can forget; a primitive cannot. Repeat
-// calls are free, since this only assigns `open`.
+// itself, rather than leaving it to the click handler that invoked it: a call
+// site can forget, a primitive cannot, and a filter that skips it leaves its
+// matches inside shut accordions under a counter that says they are there.
+// Repeat calls are free, since this only assigns `open`.
 
 // Card counts come from the DOM rather than the markup so they cannot drift
 // away from the cards the way a hand-typed number would.
@@ -545,10 +539,9 @@ const CARD_CATEGORY_ICONS = {
 function addIconsToCards() {
     // Opt-out for pages whose cards are deliberately text-only. The classifier
     // below keys off tags and title keywords and falls back to a generic
-    // padlock when it cannot place a card, which is fine for the third-party
-    // directory it was written for. On an index of our own topic pages nothing
-    // matches, so every card renders the same glyph: 40 identical padlocks that
-    // encode nothing and cost a row of height each. topics.html sets
+    // padlock when it cannot place a card. On an index of our own topic pages
+    // nothing matches, so every card would get the same padlock, encoding
+    // nothing and costing a row of height each. topics.html sets
     // data-no-card-icons on <main> for that reason.
     if (document.querySelector('[data-no-card-icons]')) return;
 
@@ -571,12 +564,11 @@ function addIconsToCards() {
 
         // Determine icon based on tags and content. Order matters - earlier matches win.
         //
-        // An authored page names its own glyph and wins outright. The classifier
-        // below was written for the third-party resource directory, where every
-        // card carries a tag like "Tool" or "CTF"; on a page of our own prose
-        // cards nothing matches and all of them render the same padlock. The fix
-        // is not more title keywords - those guess, and drift the moment a
-        // heading is reworded - it is letting the page say what it means.
+        // An authored page names its own glyph (data-icon) and wins outright.
+        // The classifier below suits the third-party resource directory, where
+        // every card carries a tag like "Tool" or "CTF"; our own prose cards
+        // match nothing and would all get the padlock. Don't add title keywords
+        // to cover them: those guess, and drift when a heading is reworded.
         if (card.dataset.icon) {
             icon = card.dataset.icon;
         } else if (tagEquals('newsletter')) {
@@ -773,16 +765,15 @@ function initHeaderHeightVar() {
 
 // Dark mode
 //
-// The initial stamp moved to /theme.js, which is render-blocking in <head>.
-// This file is deferred, so doing it here meant a visitor whose stored choice
-// differed from their OS painted the wrong theme first and flipped afterwards.
+// The initial stamp lives in /theme.js, which is render-blocking in <head>.
+// This file is deferred, so stamping here would let a visitor whose stored
+// choice differs from their OS paint the wrong theme first and flip afterwards.
 //
 // Nothing here stamps data-theme for a visitor with no stored preference, and
 // that is deliberate. style.css carries the dark tokens under
 // `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }`, so leaving
-// the attribute off is what keeps the media query in control - which means an
-// OS theme change with the page open now follows immediately, where the old
-// code stamped `dark` once at load and froze it there until a reload.
+// the attribute off is what keeps the media query in control, and an OS theme
+// change with the page open follows immediately.
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
 // The theme actually in effect, which is not always the attribute: with no
@@ -1095,10 +1086,9 @@ function injectSearchLink() {
     // clearly on both desktop and the mobile hamburger menu. The wrapping
     // span lets CSS shorten / hide the text on tight viewports later.
     //
-    // The glyph is inline SVG, not the 🔍 emoji it used to be. Emoji render
-    // through the platform emoji font, which ignores `color` - so on the dark
-    // header the magnifier came out as a small dark blob rather than a light
-    // icon, and its shape changed per operating system. currentColor makes
+    // The glyph is inline SVG, not the 🔍 emoji: emoji render through the
+    // platform emoji font, which ignores `color` (a dark blob on the dark
+    // header) and changes shape per operating system. currentColor makes
     // this follow the link colour in both themes. See .nav-icon in style.css.
     a.innerHTML = '<svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/></svg> <span class="nav-search-text">Search</span>';
 
@@ -1392,8 +1382,8 @@ const CODE_LANGS = {
                 ['tok-attr', '[\\w:.-]+(?=\\s*=)']
             ] }
     // regex and text are deliberately absent: neither has tokens worth
-    // colouring, and guessing at regex structure produced worse output than
-    // leaving it plain.
+    // colouring, and guessing at regex structure reads worse than leaving it
+    // plain.
 };
 
 function escapeHtmlText(s) {
@@ -1425,8 +1415,8 @@ function highlightCode(text, lang) {
         if (cfg.kw) rules.push(['tok-kw', '\\b(?:' + cfg.kw.map(reEscape).join('|') + ')\\b']);
         if (lang === 'bash') rules.push(['tok-key', '\\$\\{[^}]*\\}|\\$[A-Za-z_][\\w]*']);
         // Numbers only, not identifiers that merely start with a digit.
-        // `\\b\\d[\\w.]*\\b` coloured the four leading hex runs of a UUID and
-        // left the rest plain, which read as damage rather than syntax.
+        // A looser `\\b\\d[\\w.]*\\b` would colour the four leading hex runs
+        // of a UUID and leave the rest plain, which reads as damage.
         rules.push(['tok-num', '\\b(?:0x[0-9a-fA-F]+|\\d+(?:\\.\\d+)*)\\b']);
     }
 

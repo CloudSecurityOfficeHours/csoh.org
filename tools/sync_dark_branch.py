@@ -11,11 +11,8 @@ The site has two ways of being dark, and they are *not* the same selector:
 main.js loads at the bottom of <body>, so a visitor on a dark OS renders the
 *entire* page through the system branch before the attribute ever lands.
 JS-off visitors stay there permanently. Both branches therefore have to carry
-the same overrides - but only the toggle branch was ever maintained, and the
-system branch drifted to 36 rules against its 196. The gap showed up as
-light-mode text colours on dark surfaces: .next-session__note at 2.04:1,
-.hamburger at 1.08:1, and a .btn-primary whose text matched its own
-background exactly (contrast 1.00, invisible).
+the same overrides. A system branch that lags shows up as light-mode text
+colours on dark surfaces, down to text that exactly matches its background.
 
 This script regenerates the system branch from the toggle branch, so the two
 cannot disagree. It writes a single marked block; everything between the

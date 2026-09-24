@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Fail if news.html or feed.xml carries a publish date in the future.
 
-Publishers leak scheduled-publish dates into RSS. ReversingLabs served
-2026-09-30 for a post its own feed later dated 2026-08-26; Huntress served
-2026-09-15 for a post that was already live. update_news.py took pubDate
-verbatim, and a future date taken verbatim is permanent:
+Publishers leak scheduled-publish dates into RSS, and a future date taken
+verbatim is permanent:
 
   - parse_existing_cards() reads the date back out of news.html on the next
     run, so the page re-stamps its own bad value every three hours.
@@ -13,12 +11,10 @@ verbatim, and a future date taken verbatim is permanent:
   - Entries sort newest-first before the max_articles cut, so the card is
     pinned to slot 1 and cannot be evicted until real time passes it.
 
-clamp_future_date() in update_news.py now stops these at ingest. This gate is
+clamp_future_date() in update_news.py stops these at ingest. This gate is
 the assertion that it worked, and it covers the paths the clamp does not: a
-hand edit, a restored backup, or a future date arriving through some route
-nobody has thought of yet. Both cards sat at the top of the page for weeks,
-and in the JSON-LD ItemList crawlers read, with every existing gate green -
-no link checker or HTML validator has an opinion about a date.
+hand edit, a restored backup, or a future date arriving through some other
+route. No link checker or HTML validator has an opinion about a date.
 
 The ceiling tracks the clamp rather than being chosen independently:
 FUTURE_DATE_GRACE is imported from update_news.py, so the two cannot drift
@@ -94,19 +90,14 @@ def unread_surfaces(news_text: str, feed_text: str) -> List[Finding]:
 
     The checkers judge only what their regex matches, so markup that stops
     matching yields no finding, and no finding is also what a clean surface
-    yields. On 2026-09-12, with every card date rewritten as
-    <p class="article-date"><time>September 12, 2026</time></p> and the first
-    set to September 30, --check exited 0 and printed "0 news cards" as though
-    that were a count. The self-test passed too. Its plants insert well-formed
-    elements of their own, so they fire as long as the anchor string they are
-    inserted beside survives, whatever the real dates around them have become.
-    With feed.xml's dates wrapped in CDATA instead, it passed the same way.
+    yields. The self-test's plants cannot catch that on their own: they insert
+    well-formed elements of their own, so they fire as long as their anchor
+    string survives, whatever the real dates around them have become.
 
-    Failing on zero was not enough: rewriting only the first card that way
-    still passed, reading 119 of 120. So every date the loose regex finds has
-    to fall inside a strict match. Over the last 400 committed versions of
-    each file (news.html back to 2026-08-13, feed.xml to 2026-07-17), 112,800
-    dates in all, the two regexes agreed on every one. Feed text cannot forge
+    Failing on zero is not enough either, since a single unreadable card among
+    120 still reads 119. So every date the loose regex finds has to fall inside
+    a strict match. The two regexes agree on every date in the committed
+    history of both files. Feed text cannot forge
     a loose match: card text is HTML-escaped, JSON-LD strings escape their
     quotes, and feed.xml escapes its angle brackets.
 
@@ -235,20 +226,16 @@ def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
     """Plant a known-bad date on every surface and require each detector to fire.
 
     A gate that reports clean because it stopped matching is indistinguishable
-    from a clean site, which is the failure this repo keeps recording. The
+    from a clean site. The
     boundary cases are as load-bearing as the positives: a value just inside
     the grace must NOT be reported, or the gate starts failing news runs for
     dates the clamp is designed to accept, and a gate that cries wolf gets
     muted. If you add a detector, add its planted case here.
     """
-    # The clock is the newest date the files already carry, never a literal.
-    # It was hardcoded to 2026-09-12 12:00, the morning this gate landed, so
-    # the control asserted that nothing on the page was dated after 18:00 that
-    # day. The page is re-rendered every three hours and its dates only move
-    # forward: the first run to ingest a later article (PR #1696, 21:05) failed
-    # here with nothing wrong on the page, as would every run after it. The
-    # card plant below carried the same flaw a year out, as a literal
-    # September 30, 2027.
+    # The clock is the newest date the files already carry, never a literal:
+    # the page is re-rendered every three hours and its dates only move
+    # forward, so a fixed clock would eventually fail with nothing wrong on
+    # the page.
     #
     # Judging real dates against real time is main()'s job, and it names the
     # offending value and the remedy. A control that did it too would fail
@@ -307,9 +294,8 @@ def self_test(news_text: str, feed_text: str, grace: dt.timedelta) -> bool:
         report(name, bool(found) == should_fire,
                f"expected {'a finding' if should_fire else 'no finding'}, got {found[:2]}")
 
-    # The plants above fire whenever their anchor string survives, so all of
-    # them passed on 2026-09-12 against a page where CARD_DATE_RE read no real
-    # card. These rewrite the real markup instead, the way a change to
+    # The plants above fire whenever their anchor string survives, even on a
+    # page where CARD_DATE_RE reads no real card. These rewrite the real markup instead, the way a change to
     # update_news.py could, and require unread_surfaces() to name exactly the
     # surfaces listed. The first three rewrite a single date, because a surface
     # still almost entirely readable is the case a zero check missed. The

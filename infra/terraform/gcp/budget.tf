@@ -2,11 +2,10 @@
 # A monthly cost budget for this GCP project, with email alerts.
 #
 # Why this exists: the same reasoning as infra/terraform/aws/budget.tf, with the
-# same $10 limit and the same alert address. GCP has the sharpest history of
-# the three clouds. Its promotional credits ran out mid-day on 2026-07-28, the
-# project went from exactly $0.00 a day to about $2.25 a day with nothing in the
-# deployment changing, and nobody noticed for four weeks. A budget that counts
-# cost after credits (the default, kept here) would have fired within days.
+# same $10 limit and the same alert address. When promotional credits run out,
+# the project goes from exactly $0.00 a day to real spend with nothing in the
+# deployment changing. A budget that counts cost after credits (the default,
+# kept here) fires within days of that.
 #
 # Three things about it are easy to get wrong:
 #   - A budget belongs to the BILLING ACCOUNT, not to the project; the project

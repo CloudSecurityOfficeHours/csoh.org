@@ -41,9 +41,8 @@ resource "google_artifact_registry_repository" "containers" {
     # deleted." Every deploy pushes a NEW unique tag (the git commit SHA), so
     # an image is tagged at birth and stays tagged forever -- which makes
     # immutable tags and ANY deletion-based retention mutually exclusive on
-    # this repository. It ran the other way until 2026-08-30 and reached 1,112
-    # images / ~247 GB with nothing ever reclaimed. See the cleanup policies
-    # below, and note that BOTH delete rules were inert under the old setting.
+    # this repository: with immutable tags, both delete rules below are inert
+    # and the repository grows without bound. Do not re-enable it.
     #
     # What replaced the guarantee. Immutable tags promised that a tag could not
     # be moved after the fact. That promise now comes from digests instead:
@@ -80,10 +79,9 @@ resource "google_artifact_registry_repository" "containers" {
       # Retain the 10 most recently pushed image versions. This is a floor that
       # does not depend on dates: rollback targets exist even after a quiet
       # stretch where every image has aged past the DELETE rules below. Ten is
-      # deliberate (2026-09-13): an old image has no use here beyond a quick
-      # rollback, and redeploying an older commit rebuilds its image anyway. At
-      # September's push rate (~6/day) ten is a day or two of deploys. It was
-      # 50, with a 30-day DELETE window, before that.
+      # deliberate: an old image has no use here beyond a quick rollback, and
+      # redeploying an older commit rebuilds its image anyway. At a typical
+      # push rate (~6/day) ten is a day or two of deploys.
       keep_count = 10
     }
   }
@@ -104,7 +102,7 @@ resource "google_artifact_registry_repository" "containers" {
       # ...and only once they are older than this age. The value is a duration
       # string in seconds; 86400s = 1 day (the trailing "# 1d" spells that
       # out). A day of grace covers an image caught mid-push; nothing here needs
-      # an untagged image kept any longer. (It was 7 days until 2026-09-13.)
+      # an untagged image kept any longer.
       older_than = "86400s" # 1d
     }
   }
@@ -113,28 +111,19 @@ resource "google_artifact_registry_repository" "containers" {
   #
   # Policy 2 above looks like it does this job and cannot. Every deploy pushes a
   # NEW unique tag, so an image is tagged at birth and stays tagged forever;
-  # nothing ever transitions to UNTAGGED for the rule to catch. Measured on
-  # 2026-08-25: 1,071 tagged images against 4 untagged, 219 GB, growing ~2.4
-  # GB/day since May with nothing ever deleted. The policy was live and
-  # correctly configured and had removed essentially nothing -- a rule whose
+  # nothing ever transitions to UNTAGGED for the rule to catch. A rule whose
   # condition can never be met reports no error, it just never fires.
   #
-  # THIS RULE WAS INERT TOO, FOR TWO DAYS, AND FOR A DIFFERENT REASON. It was
-  # added on 2026-08-25 to fix Policy 2 and applied on 2026-08-28, and deleted
-  # nothing, because the repository still had immutable_tags = true and
-  # Artifact Registry will not delete a tagged artifact under that setting. So
-  # the fix for a rule that could never match was a rule that could never
-  # execute, and both reported success the entire time. The tell was the same
-  # in both cases and it was never in the policy: the inventory did not move.
-  # Setting immutable_tags = false (see docker_config above) is what makes this
-  # rule capable of doing anything at all -- the two settings are a package,
-  # and re-enabling immutability silently re-breaks retention.
+  # This rule depends on immutable_tags = false (see docker_config above):
+  # Artifact Registry will not delete a tagged artifact under immutable tags,
+  # so with that setting on, this rule cannot execute either, and still
+  # reports success. The two settings are a package; re-enabling immutability
+  # silently re-breaks retention. The tell is never in the policy: check that
+  # the image count actually moves.
   #
   # With a one-day age and the KEEP rule above, the repository holds its newest
   # 10 images plus anything pushed in the last day: about 2 GiB on a normal day,
-  # at ~0.19 GiB of unique layers per image. It reached 219 GB in August, and
-  # what finally brought it down on 2026-08-30 was a hand-run delete, not this
-  # rule, which still had a 30-day window then.
+  # at ~0.19 GiB of unique layers per image.
   #
   # Note the interaction with promotion: promote-qa reuses the image QA built,
   # found by tag and then deployed by digest. Once that image has aged out,

@@ -245,9 +245,7 @@ def blurb_for(meeting: dict, keywords: list[str]) -> str | None:
     """Display copy for this recap on *this* topic page, or None if it has none.
 
     The curated card summary describes the whole meeting, so on a page about one
-    topic it is often filler: a session that spent forty minutes debriefing Black
-    Hat surfaced as "Shawn greeted the group from his vacation at Disney World."
-    The selection was right and the display copy was off-topic, under a heading
+    topic it is often filler: an opening pleasantry is off-topic under a heading
     promising the community worked the topic through.
 
     So: use the card summary when it already names the topic, otherwise quote the

@@ -2,11 +2,10 @@
 # A monthly cost budget for the Azure subscription, with email alerts.
 #
 # Why this exists: the same reasoning as infra/terraform/aws/budget.tf, with the
-# same $10 limit and the same alert address. Azure has its own history here:
-# the July 2026 bill carried $119.77 of bandwidth that nobody saw until August,
-# because a health check was downloading the home page from every Cloudflare
-# data center. A budget would have said so in the first week of July. Azure
-# budgets cost nothing.
+# same $10 limit and the same alert address. Azure is the origin most exposed
+# to a runaway health check (it cannot gzip, and bills every probe as a
+# storage operation), which a budget reports within days rather than at the
+# next invoice. Azure budgets cost nothing.
 #
 # The scope is the whole subscription, not just the "csoh-site" resource group,
 # so anything created outside that group is counted too.

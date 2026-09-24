@@ -2,10 +2,10 @@
 # Update Resources
 # -----------------------------------------------------------------------------
 # Once a week, asks Claude Code to research and add 2-3 new resources to each
-# section of resources.html (CTF, Labs, Tools, Certifications, AI Security,
-# Job Search). Opens a PR that auto-approves and auto-merges when ONLY
-# resources.html changed; if Claude touched any other file the PR stays open
-# for a human to review before it goes live.
+# resources-<category>.html page (CTF, Labs, Tools, Certifications, AI
+# Security, Job Search, Newsletters). Opens a PR that auto-approves and
+# auto-merges when ONLY those category pages changed; if Claude touched any
+# other file the PR stays open for a human to review before it goes live.
 #
 # Requires repo secret: CLAUDE_CODE_OAUTH_TOKEN. Generate locally with
 # `claude setup-token` (one-time) - it mints a long-lived OAuth token tied
@@ -141,9 +141,10 @@ jobs:
           # branch and diff. (0 means "no depth limit / everything".)
           fetch-depth: 0
 
-      # Hand Claude Code a prompt that mirrors the manual workflow we used
-      # to seed the catalog. The model researches new resources, checks for
-      # duplicates against existing cards, and edits resources.html in place.
+      # Hand Claude Code a prompt that mirrors the manual workflow for adding
+      # to the catalog. The model researches new resources, checks for
+      # duplicates against existing cards, and edits the category pages in
+      # place.
       - name: Run Claude Code to add new resources
         # This first-party Anthropic action is pinned to an exact commit SHA
         # (the trailing `# v1.0.165` just notes which release that SHA is),
@@ -157,13 +158,13 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Command-line flags forwarded to the Claude Code CLI. `--model`
           # picks which model to use. `--allowedTools` is an allowlist of the
-          # ONLY tools Claude may use this run. Every entry on it is now an
+          # ONLY tools Claude may use this run. Every entry on it is an
           # in-process tool; there is no `Bash(...)` pattern of any kind, so
           # this step cannot start a shell at all.
           #
-          # `Bash(python3:*)` used to be on this list and is deliberately gone.
-          # It matched `python3 -c '<anything>'`, i.e. a full interpreter, which
-          # made the rest of the allowlist meaningless: this step reads
+          # Never add `Bash(python3:*)` (or any bare interpreter). It matches
+          # `python3 -c '<anything>'`, i.e. a full interpreter, which makes the
+          # rest of the allowlist meaningless: this step reads
           # attacker-controllable web pages via WebFetch/WebSearch, and a prompt
           # injection that reached an interpreter could read secrets out of the
           # process environment or trade this job's OIDC token for cloud
@@ -171,14 +172,13 @@ jobs:
           # checked-in script and allowlist that exact path - never the bare
           # interpreter.
           #
-          # `Bash(grep:*)` and `Bash(wc:*)` were removed on 2026-07-26. They
-          # looked harmless next to the interpreter that was removed before
-          # them, but `grep` takes a path like any other, so `Bash(grep:*)`
-          # was a read primitive over the whole runner filesystem - including
+          # Nor `Bash(grep:*)` or `Bash(wc:*)`. They look harmless, but `grep`
+          # takes a path like any other, so `Bash(grep:*)` would be a read
+          # primitive over the whole runner filesystem - including
           # /proc/self/environ, which holds this step's own secrets. The
-          # built-in `Grep` tool that remains searches the workspace and is
-          # not a shell. The prompt's "grep for the URLs you added" step is
-          # served by it just as well.
+          # built-in `Grep` tool searches the workspace and is not a shell,
+          # and serves the prompt's "grep for the URLs you added" step just as
+          # well.
           #
           # RESIDUAL RISK, stated plainly rather than papered over: `Read`
           # still accepts absolute paths and `WebFetch` is unqualified,
@@ -307,9 +307,9 @@ jobs:
       # lists - so a scope check reading only the diff could clear a PR that
       # carries files it never saw. That matters more here than anywhere
       # else in this repo: Claude's Edit tool can create a file, not just
-      # modify one, and this workflow's steer is "only touch resources.html".
-      # A new file is exactly the kind of surprise the check exists to catch,
-      # and it was the one shape the check could not see.
+      # modify one, and this workflow's steer is "only touch the category
+      # pages". A new file is exactly the kind of surprise the check exists to
+      # catch.
       # (check-pagespeed.yml and run-seo-audit.yml use the identical pair of
       # commands for the same reason.)
       - name: Detect changed files
@@ -360,11 +360,11 @@ jobs:
             # human and auto-merge stays off.
             echo "unexpected_files=true" >> "$GITHUB_OUTPUT"
           else
-            # Clean: only resources.html changed - safe to auto-merge later.
+            # Clean: only category pages changed - safe to auto-merge later.
             echo "unexpected_files=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Open a PR. If Claude only touched resources.html, the steps below
+      # Open a PR. If Claude only touched the category pages, the steps below
       # auto-approve and enable auto-merge. If anything else changed, the
       # PR stays open for human review - important safety valve.
       - name: Create Pull Request
@@ -432,7 +432,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.CSOH_PAT }}
 
-      # Only enable auto-merge when the diff is purely resources.html. If
+      # Only enable auto-merge when the diff is purely category pages. If
       # Claude wandered off and touched something else, the PR stays open
       # until a human reviews.
       - name: Enable PR auto-merge when only resources.html changed

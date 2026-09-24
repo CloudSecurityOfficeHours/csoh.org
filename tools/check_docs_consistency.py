@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
 """Documentation consistency: the half of the weekly review a script can decide.
 
-The weekly documentation review used to be one model pass over the whole site,
-and most of what it found was mechanical - a visible date disagreeing with the
-page's own JSON-LD, a social card pointing at a file that does not exist, a
-count in prose that content drift left behind. PR #1483 is the worked example:
-a majority of its findings needed no judgment at all, it took two days to
-review, and it was closed unmerged against a fast-moving `main`. Every fix in
-it was lost, including a date mismatch on `breach-lessons.html` that is still
-live today.
-
-Rediscovering that class of finding with a model every week costs tokens,
-phrases the same defect differently each time, and buries the findings that
-genuinely need a human. So this script owns everything decidable, and the
-weekly model pass (`.github/workflows/weekly-docs-review.yml`) is left with
+Much of what a documentation review finds is mechanical: a visible date
+disagreeing with the page's own JSON-LD, a social card pointing at a file that
+does not exist, a count in prose that content drift left behind. A model
+rediscovering those every week costs tokens, phrases the same defect
+differently each time, and buries the findings that genuinely need a human.
+So this script owns everything decidable, and the weekly model pass (`.github/workflows/weekly-docs-review.yml`) is left with
 accuracy, neutrality, member temperature, and reading level - the things no
 regex can settle. `docs/EDITORIAL_STANDARDS.md` is the standard both halves
 check against.
@@ -90,17 +83,14 @@ COUNT_EXCEPTIONS = {
     ("README.md", "50"): "AI Security section subtotal, not the site-wide total",
     # An instruction to contributors about section size, not a claim.
     ("CONTRIBUTING.md", "30"): "guidance on section size, not an inventory count",
-    # This tool's own README quotes README.md's false count as the worked
-    # example of why counts are reported and not auto-fixed. Documenting a
-    # defect reproduces it, and the checker cannot tell a quotation from a
-    # claim - the same trap CLAUDE.md records for writing a CI-skip token
-    # while explaining one.
+    # This tool's own README quotes a false count as the example of why
+    # counts are reported and not auto-fixed. The checker cannot tell a
+    # quotation from a claim.
     ("tools/DOCS_CONSISTENCY_README.md", "102"): "quotes the defect it documents",
     # "the 24 vendors that appear under more than one category" - describing how
-    # the vendor count is computed, not claiming an inventory total. Third time
-    # a doc has tripped this check by explaining it; prose about a number and
-    # prose asserting a number look identical to a regex, which is the standing
-    # reason count findings are reported rather than auto-fixed.
+    # the vendor count is computed, not claiming an inventory total. Prose
+    # about a number and prose asserting one look identical to a regex, which
+    # is why count findings are reported rather than auto-fixed.
     ("tools/DOCS_CONSISTENCY_README.md", "24"): "explains the dedupe, not a total",
     # "Marcello noting that 562 vendors were transacted in 2025" - a market
     # statistic a participant quoted in the session, not our vendor landscape.
@@ -180,8 +170,7 @@ DATE_PUBLISHED = re.compile(r'"datePublished"\s*:\s*"(\d{4}-\d{2}-\d{2})')
 
 # The page-meta byline is the ONLY visible date that makes a claim about the
 # page itself. Body <time> elements are session and conference dates; matching
-# those was the first version's bug and it produced confident false positives
-# on conferences.html and threat-research.html.
+# those produces confident false positives on pages like conferences.html.
 PAGE_META = re.compile(r'<p class="page-meta">(.*?)</p>', re.DOTALL)
 META_TIME = re.compile(
     r'(<time datetime=")(\d{4}-\d{2}-\d{2})("[^>]*>\s*)'
@@ -199,11 +188,8 @@ def check_dates(path: Path, text: str) -> tuple[list[Finding], str]:
 
     1. `Last updated <date>` disagreeing with the page's own JSON-LD
        `dateModified`. One claim, two values, so one is wrong. dateModified is
-       authoritative: on all five live instances the visible date is simply a
-       stale copy of datePublished, and on
-       what-practitioners-think-about-security-conferences.html it is EARLIER
-       than datePublished, i.e. the page claimed it was updated before it
-       existed. FIXABLE.
+       authoritative: the visible date is typically a stale copy of
+       datePublished. FIXABLE.
 
     2. The `datetime` attribute disagreeing with the human-readable date beside
        it. Machines read one, people read the other. FIXABLE.
@@ -213,9 +199,8 @@ def check_dates(path: Path, text: str) -> tuple[list[Finding], str]:
 
     A page-meta reading `Published <date>` with a LATER dateModified is not a
     defect and is deliberately not flagged - an article published in July and
-    edited in August is exactly that. PR #1483 treated this as an error on
-    breach-lessons.html and rewrote the label; that was an editorial choice
-    dressed as a correction.
+    edited in August is exactly that. Rewriting the label would be an
+    editorial choice dressed as a correction.
     """
     findings: list[Finding] = []
     meta = PAGE_META.search(text)
@@ -276,13 +261,11 @@ def check_placeholder_dates(path: Path, text: str) -> list[Finding]:
     """January 1 datePublished: the template nobody filled in.
 
     Judged against the series' own convention (see the note above), not against
-    schema.org. Every other breach page carries the incident's real date, so
-    January 1 is the tell - Capital One reads 2019-01-01 where the breach was
-    July 2019, and Mitnick/Novell reads 1994-01-01.
+    schema.org. A real incident has a real date, so January 1 is the tell.
 
     REPORT only. The right value is not recoverable from the repo, and git
     cannot supply it either: site-wide SRI and chrome sweeps touch every file,
-    so all 272 pages share the same last-commit date.
+    so every page shares the same last-commit date.
     """
     dp = DATE_PUBLISHED.search(text)
     if not dp or not dp.group(1).endswith("-01-01"):
@@ -303,10 +286,8 @@ OG_IMAGE = re.compile(r'<meta\s+(?:property|name)="(og:image|twitter:image)"\s+c
 def check_social_cards(path: Path, text: str) -> list[Finding]:
     """og:image / twitter:image must resolve to a file that exists.
 
-    Three meeting pages (2026-07-10, -17, -24) point at cards that were never
-    generated: img/og/meetings/ holds 104 images for 107 pages. Their unfurls
-    are broken right now, silently, because nothing fetches the URL a meta tag
-    advertises.
+    A card that was never generated breaks the page's unfurl silently, because
+    nothing else fetches the URL a meta tag advertises.
 
     REPORT, not fixable: the correct action is to run
     `tools/generate_meeting_og_images.py`, which needs Playwright. Inventing a
@@ -340,14 +321,9 @@ def check_social_cards(path: Path, text: str) -> list[Finding]:
 # ----------------------------------------------------------------------- check 5
 
 # Prose inventory claims whose true value is derivable from the repo.
-#
-# "vendors" used to be absent here, and the conflict it caused (about.html said
-# 350+, README.md and CONTRIBUTING.md said 360+) was reported rather than
-# checked, because vendor-landscape.html has no card markup to count. That was
-# the right call at the time and the wrong end state: sync_counts.vendor_landscape()
-# now counts the `<li><strong>Name</strong>` entries inside the category
-# sections, so the number is derived like every other. Both claims turned out to
-# be overstatements - 308 distinct vendors across 32 categories.
+# "vendors" is derived by sync_counts.vendor_landscape(), which counts the
+# `<li><strong>Name</strong>` entries inside vendor-landscape.html's category
+# sections.
 COUNT_SUBJECTS = {
     "vendors": "vendors_floor",
     "curated resources": "resources_floor",
@@ -371,7 +347,7 @@ COUNT_RE = re.compile(
 def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
     """Inventory numbers in prose that are FALSE, reported for a human.
 
-    Two deliberate narrowings, both learned by getting it wrong first.
+    Two deliberate narrowings.
 
     **Only disagreement, never "correct but unmarked."** 24 pages carry "browse
     all 107 recaps" and every one is generated by inject_session_blocks.py from
@@ -379,16 +355,13 @@ def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
     already keeping them right.
 
     **Only claims that are false.** "N+" is a floor, so "300+ glossary terms"
-    with 317 live is true, and so are "100+ recaps" and "200+ resources". An
-    earlier version rewrote all three toward the canonical floor and produced
-    three wrong edits out of four.
+    with 317 live is true. Rewriting a true floor toward the canonical value
+    is a wrong edit.
 
-    Report-only, deliberately. The one genuinely false claim here is README.md's
-    "102 meeting recaps in img/og/meetings/", and the right value is 104 - the
-    number of image FILES - not 107, the number of recaps the subject phrase
-    matches. Auto-fixing would have written a confident falsehood and hidden
-    the three missing cards that check_social_cards reports separately. A
-    number in prose carries context a regex cannot read, so a human decides.
+    Report-only, deliberately. A number in prose carries context a regex cannot
+    read: "N meeting recaps in img/og/meetings/" counts image FILES, not the
+    recaps the subject phrase matches, and an auto-fix would write a confident
+    falsehood. A human decides.
     """
     findings: list[Finding] = []
     for m in COUNT_RE.finditer(strip_code(text)):
@@ -420,9 +393,8 @@ def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
 def check_em_dashes(path: Path, text: str) -> tuple[list[Finding], str]:
     """Em-dashes, per docs/EDITORIAL_STANDARDS.md §5.
 
-    The site is already almost clean, so this is a regression guard rather than
-    a cleanup. Script, style, and fenced code blocks are skipped: an em-dash in
-    vendored JS or a code sample is not prose.
+    A regression guard. Script, style, and fenced code blocks are skipped: an
+    em-dash in vendored JS or a code sample is not prose.
     """
     scan = strip_code(text)
     n = scan.count("—")
@@ -491,20 +463,18 @@ def _linkable_prose(html: str) -> str:
 def check_glossary_orphans(pages: list[Path]) -> list[Finding]:
     """Glossary entries whose headword sits in linkable prose but is not linked.
 
-    The useful signal is narrow, and the first version of this check missed how
-    narrow. It reported all 17 entries with no inbound link, of which at most
-    one was actionable:
+    The useful signal is narrow. "No inbound link" alone is mostly noise:
 
-      * 3 (container, drift, subnet) yield no keys under crosslink_pages.py's
-        PAGE_DENYLIST - ordinary English words deliberately never auto-linked
-        from a page. Unlinked is the correct state, exactly as for the entries
-        check_glossary_coverage.py lists in UNREACHABLE.
-      * 9 headwords appear nowhere in site prose at all. A glossary is a
-        reference, not an index of what the site happens to discuss, so a term
-        nobody has written about yet is not a defect.
-      * 4 appeared only inside anchors, headings, or - twice - not at all: the
-        old check matched CWE inside "CWEE" and IOA inside "IOActive", because
-        a `\\b` before a term does not stop it matching a longer word.
+      * Some headwords (container, drift, subnet) yield no keys under
+        crosslink_pages.py's PAGE_DENYLIST - ordinary English words
+        deliberately never auto-linked from a page. Unlinked is the correct
+        state, as for the entries check_glossary_coverage.py lists in
+        UNREACHABLE.
+      * A headword that appears nowhere in site prose is not a defect. A
+        glossary is a reference, not an index of what the site discusses.
+      * A term that appears only inside anchors or headings can never gain a
+        link. And a `\\b` before a term alone would match CWE inside "CWEE"
+        and IOA inside "IOActive".
 
     So: match on both boundaries, ignore what the linker cannot touch, and
     report only terms that could gain a link and have not. REPORT, firmly - an

@@ -60,7 +60,7 @@ skipped files: google66d489593949bd4c.html
 
 ## Do not run these
 
-Three older scripts encoded an earlier nav design and were **removed**: `sync_navs.py`, `redesign_nav.py`, `unify_footer.py`. If you find a copy in a stale branch or worktree, do not run it - it will clobber the current nav with the 2025 one.
+Three older scripts encoded an earlier nav design and were **removed**: `sync_navs.py`, `redesign_nav.py`, `unify_footer.py`. If you find a copy in a stale branch or worktree, do not run it - it will clobber the current nav with an outdated one.
 
 ## See also
 

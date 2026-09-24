@@ -87,7 +87,7 @@ Common cloud techniques:
 
 ## How the breach library is structured
 
-Each kill chain is its **own page** at `breaches/<incident-slug>.html` (e.g. `breaches/capital-one.html`). The single-page tabbed layout (`kc-main`, `incident-tabs`, `incident-panel`) described in older versions of this guide is gone. `breach-timeline.html` is now an **index**: a grid of cards, one per breach, each linking to its page.
+Each kill chain is its **own page** at `breaches/<incident-slug>.html` (e.g. `breaches/capital-one.html`). `breach-timeline.html` is an **index**: a grid of cards, one per breach, each linking to its page.
 
 Adding a kill chain therefore has two parts: **(1) create the breach page**, then **(2) register it** on the timeline, in the sitemap, and in the prev/next pager.
 

@@ -3,14 +3,11 @@
 
 `crosslink_pages.py` works from an opt-in `TARGET_PAGES` list. Nothing errors
 when a page is missing from it - the page is simply never visited - so a new
-page ships with zero glossary cross-links and nothing anywhere reports it. That
-has now happened twice. Eight pages were found in August 2026 carrying zero
-links while comparable pages carried 45+, and a systematic sweep immediately
-after turned up 23 more, including a ~9,500-word page with a single link.
+page ships with zero glossary cross-links and nothing anywhere reports it.
 
 This check closes the loop: every `*.html` at the repo root must appear in
 either `TARGET_PAGES` or `DELIBERATELY_UNLINKED`. Adding a page to the second
-list is a one-line decision with a reason; forgetting both is now an error.
+list is a one-line decision with a reason; forgetting both is an error.
 
     python3 tools/check_crosslink_coverage.py
 

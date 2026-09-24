@@ -9,9 +9,9 @@ Bulk-imports CSOH meeting recaps into [`meetings.html`](../meetings.html) from Z
 | `fetch_zoom_transcript.py` | Cloud recording VTT | Raw transcript (speakers + timestamps) | A specific meeting; when you want a rich recap summarized from the verbatim transcript |
 | `backfill_zoom_summaries.py` | AI Companion `summary_content` | Zoom's own recap (overview + topic sections) | Bulk backfill across the full history, no per-meeting summarization step |
 
-## This now runs weekly in CI
+## This runs weekly in CI
 
-As of 2026-08, you do not normally run this by hand.
+You do not normally run this by hand.
 [`.github/workflows/publish-recaps.yml`](../.github/workflows/publish-recaps.yml)
 runs it every **Saturday at 15:00 UTC** (08:00 PT), the morning after the
 Friday session, and opens a PR with the new recaps plus everything downstream

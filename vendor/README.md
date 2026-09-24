@@ -49,13 +49,12 @@ affects page-view counting.
 dedicated `q` field and appended to the `p` (path) field. On this site that
 leaks visitor search terms: `/search.html?q=<term>` is a deep-linkable URL
 (`search-init.js` reads `params.get('q')` and pre-fills the box), and
-`/resources.html?q=`/`?category=` behave the same way. So a shared or
-bookmarked search URL sent the search term to `csoh.goatcounter.com`.
+`/resources.html?q=`/`?category=` behave the same way. Unpatched, a shared or
+bookmarked search URL would send the search term to `csoh.goatcounter.com`.
 
-That contradicted our own published privacy statement, which says the analytics
-record "only the page path, referrer, browser and OS, and screen size, in
-aggregate" (`privacy.html`). Rather than weaken the promise, we narrowed the
-beacon to match it.
+Our published privacy statement says the analytics record "only the page path,
+referrer, browser and OS, and screen size, in aggregate" (`privacy.html`). These
+patches keep the beacon to that promise.
 
 The related Do Not Track / Global Privacy Control opt-out is **not** here - it
 lives in `main.js`, which sets `window.goatcounter.no_onload = true` before this

@@ -81,8 +81,9 @@ deploy.
 | JSON | all of the above, plus `tools/site-publish.filter` and `nginx.conf` |
 | Anything under `/.well-known/` | nothing extra, but verify against production (see below) |
 
-`site-publish.filter` and `nginx.conf` both block `*.json` except four named
-files (`manifest`, `preview-mapping`, `meetings-search-index`, `search-index`).
+`site-publish.filter` and `nginx.conf` both block `*.json` except five named
+files (`manifest`, `preview-mapping`, `meetings-search-index`, `search-index`,
+`resources-index`).
 Neither exists on localhost, so a missing entry passes every local check and
 every CI gate, and fails only in production. The tell is mixed status codes:
 404 from S3/Azure (never staged) and 403 from GCP (in the image, refused by
@@ -107,7 +108,7 @@ rm -f zz-plant.json
 ```
 
 `nginx -t` needs a running Docker daemon. An exact `location =` beats the regex
-deny regardless of order, so copying one of the four existing blocks is safe;
+deny regardless of order, so copying one of the existing blocks is safe;
 say so rather than implying nginx checked it.
 
 ### A new page subdirectory has to be registered in several places

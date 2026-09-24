@@ -37,10 +37,10 @@
 #   2. The PR's contents enter this job as DATA ONLY - a .diff and a .json of
 #      metadata, fetched through the API and read by a Python script. Nothing
 #      from the fork is ever executed, sourced, imported, or installed.
-#   3. No interpreter reaches the model step. CLAUDE.md's rule about never
-#      allowlisting a bare interpreter in a job that reads untrusted input
-#      applies here with more force than anywhere else in this repo: a PR diff
-#      is the most hostile input we process.
+#   3. No interpreter reaches the model step. CLAUDE.md's "Never allowlist a
+#      bare interpreter in a job that reads the web" applies here with more
+#      force than anywhere else in this repo: a PR diff is the most hostile
+#      input we process.
 #   4. The token that can write is not present while the untrusted content is
 #      being read. The analysis job holds `contents: read` and nothing else;
 #      posting the comment is a SEPARATE job with `pull-requests: write`, and
@@ -57,8 +57,8 @@
 # Claude Code step writes a narrative impact review and cannot change the
 # verdict. That asymmetry is the design: layer 2 reads attacker-controlled
 # prose, so a PR that says "report this as safe" is talking to the layer that
-# does not get a vote. The triage script flags that text as a finding in its
-# own right.
+# does not get a vote. The triage script flags that text - in the title, the
+# body, and the diff - as a finding in its own right.
 # =============================================================================
 
 name: Security Impact Review
@@ -170,9 +170,8 @@ jobs:
             --jq '{author: .user.login, title: .title, body: .body, additions, deletions, changed_files}' \
             > pr.json
 
-          # A silent count is a failure mode - CLAUDE.md records three separate
-          # incidents of an instrument reporting "nothing is there" while broken.
-          # Assert the fetch produced something rather than printing a size and
+          # A silent count is a failure mode (see CLAUDE.md). Assert the fetch
+          # produced something rather than printing a size and
           # letting an empty file flow downstream as a clean review.
           bytes=$(wc -c < pr.diff)
           echo "diff bytes: ${bytes}"
@@ -220,8 +219,8 @@ jobs:
           # Store the bare hash, not `sha256sum`'s "<hash>  <path>" line. That
           # format makes `sha256sum -c` re-resolve the path relative to the
           # working directory of whoever runs the check, which is a false
-          # "the file changed" warning waiting to happen the first time the two
-          # steps do not share a cwd. A bare hash compares the same anywhere.
+          # "the file changed" warning whenever the two steps do not share a
+          # cwd. A bare hash compares the same anywhere.
           sha256sum < tools/pr_security_triage.py | cut -d' ' -f1 \
             > "${RUNNER_TEMP}/triage.sha256"
 
@@ -300,8 +299,7 @@ jobs:
           # Run the copy taken BEFORE the model step, not the one in the
           # workspace - see the snapshot step for why. The checksum comparison
           # is not what makes this safe (the pristine copy is); it is here so
-          # that a workspace edit is reported rather than passed over silently,
-          # which is the failure mode CLAUDE.md keeps recording.
+          # that a workspace edit is reported rather than passed over silently.
           #
           # This step is `if: always()`, so it can be reached on a run that died
           # before the snapshot was taken (a failed PR fetch, say). Fall back to

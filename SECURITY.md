@@ -10,8 +10,6 @@ csoh.org is a **pure static site** - no server-side code, no database, no user a
 
 **Hosting is multi-cloud: the same static site is served active/active from three origins** - AWS (private S3 + CloudFront), GCP (Cloud Run), and Azure (Blob static website) - behind a single **Cloudflare** edge that terminates TLS (Full strict to every origin), caches, runs the WAF and security headers, applies legacy redirects, and load-balances across the origins with health-check failover. GitHub Actions builds the site once and publishes to all three via **keyless OIDC** (GCP Workload Identity Federation, an AWS IAM role, an Azure Entra federated credential) - there is no long-lived cloud credential anywhere. The full architecture, cost, and cutover runbook are in [infra/README.md](infra/README.md); the layer-by-layer security walkthrough is the public [cloud-deployment.html](cloud-deployment.html).
 
-The site previously deployed via FTPS to a LiteSpeed shared host. That path was retired after the cutover to GCP - the FTPS step is removed from `site-update-deploy.yml`, the standalone `manual-deploy.yml` workflow is deleted, and the `FTP_*` secrets are gone.
-
 ---
 
 ## HTTP Security Headers
@@ -30,15 +28,13 @@ The origin-level copies are not redundancy for its own sake. Each origin
 hostname is reachable on its own (CloudFront's `*.cloudfront.net` name is
 public), so an origin without its own headers is a fully functional, header-free
 mirror of the site for anyone who finds it, and it has no defense of its own if
-the edge is misconfigured. The AWS distribution was in exactly that state until
-2026-07-25; see [Security Remediation - 2026-07-25](#security-remediation---2026-07-25).
+the edge is misconfigured.
 
 **Azure Blob static websites cannot emit custom response headers at all**, so
 that origin has no independent copy and depends entirely on the edge. That is a
 known, accepted gap rather than an oversight.
 
-`.htaccess` is **not** a fourth source. It is a vestige of the retired LiteSpeed
-shared host - the Docker build deletes it from the image and the publish filter
+`.htaccess` is **not** a fourth source. It is not served by any origin - the Docker build deletes it from the image and the publish filter
 never uploads it to the object-storage origins. Do not edit it expecting a
 production effect.
 
@@ -108,7 +104,7 @@ python3 tools/check_edge_headers.py --url <origin> --samples 1   # one origin di
 ```
 
 **It samples, and the sampling is the point.** The apex is a load balancer over
-three origins, and AWS and GCP now set these headers themselves - so a response
+three origins, and AWS and GCP set these headers themselves - so a response
 from either looks correct *even if the Cloudflare ruleset were deleted
 outright*. Only an Azure-served response actually exercises the edge, because
 Azure Blob cannot emit custom headers at all. A single request has no say in
@@ -116,8 +112,8 @@ which origin answers, so the checker makes 40 cache-busted requests by default
 (`--samples`, each with a unique query string so a cached response cannot
 re-confirm whichever origin replied first), prints which origins it reached,
 and warns when it never reached Azure - because such a run did not test what it
-claims to. That default is empirical, not a guess: on 2026-07-26 two
-consecutive 25-sample runs reached Azure zero times. Use `--samples 1` only
+claims to. That default is empirical, not a guess: 25-sample runs have been
+measured reaching Azure zero times in a row. Use `--samples 1` only
 when pointing at a single origin hostname, where there is nothing to sample.
 
 **It checks the edge, and only the edge.** The CloudFront response-headers
@@ -126,11 +122,11 @@ anything. See invariant 4 below: keeping the three locations in step is a
 manual discipline, and a run against the apex that happens to sample only
 AWS/GCP responses tells you the origins are healthy, not that the edge is.
 
-The `purge-cloudflare` job in `deploy.yml` runs it after the existing SRI
-verification and **fails the deploy on any drift** - a forgotten apply, a
-dashboard edit, or someone with the Cloudflare API token weakening a header.
-That job had no checkout of its own, so an `actions/checkout` step (with
-`persist-credentials: false`) was added just to fetch the checker.
+The `purge-cloudflare` job in `deploy.yml` runs it after the SRI verification
+and **fails the deploy on any drift** - a forgotten apply, a dashboard edit, or
+someone with the Cloudflare API token weakening a header. That job's
+`actions/checkout` (with `persist-credentials: false`) exists only to fetch the
+checker.
 
 Delete the script and that step when the cloudflare v5 provider upgrade lets
 `ignore_changes` go away and Terraform manages the ruleset for real again.
@@ -140,7 +136,7 @@ Delete the script and that step when the cloudflare v5 provider upgrade lets
 ## File Access Controls
 
 `nginx.conf` (the GCP origin, and the local Docker container) blocks direct
-access to sensitive files. `.htaccess` still carries the equivalent Apache rules
+access to sensitive files. `.htaccess` carries the equivalent Apache rules
 but is inert - see the note under HTTP Security Headers. On the two
 object-storage origins there is no request-time rule to apply, so the equivalent
 control is "never upload it": see `tools/site-publish.filter` below.
@@ -163,14 +159,15 @@ directory actually reaches the S3 and Azure origins. Both are scoped to
 directory listing of `/.well-known/` itself and `/.well-known/../.env`.
 
 This matters because `/security.txt` names `https://csoh.org/.well-known/security.txt`
-in its `Canonical:` field, and RFC 9116 tooling follows that URL. It used to
-return 403, which failed validation.
+in its `Canonical:` field, and RFC 9116 tooling follows that URL; a 403 there
+fails validation.
 
-**Exceptions:** four JSON files are explicitly allowlisted because the site needs to fetch them:
+**Exceptions:** five JSON files are explicitly allowlisted because the site needs to fetch them:
 - `preview-mapping.json` - resource preview thumbnails (`main.js`)
 - `manifest.json` - PWA "Add to Home Screen" metadata
 - `meetings-search-index.json` - meetings.html full-text search index (`meetings.js`)
 - `search-index.json` - site-wide search index, lazy-loaded by `search-init.js`
+- `resources-index.json` - the resources hub's search index and `#card-` link forwarding (`resources-hub.js`)
 
 The same four-file allowlist is enforced a second time in `tools/site-publish.filter`, which decides what is uploaded to the object-storage origins at all. Static object hosting has no request-time access rules, so on AWS and Azure the rule is "never upload it" rather than "return 403".
 
@@ -272,7 +269,7 @@ re-registered, which this repo already tracks as a recurring class of dead link.
 
 Before the reputation check runs, any resolved URL containing `"`, `'`, `<`,
 `>`, a backtick, a backslash, or whitespace - or not starting with `http://` or
-`https://` - is now rejected into the existing `skipped_unsafe_destination`
+`https://` - is rejected into the `skipped_unsafe_destination`
 category, and the pre-resolution URL is kept instead. A real URL never contains
 those characters unescaped, so the check costs nothing.
 
@@ -282,10 +279,10 @@ those characters unescaped, so the check costs nothing.
 `news.html` from RSS feed titles and summaries, which are attacker-influenceable
 (compromised vendor blog, hijacked feed host, expired-and-re-registered feed
 domain) - and, since these are security news feeds, a legitimate post about an
-XSS payload can produce the same bytes by accident. It used to escape only `</`,
-which stops a literal `</script>` but nothing else: an HTML parser also ends a
-script block's contents at a `<!--` comment opener. It now rewrites every `<`,
-`>`, and `&` to `\u003c`, `\u003e`, and `\u0026` after `json.dumps`. Those are
+XSS payload can produce the same bytes by accident. Escaping only `</` is not
+enough: it stops a literal `</script>`, but an HTML parser also ends a script
+block's contents at a `<!--` comment opener. So it rewrites every `<`, `>`, and
+`&` to `\u003c`, `\u003e`, and `\u0026` after `json.dumps`. Those are
 valid JSON string escapes, so Google, schema.org validators, and anything doing
 `json.loads` still see the original characters - the structured data is
 unchanged, and only the HTML parser is affected.
@@ -354,7 +351,7 @@ The CI tooling uses only:
 
 ## CI/CD Authentication
 
-CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than a personal access token. This section explains the model, the migration rationale, and what's still on a PAT.
+CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than a personal access token. This section explains the model, why an App rather than PATs, and what's still on a PAT.
 
 ### Authentication model
 
@@ -371,13 +368,10 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 
 Every workflow declares an explicit top-level `permissions:` block scoping the auto-injected `GITHUB_TOKEN`. The read-only check workflows use `contents: read` (plus `pull-requests: write` where they post comments). The write-capable workflows (`update-news`, `normalize-urls`, `site-update-deploy`) declare `contents: read` for the auto-injected token, because they handle write access through the App instead - keeping the default token strictly minimal. `deploy.yml` adds `id-token: write` for the OIDC tokens GitHub mints for the three clouds' federation exchanges.
 
-`normalize-urls.yml` was the exception until 2026-07-25: it granted the ambient
-token `contents: write` + `pull-requests: write` even though no step used
-either - both `actions/checkout` and `peter-evans/create-pull-request` are
-handed the App token explicitly, and nothing in the job calls `gh` or reads
-`GITHUB_TOKEN`. It is now `contents: read`, which every other workflow in the
-repo already declared. When you
-copy a workflow as a starting point, re-derive its `permissions:` from what its
+In `normalize-urls.yml`, for example, both `actions/checkout` and
+`peter-evans/create-pull-request` are handed the App token explicitly and
+nothing calls `gh` or reads `GITHUB_TOKEN`, so the ambient token needs no write
+scope. When you copy a workflow as a starting point, re-derive its `permissions:` from what its
 steps actually do rather than inheriting the block.
 
 ### Untrusted input meets a credential: `update-resources.yml`
@@ -390,20 +384,19 @@ arbitrary-code-execution path, and **none may be relaxed**:
 
 1. **No shell at all in `--allowedTools`.** The allowlist is exactly
    `Read,Edit,Glob,Grep,WebSearch,WebFetch`. Every entry is an in-process tool
-   and no `Bash(...)` pattern remains. It got there in two removals.
-   `Bash(python3:*)` went first: it matches `python3 -c '<anything>'`, i.e. a
-   full interpreter reachable by prompt injection in a fetched page, which made
-   the rest of the list decorative. `Bash(grep:*)` and `Bash(wc:*)` went second,
-   and that is the subtler one - `grep` takes a path like nearly every Unix
-   command, so `Bash(grep:*)` was a read primitive over the whole runner
-   filesystem, `/proc/self/environ` included. The built-in `Grep` tool that
+   and no `Bash(...)` pattern of any kind. `Bash(python3:*)` matches
+   `python3 -c '<anything>'`, i.e. a full interpreter reachable by prompt
+   injection in a fetched page, which makes the rest of the list decorative.
+   Subtler: `grep` takes a path like nearly every Unix command, so
+   `Bash(grep:*)` or `Bash(wc:*)` would be a read primitive over the whole
+   runner filesystem, `/proc/self/environ` included. The built-in `Grep` tool that
    remains searches the checked-out workspace and is not a shell. If a future
    prompt genuinely needs Python, add a checked-in script and allowlist that
    exact path - never the interpreter itself.
 2. **The `csoh-ci` App token is minted after the model step, not before.** The
    mint step sits immediately above the create-PR step that consumes it, so the
    credential that can write to this repo does not exist on the runner while the
-   model is reading the open web. Moving it back to the top of the job, where
+   model is reading the open web. Moving it to the top of the job, where
    mint steps conventionally go, silently undoes this. What is reachable during
    the research pass is `CLAUDE_CODE_OAUTH_TOKEN`, which buys model usage and
    grants nothing in this repo or in any cloud account.
@@ -417,9 +410,9 @@ Properties 2 and 3 matter more than they look because `csoh-ci` is on the `Main`
 ruleset's bypass list with mode "Always" (see [App configuration](#app-configuration)),
 so a leaked installation token is a direct push to `main`, not just a PR.
 
-### Why we migrated from PATs to a GitHub App
+### Why a GitHub App rather than PATs
 
-The original CI design used two personal access tokens belonging to a human (Shawn): `PAT_TOKEN` (push, open PRs, enable auto-merge) and `APPROVAL_PAT_TOKEN` (approve the bot's own PRs, since GitHub blocks self-approval with the same identity). PATs are functional but carry several security properties we wanted to improve:
+Personal access tokens belonging to a human would work for CI, but they carry several weaknesses:
 
 1. **Long-lived.** PATs don't expire unless you set an explicit expiry. Once granted, the token is valid until manually revoked. A leaked PAT remains useful to an attacker for as long as it takes you to notice.
 
@@ -439,7 +432,7 @@ A GitHub App fixes all four:
 
 4. **Automatic rotation.** Tokens rotate every hour with no human intervention. The only long-lived secret is the App's RSA private key, which only needs rotating when you suspect it's compromised (or as part of a periodic key-rotation hygiene pass).
 
-In numbers: blast radius of a leaked CI token went from "everything Shawn's PAT can touch, until manual revocation" → "one repo, one workflow run's worth of actions, ~1 hour."
+In numbers: the blast radius of a leaked CI token is "one repo, one workflow run's worth of actions, ~1 hour," not "everything a human's PAT can touch, until manual revocation."
 
 ### App configuration
 
@@ -461,36 +454,26 @@ Every workflow that needs write access starts with the same step:
     private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
 ```
 
-Subsequent steps reference `${{ steps.app-token.outputs.token }}` wherever they previously used `${{ secrets.PAT_TOKEN }}` (e.g., `actions/checkout`'s `token:` input, `peter-evans/create-pull-request`'s `token:` input, `git remote set-url origin "https://x-access-token:${TOKEN}@..."`).
+Subsequent steps reference `${{ steps.app-token.outputs.token }}` wherever they need a write token (e.g., `actions/checkout`'s `token:` input, `peter-evans/create-pull-request`'s `token:` input, `git remote set-url origin "https://x-access-token:${TOKEN}@..."`).
 
 ### Why one PAT remains: GitHub auto-merge does not honor ruleset bypass
 
 GitHub does not allow an actor to approve its own PRs (this restriction applies to GitHub Apps too - an App that opens a PR cannot approve it). The main-branch ruleset has a `pull_request` rule requiring 1 approval before merging.
 
-We initially expected that putting the `csoh-ci` App on the ruleset's **bypass list** with mode `Always` would let the App auto-merge its own PRs without any approval - the bypass should apply to *all* rules including `pull_request`, and the merge action is performed by the App. **Empirically, this is not the case.** Verified on 2026-05-08 with PR #650:
-
-- All required status checks: passing
-- App on bypass list with `mode: always`
-- Auto-merge enabled by the App
-- Result: `mergeStateStatus: BLOCKED`, `reviewDecision: REVIEW_REQUIRED` - auto-merge sat indefinitely
+Putting the `csoh-ci` App on the ruleset's **bypass list** with mode `Always` does **not** let the App auto-merge its own PRs without approval. With all required checks passing, the App on the bypass list, and auto-merge enabled by the App, the PR sits at `mergeStateStatus: BLOCKED`, `reviewDecision: REVIEW_REQUIRED` indefinitely.
 
 GitHub's auto-merge feature evaluates `reviewDecision` independently and does not consult the bypass list. (Bypass *does* work for direct API merges by the same actor - it's specific to the auto-merge scheduler.) So one narrow PAT remains: `CSOH_PAT`, a fine-grained org-scoped token used exclusively to approve PRs that the App has just opened, satisfying the approval rule so that auto-merge can fire.
 
-`normalize-urls.yml` keeps its "human reviews + merges" flow without an auto-approve step; the auto-approve there was a one-click convenience and added no real safety. Removing it is a strict improvement (humans now click both "approve" and "merge" instead of just "merge").
+`normalize-urls.yml` uses a "human reviews + merges" flow with no auto-approve step: a human clicks both "approve" and "merge".
 
 `site-update-deploy.yml` is unaffected - it does direct in-place commits to `main` (not via PR), and the App's bypass *does* apply to direct pushes.
 
 ### Repository secrets
 
 Everything below is a live secret. **Do not read this table by itself as the
-inventory** - it is a description of the inventory, and the two drift apart. It
-did: this table carried an `SSH_PRIVATE_KEY` row marked "live but unreferenced,
-flagged for removal, still present", re-confirmed by hand on 2026-07-26. The
-secret had in fact already been deleted, and the `ZOOM_*` set was live and
-undocumented here at the same time. A hand-maintained list of secrets is exactly
-as trustworthy as the last time somebody diffed it against the API.
-
-So the diff is now a script rather than a habit:
+inventory** - it is a description of the inventory, and the two drift apart. A
+hand-maintained list of secrets is exactly as trustworthy as the last time
+somebody diffed it against the API, so the diff is a script rather than a habit:
 
 ```bash
 python3 tools/rotate_secrets.py            # inventory, drift, rotation ages
@@ -536,22 +519,18 @@ level updates something nothing reads: the write succeeds, the inventory looks
 right, and CI keeps using the old credential. `rotate_secrets.py` resolves the
 scope from the API rather than from this table for exactly that reason.
 
-`SSH_PRIVATE_KEY` (a leftover from the retired FTPS/shared-host era, last
-updated 2026-02-18, read by no workflow) has been deleted. Confirmed absent from
-the repo's secret list on 2026-08-09.
-
 Non-secret identifiers live in repo **Variables**, not Secrets, and are populated
 from `terraform output` (see [infra/README.md](infra/README.md)):
 `AWS_PUBLISHER_ROLE_ARN`, `AWS_BUCKET_NAME`, `AWS_CLOUDFRONT_DISTRIBUTION_ID`,
 `AZURE_CLIENT_ID`, `AZURE_STORAGE_ACCOUNT`, `CLOUDFLARE_ZONE_ID`.
 
-**No origin-cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access. **All three now pin the same OIDC subject:** `repo:CloudSecurityOfficeHours/csoh.org:environment:production`. Repo alone is not enough - it would trust every workflow in the repo on every branch, including the scheduled jobs that read untrusted web content. Pinning the *environment* is stronger than pinning the ref, because the `production` GitHub Environment is itself restricted to `main` by a deployment branch policy, so the environment pin enforces the branch transitively **and** requires the job to actually declare `environment: production`.
+**No origin-cloud secret in this list - that's deliberate, for all three clouds.** The `deploy.yml` workflow needs no service-account key, no AWS access key, no Azure client secret, and no project-scoped PAT. Each cloud authenticates by exchanging GitHub's per-run OIDC token for short-lived (~1-hour) access. **All three pin the production OIDC subject** `repo:CloudSecurityOfficeHours/csoh.org:environment:production`; GCP additionally accepts `environment:qa` for the separate QA service account (see below). Repo alone is not enough - it would trust every workflow in the repo on every branch, including the scheduled jobs that read untrusted web content. Pinning the *environment* is stronger than pinning the ref, because the `production` GitHub Environment is itself restricted to `main` by a deployment branch policy, so the environment pin enforces the branch transitively **and** requires the job to actually declare `environment: production`.
 
-1. **GCP** - Workload Identity Federation exchanges the OIDC token for a token scoped to impersonate `csoh-deployer` (`roles/run.admin`, `roles/artifactregistry.writer`, `iam.serviceAccountUser` on the runtime SA). The trust is pinned in two places in [`wif.tf`](infra/terraform/gcp/wif.tf): the provider's `attribute_condition` requires both `assertion.repository` and `assertion.sub == 'repo:<owner>/<repo>:environment:production'`, and the IAM member is a `principal://.../subject/repo:<owner>/<repo>:environment:production` rather than a repo-wide `principalSet://`. The runtime SA `csoh-run-runtime` has **zero IAM roles**.
+1. **GCP** - Workload Identity Federation exchanges the OIDC token for a token scoped to impersonate `csoh-deployer` (`roles/run.admin`, `roles/artifactregistry.writer`, `iam.serviceAccountUser` on the runtime SA). The trust is pinned in two places in [`wif.tf`](infra/terraform/gcp/wif.tf): the provider's `attribute_condition` requires both `assertion.repository` and an `assertion.sub` of `environment:production` or `environment:qa`, and the IAM member is a `principal://.../subject/repo:<owner>/<repo>:environment:production` rather than a repo-wide `principalSet://`. The runtime SA `csoh-run-runtime` has **zero IAM roles**.
 2. **AWS** - `sts:AssumeRoleWithWebIdentity` returns credentials for the `csoh-site-publisher` role, scoped to write the one S3 bucket and invalidate the one CloudFront distribution. `oidc.tf` pins `sub` with `StringEquals` to the same subject string.
 3. **Azure** - an Entra app federated credential yields a token whose service principal holds only "Storage Blob Data Contributor" on the one storage account. `identity.tf` sets `subject` to the same string.
 
-`var.github_branch` in [`infra/terraform/gcp/variables.tf`](infra/terraform/gcp/variables.tf) is **not** referenced by the WIF trust and never was. It is kept because it documents the intended branch and is consumed by the equivalent variables files in `aws/` and `azure/`; its comment now says so explicitly, so nobody reads it as evidence that branch enforcement lives in `wif.tf`.
+`var.github_branch` in [`infra/terraform/gcp/variables.tf`](infra/terraform/gcp/variables.tf) is **not** referenced by the WIF trust. It is kept because it documents the intended branch and is consumed by the equivalent variables files in `aws/` and `azure/`; its comment now says so explicitly, so nobody reads it as evidence that branch enforcement lives in `wif.tf`.
 
 Net effect: a leaked workflow log compromises at most three ~1-hour tokens, each scoped to one repo's publish permissions on one resource per cloud. There is no long-lived credential to rotate or revoke for any of them.
 
@@ -564,9 +543,7 @@ could do with it is repeatedly cold the cache. That is worth documenting rather
 than glossing: it is the only long-lived credential in the deploy path, and the
 only one that needs a manual rotation cadence.
 
-`PAT_TOKEN` (the original CI PAT), `CSOH_CI_APP_ID` (deprecated numeric input, replaced by `CSOH_CI_CLIENT_ID`), and `APPROVAL_PAT_TOKEN` (replaced by `CSOH_PAT`) have all been removed.
-
-`CSOH_PAT` is a **fine-grained PAT** scoped to `CloudSecurityOfficeHours/csoh.org` only, with permissions limited to **Pull requests: Read & Write** (no contents, no actions, no anything else). Even if it leaks, the only damage an attacker can do is approve PRs - they cannot push, merge by themselves, or read code beyond what's already in the public repo. Replaced the broader classic-PAT `APPROVAL_PAT_TOKEN` on 2026-05-08.
+`CSOH_PAT` is a **fine-grained PAT** scoped to `CloudSecurityOfficeHours/csoh.org` only, with permissions limited to **Pull requests: Read & Write** (no contents, no actions, no anything else). Even if it leaks, the only damage an attacker can do is approve PRs - they cannot push, merge by themselves, or read code beyond what's already in the public repo.
 
 ### Rotation guidance
 
@@ -617,10 +594,10 @@ rather than dashboard state.
 | Control | Value | What it stops |
 |---|---|---|
 | **CAA** | 5 authorized CAs (Let's Encrypt, DigiCert, Google Trust Services, Sectigo/Comodo, SSL.com), `issue` + `issuewild` each, plus `iodef: mailto:admin@csoh.org` | Any other CA issuing a certificate for `csoh.org`. The `iodef` address gets notified on a rejected issuance attempt. |
-| **DNSSEC** | **Signed and delegated** - zone signed at Cloudflare, `DS 2371 13 2` published at `.org`, `whois` reports `signedDelegation`. Verified 2026-08-09. See below. | Forged DNS answers, which is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who could forge a response would strip either. A validating resolver now rejects the forgery instead of serving it. |
+| **DNSSEC** | **Signed and delegated** - zone signed at Cloudflare, `DS 2371 13 2` published at `.org`, `whois` reports `signedDelegation`. See below. | Forged DNS answers, which is what makes CAA and DMARC mean anything - both are just DNS records, so an attacker who could forge a response would strip either. A validating resolver rejects the forgery instead of serving it. |
 | **SPF** | `v=spf1 include:_spf.google.com ~all` | Unauthorized hosts sending as `@csoh.org`. |
 | **DKIM** | **Two** selectors, both RSA: `google._domainkey` (Google Workspace) and `default._domainkey` (a second sender). See below. | Tampering with, or forging, message bodies in transit. |
-| **DMARC** | `p=quarantine; sp=quarantine; pct=100`, aggregate reports to Cloudflare | Spoofed mail reaching inboxes. Moved up from `p=none` (monitor-only) - the policy now actually does something. |
+| **DMARC** | `p=quarantine; sp=quarantine; pct=100`, aggregate reports to Cloudflare | Spoofed mail reaching inboxes. |
 | **MTA-STS** | `mode: testing`, `max_age: 604800`, policy at `/.well-known/mta-sts.txt` | Downgrade and MITM attacks on inbound mail delivery. |
 | **TLS-RPT** | `v=TLSRPTv1; rua=mailto:admin@csoh.org` | Nothing on its own - it reports TLS delivery failures so an active downgrade attempt is visible. |
 
@@ -639,8 +616,7 @@ dig +short TXT google._domainkey.csoh.org     # Google Workspace
 dig +short TXT default._domainkey.csoh.org    # the second sender
 ```
 
-An earlier draft of the runbook claimed `default._domainkey` did not exist, and
-that error pointed straight at tightening SPF - which would have broken the
+Tightening SPF on the assumption that Google is the only sender would break the
 second sender for no gain. The caution and the reasoning are in
 [`infra/MANUAL_SECURITY_STEPS.md`](infra/MANUAL_SECURITY_STEPS.md) section 2.
 **Do not narrow SPF, and do not move to `p=reject`, on DNS inference alone.**
@@ -663,8 +639,8 @@ mail. Moving to `mode: enforce` is a separate decision that should follow a
 period of clean TLS-RPT reports, not ride along with an unrelated change.
 
 **DNSSEC is signed and delegated, and there is nothing left to submit.** Signing
-the zone was never the same as DNSSEC being live: the parent zone also has to
-publish a DS record delegating trust. Both halves are done, verified 2026-08-09:
+the zone is not the same as DNSSEC being live: the parent zone also has to
+publish a DS record delegating trust. Both halves are done (as of 2026-08-09):
 
 | Check | Result |
 |---|---|
@@ -674,23 +650,18 @@ publish a DS record delegating trust. Both halves are done, verified 2026-08-09:
 | `whois csoh.org` | `DNSSEC: signedDelegation` at the registry |
 | Google DoH + Cloudflare DoH | both return `AD=true` - the chain validates |
 
-**Do not submit a DS record.** An earlier version of this section ended with
-instructions to do exactly that, and pinned a KSK to submit. It is already
-published. Submitting a second one, or submitting a DS for anything other than
+**Do not submit a DS record.** It is already published. Submitting a second one, or submitting a DS for anything other than
 the current KSK, is the one DNSSEC mistake that takes a domain offline for every
 validating resolver: the name does not degrade, it stops resolving. Key rotation
 is Cloudflare's job here and it keeps the registry in step; the only reason to
 touch the DS by hand is a registrar transfer, which is covered in the runbook.
 
-Two corrections from getting here are worth keeping, because each cost real
-time. First, `cloudflare_zone_dnssec` turns on **signing** only. An earlier draft
-reasoned that because Cloudflare is both registrar and DNS provider
-(`whois` does confirm `Registrar: Cloudflare, Inc.`) the DS would be published
-automatically. It is not: delegation was a separate manual step in the
-dashboard, and assuming otherwise left the zone undelegated for two weeks.
+Two things are easy to get wrong. First, `cloudflare_zone_dnssec` turns on
+**signing** only. Even though Cloudflare is both registrar and DNS provider
+(`whois` confirms `Registrar: Cloudflare, Inc.`), the DS is not published
+automatically: delegation is a separate manual step in the dashboard.
 
-Second, and the reason the gap went unnoticed that long: **the obvious `ad`-flag
-check is unreliable on some network paths.** This section used to recommend
+Second, **the obvious `ad`-flag check is unreliable on some network paths:**
 
 ```sh
 dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'   # expect the "ad" flag
@@ -699,9 +670,7 @@ dig +dnssec csoh.org A @1.1.1.1 | grep 'flags:'   # expect the "ad" flag
 On at least one network here that returns `flags: qr rd ra` with no `ad`, and it
 does the same for known-good signed domains - `cloudflare.com` and
 `internetsociety.org` both fail it identically. The AD bit is being stripped in
-transit, so the command measures the path, not the zone. Reading it as a verdict
-on `csoh.org` is what produced the wrong "delegation never happened" conclusion.
-Ask a resolver that reports its validation result over HTTPS instead:
+transit, so the command measures the path, not the zone. Ask a resolver that reports its validation result over HTTPS instead:
 
 ```sh
 dig +short DNSKEY csoh.org      # zone is signed         (expect 2 keys)
@@ -747,18 +716,18 @@ registrar, is
 - Base image (`nginx:1.27-alpine`) is **digest-pinned** in the [`Dockerfile`](Dockerfile). A compromised registry tag cannot ship malicious bytes into our build.
 - `RUN apk upgrade --no-cache` after `FROM` refreshes Alpine packages on top of the pinned base.
 - The container is **Trivy-scanned** for HIGH and CRITICAL CVEs (with fixes available); the build fails if any are found.
-- Artifact Registry runs with `immutable_tags=false`, and **the integrity guarantee is the digest, not the tag**. Both deploy workflows resolve `csoh-site:<short-sha>` to its `sha256:` digest and pass that to `gcloud run deploy`, so a tag moved after the fact cannot change the bytes a revision runs; Binary Authorization evaluates the digest-resolved reference regardless. Immutability was given up deliberately on 2026-08-30 because Artifact Registry will not delete tagged artifacts while it is on, which made every retention policy inert (see below). What is genuinely weaker: two workflows racing the same tag now end in a silent overwrite rather than a rejection. Rollback is still `gcloud run services update-traffic --to-revisions <name>=100`. The registry keeps only the newest ten images, so plan on rolling back no further than that.
+- Artifact Registry runs with `immutable_tags=false`, and **the integrity guarantee is the digest, not the tag**. Both deploy workflows resolve `csoh-site:<short-sha>` to its `sha256:` digest and pass that to `gcloud run deploy`, so a tag moved after the fact cannot change the bytes a revision runs; Binary Authorization evaluates the digest-resolved reference regardless. Immutability is off deliberately because Artifact Registry will not delete tagged artifacts while it is on, which would make every retention policy inert (see below). What is genuinely weaker: two workflows racing the same tag end in a silent overwrite rather than a rejection. Rollback is still `gcloud run services update-traffic --to-revisions <name>=100`. The registry keeps only the newest ten images, so plan on rolling back no further than that.
 - **Binary Authorization is enforcing** on both `csoh-site` and `csoh-site-qa` ([`infra/terraform/gcp/binary_authorization.tf`](infra/terraform/gcp/binary_authorization.tf)): a project-level allowlist of our own Artifact Registry repository plus a default `ALWAYS_DENY`. Cloud Run will not start a container that did not come out of that repository. It checks **provenance, not signatures** - Cloud Run accepts only the project's single default policy, so requiring an attestation would require it on QA too, where images are born before anything has approved them. Note the failure mode: a denied deploy creates the revision, fails it, leaves traffic on the previous revision (so the site stays up and every external check passes) and still writes the rejected image into the service spec, which then sits `Ready: False` until the next passing deploy. "The site is up" says nothing about whether the service is healthy.
-- Cleanup policy keeps the most recent 10 versions and deletes any other version, tagged or untagged, once it is a day old (until 2026-09-13 it kept 50 and gave tagged versions 30 days). Both DELETE rules were inert for different reasons when first written, and the repository grew to 1,112 images / ~247 GB with nothing ever reclaimed: the untagged rule could never *match*, because `immutable_tags` forces every image to be tagged at birth, and the tagged rule added to fix it could never *execute*, because Artifact Registry refuses to delete a tagged artifact while immutable tags are enabled. Turning immutability off is what makes retention possible at all - the two settings are a package, and re-enabling it silently re-breaks the sweep.
+- Cleanup policy keeps the most recent 10 versions and deletes any other version, tagged or untagged, once it is a day old. This depends on `immutable_tags=false`: with immutability on, every image is tagged at birth (so an untagged rule never *matches*) and Artifact Registry refuses to delete a tagged artifact (so a tagged rule never *executes*). The two settings are a package, and re-enabling immutability silently breaks the sweep.
 
 **Workflow hardening:**
 - `permissions:` block scopes the auto-injected `GITHUB_TOKEN` to `contents: read` + `id-token: write` (id-token is required for the OIDC exchanges; nothing else is granted).
 - Every publish job is gated by the `production` GitHub Environment, configured to allow deployments only from `main` and to enforce Code Owners review on the workflow file via [`.github/CODEOWNERS`](.github/CODEOWNERS). A PR from a fork cannot reach this code path even if it could otherwise mint an OIDC token, because protected-environment policies only apply on `main`.
 
 **Edge defenses (Cloudflare, in front of all three origins):**
-- **WAF** - Cloudflare's free Managed Ruleset plus a rate-limit rule (lighter than the previous Cloud Armor OWASP CRS; a static site has no SQL/login to attack).
+- **WAF** - Cloudflare's free Managed Ruleset plus a rate-limit rule (a static site has no SQL/login to attack).
 - **TLS** - Full (strict) to every origin; TLS 1.2+ floor; HSTS preload.
-- **Security headers + legacy redirects** set once at the edge (mirroring `nginx-security-headers.conf` and the old `.htaccess` rules), applied regardless of which origin serves.
+- **Security headers + legacy redirects** set once at the edge (mirroring `nginx-security-headers.conf` and the `.htaccess` rules), applied regardless of which origin serves.
 - **Always Use HTTPS** handles HTTP→HTTPS; no origin has a plain-HTTP path.
 
 **Logging:**
@@ -804,34 +773,10 @@ runs locally, so the local container behaves like production:
 
 ---
 
-## Security Remediation - 2026-07-25
+## Security invariants - do not undo these
 
-A full security review of the repo, the workflows, the Terraform, and the live
-site landed ten changes on 2026-07-25. The sections above already describe the
-end state; this section is the record of what moved and, more importantly, the
-invariants a future change must not quietly undo. Each finding is written up in
-detail in a comment at the code it touches, so start there.
-
-### What changed
-
-| # | Area | File(s) | Change |
-|---|------|---------|--------|
-| 1 | Arbitrary code execution in CI | `.github/workflows/update-resources.yml` | Dropped `Bash(python3:*)` from `--allowedTools`; added `persist-credentials: false` to that job's `actions/checkout` |
-| 2 | Cloud trust boundary | `infra/terraform/gcp/wif.tf`, `gcp/variables.tf` | WIF `attribute_condition` and IAM member both pinned to `repo:<owner>/<repo>:environment:production`, matching AWS and Azure |
-| 3 | Third-party PII on live pages | `meetings/2024-07-19.html`, `meetings/2024-08-30.html`, both search indexes, `tools/add_meeting.py` | Removed a participant's corporate email address from two recaps; added `scrub_emails()` so it cannot recur |
-| 4 | Redirect loop on `www` over HTTP | `infra/terraform/cloudflare/rules.tf` | `target_url` now `concat("https://csoh.org", http.request.uri.path)` instead of a `wildcard_replace` on `full_uri` |
-| 5 | Header drift undetectable | new `tools/check_edge_headers.py`, `.github/workflows/deploy.yml`, `cloudflare/rules.tf` | CI now asserts the live **edge** headers against `rules.tf` and fails the deploy on drift. Extended 2026-07-26 to sample 40 cache-busted requests and report origin coverage, after single-request runs were found to pass without ever reaching the one origin that depends on the ruleset |
-| 6 | AWS origin had no headers | `infra/terraform/aws/cloudfront.tf` | New `aws_cloudfront_response_headers_policy.security`, wired into `default_cache_behavior` |
-| 7 | JSON-LD escaping | `update_news.py` | Escapes `<`, `>`, `&` rather than only `</` |
-| 8 | Redirect-header injection | `tools/normalize_urls.py` | Rejects resolved destinations containing markup characters or a non-http(s) scheme |
-| 9 | Analytics wider than the policy | `vendor/goatcounter-count.js`, new `vendor/README.md`, `privacy.html`, `llms.txt` | Query string stripped from the beacon; local modifications documented; `llms.txt` no longer claims "no analytics" |
-| 10 | Least privilege | `.github/workflows/normalize-urls.yml` | `permissions:` dropped from `contents: write` + `pull-requests: write` to `contents: read` |
-
-`update_sri.py` was re-run as part of #9, which is why that commit re-stamps the
-`?v=` key and `integrity` attribute for `vendor/goatcounter-count.js` on every
-page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
-
-### Invariants - do not undo these
+Each of these is explained in more detail in a comment at the code it touches,
+so start there before changing any of them.
 
 1. **No shell entry at all in an allowlist for a job that reads untrusted input.**
    `update-resources.yml` reads the open web with `WebFetch`/`WebSearch` while
@@ -840,20 +785,19 @@ page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
    of `Bash(...)` entries. `Bash(python3:*)` matches `python3 -c '<anything>'`,
    which makes every other entry on the list decorative; the same reasoning
    applies to any future `Bash(sh:*)`, `Bash(node:*)`, `Bash(perl:*)`, or
-   similar. The broader form of the rule, learned from `Bash(grep:*)`: **an
-   entry naming a command that accepts a path is a filesystem-read capability**,
-   however read-only the command looks. If a prompt needs Python, check in a
+   similar. More broadly, **an entry naming a command that accepts a path is a
+   filesystem-read capability**, however read-only the command looks. If a prompt needs Python, check in a
    script and allowlist that exact path.
 2. **`persist-credentials: false` on that checkout stays.** Otherwise the App
    token sits in `.git/config` as an `http.extraheader` for the rest of the job,
    readable by a plain file read from any later step. `csoh-ci` is on the `Main`
    ruleset bypass list, so that token is a direct push to `main`.
-3. **The WIF subject pin stays.** GCP must require
-   `assertion.sub == 'repo:<owner>/<repo>:environment:production'`, not just
-   `assertion.repository`. Repo-only trust lets every workflow in the repo, on
-   every branch, mint `csoh-deployer` credentials. If you ever need a second job
-   to authenticate to GCP, give it `environment: production` rather than
-   loosening the condition.
+3. **The WIF subject pin stays.** GCP must require `assertion.sub` to name an
+   environment (`environment:production` or `environment:qa`, each bound to its
+   own service account), not just `assertion.repository`. Repo-only trust lets
+   every workflow in the repo, on every branch, mint deployer credentials. A new
+   job that needs GCP declares one of those environments; never loosen the
+   condition.
 4. **The three header locations stay in step, and nothing automated checks
    that.** `infra/terraform/cloudflare/rules.tf`,
    `infra/terraform/aws/cloudfront.tf`, and `nginx-security-headers.conf`.
@@ -870,20 +814,13 @@ page: the vendored asset is SRI-hashed, so editing it rewrites the whole site.
    fails, so a late-Friday publish is never blocked. **Read the warning** and
    give the person a first name if one reads better. `@csoh.org` is exempt.
 
-### The three Terraform applies - done and verified
+### Verifying the deployed state
 
-Three of the changes (#2, #4, #6) were Terraform, and Terraform in a repo is
-just a proposal until someone runs `apply`. **All three were applied on
-2026-07-25 and re-verified against production on 2026-07-26.** The deployed
-state and the repo agree:
-
-| # | Stack | What it changed | Verified by |
-|---|---|---|---|
-| 2 | `gcp/` | WIF trust pinned to `environment:production` | live `attribute_condition` and the `principal://.../subject/...` IAM member both carry `repo:CloudSecurityOfficeHours/csoh.org:environment:production`; the deploy afterward still authenticated |
-| 4 | `cloudflare/` | `www` redirect target no longer derived from the request | `curl -sI http://www.csoh.org/about.html` returns `Location: https://csoh.org/about.html`, not a redirect to itself |
-| 6 | `aws/` | CloudFront response-headers policy | `check_edge_headers.py --url https://<dist>.cloudfront.net/ --samples 1` reports all 8 headers matching |
-
-Re-check them at any time with:
+Terraform in a repo is just a proposal until someone runs `apply`. Three of the
+controls above live in Terraform: the GCP WIF subject pin, the `www` redirect
+(its target is `concat("https://csoh.org", http.request.uri.path)`, never derived
+from the request, so it cannot loop), and the CloudFront response-headers
+policy. Check that production matches:
 
 ```bash
 terraform -chdir=infra/terraform/gcp state show \
@@ -893,20 +830,17 @@ python3 tools/check_edge_headers.py --samples 1 \
   --url "https://$(terraform -chdir=infra/terraform/aws output -raw cloudfront_domain)/"
 ```
 
-The AWS stack used to carry a caveat here - it never planned clean, because
-`viewer_certificate.minimum_protocol_version` could not converge while the
-default `*.cloudfront.net` certificate is in use, and that one inert argument
-kept three resources permanently in the diff. Commit `288fcec3` deleted it, so
-"clean plan" is now the signal to look for on all four stacks. The reasoning is
-preserved in a comment where the argument used to be, in
-`infra/terraform/aws/cloudfront.tf`. The per-apply record and the local
-toolchain traps that cost hours on the day are in
+Want: the `attribute_condition` carries
+`repo:CloudSecurityOfficeHours/csoh.org:environment:production`; the `www`
+request returns `Location: https://csoh.org/about.html`, not a redirect to
+itself; and all 8 headers match on the CloudFront hostname. All four stacks
+should plan clean. The local toolchain traps are in
 [`infra/MANUAL_SECURITY_STEPS.md`](infra/MANUAL_SECURITY_STEPS.md) section 1.
 
-The Cloudflare **header** ruleset remains the standing exception, and applying
-these three did not change that: `ignore_changes = [rules]` means `apply` will
-not push header edits, so any change to those values still has to go in by hand
-in the dashboard (or by dropping the `lifecycle` block for one apply).
+The Cloudflare **header** ruleset is the standing exception:
+`ignore_changes = [rules]` means `apply` will not push header edits, so any
+change to those values has to go in by hand in the dashboard (or by dropping the
+`lifecycle` block for one apply).
 See [Edge header drift is a CI gate](#edge-header-drift-is-a-ci-gate).
 
 ---

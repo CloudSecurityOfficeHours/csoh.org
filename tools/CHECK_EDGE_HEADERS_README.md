@@ -14,7 +14,7 @@ python3 tools/check_edge_headers.py --url https://csoh.org/about.html
 python3 tools/check_edge_headers.py --url https://<dist>.cloudfront.net/ --samples 1
 ```
 
-Passing run (real output, 2026-07-26, about 12 seconds wall clock):
+Passing run (real output, about 12 seconds wall clock):
 
 ```
 Checking 8 security headers from infra/terraform/cloudflare/rules.tf against https://csoh.org/
@@ -62,13 +62,12 @@ nothing. The edge keeps the old policy while the repo, the diff, and any reviewe
 believe it changed.
 
 That would be bad anywhere. It is worse here, because that ruleset is the **only**
-source of these headers for the Azure origin, and was the only source for the AWS
-origin until 2026-07-25:
+source of these headers for the Azure origin:
 
 | Origin | Sets these headers itself? |
 |---|---|
 | GCP / Cloud Run (nginx) | Yes, via [`nginx-security-headers.conf`](../nginx-security-headers.conf) |
-| AWS / CloudFront | Yes, via `aws_cloudfront_response_headers_policy.security` in [`infra/terraform/aws/cloudfront.tf`](../infra/terraform/aws/cloudfront.tf), added and applied on 2026-07-25. Before that apply the distribution served no headers of its own, and its `*.cloudfront.net` hostname is public |
+| AWS / CloudFront | Yes, via `aws_cloudfront_response_headers_policy.security` in [`infra/terraform/aws/cloudfront.tf`](../infra/terraform/aws/cloudfront.tf). Needed because the distribution's `*.cloudfront.net` hostname is public |
 | Azure Blob static website | **No.** Azure Blob static websites cannot emit custom response headers at all |
 
 So the script closes the loop from the other end. Terraform cannot tell you the edge
@@ -78,21 +77,17 @@ the build instead of going unnoticed.
 
 ## Why 40 requests and not one
 
-Until 2026-07-26 this gate made exactly one request, and that made it far weaker than it
-looked. Read the table above again: the apex is a Cloudflare load balancer over three
-origins, and **AWS and GCP now set these headers themselves**. An AWS-served or GCP-served
+The apex is a Cloudflare load balancer over three origins, and **AWS and GCP set these
+headers themselves**. An AWS-served or GCP-served
 response therefore looks perfect whether the Cloudflare ruleset is correct, weakened, or
 deleted outright. Only an **Azure**-served response actually exercises the ruleset, because
 Azure Blob static websites cannot emit custom response headers at all.
 
-One request that happens to land on AWS or GCP is not a check of the thing this script
-exists to guard. It is a check of the origin that did not need guarding. The distribution
-measured over 20 requests on 2026-07-26 was 10 GCP, 6 AWS, 4 Azure, so a single-request
-gate reported green roughly four times in five even in the scenario where the edge ruleset
-had been deleted - and the real-world failure it was missing would have shipped to about
-one visitor in five. Azure's share is not fixed: the 40-sample run quoted above saw 17.
+One request that lands on AWS or GCP checks the origin that did not need guarding, not
+the ruleset. A 20-request sample measured 10 GCP, 6 AWS, 4 Azure, so a single-request
+gate would report green about four times in five with the edge ruleset deleted.
 
-So the script now makes `--samples` requests (default 40), each with a unique
+So the script makes `--samples` requests (default 40), each with a unique
 `?__hdrcheck=` cache-buster - a cached response would just re-confirm whichever origin
 answered first - and prints which origins it reached:
 
@@ -107,10 +102,9 @@ more likely a bad value in `rules.tf` itself.
 
 The default of 40 comes from measurement, not from a binomial calculation, because
 Cloudflare's steering is not independent per request: it arrives in bursts. The numbers
-recorded in the script's `DEFAULT_SAMPLES` comment, all from 2026-07-26: two consecutive
-25-sample runs reached Azure **zero** times, and the next reached it 17 times. At 40
-samples, five consecutive runs reached Azure 15, 15, 12, 7 and 11 times. Forty costs about
-10 seconds and has so far always reached Azure; 25 demonstrably has not.
+are in the script's `DEFAULT_SAMPLES` comment: two consecutive 25-sample runs reached
+Azure **zero** times, while five consecutive 40-sample runs reached it 15, 15, 12, 7 and
+11 times. Forty costs about 10 seconds.
 
 **This is sampling, not proof, and the script says so.** Nothing here can force Cloudflare
 to route a request to a chosen origin. A run that never lands on Azure has not tested the
@@ -169,9 +163,8 @@ No `--samples` there on purpose: CI gets the default 40, and the ~10 seconds it 
 noise next to a deploy. If you ever add `--samples` to that step, adding a smaller number
 is the one direction that silently weakens the gate.
 
-That job historically had no checkout of its own (which is why the SRI step above it is
-written as an inline heredoc). It now checks out the repo purely to get this script,
-with `persist-credentials: false` - nothing in the job talks to git after the clone, so
+The job checks out the repo only to get this script (the SRI step above it is an inline
+heredoc), with `persist-credentials: false` - nothing in the job talks to git after the clone, so
 the credential should not be left sitting in `.git/config`.
 
 ## When it fails
@@ -205,20 +198,16 @@ edge ruleset has stopped applying.
 
 The same all-`MISSING` result when you pointed `--url` at the Azure blob endpoint
 directly, with `--samples 1`, is expected and means nothing is wrong - you bypassed the
-edge. Pointing `--url` at the AWS or GCP origin directly should now **pass**, since both
+edge. Pointing `--url` at the AWS or GCP origin directly should **pass**, since both
 set the headers themselves; that is a useful way to confirm the CloudFront policy and
 `nginx-security-headers.conf` have not fallen behind, because nothing in CI checks those
 two.
 
-## The parsing gotcha worth remembering
+## Parsing constraints
 
-An earlier version of `parse_expected_headers()` bounded the section with a plain
-substring search for `"lifecycle"`. The CSP's own explanatory comment in `rules.tf`
-contains the phrase "the lifecycle block below", so the search stopped there and
-silently dropped the last three headers: **CSP, COOP, and CORP** - precisely the ones
-this check exists to protect. It still printed a confident pass.
-
-The section end is now matched as an actual block opener:
+The section end is matched as an actual block opener, not a substring search for
+`"lifecycle"`, because comments in `rules.tf` contain that word and a substring match
+would silently drop the headers after it (CSP, COOP, and CORP):
 
 ```python
 end_match = re.search(r"^\s*lifecycle\s*\{", text[start:], re.MULTILINE)
@@ -239,7 +228,7 @@ Reordering those fields in `rules.tf` breaks the parse.
 
 ## Keeping the three copies in step
 
-The same 8 headers are now declared in three places, and nothing cross-checks them
+The same 8 headers are declared in three places, and nothing cross-checks them
 against each other:
 
 - `infra/terraform/cloudflare/rules.tf` (the edge, and the source of truth this script reads)

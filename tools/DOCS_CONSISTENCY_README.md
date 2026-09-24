@@ -13,17 +13,11 @@ python3 tools/check_docs_consistency.py --report r.md
 
 ## Why it exists
 
-The review used to be one model pass over the whole site. PR #1483 is the worked
-example: most of what it found needed no judgment at all, it touched ~80 files,
-it took two days to review, and it was closed unmerged against a `main` that
-merges news PRs several times a day. Every fix in it was lost - including the
-`breach-lessons.html` date mismatch it reported, which was still live months
-later.
-
-Paying a model to rediscover that class of defect every week costs tokens,
-phrases the same problem differently each time, and buries the findings that
-actually need a person. So anything decidable moved here, and the weekly model
-pass was left with accuracy, neutrality, member temperature, and reading level.
+Most documentation defects need no judgment. Paying a model to rediscover them
+every week costs tokens, phrases the same problem differently each time, produces
+site-wide PRs too large to review before `main` moves on, and buries the findings
+that actually need a person. So anything decidable lives here, and the weekly
+model pass covers accuracy, neutrality, member temperature, and reading level.
 
 ## Fixable vs reported
 
@@ -59,18 +53,16 @@ this from the outside as well.
 
 ## Things that look like bugs and are not
 
-Four narrowings, each of which the first version got wrong. They are the reason
-the output is worth reading.
+Four deliberate narrowings. They are the reason the output is worth reading.
 
 **Body `<time>` elements are not page dates.** Only the `<p class="page-meta">`
-byline makes a claim about the page itself. Matching any `<time>` flagged
-`conferences.html` and `threat-research.html`, whose `<time>` elements are
-session and conference dates.
+byline makes a claim about the page itself. `conferences.html` and
+`threat-research.html`, for example, use `<time>` for session and conference
+dates.
 
 **`Published X` with a later `dateModified` is not a defect.** An article
-published in July and edited in August is exactly that. PR #1483 rewrote
-`breach-lessons.html`'s label on this basis; that was an editorial choice
-presented as a correction.
+published in July and edited in August is exactly that. Rewriting the label on
+this basis is an editorial choice, not a correction.
 
 **The breach series dates by incident, not by authorship.** 0ktapus is
 2022-08-26, Log4Shell 2021-12-14, Codecov 2021-04-15 - each its incident date.
@@ -80,13 +72,10 @@ decision about the whole series. Only January 1 is flagged, because a real
 incident has a real date.
 
 **`N+` is a floor, and count claims are reported rather than fixed.** "300+
-glossary terms" with 317 live is true. An earlier version resynced every count
-toward the canonical value and produced three wrong edits out of four - the
-worst being `README.md`'s "102 meeting recaps in `img/og/meetings/`", where the
-sentence counts image *files* (104) and not recaps (107), so the "fix" would
-have written a confident falsehood and hidden the three missing cards that
-`og-asset-missing` reports separately. A number in prose carries context a regex
-cannot read.
+glossary terms" with 317 live is true. A number in prose carries context a regex
+cannot read: a sentence about OG images in `img/og/meetings/` counts image
+*files*, not recaps, and "fixing" it to the recap count would write a confident
+falsehood. So these are reported, never resynced.
 
 ## Known exceptions
 
@@ -107,10 +96,8 @@ regex.
   chrome sweeps touch every file at once, so all 272 pages share a last-commit
   date. That is why `dateModified` is treated as authoritative and why the
   weekly workflow filters sweep commits out of its review slice.
-- Vendor counts *are* derivable now. `vendor-landscape.html` has no card markup,
-  so the number was hand-typed and drifted: about.html said 350+, README.md and
-  CONTRIBUTING.md said 360+, and the truth was 308 distinct vendors across 32
-  categories. `sync_counts.vendor_landscape()` counts the
+- Vendor counts are derivable even though `vendor-landscape.html` has no card
+  markup. `sync_counts.vendor_landscape()` counts the
   `<li><strong>Name</strong>` entries inside the category sections, skipping the
   sentence-shaped caveats and deduplicating the 24 vendors that appear under
   more than one category.

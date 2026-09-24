@@ -41,9 +41,11 @@
 # That failure needs the registrar and the DNS provider to disagree. For
 # csoh.org they are the same company: `whois csoh.org` reports
 # "Registrar: Cloudflare, Inc." and the nameservers are rosalie/yahir.ns.
-# cloudflare.com. Cloudflare therefore adds the DS record at .org itself when
-# signing is enabled, and removes it if signing is ever turned off. There is no
-# copy-paste step to get wrong and no second system to drift from.
+# cloudflare.com. Cloudflare manages the key material and the registrar record
+# together, so a key rotation updates both and there is no second system to
+# drift from. Publishing the DS in the first place is still a separate step
+# from enabling signing here (this resource signs only); see
+# infra/MANUAL_SECURITY_STEPS.md section 4.
 #
 # IF THE DOMAIN IS EVER TRANSFERRED to another registrar, this stops being
 # true. Disable DNSSEC BEFORE the transfer and re-enable it after, or the new

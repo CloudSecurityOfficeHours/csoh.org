@@ -18,22 +18,13 @@
 # validate-html.yml gates its expensive steps on "does this PR touch .html", and
 # that gate is right for a markup validator. It would be exactly wrong here. The
 # nav markup is generated and rarely edited; what actually moves these numbers is
-# style.css. The failure that prompted this workflow was CSS-only - the mega-menu
-# "featured" rows carried a subtitle and a bold weight into the mobile accordion,
-# making 8 rows 6.6px taller than their siblings and 2 of them 23.6px taller.
-# Not one byte of HTML changed. Folded into validate-html, this check would have
-# been skipped on precisely the commit that broke it.
+# style.css. A CSS-only change (say, a bold weight or subtitle carried into the
+# mobile accordion, making some rows taller than their siblings) changes no HTML
+# at all, so folded into validate-html this check would be skipped on precisely
+# the commit that breaks it.
 #
 # It also wants a browser download (~30s) that a required markup check shouldn't
 # have to wait for.
-#
-# HOW IT WENT UNNOTICED FOR SO LONG
-# ---------------------------------
-# It didn't run anywhere. The script was written, committed, and referenced by no
-# workflow, so it failed on all 20 pages with 60 issues and nothing said so. That
-# is the same silent-skip shape CLAUDE.md documents for the `'*.html'` path
-# filter and the inert Cloudflare ruleset: a check that never runs is
-# indistinguishable from a check that passes. Hence this file.
 # =============================================================================
 
 name: Check Mobile Layout
@@ -59,9 +50,7 @@ on:
   #
   # Note `**.html` and not `*.html`: GitHub's `*` does not match `/`, so the
   # single-star form means root-level pages ONLY and would miss breaches/,
-  # meetings/, portfolio/ and homelab/ entirely. CLAUDE.md has the full story -
-  # this exact mistake shipped a fix that never deployed. The sample below
-  # includes breaches/capital-one.html and meetings/2026-04-17.html, so the
+  # meetings/, portfolio/ and homelab/ entirely. The sample below includes breaches/capital-one.html and meetings/2026-04-17.html, so the
   # single-star form would genuinely skip pages this workflow tests.
   push:
     branches:
@@ -74,8 +63,7 @@ on:
       - 'tools/sync_chrome.py'
       - '.github/workflows/check-mobile-layout.yml'
   # Weekly safety net, 07:20 UTC on Mondays - just after Validate HTML's 07:00 so
-  # the two don't contend. Catches drift that slipped past both triggers above,
-  # and would have caught this failure on its own.
+  # the two don't contend. Catches drift that slipped past both triggers above.
   schedule:
     - cron: '20 7 * * 1'
   # Manual "Run workflow" button in the Actions tab.
@@ -126,9 +114,9 @@ jobs:
       # the nav itself the script asserts document-level horizontal overflow and
       # hero-heading overflow, which any stylesheet or page can break - so every
       # .html, .css and .js file counts, plus the checker and the script that
-      # generates the nav markup. CLAUDE.md's rule for path filters applies to
-      # this regex too: widening it costs one redundant run of identical bytes,
-      # narrowing it costs a regression that ships.
+      # generates the nav markup. As with path filters, widening this regex
+      # costs one redundant run, and narrowing it costs a regression that
+      # ships.
       - name: Detect layout-affecting changes
         id: layout
         # `github.*` values go through `env:` rather than being interpolated
@@ -189,9 +177,8 @@ jobs:
         run: python3 tools/check_mobile_layout.py --screenshots mobile-shots
 
       # Two frames per page - the top of the open menu, and the Learn dropdown
-      # expanded, which is the largest and the usual offender. The failure this
-      # workflow was written for is a few px of row height, which reads as
-      # obvious in a screenshot and as noise in a log line.
+      # expanded, which is the largest and the usual offender. A few px of row
+      # height reads as obvious in a screenshot and as noise in a log line.
       - name: Upload mobile screenshots
         if: failure() && steps.layout.outputs.changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

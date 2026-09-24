@@ -166,14 +166,14 @@ resource "aws_cloudfront_distribution" "site" {
     # holds it there no matter what you ask for. The argument only starts doing
     # something once the distribution has an ACM certificate on a real domain.
     #
-    # The file used to say `minimum_protocol_version = "TLSv1.2_2021"`, which
-    # was pure decoration with one real cost: the plan never converged. AWS kept
-    # reporting TLSv1, Terraform kept proposing TLSv1.2_2021, and the
-    # distribution sat permanently in the diff. That in turn deferred
-    # aws_iam_role_policy.publisher and aws_s3_bucket_policy.site, whose
-    # aws_iam_policy_document data sources depend on this distribution, so both
-    # showed `policy` as "known after apply" with no actual change. One inert
-    # argument, three resources permanently dirty, every single plan.
+    # Setting `minimum_protocol_version = "TLSv1.2_2021"` here is decoration
+    # with one real cost: the plan never converges. AWS reports TLSv1,
+    # Terraform proposes TLSv1.2_2021, and the distribution sits permanently in
+    # the diff. That in turn defers aws_iam_role_policy.publisher and
+    # aws_s3_bucket_policy.site, whose aws_iam_policy_document data sources
+    # depend on this distribution, so both show `policy` as "known after apply"
+    # with no actual change. One inert argument, three resources permanently
+    # dirty, every single plan.
     #
     # That is worth avoiding on its own terms. A stack that always reports
     # changes teaches whoever runs it to skim the diff, which is exactly how
@@ -198,13 +198,13 @@ resource "aws_cloudfront_distribution" "site" {
 # -----------------------------------------------------------------------------
 # The site's security headers are declared once at Cloudflare, in
 # ../cloudflare/rules.tf, and applied to every response regardless of which
-# origin served it. That works, but it made the AWS origin entirely dependent
-# on the edge: a request that reached this distribution directly (its
-# *.cloudfront.net hostname is public) got a fully functional copy of the site
-# with no CSP, no HSTS, and no X-Frame-Options at all.
+# origin served it. On its own that leaves the AWS origin dependent on the
+# edge: a request that reaches this distribution directly (its
+# *.cloudfront.net hostname is public) would get a fully functional copy of
+# the site with no CSP, no HSTS, and no X-Frame-Options at all.
 #
-# The GCP origin never had that problem - the nginx image sets the same headers
-# itself via nginx-security-headers.conf. This policy gives the AWS origin the
+# The GCP origin sets the same headers itself via
+# nginx-security-headers.conf. This policy gives the AWS origin the
 # same independence, so the headers survive an edge misconfiguration and the
 # bare distribution is not a header-free mirror of the site.
 #

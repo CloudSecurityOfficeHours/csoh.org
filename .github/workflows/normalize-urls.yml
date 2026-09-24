@@ -53,9 +53,8 @@ permissions:
   # this job - the branch push and the PR - is performed by the separate GitHub
   # App token minted in §4 and passed explicitly to actions/checkout and
   # peter-evans/create-pull-request, so the ambient token never pushes anything.
-  # This used to be `contents: write` / `pull-requests: write`, which no step
-  # ever used; dropping to read matches the five sibling workflows and keeps
-  # the ambient credential from being more powerful than the job requires.
+  # Read-only matches the sibling workflows and keeps the ambient credential
+  # from being more powerful than the job requires.
   contents: read
 
 
@@ -66,15 +65,14 @@ permissions:
 # `concurrency` prevents runs from stepping on each other. GitHub allows only
 # ONE active run per named `group` at a time; others wait in a queue.
 #
-# This workflow used to share the `deploy-pipeline` group with
-# site-update-deploy, on the theory that "both write to the repo." But this
+# Do not share the `deploy-pipeline` group with site-update-deploy. This
 # workflow never pushes to main - it pushes a branch and opens a PR - so there
-# is no main-race to serialize against. Sharing the group was actively harmful:
+# is no main-race to serialize against, and sharing would be actively harmful:
 # cancellation is a property of the INCOMING run, and site-update-deploy joins
 # that group with cancel-in-progress: true, so any content push landing during
 # the monthly ~15-minute redirect crawl would cancel this run mid-flight, and
-# the PR would silently not appear until next month. update-news moved to its
-# own group for exactly this reason; this workflow now follows suit.
+# the PR would silently not appear until next month. update-news keeps its own
+# group for the same reason.
 concurrency:
   # A fixed, constant name (not keyed on `${{ github.ref }}`) so every run of
   # THIS workflow shares one lock - scheduled, manual, or otherwise - and two
@@ -227,15 +225,12 @@ jobs:
           # to a file AND echoes it to the log. The `../` on the tee path puts
           # the report one level up, in the repo root, next to the safety
           # report.
-          # `set -o pipefail` is REQUIRED here and its absence was a real bug.
-          # The step runs under GitHub's default `bash -e {0}`: `-e` without
-          # `-o pipefail`. A pipeline's exit status is its LAST command's, so
-          # `tee` returning 0 masked whatever normalize_urls.py returned, and
-          # `-e` never fired. That mattered once the script gained a guard that
-          # rejects redirect destinations containing markup characters: it
-          # exits 2 and prints `::error::` on an unsafe destination, and this
-          # step swallowed both, so the run went green and the PR was opened as
-          # though nothing had been skipped.
+          # `set -o pipefail` is REQUIRED here. The step runs under GitHub's
+          # default `bash -e {0}`: `-e` without `-o pipefail`. A pipeline's
+          # exit status is its LAST command's, so without it `tee` returning 0
+          # would mask whatever normalize_urls.py returned - including its exit
+          # 2 on a redirect to an unsafe destination - and the run would go
+          # green and open the PR as though nothing had been skipped.
           set -o pipefail
           cd tools && python3 normalize_urls.py --apply 2>&1 | tee ../normalize-report.txt
           # Return to the repo root for any later steps.
@@ -256,8 +251,7 @@ jobs:
           # Push/PR using the App token so this PR can trigger downstream CI.
           token: ${{ steps.app-token.outputs.token }}
           # The message for the commit the action makes. Note there is NO
-          # `[skip ci]` marker here: putting `[skip ci]` in a commit message
-          # tells GitHub to skip workflow runs for that commit. We deliberately
+          # CI-skip marker here: putting one in a commit message tells GitHub to skip workflow runs for that commit. We deliberately
           # WANT CI to run on this PR (lint, link checks, etc.) before merge.
           commit-message: 'chore: normalize redirecting URLs'
           # The PR's title as shown in the pull-requests list.

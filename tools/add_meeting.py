@@ -69,8 +69,7 @@ ENTITY_FIXES = [
 # Zoom's AI summaries refer to a participant by their DISPLAY NAME, and some
 # people's display name is their work email address. Left alone, that address
 # gets published verbatim in a recap paragraph and swept into the public search
-# index - which happened twice before this guard existed. Recap prose should
-# never contain an email address; the only one that legitimately belongs on the
+# index. Recap prose should never contain an email address; the only one that legitimately belongs on the
 # site is the project's own contact, which is stamped into page chrome by
 # sync_chrome.py rather than typed into a recap.
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -109,19 +108,17 @@ def scrub_emails(s: str) -> str:
 #
 # Neither line is a heading, so both parsers hand the pair to whichever topic
 # came last, where `" ".join(body)` welds it onto the end of that paragraph
-# and it renders as literal dashes and asterisks. Three recaps shipped that
-# way (2026-09-04, -11, -18): 130 display names, including people's device
-# names ("OG work Iphone", "Edmond's iPad"), employer tags, and third-party
-# notetaker bots.
+# and it renders as literal dashes and asterisks: display names, device
+# names, employer tags, and third-party notetaker bots.
 #
 # This is the same failure class as scrub_emails above - a Zoom display name
 # reaching the page - but deliberate rather than incidental: the roster is a
 # list of names and nothing else. Publishing attendees is a choice this site
 # has not made, and privacy.html says so.
 #
-# Anchored on the colon, because "Attendees" is a real English word that has
-# appeared in a session title: 2024-11-22 is "New Attendees and Wiz
-# Implementation", and it must survive untouched.
+# Anchored on the colon, because "Attendees" is a real English word that
+# appears in a session title (2024-11-22 is "New Attendees and Wiz
+# Implementation"), and it must survive untouched.
 ROSTER_RE = re.compile(
     r"\s*(?:[-*_]{3,}\s*)?(?:\*\*|__)?\s*(?:Attendees|Participants)\s*"
     r"(?:\*\*|__)?\s*:\s*.*$",
@@ -503,12 +500,11 @@ def render_full_page(meeting: dict, headline: str, prev_iso: str, next_iso: str)
     )
     # Hero subtitle <p> immediately after the <h1>.
     #
-    # The inner pattern must tolerate markup, not just text. crosslink_pages.py
-    # wraps glossary terms in <a class="glossary-link"> wherever they appear,
-    # including inside this subtitle, and a `[^<]*` here silently stopped
-    # matching the moment that happened - re.sub with no match is a no-op that
-    # reports nothing, so 16 recaps shipped with the previous meeting's
-    # subtitle before anyone noticed. Match anything up to the closing tag.
+    # The inner pattern must tolerate markup, not just text: crosslink_pages.py
+    # wraps glossary terms in <a class="glossary-link"> inside this subtitle
+    # too, and a `[^<]*` would silently fail to match (re.sub with no match is
+    # a no-op), leaving the previous meeting's subtitle in place. Match
+    # anything up to the closing tag.
     out, n_sub = re.subn(
         r'(<section class="hero hero--compact">.*?<h1>[^<]+</h1>\s*<p>)(?:(?!</p>).)*(</p>)',
         lambda mm: mm.group(1) + h.escape(headline) + mm.group(2),

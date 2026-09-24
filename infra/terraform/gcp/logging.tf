@@ -69,9 +69,9 @@ resource "google_logging_project_sink" "security" {
   destination = "logging.googleapis.com/projects/${var.project_id}/locations/global/buckets/${google_logging_project_bucket_config.long_retention.bucket_id}"
 
   # `filter` is the matching rule, written in Cloud Logging's query language;
-  # only entries matching it get routed. (The Cloud Armor / LB clauses were
-  # dropped with the GCLB - edge WAF + error logging now live in Cloudflare's
-  # zone analytics/logs.) The `<<-EOT ... EOT` syntax is a "heredoc" - a tidy
+  # only entries matching it get routed. (There are no Cloud Armor / LB
+  # clauses: edge WAF + error logging live in Cloudflare's zone
+  # analytics/logs.) The `<<-EOT ... EOT` syntax is a "heredoc" - a tidy
   # way to write a multi-line string; the leading dash lets the lines be
   # indented for readability without the indentation becoming part of the
   # string. The three OR'd clauses below match, in order:

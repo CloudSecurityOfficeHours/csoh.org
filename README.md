@@ -155,7 +155,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 
 ## 📚 Reference & Practice
 
-Cross-cutting entry points that sit outside the topic menus (everything else now lives under its nav section above):
+Cross-cutting entry points that sit outside the topic menus (everything else lives under its nav section above):
 
 | Resource | What it is |
 |---|---|
@@ -219,7 +219,7 @@ A series of one-page-per-role deep dives covering day-to-day work, the skills th
 A hub of build-it-yourself projects that demonstrate real cloud-security skill to hiring managers, each with a full step-by-step walkthrough under `portfolio/`: build a multi-account AWS Org with SCPs, walk every CloudGoat scenario, write a CNAPP comparison, build 5 detections in a lab SIEM, run a Prowler audit and Terraform the fixes, recreate the Capital One breach end to end, and ship a first OSS contribution to a cloud-security project.
 
 ### 🪜 Breaking Into Cloud Security ([`breaking-into-cloud-security.html`](https://csoh.org/breaking-into-cloud-security.html))
-The realistic transition from IT support / help desk into cloud security: what actually transfers, what you have to build from scratch, and the sequence that works. This page absorbed three earlier entry-path pages (`is-cloud-security-a-good-career.html`, `get-into-cloud-security-no-experience.html`, `help-desk-to-cloud-security.html`); the old URLs 301 in `.htaccess` and `retire_merged_career_pages.py` repointed every in-site link so there is no redirect hop.
+The realistic transition from IT support / help desk into cloud security: what actually transfers, what you have to build from scratch, and the sequence that works. It replaces three entry-path pages (`is-cloud-security-a-good-career.html`, `get-into-cloud-security-no-experience.html`, `help-desk-to-cloud-security.html`), whose URLs 301 here via `.htaccess`; in-site links point here directly so there is no redirect hop.
 
 ### 🧑‍🏫 Cloud Security How-To Guides ([`cloud-security-how-to.html`](https://csoh.org/cloud-security-how-to.html), `howto/`)
 Hands-on guides to the small languages cloud security actually runs on, each following the same shape: what the thing is and the one idea that makes it click, a copy-and-run walk-through, then exercises with worked answers. Covers regex as a security control, jq and JMESPath, AWS IAM policy evaluation plus Cedar, OPA and Rego, CEL, Sigma and YARA, and OVAL and SCAP. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; unlike `homelab/` these **are** search-indexed and glossary cross-linked, because they are explanatory pages that attract search traffic from people meeting a term for the first time.
@@ -1133,9 +1133,9 @@ deploy of identical bytes, a missing one costs a change that never goes live.
 losing it.** Both fire on the same push in different concurrency groups, so
 they start in the same second and overlap for about two minutes (45 of 45
 pushes measured). Housekeeping then commits with a CI-skip marker, so anything
-it generated missed the publish that triggered it. `update_sri.py` was always
-immune because the build re-stamps SRI itself; since 2026-08-23 the build also
-regenerates the meetings search index and the presentations `VideoObject`
+it generated missed the publish that triggered it. `update_sri.py` is immune
+because the build re-stamps SRI itself, and the build also regenerates the
+meetings search index and the presentations `VideoObject`
 schema before staging, so `dist/` is self-consistent whichever workflow wins.
 `update_sitemap.py` is deliberately **not** moved: it reads `git log %cs`, and
 on the deploy's shallow checkout every path would resolve to the boundary
@@ -1144,7 +1144,7 @@ rather than an error. Correctness there needs `fetch-depth: 0`, a ~355 MB clone
 on the deploy path, to freshen an SEO hint. It stays where the clone is already
 deep, and its output ships with the next deploy.
 
-**News updates** are still handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `deploy.yml` ships it.
+**News updates** are handled by a separate scheduled workflow (`update-news.yml`) that runs every 3 hours and creates a PR with new articles. Once merged, the housekeeping workflow runs against the new content, then `deploy.yml` ships it.
 
 ### Standalone URL Normalization Workflow
 
@@ -1174,7 +1174,7 @@ generated and static files only the deploy ships:
 - All of `site-update-deploy.yml`'s paths above (`**.html`, CSS, JS, `vendor/**`, images, screenshots)
 - `feed.xml`, `recaps.xml`, `sitemap.xml`, `robots.txt`, `llms.txt`, `humans.txt`, `manifest.json`, `csoh.ics`, `security.txt`, `.well-known/**`
 - `meetings-search-index.json`, `preview-mapping.json`, `email-screenshots/**`, and `search-synonyms.json` (a build *input* to the search index rather than a published file, but an edit to it still has to reach production)
-- The five images that live at the repo root rather than under `img/`: `favicon.png`, `banner.png`, `banner.webp`, `apple-touch-icon.png`, `apple-touch-icon-precomposed.png`. `img/**` does not reach them, and until 2026-08-23 nothing else did either, so swapping the favicon or the social card never published
+- The five images that live at the repo root rather than under `img/`: `favicon.png`, `banner.png`, `banner.webp`, `apple-touch-icon.png`, `apple-touch-icon-precomposed.png`. `img/**` does not reach them, so they are listed by name
 - `Dockerfile`, `nginx.conf`, `nginx-security-headers.conf`, `infra/**`, `tools/stage_site.sh`, `tools/site-publish.filter`, `tools/build_search_index.py`, `.github/workflows/deploy.yml`
 - Manual trigger via the GitHub Actions tab
 
@@ -1185,7 +1185,7 @@ the reason it needs to ship.
 **What it does - validate, build once, fan out, then verify:**
 - **validate:** runs the correctness gates before anything is published, so a
   bad commit fails here rather than on one origin out of three.
-- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set - mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact with `include-hidden-files: true`. **Only AWS and Azure consume that artifact.** GCP builds its container from a fresh checkout instead, so the two object-storage origins and the container origin arrive at their content by different routes and are byte-identical only as long as `tools/site-publish.filter`, `.dockerignore`, and the `Dockerfile` strip list agree. That is not a theoretical concern: it is how `/.well-known/security.txt` once 404'd on two origins out of three while working fine on the third.
+- **build:** regenerates the search index and runs `tools/stage_site.sh` to produce `dist/` (the public file set - mirrors nginx block rules + the Dockerfile strip list), uploaded as an artifact with `include-hidden-files: true`. **Only AWS and Azure consume that artifact.** GCP builds its container from a fresh checkout instead, so the two object-storage origins and the container origin arrive at their content by different routes and are byte-identical only as long as `tools/site-publish.filter`, `.dockerignore`, and the `Dockerfile` strip list agree. If they disagree, one URL behaves differently depending on which origin answers.
 - **publish-aws:** assumes an IAM role via OIDC, `aws s3 sync --delete` to the private bucket, invalidates CloudFront.
 - **publish-azure:** logs in via an Entra federated credential (OIDC), `az storage blob sync` into the `$web` static-website container.
 - **publish-gcp:** builds the `Dockerfile` (digest-pinned `nginx:1.27-alpine` + `apk upgrade`), Trivy-scans (fails on fixable HIGH/CRITICAL), pushes an immutable SHA tag to Artifact Registry, deploys a Cloud Run revision. The scan runs **before** the push and the deploy, so a failing image is never published. Auth is Workload Identity Federation - no stored key.
@@ -1193,15 +1193,15 @@ the reason it needs to ship.
 
 Every cloud uses **keyless OIDC** - no long-lived cloud credentials in the repo, and each cloud's trust is pinned to an exact `sub` claim naming a GitHub environment, so a job without `environment: production` cannot authenticate at all. Non-secret resource IDs come from repo Variables (see [infra/README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md)).
 
-**Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover. (This replaced the old GCP Global HTTPS load balancer + Cloud Armor + Cloud CDN, which were redundant with Cloudflare and cost ~$100/mo.)
+**Edge in front of all three origins:** Cloudflare (Free plan + Load Balancing add-on) terminates TLS, caches, runs the WAF (free managed ruleset), sets security headers, applies legacy redirects, and load-balances active/active across the origins with health-check failover.
 
 **Full architecture, cost, and cutover runbook:** [infra/README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/infra/README.md). The full security walkthrough is the public teaching page [cloud-deployment.html](https://csoh.org/cloud-deployment.html). Security model and rotation: [SECURITY.md → Deployment Security](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/SECURITY.md#deployment-security).
 
 ### QA Staging Site
 
 `qa.csoh.org` is a staging copy of the site, deployed from the **`qa` branch** to a
-second Cloud Run service by `deploy-qa.yml`. `main` still means production and
-still deploys the moment anything lands on it - QA is an addition, not a
+second Cloud Run service by `deploy-qa.yml`. `main` means production and
+deploys the moment anything lands on it - QA is an addition, not a
 redirection. Promotion is **Actions → Promote QA to production**
 (`promote-qa.yml`), which fast-forwards `main`.
 
@@ -1271,7 +1271,7 @@ Once a month, `tools/check_reading_list_staleness.py` walks every podcast / blog
 Same shape, different content, and neither one edits the site either - each opens or refreshes exactly one sticky issue:
 
 - **`check-meeting-staleness.yml`** (Mondays 15:00 UTC) runs `tools/check_meeting_staleness.py` and files an issue labeled `meeting-staleness` when the newest recap on `meetings.html` is older than the expected weekly cadence. It catches an ingest that quietly stopped working, which no other check would notice.
-- **`check-conference-staleness.yml`** (1st of the month, 14:00 UTC) runs `tools/check_conference_staleness.py` over the "Next:" dates on `conferences.html` and files an issue labeled `conference-staleness` for any that have passed. Conference dates rot in place: the link still resolves, so lychee stays quiet, but the page is advertising an event that already happened. It also scans the *visible text* of cards marked `ongoing` or `TBA`, whose `data-next-date` is deliberately never compared against today - the BSides card advertised a date four days past while the check reported OK, because only the attribute was ever examined.
+- **`check-conference-staleness.yml`** (1st of the month, 14:00 UTC) runs `tools/check_conference_staleness.py` over the "Next:" dates on `conferences.html` and files an issue labeled `conference-staleness` for any that have passed. Conference dates rot in place: the link still resolves, so lychee stays quiet, but the page is advertising an event that already happened. It also scans the *visible text* of cards marked `ongoing` or `TBA`, whose `data-next-date` is deliberately never compared against today, so a past date in the visible text is still caught.
 
 Both are deliberately `paths:`-filtered so that editing the content they watch does *not* re-trigger them - only the script and the workflow file do.
 

@@ -68,16 +68,15 @@ def extract_urls_from_html(file_path):
             # This sweep exists to catch URLs sitting in prose rather than
             # in an attribute. It must NOT look inside <pre>, <code>, or HTML
             # comments: those hold sample text, not links the site offers a
-            # reader. The comment here used to claim it skipped comments and
-            # script blocks and the code never did, which is how a regular
-            # expression in a code block reached the safety gate.
+            # reader.
             #
             # howto/regex-for-security.html teaches URL-matching patterns, so
             # it contains strings like `https://[a-z]+\.example\.com$`. That
             # matches the pattern below, and urlparse then reads the `[` as
             # the start of an IPv6 literal and raises. The gate fails closed on
             # a URL it cannot parse - which is the right call for a real URL -
-            # so an unparseable *example* blocked the whole housekeeping run.
+            # so an unparseable *example* would block the whole housekeeping
+            # run.
             #
             # href/src extraction above deliberately still runs over the whole
             # document, so a real link inside a <pre> is checked either way and

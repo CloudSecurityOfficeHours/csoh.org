@@ -62,18 +62,15 @@ def has_uncommitted_changes(path: Path, repo_root: Path) -> bool:
 # Every date in the sitemap is rendered in this one timezone.
 #
 # `%cs` renders a committer date in the *commit's own* timezone, so the value
-# depended on where the commit was made. Laptop commits landed in Pacific and
-# CI commits in UTC, and a news-bot commit at 2026-08-16T01:13Z was therefore
-# stamped 2026-08-16 while every neighbouring entry - same evening, same
-# work - said 2026-08-15. That is a lastmod dated in the future for anyone
-# west of Greenwich, and Google stops trusting lastmod on a site that reports
-# values it can tell are unreliable.
+# would depend on where the commit was made (laptop commits in Pacific, CI in
+# UTC). An evening CI commit would then carry tomorrow's date: a lastmod in
+# the future for anyone west of Greenwich, and Google stops trusting lastmod
+# on a site that reports values it can tell are unreliable.
 #
 # Pacific rather than UTC because it is the timeline the site already runs on
 # ("Friday at 7am PT") and because it is behind UTC: a date correct in Pacific
 # is never in the future in UTC, so the values stay conservative in the
-# direction that matters. It also leaves the existing, already-correct laptop
-# dates untouched.
+# direction that matters.
 SITEMAP_TZ = "America/Los_Angeles"
 
 

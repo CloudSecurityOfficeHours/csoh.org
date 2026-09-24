@@ -2,7 +2,7 @@
 # Update News
 # -----------------------------------------------------------------------------
 # Every 3 hours, pulls fresh items from the RSS/Atom feeds configured in the
-# FEEDS list at the top of update_news.py (50 sources as of this writing) and
+# FEEDS list at the top of update_news.py and
 # rewrites the news.html cards + JSON-LD schema, feed.xml, and the sitemap
 # lastmod dates. If anything changed, opens a PR and - only when the diff is
 # confined to those news files - auto-approves and auto-merges it.
@@ -66,7 +66,7 @@ on:
 # token from the csoh-ci GitHub App. CSOH_PAT (a fine-grained org-scoped
 # PAT) drives the auto-approve step because GitHub's auto-merge feature
 # does NOT honor the App's ruleset bypass when evaluating the "1 required
-# approval" rule (empirically verified, see "Auto approve" step comments).
+# approval" rule (see the "Mint installation token" step comments).
 permissions:
   # `contents: read` = may clone/read the repo, but may not push.
   contents: read
@@ -120,10 +120,10 @@ jobs:
       # App. The App's permissions (contents:write, pull-requests:write) are
       # scoped to this repo only - much smaller blast radius than a PAT if
       # the token leaks. CSOH_PAT below is still a PAT: GitHub blocks
-      # self-approval, AND empirically GitHub's auto-merge feature does NOT
-      # honor the ruleset bypass list for the approval requirement (verified
-      # in PR #650, 2026-05-08 - checks all green, App on bypass, auto-merge
-      # stayed BLOCKED on REVIEW_REQUIRED). So a second identity approving
+      # self-approval, AND GitHub's auto-merge feature does NOT honor the
+      # ruleset bypass list for the approval requirement (with checks green
+      # and the App on bypass, auto-merge stays BLOCKED on REVIEW_REQUIRED).
+      # So a second identity approving
       # the PR is the only way to drive auto-merge to completion.
       # `name` is just the step's label in the run log.
       - name: Mint installation token
@@ -263,8 +263,6 @@ jobs:
           # must author the PR so the PAT is a *different* identity that is
           # allowed to approve it. Using the App token here also lets the PR
           # trigger downstream CI, which the built-in GITHUB_TOKEN cannot do.
-          # This has now been broken and reverted twice: PR #947 (reverted in
-          # 069e3500) and PR #1286 (reverted in this commit).
           token: ${{ steps.app-token.outputs.token }}
           commit-message: 'chore: update news feed content'
           title: 'chore: Update news articles'
@@ -297,13 +295,11 @@ jobs:
         # step actually produced a PR number (an empty string `''` means no PR
         # was opened), AND the diff is news content only.
         #
-        # The scope check used to be missing here, so a PR that touched
-        # something unexpected still received a code-owner approval - it simply
-        # did not get auto-merge enabled by the next step. That is a weaker
-        # safety valve than it looks: an approved PR satisfies the Main
-        # ruleset's review requirement, so anyone could merge it later without
-        # a second look, and the approval carries the repo owner's identity via
-        # CSOH_PAT. Withhold the approval too, not just the auto-merge.
+        # Skipping auto-merge alone is a weaker safety valve than it looks: an
+        # approved PR satisfies the Main ruleset's review requirement, so
+        # anyone could merge it later without a second look, and the approval
+        # carries the repo owner's identity via CSOH_PAT. Withhold the
+        # approval too, not just the auto-merge.
         # update-resources.yml already gates its approval this way.
         if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.only_news_files == 'true'
         # `gh` is GitHub's official command-line tool, preinstalled on the

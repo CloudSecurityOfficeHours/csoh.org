@@ -3,11 +3,8 @@
 
 Why this exists
 ---------------
-The nav and footer are hand-copied into each of ~233 static pages (no
-templating). Over time they drifted: the breaches/ and meetings/ pages still
-carried an older, smaller nav; a couple of root pages had stray extra items;
-the footer's "About CSOH" link was present on some pages and missing on
-others. This script makes the menu nav, the two header buttons (hamburger and
+The nav and footer are copied into every static page (no templating), so
+anything not stamped drifts. This script makes the menu nav, the two header buttons (hamburger and
 theme toggle), and the footer *byte-identical* everywhere, with only two
 legitimate per-page differences preserved (both apply to the nav/footer only;
 the header buttons are the same two lines on every page):
@@ -17,9 +14,7 @@ the header buttons are the same two lines on every page):
   2. The current-page markers (`aria-current="page"` on the active link and
      the `active` class on its dropdown toggle).
 
-It replaces three older scripts (sync_navs.py, redesign_nav.py, unify_footer.py)
-that encoded an earlier nav design and were removed in favor of this one. Run
-from the repo root:
+Run from the repo root:
 
     python3 tools/sync_chrome.py
 
@@ -34,27 +29,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 # --- Canonical logo block (first child of .header-content) -------------------
-# The logo was the last piece of the header nothing stamped, and it had drifted
-# into four shapes. Snapshot of the damage at the time this was written, when
-# the site was 222 pages (it is ~233 now - the shape of the problem is the
-# point, not the exact counts):
-#
-#   126 pages (breaches/, meetings/)  <a href="../index.html"> with NO logo mark
-#    87 pages                         <a href="index.html"> wrapping svg + .logo
-#     8 pages                         this shape
-#     1 page  (index.html)            as above, different whitespace
-#
-# Two things fall out of that. Over half the site was missing the cloud mark
-# entirely. And the wrapping shapes put the svg *beside* the tagline, making the
-# block 231px instead of 185px - 46px that decided whether the theme toggle fit
-# on the header's one line, which is why the wrap appeared on some pages and not
-# others.
-#
 # This shape is the one the CSS is written for: `.logo` is the flex column,
 # `.logo .logo-title` and `.logo p` are its descendants, and the tagline sits
 # outside the link (clicking "Cloud Security Office Hours" shouldn't navigate).
 # href="/" is root-relative, so unlike the nav this needs no ../ prefixing on
-# subdirectory pages - add_prefix() skips it. Keep the 12-space indent;
+# subdirectory pages - add_prefix() skips it. Wrapping the svg in the link
+# alongside the tagline would widen the block (231px vs 185px) enough to push
+# the theme toggle onto a second header line. Keep the 12-space indent;
 # LOGO_PATTERN consumes the existing indentation so this controls it fully.
 CANON_LOGO = '''\
             <div class="logo">
@@ -67,10 +48,8 @@ CANON_LOGO = '''\
 
 # --- Canonical header buttons (between the logo and the nav) -----------------
 # The hamburger and theme toggle live in every header but belong to neither the
-# <nav> block nor the <footer>, so nothing enforced them and they drifted:
-# about.html and rss.html picked up HTML-entity glyphs (&#9776; / &#127769;)
-# that the June 2026 docs review (PR #953) had to patch by hand. Stamping them
-# here keeps both lines byte-identical everywhere, same as the nav and footer.
+# <nav> block nor the <footer>, so they are stamped here to keep both lines
+# byte-identical everywhere, same as the nav and footer.
 # They contain no links and no active state, so unlike the nav/footer there are
 # no per-page differences: no ../ prefixing, no current-page markers. Keep the
 # 12-space indent; the button patterns below consume the existing indentation
@@ -92,42 +71,29 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 #
 # This one says "Get the Zoom link" and not "Join ..." on purpose. It is the
 # only join-shaped button on the site that leaves for the mailing-list form;
-# the two on index.html both go to sessions.html. Three labels for what looked
-# like one action ("Join Friday Zoom" / "Join Zoom Sessions" / "Join this
-# Friday") were really two actions wearing three names, so each action now
-# states what it actually does and the two that share a destination share a
-# label.
+# the two on index.html both go to sessions.html. Each action states what it
+# actually does, and buttons that share a destination share a label.
 #
 # The five top-level items are fixed by a hard width constraint, not by taste.
 # Measured at the 1024px breakpoint: logo 185px + toggle 36px + nav 786px =
 # 1007px inside a 1009px content box. There is no room for a sixth item, so
 # any reorganisation has to happen *inside* the dropdowns.
 #
-# Learn used to be a 6-column, 40-link mega menu - 43% of the whole nav, and
-# the site's entire subject index wearing a category's name. Two of its column
-# headings ("Workloads & Platform", "Governance & AI") were containers of
-# convenience: governance and AI have nothing to do with each other, they were
-# welded together to fill a sixth column. When a heading needs an ampersand to
-# hold itself up, the column count is driving the taxonomy.
+# Learn carries three single-axis columns - Foundations (concept), By Cloud
+# (platform), Build It (hands-on) - and the subject pages live on topics.html,
+# reached by the .mega-all row. When a column heading needs an ampersand to
+# hold itself up, the column count is driving the taxonomy. The .mega-all row
+# is the pattern for every mega menu: the dropdown's hub page, promoted out of
+# a column to a full-width footer (Careers uses it for
+# cloud-security-careers.html).
 #
-# It now carries three single-axis columns - Foundations (concept), By Cloud
-# (platform), Build It (hands-on) - and the 25 subject pages live on
-# topics.html, reached by the .mega-all row. That row is the pattern for every
-# mega menu: the dropdown's hub page, promoted out of a column to a full-width
-# footer. Careers uses it for cloud-security-careers.html, which is why
-# "Careers Overview" no longer appears inside Getting Started.
+# Resources has a dropdown built from the filters main.js already deep-links
+# via ?category= (see validCategories there - keep these two in step). CTF
+# Challenges points at ctfs.html rather than ?category=ctf because the
+# dedicated page is the richer of the two.
 #
-# Resources was the inverse problem: 498 cards and 7 working filter categories
-# behind a single flat link. It gets a dropdown built from the filters
-# main.js already deep-links via ?category= (see validCategories there - keep
-# these two in step). CTF Challenges points at ctfs.html rather than
-# ?category=ctf because the dedicated page is the richer of the two.
-#
-# The six "What Practitioners Think" digests used to sit as sub-items in six
-# different columns across three dropdowns. They are the site's most
-# distinctive content and they were the hardest thing in the nav to find as a
-# set. They are now one column in Community, which is why that menu is 4col.
-# The heading is "Session Digests" and not "From the Friday Sessions" for a
+# The "What Practitioners Think" digests are one column in Community, so they
+# can be found as a set, which is why that menu is 4col. The heading is "Session Digests" and not "From the Friday Sessions" for a
 # mechanical reason: at 4 columns the longer label wraps to two lines while
 # LIVE / ARCHIVE / CONNECT stay on one, which drops that column's first item
 # a row below its neighbours. The provenance is carried by the featured
@@ -135,8 +101,8 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 #
 # Deliberate de-duplication, so this does not drift back: mentorship.html is
 # in Careers only (higher intent match than Community > Live), and
-# chat-resources / contribute-resources are in Resources only. Nothing was
-# orphaned - every link removed here is reachable from topics.html,
+# chat-resources / contribute-resources are in Resources only. Anything not
+# in the nav must stay reachable from topics.html,
 # what-practitioners-think.html, or cloud-security-careers.html.
 #
 # Keep the 12-space indent; NAV_PATTERN below consumes the existing
@@ -307,15 +273,9 @@ CANON_NAV = """\
 # --- Canonical footer (root-relative) ----------------------------------------
 # The CSOH blurb, the Buy Me a Coffee ask beside it, and the legal row.
 #
-# It used to carry "Explore", "Developer Docs" and "Connect" as link columns.
-# All three now live in the top nav, which is reachable from every page and does
-# not require scrolling to the bottom: Developer Docs was already duplicated in
-# Learn > Build It, 5 of Explore's 7 links were already top-level items, and
-# Connect moved into Community as its own column. Nothing is orphaned - see the
-# inbound-link check in the commit that moved each one.
-#
-# That left the blurb alone on a wide row, so the coffee ask takes the other
-# half. Unlike the nav's deliberately quiet outline link, this one is a filled
+# Link columns belong in the top nav, which is reachable from every page
+# without scrolling to the bottom. The coffee ask takes the other half of the
+# row. Unlike the nav's deliberately quiet outline link, this one is a filled
 # button: someone who has scrolled to the bottom has read the whole page, and
 # there is no Zoom CTA down here for it to compete with.
 #
@@ -346,10 +306,10 @@ CANON_FOOTER = """\
 
 # Match the menu nav: a <nav> with no class attribute, wrapping a <ul>. The
 # breadcrumb uses `<nav class="breadcrumb-nav">` and a <ol>, so it fails both
-# halves. Attributes are allowed through because the canonical nav now carries
-# `id` and `aria-label` - with the old bare-`<nav>` pattern this script would
-# have stamped them once and then stopped recognising its own output, which
-# breaks idempotency and the --check gate silently. Leading indentation is
+# halves. Attributes are allowed through because the canonical nav carries
+# `id` and `aria-label`; a bare-`<nav>` pattern would stop recognising this
+# script's own output, silently breaking idempotency and the --check gate.
+# Leading indentation is
 # consumed so the replacement controls indent fully.
 NAV_PATTERN = re.compile(
     r'(?m)^[ \t]*<nav(?![^>]*\bclass=)[^>]*>\s*<ul>[\s\S]*?</ul>\s*</nav>')
@@ -363,8 +323,8 @@ MOBILE_CTA_PATTERN = re.compile(r'(?m)^[ \t]*<a [^>]*class="nav-cta nav-cta--mob
 # so the canonical lines control it, same as nav/footer.
 # Match the logo block: everything between the .header-content open tag and the
 # hamburger button that follows it. Anchoring on those two fixed landmarks -
-# rather than on the logo's own markup - is what lets one pattern catch all four
-# drifted shapes (with and without the svg, <a>-wrapped and <div>-wrapped). The
+# rather than on the logo's own markup - is what lets one pattern catch any
+# drifted shape (with and without the svg, <a>-wrapped and <div>-wrapped). The
 # open tag is kept via a capture group; the leading indentation of the block
 # itself is consumed so CANON_LOGO controls it fully.
 LOGO_PATTERN = re.compile(
@@ -411,14 +371,12 @@ def mark_active(nav: str, active_href: str | None) -> str:
     The current-section marker is the `active` class and nothing else.
     `aria-expanded` is deliberately left at "false": it means "the menu this
     button controls is open right now", not "this is the section you are in",
-    and the dropdown is closed on load. Stamping "true" here told every screen
-    reader that the menu was already open on all 254 pages, so the first arrow
-    press went somewhere the user was not expecting. main.js owns the attribute
+    and the dropdown is closed on load. Stamping "true" would tell every
+    screen reader the menu is already open. main.js owns the attribute
     from load onward (initDropdownNav sets it on click and clears it on close
     and on Escape); the only correct static value is "false". "You are here" is
     already carried by `aria-current="page"` on the link just below, and the
-    visual pill is `.dropdown-toggle.active` in style.css, so neither depends
-    on the lie.
+    visual pill is `.dropdown-toggle.active` in style.css.
     """
     if not active_href or active_href not in NAV_DROPDOWN:
         return nav
@@ -470,9 +428,9 @@ def process(path: Path) -> str:
     """Return 'updated', 'unchanged', or 'skipped' for one file."""
     text = path.read_text(encoding='utf-8')
     # Test with the pattern that actually does the work, not a literal '<nav>'
-    # substring. The canonical nav carries `id` and `aria-label` now, and the
-    # substring form silently skipped all 273 pages the moment it did: the run
-    # reports skipped=273 and exits 0, which reads like a clean pass.
+    # substring. The canonical nav carries `id` and `aria-label`, so the
+    # substring form would skip every page and exit 0, which reads like a
+    # clean pass.
     if not NAV_PATTERN.search(text) or '<footer>' not in text:
         return 'skipped'
     new = text
