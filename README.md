@@ -159,7 +159,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else now
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->600+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->610+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -366,7 +366,7 @@ Version-control fundamentals - branching, commits, pull requests, and history hy
 The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources ([`resources.html`](https://csoh.org/resources.html))
-Comprehensive catalog of **<!--count:resources_floor-->600+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->7<!--/count--> categories:
+Comprehensive catalog of **<!--count:resources_floor-->610+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->7<!--/count--> categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->80+<!--/count--> entries)
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -413,9 +413,11 @@ Comprehensive catalog of **<!--count:resources_floor-->600+<!--/count--> cloud s
 - **Interview Prep** - Technical interview guides
 - **Career Development** - Mentorship, networking resources
 
-#### 📬 Cloud Security Newsletters (<!--count:cat_news-->5<!--/count--> entries)
-- **Weekly roundups** - tl;dr sec, CloudSecList, Vulnerable U
-- **Specialist newsletters** - Detection Engineering Weekly, Latio Pulse
+#### 📬 Cloud Security Newsletters (<!--count:cat_news-->18<!--/count--> entries)
+- **Cloud & AppSec** - tl;dr sec, CloudSecList, AWS Security Digest, Cloud Security Newsletter, Resilient Cyber
+- **AI security** - Agentic Security Newsletter, Unsupervised Learning
+- **Specialist** - Detection Engineering Weekly, This Week in 4n6, Latio Pulse, The Cloud Security Guy (careers)
+- **News digests** - SANS NewsBites, Risky Bulletin, this week in security, TLDR InfoSec, Metacurity, Vulnerable U, Crypto-Gram
 
 #### 📰 Cloud Security News (120+ Articles)
 - **Latest articles** sorted by publication date (newest first)
