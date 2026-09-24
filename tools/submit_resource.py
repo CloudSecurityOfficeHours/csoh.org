@@ -177,7 +177,9 @@ def select_tags():
 
 def create_resource_html(name, url, description, tags, tooltip='', category_id=None):
     """Generate the HTML for a resource card, matching the category pages."""
-    esc = lambda t: html.escape(t, quote=True)
+    def esc(text):
+        return html.escape(text, quote=True)
+
     spans = []
     lead = CATEGORY_LEAD_TAG.get(category_id)
     if lead:
