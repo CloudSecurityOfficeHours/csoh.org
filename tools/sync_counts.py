@@ -477,8 +477,40 @@ HTML_PROSE_RULES = [
 ]
 
 
-def sync_html_prose(text: str, disp: dict) -> str:
+# The rules above are global: each pattern is pinned to wording unique enough
+# that it can only match the page it was written for. The eight
+# resources-<category>.html pages break that assumption. Every one of them
+# states its own card count in a sentence that is word-for-word identical
+# across all eight, three times over (meta description, og:description,
+# twitter:description), inside content="..." attributes where a marker cannot
+# sit. No global pattern can tell which category it is looking at, so these
+# rules are keyed by filename.
+#
+# They were missing until 2026-09-26, and the hub is what makes the gap
+# visible: resources.html states the same eight numbers in ordinary markers and
+# was correct, while six of the pages' own descriptions had drifted - CTF
+# Challenges read 81 against an actual 85, Security Tools 92 against 112. The
+# number a searcher reads in a result snippet was the stale one. Nothing
+# reported it, because the SEO audit measures description *length* and never
+# content, and --check was right that every count it knew about was in sync.
+#
+# Built from CATEGORY_ALIASES rather than written out, so a new category cannot
+# be added without its description coming along. Entries whose description
+# carries no count (github-projects, newsletters today) simply never match,
+# and start being owned the day someone adds one.
+HTML_PAGE_PROSE_RULES = {
+    f"resources-{cid}.html": [
+        (r"\d+ curated, vendor-neutral resources",
+         f"{{cat_{alias}}} curated, vendor-neutral resources"),
+    ]
+    for cid, alias in CATEGORY_ALIASES.items()
+}
+
+
+def sync_html_prose(text: str, disp: dict, name: str = "") -> str:
     for pat, rep in HTML_PROSE_RULES:
+        text = re.sub(pat, rep.format(**disp), text)
+    for pat, rep in HTML_PAGE_PROSE_RULES.get(name, []):
         text = re.sub(pat, rep.format(**disp), text)
     return text
 
@@ -801,7 +833,7 @@ def main() -> int:
         txt = f.read_text(encoding="utf-8")
         new_txt = MANAGED[f.name](txt) if f.name in MANAGED else enforce_itemlist_invariant(txt)[0]
         new_txt = sync_markers(new_txt, disp)
-        new_txt = sync_html_prose(new_txt, disp)
+        new_txt = sync_html_prose(new_txt, disp, f.name)
         if new_txt != txt:
             drift.append(str(f.relative_to(REPO)))
             if apply:
