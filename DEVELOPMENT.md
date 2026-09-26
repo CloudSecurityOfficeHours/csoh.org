@@ -510,7 +510,7 @@ validator and **fail** the PR. They are stdlib-only and take about a second each
 ```bash
 python3 tools/check_no_inline_scripts.py  # the strict CSP forbids inline <script>
 python3 tools/check_svg_dimensions.py     # width/height on every <svg> with a viewBox
-python3 tools/check_jsonld.py             # ld+json parses; breadcrumbs end at their page
+python3 tools/check_jsonld.py             # ld+json parses; breadcrumbs end at their page, match the visible trail
 python3 tools/check_docs_consistency.py --check   # dates, punctuation, count claims
 python3 tools/check_faq_jsonld_parity.py --check  # FAQ and glossary JSON-LD match the page
 ```
@@ -684,7 +684,7 @@ When you add a new HTML page, do all of the following - none are automated:
 2. Write a < 155-char meta description, front-loaded with cloud-security keywords.
 3. Use a `Topic - Cloud Security Office Hours` title.
 4. Set `<link rel="canonical" href="https://csoh.org/yourpage.html">`.
-5. Add a `BreadcrumbList` JSON-LD block (`Home > Your Page`).
+5. Add a `BreadcrumbList` JSON-LD block naming the same pages, in the same order, as the visible `<nav class="breadcrumb-nav">` (`Home > Your Page`, or `Home > Parent > Your Page`). `check_jsonld.py` fails the build when the two differ; the labels may.
 6. Add a single keyword-rich `<h1>` in the hero.
 7. **Add the page to `sitemap.xml`** (a new `<url>` block). `update_sitemap.py` only refreshes `<lastmod>` for entries already in the sitemap - it does not auto-discover new pages.
 8. **Add the page to the nav** (`<ul class="dropdown-menu">` or mega-menu column) **on every existing HTML page**. The nav is duplicated per page, not shared - there is no shared template. Pick the right slot:
@@ -726,7 +726,7 @@ When you add a new HTML page, do all of the following - none are automated:
 15. Let CI regenerate SRI hashes (`update_sri.py` runs on deploy) or run it locally.
 16. **Run the local CI gates** before you push - these all block the PR:
     ```bash
-    python3 tools/check_jsonld.py            # JSON-LD parses; breadcrumbs end at their page
+    python3 tools/check_jsonld.py            # JSON-LD parses; breadcrumbs end at their page, match the visible trail
     python3 tools/check_no_inline_scripts.py # the CSP forbids inline <script>
     python3 tools/check_svg_dimensions.py    # width/height on every <svg> with a viewBox
     python3 tools/check_all_site_urls.py     # URL safety

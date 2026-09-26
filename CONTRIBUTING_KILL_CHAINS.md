@@ -96,7 +96,7 @@ Adding a kill chain therefore has two parts: **(1) create the breach page**, the
 The reliable way is to **copy the newest existing page in `breaches/`** and edit it in place - that inherits the correct `<head>`, nav, footer, shared-asset integrity hashes, and the `incident-pager` markup, so you only touch the content. In the copy, update:
 
 - `<title>`, `<meta name="description">`, `<link rel="canonical">`, the Open Graph / Twitter tags, and the OG image path.
-- The two JSON-LD blocks (`Article` and `BreadcrumbList`) - change the name, description, URL, and dates. **Every JSON-LD string must use double quotes**; `tools/check_jsonld.py` (a build gate) fails on single quotes, and on a breadcrumb whose last `item` is not the page's canonical URL.
+- The two JSON-LD blocks (`Article` and `BreadcrumbList`) - change the name, description, URL, and dates. **Every JSON-LD string must use double quotes**; `tools/check_jsonld.py` (a build gate) fails on single quotes, on a breadcrumb whose last `item` is not the page's canonical URL, and on a breadcrumb that names different pages from the visible one.
 - The `<h1>` (e.g. `Capital One 2019`).
 - The `<main class="kc-main kc-page">` body (below).
 
