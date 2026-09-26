@@ -940,7 +940,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 |---|---|---|
 | `check_all_site_urls.py` | Site-wide URL safety scan (phishing patterns, suspicious TLDs, shorteners) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md) |
 | `check_url_safety.py` | The single-URL validator `check_all_site_urls.py` is built on | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md) |
-| `check_jsonld.py` | Every JSON-LD block on the site must be valid JSON | docstring |
+| `check_jsonld.py` | Every JSON-LD block must be valid JSON, and every breadcrumb trail must end at its own page | docstring |
 | `check_no_inline_scripts.py` | No inline `<script>` blocks (the CSP forbids them) | docstring |
 | `check_svg_dimensions.py` | `width`/`height` on every `<svg>` that has a `viewBox` | docstring |
 | `check_crosslink_coverage.py` | Every root page is either cross-linked or explicitly opted out - `crosslink_pages.py` skips unlisted pages silently, so omissions never surfaced | docstring |
