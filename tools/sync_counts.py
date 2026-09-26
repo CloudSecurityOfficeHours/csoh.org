@@ -54,6 +54,8 @@ CATEGORY_META = {
                    "Job boards, hiring platforms, and career resources for cloud security roles"),
     "newsletters": ("Cloud Security Newsletters",
                     "Weekly newsletters that curate cloud security research, tools, detection engineering and industry news"),
+    "github-projects": ("Cloud Security GitHub Projects",
+                    "Open-source cloud security projects on GitHub, from CSPM and IaC scanning to Kubernetes, supply chain, IAM and detection, plus CSOH's own repositories"),
 }
 
 # Short display-key aliases for the six resource categories, so a marker reads
@@ -66,6 +68,7 @@ CATEGORY_ALIASES = {
     "ai-security": "ai",
     "job-search": "jobs",
     "newsletters": "news",
+    "github-projects": "github",
 }
 
 CARD_RE = re.compile(

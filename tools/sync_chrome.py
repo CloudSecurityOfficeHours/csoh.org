@@ -158,6 +158,7 @@ CANON_NAV = """\
                         <li><a href="resources-ai-security.html">AI Security</a></li>
                         <li><a href="resources-job-search.html">Job Search</a></li>
                         <li><a href="resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="resources-github-projects.html">GitHub Projects</a></li>
                         <li><a href="cloud-security-reading-list.html">Reading List</a></li>
                         <li><a href="chat-resources.html">Chat Resources</a></li>
                         <li><a href="contribute-resources.html">Add a Resource</a></li>

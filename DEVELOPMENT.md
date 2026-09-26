@@ -169,6 +169,7 @@ csoh.org/
 ├── resources-ai-security.html     # AI Security & LLM Protection
 ├── resources-job-search.html      # Job Search & Career Development
 ├── resources-newsletters.html     # Cloud Security Newsletters
+├── resources-github-projects.html # Cloud Security GitHub Projects
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
 ├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests

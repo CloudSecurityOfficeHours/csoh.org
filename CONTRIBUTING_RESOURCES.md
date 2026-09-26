@@ -200,6 +200,7 @@ to the hub** - the hub's contents are generated, so an edit there is overwritten
 | AI Security & LLM Protection | `resources-ai-security.html` |
 | Job Search & Career Development | `resources-job-search.html` |
 | Cloud Security Newsletters | `resources-newsletters.html` |
+| Cloud Security GitHub Projects | `resources-github-projects.html` |
 
 You don't need to touch counts, headings or the structured-data block at the
 top of the page. `tools/sync_counts.py` recalculates every count from the cards

@@ -428,7 +428,7 @@ Counts written into prose or docs go inside a marker so `sync_counts.py` owns
 them. The comment is invisible in rendered HTML and in GitHub Markdown:
 
 ```html
-Access <!--count:resources_floor-->640+<!--/count--> curated resources.
+Access <!--count:resources_floor-->730+<!--/count--> curated resources.
 ```
 
 Docs: `tools/SYNC_CHROME_README.md`, `tools/SYNC_COUNTS_README.md`,

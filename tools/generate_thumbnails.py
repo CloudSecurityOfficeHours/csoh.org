@@ -93,6 +93,7 @@ THUMBS = [
     ("ai-security",                "chip",            "#c084fc", "AI"),
     ("jobs",                       "briefcase",       "#60a5fa", "Jobs"),
     ("newsletters",                "envelope",        "#fb923c", "Newsletters"),
+    ("github-projects",            "code",            "#a78bfa", "GitHub"),
     ("degree-programs",            "cap",             "#818cf8", "Education"),
     ("careers",                    "route",           "#38bdf8", "Careers"),
     ("home-lab",                   "rack",            "#2dd4bf", "Home lab"),

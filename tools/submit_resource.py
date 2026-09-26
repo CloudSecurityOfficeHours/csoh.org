@@ -42,6 +42,7 @@ CATEGORY_LEAD_TAG = {
     'ai-security': ('ai-security', 'AI Security'),
     'job-search': ('job', 'Job Board'),
     'newsletters': ('newsletter', 'Newsletter'),
+    'github-projects': ('github', 'GitHub'),
 }
 
 # Available tags

@@ -70,7 +70,8 @@
         'certification': 'resources-certifications.html',
         'ai-security': 'resources-ai-security.html',
         'job': 'resources-job-search.html',
-        'newsletter': 'resources-newsletters.html'
+        'newsletter': 'resources-newsletters.html',
+        'github': 'resources-github-projects.html'
     };
 
     function forwardCategory() {
