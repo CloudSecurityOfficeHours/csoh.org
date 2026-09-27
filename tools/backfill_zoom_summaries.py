@@ -29,6 +29,9 @@ Usage:
 
     # Replace existing dates too (will clobber Apple-Notes-sourced content)
     python3 tools/backfill_zoom_summaries.py --replace-existing
+
+    # Check the tag inference against its planted cases (no Zoom access)
+    python3 tools/backfill_zoom_summaries.py --self-test
 """
 
 from __future__ import annotations
@@ -52,23 +55,52 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MEETINGS_HTML = REPO_ROOT / "meetings.html"
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
-# Keyword → tag. First-match wins for a given tag, multiple tags can attach.
-# Keywords are matched case-insensitively against overview + topic headings.
+# Keyword → tag. Multiple tags can attach, in this order, up to max_tags.
+# Keywords are matched case-insensitively against overview + topic headings,
+# as whole words: see _keyword_re for what a keyword does and doesn't match.
+#
+# Whole-word matching drops the inflections a substring test used to catch by
+# accident, so the forms the published recaps actually use are listed
+# explicitly: "welcomed", "exploitation", "patching", "OpenAI", "1Password".
+# Plurals need no entry of their own.
 TAG_RULES: list[tuple[str, list[str]]] = [
-    ("AI", ["ai", "llm", "genai", "claude", "chatgpt", "gemini", "copilot", "mythos", "generative ai"]),
+    ("AI", ["ai", "llm", "genai", "openai", "claude", "chatgpt", "gemini", "copilot", "mythos", "generative ai"]),
     ("Supply Chain", ["supply chain", "dependency", "npm", "pypi", "dependabot", "package", "trivy", "chainguard", "maintainer"]),
-    ("Vulnerabilities", ["vulnerability", "vulnerabilities", "cve", "zero-day", "zero day", "exploit", "rce", "xss", "injection", "patch"]),
-    ("Conferences", ["rsa", "black hat", "def con", "defcon", "sector", "keynote", "conference"]),
-    ("Governance", ["policy as code", "compliance", "grc", "fedramp", "audit", "sbom", "policy", "governance"]),
+    ("Vulnerabilities", ["vulnerability", "vulnerabilities", "cve", "zero-day", "zero day", "exploit", "exploited", "exploitation", "rce", "xss", "injection", "patch", "patching"]),
+    ("Conferences", ["rsa", "rsac", "black hat", "def con", "defcon", "sector", "keynote", "conference"]),
+    ("Governance", ["policy as code", "compliance", "grc", "fedramp", "audit", "auditor", "sbom", "policy", "governance"]),
     ("Guest Speaker", ["presented", "presentation", "talk on", "guest speaker", "spoke on", "demo"]),
-    ("Passwords", ["password", "mfa", "multi-factor", "multifactor", "authentication"]),
+    ("Passwords", ["password", "1password", "mfa", "multi-factor", "multifactor", "authentication"]),
     ("Insider Threats", ["insider threat", "malicious insider"]),
     ("SBOM", ["sbom", "software bill of materials"]),
     ("GitHub Actions", ["github actions", "workflow"]),
-    ("Education", ["certification", "degree", "omscs", "homeschool", "teach"]),
-    ("Community", ["welcome", "introduction", "new participant", "new member", "anniversary"]),
+    ("Education", ["certification", "degree", "omscs", "homeschool", "homeschooling", "teach", "teaching"]),
+    ("Community", ["welcome", "welcomed", "introduction", "new participant", "new member", "anniversary"]),
     ("Industry News", ["news", "acquisition", "acquired", "merger", "layoff"]),
     ("Anniversary", ["anniversary"]),
+]
+
+
+def _keyword_re(keyword: str) -> re.Pattern[str]:
+    """Whole-word pattern for one TAG_RULES keyword.
+
+    This used to be a substring test, which fired inside unrelated words:
+    "rsa" in "conversation", "universal" and "adversarial" tagged Conferences,
+    "ai" in "said", "training" and "email" tagged AI, and "rce" in "source"
+    tagged Vulnerabilities. A keyword now has to match whole words, and it
+    also matches its plural, so "conference" still finds "conferences".
+
+    Inside a keyword, a space or hyphen matches any run of spaces or hyphens,
+    or none at all: "def con" matches "DEF CON", "Def-Con" and "DEFCON", and
+    "zero-day" matches "zero day".
+    """
+    words = re.split(r"[\s-]+", keyword.strip())
+    body = r"[\s-]*".join(re.escape(w) for w in words)
+    return re.compile(rf"\b{body}(?:s|es)?\b", re.IGNORECASE)
+
+
+TAG_PATTERNS: list[tuple[str, list[re.Pattern[str]]]] = [
+    (tag, [_keyword_re(k) for k in keywords]) for tag, keywords in TAG_RULES
 ]
 
 
@@ -138,16 +170,81 @@ def fetch_summary_detail(token: str, uuid: str) -> dict:
 
 
 def infer_tags(text: str, max_tags: int = 4) -> list[str]:
-    low = text.lower()
     picked: list[str] = []
-    for tag, keywords in TAG_RULES:
-        if any(k in low for k in keywords):
+    for tag, patterns in TAG_PATTERNS:
+        if any(p.search(text) for p in patterns):
             picked.append(tag)
         if len(picked) >= max_tags:
             break
     if not picked:
         picked = ["Community"]
     return picked
+
+
+# Planted cases for infer_tags, run by --self-test.
+#
+# Both halves are load-bearing. The "must not" cases are the substring hits
+# that mis-tagged published recaps (the September 25, 2026 recap was tagged
+# Conferences for "conversation"), and the substring test fails every one of
+# them. The "must" cases are what whole-word matching could break if it were
+# too strict: phrases, joined and hyphenated spellings, plurals, and the
+# inflections listed in TAG_RULES.
+TAG_CASES: list[tuple[str, str, str, bool]] = [
+    # (label, text, tag, must the tag attach?)
+    ("RSA Conference", "Planning a meetup at the RSA Conference", "Conferences", True),
+    ("RSA as the event", "Lessons from events like RSA and Black Hat", "Conferences", True),
+    ("RSAC", "Meeting up at RSAC", "Conferences", True),
+    ("Black Hat", "Takeaways from Black Hat briefings", "Conferences", True),
+    ("DEF CON, spaced", "Badges and villages at DEF CON", "Conferences", True),
+    ("DEFCON, joined", "Stories from DEFCON this year", "Conferences", True),
+    ("Def-Con, hyphenated", "Villages at Def-Con", "Conferences", True),
+    ("plural","Why security conferences feel different now", "Conferences", True),
+    ("AI agents", "Securing AI agents that call tools", "AI", True),
+    ("AI, hyphenated", "AI-driven triage in the SOC", "AI", True),
+    ("OpenAI", "OpenAI's disclosure of the incident", "AI", True),
+    ("LLMs", "Guardrails for LLMs in production", "AI", True),
+    ("policy as code", "Adopting policy as code with OPA", "Governance", True),
+    ("policy-as-code", "A policy-as-code rollout", "Governance", True),
+    ("auditors", "What the auditors asked for", "Governance", True),
+    ("zero-days", "Two zero-days in the edge appliance", "Vulnerabilities", True),
+    ("exploitation", "Active exploitation of an old bug", "Vulnerabilities", True),
+    ("patching", "Patching cadence for edge devices", "Vulnerabilities", True),
+    ("1Password", "Moving the team to 1Password", "Passwords", True),
+    ("teaching", "Teaching cloud security to students", "Education", True),
+    # Community is also the fallback for text that matches nothing, so this
+    # case names AI too: "welcomed" has to attach Community on its own.
+    ("welcomed", "Shawn welcomed everyone before the AI discussion", "Community", True),
+    # --- controls: substring hits that must not attach ---
+    ("'conversation' is not RSA", "A long conversation about IAM roles", "Conferences", False),
+    ("'universal' is not RSA", "A universal logging schema", "Conferences", False),
+    ("'adversarial' is not RSA", "Adversarial testing of detection rules", "Conferences", False),
+    ("'anniversary' is not RSA", "The community's second anniversary", "Conferences", False),
+    ("'said' is not AI", "Shawn said the audit went well", "AI", False),
+    ("'training' is not AI", "Security awareness training for staff", "AI", False),
+    ("'email' is not AI", "Phishing email reporting", "AI", False),
+    ("'supply chain' is not AI", "Supply chain attacks on build systems", "AI", False),
+    ("'source' is not RCE", "Open source tooling for posture checks", "Vulnerabilities", False),
+    ("'represented' is not 'presented'", "Every cloud was represented", "Guest Speaker", False),
+]
+
+
+def run_self_test() -> int:
+    """Prove both directions of the keyword matching before anyone trusts it."""
+    failures = []
+    for label, text, tag, should_attach in TAG_CASES:
+        attached = tag in infer_tags(text, max_tags=len(TAG_RULES))
+        if attached != should_attach:
+            failures.append(f"{label}: {tag} attached={attached}, wanted {should_attach}")
+        print(f"  {'attach' if attached else '  --  '}  {tag:<15} {label}")
+    n_attach = sum(1 for c in TAG_CASES if c[3])
+    print()
+    if failures:
+        for f in failures:
+            print(f"  FAIL: {f}", file=sys.stderr)
+        return 1
+    print(f"✓ tag inference: {len(TAG_CASES)} cases correct "
+          f"({n_attach} must attach, {len(TAG_CASES) - n_attach} must not)")
+    return 0
 
 
 NOISE_TITLE_RE = re.compile(
@@ -334,7 +431,11 @@ def main() -> int:
     parser.add_argument("--target-hour", type=int, default=7, help="Pacific hour for CSOH filter (default 7).")
     parser.add_argument("--hour-slack", type=int, default=90, help="Minutes either side of --target-hour (default 90).")
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
+    parser.add_argument("--self-test", action="store_true", help="Run the tag-inference cases and exit; contacts nothing.")
     args = parser.parse_args()
+
+    if args.self_test:
+        return run_self_test()
 
     z.load_dotenv(args.env_file)
     missing = [k for k in ("ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET") if not os.environ.get(k)]

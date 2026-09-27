@@ -62,6 +62,9 @@ python3 tools/backfill_zoom_summaries.py --limit 5
 
 # Also replace dates already on the page (clobbers hand-authored content)
 python3 tools/backfill_zoom_summaries.py --replace-existing
+
+# Check tag inference against its planted cases (no Zoom access needed)
+python3 tools/backfill_zoom_summaries.py --self-test
 ```
 
 ### Flags
@@ -72,6 +75,7 @@ python3 tools/backfill_zoom_summaries.py --replace-existing
 - `--months-back N` - how far back to scan (default 60).
 - `--target-hour H` / `--hour-slack MINS` - Pacific time target for the Friday filter (defaults: 7:00 PT, 90-minute slack).
 - `--env-file PATH` - use a non-default `.env`.
+- `--self-test` - run the tag-inference cases and exit. Needs no credentials and contacts nothing.
 
 ## How it selects the summary per date
 
@@ -82,7 +86,7 @@ Zoom's AI Companion often produces multiple `summary_content` records for one Fr
 For each selected date, the script:
 
 1. Fetches the full summary content from Zoom (`summary_overview`, `summary_details`, formatted `summary_content` markdown).
-2. Infers 1-4 topical tags by keyword-matching the overview + topic headings against the existing tag vocabulary (AI, Supply Chain, Vulnerabilities, Conferences, Governance, Guest Speaker, Community, etc.).
+2. Infers 1-4 topical tags by matching the overview + topic headings against the keywords in `TAG_RULES`, as whole words, for the existing tag vocabulary (AI, Supply Chain, Vulnerabilities, Conferences, Governance, Guest Speaker, Community, etc.).
 3. Prepends `# CSOH YYYY-MM-DD` so `add_meeting.py` can parse it.
 4. Runs `add_meeting.py --tag …` for each inferred tag.
 5. Each new meeting lands in the list, the table of contents picks it up, and the filter-bar month/tag facets auto-populate on next page load.
@@ -130,6 +134,8 @@ The strippers handle structure. These need a human:
 
 - **AI transcription quirks.** Summaries are generated from Zoom's transcription, which occasionally mis-hears names (`Axi` → `XZ`, `Cisa` → `CISA`, `Psi Ops` → `Psy Ops`, etc.). Spot-check a few entries after a big backfill and apply targeted fixes with `sed` or an editor pass.
 - **Tag inference is rule-based.** Simple keyword matching, not an LLM. Some meetings will land with only 1-2 tags where a richer set would fit. Edit by hand after the fact, or extend `TAG_RULES` in the script.
+- **Keywords match whole words.** It used to be a substring test, and short keywords fired inside unrelated words: "rsa" in "conversation" tagged Conferences, and "ai" in "said" tagged AI. A keyword also matches its plural, and a space or hyphen inside one matches any run of spaces or hyphens, or none ("def con" finds "DEF CON", "Def-Con" and "DEFCON"). Other inflections need their own entry ("welcomed", "patching"). Run `--self-test` after editing `TAG_RULES`; its controls are the substring hits that mis-tagged published recaps.
+- **Whole words are not the same as the right sense.** "sector" is in the Conferences list for SecTor, but the published recaps only ever use it in "tech sector" and "cybersecurity sector"; "RSA" can mean the cipher rather than the conference. Check a Conferences tag before trusting it.
 - **Date selection assumes ~7am PT Friday.** Meetings scheduled elsewhere (different time, different day, one-off sessions) won't match the filter.
 - **Scope of published content.** The script only touches `meetings.html` articles + TOC. It doesn't commit, doesn't push. Review with `git diff` and commit yourself.
 
