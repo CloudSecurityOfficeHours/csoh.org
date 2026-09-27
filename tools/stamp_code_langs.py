@@ -140,10 +140,11 @@ EQL_CATEGORIES = (r'any|api|authentication|configuration|database|driver|email'
                   r'|file|host|iam|intrusion_detection|library|malware|network'
                   r'|package|process|registry|session|threat|vulnerability|web')
 # Operators only KQL has among these languages. `lookup` is also SPL and Sumo
-# Logic, and `top` is SPL, so neither is here.
+# Logic, `top` is SPL, and `sort by` / `order by` are Sumo Logic too, so none
+# of those is here; KQL that sorts still opens with its table name.
 KQL_OPERATORS = (r'summarize|project(?:-away|-keep|-rename|-reorder)?|extend'
                  r'|mv-expand|mv-apply|make-series|take|render|top-nested'
-                 r'|join\s+kind\s*=|order\s+by|sort\s+by|as\s+hint')
+                 r'|join\s+kind\s*=|as\s+hint')
 KQL_COMMANDS = (r'create|create-merge|create-or-alter|alter|drop|ingest|set'
                 r'|set-or-append|set-or-replace|append|show|execute')
 # Built-in metadata fields that open a Sumo Logic scope, and operators SPL and
@@ -166,6 +167,11 @@ def _detection_language(first: str, body_text: str) -> str | None:
     if re.search(r'^\s*(sequence|sample)\s+(by\s|with\s+maxspan|\[)', body_text, re.M) or \
        re.match(r'(' + EQL_CATEGORIES + r')\s+where\s', first):
         return 'eql'
+    # A Sumo Logic scope opening the query is decisive: no other language here
+    # starts with a `_sourceCategory=`-style metadata field. Tested before the
+    # operators, which the languages share more than their names suggest.
+    if re.match(SUMO_SCOPE, first):
+        return 'sumo logic'
     if re.search(r'(^|\s)\|\s*(' + KQL_OPERATORS + r')\b', body_text, re.M) or \
        re.match(r'\.(' + KQL_COMMANDS + r')\s', first):
         return 'kql'
@@ -205,6 +211,17 @@ SELF_TEST = [
     ('yara-l', 'rule r {\n  events:\n    $e.metadata.product_event_type = "X"\n  condition:\n    $e\n}'),
     ('yara', 'rule r {\n  strings:\n    $a = "x"\n  condition:\n    $a\n}'),
     ('sumo logic', '_sourceCategory=aws/cloudtrail\n| json "eventName" as event_name'),
+    # `sort by` is Sumo Logic as well as KQL; the scope decides.
+    ('sumo logic', '_sourceCategory=lab/aws/cloudtrail\n| count_distinct(arn) as n by ip\n| sort by n'),
+    ('kql', 'AWSCloudTrail\n| where ErrorCode != ""\n| sort by TimeGenerated asc'),
+    # A Terraform monitor that embeds a Sumo Logic query is Terraform.
+    ('hcl', 'resource "sumologic_monitor" "m" {\n  query = <<-EOT\n    _sourceCategory=x\n    | json "a"\n  EOT\n}'),
+    # A Sentinel analytics rule is YAML, though its query field is KQL.
+    ('yaml', 'id: 1b2c3d4e-0000-4000-8000-000000000000\nname: Denied burst\nquery: |\n  AWSCloudTrail\n  | summarize n = count() by SourceIpAddress\n  | where n >= 5'),
+    # A test report opening on a log level is output, not YAML.
+    ('text', 'INFO: Testing analysis items in .\nLab.CloudTrail.TrailTampering\n    [PASS] backup-svc stops the trail'),
+    # Falco alert output, with a `<NA>` that looks like a shell redirect.
+    ('text', '2026-09-27T18:57:33.415876851+0000: Warning /etc/shadow read (command=cat /etc/shadow) k8s_pod_name=<NA>'),
     ('datadog', 'source:cloudtrail @evt.name:StopLogging'),
     ('text', ' action | ip\n--------+-----------\n Stop   | 192.0.2.1'),
     ('bash', "curl -s localhost:9200/_query -d '{\"query\":\"FROM x | STATS n = COUNT(*)\"}'"),
@@ -256,6 +273,20 @@ def classify(raw: str) -> str:
        re.search(r'[─-╿]', body_text):
         return 'text'
 
+    # Log lines are output too: every line opening with a timestamp, as Falco
+    # prints its alerts (`2026-09-27T18:57:33...+0000: Warning ...` or
+    # `10:09:03.000000000: Critical ...`). A `<NA>` in one would otherwise
+    # land it on bash at the bottom of this function.
+    if all(re.match(r'\s*(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|\d{2}:\d{2}:\d{2}[.,:])', ln)
+           for ln in body if ln.strip()):
+        return 'text'
+    # A tool's report that opens on a log level (`INFO: Testing analysis items`,
+    # as panther_analysis_tool prints) is output. The YAML rule below would
+    # otherwise read the level as a mapping key; a YAML file never opens on an
+    # all-capitals key like these.
+    if re.match(r'(INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL|FATAL):\s', first):
+        return 'text'
+
     # --- languages with a distinctive keyword ------------------------------
     if re.search(r'^\s*package\s+[\w.]+\s*$', body_text, re.M) or \
        re.search(r'\b(deny|allow|violation)\s+contains\b', body_text) or \
@@ -283,7 +314,18 @@ def classify(raw: str) -> str:
     # command the reader runs, even though it carries SPL.
     verb = first.split()[0].rstrip(':') if first.split() else ''
     is_shell = verb in SHELL_CMDS or first.startswith(('$ ', './', '#!/'))
-    if not is_shell and (lang := _detection_language(first, body_text)):
+    # A Terraform resource that embeds a detection query (a monitor or a rule)
+    # is still Terraform. Its header decides, before the query inside it can.
+    if re.match(r'(resource|provider|variable|module|output|data)\s+"', first) or \
+       re.match(r'terraform\s*\{', first):
+        return 'hcl'
+    # A rule file that opens on a YAML key (`id:`, `title:`, `- rule:`) is YAML
+    # even when a field inside it holds a query: a Sentinel analytics rule's
+    # `query: |` carries KQL pipes that would otherwise claim the whole block.
+    # No query language here opens with `key: value`; Datadog's `source:x`
+    # has no space after the colon, so it is not caught.
+    yaml_first = bool(re.match(r'[\w.$-]+:(\s|$)', first)) or first.startswith('- ')
+    if not is_shell and not yaml_first and (lang := _detection_language(first, body_text)):
         return lang
 
     # SQL needs FROM as well as the leading verb. Without it, `with:` in a
