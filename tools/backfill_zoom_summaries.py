@@ -67,7 +67,7 @@ TAG_RULES: list[tuple[str, list[str]]] = [
     ("AI", ["ai", "llm", "genai", "openai", "claude", "chatgpt", "gemini", "copilot", "mythos", "generative ai"]),
     ("Supply Chain", ["supply chain", "dependency", "npm", "pypi", "dependabot", "package", "trivy", "chainguard", "maintainer"]),
     ("Vulnerabilities", ["vulnerability", "vulnerabilities", "cve", "zero-day", "zero day", "exploit", "exploited", "exploitation", "rce", "xss", "injection", "patch", "patching"]),
-    ("Conferences", ["rsa", "rsac", "black hat", "def con", "defcon", "sector", "keynote", "conference"]),
+    ("Conferences", ["rsa", "rsac", "black hat", "def con", "defcon", "keynote", "conference"]),
     ("Governance", ["policy as code", "compliance", "grc", "fedramp", "audit", "auditor", "sbom", "policy", "governance"]),
     ("Guest Speaker", ["presented", "presentation", "talk on", "guest speaker", "spoke on", "demo"]),
     ("Passwords", ["password", "1password", "mfa", "multi-factor", "multifactor", "authentication"]),
@@ -219,6 +219,9 @@ TAG_CASES: list[tuple[str, str, str, bool]] = [
     ("'universal' is not RSA", "A universal logging schema", "Conferences", False),
     ("'adversarial' is not RSA", "Adversarial testing of detection rules", "Conferences", False),
     ("'anniversary' is not RSA", "The community's second anniversary", "Conferences", False),
+    # A whole word in the wrong sense. "sector" was a keyword for SecTor, and
+    # matched only "tech sector" and "cybersecurity sector" in 114 recaps.
+    ("'tech sector' is not SecTor", "Layoffs across the tech sector", "Conferences", False),
     ("'said' is not AI", "Shawn said the audit went well", "AI", False),
     ("'training' is not AI", "Security awareness training for staff", "AI", False),
     ("'email' is not AI", "Phishing email reporting", "AI", False),
