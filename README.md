@@ -523,16 +523,16 @@ All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniqu
 | Incident | Year | Provider | Key Techniques |
 |---|---|---|---|
 | [Mitnick / Novell](https://csoh.org/breaches/mitnick-novell.html) | 1994 | On-Prem | War dialing, pretexting, voicemail trap, watched honeypot |
-| [event-stream / npm](https://csoh.org/breaches/event-stream-npm.html) | 2018 | npm | T1656, T1195.002, T1195.001, T1027 |
+| [event-stream / npm](https://csoh.org/breaches/event-stream-npm.html) | 2018 | npm | T1684.001, T1195.002, T1195.001, T1027 |
 | [Capital One](https://csoh.org/breaches/capital-one.html) | 2019 | AWS | T1190, T1552.005, T1619, T1530 |
 | [SolarWinds](https://csoh.org/breaches/solarwinds.html) | 2020 | Azure AD / AWS | T1195.002, T1071.004, T1606.002, T1114.002 |
-| [ChaosDB / Cosmos DB](https://csoh.org/breaches/chaosdb-cosmos.html) | 2021 | Azure Cosmos DB | T1580, T1562.007, T1552 |
+| [ChaosDB / Cosmos DB](https://csoh.org/breaches/chaosdb-cosmos.html) | 2021 | Azure Cosmos DB | T1580, T1686.001, T1552 |
 | [Codecov Bash Uploader](https://csoh.org/breaches/codecov-bash-uploader.html) | 2021 | CI / Docker | T1552.001, T1078.004, T1195.002, T1552.007 |
-| [Kaseya VSA / REvil](https://csoh.org/breaches/kaseya-vsa-revil.html) | 2021 | MSP / RMM | T1190, T1072, T1562.001, T1486 |
+| [Kaseya VSA / REvil](https://csoh.org/breaches/kaseya-vsa-revil.html) | 2021 | MSP / RMM | T1190, T1072, T1685, T1486 |
 | [Log4Shell](https://csoh.org/breaches/log4shell.html) | 2021 | Cross-cloud (OSS) | T1190, T1059, T1195.001, T1595.002 |
 | [Uber](https://csoh.org/breaches/uber.html) | 2022 | AWS / GCP | T1078, T1621, T1552.001, T1078.004 |
 | [LastPass](https://csoh.org/breaches/lastpass.html) | 2022-2023 | LastPass / AWS S3 | T1195.002, T1203, T1555, T1530 |
-| [0ktapus / Twilio](https://csoh.org/breaches/0ktapus-twilio.html) | 2022 | Okta / SaaS | T1566.003, T1656, T1111, T1199 |
+| [0ktapus / Twilio](https://csoh.org/breaches/0ktapus-twilio.html) | 2022 | Okta / SaaS | T1566.003, T1684.001, T1111, T1199 |
 | [Okta / LAPSUS$](https://csoh.org/breaches/okta-lapsus-sitel.html) | 2022 | Okta | T1199, T1078, T1213 |
 | [Storm-0558](https://csoh.org/breaches/storm-0558.html) | 2023 | Azure | T1078, T1552, T1606.001, T1114.002 |
 | [Microsoft SAS Leak](https://csoh.org/breaches/microsoft-sas-leak.html) | 2023 | Azure | T1552.004, T1530 |
@@ -547,7 +547,7 @@ All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniqu
 | [Midnight Blizzard / Microsoft](https://csoh.org/breaches/midnight-blizzard-microsoft.html) | 2024 | Azure / Entra ID | T1110.003, T1090.002, T1114.002, T1552.001 |
 | [Polyfill.io](https://csoh.org/breaches/polyfill-io.html) | 2024 | CDN / supply chain | T1583.001, T1059.007, T1195.002, T1497 |
 | [Ultralytics / PyPI](https://csoh.org/breaches/ultralytics-cache-poisoning.html) | 2024 | PyPI / GitHub Actions | T1059.004, T1190, T1195.001, T1195.002 |
-| [XZ Utils Backdoor](https://csoh.org/breaches/xz-utils-backdoor.html) | 2024 | OSS / Linux | T1585, T1587.001, T1656, T1195.001 |
+| [XZ Utils Backdoor](https://csoh.org/breaches/xz-utils-backdoor.html) | 2024 | OSS / Linux | T1585, T1587.001, T1684.001, T1195.001 |
 | [Codefinger / S3](https://csoh.org/breaches/codefinger-s3.html) | 2025 | AWS S3 | T1552, T1078.004, T1486, T1657 |
 | [tj-actions/changed-files](https://csoh.org/breaches/tj-actions-changed-files.html) | 2025 | GitHub Actions | T1195.001, T1552.001, T1078 |
 | [Salesloft Drift / UNC6395](https://csoh.org/breaches/salesloft-drift-unc6395.html) | 2025 | Salesforce / SaaS | T1528, T1078.004, T1213, T1530 |
@@ -558,7 +558,7 @@ All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniqu
 | [Oracle EBS / Cl0p](https://csoh.org/breaches/oracle-ebs-cl0p.html) | 2025 | Oracle EBS | T1588.006, T1190, T1059, T1213 |
 | [Shai-Hulud npm Worm](https://csoh.org/breaches/shai-hulud-npm-worm.html) | 2025 | npm | T1566.002, T1111, T1195.002, T1059.007 |
 | [SharePoint ToolShell](https://csoh.org/breaches/sharepoint-toolshell.html) | 2025 | SharePoint / on-prem | T1190, T1505.003, T1552.004, T1606 |
-| [UNC6040 / Salesforce Vishing](https://csoh.org/breaches/unc6040-salesforce-vishing.html) | 2025 | Salesforce / SaaS | T1566.004, T1656, T1204.001, T1528 |
+| [UNC6040 / Salesforce Vishing](https://csoh.org/breaches/unc6040-salesforce-vishing.html) | 2025 | Salesforce / SaaS | T1566.004, T1684.001, T1204.001, T1528 |
 | [Storm-2949 / Entra ID SSPR](https://csoh.org/breaches/storm-2949-entra-sspr.html) | 2026 | Azure / Entra ID | T1621, T1098.005, T1556.006, T1530 |
 | [Mini Shai-Hulud / TanStack npm](https://csoh.org/breaches/mini-shai-hulud-tanstack.html) | 2026 | npm / GitHub Actions | T1195.002, T1552.001, T1550.001, T1567.001 |
 | [Suspected AI-Assisted AWS Compromise](https://csoh.org/breaches/ai-assisted-aws-72-hours.html) | 2026 | AWS | T1078.004, T1580, T1619, T1648 |
