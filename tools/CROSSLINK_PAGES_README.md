@@ -42,7 +42,7 @@ Keep both lists complete. A page in neither is silently never visited - no error
   - `<title>`/`<head>` and `<button>` text
   - `.code-block` and `.tag-example` class blocks (example snippets)
   - HTML comments, attribute values, JSON-LD schema blocks
-- **DENYLIST** filters single-word terms that overlap with ordinary English (`public`, `data`, `cloud`, `agent`, etc.) plus single-word remnants accidentally extracted from compound entries like `Blue / Red Team`. If a generic word starts auto-linking somewhere unhelpful, add it to the `DENYLIST` set near the top of the script.
+- **DENYLIST** (`PAGE_DENYLIST` from `glossary_terms.py`) filters keys that overlap with ordinary English: single words (`public`, `data`, `cloud`, `agent`, etc.), remnants extracted from compound entries like `Blue / Red Team`, and headword fragments that read as everyday phrases (`in use`, `service provider`). Before denying a fragment, read how its live links use it: `in transit` comes from the same headword as `in use`, but every link to it is about data in transit, so it stays linkable. If a generic word starts auto-linking somewhere unhelpful, add it to `PAGE_EXTRA_DENYLIST` (page prose only) or `BASE_DENYLIST` (both linkers) in `glossary_terms.py`.
 
 ## When to run it
 

@@ -16,8 +16,9 @@ from __future__ import annotations
 import re
 from html import unescape
 
-# Single-word keys that overlap with ordinary English often enough that linking
-# them is noise. This is the baseline both tools share.
+# Keys that overlap with ordinary English often enough that linking them is
+# noise. This is the baseline both tools share: mostly single words, plus the
+# headword fragments at the end.
 BASE_DENYLIST = {
     "public",
     "private",
@@ -40,6 +41,16 @@ BASE_DENYLIST = {
     # different standard. The full designations are keys in their own right and
     # match longest-first, so "ISO/IEC 42001" still links correctly.
     "iso",
+    # Headword fragments that are everyday phrases on their own. A spaced slash
+    # or a parenthesis splits a headword into separate keys, so "Encryption at
+    # Rest / In Transit / In Use" indexes "In Use", which linked "still in use"
+    # and "apps in use" to the encryption entry on every page where it came
+    # first. "Confused-Deputy (in agents)" indexes its qualifier the same way.
+    # "in transit", from the same headword, is deliberately NOT here: its live
+    # links read "encrypt data in transit" or "modified in transit", which is
+    # the entry's meaning. Check how a fragment's links read before denying it.
+    "in use",
+    "in agents",
 }
 
 # crosslink_pages.py runs over page prose rather than terse glossary
@@ -60,6 +71,14 @@ PAGE_EXTRA_DENYLIST = {
     # them. The long form "Common Platform Enumeration" is a key in its own
     # right and is unambiguous, so the entry is still reachable from page prose.
     "cpe",
+    # Phrases whose everyday sense in page prose outnumbers the glossary's.
+    # "service provider" is SAML's SP, but pages say "PCI Level 1 service
+    # provider" and "managed service provider", and every page link it produced
+    # meant one of those. "cloud foundation" is a landing-zone synonym, but the
+    # career pages use it for foundational cloud knowledge ("the cloud
+    # foundation cert"). Inside a glossary definition both would carry their
+    # defined sense, so crosslink_glossary.py still links them.
+    "service provider", "cloud foundation",
 }
 
 PAGE_DENYLIST = BASE_DENYLIST | PAGE_EXTRA_DENYLIST
