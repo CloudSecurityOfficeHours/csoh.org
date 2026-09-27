@@ -146,7 +146,7 @@ csoh.org/
 ├── cloud-security-interview-questions.html # Interview questions with model answers
 ├── cloud-security-resume-guide.html # Resume structure and phrasing
 ├── cloud-security-home-lab.html     # Free-tier setups, budget guardrails, kill-switches
-├── cloud-security-how-to.html       # Hub for 7 language how-to guides (in `howto/`)
+├── cloud-security-how-to.html       # Hub for 16 how-to guides (in `howto/`)
 ├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
 ├── cloud-security-portfolio-projects.html # Hub for 7 portfolio walkthroughs (in `portfolio/`)
 ├── mentorship.html                  # Community mentorship program
@@ -211,8 +211,9 @@ csoh.org/
 ├── meetings/                        # 114 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (not search-indexed)
-├── howto/                           # 7 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
-│                                    #   CEL, Sigma/YARA, IAM+Cedar (search-indexed, cross-linked)
+├── howto/                           # 16 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
+│                                    #   CEL, Sigma/YARA, IAM+Cedar, and the SIEM detection languages
+│                                    #   (SPL, KQL, ES|QL/EQL, SQL, ...) (search-indexed, cross-linked)
 │
 │  ── Shared assets ──
 ├── style.css                        # All site styles (includes dark mode)

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Learn Splunk's SPL from zero on CloudTrail data in local Docker: fields, stats, where, bin, transaction, and a scheduled alert you test both ways.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="splunk spl tutorial, splunk search processing language, splunk docker lab, splunk stats where, splunk bin span, splunk transaction maxspan, splunk spath json, splunk scheduled alert savedsearches.conf, splunk security_content, cloudtrail detection splunk">
+    <title>Splunk SPL: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/splunk-spl.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/splunk-spl.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/splunk-spl.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Splunk SPL, hands-on - CSOH">
+    <meta property="og:description" content="Learn Splunk's SPL from zero on CloudTrail data in local Docker: fields, stats, where, bin, transaction, and a scheduled alert you test both ways.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="splunk">
+    <meta property="article:tag" content="spl">
+    <meta property="article:tag" content="cloudtrail">
+    <meta property="article:tag" content="detection engineering">
+    <meta property="article:tag" content="alerts">
+    <meta property="article:tag" content="siem">
+    <meta property="og:url" content="https://csoh.org/howto/splunk-spl.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/splunk-spl.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Splunk SPL, hands-on">
+    <meta name="twitter:description" content="Learn Splunk's SPL from zero on CloudTrail data in local Docker: fields, stats, where, bin, transaction, and a scheduled alert you test both ways.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/splunk-spl.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=60c4edd0" integrity="sha384-pD4ibj4YLJX3FZD7hEpxbiqvf30amQOxGqTS1HWzuBvM1OS7PbM1FvWamsfg0IgH"></script>
+    <link rel="preload" href="/style.css?v=9da1e156" as="style"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+    <link rel="stylesheet" href="/style.css?v=9da1e156"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Splunk SPL, hands-on",
+      "description": "Learn Splunk's SPL from zero on CloudTrail data in local Docker: fields, stats, where, bin, transaction, and a scheduled alert you test both ways.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-09-27",
+      "dateModified": "2026-09-27",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Start Splunk Enterprise in Docker",
+          "text": "Run the splunk/splunk image with a throwaway admin password, wait for it to report healthy, and save a helper that runs a search from the terminal."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Load the lab data and check it",
+          "text": "Create an index and a source type that reads each event's time from eventTime, load the file with oneshot, then confirm 24 events arrived with their own times."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Filter and pick columns",
+          "text": "Find trail tampering with a base search and table, and see why leaving out the index or mis-casing a field name returns nothing."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Use nested JSON fields",
+          "text": "Find console logins without MFA, requiring success as well, and learn where, quoted dotted names and spath."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Count, threshold and run the control",
+          "text": "Count denied calls per address, see the naive rule return nothing, list the error codes that exist, then count every denial code and bucket them with bin."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Correlate two events in a window",
+          "text": "Use transaction with maxspan to find a user given an access key within 10 minutes, and see what the window leaves out."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Schedule an alert",
+          "text": "Write the denied-call burst as a savedsearches.conf stanza, install it as a small app and restart Splunk."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Test the alert both ways",
+          "text": "Run the alert over a quiet window and over the attack window with trigger_actions, then count the firings."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
+          "name": "Read Splunk's public rule format",
+          "text": "Read a security_content YAML rule, its ATT&CK IDs and test, and show that it returns nothing on raw CloudTrail because it expects the Splunk Add-on for AWS."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Splunk SPL, hands-on",
+          "item": "https://csoh.org/howto/splunk-spl.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../human-risk.html">Human Risk</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Splunk SPL</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Splunk SPL, hands-on</h1>
+        <p>Splunk's Search Processing Language (<a class="glossary-link" href="../glossary.html#term-detection-query-languages">SPL</a>) chooses events, then pipes them through commands that count, filter and reshape. Learn it from zero on a local Splunk Enterprise with a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, and learn to spot the search that returns nothing because it cannot work.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker with about 3 GB of memory and 3 GB of disk to spare, and a terminal. No Splunk account and no cloud account.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> every command and search was run as printed, in order, against Splunk Enterprise 10.4.3 in Docker (image <code>splunk/splunk:10.4.3</code>, under Rosetta emulation on an Apple silicon Mac), by a script that copies each block from this page and compares the results with the output shown here. The public rule in step 9 was read from Splunk's repository and built with Splunk's own tool, contentctl-ng 1.1.1. Not run: Splunk Cloud Platform, Splunk Enterprise Security, the Splunk Add-on for AWS, and the Splunk Free licence.</p>
+        </div>
+
+        <section id="intro">
+            <h2>The language of Splunk searches</h2>
+            <p>SPL is how you ask questions of data in Splunk Enterprise, which you run yourself, and Splunk Cloud Platform, Splunk's hosted service. Splunk Enterprise Security, Splunk's <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) app, runs its detections as SPL searches too. Analysts in a security operations centre (SOC) type SPL to investigate; detection engineers save searches that run on a schedule and raise alerts.</p>
+            <p>The distinction that matters: Splunk keeps each event's raw text and works out fields when you search. A <strong>source type</strong> tells Splunk how to split the text into events, where each event's time is, and how to find the fields. When it is wrong, every search is quietly wrong, so this page checks the load before anything else.</p>
+            <p>Splunk also publishes <a href="https://help.splunk.com/en/splunk-enterprise/search/spl2-overview/what-is-new-and-different-in-spl2-" target="_blank" rel="noopener noreferrer">SPL2</a>, a newer version of the language, and the search bar in Splunk Enterprise 10.4 offers to convert a search to it. Saved searches, alerts and Splunk's public detection library, all used on this page, are SPL.</p>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">A search is a pipeline</a></li>
+                <li><a href="#walkthrough">Walk-through: one leaked key, five detections</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>A search is a pipeline</h2>
+            <p>The part before the first pipe character, <code>|</code>, is the <strong>base search</strong>: it chooses events. <code>index=</code> says where to look, and every term after it must match (AND is implied; write <code>OR</code> and <code>NOT</code> in capitals). <code>field=value</code> matches one field. After that, each <code>|</code> hands the results so far to one command, which reshapes them and passes them on. Once step 2 has loaded the lab, try:</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail readOnly=false
+| stats count BY userIdentity.userName</pre></div>
+<div class="code-block" data-lang="text"><pre>userIdentity.userName count
+--------------------- -----
+alice                     2
+backup-svc                1
+build-bot                 3</pre></div>
+            <p>Read it left to right: the base search keeps the six events that changed something (<code>readOnly=false</code>), and <code>stats</code> turns them into one row per identity. A command sees only what the command before it produced, so every prefix of a search is a search you can run. To debug one, delete commands from the end until the output stops surprising you.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through: one leaked key, five detections</h2>
+
+            <h3>1. Start Splunk Enterprise in Docker</h3>
+            <p>Splunk publishes Splunk Enterprise as the <a href="https://hub.docker.com/r/splunk/splunk" target="_blank" rel="noopener noreferrer"><code>splunk/splunk</code> image</a>, for x86-64 processors only. On an Apple silicon Mac, Docker Desktop runs it under Rosetta emulation when that option is on in its settings; this page was checked that way, and the container took about two minutes to start and one to restart. The two <code>SPLUNK_</code> settings accept the licence and the <a href="https://www.splunk.com/en_us/legal/splunk-general-terms.html" target="_blank" rel="noopener noreferrer">Splunk General Terms</a> for you, so read them first. The first line creates a throwaway admin password for this container only.</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/splunk-lab &amp;&amp; cd ~/splunk-lab
+openssl rand -hex 12 &gt; .splunk-password
+docker run -d --name splunk-lab --platform linux/amd64 \
+  -p 8000:8000 -p 8089:8089 \
+  -e SPLUNK_START_ARGS=--accept-license \
+  -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
+  -e SPLUNK_PASSWORD="$(cat .splunk-password)" \
+  splunk/splunk:10.4.3
+until [ "$(docker inspect -f '{{.State.Health.Status}}' splunk-lab)" = healthy ]; do sleep 10; done</pre></div>
+            <p>Port 8000 is Splunk Web, the browser interface. Port 8089 is the management port, where the command-line interface (CLI) and the REST API (Splunk's HTTP application programming interface) reach Splunk. A new install runs on a 60-day Enterprise Trial licence: 500 MB of new data a day, alerting included, which step 7 needs. Now save a helper that runs one search from the terminal and prints exactly the output shown on this page:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; spl &lt;&lt;'EOF'
+#!/bin/sh
+# spl: run the search on standard input against the lab. Drop only the CLI's
+# certificate notice; keep errors, so a broken search never looks like an empty one.
+docker exec -u splunk splunk-lab /opt/splunk/bin/splunk search "$(cat)" \
+  -auth "admin:$(cat ~/splunk-lab/.splunk-password)" 2&gt;&amp;1 |
+  grep -v '^WARNING: Server Certificate Hostname Validation is disabled'
+EOF
+chmod +x spl</pre></div>
+            <p>To run a search, type <code>./spl</code>, paste the search, press Enter, then Ctrl-D. Or use Splunk Web: open <code>http://localhost:8000</code>, sign in as <code>admin</code> with the password in <code>.splunk-password</code>, choose <strong>Search &amp; Reporting</strong>, set the time range picker to <strong>All time</strong> (it starts at Last 24 hours, which shows none of the lab), and paste the search. Splunk Web shows the same rows as a table, in UTC (Coordinated Universal Time), the container's time zone. The first sign-in also tells you that sharing of product usage data with Splunk is on: to stop it, open <strong>Settings &gt; Instrumentation</strong>, click the gear next to <strong>Usage Data</strong> and switch Usage Data off (licence and software version data have no switch).</p>
+
+            <h3>2. Load the lab data, then check what arrived</h3>
+            <p>The lab is 24 Amazon Web Services (AWS) CloudTrail events from one morning, trimmed to the fields this page uses but keeping CloudTrail's real field names and nesting. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user, has leaked. From <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) instances and <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> secrets (and is mostly refused), lists the <a class="glossary-link" href="../glossary.html#term-s3">Simple Storage Service</a> (S3) buckets, then creates a user <code>backup-svc</code>, attaches <code>AdministratorAccess</code> to it, gives it an access key and uses it to stop CloudTrail logging. Around that runs an ordinary morning: sign-ins, one of them without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) and one failed; an administrator creating a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a>; an application refused the same S3 object three times; a CI role describing instances. The page builds five detections from it:</p>
+            <ul>
+                <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
+                <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
+                <li><strong>D3, new user given a key:</strong> a user created and handed an access key within 10 minutes.</li>
+                <li><strong>D4, console login without MFA:</strong> a successful console sign-in without multi-factor authentication.</li>
+                <li><strong>D5, administrator policy attached:</strong> <code>AdministratorAccess</code> attached to a user.</li>
+            </ul>
+<div class="code-block" data-lang="bash"><pre>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
+{"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
+{"eventTime":"2026-09-15T09:02:40Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"readOnly":false}
+{"eventTime":"2026-09-15T09:03:05Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"readOnly":true}
+{"eventTime":"2026-09-15T09:10:22Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T09:15:47Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.21","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob","userName":"bob"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:20:03Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.77","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"errorMessage":"Failed authentication","responseElements":{"ConsoleLogin":"Failure"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:31:10Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T09:47:55Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:01:30Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:05Z","eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:31Z","eventSource":"iam.amazonaws.com","eventName":"ListUsers","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:38Z","eventSource":"iam.amazonaws.com","eventName":"ListRoles","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:52Z","eventSource":"iam.amazonaws.com","eventName":"GetAccountAuthorizationDetails","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:05Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:09Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeVpcs","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:14Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeSecurityGroups","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:22Z","eventSource":"secretsmanager.amazonaws.com","eventName":"ListSecrets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:06:12Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:30Z","eventSource":"iam.amazonaws.com","eventName":"AttachUserPolicy","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc","policyArn":"arn:aws:iam::aws:policy/AdministratorAccess"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:51Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"responseElements":{"accessKey":{"userName":"backup-svc","accessKeyId":"AKIAIOSFODNN7EXAMPLE","status":"Active"}},"readOnly":false}
+{"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+{"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
+EOF
+shasum -a 256 cloudtrail-lab.jsonl</pre></div>
+            <p>The hash must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the file changed on the way. Now create an index (a named store of events) and the source type, and load the file once with <code>oneshot</code>:</p>
+<div class="code-block" data-lang="bash"><pre>PW=$(cat .splunk-password)
+curl -sk -u "admin:$PW" -o /dev/null -w '%{http_code}\n' https://localhost:8089/services/data/indexes -d name=cloudtrail
+curl -sk -u "admin:$PW" -o /dev/null -w '%{http_code}\n' https://localhost:8089/servicesNS/nobody/search/configs/conf-props \
+  -d name=lab:cloudtrail -d SHOULD_LINEMERGE=false -d KV_MODE=json \
+  --data-urlencode 'TIME_PREFIX="eventTime":"' --data-urlencode 'TIME_FORMAT=%Y-%m-%dT%H:%M:%S%Z'
+docker cp cloudtrail-lab.jsonl splunk-lab:/tmp/cloudtrail-lab.jsonl
+docker exec -u splunk splunk-lab /opt/splunk/bin/splunk add oneshot /tmp/cloudtrail-lab.jsonl -index cloudtrail -sourcetype lab:cloudtrail -auth "admin:$PW"</pre></div>
+<div class="code-block" data-lang="text"><pre>201
+201
+WARNING: Server Certificate Hostname Validation is disabled. Please see server.conf/[sslConfig]/cliVerifyServerName for details.
+Oneshot '/tmp/cloudtrail-lab.jsonl' added</pre></div>
+            <p><code>201</code> means created. <code>-k</code> lets <code>curl</code> accept the container's self-signed certificate, which is reasonable only because it is your own machine. <code>SHOULD_LINEMERGE=false</code> makes each line one event; <code>TIME_PREFIX</code> and <code>TIME_FORMAT</code> take each event's time from its <code>eventTime</code>, where <code>%Z</code> reads the trailing <code>Z</code> as UTC; <code>KV_MODE=json</code> extracts the JSON (JavaScript Object Notation) fields when you search, naming nested ones with dots, as in <code>userIdentity.userName</code>. The first three act while data arrives, so they must exist before the load. Created through the API they apply at once; typed into a <code>props.conf</code> file they would wait for a restart. Give Splunk a few seconds, then check that 24 events arrived, each with its own time rather than the time you loaded it:</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail
+| eval own_time=if(_time == strptime(eventTime, "%Y-%m-%dT%H:%M:%S%Z"), "yes", "no")
+| stats count BY sourcetype own_time</pre></div>
+<div class="code-block" data-lang="text"><pre>  sourcetype   own_time count
+-------------- -------- -----
+lab:cloudtrail yes         24</pre></div>
+            <p><code>_time</code> is the time Splunk gave the event. <code>eval</code> computes a new field for every event, here with <code>if(test, then, else)</code>, and <code>strptime</code> turns the <code>eventTime</code> text into the same kind of number as <code>_time</code>. A <code>no</code>, or any count but 24, means the load went wrong.</p>
+            <div class="highlight-box">
+            <p><strong>A load can report success and still be wrong.</strong> Point the oneshot at an index that does not exist and it still prints <code>Oneshot ... added</code>, while Splunk drops all 24 events and says so only in its own log. Swap <code>%H</code> and <code>%M</code> in <code>TIME_FORMAT</code> and 19 events get wrong times while 5 look right, because Splunk falls back to guessing where the format fails. Only a per-event check like the one above catches both.</p>
+            </div>
+
+            <h3>3. Filter and pick columns: trail tampering (D1)</h3>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName IN (StopLogging, DeleteTrail, UpdateTrail, PutEventSelectors)
+| table _time eventName userIdentity.userName sourceIPAddress</pre></div>
+<div class="code-block" data-lang="text"><pre>           _time             eventName  userIdentity.userName sourceIPAddress
+--------------------------- ----------- --------------------- ---------------
+2026-09-15 10:09:03.000 GMT StopLogging backup-svc            203.0.113.50</pre></div>
+            <p><code>IN</code> matches any value in the list, and <code>table</code> shows the fields you name, in that order. One event: <code>backup-svc</code> stopped the trail from <code>203.0.113.50</code>. The other 23 events are the negative case, and none appears. Two traps already live in this search. Leave out <code>index=cloudtrail</code> and it returns nothing, because Splunk then searches only your role's default indexes (<code>main</code> and <code>os</code> for this admin). And field names are case-sensitive while values in the base search are not: <code>eventname=StopLogging</code> finds nothing, <code>eventName=stoplogging</code> finds the event.</p>
+
+            <h3>4. Nested fields, and where versus the base search: logins without MFA (D4)</h3>
+            <p>The obvious first draft looks only at the MFA flag:</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No
+| table _time userIdentity.userName sourceIPAddress responseElements.ConsoleLogin
+| sort _time</pre></div>
+<div class="code-block" data-lang="text"><pre>           _time            userIdentity.userName sourceIPAddress responseElements.ConsoleLogin
+--------------------------- --------------------- --------------- -----------------------------
+2026-09-15 09:15:47.000 GMT bob                   198.51.100.21   Success
+2026-09-15 09:20:03.000 GMT alice                 192.0.2.77      Failure</pre></div>
+            <p>The second row is someone failing to sign in as alice, and a failed sign-in carries <code>MFAUsed</code> <code>No</code> too. AWS's own Security Hub control for sign-in without MFA, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">[CloudWatch.3]</a>, requires success as well, and so must D4 (<code>sort _time</code> just puts rows in time order):</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No responseElements.ConsoleLogin=Success
+| table _time userIdentity.userName sourceIPAddress</pre></div>
+<div class="code-block" data-lang="text"><pre>           _time            userIdentity.userName sourceIPAddress
+--------------------------- --------------------- ---------------
+2026-09-15 09:15:47.000 GMT bob                   198.51.100.21</pre></div>
+            <p>You can filter after a pipe too, with <code>where</code>, but it follows different rules. <code>where</code> compares case-sensitively, and a field name containing dots must go in single quotes: <code>| where 'additionalEventData.MFAUsed'="No"</code>. Without the quotes, <code>where</code> reads each dot as joining two strings, both empty, and silently matches nothing. Or name the field yourself with <code>spath</code>, which extracts one JSON path on demand: <code>| spath output=mfa path=additionalEventData.MFAUsed | where mfa="No"</code>. You need <code>spath</code> whenever a source type has no automatic extraction, or JSON arrives inside another field.</p>
+
+            <h3>5. Count, then threshold: the burst that never fires (D2)</h3>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail errorCode=AccessDenied
+| stats count BY sourceIPAddress
+| where count &gt;= 5</pre></div>
+            <p>This prints nothing. Delete the last line and you see why: <code>203.0.113.50</code> has 4 and <code>192.0.2.20</code> has 3, so nobody reaches five. Did nothing happen, or can the search not see what happened? Run the control: drop the filter and ask which error codes exist at all.</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail
+| fillnull value="(none)" errorCode
+| stats count BY errorCode</pre></div>
+<div class="code-block" data-lang="text"><pre>         errorCode           count
+---------------------------- -----
+(none)                          14
+AccessDenied                     7
+Client.UnauthorizedOperation     3</pre></div>
+            <p>EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, so three of the attacker's seven refusals were invisible to the rule. The <code>fillnull</code> line matters as well: <code>stats</code> silently leaves out every event that lacks the field after <code>BY</code>, so without it the 14 events with no <code>errorCode</code> would not appear at all. AWS's Security Hub control for unauthorized API calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">[CloudWatch.2]</a>, matches both families: codes starting <code>AccessDenied</code>, such as <code>AccessDeniedException</code>, and codes ending <code>UnauthorizedOperation</code>. List all four:</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation)
+| stats count BY sourceIPAddress
+| where count &gt;= 5 ```the D2 threshold```</pre></div>
+<div class="code-block" data-lang="text"><pre>sourceIPAddress count
+--------------- -----
+203.0.113.50        7</pre></div>
+            <p>Without the <code>where</code> line, <code>192.0.2.20</code> shows 3 and stays under the threshold: the negative case. Text between three backticks is a comment.</p>
+            <div class="highlight-box">
+            <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the search without its threshold, or a count of the values that really exist.</p>
+            </div>
+            <p>To see when the refusals happened, cut time into ten-minute buckets with <code>bin</code>:</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation)
+| bin _time span=10m
+| stats count BY _time sourceIPAddress</pre></div>
+<div class="code-block" data-lang="text"><pre>           _time            sourceIPAddress count
+--------------------------- --------------- -----
+2026-09-15 09:30:00.000 GMT 192.0.2.20          1
+2026-09-15 09:40:00.000 GMT 192.0.2.20          1
+2026-09-15 10:00:00.000 GMT 192.0.2.20          1
+2026-09-15 10:00:00.000 GMT 203.0.113.50        7</pre></div>
+            <p><code>bin</code> rounds each <code>_time</code> down to its bucket, so <code>stats</code> can count per address per ten minutes. The buckets start on the clock (10:00, 10:10), not at the first event, so a burst straddling 10:10 would be split in two and could stay under five in both halves. The scheduled alert in step 7 has the same edge, because each run looks at one fixed ten-minute stretch.</p>
+
+            <h3>6. One user, two events, ten minutes (D3)</h3>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
+| transaction requestParameters.userName startswith=eval(eventName="CreateUser") endswith=eval(eventName="CreateAccessKey") maxspan=10m
+| table _time requestParameters.userName userIdentity.userName sourceIPAddress duration eventcount</pre></div>
+<div class="code-block" data-lang="text"><pre>           _time            requestParameters.userName userIdentity.userName sourceIPAddress duration eventcount
+--------------------------- -------------------------- --------------------- --------------- -------- ----------
+2026-09-15 10:06:12.000 GMT backup-svc                 build-bot             203.0.113.50          39          2</pre></div>
+            <p><code>transaction</code> groups events that share the new user's name (<code>requestParameters.userName</code>, the target, as opposed to <code>userIdentity.userName</code>, the actor), starting at <code>CreateUser</code> and ending at <code>CreateAccessKey</code>, and reports the group's <code>duration</code> in seconds: 39. Now delete <code>maxspan=10m</code> and run it again. <code>svc-reporting</code> appears too, with a duration of 9466 seconds: alice created it at 09:02:40 and keyed it 2 hours 37 minutes later, routine work that the window exists to leave out. Exercise 3 writes the same detection with <code>stats</code>.</p>
+
+            <h3>7. Turn D2 into a scheduled alert</h3>
+            <p>Splunk stores alerts as stanzas in <code>savedsearches.conf</code>: a search, a schedule, a time window and a condition. This one runs every ten minutes over the ten minutes that ended ten minutes ago, leaving time for CloudTrail's delivery delay, and fires when the search returns any row. Save it, install it as a small app, and restart Splunk to load the new app:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; savedsearches.conf &lt;&lt;'EOF'
+# D2, denied-call burst. MITRE ATT&amp;CK v19.2: T1087.004, T1580.
+[d2_denied_call_burst]
+description = Five or more denied AWS API calls from one source address in 10 minutes
+search = index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation) \
+| stats count BY sourceIPAddress \
+| where count &gt;= 5
+enableSched = 1
+cron_schedule = */10 * * * *
+dispatch.earliest_time = -20m@m
+dispatch.latest_time = -10m@m
+counttype = number of events
+relation = greater than
+quantity = 0
+alert.track = 1
+EOF
+docker exec -u splunk splunk-lab mkdir -p /opt/splunk/etc/apps/lab_detections/local
+docker cp savedsearches.conf splunk-lab:/opt/splunk/etc/apps/lab_detections/local/
+docker exec -u splunk splunk-lab /opt/splunk/bin/splunk restart</pre></div>
+            <p><code>counttype</code>, <code>relation</code> and <code>quantity</code> together say "more than 0 results", and <code>alert.track</code> lists each firing under <strong>Activity &gt; Triggered Alerts</strong> in Splunk Web. Plain Splunk Enterprise has no field for <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge) techniques, so the IDs sit in a comment. Alerts need the Enterprise Trial licence the container started on. <a href="https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.4/configure-splunk-licenses/about-splunk-free" target="_blank" rel="noopener noreferrer">Splunk Free</a>, which you can switch to later, still indexes 500 MB a day and runs scheduled searches, but has no alerting and no sign-in at all: anyone who reaches port 8000 is admin.</p>
+
+            <h3>8. Test the alert both ways</h3>
+            <p>The schedule only ever looks at the last half hour, and the lab is older than that, so run the alert over two stretches of the lab morning and let it act (<code>trigger_actions=1</code>). The window is in epoch seconds: 09:30 to 10:00 UTC holds only reports-app's refusals, and 10:00 to 10:10 holds the attack. Splunk did not honour dates written as <code>2026-09-15T10:00:00Z</code> here: the job silently searched all time, so a test written that way passes for the wrong reason.</p>
+<div class="code-block" data-lang="bash"><pre>PW=$(cat .splunk-password)
+URL=https://localhost:8089/servicesNS/nobody/lab_detections/saved/searches/d2_denied_call_burst/dispatch
+curl -sk -u "admin:$PW" -o /dev/null -w '%{http_code}\n' "$URL" -d trigger_actions=1 -d dispatch.earliest_time=1789464600 -d dispatch.latest_time=1789466400
+curl -sk -u "admin:$PW" -o /dev/null -w '%{http_code}\n' "$URL" -d trigger_actions=1 -d dispatch.earliest_time=1789466400 -d dispatch.latest_time=1789467000</pre></div>
+            <p>Each prints <code>201</code>. Wait a few seconds, then count the firings:</p>
+<div class="code-block" data-lang="spl"><pre>| rest /servicesNS/-/-/alerts/fired_alerts splunk_server=local
+| table title triggered_alert_count</pre></div>
+<div class="code-block" data-lang="text"><pre>       title         triggered_alert_count
+-------------------- ---------------------
+-                                        1
+d2_denied_call_burst                     1</pre></div>
+            <p>Two runs, one firing (the <code>-</code> row is the total): the attack window fired, the quiet one did not. <code>| rest</code> reads Splunk's own REST API from inside a search.</p>
+
+            <h3>9. Splunk's public rules: the security_content format</h3>
+            <p>Splunk publishes its detections as YAML files in <a href="https://github.com/splunk/security_content" target="_blank" rel="noopener noreferrer">splunk/security_content</a>, built into an app by its tool contentctl-ng, which writes each one out as a <code>savedsearches.conf</code> stanza like step 7's. This is its D1 rule, trimmed; its ATT&amp;CK ID is already the v19 one:</p>
+<div class="code-block" data-lang="yaml"><pre>name: AWS Defense Evasion Stop Logging Cloudtrail
+id: 8a2f3ca2-4eb5-4389-a549-14063882e537
+version: 12
+status: production
+search: |-
+    `cloudtrail` eventName = StopLogging eventSource = cloudtrail.amazonaws.com userAgent!=console.amazonaws.com errorCode = success
+      | rename user_name as user
+# (trimmed: the search goes on to count by signature, dest, user, src and vendor fields)
+how_to_implement: You must install Splunk AWS Add on and enable Cloudtrail logs in your AWS Environment.
+references:
+    - https://attack.mitre.org/techniques/T1562/008/
+mitre_attack_id:
+    - T1685.002
+# (trimmed: tests, which points at an attack sample the rule must match)</pre></div>
+            <p>The file carries its own metadata and, in <code>tests</code>, an attack sample that the rule must match when loaded into a Splunk instance. Three things to notice. <strong>ATT&amp;CK rot:</strong> <code>mitre_attack_id</code> is T1685.002, and the build copies it into the stanza for Splunk Enterprise Security, but <code>references</code> and the test sample's folder still name T1562.008, the ID that v19 revoked; the name still says Defense Evasion, the tactic v19 split into Stealth and Defense Impairment; and contentctl-ng accepted a planted T1562.008 without complaint. <strong>Field names:</strong> <code>`cloudtrail`</code> is a macro for <code>sourcetype=aws:cloudtrail</code>, and fields such as <code>src</code>, <code>user</code> and <code>signature</code> come from the <a href="https://splunk.github.io/splunk-add-on-for-amazon-web-services/DataTypes/" target="_blank" rel="noopener noreferrer">Splunk Add-on for AWS</a>, which maps CloudTrail onto Splunk's Common Information Model (CIM). <strong>The silent condition:</strong> a successful call has no <code>errorCode</code> at all in raw CloudTrail (the rule's own test event has none), so <code>errorCode = success</code> matches only data the add-on has filled in. Run the rule's base search against the raw lab, with the macro replaced by the lab's index:</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName=StopLogging eventSource=cloudtrail.amazonaws.com userAgent!=console.amazonaws.com errorCode=success
+| stats count</pre></div>
+<div class="code-block" data-lang="text"><pre>count
+-----
+    0</pre></div>
+            <p>Zero, although the lab contains exactly the event it describes; delete <code>errorCode=success</code> and the count is 1. A published rule is only as good as the field names it assumes, so run its control before you trust its silence. For the record, the five detections in ATT&amp;CK v19.2: D1 <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002</a>, D2 <a href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener noreferrer">T1087.004</a> and <a href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener noreferrer">T1580</a>, D3 <a href="https://attack.mitre.org/techniques/T1136/003/" target="_blank" rel="noopener noreferrer">T1136.003</a> and <a href="https://attack.mitre.org/techniques/T1098/001/" target="_blank" rel="noopener noreferrer">T1098.001</a>, D4 <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004</a>, D5 <a href="https://attack.mitre.org/techniques/T1098/003/" target="_blank" rel="noopener noreferrer">T1098.003</a>.</p>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>Write D5: every time the <code>AdministratorAccess</code> managed policy was attached to a user, showing who attached it, to whom, and from where.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName=AttachUserPolicy requestParameters.policyArn="arn:aws:iam::aws:policy/AdministratorAccess"
+| table _time userIdentity.userName requestParameters.userName sourceIPAddress</pre></div>
+<div class="code-block" data-lang="text"><pre>           _time            userIdentity.userName requestParameters.userName sourceIPAddress
+--------------------------- --------------------- -------------------------- ---------------
+2026-09-15 10:06:30.000 GMT build-bot             backup-svc                 203.0.113.50</pre></div>
+                    <p>Two fields are called <code>userName</code>: <code>userIdentity.userName</code> is who acted, <code>requestParameters.userName</code> who was acted on. The quotes around the policy ARN (Amazon Resource Name) keep its colons and slash as one value. For real coverage, add <code>AttachRolePolicy</code>, <code>AttachGroupPolicy</code> and <code>PutUserPolicy</code>, which grant the same power by other routes.</p>
+                </details>
+            </div>
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>This search returns nothing. Find both faults, and say how you would prove each one rather than guess.</p>
+<div class="code-block" data-lang="spl"><pre>eventName=StopLogging
+| where userIdentity.userName="backup-svc"
+| table _time eventName userIdentity.userName</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>First, no index: Splunk searched only the default indexes. Second, the unquoted dotted name in <code>where</code>, which joins two empty strings. Fixing either one alone still returns nothing, which is why guessing fails here. Prove it by deleting from the end: <code>eventName=StopLogging</code> alone returns nothing (the index), <code>index=cloudtrail eventName=StopLogging</code> returns the event (so the <code>where</code> is at fault).</p>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName=StopLogging
+| where 'userIdentity.userName'="backup-svc"
+| table _time eventName userIdentity.userName</pre></div>
+                    <p>That returns the <code>StopLogging</code> event from step 3.</p>
+                </details>
+            </div>
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>Write D3 without <code>transaction</code>, using <code>stats</code>, so that <code>svc-reporting</code> stays out. Then say what each condition protects against.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
+| stats earliest(eventName) AS first_step dc(eventName) AS steps range(_time) AS gap BY requestParameters.userName
+| where steps=2 AND first_step="CreateUser" AND gap&lt;=600</pre></div>
+<div class="code-block" data-lang="text"><pre>requestParameters.userName first_step steps gap
+-------------------------- ---------- ----- ---
+backup-svc                 CreateUser     2  39</pre></div>
+                    <p><code>dc</code> counts distinct values, so <code>steps=2</code> needs both events; <code>earliest</code> gives the first event's name, so the user must be created before the key; <code>range(_time)</code> is last minus first, in seconds, and <code>gap&lt;=600</code> is the ten-minute window. Delete the <code>where</code> line and <code>svc-reporting</code> appears with a gap of 9466. <code>stats</code> keeps one row per user instead of whole groups of events, which is usually lighter on a large index.</p>
+                </details>
+            </div>
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>Find the source addresses used by more than one identity. Then explain why counting <code>userIdentity.userName</code> instead reports 0 identities for two of the addresses.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="spl"><pre>index=cloudtrail
+| stats dc(userIdentity.arn) AS identities values(userIdentity.userName) AS users BY sourceIPAddress
+| eval users=mvjoin(users, ", ")
+| where identities &gt; 1</pre></div>
+<div class="code-block" data-lang="text"><pre>sourceIPAddress identities         users
+--------------- ---------- ---------------------
+203.0.113.50             2 backup-svc, build-bot</pre></div>
+                    <p>The leaked key and the user it created, from one address. <code>values</code> collects distinct values into one multivalue field and <code>mvjoin</code> prints them on one line. Roles have no <code>userName</code>, so <code>dc(userIdentity.userName)</code> gives 0 for <code>192.0.2.10</code> (ci-deploy) and <code>192.0.2.20</code> (reports-app). Count a field every event has, such as <code>userIdentity.arn</code> (the ARN).</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Believing an empty result.</strong> Splunk Web's default range of Last 24 hours, a missing <code>index=</code> (you then search only your role's default indexes), a mis-cased field name and an unquoted dotted name in <code>where</code> all return the same nothing as a quiet account.</li>
+                <li><strong>Dotted names in <code>where</code> and <code>eval</code> without single quotes.</strong> The dot joins strings there. Quote the name, or give it a plain one with <code>spath</code> or <code>rename</code>.</li>
+                <li><strong>Assuming <code>where</code> matches like the base search.</strong> The base search ignores case in values; <code>where</code> does not.</li>
+                <li><strong>Counting <code>BY</code> a field some events lack.</strong> <code>stats</code> drops those events without a word. <code>fillnull</code> first.</li>
+                <li><strong>Mixing up <code>field!=value</code> and <code>NOT field=value</code>.</strong> The first skips events without the field (3 in the lab for <code>errorCode!=AccessDenied</code>), the second keeps them (17).</li>
+                <li><strong>Running <code>transaction</code> without <code>maxspan</code>.</strong> It happily joins events hours apart.</li>
+                <li><strong>Trusting <code>Oneshot ... added</code>.</strong> It is also printed when every event is dropped. Count what arrived and compare each event's time.</li>
+                <li><strong>Pointing a public rule at raw CloudTrail.</strong> security_content rules assume the Splunk Add-on for AWS; on raw events, <code>errorCode = success</code> matches nothing.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="sigma-and-yara.html">Sigma and YARA</a>, where a vendor-neutral rule compiles to SPL, and <a href="kusto-kql.html">KQL</a> and <a href="sumo-logic-queries.html">Sumo Logic</a>, which run the same lab and the same five detections.</li>
+                <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a> for a real CloudTrail feed, and <a href="../detection-engineering.html">detection engineering</a> for testing, tuning and retiring rules.</li>
+                <li><a href="https://help.splunk.com/en/splunk-enterprise/spl-search-reference/10.4/quick-reference/command-quick-reference" target="_blank" rel="noopener noreferrer">Splunk's command quick reference</a>, the way into the full Search Reference.</li>
+                <li><a href="https://github.com/splunk/security_content" target="_blank" rel="noopener noreferrer">splunk/security_content</a> and its browsable form, <a href="https://research.splunk.com/" target="_blank" rel="noopener noreferrer">Splunk Security Content</a>, to read how others write and test SPL detections.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=ce8e8780" integrity="sha384-3shiQXFKQDjuyR3tcw2cQxS8sF6ASTavSyTLHJ+M+dieHkpjecvxrfWKM+4dVLal"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

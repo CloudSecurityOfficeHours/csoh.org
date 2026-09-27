@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Learn Datadog Cloud SIEM rules from zero on CloudTrail data: log search syntax, group by, thresholds, windows, sequences, Terraform and tests both ways.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="datadog cloud siem detection rules tutorial, datadog log search syntax, datadog security monitoring rule terraform, cloudtrail detection datadog, datadog evt.name error.kind, datadog sequence detection rule, datadog historical job, datadog unit test detection rule">
+    <title>Datadog Cloud SIEM detection rules: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/datadog-cloud-siem.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/datadog-cloud-siem.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/datadog-cloud-siem.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Datadog Cloud SIEM detection rules, hands-on - CSOH">
+    <meta property="og:description" content="Learn Datadog Cloud SIEM rules from zero on CloudTrail data: log search syntax, group by, thresholds, windows, sequences, Terraform and tests both ways.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="datadog">
+    <meta property="article:tag" content="cloud siem">
+    <meta property="article:tag" content="cloudtrail">
+    <meta property="article:tag" content="detection engineering">
+    <meta property="article:tag" content="log search">
+    <meta property="article:tag" content="terraform">
+    <meta property="og:url" content="https://csoh.org/howto/datadog-cloud-siem.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/datadog-cloud-siem.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Datadog Cloud SIEM detection rules, hands-on">
+    <meta name="twitter:description" content="Learn Datadog Cloud SIEM rules from zero on CloudTrail data: log search syntax, group by, thresholds, windows, sequences, Terraform and tests both ways.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/datadog-cloud-siem.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=60c4edd0" integrity="sha384-pD4ibj4YLJX3FZD7hEpxbiqvf30amQOxGqTS1HWzuBvM1OS7PbM1FvWamsfg0IgH"></script>
+    <link rel="preload" href="/style.css?v=9da1e156" as="style"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+    <link rel="stylesheet" href="/style.css?v=9da1e156"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Datadog Cloud SIEM detection rules, hands-on",
+      "description": "Learn Datadog Cloud SIEM rules from zero on CloudTrail data: log search syntax, group by, thresholds, windows, sequences, Terraform and tests both ways.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-09-27",
+      "dateModified": "2026-09-27",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Get an organisation you can test in",
+          "text": "Use a trial or non-production Datadog organisation, note your site, create an API key, and make sure Cloud SIEM analyses logs with source cloudtrail."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Load the lab data",
+          "text": "Write the lab file, move its dates into the last few hours with jq, add ddsource, a tag and a message, and send it to the logs intake with curl; expect 202."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Find the logs and read their names",
+          "text": "Search source:cloudtrail env:lab for 24 logs, confirm the pipeline set evt.name on all of them, and compare a log's side panel with Datadog's attribute names."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Filter on one attribute",
+          "text": "Find CloudTrail logging being stopped, deleted or changed with an OR list on @evt.name, and learn quoting, wildcards, exclusion and case sensitivity (D1)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Search nested attributes",
+          "text": "Find console sign-ins without MFA, and see why MFAUsed No alone also returns a failed sign-in (D4)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Count in the rule, and run the control",
+          "text": "Watch an AccessDenied-only burst rule stay silent, list the error codes that exist under @error.kind, and fix the rule to count every denial code per address (D2)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Set the time windows",
+          "text": "Understand the sliding evaluation window, keep alive and maximum signal duration, and why a wider window cannot fix a blind query."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Link two events in order",
+          "text": "Use the Sequence detection method, grouped by the new user's name, to find a user given an access key within 10 minutes (D3)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
+          "name": "Keep the rules as code",
+          "text": "Define the rules with the Datadog Terraform provider, tag them for the ATT&CK map, and run terraform init and terraform validate."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 10,
+          "name": "Test each rule both ways",
+          "text": "Use Unit Test with a matching and a non-matching log, and Run as Historical Job for the counting rules, checking the negative cases stay silent."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Datadog Cloud SIEM detection rules, hands-on",
+          "item": "https://csoh.org/howto/datadog-cloud-siem.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../human-risk.html">Human Risk</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Datadog Cloud SIEM</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Datadog Cloud SIEM detection rules, hands-on</h1>
+        <p>A detection rule in Datadog Cloud <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) is a log search wrapped in settings that group, count and time what the search finds. Learn both from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, including the names Datadog gives CloudTrail's fields and a threshold that fails without a sound.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a Datadog organisation you may send test data to and create rules in (Datadog offers a 14-day free trial of its whole product suite), an API (application programming interface) key, and a terminal with <code>curl</code> and <code>jq</code>. <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> is optional (step 9).</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> Cloud SIEM runs only as a hosted service and no Datadog account was used, so none of the searches or rules on this page were executed in Datadog. Every operator and setting was checked against Datadog's documentation and the CloudTrail rules Datadog publishes (both as of 27 September 2026), and the results quoted are what those documented rules give on the lab file, worked out by a local script, not captured from Datadog. What did run: the shell step, against a local test receiver in place of Datadog's intake, and <code>terraform validate</code> on every rule with Datadog's official Terraform provider 4.22.0.</p>
+        </div>
+
+        <section id="intro">
+            <h2>A search that selects, a rule that counts</h2>
+            <p>Datadog is a hosted monitoring platform, and Cloud SIEM is its security product: it runs detection rules over the logs you send to Datadog and records a security signal whenever a rule's conditions are met. Datadog ships a large catalogue of out-of-the-box rules, and detection engineers add custom ones in the rule editor, or as code with Terraform or Datadog's API.</p>
+            <p>The distinction that matters: a rule has two halves. The <strong>query</strong> is a Log Explorer search, and a search only selects logs; it cannot count them. Everything else is a setting of the rule: how to group the matches, how many is too many, over how long, and how severe that is. "Five refusals from one address in ten minutes" is a search for refusals, a group by on the address, a case of <code>a &gt;= 5</code> and a ten-minute window.</p>
+            <p>And the search runs on processed logs. Datadog's CloudTrail pipeline maps several CloudTrail fields onto Datadog's standard attributes, and Datadog's own rules search those: the event name as <code>@evt.name</code>, the error code as <code>@error.kind</code>. A query written from the field list in AWS (Amazon Web Services) documentation is a guess about what the pipeline kept; one written from a processed log is not.</p>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">Searches, attributes and the renamed fields</a></li>
+                <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>Searches, attributes and the renamed fields</h2>
+            <p>A search is a list of terms, and a log must match every term (AND is implied between them). A term is usually <code>name:value</code>. A few reserved attributes, such as <code>source</code>, <code>service</code> and <code>host</code>, are written bare; every other attribute takes an <code>@</code> in front. Tags, such as <code>env:lab</code>, are written bare too.</p>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:StopLogging</pre></div>
+            <p>Read it as: logs whose <code>source</code> is <code>cloudtrail</code>, and whose attribute <code>evt.name</code> is exactly <code>StopLogging</code>. Against the lab, one log. The value match is exact and case sensitive, and a dot in the name walks into nested JSON (JavaScript Object Notation), so <code>@userIdentity.arn</code> is the <code>arn</code> inside <code>userIdentity</code>.</p>
+            <p>But CloudTrail calls that field <code>eventName</code>. When logs arrive with the source <code>cloudtrail</code>, Datadog installs its CloudTrail pipeline, which maps a few fields onto standard attributes, names Datadog's other integrations use too. Datadog's own CloudTrail rules show where they land:</p>
+            <div class="table-scroll"><table class="comparison-table">
+                <thead><tr><th scope="col">CloudTrail field</th><th scope="col">Search it as</th><th scope="col">Searched by Datadog's rule</th></tr></thead>
+                <tbody>
+                    <tr><td><code>eventName</code></td><td><code>@evt.name</code></td><td><a href="https://docs.datadoghq.com/security/default_rules/cf4-844-4a0/" target="_blank" rel="noopener noreferrer">AWS CloudTrail configuration modified</a></td></tr>
+                    <tr><td><code>sourceIPAddress</code></td><td><code>@network.client.ip</code></td><td><a href="https://docs.datadoghq.com/security/default_rules/5ee-d08-7fa/" target="_blank" rel="noopener noreferrer">AWS root account activity</a></td></tr>
+                    <tr><td><code>errorCode</code></td><td><code>@error.kind</code></td><td><a href="https://docs.datadoghq.com/security/default_rules/def-000-48e/" target="_blank" rel="noopener noreferrer">Enumeration from multiple regions using a long-term access key failed</a></td></tr>
+                    <tr><td><code>userIdentity.arn</code>, <code>requestParameters.*</code>, <code>responseElements.*</code>, <code>eventSource</code></td><td>unchanged, with <code>@</code></td><td><a href="https://docs.datadoghq.com/security/default_rules/def-000-jr2/" target="_blank" rel="noopener noreferrer">Failed attempt to elevate privileges via multiple AWS roles</a>, <a href="https://docs.datadoghq.com/security/default_rules/8d2-d0c-0b6/" target="_blank" rel="noopener noreferrer">Potential brute force attack on AWS ConsoleLogin</a></td></tr>
+                    <tr><td><code>additionalEventData.MFAUsed</code></td><td><code>@additionalEventData.MFAUsed</code>, assumed</td><td>none: check a sign-in log</td></tr>
+                </tbody></table></div>
+            <p>Whether the original names survive beside the new ones is not documented. A remapper deletes the field it copies unless told to keep it, yet two of Datadog's rule pages describe their match with <code>@eventName</code>. This page writes the standard names, as Datadog's rules almost always do, and when a search finds nothing, the first check is one processed log's side panel.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through</h2>
+            <p>The lab is 24 AWS CloudTrail events. A <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> user's access key, <code>build-bot</code>, has leaked. From <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, then creates a user, <code>backup-svc</code>, gives it administrator rights and an access key, and uses it to stop CloudTrail logging. Around that sits ordinary work, including a sign-in without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA), a failed sign-in and an application refused one file three times. The page builds five detections:</p>
+            <ul>
+                <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
+                <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
+                <li><strong>D3, new user given a key:</strong> a user created and handed an access key within 10 minutes.</li>
+                <li><strong>D4, console login without MFA:</strong> a successful console sign-in without multi-factor authentication.</li>
+                <li><strong>D5, administrator policy attached:</strong> <code>AdministratorAccess</code> attached to a user.</li>
+            </ul>
+
+            <h3>1. Get an organisation you can test in</h3>
+            <p>Use a trial or a non-production organisation, never one whose signals reach an on-call rota. Note your Datadog site (such as <code>datadoghq.com</code> or <code>datadoghq.eu</code>), and create an API key in your organisation settings, on the <strong>API keys</strong> tab. Cloud SIEM analyses only the logs its filters select, so make sure it takes <code>source:cloudtrail</code>; <a href="https://docs.datadoghq.com/security/cloud_siem/guide/customize-which-logs-cloud-siem-analyzes/" target="_blank" rel="noopener noreferrer">Datadog's guide to choosing the logs Cloud SIEM analyses</a> shows the switch for your edition.</p>
+
+            <h3>2. Load the lab data</h3>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/datadog-lab &amp;&amp; cd ~/datadog-lab
+
+cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
+{"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
+{"eventTime":"2026-09-15T09:02:40Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"readOnly":false}
+{"eventTime":"2026-09-15T09:03:05Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"readOnly":true}
+{"eventTime":"2026-09-15T09:10:22Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T09:15:47Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.21","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob","userName":"bob"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:20:03Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.77","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"errorMessage":"Failed authentication","responseElements":{"ConsoleLogin":"Failure"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:31:10Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T09:47:55Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:01:30Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:05Z","eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:31Z","eventSource":"iam.amazonaws.com","eventName":"ListUsers","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:38Z","eventSource":"iam.amazonaws.com","eventName":"ListRoles","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:52Z","eventSource":"iam.amazonaws.com","eventName":"GetAccountAuthorizationDetails","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:05Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:09Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeVpcs","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:14Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeSecurityGroups","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:22Z","eventSource":"secretsmanager.amazonaws.com","eventName":"ListSecrets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:06:12Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:30Z","eventSource":"iam.amazonaws.com","eventName":"AttachUserPolicy","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc","policyArn":"arn:aws:iam::aws:policy/AdministratorAccess"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:51Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"responseElements":{"accessKey":{"userName":"backup-svc","accessKeyId":"AKIAIOSFODNN7EXAMPLE","status":"Active"}},"readOnly":false}
+{"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+{"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
+EOF
+
+shasum -a 256 cloudtrail-lab.jsonl
+
+jq -c -s '(map(.eventTime | fromdateiso8601) | max) as $last
+  | (now - 300 - $last | floor) as $shift
+  | map((.eventTime |= (fromdateiso8601 + $shift | todateiso8601))
+        + {ddsource: "cloudtrail", service: "cloudtrail", ddtags: "env:lab", message: .eventName})' \
+  cloudtrail-lab.jsonl &gt; upload.json</pre></div>
+            <p>The hash should be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>. The <code>jq</code> command moves the lab so its last event is five minutes ago, keeping every gap between events, and adds a source, a tag and the <code>message</code> field Datadog's intake requires. Next, set your site (<code>datadoghq.com</code>, <code>us3.datadoghq.com</code>, <code>us5.datadoghq.com</code>, <code>datadoghq.eu</code>, <code>ap1.datadoghq.com</code> and so on) and read your API key into a variable: after the <code>read</code> line, paste the key and press Enter. Nothing is echoed, and the key stays out of your shell history.</p>
+<div class="code-block" data-lang="bash"><pre>DD_SITE=datadoghq.com
+read -rs DD_API_KEY</pre></div>
+<div class="code-block" data-lang="bash"><pre>curl -sS -o /dev/null -w '%{http_code}\n' -X POST "https://http-intake.logs.$DD_SITE/api/v2/logs" \
+  -H 'Content-Type: application/json' -H "DD-API-KEY: $DD_API_KEY" --data-binary @upload.json</pre></div>
+            <p>Expect <code>202</code>. <code>ddsource</code> becomes each log's <code>source</code>, which is what makes Datadog install its CloudTrail pipeline (step 3 checks that it ran); every other field arrives as an attribute of the log.</p>
+            <div class="highlight-box"><p><strong>202 means accepted for processing, not stored.</strong> Datadog takes each log's date from <code>eventTime</code> and rejects any log dated more than 18 hours ago, and the lab's own dates are long past. That is why the <code>jq</code> step moves it. Count what arrived before you trust anything else.</p></div>
+
+            <h3>3. Find the logs and read their names</h3>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail env:lab</pre></div>
+            <p>Set Log Explorer's time range to cover the past 4 hours. Expect 24 logs, their event names in the content column; if your organisation already receives CloudTrail, keep <code>env:lab</code> in every search below. Then two controls. Add <code>@evt.name:*</code>, which matches logs that have the attribute: you should still see 24. Fewer means the pipeline did not process them (Datadog installs it when the first CloudTrail log arrives): check the Pipelines page, upload again with a new tag such as <code>env:lab2</code>, and use that tag. If your edition uses Security Filters, Datadog tags each log <code>datadog.cloud_siem:true</code> or <code>false</code>; with <code>datadog.cloud_siem:true</code> added you should still see 24, or no rule will ever see the lab. Open the <code>StopLogging</code> log and compare its side panel with the table above.</p>
+
+            <h3>4. Filter on one attribute: trail tampering (D1)</h3>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:(StopLogging OR DeleteTrail OR UpdateTrail OR PutEventSelectors)</pre></div>
+            <p>Expect one log: <code>StopLogging</code> by <code>backup-svc</code> from <code>203.0.113.50</code>, the lab's 10:09:03 event (Datadog shows it at the shifted time). The other 23 are the negative case. Parentheses list alternatives for one attribute, <code>OR</code> must be in capitals, and a <code>-</code> in front of a term excludes: <code>-@evt.name:DescribeInstances</code> keeps the 21 others. Values are exact and case sensitive, so <code>@evt.name:stoplogging</code> finds nothing, while <code>*</code> stands for any run of characters: <code>@evt.name:Describe*</code> finds 5. A value containing a colon, hyphen or space needs double quotes, as ARNs (Amazon Resource Names) do: <code>@userIdentity.arn:"arn:aws:iam::111122223333:user/build-bot"</code> finds 12. Numeric attributes also take ranges such as <code>[400 TO 499]</code> once they are facets, and <code>CIDR(@network.client.ip, 203.0.113.0/24)</code> matches an address range (13 logs here), though Datadog's list of places that function works leaves out detection rules.</p>
+
+            <h3>5. Nested attributes: console sign-in without MFA (D4)</h3>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @additionalEventData.MFAUsed:No</pre></div>
+            <p>Expect 2 logs, and only one is D4. <code>bob</code> signed in from <code>198.51.100.21</code> without MFA; the other is the failed attempt on <code>alice</code> from <code>192.0.2.77</code>, because failed sign-ins carry <code>MFAUsed</code> No as well. Require success too:</p>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:ConsoleLogin @responseElements.ConsoleLogin:Success @additionalEventData.MFAUsed:No</pre></div>
+            <p>Expect <code>bob</code> only. AWS's own check for console sign-ins without MFA, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">Security Hub control CloudWatch.3</a>, tests the same pair of fields: <code>MFAUsed</code> not <code>Yes</code>, and <code>ConsoleLogin</code> <code>Success</code>. No Datadog rule page names <code>additionalEventData</code>, though, so its path in Datadog is the one on this page no Datadog source shows; if the search finds nothing, open a sign-in log and read what the field is called there. As a rule, D4 needs only this query and a case of <code>a &gt; 0</code> (step 9 builds one like it), and its technique in <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge) v19.2 is <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004 Valid Accounts: Cloud Accounts</a>.</p>
+
+            <h3>6. Counting lives in the rule: the burst that never fires (D2)</h3>
+            <p>A rule turns a search into a count with three settings. The <strong>group by</strong> splits the matching logs by an attribute, and each value gets its own count and its own signal. The <strong>case</strong> is a condition on that count, written with the query's label: the first query is <code>a</code>, the second <code>b</code>. The <strong>evaluation window</strong> is how far back each count looks. Before building the rule, look at the counts it would see: in Log Explorer, show this search as a Top List grouped by <code>@network.client.ip</code> (if it is not offered, create a facet for it from a log's side panel).</p>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @error.kind:AccessDenied</pre></div>
+            <p>Expect <code>203.0.113.50</code> with 4 and <code>192.0.2.20</code> with 3. A rule with this query and a case of <code>a &gt;= 5</code> never fires. Did nothing happen, or can the query not see what happened? Run the control: every error code that exists, grouped by <code>@error.kind</code>.</p>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @error.kind:*</pre></div>
+            <p>Expect <code>AccessDenied</code> 7 and <code>Client.UnauthorizedOperation</code> 3. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, so three of the attacker's seven refusals were invisible to the rule. AWS's own check for unauthorized calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">Security Hub control CloudWatch.2</a>, counts every code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also takes in <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>, so the rule lists all four, here as Terraform (step 9 checks it):</p>
+<div class="code-block" data-lang="hcl"><pre>resource "datadog_security_monitoring_rule" "d2_denied_burst" {
+  name    = "CloudTrail calls refused 5 or more times from one address"
+  message = "{{@network.client.ip}} was refused 5 or more times in 10 minutes. Review every call from that address in the last hour."
+  query {
+    query           = "source:cloudtrail @error.kind:(AccessDenied OR AccessDeniedException OR Client.UnauthorizedOperation OR UnauthorizedOperation)"
+    group_by_fields = ["@network.client.ip"]
+  }
+  case {
+    status    = "medium"
+    condition = "a &gt;= 5"
+  }
+  options {
+    evaluation_window   = 600
+    keep_alive          = 3600
+    max_signal_duration = 86400
+  }
+  tags = ["source:cloudtrail", "tactic:TA0007-discovery", "technique:T1580-cloud-infrastructure-discovery", "mitre_technique:T1087.004"]
+}</pre></div>
+            <p>Expect one signal, for <code>203.0.113.50</code>: 7 refusals in 51 seconds. <code>192.0.2.20</code> is the negative case, with 3 refusals spread over half an hour and never more than 1 in any 10 minutes. In the rule editor the same settings are the query, its group by, the condition under Set conditions, and the windows under the rule's other parameters.</p>
+            <div class="highlight-box"><p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust a rule that never fires, run a control that must find something: the search without its threshold, or a count of the values that really exist.</p></div>
+
+            <h3>7. Time: evaluation window, keep alive, maximum duration</h3>
+            <p>The evaluation window slides: at every moment the count covers the last 600 seconds, so a burst is counted whole wherever it falls on the clock. Once a signal exists, new matches keep updating it while they arrive within the <strong>keep alive</strong> window, and it closes at the <strong>maximum signal duration</strong>, counted from its first match. Datadog allows only listed values (such as 0, 60, 300, 600 and 3600 seconds), and the evaluation window may not exceed either of the other two. Widening the window is not a fix for a blind query: on the lab, even an hour-long window gives the <code>AccessDenied</code>-only rule 4 for the attacker.</p>
+
+            <h3>8. One user, two events, in order (D3)</h3>
+            <p>Threshold, the method so far, is one of several, and each rule has exactly one. Datadog's page on creating a custom rule lists seven: Threshold; New Value, for a value not seen during a learning period; Anomaly, for a spike above a learned baseline; Content Anomaly, for field content unlike the usual; Impossible Travel, for two sign-ins too far apart for the time between them; Third Party, for turning another tool's alerts into signals; and Sequence, for ordered steps. The rules overview lists Signal correlation, which combines signals from other rules, in place of Sequence; its old page now leads to the same creation page, where a sequence step can match signals or rules as well as logs.</p>
+            <p>The Sequence detection method links steps: each step is a condition on one query, and each transition says how long the next step may take. The group by is what makes both events belong to the same new user.</p>
+<div class="code-block" data-lang="hcl"><pre>resource "datadog_security_monitoring_rule" "d3_new_user_key" {
+  name    = "New IAM user given an access key within 10 minutes"
+  message = "{{@requestParameters.userName}} was created and given an access key within 10 minutes. Check who created it and what the key has done since."
+  query {
+    query           = "source:cloudtrail @evt.name:CreateUser"
+    group_by_fields = ["@requestParameters.userName"]
+  }
+  query {
+    query           = "source:cloudtrail @evt.name:CreateAccessKey"
+    group_by_fields = ["@requestParameters.userName"]
+  }
+  case {
+    status    = "high"
+    condition = "key_created &gt; 0"
+  }
+  options {
+    detection_method    = "sequence_detection"
+    evaluation_window   = 0
+    keep_alive          = 3600
+    max_signal_duration = 86400
+    sequence_detection_options {
+      steps {
+        name              = "user_created"
+        condition         = "a &gt; 0"
+        evaluation_window = 60
+      }
+      steps {
+        name              = "key_created"
+        condition         = "b &gt; 0"
+        evaluation_window = 60
+      }
+      step_transitions {
+        parent            = "user_created"
+        child             = "key_created"
+        evaluation_window = 600 # the "within 10 minutes"
+      }
+    }
+  }
+  tags = ["source:cloudtrail", "tactic:TA0003-persistence", "technique:T1136-create-account", "mitre_technique:T1136.003", "mitre_technique:T1098.001"]
+}</pre></div>
+            <p>Expect one signal, for <code>backup-svc</code>: created at 10:06:12 lab time and keyed 39 seconds later, both by <code>build-bot</code>. The control: set the transition's window to 10800 (3 hours) and <code>svc-reporting</code> appears too, <code>alice</code>'s routine work, keyed 2 hours 37 minutes after she created it. The window is the detection. The rule editor can also join two queries with a <strong>Then condition</strong> ("query A occurs and then query B occurs") on a threshold rule, and Datadog ships a close cousin of D3, <a href="https://docs.datadoghq.com/security/default_rules/def-000-ilw/" target="_blank" rel="noopener noreferrer">AWS IAM User created with AdministratorAccess policy attached</a>, whose documented logic matches <code>backup-svc</code> here too.</p>
+
+            <h3>9. Keep the rules as code</h3>
+            <p>Put this in <code>main.tf</code> with the rules from steps 6 and 8. It turns D1's search into a rule: one query, a case of <code>a &gt; 0</code>, so a single matching log is enough. With your keys set, <code>terraform apply</code> creates the three rules; the rule editor builds the same thing by hand.</p>
+<div class="code-block" data-lang="hcl"><pre>terraform {
+  required_providers {
+    datadog = {
+      source  = "DataDog/datadog"
+      version = "~&gt; 4.22"
+    }
+  }
+}
+
+# Keys come from DD_API_KEY and DD_APP_KEY (and DD_HOST outside the US1 site).
+provider "datadog" {}
+
+resource "datadog_security_monitoring_rule" "d1_trail_tampering" {
+  name    = "CloudTrail logging stopped, deleted or changed"
+  message = "{{@userIdentity.arn}} called {{@evt.name}} from {{@network.client.ip}}. If nobody planned it, restore logging and rotate that identity's keys."
+  query {
+    query           = "source:cloudtrail @evt.name:(StopLogging OR DeleteTrail OR UpdateTrail OR PutEventSelectors)"
+    group_by_fields = ["@userIdentity.arn"]
+  }
+  case {
+    status    = "high"
+    condition = "a &gt; 0"
+  }
+  options {
+    evaluation_window   = 0
+    keep_alive          = 3600
+    max_signal_duration = 86400
+  }
+  tags = [
+    "source:cloudtrail",
+    "tactic:TA0005-defense-evasion", # the pre-v19 pair Datadog's own rules use
+    "technique:T1562-impair-defenses",
+    "mitre_technique:T1685.002", # the ATT&amp;CK v19.2 technique
+  ]
+}</pre></div>
+<div class="code-block" data-lang="bash"><pre>terraform init
+terraform validate</pre></div>
+<div class="code-block" data-lang="text"><pre>Success! The configuration is valid.</pre></div>
+            <p>Datadog's ATT&amp;CK map lists a custom rule only when its <code>tactic:</code> and <code>technique:</code> tags form a correct pair in the ATT&amp;CK version the map states, and Datadog's own CloudTrail tamper rules still carry this pre-v19 pair. In ATT&amp;CK v19.2, T1562 is revoked: stopping CloudTrail is <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002 Disable or Modify Cloud Log</a> under the new Defense Impairment tactic (TA0112), and TA0005 is now called Stealth. The free-form <code>mitre_technique</code> tag keeps the current ID; check the version on the map page before changing the pair. <code>terraform validate</code> checks the file's shape and allowed values, not the search or the condition: <code>a &gt;&gt;= 5</code> and a keep alive shorter than the window both pass it. Add <code>validate = true</code> to a rule and <code>terraform plan</code> asks Datadog to check it, which needs your keys.</p>
+
+            <h3>10. Test each rule both ways</h3>
+            <p>For the single-log rules, use <strong>Unit Test</strong> in the rule editor: copy the <code>StopLogging</code> log from Log Explorer (the export button in its side panel), paste it, mark it expected to match, and run; then paste the <code>ListBuckets</code> log marked expected not to match. Copy processed logs, not lines from the lab file: the rule matches <code>evt.name</code>, which only the processed log has. For D2 and D3, open the rule's menu and choose <strong>Run as Historical Job</strong> over the past 4 hours (not offered on Datadog's government sites). Expect results for <code>203.0.113.50</code> and <code>backup-svc</code>, and none for <code>192.0.2.20</code> or <code>svc-reporting</code>. Real-time rules analyse logs as they arrive, and Datadog does not document how they treat a batch dated hours back, so the historical job is the dependable test here.</p>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>Write the search for D5, <code>AdministratorAccess</code> attached to a user, and say what the rule around it needs.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:AttachUserPolicy @requestParameters.policyArn:"arn:aws:iam::aws:policy/AdministratorAccess"</pre></div>
+                    <p>Expect one log: <code>build-bot</code> attaching the policy to <code>backup-svc</code> from <code>203.0.113.50</code>. The ARN needs double quotes because it contains colons. The rule is D1's shape: one query and a case of <code>a &gt; 0</code>. In the log, <code>requestParameters.userName</code> is the target and <code>userIdentity.arn</code> the actor; both are worth putting in the message. Datadog's rule for this, <a href="https://docs.datadoghq.com/security/default_rules/def-000-sd5/" target="_blank" rel="noopener noreferrer">AWS IAM AdministratorAccess policy was applied to a user</a>, is tagged TA0004 and T1098; the v19.2 sub-technique is <a href="https://attack.mitre.org/techniques/T1098/003/" target="_blank" rel="noopener noreferrer">T1098.003 Additional Cloud Roles</a>.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>This search finds nothing, although the lab contains a sign-in without MFA. Why, and how do you prove it rather than guess?</p>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:ConsoleLogin @additionalEventData.MFAUsed:no</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>Attribute values are case sensitive, and CloudTrail writes <code>No</code>, not <code>no</code>. To prove it, drop the term that decides and group what is left by the field in question:</p>
+<div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:ConsoleLogin</pre></div>
+                    <p>Grouped by <code>@additionalEventData.MFAUsed</code>, expect <code>No</code> 2 and <code>Yes</code> 1. Seeing the real values moves the question from "is there data?" to "what exactly is it called?", which is the question an empty result never answers.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>One source address used two different identities. Write a rule that finds any address used by more than one identity within 10 minutes. Which address fires?</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="hcl"><pre>resource "datadog_security_monitoring_rule" "ex3_many_identities" {
+  name    = "One address used by more than one identity"
+  message = "{{@network.client.ip}} acted as more than one identity within 10 minutes."
+  query {
+    query           = "source:cloudtrail"
+    aggregation     = "cardinality"
+    distinct_fields = ["@userIdentity.arn"]
+    group_by_fields = ["@network.client.ip"]
+  }
+  case {
+    status    = "low"
+    condition = "a &gt; 1"
+  }
+  options {
+    evaluation_window   = 600
+    max_signal_duration = 86400
+  }
+}</pre></div>
+                    <p><code>cardinality</code> counts distinct values (the editor's Count setting). Expect <code>203.0.113.50</code> only, with 2: the leaked <code>build-bot</code> key and the <code>backup-svc</code> user it created. Count the ARN, which every event has, and never group by <code>userIdentity.userName</code>: roles have none, and a rule ignores logs that lack a group-by value unless optional group by is on.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>Datadog ships a rule called <a href="https://docs.datadoghq.com/security/default_rules/208-e1f-0f9/" target="_blank" rel="noopener noreferrer">AWS console login without MFA</a>. Its page says it matches when <code>@userIdentity.sessionContext.attributes.mfaAuthenticated</code> is false. Would it catch <code>bob</code>'s sign-in in this lab?</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>No, going by its page. The lab's sign-in events carry <code>additionalEventData.MFAUsed</code> and no <code>sessionContext</code> at all, so the attribute that rule tests is missing from every one of them. <code>MFAUsed</code> is also the field AWS's own Security Hub control CloudWatch.3 reads for this case. CloudTrail can describe MFA in more than one field, and a rule written for one of them is blind to events that carry the other. Before relying on any rule, yours or a vendor's, check that its fields exist on your own events: search for the field with <code>:*</code> and confirm it finds something.</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Guessing field names from AWS's documentation.</strong> Datadog's rules search <code>@evt.name</code>, <code>@network.client.ip</code> and <code>@error.kind</code>, and whether <code>eventName</code>, <code>sourceIPAddress</code> and <code>errorCode</code> survive beside them is not documented. Read a processed log first.</li>
+                <li><strong>Looking for a count in the search.</strong> The search only selects. Grouping, thresholds and windows are rule settings.</li>
+                <li><strong>Counting only <code>AccessDenied</code>.</strong> EC2 records refusals as <code>Client.UnauthorizedOperation</code>. List the error codes that exist before choosing which to count.</li>
+                <li><strong>Grouping by a field some logs lack.</strong> Logs without the group-by value are ignored unless optional group by is on, and the missing rows look like quiet.</li>
+                <li><strong>Changing case or dropping quotes.</strong> <code>stoplogging</code> is not <code>StopLogging</code>, and values with colons, hyphens or spaces need double quotes.</li>
+                <li><strong>Loading old events.</strong> Datadog rejects logs dated more than 18 hours back, and a 202 only means the request was accepted for processing.</li>
+                <li><strong>Taking <code>terraform validate</code> as a test of the rule.</strong> It checks the file, not the search, the condition or the result.</li>
+                <li><strong>Assuming the ATT&amp;CK tags match the current release.</strong> The map reads the version it states, and Datadog's rules still use pre-v19 IDs.</li>
+                <li><strong>Testing only the rule that should fire.</strong> Every rule here has a negative case in the lab; run it.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="splunk-spl.html">Splunk SPL</a>, <a href="kusto-kql.html">KQL</a> and <a href="sumo-logic-queries.html">Sumo Logic</a> run the same lab and the same five detections, a quick way to see which ideas are Datadog's and which are universal.</li>
+                <li><a href="sigma-and-yara.html">Sigma and YARA</a> for writing a detection once and converting it, and <a href="jq-and-jmespath.html">jq and JMESPath</a> for the <code>jq</code> in step 2.</li>
+                <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a> for a real CloudTrail feed, and <a href="../detection-engineering.html">detection engineering</a> for testing, tuning and retiring rules.</li>
+                <li><a href="https://docs.datadoghq.com/logs/explorer/search_syntax/" target="_blank" rel="noopener noreferrer">Datadog's log search syntax</a>, <a href="https://docs.datadoghq.com/security/cloud_siem/detect_and_monitor/custom_detection_rules/create_rule/" target="_blank" rel="noopener noreferrer">its guide to creating a custom rule</a> and <a href="https://registry.terraform.io/providers/DataDog/datadog/latest/docs/resources/security_monitoring_rule" target="_blank" rel="noopener noreferrer">the Terraform resource reference</a>.</li>
+                <li><a href="https://docs.datadoghq.com/security/default_rules/" target="_blank" rel="noopener noreferrer">Datadog's catalogue of out-of-the-box rules</a>: each page states what its rule matches and which fields it uses.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=ce8e8780" integrity="sha384-3shiQXFKQDjuyR3tcw2cQxS8sF6ASTavSyTLHJ+M+dieHkpjecvxrfWKM+4dVLal"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

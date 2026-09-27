@@ -97,7 +97,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 | 🎓 [Cloud Security Certifications](https://csoh.org/cloud-security-certifications.html) | CCSK, CCSP, AWS, Azure, GCP, CKS compared side by side |
 | 🎓 [Cloud Security Degree Programs](https://csoh.org/cloud-security-degree-programs.html) | Academic paths, what to look for, named US/international universities |
 | 🧰 [Cloud Security Home Lab](https://csoh.org/cloud-security-home-lab.html) | Free-tier setups, budget guardrails, kill-switches |
-| 🧑‍🏫 [Cloud Security How-To Guides](https://csoh.org/cloud-security-how-to.html) | OPA, regex, OVAL, jq, CEL, Sigma, YARA, IAM - explanation, walk-through, exercises (guides below) |
+| 🧑‍🏫 [Cloud Security How-To Guides](https://csoh.org/cloud-security-how-to.html) | OPA, regex, OVAL, jq, CEL, Sigma, YARA, IAM, plus SIEM query languages (SPL, KQL, ES\|QL, SQL and more) - explanation, walk-through, exercises (guides below) |
 | 🛠️ [Portfolio Projects](https://csoh.org/cloud-security-portfolio-projects.html) | Build-it-yourself projects that prove skills to hiring managers (walkthroughs below) |
 | 📖 [Cloud Security Reading List](https://csoh.org/cloud-security-reading-list.html) | Books, blogs, podcasts, newsletters & people to follow - staleness-checked monthly |
 | 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
@@ -222,7 +222,7 @@ A hub of build-it-yourself projects that demonstrate real cloud-security skill t
 The realistic transition from IT support / help desk into cloud security: what actually transfers, what you have to build from scratch, and the sequence that works. It replaces three entry-path pages (`is-cloud-security-a-good-career.html`, `get-into-cloud-security-no-experience.html`, `help-desk-to-cloud-security.html`), whose URLs 301 here via `.htaccess`; in-site links point here directly so there is no redirect hop.
 
 ### 🧑‍🏫 Cloud Security How-To Guides ([`cloud-security-how-to.html`](https://csoh.org/cloud-security-how-to.html), `howto/`)
-Hands-on guides to the small languages cloud security actually runs on, each following the same shape: what the thing is and the one idea that makes it click, a copy-and-run walk-through, then exercises with worked answers. Covers regex as a security control, jq and JMESPath, AWS IAM policy evaluation plus Cedar, OPA and Rego, CEL, Sigma and YARA, and OVAL and SCAP. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; unlike `homelab/` these **are** search-indexed and glossary cross-linked, because they are explanatory pages that attract search traffic from people meeting a term for the first time.
+Hands-on guides to the languages cloud security actually runs on, each following the same shape: what the thing is and the one idea that makes it click, a copy-and-run walk-through, then exercises with worked answers. Covers regex as a security control, jq and JMESPath, AWS IAM policy evaluation plus Cedar, OPA and Rego, CEL, Sigma and YARA, and OVAL and SCAP, plus the detection languages of SIEM platforms and data lakes: Splunk SPL, KQL, Elastic ES|QL and EQL, Panther's Python rules, YARA-L 2.0 for Google Security Operations, Sumo Logic, Datadog Cloud SIEM, SQL for Snowflake, BigQuery and Athena, and Falco rules. The detection guides assume no prior query language, SQL included, and share one 24-event AWS CloudTrail dataset (embedded identically on each page) so the same five detections can be compared across languages. Their queries were run on a real engine on the author's machine, in Docker or with the vendor's local tool, except YARA-L, Sumo Logic and Datadog, which run only inside the vendors' services; those pages were checked against vendor documentation and say so at the top. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; unlike `homelab/` these **are** search-indexed and glossary cross-linked, because they are explanatory pages that attract search traffic from people meeting a term for the first time.
 
 ### 🧪 Cloud Security Home Lab Walk-throughs (`homelab/`)
 Deep, command-line-level lab walkthroughs that go further than the home-lab overview page: break-and-detect on AWS, a CloudTrail → SIEM detection pipeline, a Kubernetes security lab, and a LocalStack AWS lab. Registered like `portfolio/` in `sync_chrome.py`, the validators, and lychee; deliberately **not** in the site search index.
@@ -778,7 +778,7 @@ csoh.org/
 ├── meetings/                   # 114 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
-├── howto/                      # 7 language how-to guides (OPA, regex, OVAL, jq, CEL, Sigma/YARA, IAM)
+├── howto/                      # 16 how-to guides: policy, query and SIEM detection languages
 │
 │  ── Shared assets ──
 ├── style.css                   # Main stylesheet (responsive design + dark mode)
@@ -1312,14 +1312,14 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->100<!--/count--> pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->109<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->291<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->300<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1330,7 +1330,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->277<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->114<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->286<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->114<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

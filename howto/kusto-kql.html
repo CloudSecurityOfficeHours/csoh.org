@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Learn KQL from zero on a local Kusto engine: filter, parse, count and join CloudTrail, catch the query that returns nothing, and write a Sentinel analytics rule.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="kql tutorial, kusto query language, kusto emulator, microsoft sentinel analytics rule yaml, awscloudtrail kql, kql has vs contains, kql join innerunique, kql parse_json, cloudtrail detection kql">
+    <title>Kusto Query Language (KQL): a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/kusto-kql.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/kusto-kql.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/kusto-kql.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Kusto Query Language (KQL), hands-on - CSOH">
+    <meta property="og:description" content="Learn KQL from zero on a local Kusto engine: filter, parse, count and join CloudTrail, catch the query that returns nothing, and write a Sentinel analytics rule.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="kql">
+    <meta property="article:tag" content="kusto">
+    <meta property="article:tag" content="microsoft sentinel">
+    <meta property="article:tag" content="azure data explorer">
+    <meta property="article:tag" content="cloudtrail">
+    <meta property="article:tag" content="detection engineering">
+    <meta property="og:url" content="https://csoh.org/howto/kusto-kql.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/kusto-kql.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kusto Query Language (KQL), hands-on">
+    <meta name="twitter:description" content="Learn KQL from zero on a local Kusto engine: filter, parse, count and join CloudTrail, catch the query that returns nothing, and write a Sentinel analytics rule.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/kusto-kql.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=60c4edd0" integrity="sha384-pD4ibj4YLJX3FZD7hEpxbiqvf30amQOxGqTS1HWzuBvM1OS7PbM1FvWamsfg0IgH"></script>
+    <link rel="preload" href="/style.css?v=9da1e156" as="style"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+    <link rel="stylesheet" href="/style.css?v=9da1e156"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Kusto Query Language (KQL), hands-on",
+      "description": "Learn KQL from zero on a local Kusto engine: filter, parse, count and join CloudTrail, catch the query that returns nothing, and write a Sentinel analytics rule.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-09-27",
+      "dateModified": "2026-09-27",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Start a Kusto engine",
+          "text": "Run Microsoft's Kusto emulator in Docker (with the Rosetta setting on an Apple silicon Mac), save a small Python client, and check that the engine answers."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Load the lab data and check it",
+          "text": "Write the lab file, ingest it into a one-column dynamic table with a JSON mapping, and confirm 24 rows that are not null."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Give it Sentinel's shape",
+          "text": "Build an AWSCloudTrail table with Sentinel's column names and types, including the three JSON columns that Sentinel stores as text."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Filter rows",
+          "text": "Use where and in to find CloudTrail logging being stopped (D1), and see how has and contains differ."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Reach into JSON text",
+          "text": "Use parse_json to find console logins without MFA, see the naive rule also report a failed login, and require a successful one (D4)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Count, threshold and run the control",
+          "text": "Watch the AccessDenied-only burst rule return nothing, list the error codes that exist, and fix the rule to count every refusal code (D2)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Bucket time",
+          "text": "Use bin for clock-aligned 10-minute buckets and between for fixed windows."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Join two events within ten minutes",
+          "text": "Join CreateUser to CreateAccessKey on the new user's name, see routine work pair up too, and exclude it with a 10-minute window (D3)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
+          "name": "Make it a Sentinel analytics rule",
+          "text": "Save the burst query as a scheduled analytics rule in the YAML format of Microsoft's own rule library, with lookback, trigger, entity mapping and MITRE ATT&CK tags."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 10,
+          "name": "Test the rule both ways",
+          "text": "Count what two consecutive scheduled runs would see and confirm one alerts and the other stays silent."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Kusto Query Language (KQL), hands-on",
+          "item": "https://csoh.org/howto/kusto-kql.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../human-risk.html">Human Risk</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Kusto Query Language (KQL)</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Kusto Query Language (KQL), hands-on</h1>
+        <p><a class="glossary-link" href="../glossary.html#term-detection-query-languages">KQL</a> is how you question data in <a class="glossary-link" href="../glossary.html#term-sentinel">Microsoft Sentinel</a>, Microsoft Defender <a class="glossary-link" href="../glossary.html#term-edr">XDR</a> and Azure Data Explorer. Build a local copy of Sentinel's <code>AWSCloudTrail</code> table, follow a leaked access key through it, and learn to recognise a query that returns nothing because it cannot work.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+<div class="info-box--blue">
+    <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker with 4 GB of memory to spare and several gigabytes of disk, and Python 3. No Azure account. On an Apple silicon Mac, turn on Docker Desktop's Rosetta setting first (step 1); without Docker, use a free Azure Data Explorer cluster.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> every command and query was run as printed against the Kusto emulator (Azure Data Explorer engine 1.0.9766.21061, the <code>latest</code> image of 27 September 2026) in Docker Desktop on an Apple silicon Mac under Rosetta, and every output is pasted from that run. Not run: the free-cluster route, and the analytics rule inside a Microsoft Sentinel workspace. The rule's query runs here like every other, and the rule file uses only fields that Microsoft's own published <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> rules use.</p>
+</div>
+
+<section id="intro">
+    <h2>One query language across Microsoft's security data</h2>
+    <p>Kusto is the query engine behind Azure Data Explorer, and KQL is the language you use to ask it questions. The same language runs in Azure Monitor Logs, in Microsoft Sentinel (which keeps its data in Log Analytics workspaces), in advanced hunting in Microsoft Defender XDR, and in Microsoft Fabric. Analysts in a security operations centre (SOC) write it to hunt through logs; detection engineers write it so that a <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system can run it on a schedule and raise alerts.</p>
+    <p>The distinction that matters most: <strong>a query only reads.</strong> It names a table, reshapes it and hands back a table, and it cannot change any data. <strong>A management command starts with a dot</strong> (<code>.create</code>, <code>.ingest</code>, <code>.show</code>) and changes or inspects the database itself. Commands belong to Azure Data Explorer and Fabric, which is why this lab can use a few of them to build its table. In Sentinel you never create <code>AWSCloudTrail</code>: Sentinel's Amazon Web Services (AWS) connectors fill it, and you write only queries.</p>
+    <p>So the lab runs on the Kusto emulator, the Azure Data Explorer engine in a free Docker container, and builds a table with Sentinel's name for it, using Sentinel's column names and types. Every query operator and function used here is one Microsoft documents as available in Sentinel, so what you write carries across.</p>
+</section>
+
+<div class="toc">
+    <h2>On this page</h2>
+    <ol>
+        <li><a href="#model">Tables in, tables out</a></li>
+        <li><a href="#walkthrough">Walk-through: one leaked key, five detections</a></li>
+        <li><a href="#exercises">Hands-on exercises</a></li>
+        <li><a href="#mistakes">Common mistakes</a></li>
+        <li><a href="#next">Where next</a></li>
+    </ol>
+</div>
+
+<section id="model">
+    <h2>Tables in, tables out</h2>
+    <p>A KQL query starts with the name of a table. Each line after that begins with a pipe, <code>|</code>, and one operator. The pipe hands the table so far to the operator; the operator does one job, such as dropping rows, adding a column or counting, and hands a new table on. The table you named is never changed, and whatever leaves the last operator is your result.</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail                                       // all 24 events
+| where isnotempty(ErrorCode)                       // the 10 that failed
+| summarize Failures = count() by SourceIpAddress   // one row per address
+| sort by Failures desc                             // biggest first</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | Failures
+-----------------+----------
+ 203.0.113.50    | 7
+ 192.0.2.20      | 3
+(2 rows)</pre></div>
+    <p>Read it as four tables in a row (you can run it yourself once step 3 has built the table). Every prefix of a query is itself a complete query, so the quickest way to debug one is to delete operators from the bottom and run it again until the table stops surprising you. Two rules before you start: everything is case-sensitive (table names, column names, operators, functions), and <code>//</code> starts a comment.</p>
+</section>
+
+<section id="walkthrough">
+    <h2>Walk-through: one leaked key, five detections</h2>
+    <p>The lab is 24 AWS CloudTrail events from one morning, trimmed to the fields this guide needs but keeping CloudTrail's real field names and nesting. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user, has leaked: from <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) instances and <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> secrets (and is mostly refused), then lists the <a class="glossary-link" href="../glossary.html#term-s3">Simple Storage Service</a> (S3) buckets. Next they create a user, <code>backup-svc</code>, attach <code>AdministratorAccess</code> to it, give it an access key, and use the new identity to stop CloudTrail logging. Around that runs an ordinary morning: sign-ins, one of them without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) and one failed; an administrator creating a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a>; an application refused the same S3 object three times; a CI role describing instances.</p>
+    <p>The walk-through builds five detections from these events:</p>
+    <ul>
+        <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
+        <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
+        <li><strong>D3, new user given a key:</strong> a user created and handed an access key within 10 minutes.</li>
+        <li><strong>D4, console login without MFA:</strong> a successful console sign-in without multi-factor authentication.</li>
+        <li><strong>D5, administrator policy attached:</strong> <code>AdministratorAccess</code> attached to a user.</li>
+    </ul>
+
+    <h3>1. Start a Kusto engine</h3>
+    <p>The Kusto emulator is Microsoft's Azure Data Explorer engine packaged as a Linux container, free and needing no Azure account. Microsoft supports it on Windows and Linux computers with an x86-64 processor and at least 2 GB of memory (4 GB recommended), not on Arm processors, and the image is several gigabytes. Setting <code>ACCEPT_EULA=Y</code> accepts <a href="https://aka.ms/adx.emulator.license" target="_blank" rel="noopener noreferrer">Microsoft's licence terms for the emulator</a>, so read them first; without it the container prints <code>EULA Not Accepted</code> and exits.</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/kql-lab &amp;&amp; cd ~/kql-lab
+docker run -d --name lab-kusto --platform linux/amd64 -e ACCEPT_EULA=Y -m 4G \
+  -p 8080:8080 mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest</pre></div>
+    <p><strong>On an Apple silicon Mac</strong> the engine runs under emulation, which Microsoft does not support. This page was checked that way, on macOS with Docker Desktop's <strong>Use Rosetta for x86_64/amd64 emulation on Apple Silicon</strong> setting turned on (Settings, General), and every step ran. It was not tried without that setting. <code>--platform linux/amd64</code> asks for the only build Microsoft publishes, so Docker does not warn that it differs from your machine; on an x86-64 computer it changes nothing.</p>
+    <p>The emulator has no screen of its own. It answers on port 8080 with no sign-in and no encryption, so keep it on your own machine. Microsoft's clients (Kusto.Explorer, Kusto.CLI, the software development kits) can connect to it; to stay within Python's standard library, save this small client instead:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; kql.py &lt;&lt;'EOF'
+# kql.py: send one query, or one command (it starts with a dot), to the
+# emulator and print the result as a table. Usage: python3 kql.py &lt; file.kql
+import json, sys, urllib.request, urllib.error
+text = sys.stdin.read().strip()
+url = "http://localhost:8080/v1/rest/" + ("mgmt" if text.startswith(".") else "query")
+body = json.dumps({"db": "NetDefaultDB", "csl": text}).encode()
+headers = {"Content-Type": "application/json", "Accept": "application/json"}
+try:
+    table = json.load(urllib.request.urlopen(urllib.request.Request(url, body, headers)))["Tables"][0]
+except urllib.error.HTTPError as err:       # the engine refused: say why
+    sys.exit(json.load(err)["error"]["@message"])
+except urllib.error.URLError as err:        # nothing listening (yet)
+    sys.exit(f"Cannot reach the emulator: {err.reason}")
+show = lambda v: "" if v is None else v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
+rows = [[c["ColumnName"] for c in table["Columns"]]] + [[show(v) for v in r] for r in table["Rows"]]
+width = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
+for n, row in enumerate(rows):
+    print((" " + " | ".join(v.ljust(w) for v, w in zip(row, width))).rstrip())
+    if n == 0:
+        print("+".join("-" * (w + 2) for w in width))
+print(f"({len(rows) - 1} row{'' if len(rows) == 2 else 's'})")
+EOF</pre></div>
+    <p>To run anything on this page, save it in a file and run <code>python3 kql.py &lt; file.kql</code>, or run <code>python3 kql.py</code>, paste, and press Ctrl-D. Check that the engine answers (if <code>kql.py</code> cannot reach it yet, give it a few more seconds):</p>
+<div class="code-block" data-lang="kql"><pre>.show version</pre></div>
+<div class="code-block" data-lang="text"><pre> BuildVersion   | BuildTime            | ServiceType | ProductVersion                      | ServiceOffering
+----------------+----------------------+-------------+-------------------------------------+-----------------
+ 1.0.9766.21061 | 2026-09-27T11:42:02Z | Engine      | 2026.09.27.1134-2638-cb0a545-master |
+(1 row)</pre></div>
+    <p>Your build will be newer if Microsoft has published one since. The emulator starts with one database, <code>NetDefaultDB</code>, and <code>kql.py</code> sends everything there.</p>
+    <p><strong>No Docker, or the emulator will not start?</strong> Create a <a href="https://learn.microsoft.com/en-us/azure/data-explorer/start-for-free" target="_blank" rel="noopener noreferrer">free Azure Data Explorer cluster</a>. It needs a Microsoft account or a Microsoft Entra user identity, not an Azure subscription or a credit card, and Microsoft grants one free cluster for a year, for commercial or non-commercial use, with about 100 GB of storage. Run each KQL block on this page in its web query editor instead of through <code>kql.py</code>; step 2 notes the one difference.</p>
+
+    <h3>2. Load the lab data</h3>
+<div class="code-block" data-lang="bash"><pre>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
+{"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
+{"eventTime":"2026-09-15T09:02:40Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"readOnly":false}
+{"eventTime":"2026-09-15T09:03:05Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"readOnly":true}
+{"eventTime":"2026-09-15T09:10:22Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T09:15:47Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.21","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob","userName":"bob"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:20:03Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.77","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"errorMessage":"Failed authentication","responseElements":{"ConsoleLogin":"Failure"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:31:10Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T09:47:55Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:01:30Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:05Z","eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:31Z","eventSource":"iam.amazonaws.com","eventName":"ListUsers","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:38Z","eventSource":"iam.amazonaws.com","eventName":"ListRoles","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:52Z","eventSource":"iam.amazonaws.com","eventName":"GetAccountAuthorizationDetails","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:05Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:09Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeVpcs","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:14Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeSecurityGroups","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:22Z","eventSource":"secretsmanager.amazonaws.com","eventName":"ListSecrets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:06:12Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:30Z","eventSource":"iam.amazonaws.com","eventName":"AttachUserPolicy","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc","policyArn":"arn:aws:iam::aws:policy/AdministratorAccess"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:51Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"responseElements":{"accessKey":{"userName":"backup-svc","accessKeyId":"AKIAIOSFODNN7EXAMPLE","status":"Active"}},"readOnly":false}
+{"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+{"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
+EOF</pre></div>
+    <p>Kusto stores data in typed columns. The simplest faithful load is a staging table with one column of type <code>dynamic</code>, which holds any JSON (JavaScript Object Notation) value, one whole event per row:</p>
+<div class="code-block" data-lang="kql"><pre>.create table RawCloudTrail (Event: dynamic)</pre></div>
+    <p>Now push the file in. <code>format="json"</code> means one JSON object per line, and the mapping says where the column's value comes from: the path <code>$</code> is the whole event. Microsoft meant <code>.ingest inline</code> for experiments like this one, not for production.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; load.kql &lt;&lt;'EOF'
+.ingest inline into table RawCloudTrail with (format="json", ingestionMapping='[{"Column":"Event","Properties":{"Path":"$"}}]') &lt;|
+EOF
+cat cloudtrail-lab.jsonl &gt;&gt; load.kql
+python3 kql.py &lt; load.kql</pre></div>
+    <p>On a free cluster, paste the whole of <code>load.kql</code> into the query editor and run it. Then look inside what you loaded instead of trusting that the command succeeded:</p>
+<div class="code-block" data-lang="kql"><pre>RawCloudTrail
+| summarize Rows = count(), NullEvents = countif(isnull(Event))</pre></div>
+<div class="code-block" data-lang="text"><pre> Rows | NullEvents
+------+------------
+ 24   | 0
+(1 row)</pre></div>
+    <div class="highlight-box">
+    <p><strong>A load can succeed and still be empty.</strong> Run the same <code>.ingest</code> without <code>ingestionMapping</code> and the engine reports no errors and 24 rows, and all 24 are null: nothing told it which part of each line belongs in <code>Event</code>. A row count proves that rows arrived, not that they hold anything.</p>
+    </div>
+
+    <h3>3. Give it Sentinel's shape</h3>
+    <p>Sentinel stores CloudTrail in a table called <code>AWSCloudTrail</code>, with its own column names: <code>eventTime</code> arrives as <code>TimeGenerated</code>, <code>sourceIPAddress</code> as <code>SourceIpAddress</code>, <code>userIdentity.arn</code> as <code>UserIdentityArn</code>. Microsoft's <a href="https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/awscloudtrail" target="_blank" rel="noopener noreferrer">AWSCloudTrail table reference</a> also types three columns as <code>string</code>, not <code>dynamic</code>: <code>RequestParameters</code>, <code>ResponseElements</code> and <code>AdditionalEventData</code> hold JSON as plain text. Build the same thing:</p>
+<div class="code-block" data-lang="kql"><pre>.set-or-replace AWSCloudTrail &lt;|
+    RawCloudTrail
+    | project
+        TimeGenerated        = todatetime(Event.eventTime),
+        EventName            = tostring(Event.eventName),
+        SourceIpAddress      = tostring(Event.sourceIPAddress),
+        UserIdentityArn      = tostring(Event.userIdentity.arn),
+        UserIdentityUserName = tostring(Event.userIdentity.userName),
+        ErrorCode            = tostring(Event.errorCode),
+        RequestParameters    = tostring(Event.requestParameters),
+        ResponseElements     = tostring(Event.responseElements),
+        AdditionalEventData  = tostring(Event.additionalEventData)</pre></div>
+    <p>That command is a query with a destination. <code>project</code> chooses the output columns and names them; <code>Event.eventName</code> reaches into the dynamic value; <code>todatetime()</code> and <code>tostring()</code> give each column its type, and <code>tostring()</code> on a nested object produces its JSON text, which is what Sentinel stores. <code>.set-or-replace</code> saves the result as a table, replacing its rows if it exists, so running it twice is harmless.</p>
+    <p>These are the nine columns this page uses. The real table has more than 50, such as <code>UserIdentityAccountId</code>; a query that names one missing here fails with an error naming the column, so it cannot mislead you quietly. <code>AWSCloudTrail | getschema</code> lists a table's columns and their types.</p>
+
+    <h3>4. Filter rows: the trail was stopped</h3>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where EventName in ("StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors")
+| project TimeGenerated, EventName, UserIdentityUserName, SourceIpAddress</pre></div>
+<div class="code-block" data-lang="text"><pre> TimeGenerated        | EventName   | UserIdentityUserName | SourceIpAddress
+----------------------+-------------+----------------------+-----------------
+ 2026-09-15T10:09:03Z | StopLogging | backup-svc           | 203.0.113.50
+(1 row)</pre></div>
+    <p><code>where</code> keeps the rows for which its condition is true, and <code>in</code> tests a value against a list. These four calls stop a trail, delete it, or change what it records. One happened, from the attacker's address, made by the identity created minutes before, and the other 23 events stay out, which matters as much. <code>==</code> is exact and case-sensitive, <code>=~</code> ignores case, and lists work the same way (<code>in</code> and <code>in~</code>). Searching inside text is where people slip:</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| summarize HasUser = countif(EventName has "User"), ContainsUser = countif(EventName contains "User")</pre></div>
+<div class="code-block" data-lang="text"><pre> HasUser | ContainsUser
+---------+--------------
+ 0       | 4
+(1 row)</pre></div>
+    <p><code>countif()</code> counts the rows where its condition is true. <code>has</code> matches a whole <em>term</em>: Kusto splits text into runs of letters and digits and indexes every term of three or more characters, which makes <code>has</code> fast. <code>CreateUser</code> is one term, so <code>has "User"</code> finds nothing, while in an Amazon Resource Name (ARN) slashes and hyphens split terms, so <code>UserIdentityArn has "backup"</code> does match <code>user/backup-svc</code>. <code>contains</code> matches any part of the text, ignoring case, and cannot use the index: it found both <code>CreateUser</code> events, <code>ListUsers</code> and <code>AttachUserPolicy</code>.</p>
+
+    <h3>5. Reach into JSON text: a sign-in without MFA</h3>
+    <p>Whether a console sign-in used MFA is recorded in <code>additionalEventData.MFAUsed</code>. In Sentinel's table that column is a string, and the dot only reaches into <code>dynamic</code> values, so <code>AdditionalEventData.MFAUsed</code> fails with a semantic error: a loud failure, which is the good kind. <code>parse_json()</code> turns the text into a dynamic value, <code>tostring()</code> turns the field you pull out back into text you can compare, and <code>extend</code> adds the result as a new column and keeps all the others:</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where EventName == "ConsoleLogin"
+| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)
+| where MFAUsed == "No"
+| project TimeGenerated, UserIdentityUserName, SourceIpAddress, MFAUsed</pre></div>
+<div class="code-block" data-lang="text"><pre> TimeGenerated        | UserIdentityUserName | SourceIpAddress | MFAUsed
+----------------------+----------------------+-----------------+---------
+ 2026-09-15T09:15:47Z | bob                  | 198.51.100.21   | No
+ 2026-09-15T09:20:03Z | alice                | 192.0.2.77      | No
+(2 rows)</pre></div>
+    <p>Two rows, and one of them is wrong. Alice's sign-in from <code>192.0.2.77</code> failed: there was no session for MFA to protect, and a rule that fires on it is noise. The outcome is in <code>responseElements.ConsoleLogin</code>:</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where EventName == "ConsoleLogin"
+| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed),
+         Outcome = tostring(parse_json(ResponseElements).ConsoleLogin)
+| where Outcome == "Success" and MFAUsed == "No"
+| project TimeGenerated, UserIdentityUserName, SourceIpAddress, Outcome, MFAUsed</pre></div>
+<div class="code-block" data-lang="text"><pre> TimeGenerated        | UserIdentityUserName | SourceIpAddress | Outcome | MFAUsed
+----------------------+----------------------+-----------------+---------+---------
+ 2026-09-15T09:15:47Z | bob                  | 198.51.100.21   | Success | No
+(1 row)</pre></div>
+    <p>Bob, and only Bob. The alarm <a class="glossary-link" href="../glossary.html#term-security-hub">AWS Security Hub</a> checks for this (<a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">control CloudWatch.3</a>) also requires a successful sign-in, and Microsoft's own <code>AWS_ConsoleLogonWithoutMFA.yaml</code> leaves failed ones out too. When a column is already <code>dynamic</code>, <code>parse_json()</code> passes the value through unchanged, so writing it costs nothing and the query works whichever type the column has.</p>
+
+    <h3>6. Count, then threshold: a burst of refusals</h3>
+    <p>A first draft of a rule for a leaked key being tried out: count <code>AccessDenied</code> errors per source address, and alert at five.</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where ErrorCode == "AccessDenied"
+| summarize Denied = count() by SourceIpAddress
+| where Denied &gt;= 5</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | Denied
+-----------------+--------
+(0 rows)</pre></div>
+    <p>Nothing. A quiet morning, or a rule that cannot fire? Take the threshold away and look at what the data holds:</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where isnotempty(ErrorCode)
+| summarize Events = count() by ErrorCode</pre></div>
+<div class="code-block" data-lang="text"><pre> ErrorCode                    | Events
+------------------------------+--------
+ AccessDenied                 | 7
+ Client.UnauthorizedOperation | 3
+(2 rows)</pre></div>
+    <p>EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>. The draft counted four of the attacker's seven refusals, one short of its own threshold. Other services spell a refusal differently again: the metric filter AWS Security Hub expects for unauthorized API calls (<a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">control CloudWatch.2</a>) matches any code ending in <code>UnauthorizedOperation</code> or starting with <code>AccessDenied</code>, such as <code>AccessDeniedException</code>, and a refusal by a virtual private cloud (<a class="glossary-link" href="../glossary.html#term-vpc">VPC</a>) endpoint's policy is logged as <code>VpceAccessDenied</code>. Note <code>isnotempty()</code>, not <code>isnull()</code>: in Kusto a <code>string</code> cannot be null, so a missing <code>errorCode</code> arrives as an empty string and <code>isnull(ErrorCode)</code> is never true, here or in Sentinel.</p>
+    <div class="highlight-box">
+    <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, remove the threshold or the filter and confirm that the rows you meant to count exist and look the way you assumed. Make that control part of testing every rule.</p>
+    </div>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+| summarize Denied = count(), Codes = make_set(ErrorCode) by SourceIpAddress
+| where Denied &gt;= 5</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | Denied | Codes
+-----------------+--------+-------------------------------------------------
+ 203.0.113.50    | 7      | ["AccessDenied","Client.UnauthorizedOperation"]
+(1 row)</pre></div>
+    <p>The attacker's address, and not the application's three refusals. Why <code>contains</code> and not a list: <code>in</code> with an exact list counts only the spellings you already know, which is how the draft failed, while the two words the codes share also catch prefixed and suffixed variants. <code>has</code> would not work here, because <code>AccessDeniedException</code> and <code>UnauthorizedOperation</code> are single terms that are not the terms <code>AccessDenied</code> or <code>Unauthorized</code>. The price is a scan instead of an index lookup, which is small for one table over a short window. <code>make_set()</code> puts the distinct codes in the result, so whoever reads the alert sees what was counted.</p>
+
+    <h3>7. Time: ten-minute buckets</h3>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+| summarize Denied = count() by SourceIpAddress, bin(TimeGenerated, 10m)
+| sort by SourceIpAddress asc, TimeGenerated asc</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | TimeGenerated        | Denied
+-----------------+----------------------+--------
+ 192.0.2.20      | 2026-09-15T09:30:00Z | 1
+ 192.0.2.20      | 2026-09-15T09:40:00Z | 1
+ 192.0.2.20      | 2026-09-15T10:00:00Z | 1
+ 203.0.113.50    | 2026-09-15T10:00:00Z | 7
+(4 rows)</pre></div>
+    <p><code>bin()</code> rounds each time down to a multiple of ten minutes, so rows fall into buckets aligned to the clock. All seven of the attacker's refusals land in the 10:00 bucket, within a minute of each other. The application's three are one per bucket across half an hour: something retrying, not someone exploring. For a fixed window, <code>between</code> includes both ends: <code>where TimeGenerated between (datetime(2026-09-15 10:00) .. datetime(2026-09-15 10:10))</code>.</p>
+
+    <h3>8. Two events, one story: a new user given a key at once</h3>
+    <p>Creating a user and immediately giving it an access key is a way to keep access after the leaked key is revoked. That is two events, so it needs a <code>join</code>. <code>let</code> gives a query a name you can use further down; each <code>let</code> ends with a semicolon.</p>
+<div class="code-block" data-lang="kql"><pre>let Created = AWSCloudTrail | where EventName == "CreateUser"
+    | project CreatedAt = TimeGenerated, CreatedBy = UserIdentityUserName, SourceIpAddress,
+              NewUser = tostring(parse_json(RequestParameters).userName);
+let Keyed = AWSCloudTrail | where EventName == "CreateAccessKey"
+    | project KeyAt = TimeGenerated, NewUser = tostring(parse_json(RequestParameters).userName);
+Created
+| join kind=inner Keyed on NewUser
+| project NewUser, CreatedAt, KeyAt, Gap = KeyAt - CreatedAt, CreatedBy, SourceIpAddress</pre></div>
+<div class="code-block" data-lang="text"><pre> NewUser       | CreatedAt            | KeyAt                | Gap      | CreatedBy | SourceIpAddress
+---------------+----------------------+----------------------+----------+-----------+-----------------
+ backup-svc    | 2026-09-15T10:06:12Z | 2026-09-15T10:06:51Z | 00:00:39 | build-bot | 203.0.113.50
+ svc-reporting | 2026-09-15T09:02:40Z | 2026-09-15T11:40:26Z | 02:37:46 | alice     | 198.51.100.20
+(2 rows)</pre></div>
+    <p><code>join kind=inner</code> pairs each row on the left with every row on the right that has the same <code>NewUser</code>. Both users match, and <code>svc-reporting</code> is alice doing her job: she created it at 09:02 and gave it a key more than two and a half hours later. The detection is the time window, a <code>where</code> after the join:</p>
+<div class="code-block" data-lang="kql"><pre>let Created = AWSCloudTrail | where EventName == "CreateUser"
+    | project CreatedAt = TimeGenerated, CreatedBy = UserIdentityUserName, SourceIpAddress,
+              NewUser = tostring(parse_json(RequestParameters).userName);
+let Keyed = AWSCloudTrail | where EventName == "CreateAccessKey"
+    | project KeyAt = TimeGenerated, NewUser = tostring(parse_json(RequestParameters).userName);
+Created
+| join kind=inner Keyed on NewUser
+| where KeyAt between (CreatedAt .. CreatedAt + 10m)
+| project NewUser, CreatedAt, KeyAt, Gap = KeyAt - CreatedAt, CreatedBy, SourceIpAddress</pre></div>
+<div class="code-block" data-lang="text"><pre> NewUser    | CreatedAt            | KeyAt                | Gap      | CreatedBy | SourceIpAddress
+------------+----------------------+----------------------+----------+-----------+-----------------
+ backup-svc | 2026-09-15T10:06:12Z | 2026-09-15T10:06:51Z | 00:00:39 | build-bot | 203.0.113.50
+(1 row)</pre></div>
+    <p>Thirty-nine seconds, by the leaked identity, from the attacker's address. Always write the <code>kind</code>. Leave it out and KQL uses <code>innerunique</code>, which keeps only one left-hand row for each key value, and Microsoft's documentation says which one is chosen at random: a user who signed in twice can quietly become a user who signed in once.</p>
+
+    <h3>9. Make it a Sentinel analytics rule</h3>
+    <p>In Sentinel a detection is a scheduled analytics rule: the query, plus how often to run it, how far back to look, when to alert, and what the alert is about. You can build one in the portal's rule wizard or deploy it as an Azure Resource Manager (ARM) template. Microsoft writes its own rules as YAML files, in the format its <a href="https://learn.microsoft.com/en-us/azure/sentinel/isv/sentinel-analytic-rules-creation" target="_blank" rel="noopener noreferrer">rule-authoring guide</a> describes, and publishes them in the <a href="https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Amazon%20Web%20Services/Analytic%20Rules" target="_blank" rel="noopener noreferrer">Azure-Sentinel repository's AWS analytic rules folder</a>. That format is a good way to keep a rule under version control. Save step 6's query in the same shape; the <code>id</code> is a globally unique identifier (GUID) you generate once:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; AWS_RefusedCallBurst.yaml &lt;&lt;'EOF'
+id: 200e45de-0a6e-4803-8137-248a3378a8dd
+name: Burst of refused AWS API calls from one address
+description: Identifies five or more refused AWS API calls from one source address.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 10m
+queryPeriod: 20m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1580
+  - T1087.004
+query: |
+  AWSCloudTrail
+  | where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+  | summarize Denied = count(), Codes = make_set(ErrorCode) by SourceIpAddress
+  | where Denied &gt;= 5
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+customDetails:
+  DeniedCalls: Denied
+version: 1.0.0
+kind: Scheduled
+EOF</pre></div>
+    <ul>
+        <li><strong><code>queryFrequency</code> and <code>queryPeriod</code></strong> are "run every" and "look back over", each from 5 minutes to 14 days. Sentinel runs the query over the lookback only, so it needs no time filter of its own, and starts each run five minutes after its scheduled time to allow for late events. A lookback twice the frequency means a burst lasting ten minutes or less falls wholly inside at least one run; the price is that a burst can be counted in two runs.</li>
+        <li><strong><code>triggerOperator: gt</code> with <code>triggerThreshold: 0</code></strong> means "alert when the query returns any rows". The trigger counts result rows, not events, so the count of five belongs in the query.</li>
+        <li><strong><code>requiredDataConnectors</code></strong> names both of Sentinel's AWS connectors, the older CloudTrail one (<code>AWS</code>) and the one that reads logs from an S3 bucket (<code>AWSS3</code>), because either can fill <code>AWSCloudTrail</code>.</li>
+        <li><strong><code>entityMappings</code></strong> tells Sentinel which column holds an address, so alerts and incidents about the same address can be grouped. <code>customDetails</code> puts the count on the alert.</li>
+        <li><strong><code>tactics</code> and <code>relevantTechniques</code></strong> map the rule to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a>, <a class="glossary-link" href="../glossary.html#term-mitre">MITRE</a>'s knowledge base of adversary tactics and techniques: Discovery, with Cloud Infrastructure Discovery (<a href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener noreferrer">T1580</a>) and Account Discovery: Cloud Account (<a href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener noreferrer">T1087.004</a>). Sentinel accepts only its own list of tactic names, which the authoring guide ties to ATT&amp;CK v16, so it lags ATT&amp;CK's releases; Exercise 4 shows what that means for log tampering.</li>
+    </ul>
+
+    <h3>10. Test the rule both ways</h3>
+    <p>The emulator has no scheduler, but you can count what two consecutive runs would see by writing their 20-minute windows by hand: the run at 10:00 looks back to 09:40, the run at 10:10 to 09:50.</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+| summarize
+    RunAt1000 = countif(TimeGenerated between (datetime(2026-09-15 09:40) .. datetime(2026-09-15 10:00))),
+    RunAt1010 = countif(TimeGenerated between (datetime(2026-09-15 09:50) .. datetime(2026-09-15 10:10)))
+    by SourceIpAddress</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | RunAt1000 | RunAt1010
+-----------------+-----------+-----------
+ 192.0.2.20      | 1         | 1
+ 203.0.113.50    | 0         | 7
+(2 rows)</pre></div>
+    <p>The 10:10 run sees the attacker's seven refusals and raises an alert; the 10:00 run sees one of the application's and none of the attacker's, and stays silent. Keep a check like this with the rule as its test, one window that must alert and one that must not: the second is what catches a rule that fires on everything.</p>
+</section>
+
+<section id="exercises">
+    <h2>Hands-on exercises</h2>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 1</span>
+        <p>The attacker gave <code>backup-svc</code> administrator rights (D5). Write a query that finds any attachment of a policy named <code>AdministratorAccess</code>, whether to a user, a group or a role, and shows who did it, to what, and when.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where EventName in ("AttachUserPolicy", "AttachGroupPolicy", "AttachRolePolicy")
+| extend Params = parse_json(RequestParameters)
+| extend PolicyArn = tostring(Params.policyArn),
+         Target = coalesce(tostring(Params.userName), tostring(Params.groupName),
+                           tostring(Params.roleName))
+| where PolicyArn endswith "/AdministratorAccess"
+| project TimeGenerated, UserIdentityUserName, EventName, Target, PolicyArn</pre></div>
+<div class="code-block" data-lang="text"><pre> TimeGenerated        | UserIdentityUserName | EventName        | Target     | PolicyArn
+----------------------+----------------------+------------------+------------+---------------------------------------------
+ 2026-09-15T10:06:30Z | build-bot            | AttachUserPolicy | backup-svc | arn:aws:iam::aws:policy/AdministratorAccess
+(1 row)</pre></div>
+            <p>Parse the JSON once into a column, then pull fields from it. The target's name sits in a different field for each call, and <code>coalesce()</code> returns the first argument that is not null, or for strings not empty: the empty-string rule from step 6 working in your favour. <code>endswith</code> matches the AWS managed policy and any customer policy given the same name, and both are worth a look.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 2</span>
+        <p>A colleague's version of the burst query buckets time in ten-minute steps that start at three minutes past (a rule that runs at :03, :13 and :23 splits time the same way). It returns nothing, although the seven refusals are still in the data. What happened, and how do you prove it?</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+| summarize Denied = count()
+    by SourceIpAddress, Bucket = bin_at(TimeGenerated, 10m, datetime(2026-09-15 10:03))
+| where Denied &gt;= 5</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | Bucket | Denied
+-----------------+--------+--------
+(0 rows)</pre></div>
+        <details>
+            <summary>Show the answer</summary>
+            <p>Run the control: the same query with the threshold removed.</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+| summarize Denied = count()
+    by SourceIpAddress, Bucket = bin_at(TimeGenerated, 10m, datetime(2026-09-15 10:03))
+| sort by SourceIpAddress asc, Bucket asc</pre></div>
+<div class="code-block" data-lang="text"><pre> SourceIpAddress | Bucket               | Denied
+-----------------+----------------------+--------
+ 192.0.2.20      | 2026-09-15T09:23:00Z | 1
+ 192.0.2.20      | 2026-09-15T09:43:00Z | 1
+ 192.0.2.20      | 2026-09-15T09:53:00Z | 1
+ 203.0.113.50    | 2026-09-15T09:53:00Z | 3
+ 203.0.113.50    | 2026-09-15T10:03:00Z | 4
+(5 rows)</pre></div>
+            <p>The burst straddles a bucket boundary. Three refusals fell before 10:03:00 and four after, and neither bucket reaches five. Nothing about the attack changed, only where the boundaries fell. This is why the rule in step 9 counts over its whole lookback instead of binning inside it, and uses a lookback longer than its frequency.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 3</span>
+        <p>Another colleague looks for the stopped trail over the last day, gets a count of zero, and concludes that nobody touched it. What went wrong, and what should they have run first?</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where TimeGenerated &gt; ago(1d)
+| where EventName == "StopLogging"
+| count</pre></div>
+<div class="code-block" data-lang="text"><pre> Count
+-------
+ 0
+(1 row)</pre></div>
+        <details>
+            <summary>Show the answer</summary>
+            <p><code>ago()</code> counts back from the engine's clock, and these events happened on 15 September 2026, so the time filter removed every one of them. The control is to ask the data what time it covers:</p>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| summarize Earliest = min(TimeGenerated), Latest = max(TimeGenerated)</pre></div>
+<div class="code-block" data-lang="text"><pre> Earliest             | Latest
+----------------------+----------------------
+ 2026-09-15T08:55:12Z | 2026-09-15T11:40:26Z
+(1 row)</pre></div>
+            <p>On lab data, use fixed times instead. Sentinel adds more layers of the same trap: the Log Analytics time picker shows the last 24 hours unless your query sets its own range, and a scheduled rule only ever sees its lookback. And if you sent these lab events to a real Log Analytics workspace, Azure Monitor would replace every <code>TimeGenerated</code> more than two days older than its arrival with the arrival time, so their dates would not survive.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 4</span>
+        <p>Turn the trail query from step 4 into a Sentinel rule (D1). What goes in <code>tactics</code> and <code>relevantTechniques</code>, and what should the query add so that it alerts only when the change succeeded?</p>
+        <details>
+            <summary>Show the answer</summary>
+            <p>Sentinel still uses ATT&amp;CK's pre-v19 names, so the mapping it accepts is the one in Microsoft's own <code>AWS_LogTampering.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre>tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.008</pre></div>
+<div class="code-block" data-lang="kql"><pre>AWSCloudTrail
+| where EventName in ("StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors")
+| where isempty(ErrorCode)
+| project TimeGenerated, EventName, UserIdentityUserName, SourceIpAddress</pre></div>
+            <p><code>isempty(ErrorCode)</code> keeps only calls that succeeded, so this returns step 4's single row: the <code>StopLogging</code> call went through. Microsoft's library puts refused attempts in a separate, low-severity rule, <code>AWS_ClearStopChangeTrailLogs.yaml</code>. In ATT&amp;CK v19.2 this behaviour is <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002 Disable or Modify Cloud Log</a>, under the new Defense Impairment tactic (TA0112): T1562.008 is revoked, and TA0005, which Sentinel still calls <code>DefenseEvasion</code>, is renamed Stealth. Neither new name is in Sentinel's tactic list yet, and Microsoft's content checks reject <code>T1685.002</code> because no tactic they know contains it. Map to what your platform accepts, and expect the mapping to move when it catches up.</p>
+        </details>
+    </div>
+</section>
+
+<section id="mistakes">
+    <h2>Common mistakes</h2>
+    <ul>
+        <li><strong>Reading <code>has</code> as "contains".</strong> <code>has</code> matches whole terms, and <code>CreateUser</code> is one term. Use <code>contains</code> for part of a word.</li>
+        <li><strong>Testing a string with <code>isnull()</code>.</strong> Kusto strings are never null; a missing value is empty. Use <code>isempty()</code> and <code>isnotempty()</code>.</li>
+        <li><strong>Trusting <code>!=</code> to mean "has a different value".</strong> <code>ErrorCode != "AccessDenied"</code> also keeps every event that has no error code at all.</li>
+        <li><strong>Counting one spelling of an outcome.</strong> A rule that counts only <code>AccessDenied</code> misses EC2's <code>Client.UnauthorizedOperation</code>, under-counts, and stays silent.</li>
+        <li><strong>Treating Sentinel's JSON columns as objects.</strong> <code>RequestParameters</code>, <code>ResponseElements</code> and <code>AdditionalEventData</code> are text. The dot fails loudly; searching the raw text with <code>has</code> or <code>contains</code> fails quietly, because it can match the word in any field.</li>
+        <li><strong>Leaving out <code>kind=</code> on a join.</strong> The default, <code>innerunique</code>, keeps one left-hand row per key and drops the rest without saying so.</li>
+        <li><strong>Filtering with <code>ago()</code> before checking the data's dates.</strong> Old data, lab data and a time picker set to the last 24 hours all return nothing. Run <code>min(TimeGenerated)</code> and <code>max(TimeGenerated)</code> first.</li>
+        <li><strong>Binning inside a scheduled rule.</strong> A bucket boundary can split a burst so that neither half reaches the threshold. Count over the whole lookback.</li>
+        <li><strong>Believing a load because it reported rows.</strong> JSON ingested without a mapping arrives as rows of nulls. Look inside before you query.</li>
+    </ul>
+</section>
+
+<section id="next" class="cta-section">
+    <h2>Where next</h2>
+    <ul>
+        <li><a href="sigma-and-yara.html">Sigma and YARA</a>, for writing a detection once in a vendor-neutral format and converting it for a SIEM such as Sentinel.</li>
+        <li><a href="splunk-spl.html">Splunk SPL</a> (Search Processing Language) and <a href="elastic-esql-eql.html">Elastic ES|QL and EQL</a> (Elasticsearch Query Language and Event Query Language), the same five detections on the same 24 events in other query languages.</li>
+        <li><a href="../detection-engineering.html">Detection engineering</a> for the lifecycle around a rule: testing, tuning, versioning and retiring it.</li>
+        <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a>, to send real CloudTrail from your own account somewhere these queries can run.</li>
+        <li><a href="https://learn.microsoft.com/en-us/kusto/query/tutorials/common-tasks-microsoft-sentinel?view=microsoft-sentinel" target="_blank" rel="noopener noreferrer">Microsoft's common tasks with KQL for Microsoft Sentinel</a> and <a href="https://github.com/Azure/Azure-Sentinel" target="_blank" rel="noopener noreferrer">the Azure-Sentinel repository</a>, where reading Microsoft's own rules is the quickest way to learn the idioms.</li>
+    </ul>
+</section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=ce8e8780" integrity="sha384-3shiQXFKQDjuyR3tcw2cQxS8sF6ASTavSyTLHJ+M+dieHkpjecvxrfWKM+4dVLal"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

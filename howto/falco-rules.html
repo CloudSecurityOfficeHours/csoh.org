@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Learn Falco's YAML rule language from zero: conditions, lists, macros, exceptions and overrides, run on a CloudTrail lab and a container's system calls.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="falco rules tutorial, falco rule syntax, falco macros and lists, falco exceptions, falco override append, falco cloudtrail plugin, falcoctl artifact install, falco modern ebpf docker desktop">
+    <title>Falco rules: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/falco-rules.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/falco-rules.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/falco-rules.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Falco rules, hands-on - CSOH">
+    <meta property="og:description" content="Learn Falco's YAML rule language from zero: conditions, lists, macros, exceptions and overrides, run on a CloudTrail lab and a container's system calls.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="falco">
+    <meta property="article:tag" content="falco rules">
+    <meta property="article:tag" content="runtime security">
+    <meta property="article:tag" content="cloudtrail">
+    <meta property="article:tag" content="detection engineering">
+    <meta property="article:tag" content="ebpf">
+    <meta property="og:url" content="https://csoh.org/howto/falco-rules.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/falco-rules.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Falco rules, hands-on">
+    <meta name="twitter:description" content="Learn Falco's YAML rule language from zero: conditions, lists, macros, exceptions and overrides, run on a CloudTrail lab and a container's system calls.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/falco-rules.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=60c4edd0" integrity="sha384-pD4ibj4YLJX3FZD7hEpxbiqvf30amQOxGqTS1HWzuBvM1OS7PbM1FvWamsfg0IgH"></script>
+    <link rel="preload" href="/style.css?v=9da1e156" as="style"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+    <link rel="stylesheet" href="/style.css?v=9da1e156"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Falco rules, hands-on",
+      "description": "Learn Falco's YAML rule language from zero: conditions, lists, macros, exceptions and overrides, run on a CloudTrail lab and a container's system calls.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-09-27",
+      "dateModified": "2026-09-27",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Get Falco, falcoctl and the plugins",
+          "text": "Run the multi-arch Falco 0.45.0 image and install the cloudtrail and json plugins and the stock CloudTrail rules with falcoctl."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Give the lab CloudTrail's file shape",
+          "text": "Convert the JSON Lines lab into one Records file with jq, adding the eventType field the plugin needs to read each record."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Look at everything first",
+          "text": "Write a plugin configuration, a shell function and a match-everything control rule, and confirm that all 24 events arrive."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Write D1 with a list and a macro",
+          "text": "Detect CloudTrail tampering with a list of calls, a macro, an output template, a priority and ATT&CK v19.2 tags."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Reach nested fields for D4",
+          "text": "Use json.value JSON Pointers to separate a successful sign-in without MFA from a failed one that looks the same."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Send counting and pairing downstream",
+          "text": "Emit one JSON alert per denied call, count per address outside Falco, and find the missing EC2 error code with a control."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Tune stock rules by override",
+          "text": "See a stock rule shadow yours under first-match, then disable it and append an exception without editing the stock file."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Run a system-call rule",
+          "text": "Load the modern eBPF probe in a privileged container and test a shadow-file rule on a positive and a negative case."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Falco rules, hands-on",
+          "item": "https://csoh.org/howto/falco-rules.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../human-risk.html">Human Risk</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Falco rules</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Falco rules, hands-on</h1>
+        <p><a class="glossary-link" href="../glossary.html#term-falco">Falco</a> tests every event against your rules the moment it happens: Linux system calls by default and, through plugins, cloud audit logs. Learn its YAML rule language from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, then turn the same language on a running container.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker (Docker Desktop is fine), <code>jq</code> and a terminal. No cloud account: the lab is a file.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> every command and rule on this page was run with Falco 0.45.0 and falcoctl 0.14.2 in Docker Desktop 4.86.0 on an Apple silicon Mac, using the projects' native arm64 images (the amd64 images were not tested), and the outputs shown are what they printed. Step 8 ran Falco's kernel probe against Docker Desktop's Linux kernel (6.12.76-linuxkit). falcosidekick, named in step 6, was not run.</p>
+        </div>
+
+        <section id="intro">
+            <h2>Rules that judge each event as it happens</h2>
+            <p>Falco is an open-source (Apache 2.0) runtime security tool for Linux, created by Sysdig and now a graduated project of the Cloud Native Computing Foundation (<a class="glossary-link" href="../glossary.html#term-cncf">CNCF</a>). Its usual job is watching system calls, the requests every program makes to the Linux kernel, and raising an alert the moment one matches a rule. Plugins let the same engine read other event streams, among them <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> audit logs, Okta, GitHub and, on this page, AWS (Amazon Web Services) CloudTrail.</p>
+            <p>A Falco rule is a few lines of YAML: a condition that is true or false for one event, a line of output to print when it is true, and a priority. Platform and security engineers write them, often starting from the stock rules the Falco project publishes, and keep them in git like any other code.</p>
+            <p>The one distinction that matters: Falco is not a search engine. It keeps no store of past events, and no rule can look back or count. Each event is judged alone as it arrives, then forgotten. That is what lets Falco alert in real time, and it is why two of the five detections on this page have to be finished somewhere else.</p>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">One event in, one verdict out</a></li>
+                <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>One event in, one verdict out</h2>
+            <p>Everything in Falco follows from one idea: <strong>a rule is a test applied to each event on its own</strong>. Events arrive one at a time, Falco checks each against the loaded rules, and when a rule's condition is true it prints that rule's output with the event's values filled in. Then it moves on and remembers nothing. This is a complete rule for CloudTrail events:</p>
+<div class="code-block" data-lang="yaml"><pre>- rule: Trail stopped
+  desc: Someone called StopLogging.
+  condition: ct.name = "StopLogging"
+  output: StopLogging by %ct.user from %ct.srcip
+  priority: CRITICAL
+  source: aws_cloudtrail</pre></div>
+            <p><code>ct.name</code> is a <strong>field</strong>: a named value extracted from each event, here the CloudTrail <code>eventName</code>. In <code>output</code>, a field name after <code>%</code> is replaced by the event's value. <code>source</code> says which stream the rule reads. Against the lab's 24 events the condition is tested 24 times and is true once, which prints:</p>
+<div class="code-block" data-lang="text"><pre>10:09:03.000000000: Critical StopLogging by backup-svc from 203.0.113.50</pre></div>
+            <p>Notice what a condition cannot say. It sees one event, so there is no "five times", no "within 10 minutes" and no "after a CreateUser". Counting and correlation happen in whatever receives Falco's alerts.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through</h2>
+            <p>The lab is 24 CloudTrail events. A <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user's access key, <code>build-bot</code>, has leaked. From <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets, and is mostly refused. They list the storage buckets, create a user called <code>backup-svc</code>, make it an administrator, give it an access key and use it to stop CloudTrail logging. Around that sits ordinary activity: an administrator creating a service user, a sign-in without <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication), a failed sign-in, and an application refused the same file three times.</p>
+            <p>Five detections run through every guide in this series:</p>
+            <ul>
+                <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
+                <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
+                <li><strong>D3, new user given a key:</strong> a user created and handed an access key within 10 minutes.</li>
+                <li><strong>D4, console login without MFA:</strong> a successful console sign-in without multi-factor authentication.</li>
+                <li><strong>D5, administrator policy attached:</strong> <code>AdministratorAccess</code> attached to a user.</li>
+            </ul>
+            <p>D1, D4 and D5 each look at one event, so each is a Falco rule. D2 needs a count and D3 needs two events; step 6 shows what Falco does instead.</p>
+
+            <h3>1. Get Falco, falcoctl and the plugins</h3>
+            <p>Everything runs in containers, and the official images are published for both Intel/AMD and Arm processors, so an Apple silicon Mac runs them natively. falcoctl, the Falco project's tool for rules and plugins, installs the <code>cloudtrail</code> plugin (reads CloudTrail files), the <code>json</code> plugin (reads any value inside an event) and the stock CloudTrail rules used in step 7:</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/falco-lab/plugins ~/falco-lab/rules &amp;&amp; cd ~/falco-lab
+docker run --rm --name csoh-lab-falco falcosecurity/falco:0.45.0 falco --version
+
+docker run --rm --name csoh-lab-falcoctl -u 0 -v "$PWD":/lab \
+  falcosecurity/falcoctl:0.14.2 artifact install \
+  cloudtrail:0.17.1 json:0.7.4 cloudtrail-rules:0.17.1 \
+  --plugins-dir /lab/plugins --rulesfiles-dir /lab/rules</pre></div>
+            <p>Expect <code>Falco version: 0.45.0</code> and <code>Engine: 0.65.0</code> among the output, then <code>Signature successfully verified!</code> and <code>Artifact successfully installed</code> once per artifact. <code>-u 0</code> runs falcoctl as root, because its image's default user cannot create the configuration directory falcoctl needs. <code>plugins/</code> now holds <code>libcloudtrail.so</code> and <code>libjson.so</code>, built for your machine's architecture, and <code>rules/</code> holds <code>aws_cloudtrail_rules.yaml</code>.</p>
+
+            <h3>2. Load the lab and give it CloudTrail's file shape</h3>
+            <p>The lab file holds one JSON (JavaScript Object Notation) event per line. CloudTrail itself writes files holding one object, <code>{"Records": [...]}</code>, and that is what the cloudtrail plugin reads, from files whose names end in <code>.json</code>. One <code>jq</code> command converts it (the <a href="jq-and-jmespath.html">jq guide</a> explains <code>-s</code> and <code>map</code>):</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
+{"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
+{"eventTime":"2026-09-15T09:02:40Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"readOnly":false}
+{"eventTime":"2026-09-15T09:03:05Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"readOnly":true}
+{"eventTime":"2026-09-15T09:10:22Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T09:15:47Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.21","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob","userName":"bob"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:20:03Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.77","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"errorMessage":"Failed authentication","responseElements":{"ConsoleLogin":"Failure"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:31:10Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T09:47:55Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:01:30Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:05Z","eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:31Z","eventSource":"iam.amazonaws.com","eventName":"ListUsers","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:38Z","eventSource":"iam.amazonaws.com","eventName":"ListRoles","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:52Z","eventSource":"iam.amazonaws.com","eventName":"GetAccountAuthorizationDetails","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:05Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:09Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeVpcs","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:14Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeSecurityGroups","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:22Z","eventSource":"secretsmanager.amazonaws.com","eventName":"ListSecrets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:06:12Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:30Z","eventSource":"iam.amazonaws.com","eventName":"AttachUserPolicy","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc","policyArn":"arn:aws:iam::aws:policy/AdministratorAccess"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:51Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"responseElements":{"accessKey":{"userName":"backup-svc","accessKeyId":"AKIAIOSFODNN7EXAMPLE","status":"Active"}},"readOnly":false}
+{"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+{"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
+EOF
+
+shasum -a 256 cloudtrail-lab.jsonl
+jq -s '{Records: map(.eventType = (if .eventName == "ConsoleLogin" then "AwsConsoleSignIn"
+                                   else "AwsApiCall" end))}' cloudtrail-lab.jsonl &gt; cloudtrail-lab.json</pre></div>
+            <p><code>shasum</code> should print <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>, the hash of the lab file every guide in this series uses. <code>-s</code> reads the 24 lines into one array, and <code>map()</code> gives each record an <code>eventType</code>.</p>
+            <div class="highlight-box">
+            <p><strong>Without <code>eventType</code>, Falco reads nothing and says nothing.</strong> AWS documents <code>eventType</code> as present on every CloudTrail record, and the plugin skips any record without one. The lab file was trimmed of it, so the conversion puts it back. Leave that out and step 3 reports <code>Events detected: 0</code>, with no error and an exit code of 0: the same thing a quiet account looks like.</p>
+            </div>
+
+            <h3>3. Point Falco at the file, and look at everything first</h3>
+            <p>A Falco configuration file says where events come from and where alerts go. Save this as <code>falco-lab.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># falco-lab.yaml: read one CloudTrail file instead of the kernel
+plugins:
+  - name: cloudtrail
+    library_path: /lab/plugins/libcloudtrail.so
+    open_params: cloudtrail-lab.json    # a file path: read it, then stop
+  - name: json
+    library_path: /lab/plugins/libjson.so
+load_plugins: [cloudtrail, json]
+plugins_hostinfo: false                 # CloudTrail events need no host /proc
+stdout_output:
+  enabled: true                         # print alerts in the terminal</pre></div>
+            <p>Every Falco run from here to step 7 is the same container, so wrap it in a shell function. It mounts this folder at <code>/lab</code>, which is why the paths above start there, and <code>--disable-source syscall</code> stops Falco trying to watch the kernel as well; step 8 does that.</p>
+<div class="code-block" data-lang="bash"><pre>falco() {
+  docker run --rm --name csoh-lab-falco -v "$PWD":/lab -w /lab \
+    falcosecurity/falco:0.45.0 falco -c falco-lab.yaml --disable-source syscall "$@"
+}</pre></div>
+            <p>Before any detection, write a <strong>control rule</strong> that matches every event, so you can see what Falco actually receives. Save it as <code>everything.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># everything.yaml: a control rule that matches every CloudTrail event
+- rule: Every event
+  desc: Control rule. Shows what arrived, before any detection logic.
+  condition: evt.num &gt; 0
+  output: "%ct.name from %ct.srcip error=%ct.error"
+  priority: DEBUG
+  source: aws_cloudtrail</pre></div>
+<div class="code-block" data-lang="bash"><pre>falco -r everything.yaml | tail -5</pre></div>
+<div class="code-block" data-lang="text"><pre>Events detected: 24
+Rule counts by severity:
+   DEBUG: 24
+Triggered rules by rule name:
+   Every event: 24</pre></div>
+            <p>All 24 arrived (<code>tail -5</code> keeps only Falco's closing summary). <code>-r</code> names the rules file to load, in place of the default ones. <code>evt.num</code> is each event's sequence number, so <code>evt.num &gt; 0</code> is always true; the stock CloudTrail file uses the same condition for a rule it ships switched off. Run it again without <code>tail</code> to see the 24 alerts: each starts with the event's own time and the rule's priority, and the 14 events with no error code end in <code>error=&lt;NA&gt;</code>, which is how Falco prints a field the event does not have. Leave out <code>source: aws_cloudtrail</code> and Falco assumes <code>syscall</code>, the kernel, and rejects the rule: <code>ct.</code> fields do not exist there.</p>
+
+            <h3>4. A list and a macro: trail tampering (D1)</h3>
+            <p>Save this as <code>d1.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># d1.yaml: D1, CloudTrail logging stopped, deleted or changed
+- list: trail_tampering_calls
+  items: [StopLogging, DeleteTrail, UpdateTrail, PutEventSelectors]
+
+- macro: call_succeeded
+  condition: (not ct.error exists)
+
+- rule: CloudTrail logging tampered with
+  desc: A call that stops, deletes or changes a CloudTrail trail succeeded.
+  condition: ct.name in (trail_tampering_calls) and call_succeeded
+  output: &gt;
+    CloudTrail logging tampered with (call=%ct.name user=%ct.user
+    ip=%ct.srcip trail=%ct.request.name)
+  priority: CRITICAL
+  source: aws_cloudtrail
+  tags: [aws, cloudtrail, mitre_defense_impairment, T1685.002]</pre></div>
+<div class="code-block" data-lang="bash"><pre>falco -r d1.yaml</pre></div>
+            <p>From here on, the outputs shown leave out Falco's closing summary:</p>
+<div class="code-block" data-lang="text"><pre>10:09:03.000000000: Critical CloudTrail logging tampered with (call=StopLogging user=backup-svc ip=203.0.113.50 trail=arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail)</pre></div>
+            <p>One alert, <code>backup-svc</code> at 10:09:03; the other 23 events are the negative case and none fires. A <strong>list</strong> is a named set of values, and <code>in</code> is true when the field equals any of them. A <strong>macro</strong> is a named piece of condition that rules reuse. <code>exists</code> is true when the event has the field at all, so <code>not ct.error exists</code> means the call did not fail. <code>output: &gt;</code> is YAML's folded style, which joins the two lines into one. The priority is a severity label, one of <code>EMERGENCY</code>, <code>ALERT</code>, <code>CRITICAL</code>, <code>ERROR</code>, <code>WARNING</code>, <code>NOTICE</code>, <code>INFORMATIONAL</code> and <code>DEBUG</code>; it does not change the order in which rules run.</p>
+            <p>Tags are free text. Falco's style guide asks rules contributed to the project to carry the <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge) tactic and technique, and yours can do the same. This page uses ATT&amp;CK v19.2, which revoked T1562.008 and files cloud-log tampering as <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002 Disable or Modify Cloud Log</a>, under the Defense Impairment tactic.</p>
+
+            <h3>5. Nested fields: console logins without MFA (D4)</h3>
+            <p>The plugin's <code>ct.</code> fields cover the common parts of an event. For anything else, the json plugin's <code>json.value[...]</code> takes a JSON Pointer: a path from the top of the event, one <code>/</code> per level, with case-sensitive keys. Save <code>d4.yaml</code>, a naive rule and a correct one:</p>
+<div class="code-block" data-lang="yaml"><pre># d4.yaml: D4, a successful console sign-in without MFA, and a naive version
+- rule: Console login without MFA (naive)
+  desc: Checks only the MFA flag.
+  condition: ct.name = "ConsoleLogin" and json.value[/additionalEventData/MFAUsed] = "No"
+  output: Naive rule (user=%ct.user ip=%ct.srcip result=%json.value[/responseElements/ConsoleLogin])
+  priority: WARNING
+  source: aws_cloudtrail
+
+- rule: Console login without MFA
+  desc: A console sign-in that succeeded without multi-factor authentication.
+  condition: &gt;
+    ct.name = "ConsoleLogin"
+    and json.value[/responseElements/ConsoleLogin] = "Success"
+    and json.value[/additionalEventData/MFAUsed] = "No"
+  output: Console login without MFA (user=%ct.user ip=%ct.srcip)
+  priority: WARNING
+  source: aws_cloudtrail
+  tags: [aws, iam, mitre_initial_access, T1078.004]</pre></div>
+<div class="code-block" data-lang="bash"><pre>falco -r d4.yaml -o rule_matching=all</pre></div>
+<div class="code-block" data-lang="text"><pre>09:15:47.000000000: Warning Naive rule (user=bob ip=198.51.100.21 result=Success)
+09:15:47.000000000: Warning Console login without MFA (user=bob ip=198.51.100.21)
+09:20:03.000000000: Warning Naive rule (user=alice ip=192.0.2.77 result=Failure)</pre></div>
+            <p>The correct rule fires once, for <code>bob</code>. The naive rule also fires for <code>alice</code> at 09:20:03: her sign-in failed, and her failed sign-in records <code>MFAUsed</code> as <code>No</code> too. It carries no <code>errorCode</code> either, so the <code>call_succeeded</code> macro would not have caught it; the verdict is in <code>responseElements.ConsoleLogin</code>. <code>-o</code> sets one configuration option for this run, and <code>rule_matching=all</code> lets both rules fire on bob's event. By default only the first rule to match an event fires, which matters in step 7.</p>
+
+            <h3>6. What Falco cannot do: count (D2) and pair (D3)</h3>
+            <p>D2 asks whether one source address was refused five or more times. That is a count across events, and a condition sees one event. What Falco can do is raise one alert per refused call and hand the alerts, as JSON, to something that counts: a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management system), a log store or, here, the shell. Start with the obvious rule: the denial codes go in a list, and the list holds the one code everybody knows. Save <code>d2.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># d2.yaml: one alert per denied call
+- list: denied_error_codes
+  items: [AccessDenied]
+
+- rule: API call denied
+  desc: A refused call. Count these per source address downstream.
+  condition: ct.error in (denied_error_codes)
+  output: API call denied (call=%ct.name error=%ct.error ip=%ct.srcip)
+  priority: NOTICE
+  source: aws_cloudtrail
+  tags: [aws, mitre_discovery, T1087.004, T1580]</pre></div>
+            <p>With <code>-o json_output=true</code> each alert is a JSON object; <code>jq</code> pulls out the source address, <code>uniq -c</code> counts, and <code>awk</code> keeps counts of five or more:</p>
+<div class="code-block" data-lang="bash"><pre>falco -r d2.yaml -o json_output=true \
+  | jq -Rr 'fromjson? | .output_fields["ct.srcip"]' | sort | uniq -c | awk '$1 &gt;= 5'</pre></div>
+            <p>No output. Delete the <code>awk</code> and the counts appear: 4 for <code>203.0.113.50</code> and 3 for <code>192.0.2.20</code>, so nobody reaches five. (<code>fromjson?</code> keeps the JSON alert lines and skips Falco's plain-text summary.) Did nothing happen, or can the rule not see what happened?</p>
+            <div class="highlight-box">
+            <p><strong>A rule that returns nothing and a rule that cannot work return the same thing.</strong> Before you believe silence, run a control that must return something. The control rule from step 3 sees every event, so ask it which error codes exist at all.</p>
+            </div>
+<div class="code-block" data-lang="bash"><pre>falco -r everything.yaml -o json_output=true \
+  | jq -Rr 'fromjson? | .output_fields["ct.error"]' | sort | uniq -c</pre></div>
+<div class="code-block" data-lang="text"><pre>   7 AccessDenied
+   3 Client.UnauthorizedOperation
+  14 null</pre></div>
+            <p>EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, so three of the attacker's seven refusals were invisible to the rule. (<code>null</code> is JSON's way of showing the 14 events with no error code.) Other services use <code>AccessDeniedException</code>, and <code>UnauthorizedOperation</code> also appears without the prefix; AWS's own <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">Security Hub control for unauthorized API calls</a> matches both families, <code>AccessDenied*</code> and <code>*UnauthorizedOperation</code>. Change the list in <code>d2.yaml</code> to <code>items: [AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation]</code> and run the same count:</p>
+<div class="code-block" data-lang="bash"><pre>falco -r d2.yaml -o json_output=true \
+  | jq -Rr 'fromjson? | .output_fields["ct.srcip"]' | sort | uniq -c | awk '$1 &gt;= 5'</pre></div>
+<div class="code-block" data-lang="text"><pre>   7 203.0.113.50</pre></div>
+            <p>The rule now fires ten times, once per refusal; <code>203.0.113.50</code> has seven and crosses the threshold, and <code>192.0.2.20</code> stays at three, the negative case. In production the counting moves to a SIEM or log store: Falco sends its JSON alerts over HTTP (<code>http_output</code>) to <a href="https://github.com/falcosecurity/falcosidekick" target="_blank" rel="noopener noreferrer">falcosidekick</a>, the project's forwarder, which passes them on to outputs such as Elasticsearch, Loki, Sumo Logic and Datadog Logs, and the threshold and the 10-minute window are that system's job.</p>
+            <p>D3, a user created and given an access key within 10 minutes, pairs two events by the new user's name, and no Falco rule can refer to an earlier event. Falco can alert on each half, as Exercise 3 does, and the system that receives both alerts does the pairing; the <a href="splunk-spl.html">Splunk</a> and <a href="kusto-kql.html">Kusto</a> guides show that part.</p>
+
+            <h3>7. Stock rules, shadowing, and tuning by override</h3>
+            <p>You rarely start from nothing. Run the stock CloudTrail rules from step 1, followed by your D1 rule:</p>
+<div class="code-block" data-lang="bash"><pre>falco -r rules/aws_cloudtrail_rules.yaml -r d1.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>09:02:40.000000000: Informational A new AWS user has been created (requesting user=alice, requesting IP=198.51.100.20, AWS region=us-east-1, new user created=svc-reporting)
+09:15:47.000000000: Critical Detected a console login without MFA (requesting user=bob, requesting IP=198.51.100.21, AWS region=us-east-1)
+10:06:12.000000000: Informational A new AWS user has been created (requesting user=build-bot, requesting IP=203.0.113.50, AWS region=us-east-1, new user created=backup-svc)
+10:09:03.000000000: Warning The CloudTrail logging has been disabled. (requesting user=backup-svc, requesting IP=203.0.113.50, AWS region=us-east-1, resource name=arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail)</pre></div>
+            <p>Your D1 rule is loaded, valid and silent. Falco's default, <code>rule_matching: first</code>, lets an event fire only the first rule it matches, in load order, and the stock <code>CloudTrail Logging Disabled</code> rule loads first. No warning says so. You could set <code>rule_matching: all</code>, which Falco's configuration file warns can cost performance, or switch the overlapping stock rule off; it only covers <code>StopLogging</code> anyway. And alice creating service users is routine, so the stock <code>Create AWS user</code> rule needs an exception. Never edit the stock file, because falcoctl replaces it on update: override it from a file loaded after it. Save <code>tuning.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># tuning.yaml: change stock rules without editing their file
+- rule: CloudTrail Logging Disabled    # d1.yaml covers this and more
+  enabled: false
+  override:
+    enabled: replace
+- rule: Create AWS user                # alice creating svc- users is routine
+  exceptions:
+    - name: routine_service_users
+      fields: [ct.user, ct.request.username]
+      comps: [=, startswith]
+      values:
+        - [alice, svc-]
+  override:
+    exceptions: append</pre></div>
+<div class="code-block" data-lang="bash"><pre>falco -r rules/aws_cloudtrail_rules.yaml -r tuning.yaml -r d1.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>09:15:47.000000000: Critical Detected a console login without MFA (requesting user=bob, requesting IP=198.51.100.21, AWS region=us-east-1)
+10:06:12.000000000: Informational A new AWS user has been created (requesting user=build-bot, requesting IP=203.0.113.50, AWS region=us-east-1, new user created=backup-svc)
+10:09:03.000000000: Critical CloudTrail logging tampered with (call=StopLogging user=backup-svc ip=203.0.113.50 trail=arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail)</pre></div>
+            <p>alice's routine user is gone, build-bot's is still there, and your D1 rule now gets its event. <code>override</code> says what to do with each key: <code>replace</code> swaps the value and <code>append</code> adds to it. An exception lists <code>fields</code>, one comparison per field (<code>comps</code>) and rows of <code>values</code>; the rule stays quiet for an event that matches a whole row. This one names the actor and the target, as Falco's documentation advises: an exception for alice alone would also hide an attacker who stole her credentials and created <code>backup-svc</code>. In a real deployment, list override files after the stock ones in the configuration's <code>rules_files</code>; the default order reads <code>/etc/falco/falco_rules.yaml</code>, then <code>falco_rules.local.yaml</code>, then the <code>/etc/falco/rules.d</code> folder.</p>
+
+            <h3>8. The same language on system calls</h3>
+            <p>Falco's usual source is the kernel. Its default driver, the modern <a class="glossary-link" href="../glossary.html#term-ebpf">eBPF</a> (extended Berkeley Packet Filter) probe, attaches to a running Linux kernel and turns system calls into events. Falco's <a href="https://falco.org/docs/getting-started/falco-docker-quickstart/" target="_blank" rel="noopener noreferrer">Docker quickstart</a> says its command will not work on Docker Desktop. On Docker Desktop 4.86.0 for Apple silicon the commands below worked, with warnings that a safeguard against time-of-check to time-of-use (TOCTOU) tricks could not attach, which Falco says does not stop detection. If they fail for you, use a Linux machine. Either way, a privileged container can do, in Docker's words, almost everything that the host can do, so use a machine you own. Save <code>shadow.yaml</code>, then start Falco privileged, so the probe can load, with the Docker socket so it can name containers, and give the probe ten seconds to attach:</p>
+<div class="code-block" data-lang="yaml"><pre># shadow.yaml: a system-call rule; with no source key, the source is syscall
+- rule: Shadow file read in a container
+  desc: A process in a container opened /etc/shadow, which holds password hashes, for reading.
+  condition: &gt;
+    evt.type in (open, openat, openat2) and evt.is_open_read = true
+    and fd.name = /etc/shadow and container.id != host
+  output: /etc/shadow read in a container (command=%proc.cmdline)
+  priority: WARNING
+  tags: [container, filesystem, mitre_credential_access, T1003.008]</pre></div>
+<div class="code-block" data-lang="bash"><pre>docker run -d --name csoh-lab-falco-kernel --privileged \
+  -v /var/run/docker.sock:/host/var/run/docker.sock -v /proc:/host/proc:ro \
+  -v "$PWD":/lab falcosecurity/falco:0.45.0 falco -r /lab/shadow.yaml
+sleep 10</pre></div>
+            <p>Now test it both ways: one container reads <code>/etc/passwd</code>, the negative case, and one reads <code>/etc/shadow</code>, the positive. Falco writes its own log to standard error, so <code>2&gt; /dev/null</code> leaves only the alerts:</p>
+<div class="code-block" data-lang="bash"><pre>docker run --rm --name csoh-lab-falco-target alpine:3.24 cat /etc/passwd &gt; /dev/null
+docker run --rm --name csoh-lab-falco-target alpine:3.24 cat /etc/shadow &gt; /dev/null
+sleep 2
+docker logs csoh-lab-falco-kernel 2&gt; /dev/null
+docker rm -f csoh-lab-falco-kernel &gt; /dev/null</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-09-27T18:57:33.415876851+0000: Warning /etc/shadow read in a container (command=cat /etc/shadow) container_id=bb8c4ab79ace container_name=csoh-lab-falco-target container_image_repository=alpine container_image_tag=3.24 k8s_pod_name=&lt;NA&gt; k8s_ns_name=&lt;NA&gt;</pre></div>
+            <p>One alert, for the shadow read; the <code>passwd</code> read stays silent. The fields after the closing parenthesis did not come from your rule: the image's default configuration appends the container plugin's suggested fields to every system-call alert (<code>append_output</code> with <code>suggested_output: true</code>). A system-call condition should open with <code>evt.type</code>: Falco uses it to test each rule against only those calls, and warns (<code>LOAD_NO_EVTTYPE</code>) about a rule without one. The image's stock rules, loaded when you pass no <code>-r</code>, include a broader version of this rule, <code>Read sensitive file untrusted</code>.</p>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>Write D5: alert whenever the <code>AdministratorAccess</code> managed policy is attached to a user, showing who attached it, to whom and from where. Check that it fires once and nothing else does.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="yaml"><pre># d5.yaml: D5, AdministratorAccess attached to a user
+- rule: Administrator policy attached to a user
+  desc: The AdministratorAccess managed policy was attached to an IAM user.
+  condition: &gt;
+    ct.name = "AttachUserPolicy" and not ct.error exists
+    and json.value[/requestParameters/policyArn] = "arn:aws:iam::aws:policy/AdministratorAccess"
+  output: Administrator policy attached (by=%ct.user to=%ct.request.username ip=%ct.srcip)
+  priority: CRITICAL
+  source: aws_cloudtrail
+  tags: [aws, iam, mitre_privilege_escalation, T1098.003]</pre></div>
+                    <p>Run it with <code>falco -r d5.yaml</code>:</p>
+<div class="code-block" data-lang="text"><pre>10:06:30.000000000: Critical Administrator policy attached (by=build-bot to=backup-svc ip=203.0.113.50)</pre></div>
+                    <p>One alert, and the summary says <code>Events detected: 1</code>, so the other 23 events stayed silent. The plugin has a field called <code>iam.policy</code> that looks made for this, and a rule on it never fires: it reads <code>requestParameters.policyName</code>, and <code>AttachUserPolicy</code> sends <code>policyArn</code> instead. Print a field in an output before you filter on it (<code>%iam.policy</code> prints <code>&lt;NA&gt;</code> here). For real coverage, add <code>AttachRolePolicy</code>, <code>AttachGroupPolicy</code> and the inline <code>PutUserPolicy</code>.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>You want an alert for every call that succeeded. The plugin's field list says <code>ct.error</code> "will be &lt;NA&gt;" when there was no error, so you write <code>condition: ct.error = "&lt;NA&gt;"</code>. Falco loads it, reads all 24 events and reports <code>Events detected: 0</code>. Why, and what should the condition be?</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p><code>&lt;NA&gt;</code> is how Falco prints a field that has no value. It is never the value itself, and any comparison with a missing field is false: even <code>ct.error != "&lt;NA&gt;"</code> matches only the 10 events that have an error code. Test for the field instead. <code>not ct.error exists</code> matches 14 events, and one of them is alice's failed sign-in, which has no error code (step 5), so "did not fail" is not the same as "succeeded" for every event type. The control rule in step 3, which prints <code>error=%ct.error</code> for every event, is how you would have seen <code>&lt;NA&gt;</code> for what it is before writing the condition.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>This rule is meant to catch <code>build-bot</code> creating users or access keys, the two halves of D3. It fires three times. Which alert should not be there, and why?</p>
+<div class="code-block" data-lang="yaml"><pre># ex3.yaml: build-bot creating users or keys
+- rule: New users and keys by build-bot
+  desc: CreateUser or CreateAccessKey calls made by the build-bot key.
+  condition: ct.name = "CreateUser" or ct.name = "CreateAccessKey" and ct.user = "build-bot"
+  output: "%ct.name by %ct.user for %ct.request.username"
+  priority: WARNING
+  source: aws_cloudtrail</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>alice's <code>CreateUser</code> at 09:02:40. <code>and</code> binds more tightly than <code>or</code>, so Falco reads the condition as <code>ct.name = "CreateUser" or (ct.name = "CreateAccessKey" and ct.user = "build-bot")</code>: every <code>CreateUser</code> matches, whoever made it. Change the condition to <code>ct.name in (CreateUser, CreateAccessKey) and ct.user = "build-bot"</code> and run it again:</p>
+<div class="code-block" data-lang="bash"><pre>falco -r ex3.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>10:06:12.000000000: Warning CreateUser by build-bot for backup-svc
+10:06:51.000000000: Warning CreateAccessKey by build-bot for backup-svc</pre></div>
+                    <p>Those two alerts, 39 seconds apart and naming the same new user, are what a SIEM pairs to finish D3.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>In step 7 a colleague fixes the shadowing another way: they load <code>d1.yaml</code> before the stock file, <code>falco -r d1.yaml -r rules/aws_cloudtrail_rules.yaml</code>, and leave the stock rule alone. D1 now fires. Why does that work, and why is the override in <code>tuning.yaml</code> the better fix?</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>First match again: your rule now loads first and claims the <code>StopLogging</code> event, so the stock <code>CloudTrail Logging Disabled</code> rule goes quiet instead. Run it and that stock alert has gone. It works by accident of load order, and it silences a rule without saying so anywhere; whoever later reorders the files, or loads another file first, changes which rule fires, and nothing warns them. <code>enabled: false</code> in an override states the intent in a file a reviewer reads, and survives any reordering that keeps it after the stock file.</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Believing a silent run.</strong> Records without <code>eventType</code>, a rule shadowed by an earlier one, and a rule below the configured minimum <code>priority</code> all end in <code>Events detected: 0</code> or a missing alert, with exit code 0. Run a match-everything control first.</li>
+                <li><strong>Adding a rule that overlaps a stock rule.</strong> With the default <code>rule_matching: first</code>, whichever loads first claims the event, and the other never fires.</li>
+                <li><strong>Trusting a field's name.</strong> <code>iam.policy</code> reads <code>policyName</code>, not the policy's ARN (Amazon Resource Name), and <code>json.value</code> keys are case-sensitive. Print a field before filtering on it.</li>
+                <li><strong>Validating plugin rules without the plugins.</strong> <code>falco -V d1.yaml</code> with the lab configuration says <code>d1.yaml: Ok</code>. Without the plugins it says <code>Ok, with warnings</code>, exits 0 and has skipped the rule, so a CI gate built that way checks nothing.</li>
+                <li><strong>System-call rules without <code>evt.type</code>, or with <code>evt.dir</code>.</strong> The first is slow and warned about. <code>evt.dir</code>, common in older examples, is deprecated since Falco 0.42, and <code>evt.dir = &lt;</code> is now always true.</li>
+                <li><strong>Expecting Falco to count or correlate.</strong> Thresholds, time windows and pairs of events belong to whatever receives the alerts.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="splunk-spl.html">Splunk</a>, <a href="kusto-kql.html">Kusto</a> and <a href="elastic-esql-eql.html">Elastic</a> run the same lab and five detections in engines that count and correlate, which is where D2 and D3 are finished; <a href="sigma-and-yara.html">Sigma and YARA</a> cover another open rule format, and <a href="jq-and-jmespath.html">jq and JMESPath</a> the <code>jq</code> used here.</li>
+                <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a> for a real CloudTrail feed, and <a href="../detection-engineering.html">detection engineering</a> for testing, tuning and retiring rules.</li>
+                <li>Falco's documentation on <a href="https://falco.org/docs/concepts/rules/basic-elements/" target="_blank" rel="noopener noreferrer">rules, macros and lists</a>, <a href="https://falco.org/docs/concepts/rules/conditions/" target="_blank" rel="noopener noreferrer">conditions</a>, <a href="https://falco.org/docs/concepts/rules/overriding/" target="_blank" rel="noopener noreferrer">overriding</a> and <a href="https://falco.org/docs/concepts/rules/exceptions/" target="_blank" rel="noopener noreferrer">exceptions</a>, and the <a href="https://falco.org/docs/reference/rules/supported-fields/" target="_blank" rel="noopener noreferrer">supported fields</a>.</li>
+                <li>The stock rules in <a href="https://github.com/falcosecurity/rules" target="_blank" rel="noopener noreferrer">falcosecurity/rules</a> and the <a href="https://github.com/falcosecurity/plugins/tree/main/plugins/cloudtrail" target="_blank" rel="noopener noreferrer">cloudtrail plugin</a>, whose rules file and field list are worth reading in full.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=ce8e8780" integrity="sha384-3shiQXFKQDjuyR3tcw2cQxS8sF6ASTavSyTLHJ+M+dieHkpjecvxrfWKM+4dVLal"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

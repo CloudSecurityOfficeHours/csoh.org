@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Write Panther detections from zero: Python rules over CloudTrail, counting and correlation in YAML, and tests run both ways with panther_analysis_tool.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="panther detections tutorial, panther python rules, panther_analysis_tool pat test, panther correlation rules, panther threshold dedup, panther signals, cloudtrail detection python, detection as code, panther-analysis">
+    <title>Panther Python detections: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/panther-python-detections.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/panther-python-detections.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/panther-python-detections.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Panther Python detections, hands-on - CSOH">
+    <meta property="og:description" content="Write Panther detections from zero: Python rules over CloudTrail, counting and correlation in YAML, and tests run both ways with panther_analysis_tool.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="panther">
+    <meta property="article:tag" content="python detections">
+    <meta property="article:tag" content="cloudtrail">
+    <meta property="article:tag" content="detection engineering">
+    <meta property="article:tag" content="detection as code">
+    <meta property="article:tag" content="correlation rules">
+    <meta property="og:url" content="https://csoh.org/howto/panther-python-detections.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/panther-python-detections.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Panther Python detections, hands-on">
+    <meta name="twitter:description" content="Write Panther detections from zero: Python rules over CloudTrail, counting and correlation in YAML, and tests run both ways with panther_analysis_tool.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/panther-python-detections.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=60c4edd0" integrity="sha384-pD4ibj4YLJX3FZD7hEpxbiqvf30amQOxGqTS1HWzuBvM1OS7PbM1FvWamsfg0IgH"></script>
+    <link rel="preload" href="/style.css?v=9da1e156" as="style"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+    <link rel="stylesheet" href="/style.css?v=9da1e156"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Panther Python detections, hands-on",
+      "description": "Write Panther detections from zero: Python rules over CloudTrail, counting and correlation in YAML, and tests run both ways with panther_analysis_tool.",
+      "totalTime": "PT90M",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-09-27",
+      "dateModified": "2026-09-27",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Install panther_analysis_tool",
+          "text": "Create a virtual environment on Python 3.11 or newer and install a pinned panther-analysis-tool release; on older Pythons an unpinned install quietly gets an old version."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Load the lab data",
+          "text": "Write the 24-event CloudTrail lab file with a heredoc so every example runs without a cloud account."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Write a rule and run it over every event",
+          "text": "Write rule() and title() for trail tampering (D1), then run the rule over the whole file with a small helper that groups matches as Panther does."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Add metadata and tests",
+          "text": "Give the rule a YAML file with severity, runbook and an ATT&CK mapping, plus one test that must match and one that must not, and run pat test."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Read nested fields",
+          "text": "Use deep_get() for console logins without MFA (D4) and fix the naive rule that also matches a failed sign-in."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Count in the YAML, and run the control",
+          "text": "Set Threshold, DedupPeriodMinutes and dedup() for a burst of refused calls (D2), see the AccessDenied-only rule stay silent, list the error codes that exist, and fix it."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Correlate two events within ten minutes",
+          "text": "Write two signal rules with CreateAlert false and a Sequence correlation rule with a 10-minute window (D3), then prove its locally skipped tests cannot fail."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Get rules into Panther",
+          "text": "Use pat upload or pat zip, run tests with API credentials in CI so correlation tests run, and require a test each way with --minimum-tests 2."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Panther Python detections, hands-on",
+          "item": "https://csoh.org/howto/panther-python-detections.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../human-risk.html">Human Risk</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Panther Python detections</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Panther Python detections, hands-on</h1>
+        <p>A Panther rule is a Python function that looks at one log event and answers True or False, and a YAML file beside it decides when those answers become an alert. Write five detections against a sample <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> file, test them on your own computer with Panther's open-source command-line tool, and see exactly which parts only a Panther deployment can check.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+<div class="info-box--blue">
+    <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and Python 3.11 or newer. No Panther account and no AWS account: everything runs against a sample file.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order with <code>panther_analysis_tool</code> 1.10.0 on Python 3.12.14 and 3.13.15 (macOS, in bash and in zsh), and every output shown is pasted from that run. Two things run only inside a Panther deployment and were not executed: counting matches against a threshold (step 6 counts them with a plain-Python stand-in) and evaluating the correlation rule (in step 7 the tool skips its tests, and the page shows what that means).</p>
+</div>
+
+<section id="intro">
+    <h2>Detections as Python functions</h2>
+    <p>Panther is a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) platform. It collects logs such as AWS (Amazon Web Services) CloudTrail, adds fields of its own whose names start with <code>p_</code> (<code>p_log_type</code>, <code>p_event_time</code>), and, as each event arrives, runs every enabled rule written for that kind of log. A rule is two files, by convention with the same name: a <code>.py</code> file holding the logic and a <code>.yml</code> file, in the plain-text YAML format, holding its ID, severity, alert settings and tests. Panther recommends keeping them in version control such as git, and its open-source CLI (command-line interface), <code>panther_analysis_tool</code>, tests them on your machine and uploads them to a Panther deployment.</p>
+    <p>Detection engineers write these, but the Python involved is small: read a field, compare it, check it against a list, return the answer. This page teaches that much Python and no more, and points at the rules Panther publishes in its open <a href="https://github.com/panther-labs/panther-analysis" target="_blank" rel="noopener noreferrer">panther-analysis repository</a> as it goes. Panther also runs scheduled searches: queries in SQL (Structured Query Language) that run on a timer over the logs Panther has stored, with a Python rule applied to each row they return. You need no SQL for this page; the <a href="sql-for-security-data-lakes.html">SQL guide</a> teaches it from zero.</p>
+    <p>The distinction that matters: <strong>the Python sees one event at a time.</strong> "Five refusals from one address in ten minutes" and "a user created, then given a key" both need several events, so neither is written in Python. Counting is set in the YAML file, and a sequence is a separate correlation rule. That split also decides what you can test at home: Python rules run entirely on your machine, while thresholds and correlation rules are evaluated only by a Panther deployment.</p>
+</section>
+
+<div class="toc">
+    <h2>On this page</h2>
+    <ol>
+        <li><a href="#model">One event in, True or False out</a></li>
+        <li><a href="#walkthrough">Walk-through: a leaked CI key, five detections</a></li>
+        <li><a href="#exercises">Hands-on exercises</a></li>
+        <li><a href="#mistakes">Common mistakes</a></li>
+        <li><a href="#next">Where next</a></li>
+    </ol>
+</div>
+
+<section id="model">
+    <h2>One event in, True or False out</h2>
+    <p>A CloudTrail event is a JSON (JavaScript Object Notation) object: named fields with values, where a value can itself hold named fields. Python reads one into a <em>dictionary</em>. A Panther rule is a function that receives one event and returns <code>True</code> (alert) or <code>False</code> (ignore). This needs nothing but Python:</p>
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
+# One trimmed CloudTrail event. Python calls this a dictionary.
+event = {"eventName": "StopLogging", "userIdentity": {"userName": "backup-svc"}}
+print(event.get("eventName"), event.get("errorCode"))   # errorCode is missing
+
+def rule(event):                  # def names a function; event is its input
+    return event.get("eventName") in {"StopLogging", "DeleteTrail"}
+
+print(rule(event))                # return hands back the function's answer
+PY</pre></div>
+<div class="code-block" data-lang="text"><pre>StopLogging None
+True</pre></div>
+    <p>In Python, <code>=</code> gives a value a name, text after <code>#</code> is a comment, and <code>.get()</code> reads a field by its name, giving <code>None</code>, Python's value for "nothing", when the field is missing. The function is a complete Panther rule. <code>in</code> asks "is it one of these?", and <code>{"StopLogging", "DeleteTrail"}</code> is a <em>set</em>, Python's way of writing a group of alternatives. <code>==</code> compares two values, and <code>and</code>, <code>or</code> and <code>not</code> combine comparisons. The indented line belongs to the function: Python uses indentation where many languages use brackets. Inside Panther, <code>event</code> is Panther's own event object, which reads the same way and adds <code>event.deep_get("userIdentity", "userName")</code> for a field inside another field.</p>
+</section>
+
+<section id="walkthrough">
+    <h2>Walk-through: a leaked CI key, five detections</h2>
+    <p>The lab file tells one story. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> (continuous integration) user, has leaked. From the IP (Internet Protocol) address <code>203.0.113.50</code> someone checks whose key it is, tries to list <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, lists the <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service) buckets, then creates a user called <code>backup-svc</code>, gives it <code>AdministratorAccess</code> and an access key, and uses that new identity to stop the CloudTrail trail. Around it runs ordinary work: alice, an administrator, signs in with <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication) and creates <code>svc-reporting</code>, giving it a key hours later; bob signs in without MFA; someone fails to sign in as alice; a <code>reports-app</code> role is refused one S3 object three times in half an hour; a CI role describes instances.</p>
+    <p>Five detections run through the rest of the page:</p>
+    <ul>
+        <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
+        <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
+        <li><strong>D3, new user given a key:</strong> a user created and handed an access key within 10 minutes.</li>
+        <li><strong>D4, console login without MFA:</strong> a successful console sign-in without multi-factor authentication.</li>
+        <li><strong>D5, administrator policy attached:</strong> <code>AdministratorAccess</code> attached to a user.</li>
+    </ul>
+
+    <h3>1. Install the CLI</h3>
+    <p>Run <code>python3 --version</code> first. <code>panther_analysis_tool</code> requires Python 3.11 or newer, and Panther tests it on 3.11. If yours is older, install a newer Python from python.org or your package manager and use its name (for example <code>python3.12</code>) instead of <code>python3</code> on the second line.</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/panther-lab &amp;&amp; cd ~/panther-lab
+python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install --quiet panther-analysis-tool==1.10.0
+pat --version</pre></div>
+<div class="code-block" data-lang="text"><pre>1.10.0</pre></div>
+    <p>The second line makes a private Python for this lab (a virtual environment) and switches to it, so nothing is installed system-wide; in a new terminal, <code>cd ~/panther-lab &amp;&amp; . .venv/bin/activate</code> brings it back. <code>pat</code> and <code>panther_analysis_tool</code> are two names for the same program. Keep the version pin: on Python 3.10 an unpinned install does not fail but quietly installs 0.57.0 from March 2025, the last release that did not require 3.11. Each run, <code>pat</code> also asks <a class="glossary-link" href="../glossary.html#term-pypi">PyPI</a> (the Python Package Index) whether a newer release exists and prints a <code>WARNING</code> line if so.</p>
+
+    <h3>2. Load the lab data</h3>
+    <p>Twenty-four events, one JSON object per line: the same file every guide in this series uses. Paste the whole block, including the final <code>EOF</code> line. Step 3 counts the events, which confirms the paste.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
+{"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
+{"eventTime":"2026-09-15T09:02:40Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"readOnly":false}
+{"eventTime":"2026-09-15T09:03:05Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"readOnly":true}
+{"eventTime":"2026-09-15T09:10:22Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T09:15:47Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.21","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob","userName":"bob"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:20:03Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.77","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"errorMessage":"Failed authentication","responseElements":{"ConsoleLogin":"Failure"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:31:10Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T09:47:55Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:01:30Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:05Z","eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:31Z","eventSource":"iam.amazonaws.com","eventName":"ListUsers","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:38Z","eventSource":"iam.amazonaws.com","eventName":"ListRoles","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:52Z","eventSource":"iam.amazonaws.com","eventName":"GetAccountAuthorizationDetails","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:05Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:09Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeVpcs","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:14Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeSecurityGroups","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:22Z","eventSource":"secretsmanager.amazonaws.com","eventName":"ListSecrets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:06:12Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:30Z","eventSource":"iam.amazonaws.com","eventName":"AttachUserPolicy","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc","policyArn":"arn:aws:iam::aws:policy/AdministratorAccess"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:51Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"responseElements":{"accessKey":{"userName":"backup-svc","accessKeyId":"AKIAIOSFODNN7EXAMPLE","status":"Active"}},"readOnly":false}
+{"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+{"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
+EOF</pre></div>
+
+    <h3>3. Your first rule, run over every event (D1)</h3>
+    <p>Rules live in a <code>rules/</code> folder. The first one catches anyone blinding CloudTrail: stopping a trail, deleting it, or changing what it records.</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p rules
+cat &gt; rules/trail_tampering.py &lt;&lt;'EOF'
+# Each of these calls stops, removes or narrows what CloudTrail records.
+TAMPERING = {"StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors"}
+
+def rule(event):
+    return event.get("eventName") in TAMPERING
+
+def title(event):
+    # An f-string: the parts in {braces} are filled in from the event.
+    return f"CloudTrail {event.get('eventName')} by {event.deep_get('userIdentity', 'arn')}"
+EOF</pre></div>
+    <p><code>rule()</code> is the only function Panther requires. <code>title()</code> writes the alert's headline, and Panther calls it only for events where <code>rule()</code> returned <code>True</code>. To run a rule over the whole file, save this helper. You do not need to follow every line: it is scaffolding, not a rule.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; fire.py &lt;&lt;'EOF'
+# fire.py: run one rule file over every lab event, then group the matches
+# the way Panther groups them into alerts: by dedup(), or else by title().
+import json, runpy, sys
+from collections import Counter
+from panther_core import PantherEvent     # the event object pat hands to rule()
+f = runpy.run_path(sys.argv[1])           # the functions in the rule file
+group = f.get("dedup") or f.get("title") or (lambda event: "one group")
+events = [PantherEvent(json.loads(line)) for line in open("cloudtrail-lab.jsonl")]
+matches = [e for e in events if f["rule"](e)]
+for e in matches:
+    print(e["eventTime"], e["sourceIPAddress"], e["eventName"], f["alert_context"](e) if "alert_context" in f else "")
+print(len(matches), "of", len(events), "events matched. Matches per group:", dict(Counter(map(group, matches))))
+EOF
+python3 fire.py rules/trail_tampering.py</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-09-15T10:09:03Z 203.0.113.50 StopLogging
+1 of 24 events matched. Matches per group: {'CloudTrail StopLogging by arn:aws:iam::111122223333:user/backup-svc': 1}</pre></div>
+    <p>One match out of 24: backup-svc's <code>StopLogging</code> at 10:09:03, and silence on the other 23. <code>PantherEvent</code> comes with the CLI and wraps each event the way Panther does, which is what gives it <code>deep_get()</code>. The last line groups matches the way Panther groups them into alerts, which step 6 explains.</p>
+
+    <h3>4. Add the metadata and tests, then run pat test</h3>
+    <p>The YAML file names the rule, sets its severity, maps it to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge, a public catalogue of attacker behaviour) and carries its tests. Each test is an event pasted from the lab file (a JSON object is valid YAML as it stands) plus the answer <code>rule()</code> should give: one event that must match and one that must not.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/trail_tampering.yml &lt;&lt;'EOF'
+AnalysisType: rule
+Filename: trail_tampering.py
+RuleID: Lab.CloudTrail.TrailTampering
+Enabled: true
+LogTypes:
+  - AWS.CloudTrail
+Severity: High
+Runbook: Confirm the change was planned. If not, restart logging and review every call from the same identity.
+Reports:
+  MITRE ATT&amp;CK:
+    - TA0112:T1685.002   # Defense Impairment: Disable or Modify Cloud Log
+Tests:
+  - Name: backup-svc stops the trail
+    ExpectedResult: true
+    Log: {"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+  - Name: the same attacker listing buckets is not tampering
+    ExpectedResult: false
+    Log: {"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+EOF
+pat test</pre></div>
+<div class="code-block" data-lang="text"><pre>INFO: Testing analysis items in .
+Lab.CloudTrail.TrailTampering
+    [PASS] backup-svc stops the trail
+        [PASS] [rule] true
+        [PASS] [title] CloudTrail StopLogging by arn:aws:iam::111122223333:user/backup-svc
+        [PASS] [dedup] CloudTrail StopLogging by arn:aws:iam::111122223333:user/backup-svc
+    [PASS] the same attacker listing buckets is not tampering
+        [PASS] [rule] false
+
+--------------------------
+Test Summary
+    Path: .
+    Passed: 1
+    Skipped: 0
+    Failed: 0
+    Invalid: 0</pre></div>
+    <p><code>pat</code> indents with tabs, shown here as spaces. For a test that expects a match it prints what each function returned; for one that expects none, only <code>rule()</code>. <code>[dedup]</code> repeats the title because this rule has no <code>dedup()</code>, which matters in step 6. <code>RuleID</code> must be unique in your deployment (the <code>Lab.</code> prefix keeps yours apart from Panther's own, such as <code>AWS.CloudTrail.Stopped</code>), <code>LogTypes</code> says which data the rule receives (<code>AWS.CloudTrail</code> is Panther's name for CloudTrail), and <code>Severity</code> is one of Info, Low, Medium, High or Critical.</p>
+    <p><code>Reports</code> maps the rule to frameworks, each ATT&amp;CK entry written tactic, colon, technique. ATT&amp;CK version 19 moved cloud-log tampering to <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002, Disable or Modify Cloud Log</a>, under the new Defense Impairment tactic (TA0112). <code>pat</code> and Panther's own mapping check test only the shape of an entry, so they accept it, but Panther's published rules still use the older IDs: <code>AWS.CloudTrail.Stopped</code> says <code>TA0005:T1562</code>, a technique v19 revoked, under the tactic v19 renamed Stealth.</p>
+
+    <h3>5. Nested fields: console logins without MFA (D4)</h3>
+    <p>MFA status sits inside another field, at <code>additionalEventData.MFAUsed</code>. <code>event.deep_get()</code> takes the path one name at a time and returns <code>None</code> if any step is missing. The obvious first attempt:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/console_login_no_mfa.py &lt;&lt;'EOF'
+def rule(event):
+    return (
+        event.get("eventName") == "ConsoleLogin"
+        and event.deep_get("additionalEventData", "MFAUsed") == "No"
+    )
+EOF
+python3 fire.py rules/console_login_no_mfa.py</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-09-15T09:15:47Z 198.51.100.21 ConsoleLogin
+2026-09-15T09:20:03Z 192.0.2.77 ConsoleLogin
+2 of 24 events matched. Matches per group: {'one group': 2}</pre></div>
+    <p>Two matches, and the second is wrong. At 09:20:03 someone at <code>192.0.2.77</code> failed to sign in as alice: that event says <code>MFAUsed: No</code> too, but nobody got in. The outcome lives in a different nested field, <code>responseElements.ConsoleLogin</code>, so the rule needs a third condition (the brackets let one condition run over several lines):</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/console_login_no_mfa.py &lt;&lt;'EOF'
+def rule(event):
+    return (
+        event.get("eventName") == "ConsoleLogin"
+        and event.deep_get("responseElements", "ConsoleLogin") == "Success"
+        and event.deep_get("additionalEventData", "MFAUsed") == "No"
+    )
+EOF
+python3 fire.py rules/console_login_no_mfa.py</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-09-15T09:15:47Z 198.51.100.21 ConsoleLogin
+1 of 24 events matched. Matches per group: {'one group': 1}</pre></div>
+    <p>Bob only, at 09:15:47. The failed login is the negative test this rule most needs. AWS's own check for this, control CloudWatch.3 among the <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">Security Hub CloudWatch controls</a>, and Panther's <code>AWS.Console.LoginWithoutMFA</code> both require the successful outcome too, and both test <code>MFAUsed != "Yes"</code> (<code>!=</code> means "is not equal to") rather than <code>== "No"</code>, so a successful login with the field missing still counts as no MFA. When you give this rule its YAML file, its <code>Reports</code> entry is <code>TA0001:T1078.004</code>: <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>, <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">Valid Accounts: Cloud Accounts</a>.</p>
+
+    <h3>6. Counting belongs in the YAML, not the Python (D2)</h3>
+    <p>A burst of refused calls from one address is a common sign that someone is trying out a stolen key. <code>rule()</code> cannot count: it sees one event and answers once. Panther counts, using three settings. <code>dedup()</code> returns a string, and matches with the same string form one group (with no <code>dedup()</code>, Panther groups by the title). <code>Threshold</code> is how many matches a group needs before an alert is sent, and <code>DedupPeriodMinutes</code> is how long, from its first match, a group keeps counting. The first version treats <code>AccessDenied</code> as "refused":</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/denied_burst.py &lt;&lt;'EOF'
+def rule(event):
+    return event.get("errorCode") == "AccessDenied"
+
+def dedup(event):
+    return event.get("sourceIPAddress", "no address")    # one group per address
+EOF
+cat &gt; rules/denied_burst.yml &lt;&lt;'EOF'
+AnalysisType: rule
+Filename: denied_burst.py
+RuleID: Lab.CloudTrail.DeniedCallBurst
+Enabled: true
+LogTypes:
+  - AWS.CloudTrail
+Severity: Medium
+Threshold: 5              # alert when one group reaches 5 matches
+DedupPeriodMinutes: 10    # counted over 10 minutes from its first match
+EOF
+python3 fire.py rules/denied_burst.py | tail -n 1</pre></div>
+<div class="code-block" data-lang="text"><pre>7 of 24 events matched. Matches per group: {'192.0.2.20': 3, '203.0.113.50': 4}</pre></div>
+    <p>The final <code>| tail -n 1</code> keeps only the last line of <code>fire.py</code>'s output. The count per group is what Panther compares with <code>Threshold</code>: four from the attacker, three from reports-app, neither reaches five, <strong>so no alert</strong>. Give this rule a test each way, as in step 4, and both pass. (<code>fire.py</code> ignores time. The attacker's refusals fall within one minute, so a 10-minute period changes nothing for them; reports-app's three are spread over half an hour, which only lowers its count.)</p>
+    <div class="highlight-box">
+    <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> A rule is no different, and green tests prove only that it does what you wrote, not that you wrote the right thing. Before trusting a quiet rule, drop the condition and look at what the data actually contains.</p>
+    </div>
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
+import json
+from collections import Counter
+print(Counter(json.loads(line).get("errorCode") for line in open("cloudtrail-lab.jsonl")))
+PY</pre></div>
+<div class="code-block" data-lang="text"><pre>Counter({None: 14, 'AccessDenied': 7, 'Client.UnauthorizedOperation': 3})</pre></div>
+    <p>Ten refusals, spelled two ways. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, and all three of those came from the attacker. AWS's own check for unauthorised calls, Security Hub control CloudWatch.2 (on the AWS page linked in step 5), counts any error code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also covers <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. Do the same. <code>startswith()</code> and <code>endswith()</code> check how a piece of text begins and ends, and the default <code>""</code> matters: without it, an event with no <code>errorCode</code> gives <code>None</code>, which has no <code>startswith()</code>.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/denied_burst.py &lt;&lt;'EOF'
+def rule(event):
+    code = event.get("errorCode", "")    # "" when the call was not refused
+    return code.startswith("AccessDenied") or code.endswith("UnauthorizedOperation")
+
+def dedup(event):
+    return event.get("sourceIPAddress", "no address")
+EOF
+python3 fire.py rules/denied_burst.py | tail -n 1</pre></div>
+<div class="code-block" data-lang="text"><pre>10 of 24 events matched. Matches per group: {'192.0.2.20': 3, '203.0.113.50': 7}</pre></div>
+    <p>Seven from <code>203.0.113.50</code>, over the threshold of five: one alert, where the first version produced none. Now add the EC2 refusal from the lab file as a test that expects <code>true</code>, so the gap cannot reopen (written before the fix, that test fails, which proves it can). Its <code>Reports</code> entries are <code>TA0007:T1087.004</code> and <code>TA0007:T1580</code>: Discovery of cloud accounts and of cloud infrastructure. This is not a hypothetical trap. Panther's published <code>AWS.IAMUser.ReconAccessDenied</code> treats EC2 <code>Describe</code> calls as reconnaissance but accepts only <code>AccessDenied</code>, so run over the lab file it matches 3 of the attacker's 7 refusals, and the three EC2 ones never count.</p>
+
+    <h3>7. Two events, one story: signals and a correlation rule (D3)</h3>
+    <p>"A new user given an access key within ten minutes" joins two events, which one call to <code>rule()</code> never sees together. Panther's answer has two parts. First, two <em>signal</em> rules: ordinary rules with <code>CreateAlert: false</code>, which record their matches for other rules to use but alert nobody. Each returns the user name from <code>alert_context()</code> under the same key, and Panther stores it in the match's <code>p_alert_context</code> field. (<code>not event.get("errorCode")</code> is <code>True</code> when the call was not refused, and <code>default=""</code> is what <code>deep_get()</code> returns if the field is missing.)</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/iam_user_created.py &lt;&lt;'EOF'
+def rule(event):
+    return event.get("eventName") == "CreateUser" and not event.get("errorCode")
+
+def alert_context(event):
+    return {"request_username": event.deep_get("requestParameters", "userName", default="")}
+EOF
+cat &gt; rules/iam_user_created.yml &lt;&lt;'EOF'
+AnalysisType: rule
+Filename: iam_user_created.py
+RuleID: Lab.CloudTrail.IAMUserCreated
+Enabled: true
+CreateAlert: false
+LogTypes:
+  - AWS.CloudTrail
+Severity: Info
+EOF
+sed 's/CreateUser/CreateAccessKey/' rules/iam_user_created.py &gt; rules/iam_access_key_created.py
+sed 's/iam_user_created/iam_access_key_created/; s/IAMUserCreated/IAMAccessKeyCreated/' rules/iam_user_created.yml &gt; rules/iam_access_key_created.yml
+python3 fire.py rules/iam_user_created.py
+python3 fire.py rules/iam_access_key_created.py</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-09-15T09:02:40Z 198.51.100.20 CreateUser {'request_username': 'svc-reporting'}
+2026-09-15T10:06:12Z 203.0.113.50 CreateUser {'request_username': 'backup-svc'}
+2 of 24 events matched. Matches per group: {'one group': 2}
+2026-09-15T10:06:51Z 203.0.113.50 CreateAccessKey {'request_username': 'backup-svc'}
+2026-09-15T11:40:26Z 198.51.100.20 CreateAccessKey {'request_username': 'svc-reporting'}
+2 of 24 events matched. Matches per group: {'one group': 2}</pre></div>
+    <p>The two <code>sed</code> lines write the second signal rule by copying the first with its names swapped (<code>s/old/new/</code> replaces text). Both users were created and later given a key: backup-svc after 39 seconds, svc-reporting after 2 hours 37 minutes. Only a time window separates them. (The signal rules carry no tests here, to save space; give them one each way as in step 4.) Second, the correlation rule itself, a YAML file with no Python: a <code>Sequence</code> of the two signal rules, and a <code>Transition</code> requiring the second within 10 minutes of the first, for the same user name. Its tests describe signals rather than events, so the times below are copied from the output above.</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p correlation_rules
+cat &gt; correlation_rules/new_user_key_within_10m.yml &lt;&lt;'EOF'
+AnalysisType: correlation_rule
+RuleID: Lab.CloudTrail.NewUserKeyWithin10m
+DisplayName: New IAM User Given An Access Key Within 10 Minutes
+Enabled: true
+Severity: High
+Detection:
+  - Sequence:
+      - ID: UserCreated
+        RuleID: Lab.CloudTrail.IAMUserCreated
+      - ID: KeyCreated
+        RuleID: Lab.CloudTrail.IAMAccessKeyCreated
+    Transitions:
+      - ID: key follows user
+        From: UserCreated
+        To: KeyCreated
+        WithinTimeFrameMinutes: 10
+        Match:
+          - On: p_alert_context.request_username
+    LookbackWindowMinutes: 30   # twice the window, plus 10 minutes for log delivery
+    Schedule:
+      RateMinutes: 10           # run every 10 minutes
+      TimeoutMinutes: 5
+Tests:
+  - Name: backup-svc is given a key 39 seconds after it is created
+    ExpectedResult: true
+    RuleOutputs:
+      - {ID: UserCreated, Matches: {p_alert_context.request_username: {backup-svc: ["2026-09-15T10:06:12Z"]}}}
+      - {ID: KeyCreated, Matches: {p_alert_context.request_username: {backup-svc: ["2026-09-15T10:06:51Z"]}}}
+  - Name: svc-reporting waits 2 hours 37 minutes, outside the window
+    ExpectedResult: false
+    RuleOutputs:
+      - {ID: UserCreated, Matches: {p_alert_context.request_username: {svc-reporting: ["2026-09-15T09:02:40Z"]}}}
+      - {ID: KeyCreated, Matches: {p_alert_context.request_username: {svc-reporting: ["2026-09-15T11:40:26Z"]}}}
+EOF</pre></div>
+    <p>Its <code>Reports</code> entries are <code>TA0003:T1136.003</code> and <code>TA0003:T1098.001</code>: <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>, by creating a cloud account and by adding cloud credentials. Each run of the rule searches the last <code>LookbackWindowMinutes</code> of signals. Panther's correlation rule documentation, where the feature is marked beta, recommends that a rule running at least as often as its window look back twice the window plus the delay before logs arrive, so that a pair split across two runs is still seen. Now run the tests, with one expectation deliberately wrong, because a clean result here needs a control:</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p planted
+sed 's/ExpectedResult: false/ExpectedResult: true/' correlation_rules/new_user_key_within_10m.yml &gt; planted/wrong.yml
+pat test --path planted --show-failures-only; echo "exit code: $?"
+rm -r planted</pre></div>
+<div class="code-block" data-lang="text"><pre>INFO: Testing analysis items in planted
+--------------------------
+Skipped Tests Summary
+    ~/panther-lab/planted/wrong.yml
+        Lab.CloudTrail.NewUserKeyWithin10m
+
+--------------------------
+Test Summary
+    Path: planted
+    Passed: 0
+    Skipped: 1
+    Failed: 0
+    Invalid: 0
+
+exit code: 0</pre></div>
+    <p>A test that claims svc-reporting should alert, and still exit code 0: <strong>Skipped: 1</strong> means the tests never ran. Only a Panther deployment evaluates correlation rules, and Panther's documentation says <code>pat test</code> needs an API (application programming interface) token for them and for Simple Detections, rules written entirely in YAML. Locally, <code>pat</code> checks only the file's structure: misspell <code>WithinTimeFrameMinutes</code> and it rejects the file. Given <code>--api-host</code> and <code>--api-token</code> from your deployment, the same command sends these tests there to run. Panther's own published correlation rules, 28 at the commit read for this page, all use a <code>Group</code> form, which matches signals in any order, and ship disabled; the <a href="https://docs.panther.com/detections/correlation-rules" target="_blank" rel="noopener noreferrer">correlation rule documentation</a> covers both forms.</p>
+
+    <h3>8. Getting rules into Panther</h3>
+    <p><code>pat upload</code> tests the folder and sends it to your deployment, given <code>--api-host</code> and <code>--api-token</code> (or the <code>PANTHER_API_HOST</code> and <code>PANTHER_API_TOKEN</code> environment variables), and <code>pat zip</code> builds an archive to upload in the Panther Console instead. Panther's own repository shows the usual continuous-integration shape: every pull request runs <code>panther_analysis_tool test --show-failures-only</code>, with the API host and token added where they are available so correlation tests run too, and every push to its <code>develop</code> branch runs <code>panther_analysis_tool upload</code>. Add <code>--minimum-tests 2</code> to your test step and any rule without at least one <code>true</code> and one <code>false</code> test fails the build.</p>
+</section>
+
+<section id="exercises">
+    <h2>Hands-on exercises</h2>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 1</span>
+        <p>Write <code>rules/admin_policy_attached.py</code> for D5: return <code>True</code> when the AWS managed <code>AdministratorAccess</code> policy is attached to an IAM user. Check it with <code>fire.py</code>, then name the lab events you would use as its positive and negative tests.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>cat &gt; rules/admin_policy_attached.py &lt;&lt;'EOF'
+ADMIN = "arn:aws:iam::aws:policy/AdministratorAccess"
+
+def rule(event):
+    policy = event.deep_get("requestParameters", "policyArn")
+    return event.get("eventName") == "AttachUserPolicy" and policy == ADMIN and not event.get("errorCode")
+EOF
+python3 fire.py rules/admin_policy_attached.py</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-09-15T10:06:30Z 203.0.113.50 AttachUserPolicy
+1 of 24 events matched. Matches per group: {'one group': 1}</pre></div>
+            <p>One match, build-bot attaching the policy to backup-svc at 10:06:30. That event is the positive test; a good negative is the <code>CreateAccessKey</code> call 21 seconds later, the same actor acting on the same user. Map it to <code>TA0004:T1098.003</code> (<a class="glossary-link" href="../glossary.html#term-privilege-escalation">Privilege Escalation</a>: Additional Cloud Roles). Comparing the whole ARN (Amazon Resource Name, AWS's full name for a resource) is a choice: Panther's <code>AWS.IAM.AttachAdminUserPolicy</code> checks only that it ends in <code>AdministratorAccess</code>, which also catches a customer-made policy that borrows the name. Neither sees administrator rights granted another way, such as <code>AttachRolePolicy</code> or an inline policy.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 2</span>
+        <p>A colleague's burst rule uses the corrected check from step 6, has <code>Threshold: 5</code>, matches all ten refusals, and has never alerted. It has no <code>dedup()</code>, and its title is <code>f"Refused {event.get('eventName')} from {event.get('sourceIPAddress')}"</code>. Why is it silent?</p>
+        <details>
+            <summary>Show the answer</summary>
+            <p>With no <code>dedup()</code>, Panther groups matches by the title, and this title contains the event name, so every different call is a group of its own. Save the rule outside <code>rules/</code> and run it through <code>fire.py</code>: the ten matches fall into eight groups, the largest holding reports-app's three <code>GetObject</code> refusals, so none reaches five. The fix is a <code>dedup()</code> that returns what you are counting per, the source address. <code>pat test</code> hints at this too: its <code>[dedup]</code> line shows the key each test event would be grouped under, and a key that repeats the title word for word deserves a second look.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 3</span>
+        <p>A colleague raises the correlation rule's <code>WithinTimeFrameMinutes</code> from 10 to 180 "to be safe" and changes nothing else. <code>pat test</code> is still green. What is wrong with the change?</p>
+        <details>
+            <summary>Show the answer</summary>
+            <p>Two things. The window exists to exclude svc-reporting, whose key came about 158 minutes after the user: at 180 the transition accepts that pair, which is exactly what the negative test says must not happen, and locally that test is skipped, so green proves nothing. And the edit breaks a documented limit: <code>WithinTimeFrameMinutes</code> may be no larger than <code>LookbackWindowMinutes</code>, still 30, because a run that looks back 30 minutes never holds both halves of a pair 158 minutes apart. <code>pat</code> checks locally only that both are whole numbers, so neither problem can surface until a Panther deployment sees the rule, for example through the tests run with <code>--api-host</code> and <code>--api-token</code>.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 4</span>
+        <p>From <code>203.0.113.50</code>, two identities acted within minutes: build-bot, then backup-svc. Which Panther features would alert when one address uses two or more distinct identities within an hour, and does anything else in the lab file reach two?</p>
+        <details>
+            <summary>Show the answer</summary>
+            <p>Counting distinct values is still counting, so it still belongs outside <code>rule()</code>. Panther's unique-value thresholding does it: add a <code>unique()</code> function returning the identity, keep <code>dedup()</code> returning the address, and set <code>Threshold: 2</code> and <code>DedupPeriodMinutes: 60</code>. <code>Threshold</code> then counts distinct <code>unique()</code> values per group, as an estimate rather than an exact count, and only Python rules can use it. Nothing else in the lab file reaches two: every other address used a single identity.</p>
+        </details>
+    </div>
+</section>
+
+<section id="mistakes">
+    <h2>Common mistakes</h2>
+    <ul>
+        <li><strong>Counting inside <code>rule()</code>.</strong> It is called once per event and answers once. "Five in ten minutes" is <code>Threshold</code> and <code>DedupPeriodMinutes</code>, grouped by <code>dedup()</code>.</li>
+        <li><strong>Checking one spelling of "refused".</strong> EC2 writes <code>Client.UnauthorizedOperation</code> where most services write <code>AccessDenied</code>, and the missing spelling fails silently. List the codes your data contains before you write the rule.</li>
+        <li><strong>Leaving out <code>dedup()</code> on a threshold rule.</strong> Matches are then grouped by the title, and a title with per-event detail in it splits the count until no group reaches the threshold.</li>
+        <li><strong>Returning something other than <code>True</code> or <code>False</code>.</strong> <code>return event.get("errorCode") and ...</code> hands back <code>None</code> for an event without that field, because <code>and</code> returns one of its values, and <code>pat</code> fails the test with <code>FunctionReturnTypeError</code>. Build the answer from comparisons such as <code>is not None</code>.</li>
+        <li><strong>Reading fields with <code>event["name"]</code>.</strong> On an event without that field it raises <code>KeyError</code> and the test fails. Use <code>event.get()</code> and <code>event.deep_get()</code>, which return <code>None</code> or a default you choose.</li>
+        <li><strong>Believing a green <code>pat test</code> for anything that is not a Python rule.</strong> Without API credentials, correlation rule tests are reported as skipped, and a Simple Detection whose test is wrong is reported as passed, both with exit code 0. The check that each <code>LogTypes</code> value exists is skipped too, so <code>AWS.CloudTrial</code> passes every local test. Run the tests with credentials in CI.</li>
+        <li><strong>Hand-writing correlation test data.</strong> A correlation test feeds in signal matches you typed, so it cannot notice when the signal rules emit a different key. Copy the values from what the signal rules actually return, as step 7 does.</li>
+    </ul>
+</section>
+
+<section id="next" class="cta-section">
+    <h2>Where next</h2>
+    <ul>
+        <li><a href="https://github.com/panther-labs/panther-analysis" target="_blank" rel="noopener noreferrer">Panther's panther-analysis repository</a>: the published rules, a <code>templates/</code> folder showing every optional function, and the correlation rules. Read the rules for a log source before writing your own.</li>
+        <li><a href="https://docs.panther.com/detections" target="_blank" rel="noopener noreferrer">Panther's detection documentation</a> and <a href="https://github.com/panther-labs/panther_analysis_tool" target="_blank" rel="noopener noreferrer">the panther_analysis_tool repository</a> for the parts this page could not run: thresholds, correlation and upload.</li>
+        <li><a href="sql-for-security-data-lakes.html">SQL for security data lakes</a> for the language of Panther's scheduled searches, and <a href="sigma-and-yara.html">Sigma and YARA</a> for the vendor-neutral way to write these detections.</li>
+        <li><a href="../detection-engineering.html">Detection engineering</a> for the lifecycle around rule files: review, tuning and retirement.</li>
+        <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a> for real CloudTrail data to point these rules at.</li>
+    </ul>
+</section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=ce8e8780" integrity="sha384-3shiQXFKQDjuyR3tcw2cQxS8sF6ASTavSyTLHJ+M+dieHkpjecvxrfWKM+4dVLal"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Learn SQL from zero on a CloudTrail lab in DuckDB, catch the queries that fail silently, then port the detections to Snowflake, BigQuery and Amazon Athena.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="sql for security analysts, cloudtrail sql queries, duckdb read_json cloudtrail, sql null comparison, snowflake variant json path, bigquery json_value, athena cloudtrail table, snowflake alerts, bigquery scheduled queries, security data lake detections">
+    <title>SQL for security data lakes: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/sql-for-security-data-lakes.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/sql-for-security-data-lakes.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/sql-for-security-data-lakes.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="SQL for security data lakes, hands-on - CSOH">
+    <meta property="og:description" content="Learn SQL from zero on a CloudTrail lab in DuckDB, catch the queries that fail silently, then port the detections to Snowflake, BigQuery and Amazon Athena.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="sql">
+    <meta property="article:tag" content="security data lake">
+    <meta property="article:tag" content="duckdb">
+    <meta property="article:tag" content="snowflake">
+    <meta property="article:tag" content="bigquery">
+    <meta property="article:tag" content="amazon athena">
+    <meta property="og:url" content="https://csoh.org/howto/sql-for-security-data-lakes.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/sql-for-security-data-lakes.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SQL for security data lakes, hands-on">
+    <meta name="twitter:description" content="Learn SQL from zero on a CloudTrail lab in DuckDB, catch the queries that fail silently, then port the detections to Snowflake, BigQuery and Amazon Athena.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/sql-for-security-data-lakes.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script src="/theme.js?v=60c4edd0" integrity="sha384-pD4ibj4YLJX3FZD7hEpxbiqvf30amQOxGqTS1HWzuBvM1OS7PbM1FvWamsfg0IgH"></script>
+    <link rel="preload" href="/style.css?v=9da1e156" as="style"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+    <link rel="stylesheet" href="/style.css?v=9da1e156"
+        integrity="sha384-IcuL9HF39gA+1P2BZkdQPVp8LclCKPwW2daiWdr7IpvTWzFE23Rvx8tm/DVWuy0T">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "SQL for security data lakes, hands-on",
+      "description": "Learn SQL from zero on a CloudTrail lab in DuckDB, catch the queries that fail silently, then port the detections to Snowflake, BigQuery and Amazon Athena.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-09-27",
+      "dateModified": "2026-09-27",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Install DuckDB",
+          "text": "Install the DuckDB command-line tool with its own install script (or winget on Windows, Homebrew on a Mac) and check the version."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Create the lab file and load it",
+          "text": "Write the 24-event CloudTrail file, check its hash, open a DuckDB database and load the file into a table with read_json."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Filter rows",
+          "text": "Use SELECT, FROM and WHERE with an IN list to find CloudTrail logging being stopped (D1)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Reach nested fields",
+          "text": "Use dots to reach inside nested objects, see the naive MFA rule also report a failed login, and require a successful one (D4)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Count in groups and run the control",
+          "text": "Use GROUP BY and HAVING, watch the AccessDenied-only burst rule return nothing, list the error codes that exist, and count every denial code (D2)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Handle NULL",
+          "text": "See why errorCode <> 'AccessDenied' drops every event that has no error code, and use IS NULL or IS DISTINCT FROM instead."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Match two events within a window",
+          "text": "Join the table to itself to pair CreateUser with CreateAccessKey for the same user within 10 minutes, and see the window exclude routine work (D3)."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Make a scheduled detection and test it both ways",
+          "text": "Save the detection as a view carrying ATT&CK v19.2 technique IDs, pass each run's time as a variable, and confirm it fires at 10:10 and stays silent at 09:50."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
+          "name": "Translate it into three dialects",
+          "text": "Write the MFA detection with Snowflake VARIANT paths, BigQuery JSON_VALUE and Athena json_extract_scalar, and compare how each handles case and time."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 10,
+          "name": "Put it on a schedule in a warehouse",
+          "text": "Turn the detection into a Snowflake alert with a time-zone-safe window, and see how BigQuery scheduled queries and Athena with an external scheduler differ."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "SQL for security data lakes, hands-on",
+          "item": "https://csoh.org/howto/sql-for-security-data-lakes.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Build It</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
+                            <li><a href="../github-actions.html">GitHub Actions</a></li>
+                            <li><a href="../terraform.html">Terraform</a></li>
+                            <li><a href="../version-control.html">Git &amp; Version Control</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                        <li><a href="../cloud-soc.html">Cloud SOC</a></li>
+                        <li><a href="../detection-engineering.html">Detection Engineering</a></li>
+                        <li><a href="../incident-response.html">Incident Response</a></li>
+                        <li><a href="../human-risk.html">Human Risk</a></li>
+                        <li><a href="../cloud-pentesting.html">Cloud Pentesting</a></li>
+                        <li><a href="../ctfs.html">CTFs</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">SQL for data lakes</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>SQL for security data lakes, hands-on</h1>
+        <p>SQL (Structured Query Language) is how you question security logs kept in a data warehouse or data lake such as Snowflake, BigQuery or Amazon Athena. Learn it from zero, free on your own computer, then see what changes in each of the three.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+<div class="info-box--blue">
+    <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and DuckDB, a free database that runs on your own computer. No cloud account.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every command and query on this page and ran it as printed: the DuckDB steps on DuckDB 1.5.5 (macOS, Apple silicon), and every output shown is pasted from that run. No Snowflake, Google Cloud or AWS account was used, so nothing here has run on Snowflake, BigQuery or Amazon Athena themselves. Instead, the Athena queries ran on Trino 483 in Docker (Athena engine version 3 takes its SQL functions from Trino), the BigQuery queries on the open-source BigQuery emulator 0.8.1, and the Snowflake queries on fakesnow 0.11.18, a Snowflake emulator built on DuckDB. Emulators catch syntax errors but are not the services, so every construct in steps 9 and 10 was also checked against the vendor's documentation, and the Snowflake alert in step 10 was checked against the documentation only.</p>
+</div>
+
+<section id="intro">
+    <h2>One query language, many places to run it</h2>
+    <p>SQL is a language for asking questions of tables. You describe the answer you want (which rows, which columns, counted or grouped how) and the database works out how to get it. Security teams write it to hunt through logs, to answer incident questions such as "what did this key do?", and to run scheduled detections over logs kept outside a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management system). Snowflake and BigQuery store data in tables and run SQL over them. Amazon Athena stores nothing itself: it runs SQL over files in Amazon <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service), such as the <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> logs that AWS (Amazon Web Services) delivers there.</p>
+    <p>The core of the language (choosing rows, counting them in groups, matching one event with another) is the same in all three, so this page teaches it in DuckDB, a free database that runs on your computer and reads the lab file directly. What changes between them is narrower: how a value inside nested JSON (JavaScript Object Notation) is reached, how time is handled, and how a query runs on a schedule. Steps 9 and 10 cover those.</p>
+</section>
+
+<div class="toc">
+    <h2>On this page</h2>
+    <ol>
+        <li><a href="#model">A query describes the table you want back</a></li>
+        <li><a href="#walkthrough">Walk-through: five detections in DuckDB</a></li>
+        <li><a href="#warehouses">What changes in Snowflake, BigQuery and Athena</a></li>
+        <li><a href="#exercises">Hands-on exercises</a></li>
+        <li><a href="#mistakes">Common mistakes</a></li>
+        <li><a href="#next">Where next</a></li>
+    </ol>
+</div>
+
+<section id="model">
+    <h2>A query describes the table you want back</h2>
+    <p>A table is rows and columns. In the lab table, <code>cloudtrail</code>, each row is one event and each column one field: <code>eventTime</code>, <code>eventName</code>, <code>sourceIPAddress</code> and so on. A query never changes the table. It describes a new table, and the database builds it. Once step 2 has loaded the data, this is a complete query:</p>
+<div class="code-block" data-lang="sql"><pre>SELECT eventTime, eventName, errorCode   -- which columns
+FROM cloudtrail                          -- from which table
+WHERE sourceIPAddress = '203.0.113.50'   -- which rows
+ORDER BY eventTime                       -- in what order
+LIMIT 3;                                 -- and how many</pre></div>
+<div class="code-block" data-lang="text"><pre>┌─────────────────────┬───────────────────┬──────────────┐
+│      eventTime      │     eventName     │  errorCode   │
+│      timestamp      │      varchar      │   varchar    │
+├─────────────────────┼───────────────────┼──────────────┤
+│ 2026-09-15 10:02:05 │ GetCallerIdentity │ NULL         │
+│ 2026-09-15 10:02:31 │ ListUsers         │ AccessDenied │
+│ 2026-09-15 10:02:38 │ ListRoles         │ AccessDenied │
+└─────────────────────┴───────────────────┴──────────────┘</pre></div>
+    <p>Read it as a sentence. Keywords such as <code>SELECT</code> ignore case, text values go in single quotes, <code>--</code> starts a comment and a semicolon ends the query. You must write the clauses in this order, but the database works in another: <code>FROM</code> first, then <code>WHERE</code>, then <code>SELECT</code>, then <code>ORDER BY</code> and <code>LIMIT</code>. Step 5 relies on that. The result is itself a table, so it can be saved and queried in turn, which step 8 does. And <code>NULL</code> in the first row is not text from the log: <code>GetCallerIdentity</code> succeeded, so it has no <code>errorCode</code> at all. Step 6 shows why that matters.</p>
+</section>
+
+<section id="walkthrough">
+    <h2>Walk-through: five detections in DuckDB</h2>
+    <p>The lab is 24 AWS CloudTrail events, the record of calls made to AWS in one account. A <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> user's access key, <code>build-bot</code>, has leaked. From <code>203.0.113.50</code> someone checks whose key it is, tries to list <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, then creates a user, <code>backup-svc</code>, gives it administrator rights and an access key, and uses it to stop CloudTrail logging. Around that sits routine work, including a console login without <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication) and an application refused one S3 file three times. The walk-through builds five detections, the same five as the other guides in this series:</p>
+    <ul>
+        <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
+        <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
+        <li><strong>D3, new user given a key:</strong> a user created and handed an access key within 10 minutes.</li>
+        <li><strong>D4, console login without MFA:</strong> a successful console sign-in without multi-factor authentication.</li>
+        <li><strong>D5, administrator policy attached:</strong> <code>AdministratorAccess</code> attached to a user.</li>
+    </ul>
+
+    <h3>1. Install DuckDB</h3>
+    <p>On macOS and Linux, DuckDB's own install script puts it in your home directory. On Windows, run <code>winget install DuckDB.cli</code> instead; on a Mac, <code>brew install duckdb</code> also works. Piping a script into <code>bash</code> runs whatever it contains, so read it first: <a href="https://install.duckdb.org" target="_blank" rel="noopener noreferrer">install.duckdb.org</a> shows it as plain text.</p>
+<div class="code-block" data-lang="bash"><pre>curl https://install.duckdb.org | bash
+export PATH="$HOME/.duckdb/cli/latest:$PATH"
+duckdb --version</pre></div>
+    <p>The script installs the newest release and suggests the <code>export</code> line, which lets the shell find <code>duckdb</code>. This page used 1.5.5:</p>
+<div class="code-block" data-lang="text"><pre>v1.5.5 (Variegata) d8cdaa33fd</pre></div>
+
+    <h3>2. Create the lab file and load it</h3>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/sql-lab &amp;&amp; cd ~/sql-lab
+
+cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
+{"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
+{"eventTime":"2026-09-15T09:02:40Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"readOnly":false}
+{"eventTime":"2026-09-15T09:03:05Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"readOnly":true}
+{"eventTime":"2026-09-15T09:10:22Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T09:15:47Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.21","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob","userName":"bob"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:20:03Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.77","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"errorMessage":"Failed authentication","responseElements":{"ConsoleLogin":"Failure"},"additionalEventData":{"MFAUsed":"No"}}
+{"eventTime":"2026-09-15T09:31:10Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T09:47:55Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:01:30Z","eventSource":"s3.amazonaws.com","eventName":"GetObject","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.20","userAgent":"Boto3/1.35.10","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/reports-app/i-0a12b34c56d78e90f"},"errorCode":"AccessDenied","requestParameters":{"bucketName":"finance-reports","key":"2026/09/summary.csv"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:05Z","eventSource":"sts.amazonaws.com","eventName":"GetCallerIdentity","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:02:31Z","eventSource":"iam.amazonaws.com","eventName":"ListUsers","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:38Z","eventSource":"iam.amazonaws.com","eventName":"ListRoles","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:02:52Z","eventSource":"iam.amazonaws.com","eventName":"GetAccountAuthorizationDetails","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:05Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:09Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeVpcs","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:14Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeSecurityGroups","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"Client.UnauthorizedOperation","readOnly":true}
+{"eventTime":"2026-09-15T10:03:22Z","eventSource":"secretsmanager.amazonaws.com","eventName":"ListSecrets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"errorCode":"AccessDenied","readOnly":true}
+{"eventTime":"2026-09-15T10:03:40Z","eventSource":"s3.amazonaws.com","eventName":"ListBuckets","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"readOnly":true}
+{"eventTime":"2026-09-15T10:06:12Z","eventSource":"iam.amazonaws.com","eventName":"CreateUser","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:30Z","eventSource":"iam.amazonaws.com","eventName":"AttachUserPolicy","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc","policyArn":"arn:aws:iam::aws:policy/AdministratorAccess"},"readOnly":false}
+{"eventTime":"2026-09-15T10:06:51Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/build-bot","userName":"build-bot"},"requestParameters":{"userName":"backup-svc"},"responseElements":{"accessKey":{"userName":"backup-svc","accessKeyId":"AKIAIOSFODNN7EXAMPLE","status":"Active"}},"readOnly":false}
+{"eventTime":"2026-09-15T10:09:03Z","eventSource":"cloudtrail.amazonaws.com","eventName":"StopLogging","awsRegion":"us-east-1","sourceIPAddress":"203.0.113.50","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/backup-svc","userName":"backup-svc"},"requestParameters":{"name":"arn:aws:cloudtrail:us-east-1:111122223333:trail/org-trail"},"readOnly":false}
+{"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
+{"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
+EOF
+
+shasum -a 256 cloudtrail-lab.jsonl
+duckdb lab.duckdb</pre></div>
+    <p>The hash must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the paste changed the file. The last command opens DuckDB's shell on a database file, <code>lab.duckdb</code>, creating it. Type the SQL in the rest of this page at its <code>D</code> prompt; <code>.exit</code> leaves. Each line of the file is one event as JSON. Load them all into a table and count them:</p>
+<div class="code-block" data-lang="sql"><pre>CREATE TABLE cloudtrail AS
+SELECT * FROM read_json('cloudtrail-lab.jsonl');
+
+SELECT count(*) AS events FROM cloudtrail;   -- expect 24</pre></div>
+    <p><code>read_json</code> works out a column for every field and a type for every column, and <code>count(*)</code> counts rows. The table is stored in <code>lab.duckdb</code>, so it is still there the next time you open the shell.</p>
+
+    <h3>3. Filter rows: trail tampering (D1)</h3>
+<div class="code-block" data-lang="sql"><pre>-- D1: CloudTrail logging stopped, deleted or changed
+SELECT eventTime, eventName, userIdentity.userName AS actor, sourceIPAddress
+FROM cloudtrail
+WHERE eventName IN ('StopLogging', 'DeleteTrail', 'UpdateTrail', 'PutEventSelectors');</pre></div>
+<div class="code-block" data-lang="text"><pre>┌─────────────────────┬─────────────┬────────────┬─────────────────┐
+│      eventTime      │  eventName  │   actor    │ sourceIPAddress │
+│      timestamp      │   varchar   │  varchar   │     varchar     │
+├─────────────────────┼─────────────┼────────────┼─────────────────┤
+│ 2026-09-15 10:09:03 │ StopLogging │ backup-svc │ 203.0.113.50    │
+└─────────────────────┴─────────────┴────────────┴─────────────────┘</pre></div>
+    <p>One row: <code>backup-svc</code> stopped logging at 10:09:03 from <code>203.0.113.50</code>. The other 23 events are the negative case, and none appears. <code>IN</code> tests a value against a list, and <code>AS</code> names an output column. Comparisons of text are exact, so <code>'stoplogging'</code> would match nothing. In <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge) v19.2 this is <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002 Disable or Modify Cloud Log</a>; rules written before v19 tag it T1562.008, which v19 revoked.</p>
+
+    <h3>4. Nested fields: console logins without MFA (D4)</h3>
+    <p>Some fields are objects inside the event, such as <code>userIdentity</code>. DuckDB stored each one as a <code>STRUCT</code>, a column holding named fields of its own, and a dot reaches inside: <code>userIdentity.userName</code>. It also recognised <code>eventTime</code> as a <code>TIMESTAMP</code>, a point in time rather than text, which step 7 needs. A first attempt at D4:</p>
+<div class="code-block" data-lang="sql"><pre>-- D4, first attempt: console logins without MFA
+SELECT eventTime, userIdentity.userName AS user_name, responseElements.ConsoleLogin AS result
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin'
+  AND additionalEventData.MFAUsed = 'No'
+ORDER BY eventTime;</pre></div>
+<div class="code-block" data-lang="text"><pre>┌─────────────────────┬───────────┬─────────┐
+│      eventTime      │ user_name │ result  │
+│      timestamp      │  varchar  │ varchar │
+├─────────────────────┼───────────┼─────────┤
+│ 2026-09-15 09:15:47 │ bob       │ Success │
+│ 2026-09-15 09:20:03 │ alice     │ Failure │
+└─────────────────────┴───────────┴─────────┘</pre></div>
+    <p>The second row is wrong: alice's sign-in at 09:20:03 failed. CloudTrail records <code>MFAUsed</code> on failed attempts too, so the rule must also ask for success. <code>AND</code> keeps a row only when every condition holds:</p>
+<div class="code-block" data-lang="sql"><pre>-- D4: a successful console sign-in without MFA
+SELECT eventTime, userIdentity.userName AS user_name, sourceIPAddress
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin'
+  AND responseElements.ConsoleLogin = 'Success'
+  AND additionalEventData.MFAUsed = 'No';</pre></div>
+    <p>Now only bob fires, at 09:15:47 from <code>198.51.100.21</code>; alice's sign-in with MFA and her failed one are the negative cases. AWS's own check, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">Security Hub control CloudWatch.3</a>, pairs the same two conditions. ATT&amp;CK: <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004 Valid Accounts: Cloud Accounts</a>.</p>
+
+    <h3>5. Count in groups: the burst that never fires (D2)</h3>
+    <p><code>GROUP BY</code> collapses the rows that share a value into one row per value, and <code>count(*)</code> then counts the rows in each group. D2 wants groups of five or more, and <code>WHERE</code> cannot test a count, because it runs before the counting; <code>HAVING</code> filters the groups afterwards:</p>
+<div class="code-block" data-lang="sql"><pre>-- D2, first attempt: AccessDenied per source address, five or more
+SELECT sourceIPAddress, count(*) AS denials
+FROM cloudtrail
+WHERE errorCode = 'AccessDenied'
+GROUP BY sourceIPAddress
+HAVING count(*) &gt;= 5;</pre></div>
+<div class="code-block" data-lang="text"><pre>┌─────────────────┬─────────┐
+│ sourceIPAddress │ denials │
+│     varchar     │  int64  │
+└─────────────────┴─────────┘
+           0 rows</pre></div>
+    <p>Nothing. Delete the <code>HAVING</code> line and you see why: <code>203.0.113.50</code> has 4 and <code>192.0.2.20</code> has 3. Did the attacker really make only four denied calls, or can the query not see the rest? Run a control: drop the filter and list the error codes that exist at all.</p>
+<div class="code-block" data-lang="sql"><pre>-- Control: which error codes are in the data?
+SELECT errorCode, count(*) AS events
+FROM cloudtrail
+GROUP BY errorCode
+ORDER BY events DESC;</pre></div>
+<div class="code-block" data-lang="text"><pre>┌──────────────────────────────┬────────┐
+│          errorCode           │ events │
+│           varchar            │ int64  │
+├──────────────────────────────┼────────┤
+│ NULL                         │     14 │
+│ AccessDenied                 │      7 │
+│ Client.UnauthorizedOperation │      3 │
+└──────────────────────────────┴────────┘</pre></div>
+    <p>EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, as <a href="https://docs.aws.amazon.com/security-lake/latest/userguide/cloudtrail-query-examples-sourceversion2.html" target="_blank" rel="noopener noreferrer">AWS's example query for unauthorised attempts</a> shows, so three of the attacker's seven denials were invisible to the rule. AWS's alarm for unauthorised API calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">Security Hub control CloudWatch.2</a>, matches every code that starts with <code>AccessDenied</code> or ends in <code>UnauthorizedOperation</code>, which also takes in <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. The fix lists all four:</p>
+<div class="code-block" data-lang="sql"><pre>-- D2: every denial code, per source address, five or more
+SELECT sourceIPAddress, count(*) AS denials
+FROM cloudtrail
+WHERE errorCode IN ('AccessDenied', 'AccessDeniedException',
+                    'Client.UnauthorizedOperation', 'UnauthorizedOperation')
+GROUP BY sourceIPAddress
+HAVING count(*) &gt;= 5;</pre></div>
+<div class="code-block" data-lang="text"><pre>┌─────────────────┬─────────┐
+│ sourceIPAddress │ denials │
+│     varchar     │  int64  │
+├─────────────────┼─────────┤
+│ 203.0.113.50    │       7 │
+└─────────────────┴─────────┘</pre></div>
+    <p><code>203.0.113.50</code> with 7 fires; <code>192.0.2.20</code>, the reports application, stays under the threshold with 3. To match the families the way AWS's alarm does, <code>LIKE</code> compares text with a pattern in which <code>%</code> stands for any run of characters: <code>errorCode LIKE 'AccessDenied%' OR errorCode LIKE '%UnauthorizedOperation'</code> gives the same 7, and also catches codes you have not met yet.</p>
+    <div class="highlight-box">
+    <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the same query without its threshold, or a count of the values that really exist. The control above also showed a row you did not ask about, <code>NULL</code> with 14 events, and step 6 is about that row.</p>
+    </div>
+
+    <h3>6. NULL: the value that is not there</h3>
+    <p><code>NULL</code> means "no value", not an empty string. Any comparison with it, even <code>NULL = NULL</code>, gives neither true nor false but unknown, and <code>WHERE</code> keeps only the rows where its condition is true. That breaks a reasonable-looking refinement of D1: alert only when tampering worked, by skipping attempts that were denied.</p>
+<div class="code-block" data-lang="sql"><pre>-- D1, tightened (wrong): skip tampering that was denied
+SELECT eventTime, eventName, sourceIPAddress
+FROM cloudtrail
+WHERE eventName IN ('StopLogging', 'DeleteTrail', 'UpdateTrail', 'PutEventSelectors')
+  AND errorCode &lt;&gt; 'AccessDenied';</pre></div>
+    <p><code>&lt;&gt;</code> means "not equal", and this returns nothing. The <code>StopLogging</code> call succeeded, so its <code>errorCode</code> is <code>NULL</code>, the comparison is unknown, and the row goes: the rule now misses the one event it exists for, and looks exactly like a quiet day. Across the whole table, <code>errorCode &lt;&gt; 'AccessDenied'</code> keeps 3 rows, not 17. Ask for the missing value directly: <code>AND errorCode IS NULL</code> (success means no error code) brings the row back. When you mean "anything but this value, including no value", write <code>errorCode IS DISTINCT FROM 'AccessDenied'</code>, which keeps all 17. Counting skips <code>NULL</code> as well: <code>count(errorCode)</code> gives 10 where <code>count(*)</code> gives 24.</p>
+
+    <h3>7. Match one event with another: new user given a key (D3)</h3>
+    <p>D3 is about two events, a <code>CreateUser</code> and a later <code>CreateAccessKey</code> for the same new user. A <code>JOIN</code> pairs rows from two tables wherever its <code>ON</code> condition holds, and here both tables are <code>cloudtrail</code>, under two short names: <code>c</code> for the creation and <code>k</code> for the key. <code>BETWEEN</code> includes both ends, and subtracting two times gives the gap between them.</p>
+<div class="code-block" data-lang="sql"><pre>-- D3: a user created and handed an access key within 10 minutes
+SELECT c.requestParameters.userName AS new_user, c.userIdentity.userName AS actor,
+       c.eventTime AS created, k.eventTime - c.eventTime AS gap
+FROM cloudtrail AS c
+JOIN cloudtrail AS k
+  ON k.requestParameters.userName = c.requestParameters.userName
+WHERE c.eventName = 'CreateUser'
+  AND k.eventName = 'CreateAccessKey'
+  AND k.eventTime BETWEEN c.eventTime AND c.eventTime + INTERVAL '10 minutes'
+ORDER BY created;</pre></div>
+<div class="code-block" data-lang="text"><pre>┌────────────┬───────────┬─────────────────────┬──────────┐
+│  new_user  │   actor   │       created       │   gap    │
+│  varchar   │  varchar  │      timestamp      │ interval │
+├────────────┼───────────┼─────────────────────┼──────────┤
+│ backup-svc │ build-bot │ 2026-09-15 10:06:12 │ 00:00:39 │
+└────────────┴───────────┴─────────────────────┴──────────┘</pre></div>
+    <p><code>build-bot</code> created <code>backup-svc</code> and gave it a key 39 seconds later. Now the control: delete the <code>BETWEEN</code> line and run it again.</p>
+<div class="code-block" data-lang="text"><pre>┌───────────────┬───────────┬─────────────────────┬──────────┐
+│   new_user    │   actor   │       created       │   gap    │
+│    varchar    │  varchar  │      timestamp      │ interval │
+├───────────────┼───────────┼─────────────────────┼──────────┤
+│ svc-reporting │ alice     │ 2026-09-15 09:02:40 │ 02:37:46 │
+│ backup-svc    │ build-bot │ 2026-09-15 10:06:12 │ 00:00:39 │
+└───────────────┴───────────┴─────────────────────┴──────────┘</pre></div>
+    <p>Without the window, alice's routine work joins the results: she created <code>svc-reporting</code> and gave it a key 2 hours 37 minutes later. Any user given a key months after creation would match too, so the window is the detection, and <code>svc-reporting</code> is its negative case. ATT&amp;CK: <a href="https://attack.mitre.org/techniques/T1136/003/" target="_blank" rel="noopener noreferrer">T1136.003 Create Account: Cloud Account</a>, then <a href="https://attack.mitre.org/techniques/T1098/001/" target="_blank" rel="noopener noreferrer">T1098.001 Additional Cloud Credentials</a>.</p>
+
+    <h3>8. Make it a scheduled detection, and test it both ways</h3>
+    <p>A detection is a query that returns no rows when all is well and one row per alert when not, run on a schedule over the most recent events. DuckDB has no scheduler of its own (cron or a pipeline job would run it), but you can build and test the query one would run. A <code>VIEW</code> saves a query under a name, and a variable stands in for the time of each run (<code>getvariable()</code> has no type until the variable is set, hence the casts):</p>
+<div class="code-block" data-lang="sql"><pre>-- D2 denied-call burst (ATT&amp;CK T1087.004, T1580): any row is an alert
+CREATE VIEW d2_denied_call_burst AS
+SELECT sourceIPAddress, count(*) AS denials, min(eventTime) AS first_seen,
+       'T1087.004, T1580' AS attack_techniques
+FROM cloudtrail
+WHERE errorCode IN ('AccessDenied', 'AccessDeniedException',
+                    'Client.UnauthorizedOperation', 'UnauthorizedOperation')
+  AND eventTime &gt;= getvariable('run_time')::TIMESTAMP - INTERVAL '10 minutes'
+  AND eventTime &lt;  getvariable('run_time')::TIMESTAMP
+GROUP BY sourceIPAddress
+HAVING count(*) &gt;= 5;</pre></div>
+    <p>The ATT&amp;CK techniques ride along in every alert row: <a href="https://attack.mitre.org/techniques/T1087/004/" target="_blank" rel="noopener noreferrer">T1087.004 Account Discovery: Cloud Account</a> and <a href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener noreferrer">T1580 Cloud Infrastructure Discovery</a>, as numbered in ATT&amp;CK v19.2. The window includes its start and excludes its end, so back-to-back runs neither overlap nor leave a gap. Now run it as the scheduler would, for 10:10, just after the burst, and for 09:50, when only the reports application had been refused:</p>
+<div class="code-block" data-lang="sql"><pre>SET VARIABLE run_time = TIMESTAMP '2026-09-15 10:10:00';
+SELECT * FROM d2_denied_call_burst;
+
+SET VARIABLE run_time = TIMESTAMP '2026-09-15 09:50:00';
+SELECT * FROM d2_denied_call_burst;</pre></div>
+<div class="code-block" data-lang="text"><pre>┌─────────────────┬─────────┬─────────────────────┬───────────────────┐
+│ sourceIPAddress │ denials │     first_seen      │ attack_techniques │
+│     varchar     │  int64  │      timestamp      │      varchar      │
+├─────────────────┼─────────┼─────────────────────┼───────────────────┤
+│ 203.0.113.50    │       7 │ 2026-09-15 10:02:31 │ T1087.004, T1580  │
+└─────────────────┴─────────┴─────────────────────┴───────────────────┘
+┌─────────────────┬─────────┬────────────┬───────────────────┐
+│ sourceIPAddress │ denials │ first_seen │ attack_techniques │
+│     varchar     │  int64  │ timestamp  │      varchar      │
+└─────────────────┴─────────┴────────────┴───────────────────┘
+                            0 rows</pre></div>
+    <p>It fires once, for <code>203.0.113.50</code>, and stays silent at 09:50. The 10:10 run also saw the reports application's 10:01:30 denial and rightly left it out. One limit remains: a burst that straddles a run, say three denials before 10:10 and three after, is split between two windows and stays under five in both. Grouping by <code>time_bucket(INTERVAL '10 minutes', eventTime)</code>, which cuts the day into ten-minute slots that start on the clock, has the same limit. Running every 5 minutes over the last 10 closes it, at the cost of some bursts alerting twice.</p>
+</section>
+
+<section id="warehouses">
+    <h2>What changes in Snowflake, BigQuery and Athena</h2>
+
+    <h3>9. The same question in three dialects</h3>
+    <p>Each warehouse speaks its own dialect of SQL, and the differences cluster where the data is nested or timed. How nested JSON looks depends on how the table was built, so the examples assume one layout each: in Snowflake, a view like the one in <a href="https://www.snowflake.com/en/developers/guides/cloudtrail-log-ingestion/" target="_blank" rel="noopener noreferrer">Snowflake's CloudTrail ingestion guide</a>, with each nested object in a <code>VARIANT</code> column; in BigQuery, a table whose nested objects are <code>JSON</code> columns (this page's own choice); and in Athena, the table from <a href="https://docs.aws.amazon.com/athena/latest/ug/create-cloudtrail-table.html" target="_blank" rel="noopener noreferrer">the Athena documentation's CloudTrail page</a>, where <code>useridentity</code> is a struct but <code>requestparameters</code>, <code>responseelements</code> and <code>additionaleventdata</code> hold JSON as plain text. D4 in each:</p>
+<div class="code-block" data-lang="sql"><pre>-- Snowflake (ran on fakesnow)
+SELECT eventTime, userIdentity:userName::STRING AS user_name, sourceIPAddress
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin'
+  AND responseElements:ConsoleLogin::STRING = 'Success'
+  AND additionalEventData:MFAUsed::STRING = 'No';</pre></div>
+<div class="code-block" data-lang="sql"><pre>-- BigQuery (ran on the BigQuery emulator)
+SELECT eventTime, JSON_VALUE(userIdentity, '$.userName') AS user_name, sourceIPAddress
+FROM security.cloudtrail
+WHERE eventName = 'ConsoleLogin'
+  AND JSON_VALUE(responseElements, '$.ConsoleLogin') = 'Success'
+  AND JSON_VALUE(additionalEventData, '$.MFAUsed') = 'No';</pre></div>
+<div class="code-block" data-lang="sql"><pre>-- Amazon Athena (ran on Trino)
+SELECT eventtime, useridentity.username AS user_name, sourceipaddress
+FROM cloudtrail_logs
+WHERE eventname = 'ConsoleLogin'
+  AND json_extract_scalar(responseelements, '$.ConsoleLogin') = 'Success'
+  AND json_extract_scalar(additionaleventdata, '$.MFAUsed') = 'No';</pre></div>
+    <p>Each returned one row, bob from <code>198.51.100.21</code>. In Snowflake, <code>:</code> steps into a <code>VARIANT</code> and <code>::STRING</code> turns what it finds into text. In BigQuery, <code>JSON_VALUE</code> takes a JSON column and a path in which <code>$</code> is the top of the object. Athena lowercases every column name and reaches struct fields with a dot, but its JSON text needs <code>json_extract_scalar</code>. The rest of what changes, each item checked on the three engines above and in the vendors' documentation:</p>
+    <div class="table-scroll"><table class="comparison-table">
+        <thead><tr><th scope="col">&nbsp;</th><th scope="col">DuckDB</th><th scope="col">Snowflake</th><th scope="col">BigQuery</th><th scope="col">Athena</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Nested names are case-sensitive</th><td>No</td><td>Yes</td><td>Yes, in JSON</td><td>Struct fields no, JSON paths yes</td></tr>
+            <tr><th scope="row">The event time</th><td><code>TIMESTAMP</code>, detected when read</td><td><code>TIMESTAMP</code> in the guide's view</td><td><code>TIMESTAMP</code> column</td><td>Text: use <code>from_iso8601_timestamp(eventtime)</code></td></tr>
+            <tr><th scope="row">Ten-minute bucket</th><td><code>time_bucket(INTERVAL '10 minutes', t)</code></td><td><code>TIME_SLICE(t, 10, 'MINUTE')</code></td><td><code>TIMESTAMP_BUCKET(t, INTERVAL 10 MINUTE)</code></td><td><code>from_unixtime(floor(to_unixtime(t) / 600) * 600)</code></td></tr>
+            <tr><th scope="row">Ten minutes after <code>t</code></th><td><code>t + INTERVAL '10 minutes'</code></td><td><code>DATEADD(minute, 10, t)</code></td><td><code>TIMESTAMP_ADD(t, INTERVAL 10 MINUTE)</code></td><td><code>t + INTERVAL '10' MINUTE</code></td></tr>
+            <tr><th scope="row"><code>GROUP BY</code> an output name</th><td>Yes</td><td>Yes</td><td>Yes</td><td>No: repeat the expression or use its position</td></tr>
+            <tr><th scope="row"><code>"x"</code> in double quotes is</th><td>A column name</td><td>A column name</td><td>Text</td><td>A column name</td></tr>
+        </tbody>
+    </table></div>
+    <p>The first row is the one that bites. DuckDB ignores case in struct field names, so a D4 written with <code>additionalEventData.mfaused</code> passes every local test, and the same lowercase path finds nothing in the three warehouses (Exercise 4).</p>
+
+    <h3>10. Put it on a schedule</h3>
+    <p>Only Snowflake expresses the schedule in SQL itself. An <a href="https://docs.snowflake.com/en/user-guide/alerts" target="_blank" rel="noopener noreferrer">alert</a> runs a condition on a schedule and, when the condition returns any row, runs an action. This is step 8's detection as an alert on the guide's view (not run, because Snowflake was not available):</p>
+<div class="code-block" data-lang="sql"><pre>CREATE ALERT d2_denied_call_burst
+  WAREHOUSE = security_wh
+  SCHEDULE = '10 MINUTE'
+  COMMENT = 'D2 denied-call burst. ATT&amp;CK T1087.004, T1580.'
+  IF (EXISTS (
+    SELECT sourceIPAddress, COUNT(*) AS denials
+    FROM cloudtrail
+    WHERE errorCode IN ('AccessDenied', 'AccessDeniedException',
+                        'Client.UnauthorizedOperation', 'UnauthorizedOperation')
+      AND eventTime &gt;= DATEADD(minute, -10,
+            CONVERT_TIMEZONE('UTC', SNOWFLAKE.ALERT.SCHEDULED_TIME())::TIMESTAMP_NTZ)
+      AND eventTime &lt;  CONVERT_TIMEZONE('UTC', SNOWFLAKE.ALERT.SCHEDULED_TIME())::TIMESTAMP_NTZ
+    GROUP BY sourceIPAddress
+    HAVING COUNT(*) &gt;= 5))
+  THEN CALL SYSTEM$SEND_EMAIL('soc_email', 'soc@example.com',
+         'D2 denied-call burst', 'Five or more denied calls from one address.');
+ALTER ALERT d2_denied_call_burst RESUME;   -- new alerts start suspended</pre></div>
+    <p><code>SNOWFLAKE.ALERT.SCHEDULED_TIME()</code> plays the part of <code>run_time</code>. The conversion around it matters: the view's <code>eventTime</code> holds UTC (Coordinated Universal Time) with no time zone attached, the function returns a time in the session's zone, and Snowflake's default zone is America/Los_Angeles, so comparing the two directly would put the window hours away from the events. <code>soc_email</code> is an email notification integration you create first.</p>
+    <p>In BigQuery, a <a href="https://docs.cloud.google.com/bigquery/docs/scheduling-queries" target="_blank" rel="noopener noreferrer">scheduled query</a> runs at intervals of five minutes or more and passes each run's intended time as <code>@run_time</code>, so the window becomes <code>eventTime &gt;= TIMESTAMP_SUB(@run_time, INTERVAL 10 MINUTE) AND eventTime &lt; @run_time</code> (on the emulator, that fired at 10:10 and stayed silent at 09:50). The result goes to a table, and a run can be announced on Pub/Sub or, if it fails, by email; nothing reports whether the detection found anything, so something must read the result. Athena has no scheduler at all: <a href="https://repost.aws/knowledge-center/schedule-query-athena" target="_blank" rel="noopener noreferrer">AWS suggests</a> an Amazon EventBridge rule that starts an AWS <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a> function, AWS Step Functions, or cron, and whatever starts the query must supply the window.</p>
+</section>
+
+<section id="exercises">
+    <h2>Hands-on exercises</h2>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 1</span>
+        <p>Write D5: every time the <code>AdministratorAccess</code> managed policy was attached to a user, showing who attached it, to whom, and from where.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="sql"><pre>-- D5: AdministratorAccess attached to a user
+SELECT eventTime, userIdentity.userName AS actor,
+       requestParameters.userName AS target_user, sourceIPAddress
+FROM cloudtrail
+WHERE eventName = 'AttachUserPolicy'
+  AND requestParameters.policyArn = 'arn:aws:iam::aws:policy/AdministratorAccess';</pre></div>
+            <p>One row: <code>build-bot</code> attached it to <code>backup-svc</code> at 10:06:30 from <code>203.0.113.50</code>. Both <code>userIdentity</code> and <code>requestParameters</code> contain a <code>userName</code>: the first is who acted, the second who was acted on, and the <code>AS</code> names keep them apart. The technique is <a href="https://attack.mitre.org/techniques/T1098/003/" target="_blank" rel="noopener noreferrer">T1098.003 Additional Cloud Roles</a>. For real coverage, also consider <code>AttachRolePolicy</code>, <code>AttachGroupPolicy</code> and inline policies written with <code>PutUserPolicy</code>.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 2</span>
+        <p>This query is meant to list the denied calls from <code>203.0.113.50</code>. It returns 10 rows, three of them from <code>192.0.2.20</code>. Why, and what is the fix?</p>
+<div class="code-block" data-lang="sql"><pre>SELECT eventTime, eventName, sourceIPAddress, errorCode
+FROM cloudtrail
+WHERE errorCode = 'AccessDenied' OR errorCode = 'Client.UnauthorizedOperation'
+  AND sourceIPAddress = '203.0.113.50';</pre></div>
+        <details>
+            <summary>Show the answer</summary>
+            <p><code>AND</code> binds more tightly than <code>OR</code>, as multiplication does before addition, so the condition reads "<code>AccessDenied</code> from anywhere, or <code>Client.UnauthorizedOperation</code> from 203.0.113.50". The three extra rows are the reports application's. Parentheses say what was meant, and an <code>IN</code> list avoids the question: <code>WHERE errorCode IN ('AccessDenied', 'Client.UnauthorizedOperation') AND sourceIPAddress = '203.0.113.50'</code> returns the attacker's 7. This mistake returned too much rather than nothing, and it is just as quiet: no error, only a count slightly too big. Checking a result against a number you already know, such as step 5's seven, is how you notice.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 3</span>
+        <p>Find every source address used by more than one identity, which is how a leaked key followed by a new user looks from the network side. Should you count <code>userIdentity.userName</code> or <code>userIdentity.arn</code> (the Amazon Resource Name)?</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="sql"><pre>SELECT sourceIPAddress, count(DISTINCT userIdentity.arn) AS identities
+FROM cloudtrail
+GROUP BY sourceIPAddress
+HAVING count(DISTINCT userIdentity.arn) &gt; 1;</pre></div>
+            <p>One row: <code>203.0.113.50</code> with 2. <code>DISTINCT</code> inside <code>count</code> counts different values rather than rows: here <code>build-bot</code> and the <code>backup-svc</code> user it created. Count the ARN, which every event has. Roles have no <code>userName</code>, and counting skips <code>NULL</code>, so <code>count(DISTINCT userIdentity.userName)</code> gives 0 for the <code>ci-deploy</code> role's address, <code>192.0.2.10</code>, and an address shared by one user and one role would count 1 and pass for a single identity.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 4</span>
+        <p>A colleague wrote D4 in DuckDB with lowercase names (<code>additionaleventdata.mfaused</code>, <code>responseelements.consolelogin</code>), tested it and saw bob. Moved to Snowflake as <code>additionalEventData:mfaused::STRING = 'No'</code> and so on, it returns nothing, every day. What is wrong, and which control finds it in one query?</p>
+        <details>
+            <summary>Show the answer</summary>
+            <p>DuckDB ignores case in column names and struct fields alike, so the local test passed. Snowflake ignores case in column names but not in the element names inside a <code>VARIANT</code>: the key is <code>MFAUsed</code>, so <code>mfaused</code> finds nothing, every comparison is with <code>NULL</code>, and no row survives. The control is to show the values without filtering on them:</p>
+<div class="code-block" data-lang="sql"><pre>-- Snowflake (ran on fakesnow)
+SELECT additionalEventData:mfaused::STRING AS lower_case,
+       additionalEventData:MFAUsed::STRING AS as_logged
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin';</pre></div>
+            <p>It returned three rows with <code>lower_case</code> empty (<code>NULL</code>) in every one, beside <code>Yes</code>, <code>No</code> and <code>No</code>. A column of nothing but <code>NULL</code> is the signature of a wrong path, in BigQuery's <code>JSON_VALUE</code> and Athena's <code>json_extract_scalar</code> as well.</p>
+        </details>
+    </div>
+</section>
+
+<section id="mistakes">
+    <h2>Common mistakes</h2>
+    <ul>
+        <li><strong>Comparing with <code>NULL</code> using <code>=</code> or <code>&lt;&gt;</code>.</strong> The comparison is unknown and the row silently drops out. Use <code>IS NULL</code>, or <code>IS DISTINCT FROM</code> when "no value" should count as different.</li>
+        <li><strong>Believing an empty result.</strong> A missing error code, a wrong key name and a quiet account all return nothing. Remove the threshold, or list the values that exist, before you believe it.</li>
+        <li><strong>Matching one denial code.</strong> EC2 says <code>Client.UnauthorizedOperation</code>, so a rule that knows only <code>AccessDenied</code> misses every refused EC2 call.</li>
+        <li><strong>Joining events without a time limit.</strong> A user created months ago and given a key today matches too; the window is the detection.</li>
+        <li><strong>Testing only in DuckDB.</strong> It ignores case in nested names and the warehouses do not. Run the final query, and its control, where it will be deployed.</li>
+        <li><strong>Treating Athena's <code>eventtime</code> as a time.</strong> In the documented table it is text, so <code>eventtime &gt;= '2026-09-15 10:00:00'</code> compares characters: the <code>T</code> in <code>2026-09-15T10:09:03Z</code> sorts after a space, and on Trino it matched all 24 events instead of 16. Convert with <code>from_iso8601_timestamp()</code> first.</li>
+        <li><strong>Mixing time zones in Snowflake.</strong> A <code>TIMESTAMP_NTZ</code> carries no zone, and the default session zone is America/Los_Angeles. Convert before comparing.</li>
+        <li><strong>A window that ends exactly now.</strong> <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-working-with-log-files.html" target="_blank" rel="noopener noreferrer">CloudTrail delivers logs on average about 5 minutes after the call</a>, and does not guarantee even that, so a run at 10:10 may not yet hold the 10:08 events, and the next run's window has moved past them. Lag the window, or overlap it and remove duplicate alerts.</li>
+        <li><strong>Forgetting that every run is billed.</strong> Athena, and BigQuery's on-demand pricing, charge by the data a query reads, and a detection that runs every ten minutes runs 144 times a day. Bound it by time and partition, and in BigQuery name only the columns you need.</li>
+    </ul>
+</section>
+
+<section id="next" class="cta-section">
+    <h2>Where next</h2>
+    <ul>
+        <li><a href="splunk-spl.html">Splunk SPL</a>, <a href="kusto-kql.html">KQL</a> and <a href="elastic-esql-eql.html">Elastic ES|QL and EQL</a> run the same lab and the same five detections, a quick way to see which ideas belong to SQL and which to every query language.</li>
+        <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a> sets up a real trail and queries it with Athena, the next step after this page's local copy.</li>
+        <li><a href="sigma-and-yara.html">Sigma and YARA</a> for writing a detection once and converting it, and <a href="../detection-engineering.html">detection engineering</a> for testing, tuning and retiring detections.</li>
+        <li><a href="https://duckdb.org/docs/current/data/json/overview" target="_blank" rel="noopener noreferrer">DuckDB's JSON documentation</a> and <a href="https://duckdb.org/docs/current/sql/introduction" target="_blank" rel="noopener noreferrer">its SQL introduction</a>, for the rest of the language.</li>
+        <li><a href="https://docs.snowflake.com/en/user-guide/querying-semistructured" target="_blank" rel="noopener noreferrer">Snowflake on querying semi-structured data</a>, <a href="https://docs.cloud.google.com/bigquery/docs/json-data" target="_blank" rel="noopener noreferrer">BigQuery on working with JSON</a> and <a href="https://docs.aws.amazon.com/athena/latest/ug/cloudtrail-logs.html" target="_blank" rel="noopener noreferrer">Athena on querying CloudTrail logs</a>.</li>
+    </ul>
+</section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=ce8e8780" integrity="sha384-3shiQXFKQDjuyR3tcw2cQxS8sF6ASTavSyTLHJ+M+dieHkpjecvxrfWKM+4dVLal"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
