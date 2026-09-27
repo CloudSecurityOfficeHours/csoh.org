@@ -405,10 +405,23 @@ function filterBySource(slug) {
 
 let previewMap = {};
 
+// Cards the preview map could fill: a linked title, no preview already in the
+// markup, and no data-no-preview opt-out. Most pages have none, including
+// every page under a subdirectory, so the map is fetched only where one exists.
+function previewCandidates() {
+    return Array.from(document.querySelectorAll('.resource-card')).filter(card =>
+        !card.hasAttribute('data-no-preview') &&
+        !card.querySelector('.resource-preview') &&
+        card.querySelector('h3 a'));
+}
+
 function loadPreviewMap() {
+    if (!previewCandidates().length) return Promise.resolve();
+    // Root-absolute: a relative path resolved to <subdir>/preview-mapping.json
+    // on pages under a subdirectory, which does not exist.
     // Bypass HTTP cache so fresh entries (added on every PR by the workflow)
     // are picked up without waiting for the browser's cache to expire.
-    return fetch('preview-mapping.json', { cache: 'no-cache' })
+    return fetch('/preview-mapping.json', { cache: 'no-cache' })
         .then(resp => {
             if (!resp.ok) return {};
             return resp.json();
@@ -621,21 +634,11 @@ function addIconsToCards() {
     });
 }
 
-// Insert a small preview screenshot for each resource card.
-// Uses WordPress mShots service to generate a lightweight thumbnail.
+// Insert a small preview screenshot for each resource card, from the local
+// screenshots listed in preview-mapping.json (tools/generate_previews.py).
 function addPreviewImagesToCards() {
-    const cards = document.querySelectorAll('.resource-card');
-
-    cards.forEach(card => {
-        // Skip if card marked as no-preview (e.g., index page category cards)
-        if (card.hasAttribute('data-no-preview')) return;
-
-        // avoid duplicating previews
-        if (card.querySelector('.resource-preview')) return;
-
+    previewCandidates().forEach(card => {
         const link = card.querySelector('h3 a');
-        if (!link) return;
-
         const url = link.href;
         if (!url) return;
 
@@ -653,7 +656,9 @@ function addPreviewImagesToCards() {
         img.width = 600;
         img.height = 160;
 
-        img.src = previewMap[url];
+        // Map values are site-root paths (img/previews/...); resolve them from
+        // the root so a card on a page under a subdirectory gets the right file.
+        img.src = new URL(previewMap[url], window.location.origin + '/').href;
         img.onerror = function() { img.remove(); };
 
         // Place the preview after any icon but before the title
