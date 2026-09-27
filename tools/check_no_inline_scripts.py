@@ -66,6 +66,7 @@ def main() -> int:
         list(repo.glob("*.html"))
         + list(repo.glob("portfolio/*.html"))
         + list(repo.glob("homelab/*.html"))
+        + list(repo.glob("howto/*.html"))
         + list(repo.glob("meetings/*.html"))
         + list(repo.glob("breaches/*.html"))
     )

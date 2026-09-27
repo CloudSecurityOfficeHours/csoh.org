@@ -116,10 +116,13 @@ say so rather than implying nginx checked it.
 `tools/sync_chrome.py` (glob + parent page) · `tools/run_seo_audit.py`
 (`AUDITED_SUBDIRS`) · `tools/check_all_site_urls.py` · `.lychee.toml` ·
 `tools/build_search_index.py` (`SUBDIR_TYPES`) · `tools/crosslink_pages.py`
-(`SUBDIR_PATTERNS`) · `sitemap.xml`. The last three are judgement calls:
-`homelab/` is deliberately excluded from search and cross-linking. The SEO
-audit averages over what it audits, so an unregistered directory never lowers
-the score.
+(`SUBDIR_PATTERNS`) · `sitemap.xml` · the per-directory globs in the CI gates
+`tools/check_no_inline_scripts.py` and `tools/check_svg_dimensions.py`. The
+search, cross-link and sitemap entries are judgement calls: `homelab/` is
+deliberately excluded from search and cross-linking. The SEO audit averages
+over what it audits, so an unregistered directory never lowers the score, and a
+gate that does not glob a directory passes it without reading it: `howto/` sat
+outside both gates for a month.
 
 ---
 
