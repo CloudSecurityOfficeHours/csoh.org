@@ -258,7 +258,7 @@ PAGES = [
      "From the Sessions"),
     ("what-practitioners-think-about-ai-security.html",
      "What Practitioners Actually Think About AI Security",
-     "Twenty-two Friday sessions of working cloud security practitioners arguing about AI security and governance, disagreements included.",
+     "Thirty Friday sessions of working cloud security practitioners arguing about AI security and governance, disagreements included.",
      "From the Sessions"),
     ("what-breaking-into-cloud-security-really-takes.html",
      "What Breaking Into Cloud Security Really Takes",
