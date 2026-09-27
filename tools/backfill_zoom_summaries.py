@@ -182,6 +182,8 @@ NOISE_TITLE_RE = re.compile(
     r'|emotional connection (?:and|&)'
     r'|cybersecurity music video'
     r'|music performance'
+    r'|personal songs?'
+    r'|songs? and reflections'
     r')\b',
     re.IGNORECASE,
 )
@@ -238,6 +240,9 @@ NOISE_BODY_RE = re.compile(
     r'|song lyrics, greetings, and disconnected phrases'
     r'|lively discussion, filled with music'
     r'|no substantive discussion, decisions, or action items were captured'
+    r'|shared audio of (?:personal )?songs'
+    r'|lyrics from songs like'
+    r'|thoughts expressed through music'
     r')',
     re.IGNORECASE,
 )
