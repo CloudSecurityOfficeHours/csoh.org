@@ -1380,6 +1380,59 @@ const CODE_LANGS = {
                 ['tok-str',  '"(?:[^"\\\\]|\\\\.)*"'],
                 ['tok-tag',  '</?[\\w:.-]+|/?>'],
                 ['tok-attr', '[\\w:.-]+(?=\\s*=)']
+            ] },
+    // The SIEM query languages on the howto/ detection guides. Keywords are
+    // the commands and operators that give a query its shape; field names are
+    // left plain so they read as data. SPL takes no single quotes as strings
+    // because in `eval` and `where` they quote a field name, not a value.
+    spl:    { line: [], str: ['"'],
+              kw: ['search', 'where', 'stats', 'eventstats', 'streamstats', 'eval',
+                   'table', 'fields', 'rename', 'sort', 'dedup', 'bin', 'by', 'as',
+                   'span', 'count', 'dc', 'values', 'min', 'max', 'earliest',
+                   'latest', 'spath', 'rex', 'timechart', 'tstats', 'makeresults',
+                   'head', 'lookup', 'transaction', 'if', 'case', 'isnull',
+                   'isnotnull', 'like', 'match', 'AND', 'OR', 'NOT', 'IN'] },
+    kql:    { line: ['//'], str: ['"', "'"],
+              kw: ['where', 'project', 'project-away', 'project-rename', 'extend',
+                   'summarize', 'by', 'count', 'dcount', 'make_set', 'make_list',
+                   'arg_min', 'arg_max', 'take', 'top', 'sort', 'order', 'asc',
+                   'desc', 'join', 'kind', 'on', 'let', 'union', 'distinct',
+                   'mv-expand', 'parse_json', 'tostring', 'todatetime', 'toint',
+                   'bin', 'ago', 'between', 'in', 'has', 'has_any',
+                   'contains', 'startswith', 'endswith', 'and', 'or', 'not',
+                   'isempty', 'isnotempty', 'isnull', 'iff', 'datetime', 'dynamic',
+                   'true', 'false', 'with', 'create', 'table', 'ingest', 'inline',
+                   'into', 'set-or-replace', 'set-or-append'] },
+    esql:   { line: ['//'], str: ['"'], caseless: true,
+              kw: ['from', 'row', 'where', 'eval', 'keep', 'drop', 'stats', 'by',
+                   'sort', 'limit', 'rename', 'dissect', 'grok', 'enrich',
+                   'mv_expand', 'lookup', 'join', 'metadata', 'as', 'and', 'or',
+                   'not', 'in', 'like', 'rlike', 'is', 'null', 'asc', 'desc',
+                   'count', 'count_distinct', 'values', 'min', 'max', 'bucket',
+                   'date_trunc', 'to_string', 'case', 'true', 'false'] },
+    eql:    { line: ['//'], str: ['"'],
+              kw: ['sequence', 'sample', 'by', 'with', 'maxspan', 'until', 'where',
+                   'and', 'or', 'not', 'in', 'like', 'regex', 'any', 'iam',
+                   'process', 'file', 'network', 'authentication', 'configuration',
+                   'true', 'false', 'null'] },
+    'yara-l': { line: ['//'], str: ['"'],
+              kw: ['rule', 'meta', 'events', 'match', 'outcome', 'condition',
+                   'options', 'over', 'after', 'before', 'and', 'or', 'not', 'nocase',
+                   'any', 'all', 'if', 'count', 'count_distinct', 'array_distinct',
+                   'max', 'min', 'sum', 're', 'regex', 'true', 'false'] },
+    'sumo logic': { line: ['//'], str: ['"'],
+              kw: ['json', 'auto', 'field', 'fields', 'parse', 'regex', 'where', 'if',
+                   'as', 'count', 'count_distinct', 'by', 'sum', 'min', 'max',
+                   'timeslice', 'sort', 'asc', 'desc', 'top', 'limit', 'lookup',
+                   'from', 'on', 'and', 'or', 'not', 'in', 'matches', 'isNull',
+                   'isEmpty', 'transaction', 'join', 'merge', 'nodrop', 'with'] },
+    // Datadog log search is `key:value` terms, not commands, so it supplies
+    // its own rules: the attribute before each colon reads as a key.
+    datadog: { rules: [
+                ['tok-str', '"(?:[^"\\\\]|\\\\.)*"'],
+                ['tok-key', '-?@?[\\w.-]+(?=:)'],
+                ['tok-kw',  '\\b(?:AND|OR|NOT|TO)\\b'],
+                ['tok-num', '\\b\\d+(?:\\.\\d+)*\\b']
             ] }
     // regex and text are deliberately absent: neither has tokens worth
     // colouring, and guessing at regex structure reads worse than leaving it
@@ -1412,8 +1465,17 @@ function highlightCode(text, lang) {
             rules.push(['tok-str', q + '(?:\\\\.|[^' + q + '\\\\\\n])*' + q]);
         });
         if (cfg.key) rules.push(['tok-key', '^[ \\t]*[-\\w.$"\\[\\]]+(?=\\s*:)']);
-        if (cfg.kw) rules.push(['tok-kw', '\\b(?:' + cfg.kw.map(reEscape).join('|') + ')\\b']);
-        if (lang === 'bash') rules.push(['tok-key', '\\$\\{[^}]*\\}|\\$[A-Za-z_][\\w]*']);
+        // Longest first: the alternation takes the first keyword that fits,
+        // and the \b after `project` is satisfied by the hyphen, so an
+        // unsorted list colours only the front of KQL's `project-away`.
+        if (cfg.kw) rules.push(['tok-kw', '\\b(?:' + cfg.kw.slice()
+            .sort(function (a, b) { return b.length - a.length; })
+            .map(reEscape).join('|') + ')\\b']);
+        // Variables: $name in shell, and YARA-L's $e event and $user
+        // placeholder variables, which carry a rule's joins.
+        if (lang === 'bash' || lang === 'yara-l') {
+            rules.push(['tok-key', '\\$\\{[^}]*\\}|\\$[A-Za-z_][\\w]*']);
+        }
         // Numbers only, not identifiers that merely start with a digit.
         // A looser `\\b\\d[\\w.]*\\b` would colour the four leading hex runs
         // of a UUID and leave the rest plain, which reads as damage.

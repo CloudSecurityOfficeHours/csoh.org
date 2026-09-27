@@ -51,7 +51,9 @@ DATA_LANG_RE = re.compile(r'\s*data-lang="[^"]*"')
 # which still gets a label and a copy button but no tokenising. Keep this list
 # in step with LANGS in main.js.
 KNOWN = {'bash', 'json', 'yaml', 'rego', 'hcl', 'sql', 'python',
-         'xml', 'cedar', 'yara', 'cel', 'regex', 'text'}
+         'xml', 'cedar', 'yara', 'cel', 'regex', 'text',
+         # The SIEM query languages of the howto/ detection guides.
+         'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog'}
 
 # Shell verbs that make a block bash even when its first line is a comment.
 SHELL_CMDS = (
@@ -124,6 +126,94 @@ def _strip_leading_comments(lines: list[str]) -> list[str]:
     return out
 
 
+# The detection query languages on the howto/ SIEM guides are pipelines of
+# `|`, which the bash fallback at the bottom of classify() would otherwise
+# claim, and several of them share commands (`| where`, `| sort`, `| lookup`),
+# so no rule may key on a command two of them write. Each rule below keys on
+# something only that language writes. ES|QL and SPL are also case-sensitive
+# here on purpose: Elastic documents ES|QL in capitals, and lowercase `| eval`
+# is SPL.
+ESQL_COMMANDS = (r'WHERE|EVAL|KEEP|DROP|STATS|SORT|LIMIT|RENAME|DISSECT|GROK'
+                 r'|ENRICH|MV_EXPAND|LOOKUP JOIN|INLINESTATS|CHANGE_POINT|FORK'
+                 r'|SAMPLE|COMPLETION|RERANK')
+EQL_CATEGORIES = (r'any|api|authentication|configuration|database|driver|email'
+                  r'|file|host|iam|intrusion_detection|library|malware|network'
+                  r'|package|process|registry|session|threat|vulnerability|web')
+# Operators only KQL has among these languages. `lookup` is also SPL and Sumo
+# Logic, and `top` is SPL, so neither is here.
+KQL_OPERATORS = (r'summarize|project(?:-away|-keep|-rename|-reorder)?|extend'
+                 r'|mv-expand|mv-apply|make-series|take|render|top-nested'
+                 r'|join\s+kind\s*=|order\s+by|sort\s+by|as\s+hint')
+KQL_COMMANDS = (r'create|create-merge|create-or-alter|alter|drop|ingest|set'
+                r'|set-or-append|set-or-replace|append|show|execute')
+# Built-in metadata fields that open a Sumo Logic scope, and operators SPL and
+# KQL do not have (`| count by` is Sumo; SPL writes `| stats count by`).
+SUMO_SCOPE = r'_(?:sourceCategory|source|sourceHost|sourceName|collector|index|view|dataTier)\s*='
+SUMO_OPERATORS = r'json\b|timeslice\b|count\s+by\b|count_distinct\s*\(|parse\s+(?:regex\b|")|transpose\b'
+# SPL: `dedup`, `transaction`, `fields` and `sort` are Sumo Logic operators
+# too, so they are not evidence of SPL on their own.
+SPL_START = r'(?:index|sourcetype|source|eventtype|tag)\s*=|\|\s*(?:makeresults|tstats|inputlookup|rest|datamodel|metadata)\b'
+SPL_OPERATORS = (r'stats|eventstats|streamstats|timechart|chart|eval|table|rex'
+                 r'|spath|bin|mvexpand|fillnull|makeresults|tstats|inputlookup'
+                 r'|outputlookup|appendpipe|foreach|xyseries|untable')
+
+
+def _detection_language(first: str, body_text: str) -> str | None:
+    """Classify a SIEM query block, or return None if it is not one."""
+    if re.match(r'(FROM|ROW|SHOW|TS)\s', first) and \
+       re.search(r'(^|\s)\|\s*(' + ESQL_COMMANDS + r')\b', body_text, re.M):
+        return 'esql'
+    if re.search(r'^\s*(sequence|sample)\s+(by\s|with\s+maxspan|\[)', body_text, re.M) or \
+       re.match(r'(' + EQL_CATEGORIES + r')\s+where\s', first):
+        return 'eql'
+    if re.search(r'(^|\s)\|\s*(' + KQL_OPERATORS + r')\b', body_text, re.M) or \
+       re.match(r'\.(' + KQL_COMMANDS + r')\s', first):
+        return 'kql'
+    if re.match(SUMO_SCOPE, first) or \
+       re.search(r'(^|\s)\|\s*(' + SUMO_OPERATORS + r')', body_text, re.M):
+        return 'sumo logic'
+    if re.match(SPL_START, first) or \
+       re.search(r'(^|\s)\|\s*(' + SPL_OPERATORS + r')\b', body_text, re.M):
+        return 'spl'
+    # KQL that uses only operators it shares with SPL (`| where`, `| count`)
+    # still opens with a bare table name on a line of its own, or a `let`.
+    # Tested after SPL, whose searches open with `index=` or a quoted term.
+    if (re.fullmatch(r'[A-Za-z_]\w*', first) and
+            re.search(r'^\s*\|\s*\w', body_text, re.M)) or \
+       re.match(r'let\s+\w+\s*=.*;$', first):
+        return 'kql'
+    # Datadog log search: `source:cloudtrail @evt.name:StopLogging`. A YAML key
+    # is followed by a space, which is what keeps `source: x` out of this.
+    if re.match(r'-?(@[\w.]+|source|service|host|status|env):[^\s]', first):
+        return 'datadog'
+    return None
+
+
+# Planted blocks for --check, which classifies these before the real pages.
+# The SIEM rules are the likeliest to be loosened later, and a loosened rule
+# fails quietly: blocks change label and the page still renders. Each language
+# has a positive case, and the shell cases are the near misses: a command that
+# carries a query must stay bash.
+SELF_TEST = [
+    ('spl', 'index=cloudtrail eventName=StopLogging\n| table _time, eventName'),
+    ('spl', 'index="cloudtrail" errorCode=*\n| stats count by errorCode'),
+    ('kql', 'AWSCloudTrail\n| summarize count() by SourceIpAddress'),
+    ('kql', 'AWSCloudTrail\n| where EventName == "StopLogging"'),
+    ('kql', '.create table RawCloudTrail (Record: dynamic)'),
+    ('esql', 'FROM logs-aws.cloudtrail-*\n| STATS n = COUNT(*) BY source.ip'),
+    ('eql', 'sequence by user.name\n  with maxspan=10m\n  [iam where true]\n  [iam where true]'),
+    ('yara-l', 'rule r {\n  events:\n    $e.metadata.product_event_type = "X"\n  condition:\n    $e\n}'),
+    ('yara', 'rule r {\n  strings:\n    $a = "x"\n  condition:\n    $a\n}'),
+    ('sumo logic', '_sourceCategory=aws/cloudtrail\n| json "eventName" as event_name'),
+    ('datadog', 'source:cloudtrail @evt.name:StopLogging'),
+    ('text', ' action | ip\n--------+-----------\n Stop   | 192.0.2.1'),
+    ('bash', "curl -s localhost:9200/_query -d '{\"query\":\"FROM x | STATS n = COUNT(*)\"}'"),
+    ('bash', "docker exec lab splunk search 'index=x | stats count by y'"),
+    ('bash', 'cat events.log | sort | uniq -c'),
+    ('sql', 'SELECT eventName, count(*)\nFROM ct\nGROUP BY eventName'),
+]
+
+
 def classify(raw: str) -> str:
     """Infer a language for one code block. First match wins, so order matters."""
     text = _html.unescape(raw).strip()
@@ -158,11 +248,26 @@ def classify(raw: str) -> str:
         except Exception:
             pass  # a JSON-ish fragment, or HCL/Rego using braces
 
+    # A rendered results table is output, not input. The ASCII rule under a
+    # header (`-----+-----`) or box-drawing borders give it away, and without
+    # this the `|` column separators land it on bash, inviting a reader to
+    # paste a query result into a shell.
+    if re.search(r'^[ \t]*[-+]*-{3,}\+-{3,}[-+]*[ \t]*$', body_text, re.M) or \
+       re.search(r'[─-╿]', body_text):
+        return 'text'
+
     # --- languages with a distinctive keyword ------------------------------
     if re.search(r'^\s*package\s+[\w.]+\s*$', body_text, re.M) or \
        re.search(r'\b(deny|allow|violation)\s+contains\b', body_text) or \
        re.search(r'^\s*(default\s+\w+\s*:=|import\s+rego\.v1)', body_text, re.M):
         return 'rego'
+
+    # YARA-L is shaped like YARA (`rule name {` ... `condition:`) but always
+    # has an `events:` section, which YARA never does, so it must be tested
+    # first or the YARA rule below claims it.
+    if re.search(r'^\s*rule\s+\w+\s*\{', body_text, re.M) and \
+       re.search(r'^\s*events:\s*$', body_text, re.M):
+        return 'yara-l'
 
     if re.search(r'^\s*rule\s+\w+', body_text, re.M) and 'condition:' in low:
         return 'yara'
@@ -171,6 +276,15 @@ def classify(raw: str) -> str:
        re.search(r'^\s*entity\s+\w+\s*[;={in]', body_text, re.M) or \
        re.search(r'^\s*action\s+[\w, ]+appliesTo\b', body_text, re.M):
         return 'cedar'
+
+    # SIEM query languages, before SQL: a wrapped EQL `with maxspan=10m` line
+    # starts with WITH, which the SQL rule below would claim. Never for a shell
+    # command, though: `curl ... -d search='index=x | stats count'` is a
+    # command the reader runs, even though it carries SPL.
+    verb = first.split()[0].rstrip(':') if first.split() else ''
+    is_shell = verb in SHELL_CMDS or first.startswith(('$ ', './', '#!/'))
+    if not is_shell and (lang := _detection_language(first, body_text)):
+        return lang
 
     # SQL needs FROM as well as the leading verb. Without it, `with:` in a
     # GitHub Actions workflow matched the case-insensitive WITH and labelled
@@ -188,8 +302,7 @@ def classify(raw: str) -> str:
         return 'hcl'
 
     # --- shell before YAML: `kubectl get pods -o yaml` is a command --------
-    verb = first.split()[0].rstrip(':') if first.split() else ''
-    if verb in SHELL_CMDS or first.startswith(('$ ', './', '#!/')):
+    if is_shell:
         return 'bash'
     # NAME=value at the start of a line, with no spaces around the `=`.
     # HCL writes `attribute_condition = "..."` with spaces, so it is excluded.
@@ -265,9 +378,23 @@ def process(path: Path, apply: bool) -> tuple[int, int, Counter]:
     return seen, changed, tally
 
 
+def self_test() -> None:
+    """Refuse to give a verdict if a planted block is misclassified."""
+    wrong = [(want, got, text.splitlines()[0])
+             for want, text in SELF_TEST
+             if (got := classify(_html.escape(text, quote=False))) != want]
+    if wrong:
+        for want, got, line in wrong:
+            print(f'SELF-TEST FAILED: expected {want}, got {got}: {line}')
+        print('A classifier rule changed behaviour; fix it before trusting --check.')
+        sys.exit(1)
+
+
 def main() -> None:
     check = '--check' in sys.argv
     report = '--report' in sys.argv
+    if check:
+        self_test()
     total = changed_total = 0
     tally: Counter = Counter()
     changed_files: list[str] = []

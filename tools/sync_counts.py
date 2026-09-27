@@ -388,6 +388,7 @@ def display_values(counts: dict) -> dict:
         "meetings": str(counts["meetings"]),
         "meetings_floor": f"{floor10(counts['meetings'])}+",
         "breaches": str(counts["breaches"]),
+        "howto_guides": str(counts["howto_guides"]),
         "feeds": str(counts["feeds"]),
         "ctfs": str(counts["ctfs"]),
         "ctfs_floor": f"{floor10(counts['ctfs'])}+",
@@ -539,6 +540,10 @@ MD_PROSE_RULES = [
      "recaps ({meetings} entries, topic-by-topic)"),
     (r"# \d+ per-breach kill chain pages",
      "# {breaches} per-breach kill chain pages"),
+    # README.md and DEVELOPMENT.md both describe howto/ in their directory
+    # trees; DEVELOPMENT.md also names the count against the hub page.
+    (r"# \d+ how-to guides", "# {howto_guides} how-to guides"),
+    (r"# Hub for \d+ how-to guides", "# Hub for {howto_guides} how-to guides"),
     (r"# \d+ per-meeting recap pages",
      "# {meetings} per-meeting recap pages"),
     (r"across the \d+ chains", "across the {breaches} chains"),
@@ -700,7 +705,7 @@ def news_banners() -> int:
 def pages_matching(pattern: str) -> int:
     """Published pages whose source matches `pattern`.
 
-    Uses the same page set as the marker sync itself (root plus the four
+    Uses the same page set as the marker sync itself (root plus the five
     published subdirectories), so a count and the pages it describes can never
     disagree about what "a page on the site" means.
     """
@@ -771,6 +776,7 @@ def canonical_counts() -> dict:
         "resources": len(unique_resources(all_category_html())),
         "meetings": len(list((REPO / "meetings").glob("*.html"))),
         "breaches": len(list((REPO / "breaches").glob("*.html"))),
+        "howto_guides": len(list((REPO / "howto").glob("*.html"))),
         "feeds": feeds_count(),
         "glossary_terms": len(re.findall(r'id="term-[a-z0-9-]+"', gloss)),
         "ctfs": card_count("ctfs.html"),
@@ -793,7 +799,10 @@ def canonical_counts() -> dict:
 
 def html_files() -> list[Path]:
     out = list(REPO.glob("*.html"))
-    for sub in ("breaches", "meetings", "portfolio", "homelab"):
+    # howto/ joined the site after this list was written and was missing
+    # until 2026-09-27, so its guides' author cards went uncounted and a count
+    # marker placed on one of them would never have been synced.
+    for sub in ("breaches", "meetings", "portfolio", "homelab", "howto"):
         out += (REPO / sub).glob("*.html")
     return sorted(out)
 
