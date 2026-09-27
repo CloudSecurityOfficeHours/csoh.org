@@ -531,6 +531,16 @@ def load_synonyms() -> dict[str, list[str]]:
     # Lowercase keys and values for case-insensitive matching at runtime.
     norm: dict[str, list[str]] = {}
     for term, aliases in data.items():
+        # "_comment" (any "_" key) is documentation, not a group. Iterating its
+        # string value shipped every character as an alias of "_comment".
+        if term.startswith("_"):
+            continue
+        # Refuse rather than skip any other malformed group: skipping would
+        # silently drop the aliases someone meant to add.
+        if not isinstance(aliases, list) or not all(isinstance(a, str) for a in aliases):
+            raise SystemExit(
+                f"{SYNONYMS_PATH.name}: {term!r} must map to a list of strings, "
+                f"got {json.dumps(aliases)[:80]}")
         norm[term.lower()] = [a.lower() for a in aliases]
     return norm
 
