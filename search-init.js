@@ -104,19 +104,32 @@
         return term.toLowerCase().replace(/^[^\w-]+|[^\w-]+$/g, '');
     }
 
+    // Every synonyms lookup goes through here. `synonyms` is parsed JSON,
+    // so it inherits Object.prototype: a bare synonyms[t] is truthy for
+    // "constructor" and "__proto__" (tokens are lowercased, so no other
+    // inherited name can match) and has no .join(). Only an own array
+    // value is an alias list.
+    function aliasesFor(t) {
+        if (!Object.prototype.hasOwnProperty.call(synonyms, t)) return null;
+        var aliases = synonyms[t];
+        return Array.isArray(aliases) ? aliases : null;
+    }
+
     function expandTokens(text) {
         // Pull tokens out of text, then add synonym aliases inline.
         // Used at index-build time on each doc's text field.
         var out = [text];
         var tokens = text.toLowerCase().match(/[\w][\w-]*(?:[ ][\w][\w-]*){0,2}/g) || [];
-        // Dedup tokens cheaply.
-        var seen = {};
+        // Dedup tokens cheaply. Null prototype, so an inherited name
+        // ("constructor") does not read as already seen.
+        var seen = Object.create(null);
         for (var i = 0; i < tokens.length; i++) {
             var t = tokens[i];
             if (seen[t]) continue;
             seen[t] = 1;
-            if (synonyms[t]) {
-                out.push(synonyms[t].join(' '));
+            var aliases = aliasesFor(t);
+            if (aliases) {
+                out.push(aliases.join(' '));
             }
         }
         return out.join(' ');
@@ -179,14 +192,16 @@
         // and we OR-match against "non-human identity" etc. as well.
         var expanded = q;
         var lower = q.toLowerCase();
-        if (synonyms[lower]) {
-            expanded = q + ' ' + synonyms[lower].join(' ');
+        var aliases = aliasesFor(lower);
+        if (aliases) {
+            expanded = q + ' ' + aliases.join(' ');
         } else {
             // Per-word lookup for multi-word queries.
             var words = lower.split(/\s+/);
             for (var i = 0; i < words.length; i++) {
-                if (synonyms[words[i]]) {
-                    expanded += ' ' + synonyms[words[i]].join(' ');
+                aliases = aliasesFor(words[i]);
+                if (aliases) {
+                    expanded += ' ' + aliases.join(' ');
                 }
             }
         }
