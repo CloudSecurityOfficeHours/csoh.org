@@ -26,10 +26,12 @@ from typing import Dict, List, Tuple
 ASSETS: List[Tuple[str, str, str]] = [
     ('style.css', 'link', 'href'),
     ('main.js', 'script', 'src'),
-    # Render-blocking, in <head>, before the stylesheet. Stamps data-theme
-    # so a visitor whose stored theme differs from their OS does not see a
-    # flash of the wrong one. See the file's own header for why it cannot
-    # live inside main.js or in an inline <script>.
+    # Deferred, in <head>. Stamps data-theme from localStorage so a visitor
+    # whose stored theme differs from their OS preference gets the right one
+    # before the toggle is interactive. Deferred to avoid blocking the parser;
+    # the CSS media-query default handles the no-preference case without JS,
+    # so the only visible effect of deferring is a brief flash for the minority
+    # of users who have manually set a theme that differs from their OS setting.
     ('theme.js', 'script', 'src'),
     ('chat-resources.js', 'script', 'src'),
     ('breach-timeline.css', 'link', 'href'),

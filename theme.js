@@ -1,20 +1,14 @@
-/* Stamps data-theme on <html> before the first paint.
+/* Stamps data-theme on <html> from localStorage.
  *
- * This has to be a separate file loaded synchronously from <head>, and not a
- * few lines inside main.js, because of two constraints that only bite together:
+ * Loaded with `defer` from <head>: runs after the document is parsed but
+ * before DOMContentLoaded, removing it as a parser-blocking resource.
  *
- *   - main.js is deferred, so it runs after the document has already painted.
- *   - The CSP is `script-src 'self'` with no 'unsafe-inline', no nonce and no
- *     hash, so the usual one-line inline snippet in <head> is dropped on the
- *     floor in production. localhost sends no CSP, which is exactly why this is
- *     easy to miss locally.
- *
- * style.css already handles the no-preference case on its own: the dark tokens
+ * style.css handles the no-preference case without JavaScript: the dark tokens
  * live under `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }`,
- * so a visitor who has never touched the toggle paints correctly with no
- * JavaScript at all. This file is for the visitor whose stored choice differs
- * from their OS (light OS with the site set to dark is the common one), who
- * would otherwise paint light and then flip when the deferred script ran.
+ * so a visitor who has never touched the toggle paints correctly with no JS.
+ * This file is for the visitor whose stored choice differs from their OS; they
+ * may see a brief flash of the wrong theme before defer fires, but the window
+ * is very short (the file is ~1 KB and cached with `immutable` after first load).
  *
  * Deliberately does nothing when there is no stored preference: leaving the
  * attribute off is what lets the media query keep control, so a visitor who
