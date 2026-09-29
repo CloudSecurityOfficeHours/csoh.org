@@ -1130,14 +1130,22 @@ jobs:
           # Give the purge a moment to take effect across the edge.
           sleep 10
           python3 - <<'PY'
-          import base64, hashlib, os, re, sys, urllib.request
+          import base64, hashlib, os, re, sys, time, urllib.error, urllib.request
 
           def get(url):
               req = urllib.request.Request(url, headers={"User-Agent": "csoh-deploy-verify"})
               # cache-control: no-cache asks the edge to revalidate rather than
               # hand us a cached copy, so we verify what it would actually serve.
               req.add_header("Cache-Control", "no-cache")
-              return urllib.request.urlopen(req, timeout=30).read()
+              for attempt in range(3):
+                  try:
+                      return urllib.request.urlopen(req, timeout=30).read()
+                  except urllib.error.HTTPError as exc:
+                      if not 500 <= exc.code < 600 or attempt == 2:
+                          raise
+                      delay = 2 ** attempt
+                      print(f"Transient HTTP {exc.code} fetching {url}; retrying in {delay}s.")
+                      time.sleep(delay)
 
           targets = []
           missing = []
