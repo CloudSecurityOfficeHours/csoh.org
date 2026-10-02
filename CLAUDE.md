@@ -978,9 +978,37 @@ line is a dashboard figure. The table on `cloud-deployment.html` marks each
 line `measured` or `estimated`; an estimate is a to-do, not a rounding.
 
 - **Scale gross cost, then subtract the monthly free allowance once.** Cloud
-  Run's allowances arrive as credits consumed early in the month.
+  Run's allowances arrive as credits consumed early in the month, so a window
+  after the first fortnight shows gross == net and *looks* like there is no
+  allowance. Compare a projected month of **usage** against the published
+  allowance; never scale a recent day's net cost.
+- **Subtract only allowances the billing data shows being granted.** Read the
+  credit rows before applying a published free tier. The only credits this
+  account receives are Cloud Run `CPU Allocation Time` and `Memory Allocation
+  Time`; Artifact Registry's documented 0.5 GB gets no credit line and is not
+  granted, and assuming it understated that row by a third. One query settles
+  it, and `HAVING` nothing means nothing was granted:
+
+```sh
+bq query --nouse_legacy_sql "SELECT service.description, c.name, c.type,
+  ROUND(SUM(c.amount),4) amt FROM \`csoh-org-495800.csoh_cost.<export table>\`,
+  UNNEST(credits) c WHERE DATE(usage_start_time,'America/Los_Angeles')
+  BETWEEN '<from>' AND '<to>' GROUP BY 1,2,3 ORDER BY amt"
+```
+
+- **Use the whole post-fix window, not a recent slice.** Cost here is driven by
+  deploy frequency, which varies two- to threefold week to week, so a short
+  window can be internally flat and still unrepresentative: 14-19 September
+  2026 read `0.0835, 0.0835, 0.0837, 0.0836, 0.0835` on consecutive days and
+  understated the month by a third. **Stability within a window says nothing
+  about whether the window is representative.** Divide by deploys, not days,
+  when you want a figure that survives the next quiet fortnight: `gh run list
+  --workflow=deploy.yml --json createdAt,conclusion,headBranch` gives the
+  denominator, and ~3,584 PUTs per deploy against ~3,817 objects in the bucket
+  is the control that the "every deploy re-uploads everything" model is right.
 - **Cost Explorer's recent days are provisional.** Leave a margin before
-  querying.
+  querying. Each call is $0.01 and lands on the next day's bill as an
+  `AWS Cost Explorer` line, so measuring shows up in what you measure.
 - **Read inventory next to dollars** (image count, `BucketSizeBytes`). A flat
   or zero line can hide growth, especially under AWS credits.
 - **Azure cost is mostly transactions**, not storage: probe reads and deploy
