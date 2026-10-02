@@ -41,6 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # pages come first (more likely to expose layout problems).
 DEFAULT_PAGES = [
     "index.html",
+    "cloud-deployment.html",
     "what-is-cloud-security.html",
     "learning-path.html",
     "cloud-security-best-practices.html",
@@ -48,6 +49,7 @@ DEFAULT_PAGES = [
     "cspm-vs-cnapp.html",
     "cloud-security-certifications.html",
     "github-actions.html",
+    "terraform.html",
     "resources.html",
     "ctfs.html",
     "conferences.html",
@@ -112,12 +114,22 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
     page.wait_for_timeout(200)
 
     # --- 1. No horizontal overflow on the document.
+    # The reference width is documentElement.clientWidth, NOT window.innerWidth.
+    # Under Chrome's mobile emulation a page that overflows gets shrink-to-fit
+    # applied, and window.innerWidth grows to match the overflowing content
+    # (390 -> 921 on a planted defect). Comparing scrollWidth against a width
+    # that tracks it makes the condition unfalsifiable: this check reported
+    # every page clean while 35 of 46 breach pages overflowed. clientWidth
+    # stays at the layout viewport, so the comparison can actually fail.
     overflow = page.evaluate(
-        "() => ({ body: document.body.scrollWidth, html: document.documentElement.scrollWidth, vw: window.innerWidth })"
+        "() => ({ body: document.body.scrollWidth, html: document.documentElement.scrollWidth,"
+        " vw: document.documentElement.clientWidth, innerWidth: window.innerWidth })"
     )
     if overflow["body"] > overflow["vw"] + 1 or overflow["html"] > overflow["vw"] + 1:
         failures.append(
-            f"horizontal overflow: body={overflow['body']}px, html={overflow['html']}px, viewport={overflow['vw']}px"
+            f"horizontal overflow: body={overflow['body']}px, html={overflow['html']}px, "
+            f"viewport={overflow['vw']}px (window.innerWidth={overflow['innerWidth']}px - "
+            f"a value above the viewport means the browser shrank the page to fit)"
         )
 
     # --- 2. Open the hamburger menu and inspect.
@@ -134,7 +146,8 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
     overflows = page.evaluate(
         """() => {
             const items = Array.from(document.querySelectorAll('header nav a, header nav button.dropdown-toggle'));
-            const vw = window.innerWidth;
+            // See check 1: innerWidth tracks the overflow, clientWidth does not.
+            const vw = document.documentElement.clientWidth;
             const bad = [];
             for (const el of items) {
                 const r = el.getBoundingClientRect();
