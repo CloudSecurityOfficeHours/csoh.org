@@ -621,29 +621,42 @@ These are **billing-API figures, not estimates.** Keep the `Source` column, and
 keep the word `measured` honest: an estimate in this table is a to-do, not a
 rounding.
 
-As of **2026-09-20**: daily cost over 14-19 September 2026, scaled to a
-30.44-day month with each provider's monthly free allowance applied once.
+As of **2026-10-01**: daily cost over 14-30 September 2026, scaled to a
+30.44-day month with each provider's monthly free allowance applied once. That
+window is every day since the last of the four fixes landed on 13 September.
+Use the whole post-fix stretch, not a recent slice of it: the 14-19 September
+window this table used until now happened to be a quiet one, which is why four
+of these figures went up while nothing regressed.
 
-| Component | Monthly | Source |
-|---|---|---|
-| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | billed, confirmed in the dashboard (no token here can read billing) |
-| Azure Blob static website | $2.86 | measured - $2.59 of deploy writes, $0.22 of probe operations |
-| GCP Artifact Registry | $0.25 | measured - 13 images, ~3 GiB |
-| GCP Cloud Run (production origin) | $0.02 | measured - a month fits the free allowance; the 2 cents are egress |
-| AWS S3 + CloudFront | $0.00 | measured - $2.63 of usage, offset by credits |
-| Terraform state (GCS), GCP logging, billing export | $0.00 | measured - inside the free tier |
-| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | measured |
-| **Total** | **~$13/mo** | ~$16 when the AWS credits lapse |
+| Component | Now | Was (14-19 Sep) | Source |
+|---|---|---|---|
+| Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, confirmed in the dashboard (no token here can read billing) |
+| Azure Blob static website | $3.98 | $2.86 | measured - $3.62 of deploy writes, $0.30 of probe operations |
+| GCP Artifact Registry | $0.34 | $0.25 | measured - 10 images, 3.4 GiB; no free allowance is actually granted |
+| GCP Cloud Run (production origin) | $0.02 | $0.02 | measured - a month fits the free allowance; the 2 cents are egress |
+| AWS S3 + CloudFront | $0.00 | $0.00 | measured - $3.66 of usage ($3.63 of it PUTs), offset by credits |
+| Terraform state (GCS), GCP logging, billing export | $0.00 | $0.00 | measured - inside the free tier |
+| Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | $0.00 | measured - no rows in the resource-level export |
+| **Total** | **~$14/mo** | ~$13/mo | ~$18 when the AWS credits lapse; ~$27 in early September, ~$97 in August |
 
-**What drives it.** Beyond the Cloudflare subscription, most of the rest is
-write and PUT operations: every deploy re-uploads the whole site to two object
-stores, so cost tracks deploy frequency. The levers that keep the remainder
-near zero each live in a `.tf` file, with the reasoning in its comments:
+**What drives it.** Beyond the Cloudflare subscription, nearly all of the rest
+is write and PUT operations: every deploy re-uploads the whole site to two
+object stores, so cost tracks deploy frequency and nothing else. Measured over
+this window that is **3.6 cents per deploy** ($0.0179 on each of AWS and Azure,
+which price it almost identically), or about $8 of the $14 at the current 7.5
+deploys a day. The control that proves it: 404,973 Tier1 PUTs over 113 deploys
+is 3,584 per deploy, against 3,817 objects in the bucket. Storage, by contrast,
+is one cent a month. So the next real lever is the sync, not a retention
+setting, and `aws/s3.tf` explains why `--size-only` is not it.
+
+The levers that keep the remainder near zero each live in a `.tf` file, with
+the reasoning in its comments:
 
 - **Health probes** (`cloudflare/load_balancer.tf`): `interval = 300` and
-  `check_regions = ["ENAM"]`, about 860 probes a day per origin. Anything on a
-  timer is multiplied by the probe fan-out, and unset `check_regions` means
-  every Cloudflare data center.
+  `check_regions = ["ENAM"]`, 864 probes a day per origin (36 in each of two
+  sampled hours a fortnight apart, so this one is measured rather than derived).
+  Anything on a timer is multiplied by the probe fan-out, and unset
+  `check_regions` means every Cloudflare data center.
 - **S3 versioning is suspended** (`aws/s3.tf`), with a lifecycle rule that
   keeps only the current copy. With versioning on, every deploy stores another
   full copy of the site with nothing to expire it.
