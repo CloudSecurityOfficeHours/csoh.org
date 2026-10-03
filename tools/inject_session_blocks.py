@@ -123,6 +123,19 @@ TOPIC_KEYWORDS: dict[str, list[str]] = {
     "conferences.html": ["black hat", "def con", "defcon", "rsa conference", "bsides"],
 }
 
+# Sentences that are meetup logistics, never substance. Venue names ("Black
+# Hat", "RSA Conference") turn up in "who's going, where's breakfast" at least
+# as often as in a debrief, so keyword scoring alone keeps quoting an invitation
+# to an event that is already over under a heading promising the community
+# worked the topic through. These sentences are dropped before a passage is
+# scored or quoted; a recap whose only on-topic sentences are logistics does not
+# qualify. Matched case-insensitively against tag-stripped text.
+LOGISTICS = (
+    "breakfast", "booth crawl", "signal group", "food court", "happy hour",
+    "planned to attend", "plan to attend", "plans to attend", "planning to attend",
+    "upcoming attendance", "conference plans", "announced plans",
+)
+
 CARD_RE = re.compile(
     r'<article class="section meeting-card" id="meeting-(?P<date>\d{4}-\d{2}-\d{2})">'
     r'.*?<h2><time datetime="[^"]*">(?P<human>[^<]*)</time>\s*-\s*(?P<headline>[^<]*)</h2>'
@@ -214,6 +227,18 @@ def pick(meetings: list[dict], keywords: list[str]) -> list[dict]:
     return hits
 
 
+def _sentences(text: str) -> list[str]:
+    return re.split(r"(?<=[.!?])\s+", text)
+
+
+def _drop_logistics(text: str) -> str:
+    """`text` without its meetup-logistics sentences (see LOGISTICS)."""
+    return " ".join(
+        s for s in _sentences(text)
+        if not any(p in TAG_RE.sub("", s).lower() for p in LOGISTICS)
+    )
+
+
 def _mentions(text: str, keywords: list[str]) -> bool:
     return any(kw in TAG_RE.sub("", text).lower() for kw in keywords)
 
@@ -226,7 +251,7 @@ def _excerpt(body: str, keywords: list[str]) -> str:
     thing the reader came for. Anchoring on the keyword is what makes "the copy
     we display mentions the topic" true rather than merely likely.
     """
-    sentences = re.split(r"(?<=[.!?])\s+", body)
+    sentences = _sentences(body)
     start = next((i for i, s in enumerate(sentences) if _mentions(s, keywords)), 0)
     kept: list[str] = []
     for sentence in sentences[start:]:
@@ -252,12 +277,14 @@ def blurb_for(meeting: dict, keywords: list[str]) -> str | None:
     recap's own passage on it. If no passage names it, the topic only came up in
     scattered asides and the recap does not belong on this page at all.
     """
-    if _mentions(meeting["summary"], keywords):
-        return meeting["summary"]
+    summary = meeting["summary"]
+    if _mentions(summary, keywords) and _drop_logistics(summary) == summary:
+        return summary
     # Ranked on the body alone. A section that matches only in its heading has no
     # sentence to quote, and the heading itself is never displayed.
     best, best_score = "", 0
-    for _heading, body in meeting["sections"]:
+    for _heading, raw in meeting["sections"]:
+        body = _drop_logistics(raw)
         score = sum(TAG_RE.sub("", body).lower().count(kw) for kw in keywords)
         if score > best_score:
             best, best_score = body, score

@@ -54,6 +54,13 @@ Two details worth keeping:
 
 - Sections are ranked on their **body** text alone. A section matching only in
   its heading has no sentence to quote, and the heading is never displayed.
+- **Meetup logistics are never quoted.** Sentences containing a `LOGISTICS`
+  phrase ("breakfast", "planned to attend", "booth crawl", ...) are dropped
+  before a section is scored or excerpted, and a card summary containing one
+  is not used as-is. Venue names appear in "who's going, where's breakfast" at
+  least as often as in a debrief, so without this `conferences.html` invited
+  readers to a Black Hat breakfast weeks after it happened. Add a phrase there
+  rather than narrowing a page's keywords.
 - Anchors are unwrapped from quoted passages. A recap's links are written for a
   page one directory down (`../glossary.html`) and are auto-inserted, so a
   paragraph pulled onto `incident-response.html` could easily contain a link
