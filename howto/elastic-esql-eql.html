@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-10-03">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="es|ql">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-09-27",
+      "dateModified": "2026-10-03",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -367,7 +367,7 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker, <code>curl</code>, <code>jq</code> and about 5 GB of free disk, plus Python 3.12 for the last step. Everything runs on your own machine at no cost, with no cloud account.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> every command and query below was run as printed, and every output pasted from that run, on Elasticsearch and Kibana 9.5.4 installed by start-local 0.14.0, with Elastic's AWS integration 7.1.4, on an Apple silicon Mac: first on the 30-day trial licence start-local turns on, then again with its licence setting changed to Basic, with identical results. The rule file in step 12 passed Elastic's own validator (elastic/detection-rules at commit 2613eb7). Not run: loading that rule into Kibana's Elastic Security app, and what <code>start.sh</code> does once the trial has expired, which is described from reading the script.</p>
@@ -554,7 +554,7 @@ EOF</pre></div>
 <div class="code-block" data-lang="text"><pre>       @timestamp       |   user.name   |   source.ip
 ------------------------+---------------+---------------
 2026-09-15T09:15:47.000Z|bob            |198.51.100.21</pre></div>
-    <p>bob, from 198.51.100.21, and nobody else: alice's sign-in with MFA and the failed attempt both stay out. <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">AWS's own Security Hub control for this</a> requires success too, and so does Elastic's rule, <em>AWS IAM User Console Login Without MFA</em>; both also check that the caller is an IAM user, and Elastic's is a New terms rule, which alerts when a user does this for the first time in seven days.</p>
+    <p>bob, from 198.51.100.21, and nobody else: alice's sign-in with MFA and the failed attempt both stay out. <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">AWS's own Security Hub CSPM control for this</a> requires success too, and so does Elastic's rule, <em>AWS IAM User Console Login Without MFA</em>; both also check that the caller is an IAM user, and Elastic's is a New terms rule, which alerts when a user does this for the first time in seven days.</p>
 
     <h3>7. Count and threshold: the denied-call burst (D2)</h3>
     <p>The obvious rule: count <code>AccessDenied</code> errors per source address and alert at five or more. <code>STATS ... BY</code> groups the rows that share a value and computes something for each group, here <code>COUNT(*)</code>, the number of rows. A <code>WHERE</code> after <code>STATS</code> filters the groups rather than the events:</p>
@@ -573,7 +573,7 @@ EOF</pre></div>
 14             |null
 7              |AccessDenied
 3              |Client.UnauthorizedOperation</pre></div>
-    <p><code>null</code> means "this event has no value here": the 14 calls that succeeded have no error code, and <code>STATS</code> gives them a group of their own. The third line is the one that matters. EC2 does not say <code>AccessDenied</code> when it refuses a call; it says <code>Client.UnauthorizedOperation</code>. Other services use <code>AccessDeniedException</code> or a bare <code>UnauthorizedOperation</code>, which is why <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">AWS's own Security Hub control for unauthorized API calls</a> matches any code that starts <code>AccessDenied</code> or ends <code>UnauthorizedOperation</code>. The attacker's seven refusals were four of one code and three of the other, so the rule counted four. Count every denial code:</p>
+    <p><code>null</code> means "this event has no value here": the 14 calls that succeeded have no error code, and <code>STATS</code> gives them a group of their own. The third line is the one that matters. EC2 does not say <code>AccessDenied</code> when it refuses a call; it says <code>Client.UnauthorizedOperation</code>. Other services use <code>AccessDeniedException</code> or a bare <code>UnauthorizedOperation</code>, which is why <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">AWS's own Security Hub CSPM control for unauthorized API calls</a> matches any code that starts <code>AccessDenied</code> or ends <code>UnauthorizedOperation</code>. The attacker's seven refusals were four of one code and three of the other, so the rule counted four. Count every denial code:</p>
 <div class="code-block" data-lang="esql"><pre>FROM logs-aws.cloudtrail-*
 | WHERE aws.cloudtrail.error_code IN ("AccessDenied", "AccessDeniedException",
                                       "Client.UnauthorizedOperation", "UnauthorizedOperation")

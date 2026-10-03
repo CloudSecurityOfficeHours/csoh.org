@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-10-03">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="datadog">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-09-27",
+      "dateModified": "2026-10-03",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -367,7 +367,7 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a Datadog organisation you may send test data to and create rules in (Datadog offers a 14-day free trial of its whole product suite), an API (application programming interface) key, and a terminal with <code>curl</code> and <code>jq</code>. <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> is optional (step 9).</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> Cloud SIEM runs only as a hosted service and no Datadog account was used, so none of the searches or rules on this page were executed in Datadog. Every operator and setting was checked against Datadog's documentation and the CloudTrail rules Datadog publishes (both as of 27 September 2026), and the results quoted are what those documented rules give on the lab file, worked out by a local script, not captured from Datadog. What did run: the shell step, against a local test receiver in place of Datadog's intake, and <code>terraform validate</code> on every rule with Datadog's official Terraform provider 4.22.0.</p>
@@ -480,14 +480,14 @@ read -rs DD_API_KEY</pre></div>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @additionalEventData.MFAUsed:No</pre></div>
             <p>Expect 2 logs, and only one is D4. <code>bob</code> signed in from <code>198.51.100.21</code> without MFA; the other is the failed attempt on <code>alice</code> from <code>192.0.2.77</code>, because failed sign-ins carry <code>MFAUsed</code> No as well. Require success too:</p>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:ConsoleLogin @responseElements.ConsoleLogin:Success @additionalEventData.MFAUsed:No</pre></div>
-            <p>Expect <code>bob</code> only. AWS's own check for console sign-ins without MFA, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">Security Hub control CloudWatch.3</a>, tests the same pair of fields: <code>MFAUsed</code> not <code>Yes</code>, and <code>ConsoleLogin</code> <code>Success</code>. No Datadog rule page names <code>additionalEventData</code>, though, so its path in Datadog is the one on this page no Datadog source shows; if the search finds nothing, open a sign-in log and read what the field is called there. As a rule, D4 needs only this query and a case of <code>a &gt; 0</code> (step 9 builds one like it), and its technique in <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge) v19.2 is <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004 Valid Accounts: Cloud Accounts</a>.</p>
+            <p>Expect <code>bob</code> only. AWS's own check for console sign-ins without MFA, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">Security Hub CSPM control CloudWatch.3</a>, tests the same pair of fields: <code>MFAUsed</code> not <code>Yes</code>, and <code>ConsoleLogin</code> <code>Success</code>. No Datadog rule page names <code>additionalEventData</code>, though, so its path in Datadog is the one on this page no Datadog source shows; if the search finds nothing, open a sign-in log and read what the field is called there. As a rule, D4 needs only this query and a case of <code>a &gt; 0</code> (step 9 builds one like it), and its technique in <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> (Adversarial Tactics, Techniques, and Common Knowledge) v19.2 is <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004 Valid Accounts: Cloud Accounts</a>.</p>
 
             <h3>6. Counting lives in the rule: the burst that never fires (D2)</h3>
             <p>A rule turns a search into a count with three settings. The <strong>group by</strong> splits the matching logs by an attribute, and each value gets its own count and its own signal. The <strong>case</strong> is a condition on that count, written with the query's label: the first query is <code>a</code>, the second <code>b</code>. The <strong>evaluation window</strong> is how far back each count looks. Before building the rule, look at the counts it would see: in Log Explorer, show this search as a Top List grouped by <code>@network.client.ip</code> (if it is not offered, create a facet for it from a log's side panel).</p>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @error.kind:AccessDenied</pre></div>
             <p>Expect <code>203.0.113.50</code> with 4 and <code>192.0.2.20</code> with 3. A rule with this query and a case of <code>a &gt;= 5</code> never fires. Did nothing happen, or can the query not see what happened? Run the control: every error code that exists, grouped by <code>@error.kind</code>.</p>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @error.kind:*</pre></div>
-            <p>Expect <code>AccessDenied</code> 7 and <code>Client.UnauthorizedOperation</code> 3. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, so three of the attacker's seven refusals were invisible to the rule. AWS's own check for unauthorized calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">Security Hub control CloudWatch.2</a>, counts every code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also takes in <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>, so the rule lists all four, here as Terraform (step 9 checks it):</p>
+            <p>Expect <code>AccessDenied</code> 7 and <code>Client.UnauthorizedOperation</code> 3. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, so three of the attacker's seven refusals were invisible to the rule. AWS's own check for unauthorized calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">Security Hub CSPM control CloudWatch.2</a>, counts every code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also takes in <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>, so the rule lists all four, here as Terraform (step 9 checks it):</p>
 <div class="code-block" data-lang="hcl"><pre>resource "datadog_security_monitoring_rule" "d2_denied_burst" {
   name    = "CloudTrail calls refused 5 or more times from one address"
   message = "{{@network.client.ip}} was refused 5 or more times in 10 minutes. Review every call from that address in the last hour."
@@ -660,7 +660,7 @@ terraform validate</pre></div>
                 <p>Datadog ships a rule called <a href="https://docs.datadoghq.com/security/default_rules/208-e1f-0f9/" target="_blank" rel="noopener noreferrer">AWS console login without MFA</a>. Its page says it matches when <code>@userIdentity.sessionContext.attributes.mfaAuthenticated</code> is false. Would it catch <code>bob</code>'s sign-in in this lab?</p>
                 <details>
                     <summary>Show the answer</summary>
-                    <p>No, going by its page. The lab's sign-in events carry <code>additionalEventData.MFAUsed</code> and no <code>sessionContext</code> at all, so the attribute that rule tests is missing from every one of them. <code>MFAUsed</code> is also the field AWS's own Security Hub control CloudWatch.3 reads for this case. CloudTrail can describe MFA in more than one field, and a rule written for one of them is blind to events that carry the other. Before relying on any rule, yours or a vendor's, check that its fields exist on your own events: search for the field with <code>:*</code> and confirm it finds something.</p>
+                    <p>No, going by its page. The lab's sign-in events carry <code>additionalEventData.MFAUsed</code> and no <code>sessionContext</code> at all, so the attribute that rule tests is missing from every one of them. <code>MFAUsed</code> is also the field AWS's own Security Hub CSPM control CloudWatch.3 reads for this case. CloudTrail can describe MFA in more than one field, and a rule written for one of them is blind to events that carry the other. Before relying on any rule, yours or a vendor's, check that its fields exist on your own events: search for the field with <code>:*</code> and confirm it finds something.</p>
                 </details>
             </div>
         </section>

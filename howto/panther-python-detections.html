@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-10-03">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="panther">
@@ -62,7 +62,7 @@
       "totalTime": "PT90M",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-09-27",
+      "dateModified": "2026-10-03",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -355,7 +355,7 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and Python 3.11 or newer. No Panther account and no AWS account: everything runs against a sample file.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order with <code>panther_analysis_tool</code> 1.10.0 on Python 3.12.14 and 3.13.15 (macOS, in bash and in zsh), and every output shown is pasted from that run. Two things run only inside a Panther deployment and were not executed: counting matches against a threshold (step 6 counts them with a plain-Python stand-in) and evaluating the correlation rule (in step 7 the tool skips its tests, and the page shows what that means).</p>
@@ -548,7 +548,7 @@ EOF
 python3 fire.py rules/console_login_no_mfa.py</pre></div>
 <div class="code-block" data-lang="text"><pre>2026-09-15T09:15:47Z 198.51.100.21 ConsoleLogin
 1 of 24 events matched. Matches per group: {'one group': 1}</pre></div>
-    <p>Bob only, at 09:15:47. The failed login is the negative test this rule most needs. AWS's own check for this, control CloudWatch.3 among the <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">Security Hub CloudWatch controls</a>, and Panther's <code>AWS.Console.LoginWithoutMFA</code> both require the successful outcome too, and both test <code>MFAUsed != "Yes"</code> (<code>!=</code> means "is not equal to") rather than <code>== "No"</code>, so a successful login with the field missing still counts as no MFA. When you give this rule its YAML file, its <code>Reports</code> entry is <code>TA0001:T1078.004</code>: <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>, <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">Valid Accounts: Cloud Accounts</a>.</p>
+    <p>Bob only, at 09:15:47. The failed login is the negative test this rule most needs. AWS's own check for this, control CloudWatch.3 among the <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">Security Hub CSPM CloudWatch controls</a>, and Panther's <code>AWS.Console.LoginWithoutMFA</code> both require the successful outcome too, and both test <code>MFAUsed != "Yes"</code> (<code>!=</code> means "is not equal to") rather than <code>== "No"</code>, so a successful login with the field missing still counts as no MFA. When you give this rule its YAML file, its <code>Reports</code> entry is <code>TA0001:T1078.004</code>: <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>, <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">Valid Accounts: Cloud Accounts</a>.</p>
 
     <h3>6. Counting belongs in the YAML, not the Python (D2)</h3>
     <p>A burst of refused calls from one address is a common sign that someone is trying out a stolen key. <code>rule()</code> cannot count: it sees one event and answers once. Panther counts, using three settings. <code>dedup()</code> returns a string, and matches with the same string form one group (with no <code>dedup()</code>, Panther groups by the title). <code>Threshold</code> is how many matches a group needs before an alert is sent, and <code>DedupPeriodMinutes</code> is how long, from its first match, a group keeps counting. The first version treats <code>AccessDenied</code> as "refused":</p>
@@ -582,7 +582,7 @@ from collections import Counter
 print(Counter(json.loads(line).get("errorCode") for line in open("cloudtrail-lab.jsonl")))
 PY</pre></div>
 <div class="code-block" data-lang="text"><pre>Counter({None: 14, 'AccessDenied': 7, 'Client.UnauthorizedOperation': 3})</pre></div>
-    <p>Ten refusals, spelled two ways. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, and all three of those came from the attacker. AWS's own check for unauthorised calls, Security Hub control CloudWatch.2 (on the AWS page linked in step 5), counts any error code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also covers <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. Do the same. <code>startswith()</code> and <code>endswith()</code> check how a piece of text begins and ends, and the default <code>""</code> matters: without it, an event with no <code>errorCode</code> gives <code>None</code>, which has no <code>startswith()</code>.</p>
+    <p>Ten refusals, spelled two ways. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, and all three of those came from the attacker. AWS's own check for unauthorised calls, Security Hub CSPM control CloudWatch.2 (on the AWS page linked in step 5), counts any error code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also covers <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. Do the same. <code>startswith()</code> and <code>endswith()</code> check how a piece of text begins and ends, and the default <code>""</code> matters: without it, an event with no <code>errorCode</code> gives <code>None</code>, which has no <code>startswith()</code>.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; rules/denied_burst.py &lt;&lt;'EOF'
 def rule(event):
     code = event.get("errorCode", "")    # "" when the call was not refused
