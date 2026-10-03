@@ -165,6 +165,7 @@ TARGET_PAGES = [
     "cloud-security-portfolio-projects.html",
     "cloud-security-reading-list.html",
     "cloud-security-resume-guide.html",
+    "cnapp-to-ai-app.html",
     "cnapp-vs-xdr.html",
     "cspm-vs-cwpp.html",
     "community.html",
