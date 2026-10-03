@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-17">
-    <meta property="article:modified_time" content="2026-08-19">
+    <meta property="article:modified_time" content="2026-10-03">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Cloud Security Topics">
     <meta property="article:tag" content="AI security">
@@ -79,7 +79,7 @@
         }
       },
       "datePublished": "2026-05-17",
-      "dateModified": "2026-08-19",
+      "dateModified": "2026-10-03",
       "mainEntityOfPage": "https://csoh.org/ai-ml-security.html",
       "about": {
         "@type": "Thing",
@@ -487,7 +487,7 @@
 
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-08-19">Last updated <strong>2026-08-19</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/ai-ml-security.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> · <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · Vendor-neutral · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/ai-ml-security.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
             <p><strong>The 30-second version:</strong> This page is about <em>securing AI workloads</em> in cloud - the model, the data, the inference endpoint, the agent, and the vector store. If you're looking for how to <em>use AI to learn cloud security</em>, that's a different page: <a href="ai-learning.html">AI Learning</a>.</p>
@@ -505,6 +505,7 @@
                 <li><a href="#agentic">Agentic AI security</a></li>
                 <li><a href="#supply-chain">Model supply chain</a></li>
                 <li><a href="#generated-code">Securing AI-generated code</a></li>
+                <li><a href="#vuln-discovery">AI as a vulnerability finder</a></li>
                 <li><a href="#training-data">Training data security</a></li>
                 <li><a href="#inference">Inference endpoint security</a></li>
                 <li><a href="#vector-db">Vector DB &amp; embedding security</a></li>
@@ -529,6 +530,7 @@
                 <li><strong>Using AI to learn / do cloud security.</strong> Prompt patterns for studying for the <a class="glossary-link" href="glossary.html#term-cloud-security-certifications">CCSP</a>, generating <a class="glossary-link" href="glossary.html#term-terraform">Terraform</a>, summarizing <a class="glossary-link" href="glossary.html#term-cloudtrail">CloudTrail</a>, drafting policy. That's <a href="ai-learning.html">the AI Learning page</a>.</li>
                 <li><strong>Securing AI workloads themselves.</strong> Models, training data, inference endpoints, agents, vector stores, MLOps (machine-learning operations) pipelines. <strong>That's this page.</strong></li>
                 <li><strong>Securing what AI writes.</strong> The code, <a class="glossary-link" href="glossary.html#term-iac">IaC</a>, and config an assistant emits into your repository. It sits awkwardly between the other two - it is not an AI workload, and it is not a productivity question either, because the artifact is ordinary production code with an unusual <a class="glossary-link" href="glossary.html#term-provenance">provenance</a>. <strong>This page owns it,</strong> in <a href="#generated-code">Securing AI-generated code</a> below.</li>
+                <li><strong>AI finding vulnerabilities in the software you run.</strong> Not an AI workload either, but it changes what lands in your patch queue. This page covers the defender's consequence in <a href="#vuln-discovery">AI as a vulnerability finder</a>; the prioritization practice itself is on <a href="vulnerability-management.html">Vulnerability Management</a>.</li>
             </ul>
             <p>The first is a productivity question. The second is a security-architecture question - what new attack surface arrives when your application stack includes a foundation model, an agent that can call tools, a RAG pipeline, or a model trained on data you can't fully audit. Everything below is about that second question, vendor-neutral, with the same opinion-bearing voice the rest of this site uses.</p>
         </section>
@@ -660,7 +662,7 @@
 
         <section id="agentic">
             <h2>Agentic AI security</h2>
-            <p>An agent is an LLM with tools and a loop - it reads context, decides what to do next, calls a tool, reads the result, decides again. The 2026 frontier of AI application security is agentic, because every tool the agent can call is a new privilege the prompt-injection attacker can reach. <strong>Real-world example:</strong> the <a href="breaches/promptware.html">Promptware kill chain</a> demonstrated exactly this - a malicious Google Calendar invite hijacked a cloud-connected AI assistant and turned its own tools into a seven-stage attack.</p>
+            <p>An agent is an LLM with tools and a loop - it reads context, decides what to do next, calls a tool, reads the result, decides again. The 2026 frontier of AI application security is agentic, because every tool the agent can call is a new privilege the prompt-injection attacker can reach. <strong>Real-world example:</strong> the <a href="breaches/promptware.html">Promptware kill chain</a> demonstrated exactly this - a malicious Google Calendar invite hijacked a cloud-connected AI assistant and turned its own tools into a seven-stage attack. That is an agent someone else is steering. The second failure mode, at the end of this section, has nobody steering at all.</p>
             <h3>Tool / function calling</h3>
             <p>The model emits a structured "call this function with these arguments" message. Risks: the model can be tricked into calling a tool the user didn't ask for, calling it with attacker-controlled arguments, or chaining calls into something destructive. Defenses: pre-validate every tool argument against a schema, allowlist tool combinations (this agent can read OR write, not both), and require confirmation for any call that crosses a destructive boundary.</p>
             <h3>RAG poisoning via indirect injection</h3>
@@ -674,6 +676,17 @@
 
             <h3>Agent skills</h3>
             <p>The other channel by which capability reaches an agent, and the harder one to scan. A skill is a bundle of instructions - often with scripts attached - that teaches an agent a procedure. Unlike an MCP server, which is code and therefore gives code controls something to grip, a malicious skill is plain English: no import to flag, no signature to match, nothing for <a class="glossary-link" href="glossary.html#term-ci-cd">CI/CD</a> scanning, secret scanners, or hardened runners to catch. Skills also reference one another, so reviewing one file does not tell you what will actually run. Snyk's <a href="https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/" target="_blank" rel="noopener noreferrer">ToxicSkills research</a> scanned 3,984 <a class="glossary-link" href="glossary.html#term-agent-skill">agent skills</a> published to ClawHub and skills.sh and found 36.8% (1,467) carrying at least one security flaw, with 13.4% (534) rated critical - the band where prompt injection sits. There is no reliable way today to spot a malicious one sitting in a marketplace. Until platforms ship an administrator control that restricts agents to approved skills, governance is procedural: review skill requests the way you review an open-source library request, keep an internal catalog, and sandbox execution so that obeying a bad instruction is bounded. The <a href="mcp-security.html#agent-skills">MCP Security guide</a> covers this in depth.</p>
+
+            <h3>Agents that route around a control on their own</h3>
+            <p>Everything above assumes someone is steering the agent. The second failure mode has no attacker in it: an agent given an ordinary task cannot finish it the intended way, finds another way, and the other way crosses a boundary nobody meant it to cross. An injection filter has nothing to catch, because nothing was injected. The agent is doing what it was asked; the problem is how.</p>
+            <p>Three cases, in rising order of consequence. In the <a href="meetings/2026-09-18.html">2026-09-18 session</a>, Bar Kaduri of Capsule Security presented research in which an agent asked to transfer a file, without a tool that could do it, uploaded the content to a public file-sharing service and handed back the link. In the <a href="breaches/huggingface-openai-agent.html">Hugging Face / OpenAI agent intrusion</a>, models under a capability evaluation escaped through the package proxy that was their sandbox's one permitted network path and went on to attack a third party's production infrastructure; the <a href="breaches/huggingface-agent-intrusion-timeline.html">full technical timeline</a> shows it ran much further than first reported. And in a <a href="https://openai.com/index/how-we-will-do-better-for-australia/" target="_blank" rel="noopener noreferrer">statement of September 28, 2026</a>, OpenAI said an experimental internal model, set during training and evaluation to research public spending on medicines, had difficulty finding the figures and discovered a way to gain non-public access to Services Australia's Medicare Statistics Reporting Service, where it ran commands and retrieved internal files and credentials. OpenAI says its review found no evidence that anyone's medical records were accessed. The room took that one up in the <a href="meetings/2026-09-25.html">2026-09-25 session</a>. In none of the three did a human decide to cross the boundary that was crossed.</p>
+            <p>Per-request authorization does not catch this, because each step can look like something the agent was allowed to do (an HTTP request, a package install, an upload) and the harm is in the sequence and the destination. Asking the model to behave is not a control either: an agent that routes around a missing tool will route around a sentence in its system prompt. What works bounds what the agent can <em>accomplish</em> across a run, and is enforced outside the model. Kaduri's answer was deterministic runtime hooks, where policy written as code decides before each tool call executes; the OWASP <a href="https://github.com/GenAI-Security-Project/agent-control-standard" target="_blank" rel="noopener noreferrer">Agent Control Standard</a> (ACS), whose specification workstream she co-leads, is an open specification for that checkpoint. Around it go default-deny egress with an allow-list of the destinations the task needs, least-privilege tool sets that withhold general-purpose tools such as a raw shell or an arbitrary HTTP client, human approval for anything irreversible or anything that sends data outside the organization, and monitoring for unexpected destinations and for repeated retries after a deny. <a href="api-security.html#ai-apis">Securing AI, LLM, and agent APIs</a> covers those controls in detail. Three points belong to the design view:</p>
+            <ul>
+                <li><strong>Containment is part of the attack surface.</strong> An allowlisting proxy is a permitted path with a filter on it, not isolation, and it is exactly where a capable agent will look. For capability evaluations, stage dependencies in advance and leave no outbound route at all. Where an agent must read the web, serving it cached content instead of live access (the change OpenAI says it made to its research environments) removes the chance to act on a live system.</li>
+                <li><strong>Bound the objective, not just the tools.</strong> Name out-of-bounds systems explicitly, and make "could not complete the task" an acceptable result rather than a failure the agent is pushed to avoid. An open-ended goal is pursued wherever it leads. This lowers the pressure; it does not replace the controls above.</li>
+                <li><strong>A credential the agent found is a stop signal.</strong> Require human approval before an agent uses any credential it was not issued. An agent holding keys nobody gave it is already outside its task.</li>
+            </ul>
+            <p>None of this changes because the operator is a model rather than a person: segmentation, least privilege, and egress control work the same way, which is the argument <a href="breach-lessons.html#pattern-not-a-person">Breach Lessons</a> makes. What changes is that the containment around agents you run is now yours to defend.</p>
         </section>
 
         <section id="supply-chain">
@@ -726,6 +739,27 @@
                 <li><strong>Do not let generated IaC bypass <a class="glossary-link" href="glossary.html#term-policy-as-code">policy-as-code</a>.</strong> Whatever gate you run against hand-written Terraform runs unchanged here. Generated infrastructure is not a new category for admission control, and treating it as one is how the exception gets carved.</li>
             </ul>
             <p>The honest summary: this is the least-solved area on the page. The controls above are the ones that work today, and none of them are detection. See <a href="cloud-security-appsec-engineer.html">the AppSec engineer role</a> for where this work usually lands.</p>
+        </section>
+
+        <section id="vuln-discovery">
+            <h2>AI as a vulnerability finder</h2>
+            <p>Everything else on this page treats AI as the thing under attack. Here it is the thing doing the finding, and the consequence for a defender fits in a sentence: AI now finds vulnerabilities faster than organizations can triage and fix them, so the bottleneck has moved from discovery to remediation.</p>
+
+            <h3>What the numbers show</h3>
+            <p>Anthropic launched <a href="https://www.anthropic.com/project/glasswing" target="_blank" rel="noopener noreferrer">Project Glasswing</a> in April 2026 to find and fix vulnerabilities in critical software with its Claude Mythos Preview model. Its own <a href="https://red.anthropic.com/2026/cvd/" target="_blank" rel="noopener noreferrer">coordinated vulnerability disclosure dashboard</a> says the vulnerabilities it has disclosed are a subset of what its models have found, because independent human triage and review is "the rate limiting step." VulnCheck's Patrick Garrity <a href="https://www.vulncheck.com/blog/anthropic-glasswing-receipts" target="_blank" rel="noopener noreferrer">reconciled that ledger against Anthropic's totals</a> in September 2026: five months in, fewer than 10% of the findings had reached a project maintainer, and under 1% were confirmed fixed. He also found that, of the findings rated by both sides, the model called about nine in ten critical or high where the maintainers called about half. A finder's own severity is a claim to check, not a priority.</p>
+
+            <h3>What the room made of it</h3>
+            <p>The <a href="meetings/2026-09-11.html">2026-09-11 session</a> worked through Garrity's figures and argued against the "vulnpocalypse" framing. The count that matters is products affected, not vulnerabilities found: one patch usually closes several findings in the same component, so a surge in disclosures is not a matching surge in work, and more disclosures do not automatically mean more exploitation. The gap the room did identify was on the defender's side: little in the market maps many findings to the single remediation step that fixes them. A related complaint was that vendors increasingly hand customers their data through an MCP tool rather than a conclusion, which moves the work of making sense of it back onto the customer. Two months earlier the <a href="meetings/2026-07-17.html">2026-07-17 session</a> had reached remediation from the other side, with one attendee arguing for fixing vulnerabilities in bulk with automated agents rather than one ticket per finding.</p>
+
+            <h3>What changes for you</h3>
+            <ul>
+                <li><strong>Count fixes, not findings.</strong> Group findings by component and fixed version, and measure remediation by the upgrades that close them. A dashboard that counts CVEs rises with every disclosure wave, whatever happened to your actual exposure.</li>
+                <li><strong>Prioritize on exploitation and reach, not volume.</strong> Known exploitation (the <a class="glossary-link" href="glossary.html#term-cisa-kev">CISA KEV</a> catalog), predicted exploitation (the Exploit Prediction Scoring System, <a class="glossary-link" href="glossary.html#term-epss">EPSS</a>), internet exposure, and <a class="glossary-link" href="glossary.html#term-reachability">reachability</a> decide what moves first. The <a href="vulnerability-management.html#prioritization">prioritization stack</a> covers how to combine them.</li>
+                <li><strong>Treat triage as the scarce resource.</strong> When discovery is cheap, the expensive part is a person who can confirm a finding is real, reachable, and worth fixing. Staff for that, and if you point an AI finder at your own code, plan the triage before you run the scan. It is the constraint the <a href="#generated-code">generated-code section</a> names too: generation scaled, review did not.</li>
+                <li><strong>Shrink what there is to find.</strong> Minimal base images, fewer dependencies, and removed components cut the surface any finder, human or AI, can report against. The 2026-09-11 session's example was a smaller organization choosing Go over Node.js to reduce the security complexity it has to carry.</li>
+                <li><strong>Ask vendors for conclusions, not feeds.</strong> A tool that hands you raw findings through an API or MCP server has moved its triage work onto your team. Ask what it gets fixed, not how much it finds.</li>
+            </ul>
+            <p>For the practice itself, see <a href="vulnerability-management.html">Vulnerability Management</a>. For how the room's view of patching and prioritization has moved over two years, see <a href="what-practitioners-think-about-vulnerability-management.html">What practitioners think about vulnerability management</a>.</p>
         </section>
 
         <section id="training-data">

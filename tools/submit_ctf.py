@@ -22,13 +22,13 @@ from check_url_safety import URLSafetyChecker
 
 # Section IDs in ctfs.html - each maps to a section heading on the page
 SECTIONS = {
-    '1': ('wiz-standalone', 'Wiz Standalone Challenges (always-available)'),
-    '2': ('aws-ctfs', 'AWS CTFs'),
-    '3': ('azure-ctfs', 'Azure CTFs'),
-    '4': ('gcp-ctfs', 'GCP CTFs'),
-    '5': ('kubernetes-ctfs', 'Kubernetes CTFs'),
-    '6': ('multi-cloud-ctfs', 'Multi-Cloud CTFs'),
-    '7': ('specialty-ctfs', 'AI, Secrets, and CI/CD CTFs'),
+    '1': ('aws-ctfs', 'AWS CTFs'),
+    '2': ('azure-ctfs', 'Azure CTFs'),
+    '3': ('gcp-ctfs', 'GCP CTFs'),
+    '4': ('kubernetes-ctfs', 'Kubernetes CTFs'),
+    '5': ('multi-cloud-ctfs', 'Multi-Cloud CTFs'),
+    '6': ('specialty-ctfs', 'AI, Secrets, and CI/CD CTFs'),
+    '7': ('wiz-standalone', 'Wiz Standalone Challenges (always-available)'),
 }
 
 # Tags grouped for selection

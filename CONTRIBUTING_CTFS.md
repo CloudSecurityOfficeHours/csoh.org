@@ -35,14 +35,14 @@ Pick the best-fitting section:
 
 | Section ID | When to use |
 |---|---|
-| `wiz-championship` | Monthly Wiz Cloud Security Championship challenges - reserved; use a calendar entry |
-| `wiz-standalone` | Always-available Wiz CTFs outside the monthly Championship |
 | `aws-ctfs` | Primarily AWS (IAM, S3, EC2, Lambda, etc.) |
 | `azure-ctfs` | Primarily Azure / Entra ID |
 | `gcp-ctfs` | Primarily GCP |
 | `kubernetes-ctfs` | Primarily Kubernetes (any cloud) |
 | `multi-cloud-ctfs` | Covers AWS + Azure + GCP in one deployment |
 | `specialty-ctfs` | AI/ML, Secrets management, CI/CD pipeline security, or other niches |
+| `wiz-championship` | Monthly Wiz Cloud Security Championship challenges - reserved; use a calendar entry |
+| `wiz-standalone` | Always-available Wiz CTFs outside the monthly Championship |
 
 If your CTF fits multiple clouds (e.g. Kubernetes Goat runs on any cloud), pick the *primary* focus and use tags to indicate the others.
 

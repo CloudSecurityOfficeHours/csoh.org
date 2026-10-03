@@ -254,7 +254,7 @@ PAGES = [
      "From the Sessions"),
     ("what-practitioners-think-about-vulnerability-management.html",
      "What Practitioners Actually Think About Vulnerability Management",
-     "Eight Friday sessions on CVSS, prioritization, and why patching stalls. What people running these programs actually said.",
+     "Nine Friday sessions on CVSS, prioritization, and why patching stalls. What people running these programs actually said.",
      "From the Sessions"),
     ("what-practitioners-think-about-ai-security.html",
      "What Practitioners Actually Think About AI Security",

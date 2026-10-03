@@ -86,13 +86,13 @@ Push now? (y/n): y
 
 | # | Section | For |
 |---|---|---|
-| 1 | `wiz-standalone` | Always-available Wiz CTFs |
-| 2 | `aws-ctfs` | AWS-focused (IAM, S3, Lambda, etc.) |
-| 3 | `azure-ctfs` | Azure / Entra ID |
-| 4 | `gcp-ctfs` | GCP |
-| 5 | `kubernetes-ctfs` | Kubernetes (any cloud) |
-| 6 | `multi-cloud-ctfs` | AWS + Azure + GCP in one |
-| 7 | `specialty-ctfs` | AI/ML, Secrets, CI/CD |
+| 1 | `aws-ctfs` | AWS-focused (IAM, S3, Lambda, etc.) |
+| 2 | `azure-ctfs` | Azure / Entra ID |
+| 3 | `gcp-ctfs` | GCP |
+| 4 | `kubernetes-ctfs` | Kubernetes (any cloud) |
+| 5 | `multi-cloud-ctfs` | AWS + Azure + GCP in one |
+| 6 | `specialty-ctfs` | AI/ML, Secrets, CI/CD |
+| 7 | `wiz-standalone` | Always-available Wiz CTFs |
 
 The script only offers the sections listed above; the monthly Wiz Championship block is not one of them and is edited directly in `ctfs.html`.
 
