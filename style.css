@@ -26,7 +26,7 @@
     --bg-color: var(--white);
     --card-bg: var(--white);
     --text-muted: #5b6573;
-    /* The page's two widths. Keep them here, together, because the number that
+    /* The page's widths. Keep them here, together, because the number that
        matters is the relationship between them - a reading column that is a
        small fraction of the frame around it reads as a broken page, however
        correct its character count is.
@@ -45,9 +45,17 @@
        Both are rem and not ch on purpose. `ch` in a custom property resolves
        against the *using* element's font rather than against :root, so a single
        `60ch` resolves to different widths on a section and on a .pull-quote and
-       the blocks stop lining up, which is the thing the measure exists to fix. */
+       the blocks stop lining up, which is the thing the measure exists to fix.
+
+       --breakout is the width diagrams, comparison tables and code blocks widen
+       to, centred on the column (the "Break-out" rule further down). 880px is
+       the widest any of them is drawn at, hence px. It reaches 72px past the
+       column on each side, so the floating table of contents measures its
+       offset from this and not from the column. Change it and re-derive that
+       rail's media-query floor as well, which cannot read a custom property. */
     --frame: 75rem;
     --measure: 46rem;
+    --breakout: 880px;
     /* Type scale ------------------------------------------------------------
        Thirteen steps, none below --fs-12.
 
@@ -1239,7 +1247,9 @@ main .cta-section > :is(p, ul, ol, dl, blockquote) {
    So they break out and centre on the same axis as the text instead. The column
    keeps its measure, these keep their width, and both share a centre line, which
    is what makes the result read as a decision rather than an accident. Capped at
-   880px, the widest any of them declares, and at the viewport below that.
+   --breakout, the widest any of them declares, and at the viewport below that.
+   The floating table of contents is placed outside this cap rather than
+   outside the prose, because it has to clear these too.
 
    Not scoped to article pages: a diagram on glossary.html has the same claim to
    width as one in an article, and .page-photo is deliberately *not* in the list
@@ -1250,7 +1260,7 @@ main :is(
     .comparison-table, .table-scroll, .matrix-table, .matrix-table--wide,
     pre.code-block
 ) {
-    width: min(880px, calc(100vw - 3rem));
+    width: min(var(--breakout), calc(100vw - 3rem));
     max-width: none;
     margin-left: 50%;
     transform: translateX(-50%);
@@ -2984,26 +2994,33 @@ footer {
    has 18 h2s), and a static list gives no section context or way to jump past
    the first screen.
 
-   The room is already there: the article column is --measure + 4rem = 800px
-   inside a 1440px viewport, so ~320px of each margin is empty. Floating with a
-   negative margin buys that space without touching the markup on any page
-   that carries a .toc, and because the float lands entirely outside the
-   text column no prose wraps around it.
+   Floating with a negative margin claims the empty margin without touching the
+   markup on any page that carries a .toc, and because the float lands
+   entirely outside the text column no prose wraps around it.
 
-   The 1300px floor is arithmetic, not taste: the rail needs 12rem + 2rem of
-   gutter = 224px of margin, and the margin is (100vw - 800px) / 2, which only
-   reaches 224px at 1248px. 1300 leaves a little slack. Below it the rule does
-   not apply at all and the list stays an in-flow callout, which is also what
-   mobile keeps.
+   Its inner edge is measured from --breakout, not from the column. Tables,
+   diagrams and code blocks break out 72px past the column, and a sticky rail
+   passes beside every one of them as the reader scrolls, so a rail measured
+   from the prose would sit underneath each. It sits 1.5rem outside the
+   break-out on every page, including pages with nothing wide, so it does not
+   jump sideways between guides.
+
+   The 1360px floor is arithmetic, not taste. From the centre line the rail
+   needs half the break-out (440px), the 1.5rem gutter and the 12rem rail, which
+   is 656px, plus 1.5rem to the window edge: 680px, half of 1360. A 17px
+   classic scrollbar still leaves 15px. A media query cannot read a custom
+   property, so re-derive this by hand if --breakout, --measure or the rail's
+   width changes. Below it the rule does not apply at all and the list stays
+   an in-flow callout, which is also what mobile keeps.
 
    max-height + overflow-y matter: a sticky box taller than the viewport only
    pins its bottom edge, and these lists can be taller than the viewport once
    the header is subtracted. */
-@media (min-width: 1300px) {
+@media (min-width: 1360px) {
     .contribute-article > .toc {
         float: left;
         width: 12rem;
-        margin: 0 0 1.5rem calc(-12rem - 2rem);
+        margin: 0 0 1.5rem calc(-12rem - 1.5rem - (var(--breakout) - var(--measure)) / 2);
         padding: 1rem 1.125rem;
         position: sticky;
         top: calc(var(--header-height) + 1rem);
@@ -6871,7 +6888,7 @@ h3:hover > .head-anchor,
 .head-anchor:focus-visible { outline: 2px solid var(--secondary-color); outline-offset: 2px; }
 
 /* Scroll-spy state on the existing table of contents. The sticky sidebar
-   treatment at >=1300px is defined further up this file; this only marks the
+   treatment at >=1360px is defined further up this file; this only marks the
    entry for the section currently on screen. */
 .toc a.is-current {
     font-weight: 700;
