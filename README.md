@@ -71,7 +71,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 |---|---|
 | 🟧 [AWS Security](https://csoh.org/aws-security.html) | Well-Architected, service catalog, top-10 misconfigs, AWS attack paths |
 | 🟦 [Azure Security](https://csoh.org/azure-security.html) | CAF Secure, Entra/Defender/Sentinel, Entra-vs-AD, Azure attack paths |
-| 🟩 [GCP Security](https://csoh.org/gcp-security.html) | Encryption-by-default, SCC Enterprise, VPC Service Controls deep-dive |
+| 🟩 [GCP Security](https://csoh.org/gcp-security.html) | Encryption-by-default, SCC tiers, VPC Service Controls deep-dive |
 | ⚖️ [AWS vs Azure vs GCP](https://csoh.org/cloud-security-comparison.html) | Definitive side-by-side - 10 comparison tables and a 20-row scorecard |
 
 ### Threat Intel
@@ -339,7 +339,7 @@ SEO-targeted hub page for the "AWS security" search intent (~10× the volume of 
 Same SEO play for Azure. CAF Secure methodology, the Microsoft service catalog (Defender for Cloud / Sentinel / Entra ID / Purview / Key Vault / Front Door / NSGs), Entra-ID-vs-traditional-AD, Azure attack paths (managed identity abuse, illicit consent grants, Conditional Access bypass), and the Microsoft Defender licensing maze.
 
 ### 🟩 GCP Security Hub ([`gcp-security.html`](https://csoh.org/gcp-security.html))
-Same SEO play for Google Cloud. Encryption-by-default story, Security Command Center Standard/Premium/Enterprise, BeyondCorp Enterprise, VPC Service Controls deep-dive, GCP attack paths (service-account impersonation, deployment-manager privesc, metadata SSH-key injection), and Assured Workloads.
+Same SEO play for Google Cloud. Encryption-by-default story, Security Command Center Standard/Premium (and the Enterprise tier's retirement), Chrome Enterprise Premium, VPC Service Controls deep-dive, GCP attack paths (service-account impersonation, deployment-manager privesc, metadata SSH-key injection), and Assured Workloads.
 
 ### ⚖️ AWS vs Azure vs GCP Security Services ([`cloud-security-comparison.html`](https://csoh.org/cloud-security-comparison.html))
 The definitive vendor-neutral comparison. Ten side-by-side `.comparison-table` blocks (identity, detection, data, network, compliance, pricing, customer identity, compute, container, serverless), conceptual differences that bite you (IAM-policy languages, org-boundary models, log pricing, VPC SC), a "which cloud for which job" guidance section, and a 20-row score-card summary.
