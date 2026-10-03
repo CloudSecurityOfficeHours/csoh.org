@@ -58,7 +58,10 @@ CSOH is vendor-neutral, free, and volunteer-run. That is the headline promise on
   carry no rankings by design.
 - **Disclose affiliation.** Shawn works at Wiz. Any page touching Wiz or its
   competitors says so. This is already done on `vendor-landscape.html`; it is a
-  standard, not a one-off.
+  standard, not a one-off. One exception: `chat-resources.html` needs no
+  disclosure. It is a dated record of links members shared in the session
+  chat, credited to whoever shared them, not prose the site wrote about Wiz
+  or its competitors.
 - **No sponsored content**, on the site or in the mailing list.
 - **Apolitical.** CSOH is a technical community. Party politics, elections, and
   culture-war material are off-topic regardless of the author's view, including
