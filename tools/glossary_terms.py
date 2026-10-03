@@ -79,6 +79,12 @@ PAGE_EXTRA_DENYLIST = {
     # foundation cert"). Inside a glossary definition both would carry their
     # defined sense, so crosslink_glossary.py still links them.
     "service provider", "cloud foundation",
+    # "Audit Log" is a fragment of the CloudTrail / Activity Log / Audit Log
+    # headword, which means a cloud provider's control-plane log. Page prose
+    # uses the phrase for any system's audit log (GitHub, Entra ID, Kubernetes,
+    # a SaaS app), so linking it would send those to the CloudTrail entry.
+    # "CloudTrail" and "Activity Log" stay keys, so the entry is still reached.
+    "audit log",
 }
 
 PAGE_DENYLIST = BASE_DENYLIST | PAGE_EXTRA_DENYLIST
@@ -138,6 +144,25 @@ def is_acronym(key: str) -> bool:
         and " " not in key
         and key == key.upper()
         and any(c.isalpha() for c in key)
+    )
+
+
+def is_case_sensitive(key: str) -> bool:
+    """Whether a key may only match text spelled exactly as the key is.
+
+    Acronyms qualify (see is_acronym), and so do single words that start
+    lowercase but carry a capital: deliberate stylings such as flAWS, eBPF,
+    mTLS and gRPC. For those the casing is the only thing separating the name
+    from an ordinary word, so a case-insensitive match would link "logic
+    flaws" to the flAWS CTF. Both cross-linkers consult this, never
+    is_acronym directly.
+    """
+    if is_acronym(key):
+        return True
+    return (
+        " " not in key
+        and key[:1].islower()
+        and any(c.isupper() for c in key)
     )
 
 
