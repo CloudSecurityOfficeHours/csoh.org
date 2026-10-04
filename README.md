@@ -257,6 +257,9 @@ The acronym soup decoded. Side-by-side comparison of cloud-security tool categor
 ### 🔍 Focused Category Comparisons ([`cspm-vs-cwpp.html`](https://csoh.org/cspm-vs-cwpp.html), [`cnapp-vs-xdr.html`](https://csoh.org/cnapp-vs-xdr.html))
 Two narrower head-to-heads for the questions the big comparison page gets asked repeatedly: posture vs. workload protection (CSPM vs CWPP), and where CNAPP ends and XDR/CDR begins.
 
+### 🧭 From CNAPP to AI-APP ([`cnapp-to-ai-app.html`](https://csoh.org/cnapp-to-ai-app.html))
+A case study of one platform's move past CNAPP: Wiz joining source control, SOC logs and runtime, and developer workstations to its cloud graph, with Red, Green and Blue AI agents on top. The author works at Wiz, so the page states that up front, dates every capability with its GA or preview status, names the other vendors converging on the same design, and gives the risks a full section.
+
 ### 📦 Containers & Cloud Security ([`containers.html`](https://csoh.org/containers.html))
 Vendor-neutral guide to containers in the cloud - what they actually are, why the boundary is process-isolation rather than tenant-isolation, the real escape paths (privileged flags, kernel CVEs, hostPath, docker.sock), identity chaining via the instance metadata service, flat networking, supply chain, minimal/hardened base images (Chainguard, Minimus, Wiz, Distroless), runtime detection, and an AWS/Azure/GCP service comparison.
 
@@ -653,6 +656,7 @@ csoh.org/
 ├── cspm-vs-cnapp.html          # CSPM vs CNAPP vs CWPP vs CIEM vs DSPM
 ├── cspm-vs-cwpp.html           # Posture vs workload protection, head to head
 ├── cnapp-vs-xdr.html           # CNAPP vs XDR (and CDR)
+├── cnapp-to-ai-app.html        # Case study: Wiz from CNAPP to AI-APP (author's employer, disclosed)
 │
 │  ── Platform topics ──
 ├── containers.html             # Container security: boundary, escapes, IMDS, supply chain
@@ -1296,7 +1300,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->63<!--/count--> pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->64<!--/count--> pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
@@ -1312,7 +1316,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->109<!--/count--> pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->110<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)

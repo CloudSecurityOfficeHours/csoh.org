@@ -110,6 +110,28 @@ def strip_generated(css: str) -> str:
     return css[:b].rstrip("\n") + "\n" + css[e + len(END) :].lstrip("\n")
 
 
+def split_selector_list(selector: str) -> list[str]:
+    """Split a selector list on its top-level commas only.
+
+    A comma inside :is(), :where(), :not() or an attribute selector belongs to
+    that one compound selector; splitting there emits half a selector, which
+    invalidates the whole mirrored rule and the browser drops it.
+    """
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for i, ch in enumerate(selector):
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(selector[start:i])
+            start = i + 1
+    parts.append(selector[start:])
+    return parts
+
+
 def twin_selector(selector: str) -> str | None:
     """Rewrite a toggle-branch selector into its system-branch equivalent.
 
@@ -117,7 +139,7 @@ def twin_selector(selector: str) -> str | None:
     apply unconditionally, so re-emitting them under the system branch would
     change what they match rather than mirror it.
     """
-    parts = [p.strip() for p in selector.split(",")]
+    parts = [p.strip() for p in split_selector_list(selector)]
     keep = [p.replace(DARK_ATTR, SYS_PREFIX) for p in parts if DARK_ATTR in p]
     return ",\n".join(keep) if keep else None
 
@@ -136,7 +158,7 @@ def build(css: str) -> str:
         normalise(part)
         for r in rules
         if r.context and r.context[0] == MEDIA_DARK
-        for part in r.selector.split(",")
+        for part in split_selector_list(r.selector)
     }
 
     top: list[Rule] = []
@@ -158,7 +180,7 @@ def build(css: str) -> str:
             sel = twin_selector(r.selector)
             if sel is None:
                 continue
-            if all(normalise(p) in handwritten for p in sel.split(",")):
+            if all(normalise(p) in handwritten for p in split_selector_list(sel)):
                 continue
             decls = " ".join(r.body.split())
             if not decls:

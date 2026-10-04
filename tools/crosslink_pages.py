@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glossary_terms import (  # noqa: E402
     PAGE_DENYLIST as DENYLIST,
     derive_keys as _derive_keys,
-    is_acronym,
+    is_case_sensitive,
     slugify,
     key_regex,
     match_key,
@@ -165,6 +165,7 @@ TARGET_PAGES = [
     "cloud-security-portfolio-projects.html",
     "cloud-security-reading-list.html",
     "cloud-security-resume-guide.html",
+    "cnapp-to-ai-app.html",
     "cnapp-vs-xdr.html",
     "cspm-vs-cwpp.html",
     "community.html",
@@ -263,7 +264,7 @@ def _existing_link_pattern_for(prefix: str) -> re.Pattern[str]:
 def load_glossary_terms() -> tuple[dict[str, str], list[str]]:
     """Parse glossary.html and return:
       - key_to_slug:   lowercased-key -> slug
-      - original_keys: original-case spellings (for is_acronym checks)
+      - original_keys: original-case spellings (for is_case_sensitive checks)
     """
     content = GLOSSARY_FILE.read_text(encoding="utf-8")
     key_to_slug: dict[str, str] = {}
@@ -288,11 +289,12 @@ def load_glossary_terms() -> tuple[dict[str, str], list[str]]:
 def build_term_regexes(keys: list[str]) -> list[tuple[re.Pattern[str], bool]]:
     """Returns (pattern, case_sensitive) pairs.
 
-    Acronyms are matched case-sensitively to avoid linking 'cd' to CD or
-    'Kev' to KEV. Everything else is case-insensitive.
+    Acronyms and lowercase-led stylings are matched case-sensitively, so 'cd'
+    does not link to CD, 'Kev' to KEV, or 'flaws' to flAWS. Everything else is
+    case-insensitive.
     """
-    case_sensitive_keys = [k for k in keys if is_acronym(k)]
-    case_insensitive_keys = [k for k in keys if not is_acronym(k)]
+    case_sensitive_keys = [k for k in keys if is_case_sensitive(k)]
+    case_insensitive_keys = [k for k in keys if not is_case_sensitive(k)]
 
     patterns: list[tuple[re.Pattern[str], bool]] = []
     if case_sensitive_keys:

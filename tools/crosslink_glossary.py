@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glossary_terms import (  # noqa: E402
     BASE_DENYLIST as DENYLIST,
     derive_keys,
-    is_acronym,
+    is_case_sensitive,
     slugify,
     key_regex,
     match_key,
@@ -46,8 +46,8 @@ def add_dt_ids(content: str) -> tuple[str, dict[str, str], dict[str, str]]:
 
     Returns the updated content, a map of lowercased-key -> slug, and a map of
     lowercased-key -> the key's original-case spelling. The second map exists so
-    _link_text can apply the acronym rule: the match regex is case-insensitive,
-    but a key that `is_acronym` must still match text of the same case.
+    _link_text can apply the case rule: the match regex is case-insensitive,
+    but a key that `is_case_sensitive` must still match text of the same case.
     """
     key_to_slug: dict[str, str] = {}
     key_to_original: dict[str, str] = {}
@@ -181,11 +181,12 @@ def _link_text(
         if not slug or slug == self_slug:
             continue
         # The alternation is case-insensitive so ordinary multi-word terms match
-        # however they are capitalised, but an acronym key must match exactly.
+        # however they are capitalised, but a case-sensitive key (an acronym,
+        # or a styling such as flAWS) must match exactly.
         # Without this, "FIRST" (Forum of Incident Response and Security Teams)
         # would link every ordinary "first" in the glossary.
         original = key_to_original.get(lookup)
-        if original and is_acronym(original) and word != original:
+        if original and is_case_sensitive(original) and word != original:
             continue
         if slug in seen_in_sentence:
             continue
