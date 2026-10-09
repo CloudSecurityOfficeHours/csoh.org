@@ -1077,7 +1077,7 @@ The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five
 | [`update-news.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
 | [`update-resources.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
 | [`update-counts.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
-| [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens an auto-approved PR for a human to merge |
+| [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens a PR for a human to approve and merge |
 | [`site-update-deploy.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI, URL safety, normalization, schema, sitemap, previews |
 
 **Deploy**
@@ -1171,7 +1171,7 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
   - Strips tracking parameters (`utm_*`, `fbclid`, `gclid`, `msclkid`, etc.)
   - Upgrades HTTP links to HTTPS
   - Resolves redirecting URLs to their final destinations
-- **Output:** Creates a PR with a detailed report of all changes, auto-approved for review
+- **Output:** Creates a PR with a detailed report of all changes, left un-approved for a human to review and merge
 
 **Full docs:** See [tools/UPDATE_SRI_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md), [tools/GENERATE_PREVIEW_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/GENERATE_PREVIEW_README.md), [tools/UPDATE_NEWS_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_NEWS_README.md), and [tools/CHECK_URL_SAFETY_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md)
 
