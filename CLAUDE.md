@@ -33,7 +33,10 @@ appears; the change just sits in `main` unpublished. To write about them, say
 The housekeeping workflow (`site-update-deploy.yml`) uses these tokens on
 purpose so its own commits don't loop. Anything it fixes lands in `main` but
 does not reach production until the next real deploy, so never rely on it to
-repair a live problem.
+repair a live problem. The one exception is preview images, which `deploy.yml`
+can't regenerate in its build: when housekeeping pushes previews, its
+`redeploy-for-previews` job dispatches `deploy.yml`. That job alone holds
+`actions: write`; keep it out of the job that loads web pages.
 
 ### Path filters must cover everything `stage_site.sh` publishes
 
