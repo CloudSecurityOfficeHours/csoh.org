@@ -630,6 +630,24 @@ same way.
 lychee --dump --config .lychee.toml './*.html' | head -1   # validate before trusting a green run
 ```
 
+### The link-check cache has one writer
+
+The weekly/manual crawl starts empty, requests every link and saves
+`.lycheecache`. PR runs restore it and never save. lychee stores only
+successes and drops any failure it reads, so the cache can only make a PR
+skip a link that worked at the last crawl. Two ways to break it:
+
+- **The full crawl restores the cache.** Then nothing re-requests a link that
+  rotted since the last crawl, and the tracking issue stops catching rot.
+- **PR runs save.** A PR-saved cache is visible only to that PR, and a
+  long-lived PR branch then prefers its own copy over main's newer crawl.
+
+lychee also discards the whole file once it was last written longer ago than
+`--max-cache-age` (`Cache is too old` in the log), so that value must exceed
+the weekly interval or PR runs request every link again. A PR run whose cache
+loaded logs `Cache is recent (...). Using.` in the lychee step; a PR run
+with no such line requested every link.
+
 ### `check_readme_coverage.py` covers what lychee doesn't
 
 lychee crawls published HTML and `.tf`, not Markdown. `python3

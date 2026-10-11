@@ -17,6 +17,10 @@
 # job does not fail on rot, so those runs maintain a sticky tracking issue
 # (same pattern as the staleness checkers), which auto-closes once a crawl
 # comes back clean.
+#
+# Only the weekly/manual crawl requests every link. It saves the links that
+# worked, and PR runs skip those, so a PR requests only links that are new
+# since that crawl or were failing. See the cache steps below.
 # =============================================================================
 
 # This whole file is a "workflow": a set of automated steps that GitHub runs
@@ -133,23 +137,37 @@ jobs:
 
       # "Caching" means saving files from one run so a later run can reuse them
       # instead of redoing slow work. Each fresh runner is empty, so without a
-      # cache lychee would re-check every URL from scratch every time. Restoring
-      # lychee's HTTP cache massively speeds up the crawl - lychee skips URLs it
-      # already validated within the cache TTL (the max-cache-age set below).
-      - name: Restore lychee cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      # cache lychee would re-request every URL on every PR.
+      #
+      # lychee's cache file (.lycheecache) is a list of URLs that answered
+      # successfully, each with the time it was checked. lychee never writes a
+      # failure to it and discards any it reads, so a failing link is
+      # rechecked on every run. The cache can only let a run skip a link that
+      # worked when it was last checked.
+      #
+      # One writer, many readers:
+      # - The weekly/manual crawl does NOT restore. It starts empty, requests
+      #   every link, and saves the result (the "Save lychee cache" step). The
+      #   run that maintains the tracking issue therefore never trusts a
+      #   remembered result, and a link that rots is caught by the next crawl.
+      # - PR runs restore that cache and do not save. GitHub makes a cache
+      #   saved by a PR visible only to that PR, while one saved on main (where
+      #   the cron runs) is visible to every PR.
+      - name: Restore lychee cache (PR runs only)
+        if: github.event_name == 'pull_request'
+        # `cache/restore` is the read-only half of actions/cache; the save half
+        # is a separate step below, so each can have its own `if:`.
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         # `with:` passes named inputs to the action - its settings/parameters.
         with:
-          # Which folder on the runner to save and later restore.
+          # Which file on the runner to restore.
           path: .lycheecache
-          # The cache's lookup name. `github.sha` is this commit's unique ID,
-          # so a fresh entry is saved per commit. On a later run, an exact
-          # match for this key is loaded first if it exists.
-          key: cache-lychee-${{ github.sha }}
-          # If no exact key match (e.g. brand-new commit), fall back to the
-          # newest cache whose name STARTS WITH this prefix - so we still reuse
-          # a recent crawl instead of starting cold.
-          restore-keys: cache-lychee-                   # fall back to any cache
+          # The lookup name. A run ID never matches an existing cache, so the
+          # lookup always falls through to `restore-keys`.
+          key: lychee-ok-${{ github.run_id }}
+          # Load the newest cache whose name STARTS WITH this prefix: the most
+          # recent weekly crawl.
+          restore-keys: lychee-ok-
 
       # Run the actual link checker. Lychee is a fast, parallel link crawler.
       # We pass it a `.lychee.toml` config in the repo root for things like
@@ -160,8 +178,14 @@ jobs:
           # `>-` is YAML's "fold this multi-line string into one line."
           # CLI flags below: --config points lychee at .lychee.toml (its
           # exclude-list of bot-blocking hosts, accepted status codes, and
-          # timeouts); --cache reuses the cache restored above;
-          # --max-cache-age 3d treats results <3 days old as still good;
+          # timeouts); --cache reads the cache restored above (PR runs) and
+          # writes .lycheecache at the end (every run);
+          # --max-cache-age 8d is how long a success stays trusted: the weekly
+          # interval plus a day for a late cron start. lychee drops older
+          # entries, and the whole file once it was last written more than 8
+          # days ago, so a missed weekly crawl makes PR runs request more,
+          # never check less. The weekly crawl has no file to read, so it is
+          # unaffected;
           # --verbose prints per-URL detail; --no-progress silences the live
           # progress bar (noise in CI logs); --max-concurrency 20 hits servers
           # in parallel (be polite); --glob-ignore-case so we catch
@@ -182,7 +206,7 @@ jobs:
           args: >-
             --config .lychee.toml
             --cache
-            --max-cache-age 3d
+            --max-cache-age 8d
             --verbose
             --no-progress
             --max-concurrency 20
@@ -242,6 +266,19 @@ jobs:
             exit 1
           fi
           echo "lychee checked $total links. Crawl ran."
+
+      # The writer half of the cache (see "Restore lychee cache" above). Only
+      # the weekly/manual crawl saves, and an `if:` with no status function
+      # also requires every earlier step to have succeeded, so a crawl that
+      # failed the assertion above never becomes the cache PRs rely on.
+      - name: Save lychee cache (full crawls only)
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .lycheecache
+          # Cache names are write-once, so each run (and each re-run attempt)
+          # gets its own. PR runs pick the newest by the `lychee-ok-` prefix.
+          key: lychee-ok-${{ github.run_id }}-${{ github.run_attempt }}
 
       # An "artifact" is a file the workflow saves and attaches to the run so
       # reviewers can download the full crawl afterward from the Actions page.
