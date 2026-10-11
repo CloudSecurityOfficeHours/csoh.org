@@ -626,6 +626,12 @@ invalid escape, which fails the whole file, and lychee exits without crawling.
 exists and its Summary shows a non-zero `Total`. A broken link never fails that
 job; a crawl that didn't happen always does. Preserve that asymmetry.
 
+Whether anything broke is read from the Summary's `Errors` count, never from a
+section heading: lychee renames headings between versions, and a marker that
+stops matching reads every crawl as clean. A missing `Errors` row fails the
+job. Findings go only to the weekly tracking issue; PR runs post nothing,
+because the report is site-wide, not the PR's.
+
 Note that `grep -q` inside an `if` treats "marker absent" and "file absent" the
 same way.
 

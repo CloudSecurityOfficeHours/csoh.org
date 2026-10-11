@@ -5,18 +5,19 @@
 # breaches/, meetings/, portfolio/, and homelab/ subfolders, and the published
 # Terraform under infra/terraform/ (using lychee) - and reports any that 404,
 # DNS-fail, or otherwise rot. Runs on PRs that touch HTML or Terraform, weekly
-# to catch external link rot, and on demand. Posts a comment on PRs when
-# problems are found, but does not fail on a broken link - link rot is
-# everywhere and shouldn't block merges.
+# to catch external link rot, and on demand. It never fails on a broken link -
+# link rot is everywhere and shouldn't block merges.
 #
-# It DOES fail when the crawl itself did not happen. See the "Assert the crawl
-# actually ran" step: otherwise "no report" and "clean report" are
-# indistinguishable to everything downstream.
+# It DOES fail when the crawl itself did not happen, or when its report can't
+# say how many links broke. See the "Assert the crawl actually ran" step:
+# otherwise "no report" and "clean report" are indistinguishable to everything
+# downstream.
 #
-# On the weekly cron (and manual runs) there is no PR to comment on, and the
-# job does not fail on rot, so those runs maintain a sticky tracking issue
-# (same pattern as the staleness checkers), which auto-closes once a crawl
-# comes back clean.
+# Findings go to ONE place: a sticky tracking issue maintained by the weekly
+# cron (and manual runs), same pattern as the staleness checkers, which
+# auto-closes once a crawl comes back clean. PR runs post nothing. They would
+# list every broken link on the site, not the PR's, on every PR, including the
+# news bot's; their results stay in the run's summary and artifact.
 #
 # Only the weekly/manual crawl requests every link. It saves the links that
 # worked, and PR runs skip those, so a PR requests only links that are new
@@ -70,17 +71,15 @@ on:
 
 # -----------------------------------------------------------------------------
 # §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
-# Read the repo files; write PR comments. Never modifies code.
+# Read the repo files; manage the tracking issue. Never modifies code.
 # -----------------------------------------------------------------------------
 # `permissions:` controls what the automatic per-run credential (the
 # GITHUB_TOKEN) is allowed to do against THIS repo. Best practice is to grant
-# the least access needed: read the files, write PR comments, nothing more.
+# the least access needed: read the files, manage one issue, nothing more.
 # This workflow never modifies code.
 permissions:
   # Allow reading repository contents (needed to fetch the HTML to scan).
   contents: read
-  # Allow writing to pull requests (needed to post the broken-links comment).
-  pull-requests: write
   # Allow managing issues (needed for the sticky tracking issue that surfaces
   # findings from the weekly cron, where there is no PR to comment on).
   issues: write
@@ -104,8 +103,8 @@ concurrency:
 
 # -----------------------------------------------------------------------------
 # §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
-# One job: crawl the links, save the report as an artifact, then comment on
-# the PR if any links are broken.
+# One job: crawl the links, save the report as an artifact, then (weekly and
+# manual runs) open, update, or close the tracking issue.
 # -----------------------------------------------------------------------------
 # `jobs:` holds the actual work. Each job runs on its own fresh machine and,
 # unless you say otherwise, jobs run in parallel. This workflow has one job.
@@ -220,7 +219,8 @@ jobs:
             './infra/terraform/*/*.tf'
           # Write the crawl results to this file (path relative to the repo).
           output: ./lychee-report.md
-          # Produce that report as Markdown so it renders nicely in a PR comment.
+          # Produce that report as Markdown so it renders as the tracking
+          # issue's body.
           format: markdown
           # By default this action would "fail" (turn the job red) on a broken
           # link. We force false so a dead link never blocks a merge.
@@ -235,17 +235,22 @@ jobs:
       #
       # For example, an invalid escape in .lychee.toml (`\.` inside a TOML
       # double-quoted string; write `\\.`) makes lychee exit before crawling
-      # anything and write no report. The `[Errors]` grep below then finds no
-      # `[Errors]` in a file that does not exist, so `has_errors` comes out
-      # `false`, and the sticky-issue step reads the absent report as a clean
-      # crawl.
+      # anything and write no report, and a search for "is anything broken?"
+      # in a file that does not exist finds nothing, which reads as clean.
       #
       # So: assert the crawl produced a real report that counted a real number
       # of links. This catches a config parse error, a lychee crash, and a glob
       # that silently matches nothing. It is deliberately the one condition in
       # this workflow that DOES fail the job - a checker that isn't running is
       # a broken checker, not a broken link.
+      #
+      # The same goes for deciding whether anything broke. That decision reads
+      # the Errors COUNT from lychee's Summary table, never a section heading:
+      # a heading that changes between lychee versions stops matching without
+      # a sound, and every crawl then looks clean. A missing Errors row fails
+      # here instead.
       - name: Assert the crawl actually ran
+        id: crawl
         run: |
           if [ ! -f ./lychee-report.md ]; then
             echo "::error::lychee produced no report - it failed before crawling."
@@ -266,6 +271,25 @@ jobs:
             exit 1
           fi
           echo "lychee checked $total links. Crawl ran."
+          # The Errors row looks like `| 🚫 Errors      | 90    |`. Anchor on
+          # the table shape so the "## Errors per input" heading can't match.
+          errors=$(grep -m1 -E '^\|[^|]*Errors *\| *[0-9]+ *\|' ./lychee-report.md | grep -oE '[0-9]+' | tail -1)
+          if [ -z "$errors" ]; then
+            echo "::error::lychee report has no Summary/Errors row - can't tell a clean crawl from a broken one."
+            echo "--- report ---"; cat ./lychee-report.md; exit 1
+          fi
+          echo "errors=$errors" >> "$GITHUB_OUTPUT"
+          echo "lychee found $errors broken links."
+          # Put a fixed headline at the top of the report when anything broke.
+          # It is the tracking issue's `stale-marker`, so the issue opens
+          # exactly when this count is non-zero.
+          if [ "$errors" -gt 0 ]; then
+            { echo "**Broken links found: $errors.** Each is listed under Errors per input."
+              echo
+              cat ./lychee-report.md
+            } > ./lychee-report.tmp
+            mv ./lychee-report.tmp ./lychee-report.md
+          fi
 
       # The writer half of the cache (see "Restore lychee cache" above). Only
       # the weekly/manual crawl saves, and an `if:` with no status function
@@ -300,14 +324,13 @@ jobs:
           # If the file is missing, just warn instead of failing the step.
           if-no-files-found: warn
 
-      # On non-PR runs (the weekly cron, a manual dispatch) there is no PR to
-      # comment on, so surface findings as a sticky tracking issue instead.
-      # Otherwise the crawl's whole point is defeated: the job never fails, so
-      # a green run with an unread artifact is indistinguishable from a clean
-      # one. The shared composite action (.github/actions/sticky-issue, also
-      # used by the staleness checkers) opens/updates the issue while the
-      # report contains lychee's `[Errors]` section and auto-closes it once a
-      # crawl comes back clean.
+      # On non-PR runs (the weekly cron, a manual dispatch), surface findings
+      # as a sticky tracking issue. Otherwise the crawl's whole point is
+      # defeated: the job never fails, so a green run with an unread artifact
+      # is indistinguishable from a clean one. The shared composite action
+      # (.github/actions/sticky-issue, also used by the staleness checkers)
+      # opens/updates the issue while the report carries the "Broken links
+      # found" headline and auto-closes it once a crawl comes back clean.
       - name: Open, update, or close tracking issue (non-PR runs)
         if: github.event_name != 'pull_request'
         uses: ./.github/actions/sticky-issue
@@ -319,79 +342,13 @@ jobs:
           label: broken-links
           label-description: Auto-generated reports from check-broken-links.yml
           report-file: ./lychee-report.md
-          # lychee prints an `[Errors]` section header only when something is
-          # broken; its absence means a clean crawl. (Matched literally, not
-          # as a regex - the action uses grep -F.)
-          stale-marker: '[Errors]'
+          # The headline the "Assert the crawl actually ran" step writes only
+          # when the Errors count is non-zero; its absence means a clean crawl.
+          # (Matched literally, not as a regex - the action uses grep -F.)
+          stale-marker: '**Broken links found:'
           footer: >-
             _This issue auto-closes once a scheduled crawl comes back clean.
             Triage guide: NXDOMAIN on two resolvers = genuinely dead, fix the
             link; 403/429 = bot-blocked, exclude it in .lychee.toml._
           # A non-empty close-comment enables auto-close on a clean report.
           close-comment: The latest link crawl found no broken links.
-
-      # Quick scan: did lychee find errors? Sets a step output we use below.
-      # `[Errors]` is the section header lychee prints when something is broken.
-      - name: Check for broken links in report
-        # `id:` gives this step a handle so later steps can read its outputs
-        # via `steps.report.outputs.<name>`.
-        id: report
-        # `github.event_name` is the trigger that started this run. Only do the
-        # comment dance on pull requests - there's no PR to comment on when this
-        # runs from the weekly schedule or a manual click.
-        if: github.event_name == 'pull_request'
-        # `run:` executes shell commands on the runner (default shell: bash).
-        # The `|` keeps this as a multi-line block, run line by line.
-        run: |
-          # If the report file exists AND contains an `[Errors]` section
-          # (`grep -q` = quiet, just succeed/fail; `-E` = extended regex;
-          # the `\[ \]` escape the literal square brackets)...
-          if [ -f ./lychee-report.md ] && grep -qE '\[Errors\]' ./lychee-report.md; then
-            # ...record that we found errors. Appending `name=value` to the
-            # special file named by $GITHUB_OUTPUT is how a step publishes an
-            # output that other steps can read.
-            echo "has_errors=true" >> "$GITHUB_OUTPUT"
-          else
-            # Otherwise record that the report was clean.
-            echo "has_errors=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # If we found errors AND we're on a PR, post a summary comment.
-      # This reads the `has_errors` output set just above; the step is skipped
-      # entirely when the report was clean or we're not on a PR.
-      - name: Comment on PR with broken links
-        if: steps.report.outputs.has_errors == 'true' && github.event_name == 'pull_request'
-        # `github-script` lets us run JavaScript with a ready-to-use, already
-        # authenticated GitHub API client (`github`) and run context info
-        # (`context`) - handy for small API calls without writing a full action.
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
-        with:
-          # The JS to run is passed as the `script:` input below. NOTE: lines
-          # inside this block are literal JavaScript, so any comments here use
-          # `//` (JS style), not `#` - a `#` would be a JS syntax error.
-          script: |
-            const fs = require('fs');
-            let report = '';
-            try {
-              report = fs.readFileSync('./lychee-report.md', 'utf8');
-            } catch (e) {
-              report = 'Error reading link check report';
-            }
-
-            // PR comments have a 65,536-char hard limit. Truncate at 60k to
-            // leave headroom for the wrapper formatting we add below.
-            if (report.length > 60000) {
-              report = report.substring(0, 60000) + '\n\n...(truncated, see artifacts for full report)';
-            }
-
-            let comment = `## :warning: Broken Links Detected\n\n`;
-            comment += report;
-            comment += `\n\n---\nFull report available in workflow artifacts.`;
-
-            // Post the comment on the PR.
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
