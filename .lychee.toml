@@ -30,6 +30,10 @@ exclude = [
   # link could never be caught.
   "^https://(www\\.)?openai\\.com/",  # Apex blocks bots (403); subdomains do not
   "help\\.otter\\.ai",            # Blocks bots (403)
+  # Kit, the mailing-list host. The signup link (csoh.kit.com) is in every
+  # page's footer and answers 403 to bots. Anchored to the host so a name that
+  # only ends in "kit.com" (toolkit.com) is still checked.
+  "^https?://([a-z0-9-]+\\.)*kit\\.com(/|$)",
   "reddit\\.com",                  # Blocks bots (403)
   "rsaconference\\.com",           # Blocks bots (403)
   "sec-consult\\.com",             # Aggressive rate limiting
@@ -103,6 +107,44 @@ exclude = [
   "www\\.beyondtrust\\.com",           # Blocks bots (403)
   "cloud\\.google\\.com/architecture/framework/security/incident-response",  # Works in browser; redirect false-404
   "github\\.com/CloudSecurityOfficeHours/csoh\\.org/security/dependabot",     # Our repo admin-only tab; 404 to anon
+  "apnews\\.com",                      # Blocks bots (403)
+  "bigid\\.com",                       # Blocks bots (403)
+  "blog\\.qualys\\.com",               # Cloudflare challenge (403)
+  "cameronhanes\\.com",                # Rate-limits bots (429)
+  "datadome\\.co",                     # Bot-protection vendor; blocks bots (403)
+  "docs\\.ansible\\.com",              # 429 to CI even at one request a second
+  "www\\.concordaerospace\\.com",      # Shopify store; intermittent 429 to bots
+  "www\\.mendi\\.io",                  # Shopify store; intermittent 429 to bots
+  "labex\\.io",                        # Cloudflare challenge (403); Linux Journey's home
+  "learning\\.cisa\\.gov",             # Login wall; 403 to bots
+  "leetcode\\.com",                    # Blocks bots (403)
+  "securityboulevard\\.com",           # Blocks bots (403)
+  "stackoverflow\\.com",               # Cloudflare challenge (403)
+  "tryhackme\\.com",                   # Rate-limits bots (429)
+  "www\\.adp\\.com",                   # Blocks bots (403)
+  "www\\.appgate\\.com",               # 405 to bots
+  "www\\.comparably\\.com",            # Blocks bots (403)
+  "www\\.deeplearning\\.ai",           # Blocks bots (403)
+  "www\\.fishbowlapp\\.com",           # Blocks bots (403)
+  "www\\.flexjobs\\.com",              # Akamai resets bots' HTTP/2 streams
+  "www\\.humansecurity\\.com",         # Bot-protection vendor; blocks bots (403)
+  "www\\.iso\\.org",                   # Blocks bots (403)
+  "www\\.monster\\.com",               # Blocks bots (403)
+  "www\\.newsbytesapp\\.com",          # Blocks bots (403)
+  "www\\.simplyhired\\.com",           # Blocks bots (403)
+  "www\\.somethingofdoom\\.com",       # Blogger custom domain; Google rate-limits bots (429)
+  "www\\.teamblind\\.com",             # Blocks bots (403)
+  "www\\.theladders\\.com",            # Blocks bots (403)
+  "www\\.usatoday\\.com",              # Paywall answers bots with 402
+  "www\\.whizlabs\\.com",              # Blocks bots (403)
+  # Short or generic names, anchored to the host so they can't match inside
+  # another domain (an unanchored "x\\.com" would skip every *x.com site).
+  "^https://(www\\.|consumer\\.)?ftc\\.gov/",  # Akamai serves bots a fake 404, even for the home page
+  "^https://(www\\.)?x\\.com/",              # Blocks bots (403)
+  "^https://cloud-security\\.slack\\.com/",  # Slack workspace; 403 to bots
+  "^https://gemini\\.google\\.com/",         # HTTP/2 errors to bots
+  "^https://github\\.com/signup",            # GitHub's signup page; 403 to bots
+  "^https://remote\\.co/",                   # Akamai resets bots' HTTP/2 streams (FlexJobs)
 
   # --- Not links: strings inside the published Terraform (infra/terraform/**.tf) ---
   #
@@ -136,3 +178,15 @@ max_concurrency = 10
 
 # Mail addresses are excluded by default in lychee v0.21+.
 # To opt in, set include_mail = true.
+
+# --- Per-host pacing (TOML tables: these must stay after every top-level key) ---
+#
+# Hosts that are live and answer a browser fine, but fail when the crawl sends
+# them many requests at once. Slowing down keeps their links CHECKED, which an
+# exclude would not. Only a full crawl pays this: PR runs skip links the cache
+# already vouches for.
+[hosts."github.com"]
+# Hundreds of github.com links; at the default pace GitHub answers some of our
+# own repo's blob pages with 503.
+concurrency = 2
+request_interval = "250ms"

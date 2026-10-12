@@ -149,7 +149,7 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->115<!--/count--> weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->116<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
 
@@ -159,7 +159,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else liv
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->730+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->760+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -369,7 +369,7 @@ Version-control fundamentals - branching, commits, pull requests, and history hy
 The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources ([`resources.html`](https://csoh.org/resources.html))
-Comprehensive catalog of **<!--count:resources_floor-->730+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->8<!--/count--> categories:
+Comprehensive catalog of **<!--count:resources_floor-->760+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->8<!--/count--> categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->80+<!--/count--> entries)
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -416,13 +416,13 @@ Comprehensive catalog of **<!--count:resources_floor-->730+<!--/count--> cloud s
 - **Interview Prep** - Technical interview guides
 - **Career Development** - Mentorship, networking resources
 
-#### 📬 Cloud Security Newsletters (<!--count:cat_news-->47<!--/count--> entries)
+#### 📬 Cloud Security Newsletters (<!--count:cat_news-->50<!--/count--> entries)
 - **Cloud & AppSec** - tl;dr sec, CloudSecList, AWS Security Digest, Cloud Security Newsletter, Resilient Cyber
 - **AI security** - Agentic Security Newsletter, Unsupervised Learning
 - **Specialist** - Detection Engineering Weekly, This Week in 4n6, Latio Pulse, The Cloud Security Guy (careers)
 - **News digests** - SANS NewsBites, Risky Bulletin, this week in security, TLDR InfoSec, Metacurity, Vulnerable U, Crypto-Gram
 
-#### 🐙 Cloud Security GitHub Projects (<!--count:cat_github-->102<!--/count--> entries)
+#### 🐙 Cloud Security GitHub Projects (<!--count:cat_github-->105<!--/count--> entries)
 - **Posture & audit** - Prowler, ScoutSuite, Cloud Custodian, Steampipe, Cartography
 - **IaC, images & policy as code** - Trivy, Checkov, OPA, Conftest, Kyverno
 - **Kubernetes, runtime & supply chain** - Kubescape, Falco, Cosign, in-toto, Harden-Runner
@@ -471,7 +471,7 @@ Archive of past Zoom session presentations:
 
 ### 📝 Meeting Recaps ([`meetings.html`](https://csoh.org/meetings.html))
 Topic-by-topic recaps of every weekly session:
-- **<!--count:meetings-->115<!--/count--> meeting recaps** with per-topic summaries and speaker notes
+- **<!--count:meetings-->116<!--/count--> meeting recaps** with per-topic summaries and speaker notes
 - Searchable, filterable by tag (AWS, Azure, AI, supply chain, conferences, etc.)
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
@@ -738,7 +738,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (115 entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (116 entries, topic-by-topic)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
@@ -779,7 +779,7 @@ csoh.org/
 │
 │  ── Subdirectory page sets ──
 ├── breaches/                   # 46 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 115 per-meeting recap pages (split from meetings.html)
+├── meetings/                   # 116 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
 ├── howto/                      # 16 how-to guides: policy, query and SIEM detection languages
@@ -1077,7 +1077,7 @@ The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five
 | [`update-news.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
 | [`update-resources.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
 | [`update-counts.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
-| [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens an auto-approved PR for a human to merge |
+| [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens a PR for a human to approve and merge |
 | [`site-update-deploy.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI, URL safety, normalization, schema, sitemap, previews |
 
 **Deploy**
@@ -1171,7 +1171,7 @@ In addition to the URL normalization that runs as part of every deploy, a **stan
   - Strips tracking parameters (`utm_*`, `fbclid`, `gclid`, `msclkid`, etc.)
   - Upgrades HTTP links to HTTPS
   - Resolves redirecting URLs to their final destinations
-- **Output:** Creates a PR with a detailed report of all changes, auto-approved for review
+- **Output:** Creates a PR with a detailed report of all changes, left un-approved for a human to review and merge
 
 **Full docs:** See [tools/UPDATE_SRI_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md), [tools/GENERATE_PREVIEW_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/GENERATE_PREVIEW_README.md), [tools/UPDATE_NEWS_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_NEWS_README.md), and [tools/CHECK_URL_SAFETY_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_URL_SAFETY_README.md)
 
@@ -1323,7 +1323,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->302<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->303<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1334,7 +1334,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->288<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->115<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->289<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->116<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

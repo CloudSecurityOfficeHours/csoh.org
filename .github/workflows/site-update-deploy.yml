@@ -30,7 +30,9 @@
 # original content push that triggered this workflow (both watch main with
 # path filters). The commits made here land in main so they're baked into
 # the next deploy - this workflow keeps SRI/sitemap/previews in sync in the
-# repo, it does not itself publish.
+# repo, it does not itself publish. The one exception is new preview images,
+# which deploy.yml cannot regenerate in its build: when they are pushed, the
+# `redeploy-for-previews` job starts deploy.yml so they go live.
 # =============================================================================
 
 # This whole file is a "workflow": a set of automated jobs that GitHub runs
@@ -160,6 +162,11 @@ jobs:
     # headroom for the slowest legitimate run (a full cache-expired URL
     # re-resolve plus a large preview batch) while still bounding the lock.
     timeout-minutes: 60
+    # A job's `outputs:` are how a LATER job reads a value from this one.
+    # `redeploy-for-previews` (at the bottom) reads this to decide whether to
+    # run at all.
+    outputs:
+      previews_pushed: ${{ steps.commit_previews.outputs.pushed }}
     # `steps:` is the ordered list of actions/commands the job runs, top to
     # bottom, on that VM. Each `- name:` below is one step.
     steps:
@@ -568,7 +575,11 @@ jobs:
       # the credentials persisted by actions/checkout (which used the App
       # token) - same pattern as the SRI / sitemap / normalize steps above.
       # No need to embed the token in the remote URL.
+      #
+      # Publishes `pushed=true` only once the push has succeeded, which is what
+      # starts the `redeploy-for-previews` job below.
       - name: Commit and push preview images
+        id: commit_previews
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -587,4 +598,52 @@ jobs:
           else
             git commit -m "chore: auto-generate preview images and sync HTML paths [skip ci]"
             git push || (git pull --rebase origin main && git push)
+            # Reached only if a push above succeeded: a failed retry fails
+            # the step before this line.
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
           fi
+
+  # ---------------------------------------------------------------------------
+  # Publish the previews the job above just pushed.
+  # ---------------------------------------------------------------------------
+  # Housekeeping commits carry a CI-skip marker, so they never trigger
+  # deploy.yml, and deploy.yml regenerates most of what housekeeping makes
+  # inside its own build. Preview screenshots are the exception: they need
+  # Playwright and minutes. So the deploy started by the content push ships
+  # cards that name previews that don't exist yet, and those images 404 in
+  # production until something else deploys. This job starts that deploy as
+  # soon as the previews are on main.
+  #
+  # It is a separate job so that `actions: write` (permission to start a
+  # workflow) belongs to one API call, not to the job above, which loads
+  # untrusted web pages in a browser.
+  #
+  # It cannot loop: deploy.yml never pushes, so it never triggers this
+  # workflow. If the content push's deploy is still running, the dispatched
+  # one waits behind it on deploy.yml's `deploy` lock and publishes after it,
+  # so the newest main is what ends up live.
+  redeploy-for-previews:
+    # `needs:` waits for that job to finish successfully; `if:` then reads the
+    # output it published.
+    needs: update-sri-and-previews
+    if: needs.update-sri-and-previews.outputs.previews_pushed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Job-level `permissions:` REPLACE the workflow-level block for this job,
+    # so this token can start workflows and nothing else. It does not even
+    # read the code: nothing here checks the repo out.
+    permissions:
+      actions: write
+    steps:
+      # GITHUB_TOKEN-authored events normally can't start workflows, but
+      # workflow_dispatch is one of the two exceptions (repository_dispatch is
+      # the other), so the default token is enough. A dispatched run builds the
+      # tip of `ref` as it is now, which includes the preview commit.
+      - name: Dispatch deploy.yml on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/dispatches" \
+            -f ref=main
+          echo "Dispatched deploy.yml on main to publish the new previews."
