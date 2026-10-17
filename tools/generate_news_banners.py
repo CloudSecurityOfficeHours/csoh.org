@@ -48,6 +48,7 @@ SOURCES = {
     # headless browsers, so the capture is an ad gate rather than the site.
     # Its cards render without a banner, which the template handles.
     "riskybusiness":          "https://news.risky.biz/",
+    "joho-todai":             "https://joho-todai.com/",
     # Cloud Security Research
     "wiz":                    "https://www.wiz.io/blog",
     "orca-security":          "https://orca.security/resources/blog/",

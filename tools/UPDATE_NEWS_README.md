@@ -5,8 +5,8 @@
 The [News page](https://csoh.org/news.html) is updated **automatically every 3 hours** - no one has to manually add articles. The script also generates an **RSS feed** (`feed.xml`) so subscribers get updates automatically. Here's how it works in plain English:
 
 1. **GitHub Actions** (a free automation service built into GitHub) runs a Python script on a schedule - every 3 hours.
-2. The script visits **62 cloud security news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries. Fetching the feeds and following each article's redirects both run in parallel, which is what keeps a run to about two minutes; done one at a time the same work took over twenty.
-3. The script filters those articles for **cloud security topics** (looking for keywords like "AWS", "Azure", "Kubernetes", "vulnerability", "breach", etc.) and throws out duplicates.
+2. The script visits **<!--count:feeds-->63<!--/count--> news sources** and checks for new articles using something called **RSS feeds**. An RSS feed is like a news wire - it's a machine-readable list of recent articles that a website publishes so other tools can easily pull in headlines, dates, and summaries. Fetching the feeds and following each article's redirects both run in parallel, which is what keeps a run to about two minutes; done one at a time the same work took over twenty.
+3. The script filters those articles for **cloud security topics** (looking for keywords like "AWS", "Azure", "Kubernetes", "vulnerability", "breach", etc.) and throws out duplicates. A feed marked `"general": True` covers technology at large, where those broad keywords would also match product and policy news, so its articles must instead match the narrower `SECURITY_KEYWORDS` ("vulnerab", "breach", "malware", ...) and never take part in the top-up in step 5.
 4. **Existing cards on `news.html` are preserved across runs.** RSS feeds are rolling windows, so today-dated articles from earlier runs would otherwise get dropped when feeds rotate. The script parses the current `news.html`, then merges in whatever new items this run's feeds surfaced, sorted by date and capped at 120 articles.
 5. If after that merge fewer than **10 today-dated articles** are on the page, the script tops up from a **relaxed-filter pool** - today-dated items from the same security feeds that didn't hit the strict keyword filter. The target is tunable with `--today-target`.
 6. No single source may take more than **12 of the 120 cards** (`--per-source-cap`, 0 disables). Some feeds re-publish their whole back catalog under a handful of recent dates, which on a plain newest-first cut hands one vendor a fifth of the page. If the cap can't be met because too few sources are reporting, the over-cap items backfill rather than leaving the page short, so a quiet day still fills. Sources held back are named on stderr - one appearing far over the cap is usually re-stamping old posts rather than genuinely publishing that much.
@@ -19,7 +19,7 @@ The [News page](https://csoh.org/news.html) is updated **automatically every 3 h
 
 ---
 
-## News Sources (62 feeds)
+## News Sources (63 feeds)
 
 The script pulls from these trusted, non-paywalled sources:
 
@@ -104,6 +104,12 @@ The script pulls from these trusted, non-paywalled sources:
 | Qualys Blog | Vulnerability research and patch guidance |
 | Trail of Bits Blog | Applied cryptography and security engineering research |
 | watchTowr Labs | Edge-device and enterprise-appliance exploit research |
+
+### General Technology (security articles only)
+
+| Source | What It Covers |
+|--------|---------------|
+| Joho no Todai | Source-linked technology reporting from Japan (English edition); only its security articles are used |
 
 Want to **add a new source**? You have two options:
 

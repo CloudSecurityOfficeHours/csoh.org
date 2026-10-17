@@ -233,7 +233,7 @@ csoh.org/
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection, live edge-header verification)
 ├── .github/workflows/      # CI/CD pipelines (21 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy, check-mobile-layout, security-impact-review, deploy-qa, promote-qa, publish-recaps, weekly-docs-review)
-└── update_news.py          # News aggregation from 62 RSS feeds
+└── update_news.py          # News aggregation from 63 RSS feeds
 ```
 
 ### Workflows at a Glance
@@ -244,7 +244,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
-| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls 62 RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
+| [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls <!--count:feeds-->63<!--/count--> RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
 | [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the six `resources-*.html` category pages; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is `resources-*.html` only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - human approves and merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
@@ -404,7 +404,7 @@ QA run and is therefore unpromotable.
 - The self-hosted third-party files in `vendor/` are SRI-hashed too, but not identically: `vendor/goatcounter-count.js` is in `update_sri.py`'s `ASSETS` list and is re-stamped automatically, while `vendor/minisearch-7.1.2.min.js` carries a hand-stamped `integrity` in `search.html` and no `?v=` cache-bust (the file is pinned to a version and never regenerated). `goatcounter-count.js` is also **not** a pristine upstream copy - it carries two local patches. See [vendor/README.md](vendor/README.md) before you touch or re-vendor anything in that directory
 
 **News Aggregation**
-- `update_news.py` pulls from 62 RSS/Atom feeds every 3 hours (via GitHub Actions)
+- `update_news.py` pulls from <!--count:feeds-->63<!--/count--> RSS/Atom feeds every 3 hours (via GitHub Actions)
 - Generates `news.html` and `feed.xml`, regenerates the `NewsArticle` JSON-LD block on `news.html`, and refreshes `sitemap.xml` lastmod dates
 - Preserves cards already on `news.html` across runs so today-dated items don't disappear when RSS feeds rotate
 - PRs are auto-created and auto-merged if only `news.html`, `feed.xml`, and `sitemap.xml` changed

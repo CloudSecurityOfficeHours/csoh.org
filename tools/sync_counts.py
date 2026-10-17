@@ -444,6 +444,7 @@ HTML_PROSE_RULES = [
     # of this sentence carries a <!--count:feeds--> marker; this rule keeps the
     # schema copy in step with it.
     (r"\d+ trusted RSS feeds", "{feeds} trusted RSS feeds"),
+    (r"aggregated from our \d+ sources", "aggregated from our {feeds} sources"),
     # glossary.html states its own size where a marker cannot sit: the <title>,
     # three content="..." descriptions, the search box's placeholder attribute,
     # and the no-JS starting value of its "N terms shown" counter. The chart on
@@ -549,6 +550,10 @@ MD_PROSE_RULES = [
     (r"across the \d+ chains", "across the {breaches} chains"),
     (r"\(\d+ RSS feeds, runs every 3 hours\)",
      "({feeds} RSS feeds, runs every 3 hours)"),
+    (r"# News aggregation from \d+ RSS feeds",
+     "# News aggregation from {feeds} RSS feeds"),
+    # A heading, where a marker would change GitHub's anchor for it.
+    (r"## News Sources \(\d+ feeds\)", "## News Sources ({feeds} feeds)"),
     (r"# \d+ CI/CD workflows", "# {workflows} CI/CD workflows"),
     (r"cloud CTF directory \(\d+\+? challenges\)",
      "cloud CTF directory ({ctfs} challenges)"),

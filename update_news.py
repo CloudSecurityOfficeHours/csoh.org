@@ -50,6 +50,9 @@ FEEDS = [
     {"name": "CISA Alerts", "url": "https://www.cisa.gov/uscert/ncas/alerts.xml"},
     {"name": "CISA Current Activity", "url": "https://www.cisa.gov/uscert/ncas/current-activity.xml"},
     {"name": "CISA Bulletins", "url": "https://www.cisa.gov/uscert/ncas/bulletins.xml"},
+    # General technology news: "general" admits only items that match
+    # SECURITY_KEYWORDS (see build_entries).
+    {"name": "Joho no Todai", "url": "https://joho-todai.com/en/rss/", "general": True},
     # Cloud Security Research
     {"name": "Wiz Blog", "url": "https://www.wiz.io/feed/rss.xml"},
     {"name": "Orca Security Blog", "url": "https://orca.security/resources/blog/feed/"},
@@ -108,6 +111,18 @@ KEYWORDS = {
     "scam", "fraud", "social engineering", "credential", "identity theft",
     "siem", "ssrf", "misconfiguration", "saml", "oauth", "infostealer",
 }
+
+# KEYWORDS assumes a security-focused feed: on a general technology feed its
+# broad terms ("ai", "research", "cloud") admit product and policy news. Items
+# from feeds marked "general" must match one of these instead.
+SECURITY_KEYWORDS = {
+    "security", "vulnerab", "cve", "cves", "exploit", "zero-day", "breach",
+    "data leak", "malware", "ransomware", "phishing", "spyware", "backdoor",
+    "botnet", "infostealer", "cyberattack", "attacker", "hacker",
+    "credential", "prompt injection",
+}
+
+GENERAL_SOURCES = {f["name"] for f in FEEDS if f.get("general")}
 
 CATEGORY_KEYWORDS = {
     "breach": ["breach", "data leak", "exposed", "leak", "compromise"],
@@ -236,6 +251,11 @@ def _word_match(keyword: str, text: str) -> bool:
 def is_relevant(text: str) -> bool:
     lower = text.lower()
     return any(_word_match(kw, lower) for kw in KEYWORDS)
+
+
+def is_security_news(text: str) -> bool:
+    lower = text.lower()
+    return any(_word_match(kw, lower) for kw in SECURITY_KEYWORDS)
 
 
 def classify_category(text: str) -> str:
@@ -514,6 +534,7 @@ SOURCE_SLUGS = {
     "AWS Security Bulletins": "aws-security-bulletins",
     "The Record": "therecord",
     "Risky Business News": "riskybusiness",
+    "Joho no Todai": "joho-todai",
     # Cloud Security Research
     "Wiz Blog": "wiz",
     "Orca Security Blog": "orca-security",
@@ -1012,7 +1033,12 @@ def build_entries(
         existing_urls.add(resolved)
 
         combined = f"{item['title']} {item.get('summary', '')}"
-        if is_relevant(combined):
+        if item["source"] in GENERAL_SOURCES:
+            # A general feed's misses are mostly not security news, so they
+            # never join the relaxed today pool below.
+            if is_security_news(combined):
+                collected.append(item)
+        elif is_relevant(combined):
             collected.append(item)
         else:
             pub_dt = parse_date(item.get("published", ""))
