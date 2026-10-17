@@ -14,6 +14,14 @@ need a gate of their own.
 coverage has to be derived from what the repo actually contains: **enumerate
 by what exists, not by the pattern you were already thinking about.**
 
+**lychee is told not to crawl this repo's own GitHub pages.** Every link
+from a published page to `.../csoh.org/blob/main/<path>` or `tree/main/` is
+answered by the checkout itself, so `.lychee.toml` excludes them and this
+gate resolves them here. Over the network they are the slowest way to learn
+the answer: GitHub answers a burst of blob-page requests with 503s, and on a
+pull request lychee would test `main` rather than the branch that renamed
+the file.
+
 **A count marker inside a code fence renders as literal text.** Fences are
 verbatim, so `<!--count:meetings-->109<!--/count-->` in a directory tree is
 displayed to every reader on GitHub. Counts in a fence belong to
@@ -30,6 +38,8 @@ WHAT IT ASSERTS
    directory appearing nowhere is how a tree goes uncrawled.
 4. No count marker sits inside a code fence, except the documented examples in
    `MARKER_EXAMPLES`.
+5. Every link from a published page or published `.tf` file into this repo on
+   GitHub (`blob/main/`, `tree/main/`) names a path in the checkout.
 
 `CATALOGS` is deliberately narrow. README.md and DEVELOPMENT.md each carry a
 full directory tree and so owe a coverage contract; CONTRIBUTING.md names ~54
@@ -56,6 +66,7 @@ import posixpath
 import re
 import sys
 from pathlib import Path, PurePosixPath
+from urllib.parse import unquote
 
 REPO = Path(__file__).resolve().parent.parent
 README = REPO / "README.md"
@@ -132,6 +143,36 @@ def unresolved(targets: set[str], exists=None) -> list[str]:
     """Targets with no corresponding path. `exists` is injectable for the self-test."""
     exists = exists or (lambda p: (REPO / p).exists())
     return sorted(t for t in targets if not exists(t))
+
+
+# A link into this repo on GitHub, as a published page writes it. The path
+# stops at a quote, bracket, whitespace, fragment or query, so `#L32-L41` line
+# anchors and the closing quote of an href are not part of it.
+OWN_REPO_LINK_RE = re.compile(
+    r"https://github\.com/CloudSecurityOfficeHours/csoh\.org/(?:blob|tree)/main/"
+    r"([^\s\"'<>()#?]+)")
+
+
+def own_repo_targets(text: str) -> set[str]:
+    """Repo paths named by GitHub blob/tree links in a page or .tf file.
+
+    Trailing sentence punctuation is dropped: a URL that ends a comment in a
+    .tf file is often followed by a full stop that is not part of the path.
+    """
+    out = set()
+    for m in OWN_REPO_LINK_RE.finditer(text):
+        path = unquote(m.group(1)).rstrip(".,;:").rstrip("/")
+        if path:
+            out.add(path)
+    return out
+
+
+def published_sources() -> list[Path]:
+    """What the link crawler reads: every published page and the published .tf."""
+    out = sorted(REPO.glob("*.html"))
+    for d in published_subdirs():
+        out += sorted((REPO / d).glob("*.html"))
+    return out + sorted(REPO.glob("infra/terraform/*/*.tf"))
 
 
 def published_subdirs() -> list[str]:
@@ -280,6 +321,21 @@ def self_test() -> list[str]:
     if globs and globs[0].match("index.html"):
         bad.append("placeholder glob matched an unrelated page")
 
+    # Own-repo GitHub links: lychee no longer crawls them, so this detector is
+    # the only thing that would notice one going stale.
+    page = (f'<a href="{GITHUB_BLOB}__missing__.html">x</a> '
+            f'<a href="{GITHUB_BLOB}resources.html#L32-L41">y</a> '
+            f'see {GITHUB_TREE}infra/terraform/. '
+            '<a href="https://github.com/someone/else/blob/main/__missing__.md">z</a>')
+    found = own_repo_targets(page)
+    if found != {"__missing__.html", "resources.html", "infra/terraform"}:
+        bad.append(f"own-repo link extractor found {sorted(found)}, not the three planted links")
+    if unresolved(found) != ["__missing__.html"]:
+        bad.append("own-repo link resolver did not flag exactly the one missing file")
+    sources = published_sources()
+    if not any(p.suffix == ".tf" for p in sources) or not any(p.parent != REPO for p in sources):
+        bad.append("published-source sweep missed the .tf files or the subdirectory pages")
+
     fenced = "```\n├── x.html  # <!--count:meetings-->9<!--/count--> recaps\n```"
     if not visible_markers(fenced):
         bad.append("visible-marker check missed a marker inside a code fence")
@@ -337,8 +393,15 @@ def main() -> int:
         visible += [f"{doc.relative_to(REPO)}:{m}" for m in visible_markers(
             doc.read_text(encoding="utf-8"))]
 
+    own_links, own_total = [], 0
+    for src in published_sources():
+        targets = own_repo_targets(src.read_text(encoding="utf-8", errors="ignore"))
+        own_total += len(targets)
+        own_links += [f"{src.relative_to(REPO)}: {t}" for t in unresolved(targets)]
+
     findings: list[tuple[str, list[str]]] = [
         ("Markdown links pointing at files that do not exist", broken_links),
+        ("GitHub links from published pages to paths not in this repo", own_links),
         ("Root pages named nowhere in a catalog doc", uncovered),
         ("Entries in NOT_IN_README that no longer exist", stale_optouts()),
         ("Published subdirectories not documented in a catalog doc", undocumented),
@@ -351,6 +414,8 @@ def main() -> int:
           f"{', '.join(published_subdirs())})")
     print(f"Checked {link_total} in-repo links across {len(tracked_docs())} Markdown docs, "
           f"and {len(list(REPO.glob('*.html')))} root pages against {', '.join(CATALOGS)}.")
+    print(f"Checked {own_total} links into this repo on GitHub across "
+          f"{len(published_sources())} published pages and .tf files.")
 
     for label, items in findings:
         if items:

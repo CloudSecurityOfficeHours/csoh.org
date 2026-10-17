@@ -669,6 +669,10 @@ tools/check_readme_coverage.py --check` (in `validate-html.yml`) asserts:
   shortlist and deliberately excluded);
 - every published subdirectory (derived by globbing for `*.html`) is
   documented and is in `check-broken-links.yml`'s inputs;
+- every link from a published page or `.tf` file into this repo on GitHub
+  (`.../csoh.org/blob/main/<path>`, `tree/main/`) names a path in the
+  checkout. `.lychee.toml` excludes exactly those two shapes, so this is the
+  only check that sees them;
 - no count marker sits inside a code fence, where it would render literally.
 
 Page families collapsed behind `<placeholder>` tokens are expanded from the
