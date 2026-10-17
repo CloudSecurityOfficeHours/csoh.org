@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-10-17">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="opa tutorial">
@@ -62,7 +62,7 @@
       "totalTime": "PT90M",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-08-24",
+      "dateModified": "2026-10-17",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -349,9 +349,10 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-10-17">Last updated <strong>2026-10-17</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner to intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal, the <code>opa</code> binary, and optionally Docker for the Conftest step</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> every policy, test and command on this page, including the exercise answers, was run with OPA 1.21.2, Conftest 0.71.1 and Regal 0.43.0 on an Apple silicon Mac, and the outputs described are what they printed. The Terraform plan in step 5 was made with Terraform 1.15.7 and AWS provider 5.100.0 using dummy credentials, so its JSON is real but no AWS account was involved and nothing was applied.</p>
         </div>
 
         <section id="intro">
@@ -482,9 +483,10 @@ deny contains msg if {
     rc.type == "aws_s3_bucket_public_access_block"
 
     # Only judge resources that will exist afterwards. A destroy has
-    # change.after == null, and reading fields off null is undefined,
-    # which would silently skip the check rather than pass it.
-    "delete" not in rc.change.actions
+    # change.after == null; reading a field off null is undefined, and
+    # `not` turns undefined into a match, so without this line deleting
+    # the resource would be reported as a violation.
+    not "delete" in rc.change.actions
 
     not rc.change.after.block_public_acls == true
     msg := sprintf("%v does not block public ACLs", [rc.address])
@@ -494,6 +496,7 @@ brew install conftest
 conftest test --policy policy/ tfplan.json
 
 echo $?    # 0 = no denials, 1 = at least one. This is your CI gate.</pre></div>
+            <p>Read the output as well as the exit code. A policy that fails to load also exits 1, so a syntax error looks exactly like a denial to a gate that checks only <code>$?</code>.</p>
 
             <h3>6. Unit-test the policy itself</h3>
             <p>A policy is code that decides whether other code ships. Untested, it is the least trustworthy thing in the pipeline. OPA has a test runner built in: any rule named <code>test_*</code> is a test, and it passes if it evaluates to true.</p>
@@ -532,6 +535,7 @@ opa check --strict policy/  # --strict rejects unused vars, shadowed names, and
 # Regal is a dedicated Rego linter and catches idiom problems opa check does not.
 brew install regal
 regal lint policy/</pre></div>
+            <p>Run against this page's own <code>policy/</code> directory after <code>opa fmt</code>, Regal reports five findings and no bugs: the package name does not mirror the directory, the tests share package <code>main</code> with the policy instead of living in <code>main_test</code>, and there is no entrypoint annotation. Conftest's <code>main</code> default explains the first two. Treat each as a convention to adopt, or to switch off in Regal's configuration on purpose.</p>
             <p>Put <code>opa check --strict</code> and <code>opa test</code> in <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> next to the gate itself. A policy repository where the policies are not tested is a repository that will eventually block a deploy for the wrong reason, and the fastest way to get policy-as-code removed from a pipeline is to have it be wrong once at a bad moment.</p>
         </section>
 
@@ -541,23 +545,24 @@ regal lint policy/</pre></div>
 
             <div class="exercise">
                 <span class="exercise__label">Exercise 1</span>
-                <p>Write a rule that denies any <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> instance in a Terraform plan whose <code>change.after.metadata_options.http_tokens</code> is not <code>"required"</code>. That setting is what forces <a class="glossary-link" href="../glossary.html#term-imds">IMDSv2</a>, and a missing <code>metadata_options</code> block is the default-insecure case that matters most.</p>
+                <p>Write a rule that denies any <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> instance in a Terraform plan whose <code>metadata_options</code> block does not set <code>http_tokens</code> to <code>"required"</code>. That setting is what forces <a class="glossary-link" href="../glossary.html#term-imds">IMDSv2</a>, and a missing <code>metadata_options</code> block is the default-insecure case that matters most.</p>
                 <details>
                     <summary>Show the answer</summary>
 <div class="code-block" data-lang="rego"><pre>deny contains msg if {
     some rc in input.resource_changes
     rc.type == "aws_instance"
-    "delete" not in rc.change.actions
-    not rc.change.after.metadata_options.http_tokens == "required"
+    not "delete" in rc.change.actions
+    not rc.change.after.metadata_options[0].http_tokens == "required"
     msg := sprintf("%v does not require IMDSv2", [rc.address])
 }</pre></div>
-                    <p>The <code>not ... == "required"</code> form is doing the real work. If you wrote <code>rc.change.after.metadata_options.http_tokens == "optional"</code> you covered the explicitly-bad case and missed the far more common one where the block is absent entirely.</p>
+                    <p>The <code>not ... == "required"</code> form is doing the real work. If you wrote <code>rc.change.after.metadata_options[0].http_tokens == "optional"</code> you covered the explicitly-bad case and missed the far more common one where the block is absent entirely.</p>
+                    <p>Note the <code>[0]</code>. In plan JSON a nested block such as <code>metadata_options</code> is a list, even when it can appear only once. Without the index, <code>metadata_options.http_tokens</code> is undefined on every instance, and the <code>not</code> flags the compliant ones too.</p>
                 </details>
             </div>
 
             <div class="exercise">
                 <span class="exercise__label">Exercise 2</span>
-                <p>This rule never fires, no matter what you feed it. Find out why without changing the input.</p>
+                <p>Your Terraform plan opens SSH (port 22) to <code>0.0.0.0/0</code>, and this rule never fires against it. Find out why without changing the input.</p>
 <div class="code-block" data-lang="rego"><pre>deny contains msg if {
     some rc in input.resource_changes
     rc.type == "aws_security_group_rule"
@@ -567,14 +572,14 @@ regal lint policy/</pre></div>
 }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
-                    <p><code>=</code> is not <code>==</code>. A single <code>=</code> is unification, which here <em>assigns</em> 22 to a fresh binding rather than comparing against it, so that line succeeds no matter what the port is. That is not the bug that stops the rule firing, though; it is the one that would make it fire too often. Run <code>opa check --strict</code> and you get told directly.</p>
-                    <p>The reason nothing fires is more mundane and more common: in a Terraform plan, <code>from_port</code> is a number and the surrounding structure is <code>cidr_blocks</code>, but real <code>aws_security_group_rule</code> resources frequently express the same thing through <code>aws_vpc_security_group_ingress_rule</code> with a <code>cidr_ipv4</code> field instead. A type filter that names a resource type your plan does not contain produces an empty iteration and therefore an empty deny set, forever, with no error.</p>
-                    <p>The habit worth building: before debugging the logic, prove the iteration is finding anything at all.</p>
+                    <p>Before you debug the logic, prove the iteration is finding anything at all:</p>
 <div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d policy/ -i tfplan.json \
   'data.main.deny'                                     # [] tells you nothing
 
 opa eval --format pretty -i tfplan.json \
   '[rc.type | some rc in input.resource_changes]'      # what types are ACTUALLY here?</pre></div>
+                    <p>If the second query lists <code>aws_vpc_security_group_ingress_rule</code> and no <code>aws_security_group_rule</code>, that is the answer. The plan defines its SSH rule with the newer resource, which takes a single <code>cidr_ipv4</code> string instead of a <code>cidr_blocks</code> list. A type filter that names a type the plan does not contain produces an empty iteration and therefore an empty deny set, forever, with no error. Against a plan that does use <code>aws_security_group_rule</code>, the rule fires as intended.</p>
+                    <p>The single <code>=</code> on the port line is a separate smell, not the bug. <code>=</code> is unification: with both sides known, as here, it compares exactly as <code>==</code> would, but when one side is an unbound variable it binds instead, and the line always succeeds. Use <code>==</code> to compare and <code>:=</code> to assign. Regal flags this line ("Prefer <code>==</code> for equality comparison"); <code>opa check --strict</code> does not.</p>
                 </details>
             </div>
 
@@ -621,7 +626,7 @@ deny contains msg if {
                 <li><strong>Judging resources that are being destroyed.</strong> A Terraform plan's <code>resource_changes</code> includes deletions, and <code>change.after</code> is <code>null</code> for those. Filter on <code>change.actions</code> or your gate will report findings about resources that are on their way out.</li>
                 <li><strong>Only testing the deny direction.</strong> A policy that denies everything passes every deny test you will ever write.</li>
                 <li><strong>Forgetting that Conftest defaults to package <code>main</code>.</strong> Policies in <code>package storage</code> are silently not evaluated unless you pass <code>--namespace storage</code> or <code>--all-namespaces</code>. Zero findings and zero policies loaded look the same from the outside.</li>
-                <li><strong>Skipping <code>opa check --strict</code>.</strong> Single <code>=</code> where you meant <code>==</code>, an unused variable, a typo in a field name: all of these parse fine and quietly change what the policy means.</li>
+                <li><strong>Skipping <code>opa check --strict</code> and Regal.</strong> <code>opa check --strict</code> rejects an unused variable, and Regal flags a single <code>=</code> where you meant <code>==</code>. A typo in a field name passes both, because a misspelled field is just an undefined reference, so only a test with a realistic input catches it.</li>
             </ul>
         </section>
 
