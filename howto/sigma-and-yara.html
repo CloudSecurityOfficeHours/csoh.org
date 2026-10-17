@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-10-17">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="sigma rules">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-08-24",
+      "dateModified": "2026-10-17",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -361,9 +361,10 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-10-17">Last updated <strong>2026-10-17</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Python for <code>sigma-cli</code>, and <code>yara-x</code> for the YARA half. No SIEM required.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> the Sigma rules and commands were run as printed with sigma-cli 3.1.0 (pySigma 1.5.0, Splunk backend 2.1.0), and the YARA rules and commands with yara-x-cli 1.20.0, on an Apple silicon Mac; the outputs shown are what they printed. The install commands in steps 1 and 6 were not re-run, because both tools were already installed, and the correlation rule was converted for Splunk only.</p>
         </div>
 
         <section id="intro">
@@ -405,6 +406,7 @@ sigma plugin install splunk</pre></div>
             <p>Save this as <code>aws_cloudtrail_access_denied_burst.yml</code>. The filename matters more than you would expect, and step 3 explains why.</p>
 <div class="code-block" data-lang="yaml"><pre>title: Access Denied Burst From Single Source
 id: 7c8f1f2a-3b4c-4d5e-8f90-1a2b3c4d5e6f     # a UUID, generated once, never reused
+name: aws_cloudtrail_access_denied            # what a correlation rule calls it (step 5)
 status: experimental                          # experimental | test | stable | deprecated
 description: Repeated AccessDenied results from one source, a common sign of
   credential validation or enumeration after a key leak.
@@ -456,9 +458,9 @@ sigma convert -t splunk --without-pipeline aws_cloudtrail_access_denied_burst.ym
             <p>Read what the compiler did. <code>|startswith</code> became a trailing <code>*</code>, and <code>not</code> became <code>NOT</code>. That is the whole value proposition: the same rule targets Elastic, Sentinel, QRadar, Carbon Black, or SentinelOne by changing one flag, and each backend knows its own dialect's quirks.</p>
 
             <h3>5. Correlation rules</h3>
-            <p>The rule above fires on a single denied event, which is noisy and not really what the title claims. "A burst" is a count over a window, and that needs a <a href="https://github.com/SigmaHQ/sigma-specification/" target="_blank" rel="noopener noreferrer">Sigma correlation rule</a>: a second YAML document that references the first by name.</p>
+            <p>The rule above fires on a single denied event, which is noisy and not really what the title claims. "A burst" is a count over a window, and that needs a <a href="https://github.com/SigmaHQ/sigma-specification/" target="_blank" rel="noopener noreferrer">Sigma correlation rule</a>: a second YAML document that references the first by name. Append it to the same file: its <code>rules:</code> entry points at the <code>name:</code> line from step 2, and without that line sigma-cli rejects the pair because the rule is "not found in rule collection". It also needs a title of its own, or <code>sigma check</code> reports a high-severity duplicate title.</p>
 <div class="code-block" data-lang="yaml"><pre>---
-title: Access Denied Burst From Single Source
+title: Access Denied Burst From Single Source - 10 in 10 Minutes
 id: 1f2e3d4c-5b6a-4789-9012-3456789abcde
 status: experimental
 correlation:
