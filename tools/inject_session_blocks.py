@@ -94,8 +94,10 @@ TOPIC_KEYWORDS: dict[str, list[str]] = {
     "github-actions.html": ["github actions"],
     "api-security.html": ["api security", "api gateway", "api abuse"],
     "network-security.html": ["security groups", "vpc peering", "network segmentation",
-                              "cloud network", "network security"],
-    "data-security.html": ["data security posture", "data classification", "encryption at rest",
+                              "cloud network", "network security", "network controls",
+                              "network egress", "egress control", "egress filtering",
+                              "firewall"],
+    "data-security.html": ["data security", "data classification", "encryption at rest",
                            "data exfiltration", "data loss prevention", "bucket security",
                            "storage security"],
     "saas-security.html": ["saas security", "saas posture", "saas sprawl", "saas"],
@@ -135,6 +137,27 @@ LOGISTICS = (
     "planned to attend", "plan to attend", "plans to attend", "planning to attend",
     "upcoming attendance", "conference plans", "announced plans",
 )
+
+# Sentences that are small talk, never substance. A recap that opens "The
+# meeting began with casual conversation about Thanksgiving ... before
+# transitioning into ... network security solutions" names the topic in the
+# same breath as the holiday, and quoting it puts the holiday under a heading
+# promising the community worked the topic through. Treated exactly like
+# LOGISTICS: dropped before a passage is scored or quoted.
+ASIDES = (
+    "casual conversation", "small talk", "humorous anecdote", "personal updates",
+    "pleasantries", "catch-up conversation",
+)
+
+# A keyword followed by one of these is a job title ("Abdullah, a network
+# security engineer, shared ..."): it says who was on the call, not what the
+# call discussed, so the hit is not counted anywhere.
+ROLE_NOUNS = (
+    "engineer", "engineers", "architect", "architects", "analyst", "analysts",
+    "manager", "managers", "specialist", "specialists", "consultant", "consultants",
+    "role", "roles", "position", "positions", "job", "jobs", "career", "careers",
+)
+_ROLE_AFTER = re.compile(r"\s+(?:%s)\b" % "|".join(ROLE_NOUNS))
 
 CARD_RE = re.compile(
     r'<article class="section meeting-card" id="meeting-(?P<date>\d{4}-\d{2}-\d{2})">'
@@ -216,7 +239,7 @@ def pick(meetings: list[dict], keywords: list[str]) -> list[dict]:
     for m in meetings:
         if m["date"] in INELIGIBLE:
             continue
-        if sum(m["text"].count(kw) for kw in keywords) < MIN_SCORE:
+        if _hits(m["text"], keywords) < MIN_SCORE:
             continue
         blurb = blurb_for(m, keywords)
         if blurb is None:
@@ -232,15 +255,26 @@ def _sentences(text: str) -> list[str]:
 
 
 def _drop_logistics(text: str) -> str:
-    """`text` without its meetup-logistics sentences (see LOGISTICS)."""
+    """`text` without its logistics and small-talk sentences (LOGISTICS, ASIDES)."""
     return " ".join(
         s for s in _sentences(text)
-        if not any(p in TAG_RE.sub("", s).lower() for p in LOGISTICS)
+        if not any(p in TAG_RE.sub("", s).lower() for p in LOGISTICS + ASIDES)
+    )
+
+
+def _hits(text: str, keywords: list[str]) -> int:
+    """Keyword occurrences in `text`, not counting job titles (see ROLE_NOUNS)."""
+    plain = TAG_RE.sub("", text).lower()
+    return sum(
+        1
+        for kw in keywords
+        for m in re.finditer(re.escape(kw), plain)
+        if not _ROLE_AFTER.match(plain, m.end())
     )
 
 
 def _mentions(text: str, keywords: list[str]) -> bool:
-    return any(kw in TAG_RE.sub("", text).lower() for kw in keywords)
+    return _hits(text, keywords) > 0
 
 
 def _excerpt(body: str, keywords: list[str]) -> str:
@@ -285,7 +319,7 @@ def blurb_for(meeting: dict, keywords: list[str]) -> str | None:
     best, best_score = "", 0
     for _heading, raw in meeting["sections"]:
         body = _drop_logistics(raw)
-        score = sum(TAG_RE.sub("", body).lower().count(kw) for kw in keywords)
+        score = _hits(body, keywords)
         if score > best_score:
             best, best_score = body, score
     return _excerpt(best, keywords) if best_score else None
@@ -338,6 +372,14 @@ def splice(page: str, block: str) -> str | None:
     return page[:anchor] + block + "\n\n      " + page[anchor:]
 
 
+def unsplice(page: str) -> str:
+    """`page` with any existing block removed, along with the line it sat on."""
+    return re.sub(
+        r"[ \t]*" + re.escape(START) + r".*?" + re.escape(END) + r"[ \t]*\n?",
+        "", page, flags=re.DOTALL,
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true", help="report only, write nothing")
@@ -360,10 +402,18 @@ def main() -> int:
             skipped.append(f"{page_name} (missing)")
             continue
         picks = pick(meetings, keywords)
-        if len(picks) < 2:
-            skipped.append(f"{page_name} (only {len(picks)} matching recap(s))")
-            continue
         page = path.read_text(encoding="utf-8")
+        if len(picks) < 2:
+            # A page that no longer qualifies loses the block it had; leaving
+            # it would keep showing entries the current rules reject.
+            if START in page:
+                changed += 1
+                print(f"  ✗ {page_name}: block removed, only {len(picks)} matching recap(s)")
+                if not args.dry_run:
+                    path.write_text(unsplice(page), encoding="utf-8")
+            else:
+                skipped.append(f"{page_name} (only {len(picks)} matching recap(s))")
+            continue
         new_page = splice(page, render(picks, total))
         if new_page is None:
             skipped.append(f"{page_name} (no insertion point)")

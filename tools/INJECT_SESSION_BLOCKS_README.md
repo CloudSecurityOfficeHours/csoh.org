@@ -28,8 +28,9 @@ topic page **into** recaps. Running both creates the loop.
    *Ineligible recaps* below.
 5. Each surviving recap gets a blurb. See *What the blurb says* below.
 6. The `MAX_RECAPS` (4) most recent qualifying recaps are rendered.
-7. A page with fewer than 2 qualifying recaps is skipped entirely. A block with
-   one weak entry is worse than no block.
+7. A page with fewer than 2 qualifying recaps gets no block, and a block it
+   already carries is removed. A block with one weak entry is worse than no
+   block, and a stale one keeps showing entries the current rules reject.
 
 ## What the blurb says
 
@@ -61,6 +62,16 @@ Two details worth keeping:
   least as often as in a debrief, so without this `conferences.html` invited
   readers to a Black Hat breakfast weeks after it happened. Add a phrase there
   rather than narrowing a page's keywords.
+- **Small talk is never quoted either.** `ASIDES` ("casual conversation",
+  "humorous anecdote", "personal updates", ...) is dropped the same way. A recap
+  that opens "The meeting began with casual conversation about Thanksgiving ...
+  before transitioning into ... network security solutions" names the topic in
+  the same sentence as the holiday; quoting it puts the holiday under the
+  heading.
+- **A job title is not a topic.** A keyword followed by a word in `ROLE_NOUNS`
+  ("a network security engineer", "data security roles") is not counted, in
+  the whole-recap score or in a passage. It says who was on the call, not what
+  the call discussed.
 - Anchors are unwrapped from quoted passages. A recap's links are written for a
   page one directory down (`../glossary.html`) and are auto-inserted, so a
   paragraph pulled onto `incident-response.html` could easily contain a link
