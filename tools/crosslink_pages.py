@@ -92,6 +92,8 @@ TARGET_PAGES = [
     "about-shawn-nunley.html",
     # May 2026 build-out: discipline & topic reference pages
     "iam.html",
+    "cloud-logging.html",
+    "working-a-finding.html",
     "zero-trust.html",
     "network-security.html",
     "data-security.html",
