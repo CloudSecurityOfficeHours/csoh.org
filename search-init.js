@@ -296,7 +296,7 @@
                 var label = od.type === 'resource'
                     ? (od.heading || od.section)
                     : (od.section || od.heading);
-                others += '<li><a href="' + escapeHtml(od.url) + '">' +
+                others += '<li><a href="' + escapeHtml(sameOriginRef(od.url) || '#') + '">' +
                     escapeHtml(label) + '</a></li>';
             }
             if (group.others.length > shown) {
@@ -306,7 +306,7 @@
         }
         return [
             '<li class="csoh-result">',
-            '  <a class="csoh-result-link" href="', escapeHtml(doc.url), '">',
+            '  <a class="csoh-result-link" href="', escapeHtml(sameOriginRef(doc.url) || '#'), '">',
             '    <span class="csoh-result-type-badge csoh-type-', escapeHtml(primary.type || 'guide'), '">', typeBadge, '</span>',
             '    <span class="csoh-result-title">', highlight(doc.heading || doc.title, q), '</span>',
             '    ', pageLine,
@@ -371,6 +371,20 @@
         } catch (_) {
             return safe;
         }
+    }
+
+    // Result hrefs come from the search index. Escaping stops a quote from
+    // breaking out of the attribute, but a protocol-relative or scheme URL
+    // would still navigate away. Keep only references that resolve here.
+    function sameOriginRef(ref) {
+        var url;
+        try {
+            url = new URL(ref, window.location.origin);
+        } catch (e) {
+            return '';
+        }
+        if (url.origin !== window.location.origin) return '';
+        return url.pathname + url.search + url.hash;
     }
 
     function escapeHtml(s) {

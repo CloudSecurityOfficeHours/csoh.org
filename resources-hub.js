@@ -20,6 +20,21 @@
     var cards = null;
     var loading = null;
 
+    // Index fields are concatenated into a navigation URL. A page path of
+    // "//host/..." becomes "///host/...", which browsers treat as a
+    // protocol-relative URL and leave the origin. Resolve against this
+    // origin and refuse anything that does not stay here.
+    function sameOriginRef(ref) {
+        var url;
+        try {
+            url = new URL(ref, window.location.origin);
+        } catch (e) {
+            return '';
+        }
+        if (url.origin !== window.location.origin) return '';
+        return url.pathname + url.search + url.hash;
+    }
+
     function load() {
         if (cards) return Promise.resolve(cards);
         if (loading) return loading;
@@ -52,7 +67,8 @@
                 if (rows[i].s === slug) {
                     // replace() so Back returns where the reader came from
                     // rather than bouncing through the hub again.
-                    window.location.replace('/' + rows[i].p + '#card-' + slug);
+                    var dest = sameOriginRef('/' + rows[i].p + '#card-' + slug);
+                    if (dest) window.location.replace(dest);
                     return;
                 }
             }
@@ -98,9 +114,11 @@
         grid.textContent = '';
         for (var i = 0; i < matches.length; i++) {
             var c = matches[i];
+            var dest = sameOriginRef('/' + c.p + '#card-' + c.s);
+            if (!dest) continue;
             var a = document.createElement('a');
             a.className = 'card-link';
-            a.href = '/' + c.p + '#card-' + c.s;
+            a.href = dest;
             a.innerHTML =
                 '<div class="resource-card" data-icon="🔎">' +
                 '<h3>' + esc(c.n) + '</h3>' +

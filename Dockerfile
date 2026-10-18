@@ -50,6 +50,7 @@ RUN rm -rf /usr/share/nginx/html/.git \
 # private keys). The `.env`/`*.pem`/`*.key` patterns are the security-
 # critical ones - even though .dockerignore should have prevented them
 # from being COPY'd in the first place, this is the second line of defense.
+# nginx.conf denies pem|key|crt at request time as the third.
 RUN find /usr/share/nginx/html -name '*.py' -delete && \
     find /usr/share/nginx/html -name '*.pyc' -delete && \
     find /usr/share/nginx/html -name '*.md' -delete && \
