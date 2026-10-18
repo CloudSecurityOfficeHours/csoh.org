@@ -97,6 +97,8 @@ csoh.org/
 │
 │  ── Discipline topics ──
 ├── iam.html                         # IAM & cloud identity, RBAC/ABAC, workload identity, priv-esc paths
+├── cloud-logging.html               # Which logs, which plane, retention cost, first events
+├── working-a-finding.html           # Reachability, ownership, smallest fix, stayed fixed
 ├── non-human-identity.html          # NHI: service accounts, keys, tokens, AI agents
 ├── human-risk.html                  # Human risk: social engineering, BEC, vishing, behaviour data
 ├── zero-trust.html                  # NIST SP 800-207, BeyondCorp, CISA Maturity Model

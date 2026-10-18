@@ -80,12 +80,15 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 # any reorganisation has to happen *inside* the dropdowns.
 #
 # Learn carries three single-axis columns - Foundations (concept), By Cloud
-# (platform), Build It (hands-on) - and the subject pages live on topics.html,
-# reached by the .mega-all row. When a column heading needs an ampersand to
-# hold itself up, the column count is driving the taxonomy. The .mega-all row
-# is the pattern for every mega menu: the dropdown's hub page, promoted out of
-# a column to a full-width footer (Careers uses it for
-# cloud-security-careers.html).
+# (platform), The subject (the work) - and the pages that do not fit a column
+# live on topics.html, reached by the .mega-all row. The third column used to
+# be "Build It" and led with how this site is deployed (cloud-deployment,
+# GitHub Actions, Terraform, Git). Those pages still exist; they are listed
+# under topics.html#build and are not the front door. The column now leads
+# with the learning path and the how-to hub, then identity, workloads,
+# detection, logging, and working a finding. The .mega-all row is the pattern
+# for every mega menu: the dropdown's hub page, promoted out of a column to a
+# full-width footer (Careers uses it for cloud-security-careers.html).
 #
 # Resources has a dropdown built from the filters main.js already deep-links
 # via ?category= (see validCategories there - keep these two in step). CTF
@@ -101,9 +104,15 @@ CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switc
 #
 # Deliberate de-duplication, so this does not drift back: mentorship.html is
 # in Careers only (higher intent match than Community > Live), and
-# chat-resources / contribute-resources are in Resources only. Anything not
-# in the nav must stay reachable from topics.html,
-# what-practitioners-think.html, or cloud-security-careers.html.
+# chat-resources / contribute-resources are in Resources only. Threat Intel
+# is current events only: news, threat research, breach kill chains, and the
+# year in review. Cloud SOC, detection engineering, incident response,
+# pentesting, and human risk are practice pages; they stay on topics.html
+# (detection and response is also a Learn link). CTFs stay under Resources,
+# so Threat Intel does not carry a second copy. learning-path.html is featured
+# under Learn and repeated under Careers, because both a newcomer and someone
+# hiring will look for it. Anything not in the nav must stay reachable from
+# topics.html, what-practitioners-think.html, or cloud-security-careers.html.
 #
 # Keep the 12-space indent; NAV_PATTERN below consumes the existing
 # indentation so this controls it fully.
@@ -135,13 +144,15 @@ CANON_NAV = """\
                           </ul>
                         </div>
                         <div class="mega-col">
-                          <span class="mega-heading">Build It</span>
+                          <span class="mega-heading">The subject</span>
                           <ul>
-                            <li class="mega-featured"><a href="cloud-deployment.html">Multi-Cloud Secure Deploy<span class="mega-tag">AWS &middot; GCP &middot; Azure, end to end</span></a></li>
-                            <li class="mega-featured"><a href="cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; OVAL &middot; jq &middot; CEL &middot; Sigma</span></a></li>
-                            <li><a href="github-actions.html">GitHub Actions</a></li>
-                            <li><a href="terraform.html">Terraform</a></li>
-                            <li><a href="version-control.html">Git &amp; Version Control</a></li>
+                            <li class="mega-featured"><a href="learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="iam.html">IAM &amp; identity</a></li>
+                            <li><a href="topics.html#workloads">Workloads</a></li>
+                            <li><a href="topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="working-a-finding.html">Working a finding</a></li>
                           </ul>
                         </div>
                         <a class="mega-all" href="topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
@@ -171,12 +182,6 @@ CANON_NAV = """\
                         <li><a href="threat-research.html">Threat Research</a></li>
                         <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
                         <li><a href="cloud-breach-year-in-review.html">Year in Review</a></li>
-                        <li><a href="cloud-soc.html">Cloud SOC</a></li>
-                        <li><a href="detection-engineering.html">Detection Engineering</a></li>
-                        <li><a href="incident-response.html">Incident Response</a></li>
-                        <li><a href="human-risk.html">Human Risk</a></li>
-                        <li><a href="cloud-pentesting.html">Cloud Pentesting</a></li>
-                        <li><a href="ctfs.html">CTFs</a></li>
                       </ul>
                     </li>
                     <li class="has-dropdown has-mega">

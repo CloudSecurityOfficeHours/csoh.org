@@ -143,6 +143,12 @@ SUBDIR_TYPES: list[tuple[str, str]] = [
     ("breaches", "breach"),
     ("meetings", "meeting"),
     ("howto", "guide"),
+    # Walkthroughs. The root hubs (cloud-security-home-lab.html,
+    # cloud-security-portfolio-projects.html) were already indexed; the
+    # individual write-ups under these directories were not, so a search for
+    # the thing someone actually built returned nothing.
+    ("homelab", "guide"),
+    ("portfolio", "guide"),
 ]
 
 # ----- HTML parsing ------------------------------------------------------

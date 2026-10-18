@@ -114,6 +114,13 @@ TOPIC_KEYWORDS: dict[str, list[str]] = {
     "cloud-pentesting.html": ["cloud pentest", "red team", "pacu", "cloudgoat",
                               "offensive security", "penetration test", "pen test"],
     "cloud-soc.html": ["cloud soc", "soc operations", "security operations center"],
+    # cloud-logging.html and working-a-finding.html are not listed. A sweep of
+    # the recaps did not find two sessions that are actually about those
+    # pages (logging keywords matched nothing; "reachability" matched a recap
+    # whose title is travel logistics). Leaving a thin or mis-titled echo
+    # under "the community worked this topic through" is worse than no echo.
+    # Add them here when two recaps clear MIN_SCORE on phrases that mean the
+    # page, not a passing use of the word.
     "grc.html": ["governance, risk", "grc program", "audit findings"],
     "threat-modeling.html": ["threat model", "threat modeling", "stride"],
     "service-mesh-security.html": ["service mesh", "istio", "linkerd"],

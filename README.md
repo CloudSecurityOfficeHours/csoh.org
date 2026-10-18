@@ -41,6 +41,8 @@ The vendor-neutral curriculum, written by practitioners. The site nav has five g
 | Guide | What it covers |
 |---|---|
 | 🔐 [IAM & Cloud Identity](https://csoh.org/iam.html) | Federation, RBAC/ABAC, JIT, workload identity, privilege-escalation paths |
+| 📡 [Logging & Telemetry](https://csoh.org/cloud-logging.html) | Which logs, which plane, what not to collect, retention cost, first events |
+| 🔎 [Working a Finding](https://csoh.org/working-a-finding.html) | Reachable or not, who owns the identity, the smallest fix, and how it stays fixed |
 | 🛡️ [Zero Trust Architecture](https://csoh.org/zero-trust.html) | NIST SP 800-207, BeyondCorp, CISA Maturity Model, ZTNA, microsegmentation |
 | 🌐 [Cloud Network Security](https://csoh.org/network-security.html) | VPC design, private endpoints, egress controls, WAF, DDoS, SASE/ZTNA |
 | 🗝️ [Data Security, KMS & Secrets](https://csoh.org/data-security.html) | Envelope encryption, BYOK/HSM, secrets management, key rotation |
@@ -277,6 +279,12 @@ Cloud-side detection and response - how cloud SOC differs from packet-driven tra
 
 ### 🔐 IAM & Cloud Identity ([`iam.html`](https://csoh.org/iam.html))
 Cloud identity is the #1 root-cause category in breach reports. This page covers federation (SAML/OIDC/SCIM), RBAC vs ABAC vs ReBAC, JIT access and PAM, workload identity (IRSA / Workload Identity Federation / Managed Identities), and the per-cloud privilege-escalation paths (`iam:PassRole`, AssumeRole chains, GCP service-account impersonation, Azure managed-identity abuse). FAQ schema.
+
+### 📡 Logging & Telemetry ([`cloud-logging.html`](https://csoh.org/cloud-logging.html))
+Which logs to turn on, and which to leave off. Control plane first, identity next, data plane only for the crown jewels. What not to ship into a SIEM, how retention cost actually works, and the first events worth paging on.
+
+### 🔎 Working a Finding ([`working-a-finding.html`](https://csoh.org/working-a-finding.html))
+The workflow a scanner does not give you. Is it reachable, who owns the identity, what is the smallest fix, and how you know it stayed fixed after the ticket closes.
 
 ### 🤖 Non-Human Identity ([`non-human-identity.html`](https://csoh.org/non-human-identity.html))
 The identity class that now outnumbers humans by an order of magnitude: service accounts, workload identities, API keys, tokens, and increasingly AI agents. Discovery, ownership, lifecycle, rotation, and why the usual IAM playbook doesn't transfer cleanly.
@@ -668,6 +676,8 @@ csoh.org/
 │
 │  ── Security domains ──
 ├── iam.html                    # IAM & cloud identity, RBAC/ABAC, workload identity, priv-esc
+├── cloud-logging.html          # Which logs, which plane, retention cost, first events
+├── working-a-finding.html      # Reachability, ownership, smallest fix, stayed fixed
 ├── non-human-identity.html     # Non-human identity (NHI): service accounts, keys, agents
 ├── human-risk.html             # Human risk: social engineering, BEC, vishing, behaviour data
 ├── zero-trust.html             # NIST SP 800-207, BeyondCorp, CISA Maturity Model, ZTNA
