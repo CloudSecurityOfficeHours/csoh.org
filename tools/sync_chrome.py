@@ -291,7 +291,7 @@ CANON_FOOTER = """\
     <div class="footer-content">
       <div class="footer-section footer-about">
         <h3>CSOH</h3>
-        <p>A vendor-neutral community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
       </div>
       <div class="footer-section footer-support">
         <h3>Support CSOH</h3>

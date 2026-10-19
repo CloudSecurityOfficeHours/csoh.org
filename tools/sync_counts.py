@@ -433,12 +433,11 @@ def sync_markers(text: str, disp: dict) -> str:
 # applied to HTML. Patterns are deliberately narrow so they only ever rewrite a
 # resource count that is already spelled out as "<number>+ <phrase>".
 HTML_PROSE_RULES = [
-    (r"\d+\+ vendor-neutral resources", "{resources_floor} vendor-neutral resources"),
-    (r"\d+\+ curated cloud security resources", "{resources_floor} curated cloud security resources"),
     (r"\d+\+ curated resources", "{resources_floor} curated resources"),
+    (r"\d+\+ curated cloud security resources", "{resources_floor} curated cloud security resources"),
     (r"\d+\+ entry Resources Directory", "{resources_floor} entry Resources Directory"),
     (r"broad catalog \(\d+\+\)", "broad catalog ({resources_floor})"),
-    (r"\d+\+ links, vendor-neutral", "{resources_floor} links, vendor-neutral"),
+    (r"\d+\+ links, no affiliate codes", "{resources_floor} links, no affiliate codes"),
     # faq.html mirrors its visible answers into an FAQPage JSON-LD block, where an
     # HTML comment would be literal text inside the JSON string. The visible copy
     # of this sentence carries a <!--count:feeds--> marker; this rule keeps the
@@ -502,8 +501,8 @@ HTML_PROSE_RULES = [
 # and start being owned the day someone adds one.
 HTML_PAGE_PROSE_RULES = {
     f"resources-{cid}.html": [
-        (r"\d+ curated, vendor-neutral resources",
-         f"{{cat_{alias}}} curated, vendor-neutral resources"),
+        (r"\d+ curated resources",
+         f"{{cat_{alias}}} curated resources"),
     ]
     for cid, alias in CATEGORY_ALIASES.items()
 }
@@ -575,7 +574,7 @@ def sync_llms(disp: dict, apply: bool) -> tuple[bool, list[str]]:
         (r"\d+\+ curated resources", f"{disp['resources_floor']} curated resources"),
         (r"\d+\+ curated tools", f"{disp['resources_floor']} curated tools"),
         (r"\d+\+ weekly sessions", f"{disp['meetings_floor']} weekly sessions"),
-        (r"\d+ vendor-neutral sources", f"{disp['feeds']} vendor-neutral sources"),
+        (r"\d+ independent sources", f"{disp['feeds']} independent sources"),
         (r"\d+\+ terms in plain English", f"{disp['glossary_terms_floor']} terms in plain English"),
     ]
     changed = []
