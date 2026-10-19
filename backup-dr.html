@@ -658,6 +658,30 @@
         <section id="air-gap">
             <h2>Air-gapping in cloud - the virtual air gap</h2>
             <p>Classical air-gapping means a physical separation - backup tape stored in a vault no network can reach. Cloud has no physical <a class="glossary-link" href="glossary.html#term-air-gap">air gap</a> to offer, but it can offer a <em>virtual</em> one: a destination so isolated by IAM, network, and KMS boundaries that the path from production to backup is effectively one-way.</p>
+        <figure class="diagram-figure" id="air-gap-ladder">
+          <svg viewBox="0 0 640 194" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="air-gap-ladder-title air-gap-ladder-desc" width="640" height="194">
+            <title id="air-gap-ladder-title">Virtual air gap, one step further each time</title>
+            <desc id="air-gap-ladder-desc">Cross-account, cross-tenant, cross-cloud, and offline.</desc>
+            <g font-family="system-ui, Segoe UI, sans-serif">
+              <rect width="640" height="194" rx="8" fill="#ffffff"/>
+              <rect x="16" y="16" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="39" font-size="13" font-weight="700" fill="#0369a1">1</text>
+              <text x="58" y="39" font-size="14" fill="#0f172a">Cross-account. A separate account pulls, read-only</text>
+              <rect x="16" y="58" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="81" font-size="13" font-weight="700" fill="#0369a1">2</text>
+              <text x="58" y="81" font-size="14" fill="#0f172a">Cross-tenant. A different organization owns the copy</text>
+              <rect x="16" y="100" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="123" font-size="13" font-weight="700" fill="#0369a1">3</text>
+              <text x="58" y="123" font-size="14" fill="#0f172a">Cross-cloud. The other provider holds the immutable copy</text>
+              <rect x="16" y="142" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="165" font-size="13" font-weight="700" fill="#0369a1">4</text>
+              <text x="58" y="165" font-size="14" fill="#0f172a">Offline. Periodic copies to a place with no network path</text>
+            </g>
+          </svg>
+          <figcaption>Each step is further from the production identity. The common thread is that prod cannot delete the destination.</figcaption>
+        </figure>
+
+
             <h3>The patterns that approximate an air gap</h3>
             <ul>
                 <li><strong>Cross-account destination.</strong> Backups land in a separate AWS account / Azure subscription / GCP project. The backup account has no IAM trust relationship that allows production identities to write or delete; the backup service in the backup account <em>pulls</em> from production using a read-only role assumed in the production account. Even full compromise of the production account does not grant write or delete on the backup destination.</li>
@@ -687,6 +711,39 @@
         <section id="kill-chain">
             <h2>The cloud ransomware kill chain</h2>
             <p>Modern cloud ransomware doesn't look like the on-prem ransomware of 2017. The kill chain has adapted to the cloud's architecture - most importantly, to the fact that the cloud's control plane and data plane are both API-accessible to anyone with credentials.</p>
+        <figure class="diagram-figure" id="ransom-chain">
+          <svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ransom-chain-title ransom-chain-desc" width="640" height="320">
+            <title id="ransom-chain-title">Cloud ransomware, seven steps</title>
+            <desc id="ransom-chain-desc">Initial access through the ransom note, including destroying backups before production.</desc>
+            <g font-family="system-ui, Segoe UI, sans-serif">
+              <rect width="640" height="320" rx="8" fill="#ffffff"/>
+              <rect x="16" y="16" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="39" font-size="13" font-weight="700" fill="#0369a1">1</text>
+              <text x="58" y="39" font-size="14" fill="#0f172a">Initial access. A cloud identity, usually a stolen credential</text>
+              <rect x="16" y="58" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="81" font-size="13" font-weight="700" fill="#0369a1">2</text>
+              <text x="58" y="81" font-size="14" fill="#0f172a">Discovery. Map IAM, data, keys, and the backups</text>
+              <rect x="16" y="100" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="123" font-size="13" font-weight="700" fill="#0369a1">3</text>
+              <text x="58" y="123" font-size="14" fill="#0f172a">Persistence. Extra keys, trust changes, federation</text>
+              <rect x="16" y="142" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="165" font-size="13" font-weight="700" fill="#0369a1">4</text>
+              <text x="58" y="165" font-size="14" fill="#0f172a">Exfiltration. Copy data out, then encrypt for the ransom</text>
+              <rect x="16" y="184" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="207" font-size="13" font-weight="700" fill="#0369a1">5</text>
+              <text x="58" y="207" font-size="14" fill="#0f172a">Backups first. Delete, encrypt, or shorten the restore</text>
+              <rect x="16" y="226" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="249" font-size="13" font-weight="700" fill="#0369a1">6</text>
+              <text x="58" y="249" font-size="14" fill="#0f172a">Production. Encrypt or drop the live data</text>
+              <rect x="16" y="268" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="291" font-size="13" font-weight="700" fill="#0369a1">7</text>
+              <text x="58" y="291" font-size="14" fill="#0f172a">Ransom note. Priced from revenue and insurance</text>
+            </g>
+          </svg>
+          <figcaption>Step 5 is the one that makes the rest matter: the backups go before the data does.</figcaption>
+        </figure>
+
+
             <h3>The seven steps</h3>
             <ol>
                 <li><strong><a class="glossary-link" href="glossary.html#term-initial-access">Initial access</a>.</strong> Compromised credentials (most often), exposed access keys in a public git repo, a vulnerable web app providing a path to an instance profile, a phished cloud-console session, a third-party <a class="glossary-link" href="glossary.html#term-saas">SaaS</a> connector with broader scopes than needed. The path varies; the outcome is the same - the attacker has some cloud identity.</li>
@@ -716,17 +773,28 @@
             <p>Map your detection coverage against these techniques explicitly. The <a href="detection-engineering.html">detection engineering</a> page covers the rule-writing side; the <a href="cloud-soc.html">Cloud SOC</a> page covers the response side.</p>
         </section>
 
-        <figure class="page-photo">
-          <picture>
-            <source srcset="/img/photos/padlock-hand.webp" type="image/webp">
-            <img src="/img/photos/padlock-hand.jpg" alt="Close-up of a hand holding a padlock against a backdrop of code" width="1880" height="1253" loading="lazy" decoding="async">
-          </picture>
-          <figcaption>Photo on Pexels</figcaption>
-        </figure>
 
         <section id="architectures">
             <h2>Backup architectures</h2>
             <p>Two architectural choices dominate the design. Get these right and most other decisions become local optimizations; get them wrong and no amount of tool selection will save the program.</p>
+        <figure class="diagram-figure" id="pull-vs-push">
+          <svg viewBox="0 0 640 110" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pull-vs-push-title pull-vs-push-desc" width="640" height="110">
+            <title id="pull-vs-push-title">Pull from prod, or push to backup</title>
+            <desc id="pull-vs-push-desc">The backup account pulls read-only, versus production holding a credential that can delete the backups.</desc>
+            <g font-family="system-ui, Segoe UI, sans-serif">
+              <rect width="640" height="110" rx="8" fill="#ffffff"/>
+              <rect x="16" y="16" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="39" font-size="13" font-weight="700" fill="#0369a1">Pull</text>
+              <text x="82" y="39" font-size="14" fill="#0f172a">Backup account reads prod and writes its own store</text>
+              <rect x="16" y="58" width="608" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="32" y="81" font-size="13" font-weight="700" fill="#0369a1">Push</text>
+              <text x="82" y="81" font-size="14" fill="#0f172a">Prod can write the backup, and can delete it</text>
+            </g>
+          </svg>
+          <figcaption>Pull is the pattern. Push is the failure: a compromised prod admin can delete both copies.</figcaption>
+        </figure>
+
+
 
             <h3>Pull-from-prod, not push-to-backup</h3>
             <p>The single most important pattern: the backup destination is the <em>active</em> party in the relationship, not the production environment. The backup service, running in a separate account, assumes a read-only role into production, reads the data, writes to its own immutable storage. Production identities have no credentials with write or delete on the backup destination. Compromise of production does not yield access to backups.</p>
