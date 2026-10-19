@@ -11,16 +11,15 @@ conflated.
 
 An OG image is a 1200x630 social embed: a big headline, a subtitle, a
 footer, all sized to be read at full width in a Slack or LinkedIn unfurl.
-The compact card grids on index.html and what-practitioners-think.html
-render their thumbnail 197-303px wide. An OG card in that slot gives a 6px
-subtitle and a headline that just repeats the <h3> directly beneath it.
+Compact card grids (today: what-practitioners-think.html) render their
+thumbnail 197-303px wide. An OG card in that slot gives a 6px subtitle and
+a headline that just repeats the <h3> directly beneath it. The homepage no
+longer uses a thumbnail or featured-OG card grid; its first screen is three
+doors and the next session.
 
 A thumbnail at 233px has one job: be recognisable at a glance and say
 which topic this is. So these tiles carry a glyph and one category word,
 and leave the naming to the card's own heading.
-
-The featured grid still uses OG cards on purpose. At 311px wide they are
-legible and the extra prominence suits the four "start here" cards.
 
 Usage:
     /usr/bin/python3 tools/generate_thumbnails.py
@@ -73,7 +72,7 @@ SCALE = 3
 # point the card's <img> at img/thumbs/<slug>.jpg with class
 # "resource-preview resource-preview--thumb".
 THUMBS = [
-    # ── index.html: "Learn the fundamentals" ────────────────────────────────
+    # ── Topic tiles (used by digest / card grids; homepage no longer embeds them)
     ("what-is-cloud-security",     "cloud-check",     "#38bdf8", "Start here"),
     ("shared-responsibility",      "split-panel",     "#2dd4bf", "Foundations"),
     ("aws-security",               "layers",          "#ff9d2e", "AWS"),
@@ -81,12 +80,11 @@ THUMBS = [
     ("gcp-security",               "globe",           "#7dd37d", "GCP"),
     ("iam",                        "key",             "#a78bfa", "Identity"),
     ("zero-trust",                 "shield-keyhole",  "#22d3ee", "Architecture"),
-    # "Compare", not "Tooling": the Browse-by-topic grid below already has a
-    # "Tools" tile, and two near-identical labels a few cards apart is exactly
-    # the ambiguity a thumbnail is supposed to remove.
+    # "Compare", not "Tooling": neighbouring tiles already use "Tools", and two
+    # near-identical labels a few cards apart is exactly the ambiguity a
+    # thumbnail is supposed to remove.
     ("cspm-vs-cnapp",              "panels",          "#34d399", "Compare"),
 
-    # ── index.html: "Browse by topic" ──────────────────────────────────────
     ("labs",                       "flask",           "#4ade80", "Labs"),
     ("tools",                      "wrench",          "#fbbf24", "Tools"),
     ("certifications",             "award",           "#facc15", "Certs"),

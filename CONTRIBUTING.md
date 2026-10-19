@@ -403,11 +403,11 @@ If you're not sure exactly how to do it:
 ### Editing the Homepage
 
 The homepage is at [index.html](index.html). It contains:
-- Hero section (big banner at top)
-- About text
-- Featured resources
-- Call-to-action buttons
-- Footer
+- Compact hero (short pitch, no category grid)
+- Three front doors (learning path / topics / Friday sessions)
+- Next-session strip (stamped by `tools/sync_next_session.py`)
+- Call-to-action buttons (join links go to `sessions.html`)
+- Footer (owned by `tools/sync_chrome.py` - edit `CANON_FOOTER` there)
 
 To edit:
 

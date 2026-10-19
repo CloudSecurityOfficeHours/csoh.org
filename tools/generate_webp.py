@@ -18,11 +18,11 @@ Idempotent: skips files whose .webp sibling is newer than the source.
 
 `--only-existing` refreshes the .webp files that are already committed and
 creates no new ones. It exists because these directories are deliberately
-partial: img/og has .webp siblings only for the four featured cards on
-index.html, because a sibling is only reachable where the image is rendered
-through a <picture> element. Every other OG image is an og:image meta target,
-and a meta tag carries a single URL, so it can never use a <source srcset>. A
-bare run over img/og would add siblings nothing can reach.
+partial: img/og has .webp siblings only for pages that still render an OG
+asset through a <picture> element (a few legacy cards). The homepage no
+longer embeds a featured OG grid. Every other OG image is an og:image meta
+target, and a meta tag carries a single URL, so it can never use a
+<source srcset>. A bare run over img/og would add siblings nothing can reach.
 
 When a generator re-renders one of those JPGs, its sibling has to be re-encoded
 or the browser keeps getting the old image from <source srcset> while the

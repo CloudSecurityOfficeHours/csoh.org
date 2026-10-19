@@ -121,11 +121,12 @@ say so rather than implying nginx checked it.
 `tools/build_search_index.py` (`SUBDIR_TYPES`) · `tools/crosslink_pages.py`
 (`SUBDIR_PATTERNS`) · `sitemap.xml` · the per-directory globs in the CI gates
 `tools/check_no_inline_scripts.py` and `tools/check_svg_dimensions.py`. The
-search, cross-link and sitemap entries are judgement calls: `homelab/` is
-deliberately excluded from search and cross-linking. The SEO audit averages
-over what it audits, so an unregistered directory never lowers the score, and a
-gate that does not glob a directory passes it without reading it: `howto/` sat
-outside both gates for a month.
+search, cross-link and sitemap entries are judgement calls: `homelab/` and
+`portfolio/` are search-indexed as `guide` but deliberately excluded from
+glossary cross-linking. The SEO audit averages over what it audits, so an
+unregistered directory never lowers the score, and a gate that does not glob a
+directory passes it without reading it: `howto/` sat outside both gates for a
+month.
 
 ---
 
@@ -1158,9 +1159,12 @@ misreport layout (e.g. `clientWidth` of 0).
 ### `img/og/` and `img/thumbs/`
 
 - **`img/og/`**: 1200x630 social cards from `tools/generate_og_images.py`, for
-  unfurls and the four featured "start here" cards on `index.html`.
+  unfurls (`og:image` / `twitter:image`). The homepage no longer embeds a
+  featured OG card grid; a few legacy `img/og/*.webp` siblings remain for pages
+  that still render an OG asset through `<picture>`.
 - **`img/thumbs/`**: 3:2 glyph tiles from `tools/generate_thumbnails.py`, for
-  compact card grids, where an OG card's text is illegible.
+  compact card grids (today: `what-practitioners-think.html`), where an OG
+  card's text is illegible.
 
 `.resource-card .resource-preview` crops to a fixed box with `object-fit:
 cover` for third-party screenshots; the `--og` and `--thumb` modifiers pin the
@@ -1168,7 +1172,7 @@ box to each asset's own ratio.
 
 After adding a tile, run `generate_webp.py img/thumbs` and then
 `update_sri.py`. For `img/og/`, always use `generate_webp.py --only-existing`:
-only the four featured cards render through `<picture>`, and every other OG
+only pages that already have a `.webp` sibling need one, and every other OG
 image is an `og:image` target that can't use a `.webp` sibling.
 `update-counts.yml` relies on `--only-existing` to keep `meetings.webp` in step
 with its `.jpg`.
