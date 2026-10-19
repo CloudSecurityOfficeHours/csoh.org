@@ -63,7 +63,20 @@ CANON_NAV_CTA_MOBILE = ('            <a href="https://csoh.kit.com/39feb4f397" c
                         '<span class="nav-cta__lead">Get the </span>Zoom link</a>')
 
 CANON_HAMBURGER = '            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>'
-CANON_THEME_TOGGLE = '            <button class="theme-toggle" aria-label="Switch to dark mode">🌙</button>'
+# SVG icons (not emoji) so the toggle matches the logo mark. main.js swaps
+# data-theme-icon between "dark" and "light"; CSS shows the matching glyph.
+CANON_THEME_TOGGLE = (
+    '            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark">'
+    '<svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">'
+    '<path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/>'
+    '</svg>'
+    '<svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">'
+    '<circle cx="12" cy="12" r="4.2" fill="currentColor"/>'
+    '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+    'd="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/>'
+    '</svg>'
+    '</button>'
+)
 
 # --- Canonical menu nav (root-relative, no active markers) -------------------
 # Top level: Learn / Resources / Threat Intel / Careers / Community, then the
@@ -339,7 +352,7 @@ LOGO_PATTERN = re.compile(
 HAMBURGER_PATTERN = re.compile(
     r'(?m)^[ \t]*<button[^>]*class="hamburger"[^>]*>[^<]*</button>')
 THEME_TOGGLE_PATTERN = re.compile(
-    r'(?m)^[ \t]*<button[^>]*class="theme-toggle"[^>]*>[^<]*</button>')
+    r'(?ms)^[ \t]*<button[^>]*class="theme-toggle"[^>]*>.*?</button>')
 
 # Build href -> enclosing top-level dropdown label, by scanning CANON_NAV.
 # Each dropdown <button> starts a new section; every page href that follows

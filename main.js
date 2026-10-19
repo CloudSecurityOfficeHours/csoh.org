@@ -824,7 +824,8 @@ function initThemeToggle() {
 
 function updateToggleIcon(btn) {
     const isDark = currentTheme() === 'dark';
-    btn.textContent = isDark ? '☀️' : '🌙';
+    // data-theme-icon drives which SVG child CSS shows (moon vs sun).
+    btn.setAttribute('data-theme-icon', isDark ? 'light' : 'dark');
     btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
 }
 
