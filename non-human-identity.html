@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-07-05">
-    <meta property="article:modified_time" content="2026-09-12">
+    <meta property="article:modified_time" content="2026-10-18">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Guide">
     <meta property="article:tag" content="non-human-identity">
@@ -77,7 +77,7 @@
         }
       },
       "datePublished": "2026-07-05",
-      "dateModified": "2026-09-12",
+      "dateModified": "2026-10-18",
       "mainEntityOfPage": "https://csoh.org/non-human-identity.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -371,7 +371,24 @@
 
 <section id="ciem-secrets-itdr"><h2>Where CIEM, secrets management, and ITDR fit</h2><p>NHI security overlaps three adjacent categories, and it helps to be precise about the boundaries.</p><h3>CIEM answers "is this over-permissioned?"</h3><p>Cloud Infrastructure Entitlement Management analyzes effective permissions and right-sizes them toward <a class="glossary-link" href="glossary.html#term-least-privilege">least privilege</a>. It is the entitlement lens on your NHIs and is usually delivered as part of a <a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a>. NHI security uses <a class="glossary-link" href="glossary.html#term-ciem">CIEM</a> findings but adds the questions CIEM does not: who owns this identity, is its secret rotated, and should it exist at all. See <a href="cspm-vs-cnapp.html">CSPM vs CNAPP</a>.</p><h3>Secrets management answers "where does the secret live and how does it rotate?"</h3><p>A secrets manager stores credentials securely, brokers access to them, and can rotate them. It is essential plumbing, but a secrets manager full of long-lived keys is still a pile of long-lived keys. NHI security asks whether that secret needs to exist at all, which is where secretless approaches come in below.</p><h3>ITDR answers "is this identity being abused right now?"</h3><p><a class="glossary-link" href="glossary.html#term-itdr">Identity Threat Detection and Response</a> watches identity behavior for signs of compromise: impossible travel, anomalous API usage, a dormant service account suddenly active. For NHIs this is where detection lives, and it is covered more in the detection section.</p><p>None of these replaces the others. A mature program uses CIEM to right-size, a secrets manager (or federation) to handle credentials, and ITDR to catch abuse, all sitting on top of a current NHI inventory.</p></section>
 
-<section id="secretless"><h2>Workload identity federation and secretless access</h2><p>If long-lived static secrets are the root NHI risk, the strongest fix is to stop having them. That is the idea behind <strong>secretless access</strong>: a workload proves its identity with a short-lived, verifiable token and exchanges it for access, so there is no standing key to leak.</p><h3>OIDC-based workload identity federation</h3><p>The most widely deployed pattern uses <a class="glossary-link" href="glossary.html#term-oidc">OpenID Connect</a>. A workload gets a short-lived OIDC identity token from a trusted issuer, and the cloud is configured to trust that issuer for specific subjects. Common examples:</p><ul><li><a href="github-actions.html">GitHub Actions</a> assuming an AWS role via OIDC instead of storing an <code>AWS_ACCESS_KEY_ID</code> in the repo.</li><li><a class="glossary-link" href="glossary.html#term-eks">GKE</a> Workload Identity, EKS Pod Identity, and Azure Workload Identity, which let <a href="kubernetes.html">Kubernetes</a> pods assume cloud identities without mounting static keys.</li></ul><p>A conceptual GitHub-to-AWS trust looks like this: the workflow requests an OIDC token, and AWS <a class="glossary-link" href="glossary.html#term-sts">STS</a> exchanges it for temporary role credentials.</p><div class="code-block" data-lang="bash"><pre># GitHub Actions requests an OIDC token, then:
+<section id="secretless"><h2>Workload identity federation and secretless access</h2><p>If long-lived static secrets are the root NHI risk, the strongest fix is to stop having them. That is the idea behind <strong>secretless access</strong>: a workload proves its identity with a short-lived, verifiable token and exchanges it for access, so there is no standing key to leak.</p>
+<figure class="diagram-figure" id="secretless-exchange">
+          <svg viewBox="0 0 640 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="secretless-exchange-title secretless-exchange-desc" width="640" height="128">
+            <title id="secretless-exchange-title">A standing key versus a token that expires</title>
+            <desc id="secretless-exchange-desc">A long-lived key can be copied and replayed until someone rotates it. A workload identity token is checked, exchanged for minutes-long credentials, and then it expires.</desc>
+            <g font-family="system-ui, Segoe UI, sans-serif">
+              <rect width="640" height="128" rx="8" fill="#ffffff"/>
+              <text x="20" y="26" font-size="15" font-weight="700" fill="#0f172a">A standing key versus a token that expires</text>
+              <rect x="16.0" y="40" width="299.0" height="72" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="28.0" y="66" font-size="13" font-weight="700" fill="#0f172a">Standing key</text>
+              <text x="28.0" y="88" font-size="12" fill="#334155">Stored, copied, replayed</text>
+              <rect x="325.0" y="40" width="299.0" height="72" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="337.0" y="66" font-size="13" font-weight="700" fill="#0f172a">Workload token</text>
+              <text x="337.0" y="88" font-size="12" fill="#334155">Checked, exchanged, expires</text>
+            </g>
+          </svg>
+          <figcaption>Secretless access, from the section below. The cloud trusts a subject claim, not a key that has been sitting in a repository.</figcaption>
+        </figure><h3>OIDC-based workload identity federation</h3><p>The most widely deployed pattern uses <a class="glossary-link" href="glossary.html#term-oidc">OpenID Connect</a>. A workload gets a short-lived OIDC identity token from a trusted issuer, and the cloud is configured to trust that issuer for specific subjects. Common examples:</p><ul><li><a href="github-actions.html">GitHub Actions</a> assuming an AWS role via OIDC instead of storing an <code>AWS_ACCESS_KEY_ID</code> in the repo.</li><li><a class="glossary-link" href="glossary.html#term-eks">GKE</a> Workload Identity, EKS Pod Identity, and Azure Workload Identity, which let <a href="kubernetes.html">Kubernetes</a> pods assume cloud identities without mounting static keys.</li></ul><p>A conceptual GitHub-to-AWS trust looks like this: the workflow requests an OIDC token, and AWS <a class="glossary-link" href="glossary.html#term-sts">STS</a> exchanges it for temporary role credentials.</p><div class="code-block" data-lang="bash"><pre># GitHub Actions requests an OIDC token, then:
 aws sts assume-role-with-web-identity \
   --role-arn arn:aws:iam::ACCOUNT:role/deploy \
   --web-identity-token "$OIDC_TOKEN" \
