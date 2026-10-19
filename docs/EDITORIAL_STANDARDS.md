@@ -48,14 +48,16 @@ confidence it has not earned.
 
 ## 3. Neutrality
 
-CSOH is vendor-neutral, free, and volunteer-run. That is the headline promise on
-`index.html` and in `README.md`, and prose is what keeps or breaks it.
+CSOH is free, independent, and volunteer-run. Say that once where it matters
+(the Code of Conduct, the About ethos, a cert that is genuinely cross-vendor).
+Do not stamp "vendor-neutral" on every meta description, footer, page-meta
+line, or guide intro - readers already get it from the content.
 
 - **No sales pitch.** Describe what a tool does and what it is good at. No
   marketing superlatives, no "leading" or "best-in-class".
 - **No putting down competitors** (`code-of-conduct.html`). Comparisons state
-  tradeoffs, not winners. `cloud-comparison.html` and `vendor-landscape.html`
-  carry no rankings by design.
+  tradeoffs, not winners. `cloud-security-comparison.html` and
+  `vendor-landscape.html` carry no rankings by design.
 - **Disclose affiliation.** Shawn works at Wiz. Any page touching Wiz or its
   competitors says so. This is already done on `vendor-landscape.html`; it is a
   standard, not a one-off. Two exceptions need no disclosure:

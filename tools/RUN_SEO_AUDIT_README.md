@@ -59,6 +59,7 @@ Exit codes:
 - All `portfolio/*.html`
 - All `meetings/*.html` (the weekly recaps)
 - All `homelab/*.html`
+- All `howto/*.html`
 
 The script discovers the page set at runtime, so the total grows as the site
 does - it is not a fixed number.
@@ -66,9 +67,9 @@ does - it is not a fixed number.
 **Adding a new subdirectory of pages?** Add it to `AUDITED_SUBDIRS` in
 [`run_seo_audit.py`](run_seo_audit.py) or it is silently never audited. Because
 the score is an average over the pages that *were* audited, a missing directory
-does not dent the number - so nothing flags the omission. (`crosslink_pages.py` and
-`build_search_index.py` also skip `homelab/`, but there the exclusion **is**
-deliberate.)
+does not dent the number - so nothing flags the omission. (`homelab/` and
+`portfolio/` are search-indexed but deliberately **not** glossary-cross-linked;
+that exclusion is independent of this audit list.)
 
 ## When to run
 

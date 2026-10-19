@@ -43,6 +43,7 @@ breaches/*.html
 meetings/*.html
 portfolio/*.html
 homelab/*.html
+howto/*.html
 ```
 
 `google66d489593949bd4c.html` is skipped - it is Google's site-verification stub and must stay exactly as Google issued it.

@@ -64,7 +64,7 @@ last existing entry.
 
 ```
 This adds Cloud Security Office Hours (https://csoh.org) under
-Reading Materials → Others. It's a vendor-neutral community resource
+Reading Materials → Others. It's a free community resource
 hub with weekly Zoom sessions, pillar guides, a 230+ term glossary,
 breach kill chains mapped to MITRE ATT&CK Cloud, and a curated
 CTF directory. Free, open, no trackers, no on-site ads.
@@ -153,7 +153,7 @@ Resources` or `Communities` sub-section, prefer that.
 **Entry text:**
 
 ```markdown
-- [Cloud Security Office Hours](https://csoh.org/) - Vendor-neutral cloud-security community with weekly Zoom sessions, pillar guides, glossary, breach kill chains mapped to MITRE ATT&CK, and a curated CTF directory.
+- [Cloud Security Office Hours](https://csoh.org/) - Cloud-security community with weekly Zoom sessions, pillar guides, glossary, breach kill chains mapped to MITRE ATT&CK, and a curated CTF directory.
 ```
 
 **PR title:** `Add Cloud Security Office Hours under Cloud Security`
@@ -171,7 +171,7 @@ Reading Material`, depending on current structure.
 **Entry text:**
 
 ```markdown
-- [Cloud Security Office Hours](https://csoh.org/) - Free vendor-neutral cloud-security community covering AppSec topics including [supply-chain security](https://csoh.org/cloud-security-best-practices.html#supply-chain), [Kubernetes hardening](https://csoh.org/cloud-security-best-practices.html#workloads), and [AI/LLM workload security](https://csoh.org/cloud-security-best-practices.html#ai). Pillar guides + glossary + breach kill chains.
+- [Cloud Security Office Hours](https://csoh.org/) - Free cloud-security community covering AppSec topics including [supply-chain security](https://csoh.org/cloud-security-best-practices.html#supply-chain), [Kubernetes hardening](https://csoh.org/cloud-security-best-practices.html#workloads), and [AI/LLM workload security](https://csoh.org/cloud-security-best-practices.html#ai). Pillar guides + glossary + breach kill chains.
 ```
 
 ---
