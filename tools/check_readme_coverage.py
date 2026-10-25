@@ -135,8 +135,17 @@ def in_repo_targets(text: str, base: str = "") -> set[str]:
 
 
 def tracked_docs() -> list[Path]:
-    """Markdown docs whose in-repo links are checked: repo root plus tools/."""
-    return sorted(REPO.glob("*.md")) + sorted((REPO / "tools").glob("*.md"))
+    """Markdown docs whose in-repo links are checked.
+
+    Repo root, tools/, and docs/. docs/ is included so a broken link in the
+    editorial standard or the agent lessons fails this gate. lychee does not
+    crawl Markdown.
+    """
+    return (
+        sorted(REPO.glob("*.md"))
+        + sorted((REPO / "tools").glob("*.md"))
+        + sorted((REPO / "docs").glob("*.md"))
+    )
 
 
 def unresolved(targets: set[str], exists=None) -> list[str]:
