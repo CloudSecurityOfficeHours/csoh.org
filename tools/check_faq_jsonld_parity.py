@@ -21,16 +21,23 @@ visible text, word for word:
 - FAQPage mainEntity is the visible FAQ, in page order. A question's name is
   its <summary> or <h3> text and its answer is everything up to the next
   question. Questions that exist only in JSON-LD are dropped.
-- A DefinedTerm description is its visible <dd>, minus a trailing
-  "Deep dive:" link, which is navigation to a guide page rather than part of
-  the definition.
+- A DefinedTerm name is its visible <dt>, and its description is the <dd>,
+  minus a trailing "Deep dive:" link, which is navigation to a guide page
+  rather than part of the definition.
+- On a page that carries a DefinedTermSet, every <dt id> followed by a <dd>
+  has a DefinedTerm. --fix adds a missing one after the nearest term above it
+  on the page, with its @id and url pointing at the <dt> anchor. It does that
+  by rewriting the hasDefinedTerm array, and only when the array as it stands
+  would be rewritten byte for byte, so the existing entries never move.
 
 Text is taken the way a reader sees it: tags removed (inline ones such as <a>
 and <strong> without leaving a gap, so a link before a full stop does not
 become "link ."), entities decoded, whitespace collapsed.
 
-So edit the visible FAQ or <dd>, then run --fix. Never edit the JSON-LD copy by
-hand: --check, which validate-html.yml runs, fails on any difference.
+So edit the visible FAQ, <dt> or <dd>, then run --fix. Never edit the JSON-LD
+copy by hand, and never add a DefinedTerm by hand: --check, which
+validate-html.yml runs, fails on any difference, including a visible term with
+no copy at all.
 
 WHERE THE VISIBLE FAQ IS
 ------------------------
@@ -103,7 +110,7 @@ INLINE_TAGS = frozenset(
 TOKEN_RE = re.compile(r"[a-z0-9]+")
 ANSWER_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(\[])")
 PAGE_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n\s*\n")
-DT_DD_RE = re.compile(r'<dt\b[^>]*\bid="([^"]+)"[^>]*>.*?</dt>\s*<dd\b[^>]*>(.*?)</dd>', re.S)
+DT_DD_RE = re.compile(r'<dt\b[^>]*\bid="([^"]+)"[^>]*>(.*?)</dt>\s*<dd\b[^>]*>(.*?)</dd>', re.S)
 
 # A trailing "Deep dive: <link>." in a glossary <dd> is navigation to the guide
 # page, not part of the definition, and DefinedTerm descriptions leave it out on
@@ -120,11 +127,14 @@ H2_RANGE_END_RE = re.compile(r"<h2\b|</section>|</main>|</article>", re.I)
 DETAILS_RE = re.compile(r"<details\b[^>]*>\s*<summary\b[^>]*>(.*?)</summary>(.*?)</details>", re.S | re.I)
 H3_PAIR_RE = re.compile(r"<h3\b[^>]*>(.*?)</h3>(.*?)(?=<h3\b|\Z)", re.S | re.I)
 MAIN_ENTITY_KEY_RE = re.compile(r'"mainEntity"\s*:\s*(?=\[)')
+HAS_DEFINED_TERM_KEY_RE = re.compile(r'"hasDefinedTerm"\s*:\s*(?=\[)')
+NAME_KEY_RE = re.compile(r'"name"\s*:\s*')
 DESCRIPTION_KEY_RE = re.compile(r'"description"\s*:\s*')
 DECODER = json.JSONDecoder()
 
 # Findings --fix resolves. Everything else needs a person.
-FIXABLE = frozenset({"faq-out-of-sync", "faq-no-visible-faq", "term-out-of-sync"})
+FIXABLE = frozenset({"faq-out-of-sync", "faq-no-visible-faq", "term-out-of-sync", "term-name-out-of-sync",
+                     "term-missing-jsonld"})
 
 
 @dataclass
@@ -415,10 +425,10 @@ def _sync_faq(page: str, raw: str, blocks: list, stats: Counter, findings: list,
                             {"dropped": dropped, "added": added, "changed": changed, "reordered": reordered}))
 
 
-def _description_span(body: str, term_id: str, old: str) -> tuple[int, int] | None:
-    """Where this term's description literal sits in the block, confirmed by decoding it."""
+def _field_span(body: str, term_id: str, key_re: re.Pattern, old: str) -> tuple[int, int] | None:
+    """Where one of this term's string fields sits in the block, confirmed by decoding it."""
     at = re.search(r'"@id"\s*:\s*' + re.escape(json.dumps(term_id, ensure_ascii=False)), body)
-    key = DESCRIPTION_KEY_RE.search(body, at.end()) if at else None
+    key = key_re.search(body, at.end()) if at else None
     if not key:
         return None
     try:
@@ -428,38 +438,135 @@ def _description_span(body: str, term_id: str, old: str) -> tuple[int, int] | No
     return (key.end(), end) if value == old else None
 
 
+def _fragment(term) -> str:
+    term_id = str(term.get("@id", "")) if isinstance(term, dict) else ""
+    return term_id.rsplit("#", 1)[-1] if "#" in term_id else ""
+
+
+def _rebuild_term_array(page: str, raw: str, with_terms: list, visible: dict, missing: set,
+                        findings: list) -> tuple[tuple[int, int, str], set] | None:
+    """(edit, fragments it rewrites): the hasDefinedTerm array with every missing term added.
+
+    The rewritten array also carries every name and description correction for
+    the terms already in it, so the caller makes no per-field edits for those.
+    None means the array could not be rebuilt safely, and each missing term is
+    reported as unreadable.
+    """
+    def unreadable(why: str) -> None:
+        for frag in visible:
+            if frag in missing:
+                findings.append(Finding(page, "term-unreadable", f"{frag}: no DefinedTerm, and {why}",
+                                        line_of(raw, f'id="{frag}"'),
+                                        {"jsonld": "(none)", "page": visible[frag][1] or "(empty <dd>)"}))
+
+    sets = [(m, node) for m, data, _ in with_terms for node in _walk(data)
+            if "DefinedTermSet" in _types(node) and isinstance(node.get("hasDefinedTerm"), list)]
+    if len(sets) != 1:
+        return unreadable(f"the page has {len(sets)} DefinedTermSet arrays rather than one")
+    m, term_set = sets[0]
+    base = term_set.get("url")
+    if not isinstance(base, str) or not base:
+        return unreadable("its DefinedTermSet has no url to build an @id from")
+    body = m.group(2)
+    keys = list(HAS_DEFINED_TERM_KEY_RE.finditer(body))
+    try:
+        if len(keys) != 1:
+            raise ValueError("hasDefinedTerm is not unique")
+        current, end = DECODER.raw_decode(body, keys[0].end())
+    except ValueError:
+        return unreadable("its hasDefinedTerm array could not be located")
+    start = keys[0].end()
+    if current != term_set["hasDefinedTerm"] or json_text(current, body, start) != body[start:end]:
+        return unreadable("its hasDefinedTerm array is not laid out the way this tool writes JSON, "
+                          "so rewriting it would reformat every entry")
+
+    rebuilt = []
+    for item in current:
+        frag = _fragment(item)
+        if frag in visible and "DefinedTerm" in _types(item) and isinstance(item.get("description"), str):
+            name, description = visible[frag]
+            item = dict(item)
+            if name and isinstance(item.get("name"), str):
+                item["name"] = name
+            if description:
+                item["description"] = description
+        rebuilt.append(item)
+    order = list(visible)
+    for i, frag in enumerate(order):
+        if frag not in missing:
+            continue
+        name, description = visible[frag]
+        line = line_of(raw, f'id="{frag}"')
+        if not name or not description:
+            findings.append(Finding(page, "term-unreadable", f"{frag}: no DefinedTerm, and its <dt> or <dd> is empty",
+                                    line, {"jsonld": "(none)", "page": description or "(empty <dd>)"}))
+            continue
+        ids = [_fragment(item) for item in rebuilt]
+        above = next((p for p in reversed(order[:i]) if p in ids), None)
+        rebuilt.insert(ids.index(above) + 1 if above else 0, {
+            "@type": "DefinedTerm", "@id": f"{base}#{frag}", "name": name, "description": description,
+            "inDefinedTermSet": base, "url": f"{base}#{frag}"})
+        findings.append(Finding(page, "term-missing-jsonld", frag, line, {"name": name, "description": description}))
+    edit = (m.start(2) + start, m.start(2) + end, json_text(rebuilt, body, start))
+    return edit, {_fragment(item) for item in current}
+
+
 def _sync_terms(page: str, raw: str, blocks: list, stats: Counter, findings: list, edits: list) -> None:
-    dd_by_id = None
+    with_terms = []
     for m, data in blocks:
         if data is None:
             continue
         terms = [t for t in _walk(data) if "DefinedTerm" in _types(t) and isinstance(t.get("description"), str)]
-        if not terms:
-            continue
-        if dd_by_id is None:
-            dd_by_id = dict(DT_DD_RE.findall(raw))
-            stats["term_pages"] += 1
+        if terms:
+            with_terms.append((m, data, terms))
+    if not with_terms:
+        return
+    stats["term_pages"] += 1
+    # Every <dt id> followed by a <dd>, in page order, as (name, description).
+    visible = {frag: (rendered(dt), rendered(DD_NAVIGATION_SUFFIX_RE.sub("", dd)))
+               for frag, dt, dd in DT_DD_RE.findall(raw)}
+    stats["visible_terms"] += len(visible)
+    present = {_fragment(t) for _, _, terms in with_terms for t in terms}
+    missing = {frag for frag in visible if frag not in present}
+    rebuilt = _rebuild_term_array(page, raw, with_terms, visible, missing, findings) if missing else None
+    if rebuilt:
+        edits.append(rebuilt[0])
+    in_rebuilt_array = rebuilt[1] if rebuilt else set()
+
+    for m, _, terms in with_terms:
         body, body_start = m.group(2), m.start(2)
         for t in terms:
             stats["terms"] += 1
             term_id = str(t.get("@id", ""))
             name = str(t.get("name", ""))
-            frag = term_id.rsplit("#", 1)[-1] if "#" in term_id else ""
+            frag = _fragment(t)
+            per_field = frag not in in_rebuilt_array
             line = line_of(raw, term_id) if term_id else line_of(raw, name)
-            if frag not in dd_by_id:
+            if frag not in visible:
                 findings.append(Finding(page, "term-missing-dt", term_id or name, line, {"jsonld": t["description"]}))
                 continue
-            expected = rendered(DD_NAVIGATION_SUFFIX_RE.sub("", dd_by_id[frag]))
+            shown, expected = visible[frag]
+            if isinstance(t.get("name"), str) and shown and t["name"] != shown:
+                span = _field_span(body, term_id, NAME_KEY_RE, t["name"]) if per_field else None
+                if per_field and span is None:
+                    findings.append(Finding(page, "term-unreadable", frag, line, {"jsonld": t["name"], "page": shown}))
+                else:
+                    if span:
+                        edits.append((body_start + span[0], body_start + span[1],
+                                      _script_safe(json.dumps(shown, ensure_ascii=False))))
+                    findings.append(Finding(page, "term-name-out-of-sync", frag, line,
+                                            {"jsonld": t["name"], "page": shown}))
             if t["description"] == expected:
                 stats["terms_in_sync"] += 1
                 continue
-            span = _description_span(body, term_id, t["description"]) if expected else None
-            if span is None:
+            span = _field_span(body, term_id, DESCRIPTION_KEY_RE, t["description"]) if expected and per_field else None
+            if not expected or (per_field and span is None):
                 findings.append(Finding(page, "term-unreadable", frag, line,
                                         {"jsonld": t["description"], "page": expected or "(empty <dd>)"}))
                 continue
-            edits.append((body_start + span[0], body_start + span[1],
-                          _script_safe(json.dumps(expected, ensure_ascii=False))))
+            if span:
+                edits.append((body_start + span[0], body_start + span[1],
+                              _script_safe(json.dumps(expected, ensure_ascii=False))))
             findings.append(Finding(page, "term-out-of-sync", frag, line, {"jsonld": t["description"], "page": expected}))
 
 
@@ -606,24 +713,78 @@ def self_test() -> list[str]:
     if faq_in(fixed) != [(q1, a1), (q2, a2)] or around_array(fixed) != around_array(graphed):
         bad.append("a FAQPage inside @graph was not rewritten in place, or text outside its mainEntity array changed")
 
-    def term_set(*terms) -> dict:
-        return {"@context": "https://schema.org", "@type": "DefinedTermSet", "hasDefinedTerm": [
-            {"@type": "DefinedTerm", "@id": f"https://csoh.org/glossary.html#{i}", "name": i, "description": d}
-            for i, d in terms]}
+    glossary = "https://csoh.org/glossary.html"
+
+    def term_set(*terms, url: str | None = glossary) -> dict:
+        """terms are (id, description) or (id, description, name); the name defaults to the <dt> text."""
+        node = {"@context": "https://schema.org", "@type": "DefinedTermSet", "hasDefinedTerm": [
+            {"@type": "DefinedTerm", "@id": f"{glossary}#{t[0]}", "name": t[2] if len(t) > 2 else t[0][5:].upper(),
+             "description": t[1]} for t in terms]}
+        if url:
+            node["url"] = url
+        return node
+
+    def terms_in(raw: str) -> list[tuple[str, str, str]]:
+        return [(_fragment(t), t["name"], t["description"])
+                for m in LDJSON_RE.finditer(raw) for t in json.loads(m.group(2))["hasDefinedTerm"]]
 
     dl = ('<dl><dt id="term-x">X</dt><dd>A <a href="#term-y">vendor</a> coinage. <em>Deep dive:</em> '
           '<a href="x.html">X</a>.</dd><dt id="term-y">Y</dt><dd>Why not.</dd></dl>')
+    in_sync = [("term-x", "X", "A vendor coinage."), ("term-y", "Y", "Why not.")]
     if run(page([term_set(("term-x", "A vendor coinage."), ("term-y", "Why not."))], dl))[0]:
-        bad.append("DefinedTerms matching their <dd> apart from the Deep dive link were reported")
+        bad.append("DefinedTerms matching their <dt> and <dd> apart from the Deep dive link were reported")
     drifted = page([term_set(("term-x", "An emerging category."), ("term-y", "Why not."))], dl)
     if kinds(drifted) != ["term-out-of-sync"]:
         bad.append("a DefinedTerm description that differs from its <dd> was not reported")
-    fixed = converges(drifted, "glossary")
-    described = [t["description"] for m in LDJSON_RE.finditer(fixed) for t in json.loads(m.group(2))["hasDefinedTerm"]]
-    if described != ["A vendor coinage.", "Why not."]:
+    if terms_in(converges(drifted, "glossary")) != in_sync:
         bad.append("--fix did not rewrite exactly the one differing DefinedTerm description")
+    renamed = page([term_set(("term-x", "A vendor coinage.", "X / Old alias"), ("term-y", "Why not."))], dl)
+    if kinds(renamed) != ["term-name-out-of-sync"]:
+        bad.append("a DefinedTerm name that differs from its <dt> was not reported")
+    if terms_in(converges(renamed, "renamed-term")) != in_sync:
+        bad.append("--fix did not rewrite exactly the one differing DefinedTerm name")
     if "term-missing-dt" not in kinds(page([term_set(("term-z", "Zed."))], dl)):
         bad.append("a DefinedTerm with no matching <dt> was not reported")
+
+    # term-v comes before every term that has a copy, term-w sits between two.
+    gapped = ('<dl><dt id="term-v">V</dt><dd>Very first.</dd>' + dl[4:-5]
+              .replace('<dt id="term-y">', '<dt id="term-w">W <abbr>(wide)</abbr></dt><dd>Worth &amp; more.</dd>'
+                                           '<dt id="term-y">') + '</dl>')
+    with_gaps = [("term-v", "V", "Very first."), in_sync[0], ("term-w", "W (wide)", "Worth & more."), in_sync[1]]
+    missing = page([term_set(("term-x", "A vendor coinage."), ("term-y", "Why not."))], gapped)
+    if kinds(missing) != ["term-missing-jsonld", "term-missing-jsonld"]:
+        bad.append("visible glossary terms with no DefinedTerm were not reported")
+    fixed = converges(missing, "missing-term")
+    if terms_in(fixed) != with_gaps:
+        bad.append("--fix did not add each missing DefinedTerm after the term above it, named and described "
+                   "from its <dt> and <dd>")
+    added = next((t for m in LDJSON_RE.finditer(fixed) for t in json.loads(m.group(2))["hasDefinedTerm"]
+                  if _fragment(t) == "term-w"), None)
+    if added != {"@type": "DefinedTerm", "@id": f"{glossary}#term-w", "name": "W (wide)",
+                 "description": "Worth & more.", "inDefinedTermSet": glossary, "url": f"{glossary}#term-w"}:
+        bad.append("an added DefinedTerm does not have the shape of the existing ones")
+    if [line for line in difflib.unified_diff(missing.splitlines(), fixed.splitlines(), lineterm="", n=0)
+            if line.startswith("-") and not line.startswith("---")]:
+        bad.append("adding DefinedTerms rewrote lines of the entries already there")
+    both = page([term_set(("term-x", "An emerging category.", "X / Old alias"), ("term-y", "Why not."))], gapped)
+    if kinds(both) != ["term-missing-jsonld", "term-missing-jsonld", "term-name-out-of-sync", "term-out-of-sync"]:
+        bad.append("missing, renamed and drifted DefinedTerms on one page were not all reported")
+    if terms_in(converges(both, "missing-and-drifted")) != with_gaps:
+        bad.append("--fix did not add the missing terms and correct the drifted one in the same pass")
+    if run(page([], gapped))[0]:
+        bad.append("a <dl> on a page that carries no DefinedTermSet was reported")
+    no_url = page([term_set(("term-x", "A vendor coinage."), ("term-y", "Why not."), url=None)], gapped)
+    findings, _, fixed = run(no_url)
+    if [f.kind for f in findings] != ["term-unreadable", "term-unreadable"] or fixed != no_url:
+        bad.append("missing terms on a DefinedTermSet with no url were not reported as unreadable, "
+                   "or --fix changed the page")
+    laid_out = term_set(("term-x", "A vendor coinage."), ("term-y", "Why not."))
+    hand_laid = page([laid_out], gapped).replace(json.dumps(laid_out, indent=2), json.dumps(laid_out, indent=4))
+    findings, _, fixed = run(hand_laid)
+    if (hand_laid == page([laid_out], gapped) or [f.kind for f in findings] != ["term-unreadable", "term-unreadable"]
+            or fixed != hand_laid):
+        bad.append("missing terms in a hasDefinedTerm array laid out differently from this tool's JSON were not "
+                   "reported as unreadable, or --fix reformatted the array")
 
     broken = '<html><head><script type="application/ld+json">{"@type": "FAQPage",</script></head><body></body></html>'
     findings, _, fixed = run(broken)
@@ -641,13 +802,16 @@ LABELS = {
     "faq-no-visible-faq": "FAQPage blocks with no visible FAQ anywhere on the page (--fix removes them)",
     "faq-out-of-sync": "FAQPage blocks that differ from the visible FAQ (--fix rewrites them)",
     "term-out-of-sync": "DefinedTerm descriptions that differ from the visible <dd> (--fix rewrites them)",
+    "term-name-out-of-sync": "DefinedTerm names that differ from the visible <dt> (--fix rewrites them)",
+    "term-missing-jsonld": "visible glossary terms with no DefinedTerm (--fix adds them)",
 }
 
 
 def report(findings: list[Finding], totals: Counter, verbose: bool) -> None:
     print(f"Self-test passed. {totals['faq_pages']} FAQPage blocks: {totals['questions']} questions in JSON-LD, "
           f"{totals['visible_questions']} in the visible FAQs, {totals['faq_in_sync']} blocks already identical. "
-          f"{totals['terms']} DefinedTerms, {totals['terms_in_sync']} identical to their <dd>.")
+          f"{totals['visible_terms']} visible glossary terms, {totals['terms']} DefinedTerms, "
+          f"{totals['terms_in_sync']} identical to their <dd>.")
     for kind, label in LABELS.items():
         items = [f for f in findings if f.kind == kind]
         if not items:
@@ -672,7 +836,7 @@ def report(findings: list[Finding], totals: Counter, verbose: bool) -> None:
                                 print(f"                 closest on page: {clip(c['closest'])}")
                 for q in f.detail["added"]:
                     print(f"      adds visible question: {clip(q, 120)}")
-            elif kind in ("term-out-of-sync", "term-unreadable"):
+            elif kind in ("term-out-of-sync", "term-name-out-of-sync", "term-unreadable"):
                 print(f"      JSON-LD: {clip(f.detail['jsonld'])}")
                 print(f"      page:    {clip(f.detail['page'])}")
             else:

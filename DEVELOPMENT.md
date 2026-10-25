@@ -83,7 +83,7 @@ csoh.org/
 ├── cnapp-vs-xdr.html                # Where CNAPP ends and XDR/CDR begins
 ├── cnapp-to-ai-app.html             # Case study: Wiz from CNAPP to AI-APP (disclosed)
 ├── vendor-landscape.html            # 300+ cloud-security vendors across 32 categories
-├── glossary.html                    # 329 cloud-security terms with live search + cross-links
+├── glossary.html                    # 330 cloud-security terms with live search + cross-links
 ├── topics.html                      # Complete A-Z topic index - every page in one flat list
 ├── faq.html                         # Frequently asked questions
 │
@@ -211,7 +211,7 @@ csoh.org/
 │
 │  ── Per-breach pages and meeting recaps ──
 ├── breaches/                        # 46 per-breach kill chain pages (split from breach-timeline.html)
-├── meetings/                        # 117 per-meeting recap pages (split from meetings.html)
+├── meetings/                        # 118 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (search-indexed as guide; not cross-linked)
 ├── howto/                           # 16 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
@@ -527,11 +527,13 @@ ever deletes a file. See [docs/EDITORIAL_STANDARDS.md](docs/EDITORIAL_STANDARDS.
 for the standard it enforces.
 
 `check_faq_jsonld_parity.py --check` fails when a FAQPage answer or a glossary
-DefinedTerm description differs from the visible text it copies. That copy is
-what a search engine shows, and it is generated rather than written: edit the
-visible FAQ or the `<dd>`, run `python3 tools/check_faq_jsonld_parity.py --fix`,
-and commit the result. Run it with no flags first to see what `--fix` will
-change, including any JSON-LD-only claim it is about to drop.
+DefinedTerm name or description differs from the visible text it copies, or
+when a visible glossary term has no DefinedTerm at all. That copy is what a
+search engine shows, and it is generated rather than written: edit the visible
+FAQ or the `<dt>`/`<dd>`, run `python3 tools/check_faq_jsonld_parity.py --fix`
+(which also adds the DefinedTerm for a new term), and commit the result. Run
+it with no flags first to see what `--fix` will change, including any
+JSON-LD-only claim it is about to drop.
 
 Three more checks run post-merge rather than on the PR, but are worth running
 locally if you touched what they cover:
@@ -828,7 +830,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/sync_next_session.py` | Stamps the next Friday session's date into the `[data-next-session]` banners and `sessions.html`'s `Event` JSON-LD (`startDate` / `endDate`), from `csoh.ics` | **Don't edit** -- runs as a fixer in the deploy build and in housekeeping; deliberately **not** gated, since the date expires weekly on its own |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
-| `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->329<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
+| `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->330<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |
 | `sitemap.xml` | XML sitemap for search engines | **Don't edit** -- lastmod refreshed automatically |

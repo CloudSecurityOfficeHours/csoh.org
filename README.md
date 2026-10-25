@@ -24,7 +24,7 @@ The curriculum, written by practitioners. The site nav has five groups - **Learn
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
 | 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
-| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->329<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
+| 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->330<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
 #### By Cloud
@@ -161,7 +161,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->117<!--/count--> weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->118<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
 
@@ -193,7 +193,7 @@ Our recommended learning sequence:
 1. **Get the Lay of the Land**: [What is Cloud Security?](https://csoh.org/what-is-cloud-security.html) - pillar overview of the field
 2. **Follow the Roadmap**: [Cloud Security Learning Path](https://csoh.org/learning-path.html) - beginner → advanced with milestones, free labs, study targets
 3. **Master the Fundamentals**: [Best Practices](https://csoh.org/cloud-security-best-practices.html) and the [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html)
-4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->329<!--/count--> terms, every cross-reference hyperlinked
+4. **Decode the Acronyms**: [Glossary](https://csoh.org/glossary.html) - <!--count:glossary_terms-->330<!--/count--> terms, every cross-reference hyperlinked
 5. **Get Hands-On**: [CTF Challenges](https://csoh.org/ctfs.html) and [Resources](https://csoh.org/resources.html) for practice
 6. **Choose a Certification**: [Cloud Security Certifications guide](https://csoh.org/cloud-security-certifications.html) - CCSK, CCSP, AWS, Azure, GCP, CKS
 7. **Read Real Breaches**: [Breach Kill Chains](https://csoh.org/breach-timeline.html) - see how attacks actually happen
@@ -488,7 +488,7 @@ Archive of past Zoom session presentations:
 
 ### 📝 Meeting Recaps ([`meetings.html`](https://csoh.org/meetings.html))
 Topic-by-topic recaps of every weekly session:
-- **<!--count:meetings-->117<!--/count--> meeting recaps** with per-topic summaries and speaker notes
+- **<!--count:meetings-->118<!--/count--> meeting recaps** with per-topic summaries and speaker notes
 - Searchable, filterable by tag (AWS, Azure, AI, supply chain, conferences, etc.)
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
@@ -507,7 +507,7 @@ Plain-English landing page for both feeds - `feed.xml` (cloud-security news, ref
 
 ### 📖 Glossary ([`glossary.html`](https://csoh.org/glossary.html))
 A plain-English glossary of cloud-security acronyms and concepts:
-- **<!--count:glossary_terms-->329<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
+- **<!--count:glossary_terms-->330<!--/count--> terms** across 13 sections - cloud models, IAM, network, data, detection, the *PM family, supply-chain, ATT&CK, AI/LLM, DevOps, standards bodies
 - **Live search** filters terms and definitions as you type, hiding sections with no matches
 - **Cross-linked**: every glossary term mentioned in any other definition is automatically hyperlinked to its entry - see `tools/crosslink_glossary.py`
 - Targeted terms (arrived via `#term-...` anchor) get a yellow highlight so the reader can immediately spot them
@@ -665,7 +665,7 @@ csoh.org/
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
 ├── vendor-landscape.html       # 300+ cloud-security vendors across 32 categories
-├── glossary.html               # 329 cloud security terms with live search & cross-links
+├── glossary.html               # 330 cloud security terms with live search & cross-links
 ├── topics.html                 # Complete A-Z topic index - every page in one flat list
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
 │
@@ -757,7 +757,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (117 entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (118 entries, topic-by-topic)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
@@ -798,7 +798,7 @@ csoh.org/
 │
 │  ── Subdirectory page sets ──
 ├── breaches/                   # 46 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 117 per-meeting recap pages (split from meetings.html)
+├── meetings/                   # 118 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
 ├── howto/                      # 16 how-to guides: policy, query and SIEM detection languages
@@ -971,7 +971,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
 | `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DOCS_CONSISTENCY_README.md) |
 | `check_readme_coverage.py` | Every in-repo Markdown link resolves (over 400 of them, across every tracked doc - lychee reads none, and the tool prints the real counts, so do not trust one written here); every root page is named in README.md and DEVELOPMENT.md; every published subdirectory is documented *and* crawled; no count marker sits inside a code fence. Self-tests before reporting, so a broken detector fails loudly instead of passing quietly | docstring |
-| `check_faq_jsonld_parity.py` | FAQPage answers and glossary DefinedTerm descriptions must match the visible text they copy, word for word. The JSON-LD copy is the text a search engine shows, and three docs-review findings in September 2026 were corrections that never reached it. `--fix` regenerates every copy from its page; `--check` for CI. Self-tests before reporting | docstring |
+| `check_faq_jsonld_parity.py` | FAQPage answers and glossary DefinedTerm names and descriptions must match the visible text they copy, word for word, and every visible glossary term must have a DefinedTerm. The JSON-LD copy is the text a search engine shows, and three docs-review findings in September 2026 were corrections that never reached it. `--fix` regenerates every copy from its page; `--check` for CI. Self-tests before reporting | docstring |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
 | `add_theme_script.py` | Stamps the render-blocking `theme.js` tag into every page's `<head>`, above the stylesheet. A page that misses it renders a flash of the wrong theme for any visitor whose stored choice differs from their OS, which is invisible in a screenshot and in every static check. `--check` for CI | docstring |
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
@@ -1325,7 +1325,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
-- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->329<!--/count--> individual terms
+- ✅ **DefinedTermSet** - the glossary, with <!--count:glossary_terms-->330<!--/count--> individual terms
 
 **Entity schema** - who/what is responsible for the content:
 - ✅ **Organization** - CSOH itself, with founding date, contact point, sameAs links, search action
@@ -1344,18 +1344,18 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->306<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->307<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
 - ✅ **`security.txt`** (RFC 9116) for vulnerability disclosure, at both `/.well-known/security.txt` and `/security.txt`
 - ✅ Site-wide **canonical URLs** to consolidate ranking signals
-- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->329<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
+- ✅ **Glossary cross-linking** - first occurrence of each of <!--count:glossary_terms-->330<!--/count--> terms auto-linked to the glossary on every content page ([tools/crosslink_pages.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/crosslink_pages.py))
 
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->292<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->117<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->293<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->118<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
