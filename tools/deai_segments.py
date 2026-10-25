@@ -320,7 +320,10 @@ def verify(ref: str) -> int:
         return [re.sub(r'\s+', ' ', m.group(0)) for m in TAG.finditer(s)]
 
     def links(s: str) -> list[tuple[str, str]]:
-        return [(h, text_of(x)) for h, x in re.findall(r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', s, re.S)]
+        # Every target is pinned. Wrapped text is pinned for inline links only: a link that wraps a whole card
+        # (a <p>, <div> or heading inside it) carries prose the pass may rewrite.
+        return [(h, '<card>' if re.search(r'<(?:p|div|h[1-6]|li|ul|ol|section|article)\b', x) else text_of(x))
+                for h, x in re.findall(r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', s, re.S)]
 
     for f in files:
         old = subprocess.run(['git', 'show', f'{ref}:{f}'], cwd=ROOT, capture_output=True, text=True).stdout
