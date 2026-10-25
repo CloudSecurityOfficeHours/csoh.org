@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-05-04">
-    <meta property="article:modified_time" content="2026-05-04">
+    <meta property="article:modified_time" content="2026-10-25">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Portfolio Projects">
     <meta property="article:tag" content="capital one breach lab">
@@ -63,7 +63,7 @@
       "totalTime": "PT8H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-05-04",
-      "dateModified": "2026-05-04",
+      "dateModified": "2026-10-25",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -286,7 +286,7 @@
     </section>
     <main class="container contribute-article" id="main-content">
 
-        <p class="page-meta"><time datetime="2026-05-04">Last updated <strong>2026-05-04</strong></time> · <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/portfolio/recreate-capital-one.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
+        <p class="page-meta"><time datetime="2026-10-25">Last updated <strong>2026-10-25</strong></time> · <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> · <a href="https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/portfolio/recreate-capital-one.html" target="_blank" rel="noopener noreferrer">View source on GitHub</a></p>
 
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~12 hours &nbsp;·&nbsp; <strong>Difficulty:</strong> Advanced &nbsp;·&nbsp; <strong>Stack:</strong> AWS · Terraform · WAF · IAM · GuardDuty</p>
@@ -339,7 +339,7 @@
             <h3>3. Execute the exploit</h3>
             <p>From your laptop, hit the SSRF endpoint to fetch <code>http://169.254.169.254/latest/meta-data/iam/security-credentials/&lt;role-name&gt;</code>. You should get back temporary credentials. Use <code>aws configure</code> with those creds, then <code>aws s3 ls</code> across the buckets. Screenshot every step.</p>
             <h3>4. Capture the CloudTrail of your own attack</h3>
-            <p>Pull the CloudTrail events your exploit generated. Note: the IMDS call itself doesn't show in CloudTrail. Only the subsequent <code>sts:AssumeRole</code> (if any) and the S3 calls do. This is itself a teaching moment about the limits of AWS detection.</p>
+            <p>Pull the CloudTrail events your exploit generated. Note: the IMDS call itself doesn't show in CloudTrail. The calls made with the stolen credentials do: <code>ListBuckets</code> and any <code>sts:AssumeRole</code> you make are logged by default, but object-level calls such as listing a bucket's contents or <code>GetObject</code> appear only if S3 data events were enabled on a trail beforehand. This is itself a teaching moment about the limits of AWS detection.</p>
             <h3>5. Now build the fixes - one at a time</h3>
             <p>Walk through the Capital One root causes and Terraform a fix per cause:</p><ul><li><strong>IMDSv2 enforcement</strong> via <code>http_tokens = required</code> at the launch template, plus an SCP that denies launching with v1.</li><li><strong>Scoped IAM role</strong> - read access on one bucket, no list-buckets, no cross-account.</li><li><strong>WAF rule</strong> blocking requests targeting <code>169.254.169.254</code> (or other internal IPs).</li><li><strong>Egress restrictions</strong> - VPC endpoint for S3 + NAT egress restricted to known destinations.</li><li><strong>S3 access logging</strong> + bucket policies preventing exfiltration.</li><li><strong>GuardDuty</strong> enabled with the relevant findings turned on.</li></ul>
             <h3>6. Re-run the exploit against the fixed architecture</h3>
