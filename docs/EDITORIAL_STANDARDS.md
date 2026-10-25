@@ -94,8 +94,13 @@ This is a judgment call and it is reported for a human, never auto-applied.
 
 ## 5. Mechanics
 
-- **No em-dashes.** Use a spaced hyphen ( - ), a colon, or parentheses. This is
-  consistent across the site and the review enforces it.
+- **No em-dashes.** Rephrase the sentence: give the aside its own sentence, fold
+  it into a clause, or use a colon to introduce a list. A spaced hyphen ( - ) is
+  the fallback `check_docs_consistency.py` applies because a script cannot
+  rephrase. It keeps the dash's rhythm, so in hand-written prose it is not the
+  fix (see §9). Labels are exempt: a term and its expansion ("CSPM - Cloud
+  Security Posture Management"), a glossary headword, a link followed by its
+  description. This is consistent across the site and the review enforces it.
 - **No hand-typed counts.** Every number describing site inventory lives inside a
   `<!--count:name-->N<!--/count-->` marker owned by `tools/sync_counts.py`. A bare
   "310+ glossary terms" in prose will drift the day content lands. See
@@ -139,6 +144,100 @@ correct value is derivable from something already in the repo:
 - a count resynced to the real number of cards or files
 - an em-dash replaced with a spaced hyphen
 
-Everything else - accuracy, neutrality, temperature, reading level, external
-reference currency, and every deletion - is reported to the tracking issue and
-waits for you.
+Everything else - accuracy, neutrality, temperature, reading level, voice,
+external reference currency, and every deletion - is reported to the tracking
+issue and waits for you.
+
+## 9. Voice: prose that reads as generated
+
+Readers recognise machine-written prose by its structure more than its
+vocabulary. The patterns below are what give a page away here. They are a style
+problem, not an accuracy one, and fixing them must not change what any sentence
+claims.
+
+### Patterns to rewrite
+
+- **Dash asides.** A clause set off by a spaced hyphen, or by a pair of them,
+  mid-sentence or as a tail. Give it its own sentence, make it a clause, or use
+  "rather than", "which means", or a colon before a list. "...or insecure
+  APIs - not exotic zero-days" becomes "...or insecure APIs rather than exotic
+  zero-days".
+- **Reversals.** "X - not Y", "It is not X. It is Y.", "not just X but Y". State
+  the claim directly. Keep the contrast only where the reader would otherwise
+  assume X.
+- **A list, then its summary.** "Public buckets, open security groups, weak
+  password policies - these are the day-to-day failure modes." Lead with the
+  claim and follow it with the list.
+- **Stacked fragments.** Three or more verbless sentences in a row: "CloudTrail
+  feeding a SIEM. Provider-native services like GuardDuty. A response
+  runbook." Write one sentence that carries the list. Cards and tiles are terse
+  by design and are exempt.
+- **Question strings.** A definition written as rhetorical questions: "Who can
+  assume what role? Which permissions are unused?" Write the statement the
+  questions stand for. FAQ headings are questions by design and are exempt.
+- **Restating tag lines.** A short closer that repeats the sentence before it:
+  "The provider's job, full stop." Fold the point into the sentence.
+- **Tacked-on slogans.** A triad after a dash that restates the list before it:
+  "VPCs, private endpoints, traffic monitoring - segment, restrict, observe."
+- **Reveal labels.** "The catch:", "The honest lesson is", "Here's why", "This is
+  where", "The bottom line". Say the thing.
+- **Empty intensifiers.** "Actually", "genuinely", "truly", "single most",
+  "highest-leverage". Cut one only when removing it changes nothing. In "the
+  breaches that actually happen" it contrasts real incidents with hypothetical
+  ones, so it stays.
+- **Bold-lead bullets.** `<li><strong>Label:</strong> ...` is right when the
+  label is a term being defined or a step being named. Prose cut into bullets
+  with a bold phrase on each is not a list. Write the paragraph.
+
+### The rewrite must not change the claim
+
+A rewrite can keep every name, number, and link identical and still change what
+a sentence says. Check each changed sentence for all of these:
+
+- **Hedges and quantifiers stay as written.** "Most", "almost", "primarily",
+  "often", "usually". "Primarily" is not "mostly".
+- **Trend words stay.** "Increasingly" does not become "now". Whether a trend
+  claim has gone stale is a temperature question (§4), not a style fix.
+- **Intensity stays.** "Explodes" is not "grows". "Wildly different" is not
+  "very different".
+- **Scope stays.** An open example list stays open ("like", "such as",
+  "including"). A complete enumeration stays complete ("which means", or a
+  colon). Adding "and" before the last item of an example list closes it.
+- **No new order.** Joining parallel items with "starts with", "on top of that",
+  or "then" asserts a sequence or a dependency the original did not.
+- **No new claim in place of a flourish.** "The acronym soup is real" cannot
+  become "Most tool categories go by acronyms". The second is a countable claim
+  nobody checked.
+- **A flourish that carries a claim stays.** "Forget 'advanced persistent
+  threats' for a minute" tells the reader that framing is misplaced. Deleting it
+  deletes that.
+- **Facts are out of scope.** A style pass that finds an inaccuracy reports it,
+  and the fix goes in its own change, so a reviewer can tell a correction from a
+  rewording.
+
+### Doing a pass
+
+- Edit only sentences that show a pattern above. Leave plain sentences alone,
+  even ones you would have written differently.
+- Skip generated and recorded text. `news.html` is regenerated weekly. Meeting
+  recaps come from the session summaries through `tools/add_meeting.py`.
+  `chat-resources.html` is a dated record of what members shared. Text a tool
+  writes is changed in the tool.
+- Text that appears twice changes in both places. A FAQ answer is duplicated in
+  the page's `FAQPage` JSON-LD: run `python3 tools/check_faq_jsonld_parity.py
+  --fix`, then `--check`. A pull quote repeats a sentence from its section.
+- Rebuild `search-index.json` with `python3 tools/build_search_index.py`, twice.
+  The second run must change nothing.
+
+### Checking a pass
+
+Both checks are required.
+
+1. **Mechanical.** Every `<a>` keeps its `href` and the term it wraps. Every
+   number, code span, tag, and attribute is unchanged, so only text moves. This
+   catches broken links and renamed things, and very little of the drift above.
+2. **Meaning.** A reviewer who sees both versions, and not the editor's summary
+   of them, goes through every changed sentence and marks it same meaning,
+   changed, or unsure against the list above. Ask the reviewer to assume
+   something changed. Anything not marked same meaning is reverted or reworded,
+   and the reviewer goes again from scratch, not only over the lines it flagged.
