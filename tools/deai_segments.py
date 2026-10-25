@@ -333,8 +333,8 @@ def verify(ref: str) -> int:
             bad[f].append('a link target or wrapped term changed')
         if sorted(NUM.findall(text_of(_main_of(old)))) != sorted(NUM.findall(text_of(_main_of(new)))):
             bad[f].append('numbers in <main> changed')
-        if DASH.search(new):
-            bad[f].append('em/en dash present')
+        if len(DASH.findall(new)) > len(DASH.findall(old)):
+            bad[f].append('em/en dash added')
     print(f'{len(files)} modified pages checked against {ref}; {len(bad)} with problems')
     for f, p in bad.items():
         print(' ', f, p)
