@@ -333,11 +333,11 @@
         </div>
 
         <section id="intro">
-            <p>GuardDuty tells you what AWS decides is suspicious. A detection engineer needs to write their own logic against the raw audit trail - and CloudTrail <em>is</em> that raw trail. This walkthrough wires CloudTrail into a queryable pipeline (S3 &rarr; Athena), writes detections for the techniques you detonated in the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>, expresses them portably as Sigma rules, and proves they actually fire. It is the blue-team counterpart to the offensive lab.</p>
+            <p>GuardDuty tells you what AWS decides is suspicious. A detection engineer needs to write their own logic against the raw audit trail, and CloudTrail <em>is</em> that raw trail. This walkthrough wires CloudTrail into a queryable pipeline (S3 &rarr; Athena), writes detections for the techniques you detonated in the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>, expresses them portably as Sigma rules, and proves they fire. It is the blue-team counterpart to the offensive lab.</p>
         </section>
 
         <div class="highlight-box">
-            <p><strong>Do the offensive lab first.</strong> This pipeline hunts through telemetry. The most instructive way to run it is against the events you generated in the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a> - so your queries have real attacker activity to catch, not just your own console clicks.</p>
+            <p><strong>Do the offensive lab first.</strong> This pipeline hunts through telemetry. The most instructive way to run it is against the events you generated in the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>, so your queries have real attacker activity to catch, not just your own console clicks.</p>
         </div>
 
         <div class="toc">
@@ -367,7 +367,7 @@
             <ul>
                 <li>A lab account with CloudTrail delivering to S3 (the <a href="break-and-detect-aws.html">offensive lab</a> sets this up).</li>
                 <li>Amazon Athena enabled (it queries the S3 logs directly; cost is pennies with partition projection).</li>
-                <li>Telemetry worth hunting - run the offensive lab's attacks before you start.</li>
+                <li>Telemetry worth hunting: run the offensive lab's attacks before you start.</li>
                 <li>Background from the <a href="../detection-engineering.html">detection engineering</a> and <a href="../cloud-soc.html">cloud SOC</a> pages.</li>
             </ul>
         </section>
@@ -378,7 +378,7 @@
             <h3>1. Confirm CloudTrail is landing in S3</h3>
 <div class="code-block" data-lang="bash"><pre>aws cloudtrail describe-trails --query 'trailList[].{name:Name,bucket:S3BucketName}'   # list each trail and the bucket it writes to
 aws s3 ls s3://&lt;your-trail-bucket&gt;/AWSLogs/&lt;account-id&gt;/CloudTrail/ --recursive | head   # --recursive walks the prefix; head shows just the first few objects</pre></div>
-            <p>You should see gzip'd JSON objects partitioned by region and date. If nothing is there yet, generate some activity (a few CLI calls) and wait a few minutes - CloudTrail delivers in batches.</p>
+            <p>You should see gzip'd JSON objects partitioned by region and date. If nothing is there yet, generate some activity (a few CLI calls) and wait a few minutes, because CloudTrail delivers in batches.</p>
 
             <h3>2. Create the Athena table with partition projection</h3>
             <p>Partition projection lets Athena compute partitions from the S3 path pattern, so you never run <code>MSCK REPAIR</code> or add partitions by hand. Run this DDL in the Athena console (swap in your bucket, account, and regions):</p>
@@ -425,7 +425,7 @@ WHERE date &gt;= date_format(current_date - interval '1' day, '%Y/%m/%d')   -- l
 GROUP BY 1, 2            -- group by the 1st and 2nd selected columns (who, eventname)
 ORDER BY n DESC         -- busiest actor+action first
 LIMIT 50;               -- cap the result at 50 rows</pre></div>
-            <p>Always filter on <code>date</code> (and <code>region</code> when you can). That is what keeps Athena from scanning every object in the bucket - the difference between a one-cent query and a painful one.</p>
+            <p>Always filter on <code>date</code> (and <code>region</code> when you can). That is what keeps Athena from scanning every object in the bucket, and it is the difference between a one-cent query and a painful one.</p>
 
             <h3>4. The detection library</h3>
             <p>Each query below is a detection. Read the "why it matters" line, then run it against your telemetry.</p>
@@ -495,10 +495,10 @@ level: high                              # alert severity
 tags:                                    # MITRE ATT&amp;CK mapping for this behaviour
   - attack.defense-impairment
   - attack.t1685.002                     # T1685.002 = Disable or Modify Cloud Log</pre></div>
-            <p>The tags follow ATT&amp;CK v19, which moved cloud log tampering from T1562.008 (under Defense Evasion) to T1685.002 under a new Defense Impairment tactic. Older rules, and Stratus Red Team's technique names such as <code>aws.defense-evasion.cloudtrail-stop</code>, still use the old ones. Convert it with the Sigma CLI - <code>pip install sigma-cli</code> then <code>sigma convert -t &lt;backend&gt; rule.yml</code>. The <a href="https://github.com/SigmaHQ/sigma/tree/master/rules/cloud/aws" target="_blank" rel="noopener noreferrer">SigmaHQ repo already ships dozens of AWS CloudTrail rules</a> - read them, and you will recognise the exact patterns from your detection library above. That is the portable, shareable form employers want to see.</p>
+            <p>The tags follow ATT&amp;CK v19, which moved cloud log tampering from T1562.008 (under Defense Evasion) to T1685.002 under a new Defense Impairment tactic. Older rules, and Stratus Red Team's technique names such as <code>aws.defense-evasion.cloudtrail-stop</code>, still use the old ones. Convert it with the Sigma CLI: <code>pip install sigma-cli</code>, then <code>sigma convert -t &lt;backend&gt; rule.yml</code>. The <a href="https://github.com/SigmaHQ/sigma/tree/master/rules/cloud/aws" target="_blank" rel="noopener noreferrer">SigmaHQ repo already ships dozens of AWS CloudTrail rules</a>. Read them, and you will recognise the exact patterns from your detection library above. That is the portable, shareable form employers want to see.</p>
 
             <h3>6. Prove the detections fire</h3>
-            <p>Re-run each query after generating attack telemetry. If you completed the offensive lab, the Stratus detonations are already in the trail - your <code>StopLogging</code>, <code>PutBucketPolicy</code>, and <code>GetParameter</code> queries should now return rows tied to the exact moment you detonated them. This closed loop - <em>generate telemetry, query it, confirm the detection triggers</em> - is the entire discipline of detection engineering in miniature.</p>
+            <p>Re-run each query after generating attack telemetry. If you completed the offensive lab, the Stratus detonations are already in the trail, so your <code>StopLogging</code>, <code>PutBucketPolicy</code>, and <code>GetParameter</code> queries should now return rows tied to the exact moment you detonated them. The entire discipline of detection engineering in miniature is this closed loop: <em>generate telemetry, query it, confirm the detection triggers</em>.</p>
 
             <h3>7. Operationalize (pick one)</h3>
             <ul>
@@ -518,7 +518,7 @@ DROP TABLE cloudtrail_logs;   -- removes only the Athena schema - the underlying
             <h2>Common mistakes</h2>
             <ul>
                 <li><strong>Querying without a <code>date</code> filter.</strong> Athena scans every partition and the bill balloons. Always bound by <code>date</code> (and <code>region</code>).</li>
-                <li><strong>Treating <code>requestParameters</code> as structured.</strong> It is a JSON string - parse it with <code>json_extract_scalar</code>.</li>
+                <li><strong>Treating <code>requestParameters</code> as structured.</strong> It is a JSON string, so parse it with <code>json_extract_scalar</code>.</li>
                 <li><strong>Writing detections you never test.</strong> An untested detection is a guess. Generate the telemetry and confirm it fires.</li>
                 <li><strong>Leaving data-event logging on.</strong> It is the CloudTrail cost that surprises people.</li>
             </ul>

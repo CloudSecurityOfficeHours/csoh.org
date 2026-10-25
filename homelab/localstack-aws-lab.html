@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-07-05">
-    <meta property="article:modified_time" content="2026-07-05">
+    <meta property="article:modified_time" content="2026-10-25">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Home Lab">
     <meta property="article:tag" content="localstack tutorial">
@@ -63,7 +63,7 @@
       "totalTime": "PT4H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-07-05",
-      "dateModified": "2026-07-05",
+      "dateModified": "2026-10-25",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -328,17 +328,17 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-07-05">Last updated <strong>2026-07-05</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-10-25">Last updated <strong>2026-10-25</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>Stack:</strong> Docker &middot; LocalStack &middot; Terraform &middot; AWS CLI &middot; Checkov</p>
         </div>
 
         <section id="intro">
-            <p><a href="https://www.localstack.cloud/" target="_blank" rel="noopener noreferrer">LocalStack</a> runs a mock of the AWS cloud as a single container on your laptop. Every <code>aws</code> command you already know works against it - you just point the CLI at <code>http://localhost:4566</code> instead of the real AWS endpoints. Nothing you do here can ever generate a bill, which makes it the perfect first lab: create, mangle, and destroy S3 buckets, IAM roles, and Lambda functions as fast as you can type, with zero risk. This walkthrough takes you from an empty laptop to a deliberately-misconfigured "cloud" you can scan and fix.</p>
+            <p><a href="https://www.localstack.cloud/" target="_blank" rel="noopener noreferrer">LocalStack</a> runs a mock of the AWS cloud as a single container on your laptop. Most of the <code>aws</code> commands you already know, for core services such as S3, IAM and Lambda, work against it: you just point the CLI at <code>http://localhost:4566</code> instead of the real AWS endpoints. Nothing you do here can ever generate a bill, which makes it the perfect first lab: create, mangle, and destroy S3 buckets, IAM roles, and Lambda functions as fast as you can type, with zero risk. This walkthrough takes you from an empty laptop to a deliberately-misconfigured "cloud" you can scan and fix.</p>
         </section>
 
         <div class="highlight-box">
-            <p><strong>Read this before you start.</strong> LocalStack emulates the AWS <em>API surface</em>, not AWS's security <em>enforcement</em>. The free Community edition happily lets you create IAM users and attach policies, but it does not actually enforce them - a <code>Deny</code> will not stop anything. That makes LocalStack unbeatable for learning the AWS API, CLI, SDKs, Terraform, and IaC scanning, and the wrong tool for testing whether an IAM policy actually blocks an action. For that, use a real free-tier account (see the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>).</p>
+            <p><strong>Read this before you start.</strong> LocalStack emulates the AWS <em>API surface</em>, not AWS's security <em>enforcement</em>. The free Community edition happily lets you create IAM users and attach policies, but it does not actually enforce them: a <code>Deny</code> will not stop anything. That makes LocalStack unbeatable for learning the AWS API, CLI, SDKs, Terraform, and IaC scanning, and the wrong tool for testing whether an IAM policy actually blocks an action. For that, use a real free-tier account (see the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>).</p>
         </div>
 
         <div class="toc">
@@ -409,7 +409,7 @@ awslocal s3 mb s3://lab-bucket               # mb = "make bucket"
 echo "top secret" &gt; secret.txt               # create a throwaway local file to upload
 awslocal s3 cp secret.txt s3://lab-bucket/   # cp = copy the local file up into the bucket
 awslocal s3 ls s3://lab-bucket/              # ls = list the bucket's contents; you should see secret.txt</pre></div>
-            <p>Every command is identical to real AWS; only the endpoint differs. Getting <code>000000000000</code> back from <code>get-caller-identity</code> is your proof you are hitting LocalStack and not a real account - check it any time you are unsure.</p>
+            <p>Every command is identical to real AWS; only the endpoint differs. Getting <code>000000000000</code> back from <code>get-caller-identity</code> is your proof you are hitting LocalStack and not a real account. Check it any time you are unsure.</p>
 
             <h3>4. Deploy infrastructure with Terraform</h3>
             <p>Create a working directory and a provider file. <code>tflocal</code> wires the endpoints for you:</p>
@@ -510,7 +510,7 @@ awslocal iam get-user-policy --user-name legacy-app-user --policy-name app-admin
             <p>That anonymous <code>curl</code> succeeding is the whole point: a public bucket policy means the object is on the internet. The <code>iam list-*</code> / <code>get-user-policy</code> sequence is the enumeration muscle memory you will use for real in the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>.</p>
 
             <h3>7. Catch the issues with IaC scanning</h3>
-            <p>This is where a local lab genuinely shines: static scanners find every one of these problems from the Terraform files alone - no deploy, no cloud, no cost.</p>
+            <p>IaC scanning is where a local lab genuinely shines: static scanners find most of these problems from the Terraform files alone, with no deploy, no cloud and no cost. Key rotation is the exception, because a key's age exists only in a live account.</p>
 <div class="code-block" data-lang="bash"><pre># Checkov - a policy-as-code scanner that reads Terraform statically (no deploy, no cloud, no cost)
 python3 -m pip install --user checkov
 checkov -d .        # -d = scan every .tf file in this directory; prints a PASS/FAIL line per check
@@ -518,7 +518,7 @@ checkov -d .        # -d = scan every .tf file in this directory; prints a PASS/
 # Trivy in config mode does the same job and also covers Dockerfiles, Kubernetes manifests, and more
 #   install it first: brew install trivy   (or see aquasecurity.github.io/trivy)
 trivy config .      # scan the current directory's infrastructure-as-code for the same misconfigurations</pre></div>
-            <p>Read the output. Checkov flags <code>CKV_AWS_*</code> IDs for the public bucket, the wildcard IAM policy, the missing default encryption, and more. Map each finding back to the exact resource you wrote, fix them one at a time, and re-scan until the run is clean. That loop - write, scan, remediate, re-scan - is precisely what an AppSec / IaC engineer does on every pull request. See the <a href="../ci-cd.html">CI/CD security</a> page for wiring the same scan into a pipeline.</p>
+            <p>Read the output. Checkov flags <code>CKV_AWS_*</code> IDs for the public bucket, the wildcard IAM policy, the missing default encryption, and more. Map each finding back to the exact resource you wrote, fix them one at a time, and re-scan until the run is clean. That write, scan, remediate, re-scan loop is precisely what an AppSec / IaC engineer does on every pull request. See the <a href="../ci-cd.html">CI/CD security</a> page for wiring the same scan into a pipeline.</p>
 
             <h3>8. Tear it down</h3>
 <div class="code-block" data-lang="bash"><pre>tflocal destroy -auto-approve   # delete everything Terraform created; -auto-approve skips the confirmation prompt
@@ -532,7 +532,7 @@ localstack stop                 # stop the container - community-edition state l
                 <li><strong>Great for:</strong> AWS CLI and SDK fluency, boto3 scripting, Terraform / OpenTofu, IaC scanning (Checkov, Trivy, tfsec), and event-driven plumbing (S3 &rarr; Lambda &rarr; SQS).</li>
                 <li><strong>Not for:</strong> IAM policy <em>enforcement</em>, <code>AssumeRole</code> / session-policy boundaries, GuardDuty or CloudTrail detection, and anything that depends on real network, quota, or billing behavior.</li>
             </ul>
-            <p>When you outgrow the mock - when you need to know whether a policy actually <em>blocks</em> something, or whether a detection fires - move to a real free-tier account with the guardrails from the <a href="../cloud-security-home-lab.html#guardrails">home-lab guide</a>.</p>
+            <p>When you outgrow the mock (when you need to know whether a policy actually <em>blocks</em> something, or whether a detection fires), move to a real free-tier account with the guardrails from the <a href="../cloud-security-home-lab.html#guardrails">home-lab guide</a>.</p>
         </section>
 
         <section id="mistakes">

@@ -340,11 +340,11 @@
         </div>
 
         <section id="intro">
-            <p>You can learn the overwhelming majority of Kubernetes attack and defense on your laptop, for free. <a href="https://kind.sigs.k8s.io/" target="_blank" rel="noopener noreferrer">kind</a> ("Kubernetes IN Docker") spins up a real, conformant cluster inside Docker containers in about thirty seconds. <a href="https://github.com/madhuakula/kubernetes-goat" target="_blank" rel="noopener noreferrer">Kubernetes Goat</a> is a deliberately vulnerable cluster full of realistic scenarios - leaked secrets, SSRF, container escape, over-permissive RBAC. This walkthrough builds the cluster, walks several Goat scenarios hands-on, then flips to defense: you baseline the cluster with kube-bench and kubescape and lock a namespace down with Pod Security admission and NetworkPolicies.</p>
+            <p>You can learn the overwhelming majority of Kubernetes attack and defense on your laptop, for free. <a href="https://kind.sigs.k8s.io/" target="_blank" rel="noopener noreferrer">kind</a> ("Kubernetes IN Docker") spins up a real, conformant cluster inside Docker containers in about thirty seconds. <a href="https://github.com/madhuakula/kubernetes-goat" target="_blank" rel="noopener noreferrer">Kubernetes Goat</a> is a deliberately vulnerable cluster full of realistic scenarios (leaked secrets, SSRF, container escape, over-permissive RBAC). This walkthrough builds the cluster, walks several Goat scenarios hands-on, then flips to defense: you baseline the cluster with kube-bench and kubescape and lock a namespace down with Pod Security admission and NetworkPolicies.</p>
         </section>
 
         <div class="highlight-box">
-            <p><strong>Laptop only.</strong> Kubernetes Goat is intentionally exploitable. Run it on a local kind cluster you can delete - never on a shared, cloud, or production cluster, and never expose its ports beyond localhost.</p>
+            <p><strong>Laptop only.</strong> Kubernetes Goat is intentionally exploitable. Run it on a local kind cluster you can delete. Never run it on a shared, cloud, or production cluster, and never expose its ports beyond localhost.</p>
         </div>
 
         <div class="toc">
@@ -376,7 +376,7 @@
                 <li><strong>kubectl</strong> - the Kubernetes CLI.</li>
                 <li><strong>kind</strong> - installed below.</li>
                 <li><strong>git</strong> - to clone Kubernetes Goat.</li>
-                <li>Skim the <a href="../kubernetes.html">Kubernetes security reference</a> first for the threat-model context - what RBAC, admission control, and the service-account token actually are.</li>
+                <li>Skim the <a href="../kubernetes.html">Kubernetes security reference</a> first for the threat-model context: what RBAC, admission control, and the service-account token are.</li>
             </ul>
         </section>
 
@@ -432,7 +432,7 @@ kubectl auth can-i --list \                     # --list = dump every verb/resou
 # check one specific dangerous verb
 kubectl auth can-i create pods \                # asks a yes/no question: can this identity create pods?
   --as=system:serviceaccount:default:default    # a "yes" here from a pod's own SA is a real privilege-escalation finding</pre></div>
-            <p><code>kubectl auth can-i</code> is the single most useful RBAC command. Running it <em>as</em> a service account shows you the exact blast radius of a pod compromise. If a default service account can <code>create pods</code> or <code>get secrets</code> cluster-wide, that is your finding.</p>
+            <p><code>kubectl auth can-i</code> is the most useful RBAC command. Running it <em>as</em> a service account shows you the exact blast radius of a pod compromise. If a default service account can <code>create pods</code> or <code>get secrets</code> cluster-wide, that is your finding.</p>
 
             <h3>6. Scenario: spot a container-escape path</h3>
 <div class="code-block" data-lang="bash"><pre># inspect a pod spec for the classic escape enablers
@@ -449,7 +449,7 @@ kubectl logs job/kube-bench                                          # the bench
 # kubescape: posture scan mapped to the NSA/CISA and MITRE ATT&amp;CK frameworks
 brew install kubescape
 kubescape scan --format html --output kubescape-report.html   # scan the live cluster and write a shareable HTML report</pre></div>
-            <p>kube-bench grades the cluster against the CIS benchmark control by control; kubescape maps findings to attack frameworks and produces a shareable report. Trivy can also scan the whole cluster in one shot: <code>trivy k8s --report summary cluster</code>. Reading these reports - deciding what is a real risk versus benchmark noise on a kind cluster - is the actual skill.</p>
+            <p>kube-bench grades the cluster against the CIS benchmark control by control; kubescape maps findings to attack frameworks and produces a shareable report. Trivy can also scan the whole cluster in one shot: <code>trivy k8s --report summary cluster</code>. The actual skill is reading these reports, which means deciding what is a real risk versus benchmark noise on a kind cluster.</p>
 
             <h3>8. Harden a namespace: Pod Security admission</h3>
 <div class="code-block" data-lang="bash"><pre>kubectl create namespace secure-app          # a fresh namespace to apply the policy to
@@ -460,7 +460,7 @@ kubectl label namespace secure-app \         # Pod Security admission is switche
 # now try to run a privileged pod there - admission rejects it before it schedules
 kubectl -n secure-app run bad --image=nginx \        # -n = target the labeled namespace
   --overrides='{"spec":{"containers":[{"name":"bad","image":"nginx","securityContext":{"privileged":true}}]}}'   # patch in privileged:true - the exact thing "restricted" forbids</pre></div>
-            <p>Pod Security admission is built into modern Kubernetes. The <code>restricted</code> profile blocks privileged containers, host namespaces, and <code>hostPath</code> mounts - the exact things you exploited in step 6. Watch the API server reject the bad pod with a clear policy violation.</p>
+            <p>Pod Security admission is built into modern Kubernetes. The <code>restricted</code> profile blocks privileged containers, host namespaces, and <code>hostPath</code> mounts, the exact things you exploited in step 6. Watch the API server reject the bad pod with a clear policy violation.</p>
 
             <h3>9. Harden the network: default-deny</h3>
             <p><code>default-deny.yaml</code>:</p>
@@ -488,11 +488,11 @@ kubectl -n secure-app apply -f default-deny.yaml   # re-apply the policy; now tr
         <section id="mistakes">
             <h2>Common mistakes</h2>
             <ul>
-                <li><strong>Running Kubernetes Goat on a real or shared cluster.</strong> It is deliberately vulnerable - laptop kind only.</li>
+                <li><strong>Running Kubernetes Goat on a real or shared cluster.</strong> It is deliberately vulnerable, so run it on laptop kind only.</li>
                 <li><strong>Expecting NetworkPolicy to work under kindnet.</strong> You need Calico or Cilium for enforcement.</li>
                 <li><strong>Skipping <code>kubectl auth can-i --list</code>.</strong> It is the fastest way to understand what a compromised pod can reach.</li>
                 <li><strong>Treating kube-bench output as a to-do list.</strong> Many controls are noise on a throwaway kind cluster; judgment about what matters is the point.</li>
-                <li><strong>Leaving the cluster running.</strong> It costs nothing but eats RAM - <code>kind delete cluster</code> when done.</li>
+                <li><strong>Leaving the cluster running.</strong> It costs nothing but eats RAM, so run <code>kind delete cluster</code> when done.</li>
             </ul>
         </section>
 
