@@ -19,6 +19,7 @@ python3 tools/deai_segments.py check batches/batch-01.json rewrites.json
 python3 tools/deai_segments.py apply segs.json accepted.json report.json --dry-run
 python3 tools/deai_segments.py apply segs.json accepted.json report.json
 python3 tools/deai_segments.py verify --ref HEAD
+python3 tools/deai_segments.py labels pages.txt report.json --dry-run
 python3 tools/deai_segments.py self-test
 ```
 
@@ -33,6 +34,14 @@ python3 tools/deai_segments.py self-test
   It refuses a segment whose bytes changed since extraction.
 - `verify` compares every page modified since a git ref and fails unless only
   prose text moved.
+- `labels` is a mechanical label pass, separate from any rewrite. A list item
+  that opens with a link and then ` - ` gets a colon in place of the dash. An
+  acronym followed by ` - ` and its expansion gets the expansion in
+  parentheses, but only when the expansion's initials spell the acronym. It
+  never touches link text, code, headings, generated regions or
+  `glossary.html`, whose headword separator the cross-link tooling parses. Bold
+  term labels are left alone: a colon there would only produce the
+  `<strong>X</strong>:` bullet section 9 calls a tell.
 
 ## What the check rejects
 

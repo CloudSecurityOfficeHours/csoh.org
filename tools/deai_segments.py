@@ -37,7 +37,27 @@ USAGE
                        write accepted rewrites into the pages, last offset first
   verify   [--ref REF]
                        whole-file check of every page modified since REF (default HEAD)
-  self-test            planted cases the check must accept or reject
+  labels   PAGES.txt REPORT.json [--dry-run]
+                       mechanical label pass (below)
+  self-test            planted cases the check and the label pass must accept or reject
+
+LABEL PASS
+----------
+Section 5 bans a spaced hyphen used as a dash, labels included. Two label
+shapes are converted mechanically because the replacement is unambiguous:
+
+- A list item that opens with a link, then " - " and a description:
+  `<li><a href="x">Name</a> - what it is</li>` becomes `...</a>: what it is`.
+- An acronym followed by its expansion, `CSPM - Cloud Security Posture
+  Management`, becomes `CSPM (Cloud Security Posture Management)`, but only
+  when the expansion's initials spell the acronym. Anything else that merely
+  looks like one (kill-chain phase titles, ATT&CK IDs inside links) is left.
+
+Neither shape is touched inside links, code, headings, SVG, scripts or the
+generated SESSION_BLOCK and QUOTES regions. glossary.html is never passed in:
+its headwords use " - " as a separator that the cross-link tooling parses.
+A bold term followed by " - " is not converted, because a colon there makes
+the `<strong>X</strong>:` bullet that section 9 lists as a tell.
 
 REWRITES.json is a list of {"id": ..., "after": ...}. A segment id is
 "<page>#<n>", numbered in page order at extraction time; offsets are only
@@ -344,6 +364,83 @@ def verify(ref: str) -> int:
     return 1 if bad else 0
 
 
+# ---- label pass -------------------------------------------------------------------------------------------------
+
+LI_LINK = re.compile(r'(<li\b[^>]*>\s*(?:<strong>\s*)?<a\b[^>]*>(?:(?!</a>).)*</a>\s*(?:</strong>)?)\s+-\s+', re.S)
+CONNECT = {'and', 'for', 'of', 'the', 'to', 'in', 'on', '&', 'as', 'a', 'an', 'with', 'by', 'at'}
+ACRONYM = re.compile(r'(?<![\w-])([A-Z][A-Za-z0-9]{1,9}(?:/[A-Z][A-Za-z0-9]{1,9})?) - '
+                     r'((?:(?:[A-Z][\w]*(?:-[A-Z]?[\w]+)*|&amp;|&|and|for|of|the|to|in|on|as|with|by|at) ?){2,9})')
+LABEL_PROTECTED = PROTECTED + [r'<h[1-6]\b.*?</h[1-6]>', r'<code\b.*?</code>', r'<a\b[^>]*>.*?</a>']
+
+
+def _initials(words: list[str]) -> str:
+    return ''.join(p[0] for w in words if w.lower() not in CONNECT for p in w.split('-') if p).upper()
+
+
+def _expansion(acr: str, phrase: str) -> str | None:
+    """The longest leading run of words whose initials spell the acronym, or None."""
+    words = phrase.replace('&amp;', '&').split()
+    letters = re.sub(r'[^A-Z]', '', acr.upper())
+    for n in range(len(words), 1, -1):
+        if words[n - 1].lower() not in CONNECT and _initials(words[:n]) == letters:
+            return ' '.join(phrase.split()[:n])
+    return None
+
+
+def label_pass(s: str) -> tuple[str, list[tuple[str, str, str]]]:
+    """Return the converted page and a list of (kind, before, after) for each change."""
+    m = re.search(r'<main\b.*?</main>', s, re.S)
+    if not m:
+        return s, []
+    changes = []
+
+    def protected(lo: int, hi: int, spans: list[tuple[int, int]]) -> bool:
+        return any(a < hi and lo < b for a, b in spans)
+
+    spans = [(x.start(), x.end()) for p in PROTECTED for x in re.finditer(p, s, re.S | re.I)]
+    out, last = [], 0
+    for x in LI_LINK.finditer(s, m.start(), m.end()):
+        if protected(x.start(), x.end(), spans):
+            continue
+        out.append(s[last:x.start()] + x.group(1) + ': ')
+        changes.append(('link description', text_of(x.group(0))[-60:] + ' - …', text_of(x.group(1))[-60:] + ': …'))
+        last = x.end()
+    s = ''.join(out) + s[last:]
+
+    m = re.search(r'<main\b.*?</main>', s, re.S)
+    spans = [(x.start(), x.end()) for p in LABEL_PROTECTED for x in re.finditer(p, s, re.S | re.I)]
+    out, last = [], 0
+    for x in ACRONYM.finditer(s, m.start(), m.end()):
+        if protected(x.start(), x.end(), spans) or re.fullmatch(r'T\d{4}', x.group(1)):
+            continue
+        exp = _expansion(x.group(1), x.group(2))
+        if not exp:
+            continue
+        end = x.start(2) + x.group(2).find(exp) + len(exp)
+        out.append(s[last:x.start()] + f'{x.group(1)} ({exp})')
+        changes.append(('acronym expansion', f'{x.group(1)} - {exp}', f'{x.group(1)} ({exp})'))
+        last = end
+    return ''.join(out) + s[last:], changes
+
+
+def labels(pages_path: str, report_path: str, dry: bool) -> int:
+    pages = [line.strip() for line in Path(pages_path).read_text().splitlines() if line.strip()]
+    report = collections.defaultdict(list)
+    for f in pages:
+        if f == 'glossary.html':
+            continue
+        s = (ROOT / f).read_text(encoding='utf-8')
+        new, changes = label_pass(s)
+        if changes and not dry:
+            (ROOT / f).write_text(new, encoding='utf-8')
+        for kind, before, after in changes:
+            report[f].append({'kind': kind, 'before': before, 'after': after})
+    Path(report_path).write_text(json.dumps(report, indent=1, ensure_ascii=False))
+    kinds = collections.Counter(c['kind'] for v in report.values() for c in v)
+    print(f'{sum(kinds.values())} label conversions on {len(report)} pages: {dict(kinds)}', '(dry run)' if dry else '')
+    return 0
+
+
 # ---- self-test --------------------------------------------------------------------------------------------------
 
 def self_test() -> int:
@@ -371,6 +468,34 @@ def self_test() -> int:
         failures += not ok
         print(f'{"ok  " if ok else "FAIL"} {name}: {got or "accepted"}')
     VENDORS = None
+
+    def page(body: str) -> str:
+        return f'<html><head></head><body><main>{body}</main></body></html>'
+
+    label_cases = {
+        'list link description': ('<ul><li><a href="a.html">Guide</a> - what it covers</li></ul>',
+                                  '<ul><li><a href="a.html">Guide</a>: what it covers</li></ul>'),
+        'bold list link description': ('<ul><li><strong><a href="a.html">Guide</a></strong> - covers it</li></ul>',
+                                       '<ul><li><strong><a href="a.html">Guide</a></strong>: covers it</li></ul>'),
+        'mid-sentence link aside left': ('<p>See the <a href="g.html">glossary</a> - it helps.</p>', None),
+        'bold term label left': ('<ul><li><strong>Term</strong> - definition here</li></ul>', None),
+        'generated block left': ('<!-- SESSION_BLOCK_START --><ul><li><a href="m.html">Recap</a> - notes</li></ul>'
+                                 '<!-- SESSION_BLOCK_END -->', None),
+        'acronym expansion': ('<p><strong>CSPM - Cloud Security Posture Management.</strong> Scans.</p>',
+                              '<p><strong>CSPM (Cloud Security Posture Management).</strong> Scans.</p>'),
+        'hyphenated expansion': ('<p>CNAPP - Cloud-Native Application Protection Platform is the umbrella.</p>',
+                                 '<p>CNAPP (Cloud-Native Application Protection Platform) is the umbrella.</p>'),
+        'phase title left': ('<div>Initial Access - Stealing the Session</div>', None),
+        'acronym inside link left': ('<p><a href="t.html">IAM - Identity and Access Management</a></p>', None),
+        'ATT&CK ID left': ('<p>T1078 - Valid Accounts was used.</p>', None),
+    }
+    for name, (body, want) in label_cases.items():
+        got, changes = label_pass(page(body))
+        expect = page(want) if want else page(body)
+        again, more = label_pass(got)
+        ok = got == expect and not more and again == got
+        failures += not ok
+        print(f'{"ok  " if ok else "FAIL"} label: {name}' + ('' if ok else f'\n      got {got}'))
     if failures:
         print(f'{failures} self-test case(s) failed')
         return 1
@@ -399,6 +524,10 @@ def main() -> int:
     a.add_argument('--dry-run', action='store_true')
     v = sub.add_parser('verify')
     v.add_argument('--ref', default='HEAD')
+    lb = sub.add_parser('labels')
+    lb.add_argument('pages')
+    lb.add_argument('report')
+    lb.add_argument('--dry-run', action='store_true')
     sub.add_parser('self-test')
     args = ap.parse_args()
     if args.cmd == 'extract':
@@ -414,6 +543,8 @@ def main() -> int:
         return apply(args.segments, args.rewrites, args.report, args.dry_run)
     if args.cmd == 'verify':
         return verify(args.ref)
+    if args.cmd == 'labels':
+        return labels(args.pages, args.report, args.dry_run)
     return self_test()
 
 
