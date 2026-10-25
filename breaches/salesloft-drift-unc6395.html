@@ -349,7 +349,7 @@
       <span class="prov-tag prov-tag--sky">Salesforce</span>
     </div>
     <h2 class="inc-title">Salesloft Drift / UNC6395 - GitHub Compromise → Stolen Drift OAuth Tokens → Bulk SOQL Exfil → Secret-Mining → 700+ Orgs Hit</h2>
-    <p class="inc-summary">A threat actor tracked as UNC6395 (also referenced as GRUB1) stole OAuth refresh and access tokens tied to the Salesloft Drift third-party chat integration and used them to reach hundreds of organizations' Salesforce instances. Over roughly ten days in August 2025 the actor ran automated OAuth-authenticated SOQL queries to bulk-export Salesforce objects, then combed the exported data for embedded secrets - AWS access keys (AKIA...), Snowflake tokens, VPN credentials, and passwords - to enable downstream compromise. The root cause was traced back to a compromise of Salesloft's GitHub environment (March-June 2025) that let the actor pivot into the Drift AWS environment and harvest the integration's customer OAuth tokens. 700+ organizations were potentially affected, including major security vendors, making this one of the largest <a class="glossary-link" href="../glossary.html#term-saas">SaaS</a> supply-chain incidents of 2025.</p>
+    <p class="inc-summary">A threat actor tracked as UNC6395 (also referenced as GRUB1) stole OAuth refresh and access tokens tied to the Salesloft Drift third-party chat integration and used them to reach hundreds of organizations' Salesforce instances. Over roughly ten days in August 2025 the actor ran automated OAuth-authenticated SOQL queries to bulk-export Salesforce objects. To enable downstream compromise, the actor then combed the exported data for embedded secrets: AWS access keys (AKIA...), Snowflake tokens, VPN credentials, and passwords. The root cause was traced back to a compromise of Salesloft's GitHub environment (March-June 2025) that let the actor pivot into the Drift AWS environment and harvest the integration's customer OAuth tokens. 700+ organizations were potentially affected, including major security vendors, making this one of the largest <a class="glossary-link" href="../glossary.html#term-saas">SaaS</a> supply-chain incidents of 2025.</p>
     <div class="inc-stats">
       <div class="inc-stat"><strong>700+</strong> organizations potentially affected</div>
       <div class="inc-stat"><strong>Aug 8-18, 2025</strong> ~10-day <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> window</div>
@@ -370,7 +370,7 @@
           <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
         </div>
         <p class="step-desc">The upstream root cause was a compromise of Salesloft's GitHub account. From March through June 2025 the actor downloaded content from multiple private repositories, added a guest user, and established suspicious <a class="glossary-link" href="../glossary.html#term-ci-cd">CI/CD</a> workflows. </p>
-        <p class="step-desc">From there the actor pivoted into the Drift AWS environment, where the OAuth access and refresh tokens issued to Drift's customer integrations were stored. Harvesting those tokens gave the actor pre-authenticated access to every downstream Salesforce <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> that had connected Drift - no victim-side credential theft required.</p>
+        <p class="step-desc">From there the actor pivoted into the Drift AWS environment, where the OAuth access and refresh tokens issued to Drift's customer integrations were stored. Harvesting those tokens gave the actor pre-authenticated access to every downstream Salesforce <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> that had connected Drift, with no victim-side credential theft required.</p>
         <div class="step-code">
           <span class="hl">Upstream entry:</span> Salesloft GitHub account (repos downloaded, guest user + workflows added)<br>
           <span class="hl">Pivot:</span> Salesloft GitHub → Drift AWS environment holding customer OAuth tokens<br>
@@ -388,7 +388,7 @@
           <div class="step-title">UNC6395 authenticated to victim Salesforce (and some Google Workspace) tenants using the stolen Drift OAuth tokens - no password or <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> challenge</div>
           <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1528/" target="_blank" rel="noopener">T1528 - Steal Application Access Token</a>
         </div>
-        <p class="step-desc">The stolen Drift OAuth refresh and access tokens were valid, pre-authorized application credentials, so the actor connected directly to each customer's Salesforce instance through the trusted integration - bypassing user login, MFA, and password controls entirely. Because the access rode an approved third-party tenant integration, activity blended in with normal Drift API traffic. </p>
+        <p class="step-desc">The stolen Drift OAuth refresh and access tokens were valid, pre-authorized application credentials, so the actor connected directly to each customer's Salesforce instance through the trusted integration, bypassing user login, MFA, and password controls entirely. Because the access rode an approved third-party tenant integration, activity blended in with normal Drift API traffic. </p>
         <p class="step-desc">Separately, on August 9 the actor abused OAuth tokens for the Drift Email integration to read email from a very small number of Google Workspace accounts that had specifically connected Drift.</p>
         <div class="step-code">
           <span class="hl">Credential type:</span> OAuth refresh + access tokens for the Drift integration (T1528)<br>
@@ -407,7 +407,7 @@
           <div class="step-title">Actor enumerated accessible Salesforce objects and mapped high-value tables via the API</div>
           <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1213/" target="_blank" rel="noopener">T1213 - Data from Information Repositories</a>
         </div>
-        <p class="step-desc">Operating through Salesforce's APIs with Python-based tooling, UNC6395 enumerated the standard objects reachable by the compromised Drift integration to find where sensitive text lived. The actor focused on records that commonly hold free-text and credential-bearing content - Cases (support ticket bodies), Accounts, Contacts, Users, and Opportunities. </p>
+        <p class="step-desc">Operating through Salesforce's APIs with Python-based tooling, UNC6395 enumerated the standard objects reachable by the compromised Drift integration to find where sensitive text lived. The actor focused on records that commonly hold free-text and credential-bearing content: Cases (support ticket bodies), Accounts, Contacts, Users, and Opportunities. </p>
         <p class="step-desc">Support case text was a prime target because customers routinely paste keys, tokens, and passwords into tickets. The actor used custom user-agent strings to appear like a legitimate integration and reduce the chance of anomaly detection.</p>
         <div class="step-code">
           <span class="hl">Objects targeted:</span> Case, Account, Contact, User, Opportunity<br>
@@ -446,7 +446,7 @@
           <div class="step-title">Exfiltrated data was mined for embedded secrets to enable downstream cloud compromise</div>
           <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
         </div>
-        <p class="step-desc">The campaign's real objective was credential harvesting, not the Salesforce data itself. UNC6395 scanned the stolen exports - likely with scripts and regex - for patterns that reveal secrets: AWS access key IDs (AKIA...), Snowflake tokens, VPN credentials, and password strings pasted into support cases. </p>
+        <p class="step-desc">The campaign's real objective was credential harvesting, not the Salesforce data itself. UNC6395 scanned the stolen exports, likely with scripts and regex, for patterns that reveal secrets: AWS access key IDs (AKIA...), Snowflake tokens, VPN credentials, and password strings pasted into support cases. </p>
         <p class="step-desc">Any live secret found became a foothold into a victim's cloud estate, turning one SaaS integration breach into potential AWS and data-warehouse compromise. On August 20, 2025 Salesloft and Salesforce revoked all active Drift OAuth tokens and Salesforce removed the Drift app from AppExchange pending investigation.</p>
         <div class="step-code">
           <span class="hl">Secrets hunted:</span> AWS keys (AKIA...), Snowflake tokens, VPN credentials, plaintext passwords<br>

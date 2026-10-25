@@ -338,7 +338,7 @@
         </div>
 
         <section id="intro">
-            <p>The single best way to understand a cloud attack is to build the vulnerable setup, exploit it yourself, and then watch the defenses react - or fail to. This walkthrough deploys a small, deliberately-weak AWS environment with Terraform, walks three escalating attack paths against it (manual CLI recon, automated enumeration with Pacu, ATT&amp;CK technique detonation with Stratus Red Team), and reads the GuardDuty findings that result. It ends with the question every detection engineer asks - <em>what did the defenses miss?</em> - which is the on-ramp to the <a href="cloudtrail-siem-detection.html">CloudTrail-to-SIEM walkthrough</a>.</p>
+            <p>The single best way to understand a cloud attack is to build the vulnerable setup, exploit it yourself, and then watch the defenses react or fail to. This walkthrough deploys a small, deliberately-weak AWS environment with Terraform, walks three escalating attack paths against it (manual CLI recon, automated enumeration with Pacu, ATT&amp;CK technique detonation with Stratus Red Team), and reads the GuardDuty findings that result. It ends with the question every detection engineer asks: <em>what did the defenses miss?</em> That question is the on-ramp to the <a href="cloudtrail-siem-detection.html">CloudTrail-to-SIEM walkthrough</a>.</p>
         </section>
 
         <div class="toc">
@@ -360,7 +360,7 @@
                 <li>A deliberately-vulnerable Terraform stack: a public bucket, a leaked access key, an over-permissive user, an SSM secret, and a wide-open security group.</li>
                 <li>Three attack runs against it, from manual recon to automated ATT&amp;CK detonation.</li>
                 <li>A read-through of the resulting GuardDuty findings, mapped to what you did.</li>
-                <li>A clear list of what GuardDuty caught and what it did not - your detection-engineering to-do list.</li>
+                <li>A clear list of what GuardDuty caught and what it did not, which is your detection-engineering to-do list.</li>
             </ul>
         </section>
 
@@ -494,7 +494,7 @@ aws s3 ls                                           # list buckets the key can s
 aws s3 cp s3://exports-lab-&lt;account-id&gt;/loot.txt -   # trailing "-" streams the object to stdout instead of a file
 aws ssm get-parameter --name /lab/db_password --with-decryption \   # --with-decryption returns the plaintext SecureString
   --query Parameter.Value --output text             # --query/--output text = print just the value, nothing else</pre></div>
-            <p>Each command is one link in a real kill chain: <em>credential access</em> (the leaked key), <em>discovery</em> (enumerating what it can do), and <em>collection</em> (reading the bucket and the decrypted secret). This is exactly how the majority of cloud breaches begin - see the <a href="../breach-timeline.html">breach kill chains</a> for the production versions.</p>
+            <p>Each command is one link in a real kill chain: <em>credential access</em> (the leaked key), <em>discovery</em> (enumerating what it can do), and <em>collection</em> (reading the bucket and the decrypted secret). This is exactly how the majority of cloud breaches begin. See the <a href="../breach-timeline.html">breach kill chains</a> for the production versions.</p>
 
             <h3>4. Attack path 2 - automated enumeration with Pacu</h3>
 <div class="code-block" data-lang="bash"><pre>pip install pacu
@@ -504,7 +504,7 @@ pacu                               # launches Pacu's own interactive shell (its 
 #   run iam__enum_permissions      # enumerate every permission the key has
 #   run iam__privesc_scan          # take those permissions and map concrete paths to admin
 #   run s3__download_bucket        # bulk-download readable buckets - automated collection</pre></div>
-            <p><a href="https://github.com/RhinoSecurityLabs/pacu" target="_blank" rel="noopener noreferrer">Pacu</a> is the AWS exploitation framework. <code>iam__privesc_scan</code> is the highlight: it takes the permissions you enumerated and tells you <em>how</em> to escalate to admin from them - the same reasoning an attacker (or a good IAM reviewer) applies to an over-permissive policy.</p>
+            <p><a href="https://github.com/RhinoSecurityLabs/pacu" target="_blank" rel="noopener noreferrer">Pacu</a> is the AWS exploitation framework. <code>iam__privesc_scan</code> is the highlight: it takes the permissions you enumerated and tells you <em>how</em> to escalate to admin from them. It is the same reasoning an attacker (or a good IAM reviewer) applies to an over-permissive policy.</p>
 
             <h3>5. Attack path 3 - detonate ATT&amp;CK techniques with Stratus Red Team</h3>
 <div class="code-block" data-lang="bash"><pre>brew install stratus-red-team          # or grab a binary from the releases page
@@ -525,12 +525,12 @@ DETECTOR=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text) 
 aws guardduty list-findings --detector-id "$DETECTOR"        # list finding IDs GuardDuty has raised
 aws guardduty get-findings --detector-id "$DETECTOR" \       # fetch the full detail for one finding...
   --finding-ids &lt;finding-id&gt; --query 'Findings[0].{type:Type,severity:Severity}'   # ...and print just its type and severity</pre></div>
-            <p>Expect findings such as <code>Stealth:IAMUser/CloudTrailLoggingDisabled</code> (from the Stratus cloudtrail-stop), <code>UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS</code> (from the credential-theft technique), and <code>Policy:S3/BucketAnonymousAccessGranted</code> (from your public bucket). Findings can take minutes to hours to surface; to see the <em>shape</em> of a finding immediately, generate samples with <code>aws guardduty create-sample-findings --detector-id "$DETECTOR"</code>. Read each finding in full - every one is a real attack pattern, annotated, in an environment you control.</p>
+            <p>Expect findings such as <code>Stealth:IAMUser/CloudTrailLoggingDisabled</code> (from the Stratus cloudtrail-stop), <code>UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS</code> (from the credential-theft technique), and <code>Policy:S3/BucketAnonymousAccessGranted</code> (from your public bucket). Findings can take minutes to hours to surface; to see the <em>shape</em> of a finding immediately, generate samples with <code>aws guardduty create-sample-findings --detector-id "$DETECTOR"</code>. Read each finding in full. Every one is a real attack pattern, annotated, in an environment you control.</p>
         </section>
 
         <section id="gaps">
             <h2>What did the defenses miss?</h2>
-            <p>GuardDuty is anomaly- and signature-based, so it will not flag everything you did. The quiet <code>ssm:GetParameter</code> read of the secret, the <code>iam:PutUserPolicy</code> self-escalation Pacu mapped, and the plain enumeration calls often raise <em>no</em> managed finding at all. That gap is not a failure of the lab - it is the reason detection engineers write their own logic against the raw audit trail. Take your list of "things GuardDuty missed" straight into the <a href="cloudtrail-siem-detection.html">CloudTrail-to-SIEM walkthrough</a> and build detections for them.</p>
+            <p>GuardDuty is anomaly- and signature-based, so it will not flag everything you did. The quiet <code>ssm:GetParameter</code> read of the secret, the <code>iam:PutUserPolicy</code> self-escalation Pacu mapped, and the plain enumeration calls often raise <em>no</em> managed finding at all. That gap is not a failure of the lab but the reason detection engineers write their own logic against the raw audit trail. Take your list of "things GuardDuty missed" straight into the <a href="cloudtrail-siem-detection.html">CloudTrail-to-SIEM walkthrough</a> and build detections for them.</p>
         </section>
 
         <div class="highlight-box">
