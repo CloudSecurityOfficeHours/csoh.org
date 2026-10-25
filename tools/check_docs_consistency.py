@@ -46,7 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from sync_counts import canonical_counts, display_values  # noqa: E402
+from sync_counts import CATEGORY_ALIASES, canonical_counts, display_values  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -344,6 +344,29 @@ COUNT_RE = re.compile(
 )
 
 
+def count_key(path: Path, subject: str) -> str | None:
+    """Which sync_counts key a prose count is claiming.
+
+    A resources category page states that category's own card count in its
+    descriptions ("N curated resources"). sync_counts owns those sentences
+    through HTML_PAGE_PROSE_RULES, under cat_<alias>, because a marker comment
+    cannot sit inside a content attribute. The site-wide resources floor is a
+    different number, so comparing a category total to it reports a correct
+    count as drift. Any other subject still uses COUNT_SUBJECTS.
+    """
+    name = path.name
+    if (
+        subject in ("resources", "curated resources")
+        and name.startswith("resources-")
+        and name.endswith(".html")
+    ):
+        cid = name[len("resources-"):-len(".html")]
+        alias = CATEGORY_ALIASES.get(cid)
+        if alias:
+            return f"cat_{alias}"
+    return COUNT_SUBJECTS.get(subject)
+
+
 def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
     """Inventory numbers in prose that are FALSE, reported for a human.
 
@@ -368,7 +391,7 @@ def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
         num, plus, subject = m.group(1), m.group(2), m.group(3).lower()
         if (rel(path), num) in COUNT_EXCEPTIONS:
             continue
-        key = COUNT_SUBJECTS.get(subject)
+        key = count_key(path, subject)
         truth = disp.get(key) if key else None
         if not truth:
             continue
@@ -377,13 +400,23 @@ def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
         false_claim = (claimed > real) if plus else (claimed != real)
         if not false_claim:
             continue
+        if key.startswith("cat_"):
+            detail = (
+                "This is the category's own card count. sync_counts.py owns it "
+                "through HTML_PAGE_PROSE_RULES. Do not replace it with the "
+                "site-wide resources floor."
+            )
+        else:
+            detail = (
+                "Check what the sentence is actually counting before changing it, "
+                f"then consider a <!--count:{key}--> marker so sync_counts.py "
+                "owns it."
+            )
         findings.append(Finding(
             "count-drift", rel(path),
             f"prose says \"{num}{plus} {subject}\" but the real count is {truth}",
             fixable=False,
-            detail="Check what the sentence is actually counting before changing it, "
-                   f"then consider a <!--count:{key}--> marker so sync_counts.py "
-                   "owns it.",
+            detail=detail,
         ))
     return findings
 

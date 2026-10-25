@@ -86,6 +86,14 @@ false positive gets rediscovered by the next reader, while one listed with a
 reason is an argument you can disagree with. Add to it rather than widening a
 regex.
 
+A category page (`resources-<category>.html`) is not an exception. Its
+description states that category's card count, and `sync_counts.py` already
+owns the sentence through `HTML_PAGE_PROSE_RULES` (`cat_<alias>`), because a
+marker comment cannot sit inside a `content` attribute. The checker compares
+that sentence to the category count. The site-wide resources floor answers a
+different question, and a category total that disagrees with the floor is not
+drift. A category total that disagrees with its own cards still is.
+
 ## Notes
 
 - Imports `canonical_counts()` and `display_values()` from `sync_counts.py`
