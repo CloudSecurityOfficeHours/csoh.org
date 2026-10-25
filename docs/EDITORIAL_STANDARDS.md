@@ -43,15 +43,15 @@ A page that only serves one end of that range is a finding, in either direction.
 - Credit your sources (`code-of-conduct.html`). A technique, tool, or diagram
   that came from someone else names them and links to them.
 
-Where a claim cannot be verified, it gets softened or cut - not shipped with
-confidence it has not earned.
+Where a claim cannot be verified, soften it or cut it. A claim ships only
+with confidence it has earned.
 
 ## 3. Neutrality
 
 CSOH is free, independent, and volunteer-run. Say that once where it matters
 (the Code of Conduct, the About ethos, a cert that is genuinely cross-vendor).
 Do not stamp "vendor-neutral" on every meta description, footer, page-meta
-line, or guide intro - readers already get it from the content.
+line, or guide intro. Readers already get it from the content.
 
 - **No sales pitch.** Describe what a tool does and what it is good at. No
   marketing superlatives, no "leading" or "best-in-class".
@@ -94,8 +94,15 @@ This is a judgment call and it is reported for a human, never auto-applied.
 
 ## 5. Mechanics
 
-- **No em-dashes.** Use a spaced hyphen ( - ), a colon, or parentheses. This is
-  consistent across the site and the review enforces it.
+- **No em-dashes, en-dashes, or spaced hyphens used as dashes.** An em-dash
+  (U+2014), an en-dash (U+2013), and their HTML entities do not belong in
+  prose. A spaced hyphen (` - `) used in their place is a dash substitute and
+  an AI tell, so it is not the replacement. Rewrite the sentence with a comma,
+  a period, a colon, or parentheses. `tools/check_docs_consistency.py` reports
+  em-dashes for that rewrite and does not insert a spaced hyphen. It does not
+  flag every ` - `, because the same characters appear in commands, flags, and
+  titles. En-dashes already in numeric ranges are the same ban; rewrite them
+  when you touch the sentence.
 - **No hand-typed counts.** Every number describing site inventory lives inside a
   `<!--count:name-->N<!--/count-->` marker owned by `tools/sync_counts.py`. A bare
   "310+ glossary terms" in prose will drift the day content lands. See
@@ -137,8 +144,11 @@ correct value is derivable from something already in the repo:
 
 - a visible date resynced to the page's own JSON-LD `dateModified`
 - a count resynced to the real number of cards or files
-- an em-dash replaced with a spaced hyphen
 
-Everything else - accuracy, neutrality, temperature, reading level, external
-reference currency, and every deletion - is reported to the tracking issue and
+An em-dash is not on that list. The script reports it. The rewrite (a comma,
+a period, a colon, or parentheses) is a human edit. A spaced hyphen is not a
+mechanical substitute.
+
+Everything else (accuracy, neutrality, temperature, reading level, external
+reference currency, and every deletion) is reported to the tracking issue and
 waits for you.
