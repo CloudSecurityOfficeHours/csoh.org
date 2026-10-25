@@ -390,33 +390,31 @@ def check_counts(path: Path, text: str, disp: dict) -> list[Finding]:
 
 # ----------------------------------------------------------------------- check 6
 
+# Em-dash characters and the HTML entities that render as one. A spaced
+# hyphen is not a substitute (EDITORIAL_STANDARDS.md §5), so this check
+# reports the sentence for a rewrite and never rewrites it.
+_EM_DASH = re.compile(r"—|&mdash;|&#8212;|&#x2014;", re.IGNORECASE)
+
+
 def check_em_dashes(path: Path, text: str) -> tuple[list[Finding], str]:
     """Em-dashes, per docs/EDITORIAL_STANDARDS.md §5.
 
-    A regression guard. Script, style, and fenced code blocks are skipped: an
-    em-dash in vendored JS or a code sample is not prose.
+    Reported, not rewritten. The right edit is a new sentence: a comma, a
+    period, a colon, or parentheses. `--fix` must not insert a spaced hyphen.
+    Script, style, and fenced code blocks are skipped: an em-dash in vendored
+    JS or a code sample is not prose.
     """
     scan = strip_code(text)
-    n = scan.count("—")
+    n = len(_EM_DASH.findall(scan))
     if not n:
         return [], text
-    out = [Finding(
+    noun = "em-dash" if n == 1 else "em-dashes"
+    return [Finding(
         "em-dash", rel(path),
-        f"{n} em-dash{'es' if n > 1 else ''} in prose; the standard is a spaced hyphen",
-        fixable=True,
-    )]
-    # Rebuild with replacements applied only at offsets that survived stripping.
-    chars = list(text)
-    for i, ch in enumerate(scan):
-        if ch == "—":
-            chars[i] = "\x01"
-    rebuilt = "".join(chars)
-    # An em-dash ending a line must not leave a trailing space behind it - the
-    # sentence continues on the next line, and trailing whitespace is its own
-    # lint failure. Handle that case before the general one.
-    rebuilt = re.sub(r"[ \t]*\x01[ \t]*(?=\n)", " -", rebuilt)
-    rebuilt = re.sub(r"[ \t]*\x01[ \t]*", " - ", rebuilt)
-    return out, rebuilt
+        f"{n} {noun} in prose; rewrite the sentence with a comma, period, "
+        "colon, or parentheses. Do not substitute a spaced hyphen.",
+        fixable=False,
+    )], text
 
 
 # ----------------------------------------------------------------------- check 7
@@ -578,9 +576,9 @@ def render_report(findings: list[Finding]) -> str:
     out.append(f"{len(fixable)} mechanical, {len(report)} needing a human.")
     out.append("")
     if fixable:
-        out += ["## Mechanical - applied by `--fix`", ""]
+        out += ["## Mechanical fixes applied by `--fix`", ""]
         for f in sorted(fixable, key=lambda x: (x.kind, x.path)):
-            out.append(f"- **{f.path}** - {f.message}")
+            out.append(f"- **{f.path}**: {f.message}")
             if f.detail:
                 out.append(f"  - {f.detail}")
         out.append("")
@@ -588,7 +586,7 @@ def render_report(findings: list[Finding]) -> str:
         out += ["## Needs a human", "",
                 "Not auto-applied. Nothing here is deleted by any tool.", ""]
         for f in sorted(report, key=lambda x: (x.kind, x.path)):
-            out.append(f"- [ ] **{f.path}** - {f.message}")
+            out.append(f"- [ ] **{f.path}**: {f.message}")
             if f.detail:
                 out.append(f"  - {f.detail}")
         out.append("")

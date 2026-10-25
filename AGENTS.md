@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Read [CLAUDE.md](CLAUDE.md) and follow it. That file is the single source of truth for how to work in this repo. This file does not restate those rules. When a rule changes, it changes in CLAUDE.md.
+Read [CLAUDE.md](CLAUDE.md) and [docs/agent-lessons.md](docs/agent-lessons.md) and follow both. CLAUDE.md is the single source of truth for how this repo works. The lessons file adds session rules and does not restate it. When they disagree, CLAUDE.md wins unless a lesson says it corrects CLAUDE.md. This file does not restate those rules. When a rule changes, it changes in CLAUDE.md or in the lessons file.
 
 Other docs, depending on the task:
 

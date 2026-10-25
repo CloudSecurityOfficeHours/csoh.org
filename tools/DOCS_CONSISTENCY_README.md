@@ -43,7 +43,7 @@ this from the outside as well.
 |---|---|---|
 | `date-visible-vs-jsonld` | fixable | `Last updated <date>` disagreeing with the page's own JSON-LD `dateModified` |
 | `date-attr-text` | fixable | `<time datetime>` disagreeing with the date printed beside it |
-| `em-dash` | fixable | Em-dashes where the standard calls for a spaced hyphen |
+| `em-dash` | reported | Em-dashes in prose. Rewrite the sentence. A spaced hyphen is not a substitute, so `--fix` does not insert one. |
 | `date-incoherent` | reported | `datePublished` after `dateModified` |
 | `date-placeholder` | reported | January 1 `datePublished` - the unfilled template |
 | `og-asset-missing` | reported | `og:image` / `twitter:image` naming a file that does not exist |

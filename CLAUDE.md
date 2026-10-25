@@ -3,6 +3,12 @@
 Notes for anyone (human or agent) working in this repo: the rules that are not
 obvious from the code, why they hold, and how to check them.
 
+**Read [docs/agent-lessons.md](docs/agent-lessons.md) and follow it.** It holds
+the working rules from past sessions: what needs Shawn's approval, how to
+write, and the site conventions that are easy to get wrong. It adds to this
+file. When the two disagree, this file wins unless a lesson says it corrects
+this file.
+
 Two habits run through all of it:
 
 - **Run a control before believing a clean result.** A check that cannot see
@@ -254,7 +260,7 @@ The pipeline guards against both known causes:
 
 - **Stale hashes.** `deploy.yml` runs `update_sri.py` in the build, so the
   published artifact is self-consistent. Run it locally anyway so local preview
-  loads.
+  loads. A stale SRI hash is a local-only issue, because deploy re-stamps it.
 - **A poisoned edge cache** (old bytes cached under a new `?v=` key, pinned by
   `immutable`). Publish jobs upload assets before HTML, and `purge-cloudflare`
   clears the edge after all three origins update, then re-derives every

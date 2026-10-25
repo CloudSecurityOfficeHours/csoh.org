@@ -43,15 +43,15 @@ A page that only serves one end of that range is a finding, in either direction.
 - Credit your sources (`code-of-conduct.html`). A technique, tool, or diagram
   that came from someone else names them and links to them.
 
-Where a claim cannot be verified, it gets softened or cut - not shipped with
-confidence it has not earned.
+Where a claim cannot be verified, soften it or cut it. A claim ships only
+with confidence it has earned.
 
 ## 3. Neutrality
 
 CSOH is free, independent, and volunteer-run. Say that once where it matters
 (the Code of Conduct, the About ethos, a cert that is genuinely cross-vendor).
 Do not stamp "vendor-neutral" on every meta description, footer, page-meta
-line, or guide intro - readers already get it from the content.
+line, or guide intro. Readers already get it from the content.
 
 - **No sales pitch.** Describe what a tool does and what it is good at. No
   marketing superlatives, no "leading" or "best-in-class".
@@ -94,13 +94,15 @@ This is a judgment call and it is reported for a human, never auto-applied.
 
 ## 5. Mechanics
 
-- **No em-dashes.** Rephrase the sentence: give the aside its own sentence, fold
-  it into a clause, or use a colon to introduce a list. A spaced hyphen ( - ) is
-  the fallback `check_docs_consistency.py` applies because a script cannot
-  rephrase. It keeps the dash's rhythm, so in hand-written prose it is not the
-  fix (see §9). Labels are exempt: a term and its expansion ("CSPM - Cloud
-  Security Posture Management"), a glossary headword, a link followed by its
-  description. This is consistent across the site and the review enforces it.
+- **No em-dashes, en-dashes, or spaced hyphens used as dashes.** An em-dash
+  (U+2014), an en-dash (U+2013), and their HTML entities do not belong in
+  prose. A spaced hyphen (` - `) used in their place is a dash substitute and
+  an AI tell, so it is not the replacement. Rewrite the sentence with a comma,
+  a period, a colon, or parentheses. `tools/check_docs_consistency.py` reports
+  em-dashes for that rewrite and does not insert a spaced hyphen. It does not
+  flag every ` - `, because the same characters appear in commands, flags, and
+  titles. En-dashes already in numeric ranges are the same ban; rewrite them
+  when you touch the sentence.
 - **No hand-typed counts.** Every number describing site inventory lives inside a
   `<!--count:name-->N<!--/count-->` marker owned by `tools/sync_counts.py`. A bare
   "310+ glossary terms" in prose will drift the day content lands. See
@@ -142,10 +144,13 @@ correct value is derivable from something already in the repo:
 
 - a visible date resynced to the page's own JSON-LD `dateModified`
 - a count resynced to the real number of cards or files
-- an em-dash replaced with a spaced hyphen
 
-Everything else - accuracy, neutrality, temperature, reading level, voice,
-external reference currency, and every deletion - is reported to the tracking
+An em-dash is not on that list. The script reports it. The rewrite (a comma,
+a period, a colon, or parentheses) is a human edit. A spaced hyphen is not a
+mechanical substitute.
+
+Everything else (accuracy, neutrality, temperature, reading level, voice,
+external reference currency, and every deletion) is reported to the tracking
 issue and waits for you.
 
 ## 9. Voice: prose that reads as generated
@@ -157,17 +162,16 @@ claims.
 
 ### Patterns to rewrite
 
-- **Dash asides.** A clause set off by a spaced hyphen, or by a pair of them,
-  mid-sentence or as a tail. Give it its own sentence, make it a clause, or use
-  "rather than", "which means", or a colon before a list. "...or insecure
-  APIs - not exotic zero-days" becomes "...or insecure APIs rather than exotic
-  zero-days".
-- **Reversals.** "X - not Y", "It is not X. It is Y.", "not just X but Y". State
+- **Dash asides.** An aside set off by a dash in the middle or at the end of a
+  sentence interrupts the flow. Give it its own sentence, make it a clause, or
+  use "rather than", "which means", or a colon before a list.
+- **Reversals.** "X, not Y", "It is not X. It is Y.", "not just X but Y". State
   the claim directly. Keep the contrast only where the reader would otherwise
   assume X.
-- **A list, then its summary.** "Public buckets, open security groups, weak
-  password policies - these are the day-to-day failure modes." Lead with the
-  claim and follow it with the list.
+- **A list, then its summary.** A list followed by a sentence that merely
+  summarizes it, such as "Public buckets, open security groups, weak password
+  policies. These are the day-to-day failure modes." Lead with the claim and
+  follow it with the list.
 - **Stacked fragments.** Three or more verbless sentences in a row: "CloudTrail
   feeding a SIEM. Provider-native services like GuardDuty. A response
   runbook." Write one sentence that carries the list. Cards and tiles are terse
@@ -177,8 +181,8 @@ claims.
   questions stand for. FAQ headings are questions by design and are exempt.
 - **Restating tag lines.** A short closer that repeats the sentence before it:
   "The provider's job, full stop." Fold the point into the sentence.
-- **Tacked-on slogans.** A triad after a dash that restates the list before it:
-  "VPCs, private endpoints, traffic monitoring - segment, restrict, observe."
+- **Tacked-on slogans.** A triad that restates the list before it: "VPCs,
+  private endpoints, traffic monitoring: segment, restrict, observe."
 - **Reveal labels.** "The catch:", "The honest lesson is", "Here's why", "This is
   where", "The bottom line". Say the thing.
 - **Empty intensifiers.** "Actually", "genuinely", "truly", "single most",
