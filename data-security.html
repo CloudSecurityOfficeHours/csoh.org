@@ -132,7 +132,7 @@
           "name": "How often should keys be rotated?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "It depends on the key's role. KEKs in a cloud KMS rotate cheaply (annual is the common cadence, and AWS, Azure, and GCP all support automatic annual rotation of customer-managed symmetric keys) because rotation only re-wraps the DEKs; it does not re-encrypt the underlying data. DEKs rotate per object or per session; the application generates a fresh DEK for each large object or each connection. Long-lived secrets (database passwords, API tokens) should rotate on a 30-90 day cadence, ideally driven by a secrets manager that brokers dynamic credentials so the rotation is invisible to the consumer. Certificates rotate per their lifetime (90 days for Let's Encrypt and ACM private CA defaults). Static service-account keys should not exist at all. Replace them with workload identity or short-lived OIDC tokens."
+            "text": "It depends on the key's role. KEKs in a cloud KMS rotate cheaply (annual is the common cadence, and AWS, Azure, and GCP all support automatic annual rotation of customer-managed symmetric keys) because rotation only creates a new key version; it does not re-encrypt the underlying data. DEKs rotate per object or per session; the application generates a fresh DEK for each large object or each connection. Long-lived secrets (database passwords, API tokens) should rotate on a 30-90 day cadence, ideally driven by a secrets manager that brokers dynamic credentials so the rotation is invisible to the consumer. Certificates rotate per their lifetime (90 days for Let's Encrypt and ACM private CA defaults). Static service-account keys should not exist at all. Replace them with workload identity or short-lived OIDC tokens."
           }
         },
         {
@@ -501,7 +501,7 @@
 
         <section id="at-rest">
             <h2>Encryption at rest - what the cloud gives you, what you add</h2>
-            <p>All three major clouds encrypt managed storage at rest by default, with provider-owned keys, using AES-256. <a class="glossary-link" href="glossary.html#term-s3">S3</a>, EBS, RDS, DynamoDB, Azure Blob, Azure Disks, Azure SQL, GCS, Persistent Disks, BigQuery, Spanner: all of it, encrypted out of the box. This is necessary and insufficient. The defaults protect against physical theft of disks from a data center; they do not protect against an IAM principal in your account who has permission to read the bucket. <em>"Encrypted at rest" in the marketing sense is not what an auditor or regulator means by the same phrase.</em></p>
+            <p>All three major clouds encrypt managed storage at rest by default, with provider-owned keys, using AES-256. <a class="glossary-link" href="glossary.html#term-s3">S3</a>, DynamoDB, Azure Blob, Azure Disks, Azure SQL, GCS, Persistent Disks, BigQuery, Spanner: all of it, encrypted out of the box. This is necessary and insufficient. The defaults protect against physical theft of disks from a data center; they do not protect against an IAM principal in your account who has permission to read the bucket. <em>"Encrypted at rest" in the marketing sense is not what an auditor or regulator means by the same phrase.</em></p>
             <h3>The hierarchy you actually want</h3>
         <figure class="diagram-figure" id="key-custody">
           <svg viewBox="0 0 640 194" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="key-custody-title key-custody-desc" width="640" height="194">
@@ -581,7 +581,7 @@
             <p>The encrypted DEK is small (a few hundred bytes); it travels with the data, gets stored alongside it. The plaintext KEK never leaves the HSM. The pattern means:</p>
             <ul>
                 <li><strong>Bulk crypto is fast.</strong> Encrypting a 10 GB object means one KMS call (for the DEK) and one local AES operation rather than 10 GB of API traffic.</li>
-                <li><strong>Rotation is cheap.</strong> Rotating the KEK doesn't re-encrypt the data; it re-wraps the encrypted DEK (a few hundred bytes per object). Old ciphertext stays valid until the next KEK rotation.</li>
+                <li><strong>Rotation is cheap.</strong> Rotating the KEK doesn't re-encrypt the data or re-wrap the encrypted DEK (a few hundred bytes per object). Old ciphertext stays valid because the KMS keeps the old KEK version.</li>
                 <li><strong>Revocation is instant.</strong> Disabling or scheduling-deletion of the KEK renders every encrypted DEK undecryptable, which renders every encrypted ciphertext irretrievable. No need to crawl billions of objects to "delete" them.</li>
                 <li><strong>The <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a> of a stolen DEK is bounded.</strong> A leaked DEK decrypts only the data it was minted for. The KEK never leaves the HSM, so it cannot be leaked.</li>
             </ul>
@@ -673,7 +673,7 @@
 
         <section id="secrets">
             <h2>Secrets management - passwords, tokens, API keys, certs</h2>
-            <p>Encryption protects data; <em>secrets management</em> protects the credentials that grant access to data. The two failure modes a secrets manager prevents: secrets committed to source control, and secrets that never rotate. Every cloud has a managed secrets service; HashiCorp Vault is the open-source / <a class="glossary-link" href="glossary.html#term-public">multi-cloud</a> heavyweight; the ecosystem has converged on a common feature surface. <strong>Real-world example:</strong> the <a href="breaches/lastpass.html">LastPass breach</a> shows the blast radius of the first failure mode: attackers pivoted from a compromised developer's machine to cloud storage backups and walked off with customer vault data.</p>
+            <p>Encryption protects data; <em>secrets management</em> protects the credentials that grant access to data. The two failure modes a secrets manager prevents: secrets committed to source control, and secrets that never rotate. Every cloud has a managed secrets service; HashiCorp Vault is the open-source / <a class="glossary-link" href="glossary.html#term-public">multi-cloud</a> heavyweight; the ecosystem has converged on a common feature surface. <strong>Real-world example:</strong> the <a href="breaches/microsoft-sas-leak.html">Microsoft SAS leak</a> shows the blast radius of the first failure mode: a full-control storage token in a URL on a public GitHub repository exposed 38TB of internal data for three years.</p>
             <div class="comparison-table">
                 <table>
                     <thead>
@@ -1010,7 +1010,7 @@
                         </tr>
                         <tr>
                             <th scope="row">Storage default encryption</th>
-                            <td>S3, EBS, RDS, DDB - on by default</td>
+                            <td>S3, DDB - on by default</td>
                             <td>Blob, Disks, SQL - on by default</td>
                             <td>GCS, PD, Cloud SQL - on by default</td>
                         </tr>
@@ -1125,7 +1125,7 @@
             <p>By default, no. A Kubernetes Secret object is base64-encoded, not encrypted. Anyone with read access to the etcd database, or to the Kubernetes API with the right RBAC, sees the plaintext after a trivial decode. To get real encryption you need encryption-at-rest configured on etcd (a KMS provider plugin pointing at AWS KMS, Azure Key Vault, or GCP KMS), and you should additionally pull secrets from an external secrets manager via External Secrets Operator, the Secrets Store CSI driver, or SOPS-encrypted manifests. Sealed-secrets is a related pattern that lets you commit encrypted secrets to git safely. Treat the in-cluster Secret object as a delivery mechanism, not as the source of truth.</p>
 
             <h3>How often should keys be rotated?</h3>
-            <p>It depends on the key's role. KEKs in a cloud KMS rotate cheaply (annual is the common cadence, and AWS, Azure, and GCP all support automatic annual rotation of customer-managed symmetric keys) because rotation only re-wraps the DEKs; it does not re-encrypt the underlying data. DEKs rotate per object or per session; the application generates a fresh DEK for each large object or each connection. Long-lived secrets (database passwords, API tokens) should rotate on a 30-90 day cadence, ideally driven by a secrets manager that brokers dynamic credentials so the rotation is invisible to the consumer. Certificates rotate per their lifetime (90 days for Let's Encrypt and ACM private CA defaults). Static service-account keys should not exist at all. Replace them with workload identity or short-lived OIDC tokens.</p>
+            <p>It depends on the key's role. KEKs in a cloud KMS rotate cheaply (annual is the common cadence, and AWS, Azure, and GCP all support automatic annual rotation of customer-managed symmetric keys) because rotation only creates a new key version; it does not re-encrypt the underlying data. DEKs rotate per object or per session; the application generates a fresh DEK for each large object or each connection. Long-lived secrets (database passwords, API tokens) should rotate on a 30-90 day cadence, ideally driven by a secrets manager that brokers dynamic credentials so the rotation is invisible to the consumer. Certificates rotate per their lifetime (90 days for Let's Encrypt and ACM private CA defaults). Static service-account keys should not exist at all. Replace them with workload identity or short-lived OIDC tokens.</p>
 
             <h3>When should I tokenize instead of encrypt?</h3>
             <p>Tokenize when the goal is to remove sensitive data from a system entirely, not just to make it unreadable in storage. The canonical use case is PCI DSS scope reduction: a tokenization service holds the cardholder data, every other system holds only opaque tokens, and PCI scope shrinks to the tokenization vault. Tokenization is also a good fit for GDPR pseudonymization: the analytics system gets tokens, the lookup table sits in a controlled environment. Encrypt when the data has to remain usable in place (the application needs to decrypt and operate on it). Hash when you only need a one-way comparison and never need to recover the original (passwords, deduplication keys); use a slow KDF like Argon2id, scrypt, or bcrypt for password hashing, never a raw SHA-256.</p>

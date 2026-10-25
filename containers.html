@@ -478,7 +478,7 @@
                 <li><strong>One artifact across clouds.</strong> An OCI image runs on <a class="glossary-link" href="glossary.html#term-eks">EKS</a>, AKS, GKE, <a class="glossary-link" href="glossary.html#term-ecs">ECS</a>, <a class="glossary-link" href="glossary.html#term-lambda">Cloud Run</a>, Container Apps, App Runner, Lambda (with caveats). The portability argument matters when you have to leave one cloud.</li>
                 <li><strong>Operability.</strong> The container runtime gives you health checks, log shipping, metrics, and auto-restart on crash for free, regardless of language.</li>
             </ul>
-            <p>The cost of that efficiency, from a security standpoint, is a shared kernel and a shared network namespace on the host. Both become <a class="glossary-link" href="glossary.html#term-attack-surface">attack surface</a> when the threat model is "untrusted code in a container" instead of "trusted code on a VM."</p>
+            <p>The cost of that efficiency, from a security standpoint, is a shared kernel and a shared network on the host. Both become <a class="glossary-link" href="glossary.html#term-attack-surface">attack surface</a> when the threat model is "untrusted code in a container" instead of "trusted code on a VM."</p>
         </section>
 
         <section id="boundary">
@@ -548,7 +548,7 @@
         <section id="identity">
             <h2>Identity chaining - IMDS and stolen cloud roles</h2>
             <p>This is the cloud-specific container risk. Every cloud VM has an Instance Metadata Service at the link-local address 169.254.169.254 (or fd00:ec2::254 on AWS IPv6, similar paths on Azure and GCP). The metadata service hands out, among other things, the IAM credentials of the role attached to the VM.</p>
-            <p>By default, containers running on the VM share its network namespace - they can reach 169.254.169.254. A compromised container with code execution can run <code>curl http://169.254.169.254/...</code> and walk away with the VM's full cloud permissions. That's identity chaining: <em>workload compromise → host compromise → cloud compromise</em>, in one hop.</p>
+            <p>By default, containers running on the VM can reach 169.254.169.254: the host routes their traffic out through its own network. A compromised container with code execution can run <code>curl http://169.254.169.254/...</code> and walk away with the VM's full cloud permissions. That's identity chaining: <em>workload compromise → host compromise → cloud compromise</em>, in one hop.</p>
             <p>This is exactly the Capital One breach pattern (see the <a href="breaches/capital-one.html">Capital One kill chain</a>) - except instead of an <a class="glossary-link" href="glossary.html#term-ssrf">SSRF</a> in a <a class="glossary-link" href="glossary.html#term-waf">WAF</a>, the entry point is whatever runs in your container.</p>
             <h3>The fix has two parts</h3>
             <p><strong>1. Per-workload identity, not per-host.</strong> Every cloud now offers a way to give an individual workload (pod, container, function) its own short-lived cloud credentials, scoped to that workload only:</p>
