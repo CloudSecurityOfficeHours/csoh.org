@@ -527,11 +527,13 @@ ever deletes a file. See [docs/EDITORIAL_STANDARDS.md](docs/EDITORIAL_STANDARDS.
 for the standard it enforces.
 
 `check_faq_jsonld_parity.py --check` fails when a FAQPage answer or a glossary
-DefinedTerm description differs from the visible text it copies. That copy is
-what a search engine shows, and it is generated rather than written: edit the
-visible FAQ or the `<dd>`, run `python3 tools/check_faq_jsonld_parity.py --fix`,
-and commit the result. Run it with no flags first to see what `--fix` will
-change, including any JSON-LD-only claim it is about to drop.
+DefinedTerm name or description differs from the visible text it copies, or
+when a visible glossary term has no DefinedTerm at all. That copy is what a
+search engine shows, and it is generated rather than written: edit the visible
+FAQ or the `<dt>`/`<dd>`, run `python3 tools/check_faq_jsonld_parity.py --fix`
+(which also adds the DefinedTerm for a new term), and commit the result. Run
+it with no flags first to see what `--fix` will change, including any
+JSON-LD-only claim it is about to drop.
 
 Three more checks run post-merge rather than on the PR, but are worth running
 locally if you touched what they cover:
