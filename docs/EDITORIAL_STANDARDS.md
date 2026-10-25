@@ -232,6 +232,10 @@ a sentence says. Check each changed sentence for all of these:
   --fix`, then `--check`. A pull quote repeats a sentence from its section.
 - Rebuild `search-index.json` with `python3 tools/build_search_index.py`, twice.
   The second run must change nothing.
+- For a pass across many pages, `tools/deai_segments.py` extracts the flagged
+  blocks, lets a rewriter return replacements without editing pages, and
+  applies only those that pass the mechanical check below. See
+  [tools/DEAI_SEGMENTS_README.md](../tools/DEAI_SEGMENTS_README.md).
 
 ### Checking a pass
 
