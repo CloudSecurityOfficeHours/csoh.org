@@ -40,7 +40,9 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import sys
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -215,6 +217,10 @@ def self_test() -> int:
     An idempotency bug does not exist on the first run: the tool that writes a
     file and the tool that re-reads its own output are the same code taking
     different paths through it, and only one of those runs the first time.
+
+    Every write goes to copies of the pages in a temporary directory, never to
+    the pages themselves. The probe instant is fixed, so stamping the real
+    pages would replace their next-session date with a past one.
     """
     tz = ZoneInfo("America/Los_Angeles")
     cases = [
@@ -238,43 +244,49 @@ def self_test() -> int:
     now = datetime(2026, 9, 23, 12, 0, tzinfo=tz)
     start, end = resolve(now)
 
-    # Stamp first, so each plant below is planted into a known-current file;
-    # otherwise an unstamped page reports "plant did nothing".
-    run(check=False, now=now)
+    with tempfile.TemporaryDirectory(prefix="sync_next_session-") as tmp:
+        root = Path(tmp)
+        for name in VISIBLE_PAGES:
+            shutil.copyfile(REPO / name, root / name)
 
-    # Plant a stale value in each target and confirm every detector names it.
-    # The plant asserts it changed something: a no-op plant would "pass" by
-    # finding nothing to replace, which is a control that can only succeed.
-    for name, old, new in (
-        ("index.html", visible_text(start), "Friday at 7:00 AM PT"),
-        (EVENT_PAGE, visible_text(start), "Friday at 7:00 AM PT"),
-        (EVENT_PAGE, f'"startDate": "{start.isoformat()}"', '"startDate": "2020-01-03T07:00:00-08:00"'),
-        (EVENT_PAGE, f'"endDate": "{end.isoformat()}"', '"endDate": "2020-01-03T08:00:00-08:00"'),
-    ):
-        path = REPO / name
-        original = path.read_text(encoding="utf-8")
-        planted = original.replace(old, new, 1)
-        if planted == original:
-            print(f"  FAIL plant did nothing in {name}: {old!r} not on disk")
+        # Stamp first, so each plant below is planted into a known-current
+        # file; otherwise an unstamped page reports "plant did nothing".
+        run(check=False, now=now, root=root)
+
+        # Plant a stale value in each target and confirm every detector names
+        # it. The plant asserts it changed something: a no-op plant would
+        # "pass" by finding nothing to replace, which is a control that can
+        # only succeed.
+        for name, old, new in (
+            ("index.html", visible_text(start), "Friday at 7:00 AM PT"),
+            (EVENT_PAGE, visible_text(start), "Friday at 7:00 AM PT"),
+            (EVENT_PAGE, f'"startDate": "{start.isoformat()}"', '"startDate": "2020-01-03T07:00:00-08:00"'),
+            (EVENT_PAGE, f'"endDate": "{end.isoformat()}"', '"endDate": "2020-01-03T08:00:00-08:00"'),
+        ):
+            path = root / name
+            original = path.read_text(encoding="utf-8")
+            planted = original.replace(old, new, 1)
+            if planted == original:
+                print(f"  FAIL plant did nothing in {name}: {old!r} not on disk")
+                failed += 1
+                continue
+            path.write_text(planted, encoding="utf-8")
+            try:
+                detected = run(check=True, now=now, root=root) == 1
+            finally:
+                path.write_text(original, encoding="utf-8")
+            print(f"  {'ok  ' if detected else 'FAIL'} planted {new[:28]!r} in {name} -> "
+                  f"{'detected' if detected else 'MISSED'}")
+            failed += not detected
+
+        # Idempotency: stamp, then stamp again and demand the second pass be a
+        # no-op rather than trusting that it reads its own output correctly.
+        run(check=False, now=now, root=root)
+        if run(check=True, now=now, root=root) != 0:
+            print("  FAIL second pass found drift - the tool does not re-read its own output")
             failed += 1
-            continue
-        path.write_text(planted, encoding="utf-8")
-        try:
-            detected = run(check=True, now=now) == 1
-        finally:
-            path.write_text(original, encoding="utf-8")
-        print(f"  {'ok  ' if detected else 'FAIL'} planted {new[:28]!r} in {name} -> "
-              f"{'detected' if detected else 'MISSED'}")
-        failed += not detected
-
-    # Idempotency: stamp, then stamp again and demand the second pass be a
-    # no-op rather than trusting that it reads its own output correctly.
-    run(check=False, now=now)
-    if run(check=True, now=now) != 0:
-        print("  FAIL second pass found drift - the tool does not re-read its own output")
-        failed += 1
-    else:
-        print("  ok   second pass is a no-op")
+        else:
+            print("  ok   second pass is a no-op")
 
     print("self-test:", "FAILED" if failed else "all detectors fired")
     return 1 if failed else 0
