@@ -173,7 +173,7 @@
           "name": "Why does GCP Data Access logging matter so much?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "GCP's Cloud Audit Logs split into Admin Activity (free, always on), System Event (free, always on), Policy Denied (free, opt-in), and Data Access (paid, off by default). Data Access is the stream that records reads of customer data (a service account listing objects in a sensitive bucket, querying a sensitive BigQuery table, decrypting a KMS key). Most cloud breaches involve data access; turning the stream off saves money and blinds the detection program. Enable it deliberately on the projects that hold real data; budget for the volume."
+            "text": "GCP's Cloud Audit Logs split into Admin Activity (free, always on), System Event (free, always on), Policy Denied (on by default, can't be disabled, storage charged), and Data Access (paid, off by default except for BigQuery). Data Access is the stream that records reads of customer data (a service account listing objects in a sensitive bucket, querying a sensitive BigQuery table, decrypting a KMS key). Most cloud breaches involve data access; turning the stream off saves money and blinds the detection program. Enable it deliberately on the projects that hold real data; budget for the volume."
           }
         },
         {
@@ -496,7 +496,7 @@
 
         <section id="lifecycle">
             <h2>The detection engineering lifecycle</h2>
-            <p>The widely-cited model is Palantir's: <strong>research → develop → tune → deploy → validate → retire</strong>. Each phase has explicit inputs, outputs, and exit criteria. The lifecycle isn't ceremony: it's the only thing that keeps a rule library from becoming a graveyard.</p>
+            <p>A practical lifecycle runs <strong>research → develop → tune → deploy → validate → retire</strong>; Palantir's widely cited Alerting and Detection Strategy (ADS) framework supplies the documentation each rule carries through it. Each phase has explicit inputs, outputs, and exit criteria. The lifecycle isn't ceremony: it's the only thing that keeps a rule library from becoming a graveyard.</p>
             <div class="pillar-grid">
                 <div class="pillar-card pillar-card-iam">
                     <h3>1. Research</h3>
@@ -561,7 +561,7 @@
             <ul>
                 <li><strong><a href="https://docs.cloud.google.com/logging/docs/audit" target="_blank" rel="noopener noreferrer">Cloud Audit Logs</a>: Admin Activity</strong>. Control-plane operations. Free, always on, 400-day retention by default at the project level. Aggregate to an org-level log sink for cross-project queryability.</li>
                 <li><strong>Cloud Audit Logs - System Event</strong>. Google-initiated events affecting your resources (live migration, automated maintenance, defender actions). Free, always on.</li>
-                <li><strong>Cloud Audit Logs - Policy Denied</strong>. Logs when an IAM or VPC-SC policy denies an action. Free, opt-in. Excellent attack-surface signal.</li>
+                <li><strong>Cloud Audit Logs - Policy Denied</strong>. Logs when an IAM or VPC-SC policy denies an action. On by default and can't be disabled (only excluded); storage is charged. Excellent attack-surface signal.</li>
                 <li><strong>Cloud Audit Logs - Data Access</strong>. The data-plane stream: reads of data in BigQuery, Cloud Storage, Pub/Sub, etc. <strong>Off by default for most services; paid.</strong> See the <a href="#data-access">data-access gotcha section</a>.</li>
                 <li><strong>VPC Flow Logs</strong>. Network metadata at the subnet level. Granular sampling controls. Don't forget Firewall Rules Logging, which is a separate enablement.</li>
                 <li><strong>Cloud DNS query logs</strong>. DNS-side detection signal, enabled per-policy.</li>
@@ -717,7 +717,7 @@
             <h2>Native threat-detection services</h2>
             <p>Each major cloud ships a managed threat-detection service. Detection engineers use them as <em>signal sources</em> (high-confidence findings that flow into the SIEM as one input among many) rather than as a complete detection program. The tradeoff is the same in every cloud: the managed service catches the well-known stuff cheaply; everything else still needs custom rules.</p>
             <h3>AWS GuardDuty</h3>
-            <p><a href="https://aws.amazon.com/guardduty/" target="_blank" rel="noopener noreferrer">GuardDuty</a> analyzes CloudTrail, VPC Flow Logs, DNS queries, S3 data events, EKS audit logs, Lambda invocation logs, EBS volume snapshots, and RDS login activity. Findings are categorized by attack stage (Reconnaissance, Discovery, CredentialAccess, etc.) and map to ATT&amp;CK. Strong areas: instance compromise, S3 anomalies, mining/crypto activity, credential exfiltration. Weak areas: low-and-slow insider activity, anything that requires environment-specific context (your "this user shouldn't be in this region" rule). Cost scales with API-call volume, so large environments need budgeting.</p>
+            <p><a href="https://aws.amazon.com/guardduty/" target="_blank" rel="noopener noreferrer">GuardDuty</a> analyzes CloudTrail, VPC Flow Logs, DNS queries, S3 data events, EKS audit logs, Lambda network activity logs, EBS volume snapshots, and RDS login activity. Findings are categorized by attack stage (Recon, Discovery, CredentialAccess, etc.) and map to ATT&amp;CK. Strong areas: instance compromise, S3 anomalies, mining/crypto activity, credential exfiltration. Weak areas: low-and-slow insider activity, anything that requires environment-specific context (your "this user shouldn't be in this region" rule). Cost scales with API-call volume, so large environments need budgeting.</p>
             <h3>Microsoft Defender for Cloud</h3>
             <p><a href="https://azure.microsoft.com/en-us/products/defender-for-cloud" target="_blank" rel="noopener noreferrer">Defender for Cloud</a> bundles <a class="glossary-link" href="glossary.html#term-cspm">CSPM</a> and CWPP plans, each producing findings. Defender for Servers, Containers, Storage, SQL, Key Vault, App Service, ARM, DNS, Cloud Database, and APIs each shed detections. Tightly integrated with Sentinel (the SIEM) and Defender XDR (the unified XDR plane). Strong on Microsoft-platform context (Entra, M365, Windows) and on integrating identity-side and infrastructure-side signal. Cost is per-plan and per-resource; the bill is non-trivial at scale.</p>
             <h3>Google Security Command Center</h3>
@@ -877,7 +877,7 @@
                             <th scope="row">Data-plane audit log</th>
                             <td>CloudTrail data events (paid, off by default)</td>
                             <td>Per-resource Diagnostic Settings (paid, off by default)</td>
-                            <td>Cloud Audit Logs - Data Access (paid, off by default)</td>
+                            <td>Cloud Audit Logs - Data Access (paid, off by default except for BigQuery)</td>
                         </tr>
                         <tr>
                             <th scope="row">Identity sign-in log</th>
@@ -1043,7 +1043,7 @@
             <p>Both put rules in Git and deploy through CI/CD. The difference is the input data: compliance-as-code (see the <a href="grc.html">GRC page</a>) evaluates configuration state: is this S3 bucket configured correctly right now? Detection-as-code evaluates streaming events: did this CloudTrail event indicate malicious activity? The workflows look almost identical and the team skills transfer; the test harnesses and the evaluation engines differ.</p>
 
             <h3>Why does GCP Data Access logging matter so much?</h3>
-            <p>GCP's Cloud Audit Logs split into Admin Activity (free, always on), System Event (free, always on), Policy Denied (free, opt-in), and Data Access (paid, off by default). Data Access is the stream that records reads of customer data (a <a class="glossary-link" href="glossary.html#term-service-account">service account</a> listing objects in a sensitive bucket, querying a sensitive BigQuery table, decrypting a <a class="glossary-link" href="glossary.html#term-kms">KMS</a> key). Most cloud breaches involve data access; turning the stream off saves money and blinds the detection program. Enable it deliberately on the projects that hold real data; budget for the volume.</p>
+            <p>GCP's Cloud Audit Logs split into Admin Activity (free, always on), System Event (free, always on), Policy Denied (on by default, can't be disabled, storage charged), and Data Access (paid, off by default except for BigQuery). Data Access is the stream that records reads of customer data (a <a class="glossary-link" href="glossary.html#term-service-account">service account</a> listing objects in a sensitive bucket, querying a sensitive BigQuery table, decrypting a <a class="glossary-link" href="glossary.html#term-kms">KMS</a> key). Most cloud breaches involve data access; turning the stream off saves money and blinds the detection program. Enable it deliberately on the projects that hold real data; budget for the volume.</p>
 
             <h3>Should I build on a SIEM or a data lake?</h3>
             <p>Most large 2026 programs run both: a SIEM (Sentinel, Splunk, Google SecOps, Elastic) for the real-time, high-value correlations the SOC depends on, and a data lake (Snowflake, Databricks, BigQuery, S3 + Iceberg) with a security-analytics layer (Anvilogic, Hunters, Query.ai, Panther) for the cheaper long-tail and forensic querying. Small programs pick one and accept the trade-off, usually a <a class="glossary-link" href="glossary.html#term-cloud-native">cloud-native</a> SIEM for speed-of-stand-up.</p>

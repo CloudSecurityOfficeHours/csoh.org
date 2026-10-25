@@ -132,7 +132,7 @@
           "name": "Does S3 Object Lock prevent ransomware?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "It prevents object deletion and overwrite for the duration of the lock, which is the most important property, but only if you use Compliance mode (Governance mode is bypassable by IAM principals with the right permission). Object Lock does not prevent attackers from deleting the bucket itself if they have S3 admin and bucket versioning is off, does not prevent KMS key disablement that renders objects unreadable, and does not prevent retention being set too short before an attack. The full pattern is: Compliance-mode Object Lock + bucket versioning + replication to a separate account + KMS keys whose admin and usage roles are in a different trust domain + MFA-delete on the source bucket."
+            "text": "It prevents object deletion and overwrite for the duration of the lock, which is the most important property, but only if you use Compliance mode (Governance mode is bypassable by IAM principals with the right permission). Object Lock does not protect object versions that carry no retention period or legal hold (set a default retention on the bucket), does not prevent KMS key disablement that renders objects unreadable, and does not prevent retention being set too short before an attack. The full pattern is: Compliance-mode Object Lock + bucket versioning + replication to a separate account + KMS keys whose admin and usage roles are in a different trust domain + MFA-delete on the source bucket."
           }
         },
         {
@@ -503,7 +503,7 @@
               </ul>
             </div>
             <p>The "1" for immutability and the "0" for verification are the security additions. Both are non-negotiable in a ransomware-aware architecture. The remaining three (copies / media / offsite) translate cleanly to cloud, though the meaning of "different media" deserves a footnote.</p>
-            <p><strong>Different media in cloud, practically:</strong> the spirit of the original rule was to avoid a single technology failure wiping all copies. In cloud, the equivalent is to avoid a single <em>service or account</em> failure / compromise wiping all copies. Two <a class="glossary-link" href="glossary.html#term-s3">S3</a> buckets in the same account are not "two media." S3 in one account + S3 in a separate account with cross-region replication + Glacier Deep Archive on a Vault Lock is closer in spirit: three services, three trust boundaries, three failure modes.</p>
+            <p><strong>Different media in cloud, practically:</strong> the spirit of the original rule was to avoid a single technology failure wiping all copies. In cloud, the equivalent is to avoid a single <em>service or account</em> failure / compromise wiping all copies. Two <a class="glossary-link" href="glossary.html#term-s3">S3</a> buckets in the same account are not "two media." S3 in one account + S3 in a separate account with cross-region replication + an S3 Glacier Deep Archive copy under Compliance-mode Object Lock is closer in spirit: three copies, three trust boundaries, three failure modes.</p>
         </section>
 
         <section id="rto-rpo">
@@ -635,7 +635,7 @@
                 <li><strong>Compliance mode</strong> - retention cannot be shortened or removed by anyone, including the AWS account root, until the retention period expires. Object cannot be deleted. This is the only setting that satisfies the "even root can't delete" property required for serious ransomware resilience.</li>
                 <li><strong>Legal hold</strong> - independent of retention; pins an object until the hold is removed by a principal with <code>s3:PutObjectLegalHold</code>. Used for litigation, investigations, or extending retention.</li>
             </ul>
-            <p>Pair Object Lock with <strong>Glacier Vault Lock</strong> for archive tiers. Vault Lock policies are write-once and cannot be changed after the lock is engaged (even by root). Use the combination where an archive has to stay immutable.</p>
+            <p>Object Lock also covers the archive tiers: a locked version keeps its lock when a lifecycle rule moves it to S3 Glacier Flexible Retrieval or S3 Glacier Deep Archive. <strong>Glacier Vault Lock</strong> applies only to vaults in the original vault-based Amazon Glacier service, which no longer accepts new customers. Its policies are write-once and cannot be changed after the lock is engaged (even by root).</p>
 
             <h3><a href="https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview" target="_blank" rel="noopener noreferrer">Azure - Blob Immutable Storage</a></h3>
             <p>Azure offers two flavors of immutability at the blob storage layer:</p>
@@ -644,7 +644,7 @@
                 <li><strong>Legal hold</strong> - pins blobs until the hold is explicitly removed by a principal with the appropriate role.</li>
                 <li><strong>Version-level immutability</strong> - apply immutability per blob version rather than per container, enabling granular policies.</li>
             </ul>
-            <p>Azure Backup Recovery Services Vaults also support <strong>soft delete</strong> (default 14 days, can be extended to 180 days and made non-bypassable) and <strong>multi-user authorization (MUA)</strong>, a Resource Guard pattern that requires approval from a second <a class="glossary-link" href="glossary.html#term-tenant">tenant</a> for destructive operations on the vault. MUA is the Azure-native answer to "we need two-person rule on backup deletion."</p>
+            <p>Azure Backup Recovery Services Vaults also support <strong>soft delete</strong> (default 14 days, can be extended to 180 days and made non-bypassable) and <strong>multi-user authorization (MUA)</strong>, a Resource Guard pattern that requires approval from a separate owner of the Resource Guard, ideally in a second <a class="glossary-link" href="glossary.html#term-tenant">tenant</a>, for destructive operations on the vault. MUA is the Azure-native answer to "we need two-person rule on backup deletion."</p>
 
             <h3><a href="https://docs.cloud.google.com/storage/docs/bucket-lock" target="_blank" rel="noopener noreferrer">GCP - Cloud Storage Bucket Lock</a></h3>
             <p>GCS Bucket Lock applies a retention policy to a bucket; objects within cannot be deleted or overwritten until they exceed the retention period. The retention policy itself can be <strong>locked</strong>. Once locked, neither the project owner nor org admin can shorten or remove it. The lock is permanent for the lifetime of the bucket; the only way out is bucket deletion, which requires the bucket to be empty (impossible while objects are within retention).</p>
@@ -811,7 +811,7 @@
             <p>The destination lives in its own organizational unit. No admin trust from production. Separate IAM admins, separate KMS admins, separate logging, separate monitoring, separate billing if practical. Treat it as a tenant of one.</p>
             <ul>
                 <li><strong>AWS:</strong> a dedicated AWS account in a "Security" or "Backup" OU. SCP-restricted to block deletion of backup vaults, KMS keys, snapshots. AWS Backup vault policies enforce cross-account access with explicit deny on bulk operations.</li>
-                <li><strong>Azure:</strong> a dedicated subscription, optionally a dedicated tenant for the strongest separation. MUA (multi-user authorization) Resource Guard requires approvals from a different tenant.</li>
+                <li><strong>Azure:</strong> a dedicated subscription, optionally a dedicated tenant for the strongest separation. A MUA (multi-user authorization) Resource Guard placed in a different tenant gives the strongest separation.</li>
                 <li><strong>GCP:</strong> a dedicated project, optionally a separate folder or organization. VPC Service Controls perimeter around the project. Org-policy constraints preventing data movement out.</li>
             </ul>
             <p>Sketch of the canonical architecture:</p>
@@ -843,7 +843,7 @@ Out-of-cloud / cross-cloud / on-prem destination
                 <li><strong>S3 with versioning, Object Lock, replication.</strong> The pattern for object data: versioning + Compliance-mode Object Lock + cross-account replication to a hardened destination. MFA delete on the source for additional guardrail.</li>
                 <li><strong>EBS snapshots.</strong> Per-volume, can be copied cross-account and cross-region. AWS Backup is the recommended orchestration layer rather than ad-hoc snapshot scripts. Fast Snapshot Restore for fast RTO on critical volumes.</li>
                 <li><strong>RDS automated backups + manual snapshots.</strong> Automated retain up to 35 days; manual snapshots persist indefinitely until deleted. Cross-region copy + cross-account share for isolation. RDS Multi-AZ is HA, not backup.</li>
-                <li><strong><a href="https://docs.aws.amazon.com/amazonglacier/latest/dev/vault-lock.html" target="_blank" rel="noopener noreferrer">Glacier Vault Lock</a></strong>: the archive tier with the strongest immutability primitive. Vault Lock policies are write-once, cannot be modified once locked. The right destination for long-term immutable archive of tier-1+ data.</li>
+                <li><strong><a href="https://docs.aws.amazon.com/amazonglacier/latest/dev/vault-lock.html" target="_blank" rel="noopener noreferrer">Glacier Vault Lock</a></strong>: write-once policies on vaults in the original vault-based Amazon Glacier service, which no longer accepts new customers. For new long-term immutable archives of tier-1+ data, use the S3 Glacier storage classes under Compliance-mode Object Lock.</li>
                 <li><strong>DynamoDB point-in-time recovery (PITR)</strong> - continuous backup of DynamoDB tables for 35 days. Restore to any second in that window. Combine with on-demand backups for longer retention.</li>
                 <li><strong><a href="https://aws.amazon.com/disaster-recovery/" target="_blank" rel="noopener noreferrer">AWS Elastic Disaster Recovery (DRS)</a></strong>: cross-region / cross-AZ replication-based DR for servers. Continuous block-level replication; failover into AWS within minutes. Complements backup, doesn't replace it.</li>
                 <li><strong>Backup with logically air-gapped vaults</strong> - newer AWS Backup capability that stores backup data in AWS-managed accounts the customer never touches, accessible only via the AWS Backup API. Higher cost, stronger isolation.</li>
@@ -866,7 +866,7 @@ Out-of-cloud / cross-cloud / on-prem destination
             <p>Azure splits backup and DR more explicitly than AWS does: <strong>Azure Backup</strong> for backup, <strong>Azure Site Recovery (ASR)</strong> for DR, and several service-specific protections sitting around them.</p>
             <h3>The native services</h3>
             <ul>
-                <li><strong><a href="https://azure.microsoft.com/en-us/products/backup/" target="_blank" rel="noopener noreferrer">Azure Backup</a>: Recovery Services Vault</strong> for VMs, file shares, on-prem servers via MARS agent. <strong>Soft delete</strong> (default 14 days, extensible) and <strong>immutable vaults</strong> (a Recovery Services Vault can be marked immutable, preventing destructive operations during retention) are the immutability primitives. <strong>Multi-user authorization (MUA)</strong> via Resource Guard requires approval from a principal in a different tenant for high-impact operations on the vault. This is the Azure native answer to two-person rule.</li>
+                <li><strong><a href="https://azure.microsoft.com/en-us/products/backup/" target="_blank" rel="noopener noreferrer">Azure Backup</a>: Recovery Services Vault</strong> for VMs, file shares, on-prem servers via MARS agent. <strong>Soft delete</strong> (default 14 days, extensible) and <strong>immutable vaults</strong> (a Recovery Services Vault can be marked immutable, preventing destructive operations during retention) are the immutability primitives. <strong>Multi-user authorization (MUA)</strong> via Resource Guard requires approval from whoever controls the Resource Guard (Microsoft recommends placing it in a different tenant) for high-impact operations on the vault. This is the Azure native answer to two-person rule.</li>
                 <li><strong>Azure Backup Vault</strong> (distinct from Recovery Services Vault) - newer vault model used by Azure Database for PostgreSQL, Blob, Disk, <a class="glossary-link" href="glossary.html#term-kubernetes">Kubernetes</a> backup, and other workload-specific scenarios.</li>
                 <li><strong><a href="https://azure.microsoft.com/en-us/products/site-recovery/" target="_blank" rel="noopener noreferrer">Azure Site Recovery (ASR)</a></strong>: replication-based DR for Azure VMs, VMware, and Hyper-V. Continuous replication to a target region with documented RTO measured in minutes. Failback supported. ASR is the DR pillar, not the backup pillar.</li>
                 <li><strong>Blob versioning + immutable storage policies.</strong> Per-container or per-version. Time-based retention locked at the policy level. Pair with <strong>soft delete</strong> for blobs and containers.</li>
@@ -924,7 +924,7 @@ Out-of-cloud / cross-cloud / on-prem destination
             <h3>Point-in-time recovery (PITR)</h3>
             <p>Continuous capture of database changes (transaction logs / change feed) enabling restore to any second within the retention window. The right primitive for "we made a bad schema change three hours ago" or "an attacker dropped a table at 3am."</p>
             <ul>
-                <li>RDS / Aurora PITR - 5-minute granularity within the automated backup retention window (up to 35 days).</li>
+                <li>RDS / Aurora PITR - restore to any second within the automated backup retention window (up to 35 days); on RDS the latest restorable time is typically within the last five minutes.</li>
                 <li>Azure SQL PITR - up to 35 days; LTR for longer retention.</li>
                 <li>Cloud SQL PITR - restore to any point within the retention window.</li>
                 <li>DynamoDB / Spanner / Firestore - service-specific PITR with up-to-second granularity (DynamoDB) or version-history-based (Spanner).</li>
@@ -984,7 +984,7 @@ Out-of-cloud / cross-cloud / on-prem destination
 
         <section id="insurance">
             <h2>Cyber insurance - what carriers ask for now</h2>
-            <p>The cyber insurance market reset between 2022 and 2025. Premiums tripled or worse, sublimits were introduced for ransomware specifically, and underwriters now ask detailed technical questions on the application. The 2026 reality is that minimum hygiene is a precondition for coverage, and certain failures lead to non-payment after a loss.</p>
+            <p>The cyber insurance market reset between 2021 and 2022. Premiums tripled or worse, sublimits were introduced for ransomware specifically, and underwriters now ask detailed technical questions on the application. Rates have eased since mid-2023, but the 2026 reality is that minimum hygiene is a precondition for coverage, and certain failures lead to non-payment after a loss.</p>
             <h3>What carriers now require</h3>
             <ul>
                 <li><strong>Immutable backups.</strong> Documented Object Lock / Vault Lock / immutable Blob Storage / Bucket Lock with retention sized to the dwell-time threat model. Spreadsheet attestation alone is no longer accepted; carriers ask for evidence: policy documents, CSPM exports, audit reports.</li>
@@ -1030,7 +1030,7 @@ Out-of-cloud / cross-cloud / on-prem destination
             <h3>When to add a third party on top of native</h3>
             <ul>
                 <li><strong><a class="glossary-link" href="glossary.html#term-public">Multi-cloud</a>.</strong> AWS Backup doesn't back up Azure; Azure Backup doesn't back up GCS. A single pane of glass across clouds is a strong reason to add a third party.</li>
-                <li><strong>SaaS coverage.</strong> Microsoft 365, Google Workspace, Salesforce, ServiceNow, Atlassian, GitHub data is not natively backed up to your specification by the SaaS provider. (Microsoft's stance is that 365 is durable, not backed up. That distinction matters in a ransomware scenario.) Third parties fill the gap.</li>
+                <li><strong>SaaS coverage.</strong> Microsoft 365, Google Workspace, Salesforce, ServiceNow, Atlassian and GitHub keep your data durable, but durability is not backup, and that distinction matters in a ransomware scenario. Some sell native backup as a paid add-on with a fixed scope: Microsoft 365 Backup covers SharePoint, OneDrive and Exchange Online, and Atlassian Backup and Restore covers Jira and Confluence on Premium and Enterprise plans. Otherwise the provider does not back up your data to your specification. Third parties fill the gap.</li>
                 <li><strong>Cross-cloud recovery.</strong> "Recover into a different cloud" is a third-party capability; native services don't cross cloud boundaries.</li>
                 <li><strong>Unified <a class="glossary-link" href="glossary.html#term-rbac">RBAC</a> and audit.</strong> Centralized backup policy and audit across a heterogeneous environment.</li>
                 <li><strong>Specialized features.</strong> Anomaly detection on backup metadata, ransomware-specific recovery workflows, isolated recovery environment orchestration.</li>
@@ -1108,7 +1108,7 @@ Out-of-cloud / cross-cloud / on-prem destination
                         </tr>
                         <tr>
                             <th scope="row">Archive-tier immutability</th>
-                            <td>Glacier Vault Lock</td>
+                            <td>S3 Object Lock on S3 Glacier storage classes (Glacier Vault Lock for legacy vaults)</td>
                             <td>Archive tier with immutability policy</td>
                             <td>Archive storage class with Bucket Lock</td>
                         </tr>
@@ -1169,7 +1169,7 @@ Out-of-cloud / cross-cloud / on-prem destination
                         <tr>
                             <th scope="row">SaaS / Microsoft 365 backup</th>
                             <td>Not native; third-party (Veeam, Druva, etc.)</td>
-                            <td>Native is durability, not backup; third-party recommended</td>
+                            <td>Microsoft 365 Backup (paid, SharePoint / OneDrive / Exchange) or third-party</td>
                             <td>Workspace native + third-party for fuller restore options</td>
                         </tr>
                     </tbody>
@@ -1212,7 +1212,7 @@ Out-of-cloud / cross-cloud / on-prem destination
             <ul>
                 <li><a href="https://www.cisa.gov/stopransomware" target="_blank" rel="noopener noreferrer">CISA - StopRansomware.gov</a></li>
                 <li><a href="https://www.cisa.gov/sites/default/files/2025-03/StopRansomware-Guide%20508.pdf" target="_blank" rel="noopener noreferrer">CISA / MS-ISAC Ransomware Guide (PDF)</a></li>
-                <li><a href="https://csrc.nist.gov/pubs/sp/800/61/r3/final" target="_blank" rel="noopener noreferrer">NIST SP 800-61 - Incident Handling Guide</a></li>
+                <li><a href="https://csrc.nist.gov/pubs/sp/800/61/r3/final" target="_blank" rel="noopener noreferrer">NIST SP 800-61 - Incident Response Recommendations and Considerations for Cybersecurity Risk Management</a></li>
                 <li><a href="https://csrc.nist.gov/pubs/sp/800/209/final" target="_blank" rel="noopener noreferrer">NIST SP 800-209 - Security Guidelines for Storage Infrastructure</a></li>
                 <li><a href="https://www.fsisac.com/" target="_blank" rel="noopener noreferrer">FS-ISAC - sector resources on operational resilience</a></li>
                 <li><a href="https://www.sheltered-harbor.org/" target="_blank" rel="noopener noreferrer">Sheltered Harbor - financial-services data-vaulting program</a></li>
@@ -1254,7 +1254,7 @@ Out-of-cloud / cross-cloud / on-prem destination
             <p>Drive retention from three inputs: the legal / regulatory minimum (HIPAA 6 years for some records, <a class="glossary-link" href="glossary.html#term-sox">SOX</a> 7 years for financial, <a class="glossary-link" href="glossary.html#term-gdpr">GDPR</a> limits maxima not minima), the business RPO and recovery scenario (a ransomware dwell time of 60-90 days means a backup younger than that may already be compromised), and cost. Common pattern: hourly snapshots for 24-48 hours, daily for 30 days, weekly for 90 days, monthly for 1 year, annual for 7 years, all with immutability locks matching retention. Move long-tail copies to cold storage (Glacier Deep Archive, Azure Archive, GCS Archive) to control cost.</p>
 
             <h3>Does S3 Object Lock prevent ransomware?</h3>
-            <p>It prevents object deletion and overwrite for the duration of the lock, which is the most important property, but only if you use Compliance mode (Governance mode is bypassable by IAM principals with the right permission). Object Lock does not prevent attackers from deleting the bucket itself if they have S3 admin and bucket versioning is off, does not prevent KMS key disablement that renders objects unreadable, and does not prevent retention being set too short before an attack. The full pattern is: Compliance-mode Object Lock + bucket versioning + replication to a separate account + KMS keys whose admin and usage roles are in a different trust domain + MFA-delete on the source bucket.</p>
+            <p>It prevents object deletion and overwrite for the duration of the lock, which is the most important property, but only if you use Compliance mode (Governance mode is bypassable by IAM principals with the right permission). Object Lock does not protect object versions that carry no retention period or legal hold (set a default retention on the bucket), does not prevent KMS key disablement that renders objects unreadable, and does not prevent retention being set too short before an attack. The full pattern is: Compliance-mode Object Lock + bucket versioning + replication to a separate account + KMS keys whose admin and usage roles are in a different trust domain + MFA-delete on the source bucket.</p>
 
             <h3>How often should we test restoration?</h3>
             <p>Quarterly at minimum for any tier-1 system; monthly or continuous validation for the most critical. The gap between "we have backups" and "we can restore at scale within RTO" is enormous and only revealed by doing the restore. A useful cadence: per-system small restore monthly, full-stack tabletop quarterly, full-service restore annually (or after any major architecture change). The numbers to capture from each test: time to restore, data loss vs RPO, manual steps required, missing IAM, missing keys, missing tooling. Each finding feeds the runbook.</p>

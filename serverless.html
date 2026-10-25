@@ -140,7 +140,7 @@
           "name": "How does this relate to zero trust?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Serverless makes some zero-trust principles trivially easy and others harder. Per-invocation isolation and per-function identity are zero trust by default - \"verify explicitly\" and \"least privilege\" come almost for free. What's harder: network-level segmentation (the platform abstracts the network away) and continuous verification (no host to inspect, no agent to run, so you depend on the platform's telemetry and your own logging)."
+            "text": "Serverless makes some zero-trust principles trivially easy and others harder. Per-environment isolation and per-function identity are zero trust by default - \"verify explicitly\" and \"least privilege\" come almost for free. What's harder: network-level segmentation (the platform abstracts the network away) and continuous verification (no host to inspect, no agent to run, so you depend on the platform's telemetry and your own logging)."
           }
         }
       ]
@@ -450,7 +450,7 @@
                 <li><strong>An event configuration</strong> - declaring what causes the function to run. HTTP routes via an API gateway, queue messages, blob/object events, scheduled timers, database streams, message-bus events, identity events.</li>
                 <li><strong>An execution role</strong> - the cloud identity the function assumes when it runs. Permissions for whatever services the code needs to call (read a row from DynamoDB, write to S3, call SQS, etc.).</li>
             </ol>
-            <p>When an event arrives, the platform allocates an isolated execution environment (a per-invocation Firecracker micro-VM on AWS, and equivalents on Azure and GCP), copies your code in, runs it for at most a few minutes (varies by provider; Lambda caps at 15 minutes), and discards the environment. From your side: no servers visible, no nodes to patch, no operating system to maintain. The platform handles all of that.</p>
+            <p>When an event arrives, the platform allocates an isolated execution environment (a Firecracker micro-VM on AWS, and equivalents on Azure and GCP), copies your code in, runs it for at most a few minutes (varies by provider; Lambda's default cap is 15 minutes per invocation), and then keeps the environment so later invocations can reuse it, until the platform discards it. From your side: no servers visible, no nodes to patch, no operating system to maintain. The platform handles all of that.</p>
             <p>The <em>serverless</em> name is a marketing term; there are obviously servers underneath. The accurate framing is <strong>functions as a service</strong>: the unit of deployment is a function, the unit of billing is the millisecond of execution, and the platform owns everything between your code and the silicon.</p>
         </section>
 
@@ -541,12 +541,12 @@
             <h2>The trust boundary</h2>
             <p>For each function invocation, the security-relevant boundary is straightforward:</p>
             <ul>
-                <li><strong>The execution environment is per-invocation, <a class="glossary-link" href="glossary.html#term-hypervisor">hypervisor</a>-isolated.</strong> On AWS, every Lambda invocation runs in a Firecracker micro-VM dedicated to one customer. Azure and GCP have similar isolation. Two of your functions cannot share a kernel; two customers' functions definitely cannot.</li>
+                <li><strong>The execution environment is short-lived and <a class="glossary-link" href="glossary.html#term-hypervisor">hypervisor</a>-isolated.</strong> On AWS, Lambda execution environments run in Firecracker micro-VMs dedicated to one customer, and warm invocations reuse them. Azure and GCP have similar isolation. Two of your functions cannot share a kernel; two customers' functions definitely cannot.</li>
                 <li><strong>The function's identity is its execution role.</strong> Whatever permissions that role has, the function has. There is no node identity, no shared service-account token, no host-level credentials to fall back to.</li>
                 <li><strong>The event source is the entry point.</strong> Whatever calls the function (API Gateway, an HTTP function URL, S3 events, queue messages) is the threat surface. Untrusted input enters the function via the event payload.</li>
                 <li><strong>The function's outbound calls are bounded by its role.</strong> If the role can read a single DynamoDB table, that's the <a class="glossary-link" href="glossary.html#term-blast-radius">blast radius</a>. Per-function least-privilege roles are the difference between "one function compromised" and "one function got the keys to everything."</li>
             </ul>
-            <p>The platform genuinely makes the boundary stronger than a long-lived container or VM in some ways: fresh execution environment per invocation, hypervisor isolation by default, no host to patch. It also makes some kinds of compromise <em>cheaper</em>: stealing a function's IAM credentials and using them outside the function is easy if the function leaks them, and the function only needs to be compromised once to do that.</p>
+            <p>The platform genuinely makes the boundary stronger than a long-lived container or VM in some ways: short-lived execution environments, hypervisor isolation by default, no host to patch. It also makes some kinds of compromise <em>cheaper</em>: stealing a function's IAM credentials and using them outside the function is easy if the function leaks them, and the function only needs to be compromised once to do that.</p>
         </section>
 
         <section id="risks">
@@ -781,7 +781,7 @@
                             <td>60 min (v2 / Cloud Run-based)</td>
                         </tr>
                         <tr>
-                            <th scope="row">Per-invocation isolation</th>
+                            <th scope="row">Execution isolation</th>
                             <td>Firecracker micro-VM</td>
                             <td>Sandboxed worker (Consumption); container (Premium)</td>
                             <td>gVisor on Cloud Run infrastructure</td>
@@ -928,7 +928,7 @@
             <p>Yes. Injection, deserialization, broken access control, <a class="glossary-link" href="glossary.html#term-ssrf">SSRF</a> - every OWASP-class issue applies. The execution environment is shorter-lived and the IAM blast radius is usually narrower, but the application-layer surface is the same. Add event-source-specific injection as an extra category that doesn't exist for traditional servers.</p>
 
             <h3>How does this relate to zero trust?</h3>
-            <p>Serverless makes some zero-trust principles trivially easy and others harder. Per-invocation isolation and per-function identity are <a class="glossary-link" href="glossary.html#term-zero-trust">zero trust</a> by default - "verify explicitly" and "<a class="glossary-link" href="glossary.html#term-least-privilege">least privilege</a>" come almost for free. What's harder: network-level segmentation (the platform abstracts the network away) and continuous verification (no host to inspect, no agent to run, so you depend on the platform's telemetry and your own logging).</p>
+            <p>Serverless makes some zero-trust principles trivially easy and others harder. Per-environment isolation and per-function identity are <a class="glossary-link" href="glossary.html#term-zero-trust">zero trust</a> by default - "verify explicitly" and "<a class="glossary-link" href="glossary.html#term-least-privilege">least privilege</a>" come almost for free. What's harder: network-level segmentation (the platform abstracts the network away) and continuous verification (no host to inspect, no agent to run, so you depend on the platform's telemetry and your own logging).</p>
         </section>
 
         <section class="cta-section">

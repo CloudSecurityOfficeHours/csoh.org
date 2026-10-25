@@ -871,7 +871,7 @@
             <h3>Control-plane compromise</h3>
             <p>If <em>istiod</em> (or the Linkerd / Cilium / Consul control plane) is compromised, every certificate in the mesh becomes untrustworthy. RBAC the control plane like the secret it administers; isolate it to a hardened namespace with deny-by-default NetworkPolicy; rotate its root CA on a defined cadence; alert on every API change to it.</p>
             <h3>Sidecar lifecycle bugs</h3>
-            <p>Pre-Kubernetes-1.29, sidecars had no formal lifecycle relationship with the application container: they started in arbitrary order and could outlive the app, causing the "job pod that never terminates" class of bugs. Kubernetes 1.29's native sidecars (KEP-753, GA in 1.29) finally fixed this, but old clusters may still hit it.</p>
+            <p>Pre-Kubernetes-1.29, sidecars had no formal lifecycle relationship with the application container: they started in arbitrary order and could outlive the app, causing the "job pod that never terminates" class of bugs. Kubernetes 1.29's native sidecars (KEP-753, on by default since 1.29 and GA in 1.33) finally fixed this, but old clusters may still hit it.</p>
         </section>
 
         <section id="ambient">
@@ -885,7 +885,7 @@
             </ul>
             <p>GA at Istio 1.22 (mid-2024) and steadily maturing through 2025-2026. The migration story from sidecar to ambient is supported by the Istio operator; ambient and sidecar pods can coexist during transition.</p>
             <h3>Cilium Service Mesh (sidecarless from the start)</h3>
-            <p>Cilium's mesh has never used sidecars. The L4 path (mTLS, identity, encryption, NetworkPolicy enforcement) runs in eBPF programs attached to network hooks in the Linux kernel; there is no proxy in the pod. L7 features (HTTP-level routing, authorization with HTTP-aware predicates) run in a per-node Envoy that Cilium manages. The result is one of the leanest data planes in the ecosystem: most of the work happens in the kernel, on the packet, without a userspace proxy round-trip.</p>
+            <p>Cilium's mesh has never used sidecars. The L4 path (identity and NetworkPolicy enforcement) runs in eBPF programs attached to network hooks in the Linux kernel; there is no proxy in the pod. Encryption, when enabled, comes from IPsec or WireGuard (ztunnel is a beta third option), and the beta mutual-authentication feature runs its mTLS handshake out of band between Cilium agents. L7 features (HTTP-level routing, authorization with HTTP-aware predicates) run in a per-node Envoy that Cilium manages. The result is one of the leanest data planes in the ecosystem: most of the work happens in the kernel, on the packet, without a userspace proxy round-trip.</p>
             <h3>What sidecarless costs you</h3>
             <ul>
                 <li><strong>Different blast-radius model.</strong> A sidecar fails per pod; a node-level proxy fails per node. Different failure modes need different SLOs.</li>
@@ -1014,7 +1014,7 @@
                 <li>If you don't yet know what you need, pick <strong>Linkerd</strong>. Smallest surface, hardest to misconfigure.</li>
                 <li>If you're replacing more than one networking layer, pick <strong>Cilium</strong>. The whole-stack consolidation is the value.</li>
                 <li>If you need rich L7 features, multi-cluster federation, or already have a platform team, pick <strong>Istio</strong>. In ambient mode, the historical operational tax is much lower.</li>
-                <li>If you have significant VM and bare-metal alongside Kubernetes, pick <strong>Consul</strong>. It's the only one that treats VMs as first-class.</li>
+                <li>If you have significant VM and bare-metal alongside Kubernetes, pick <strong>Consul</strong>. It treats VMs as first-class; Istio and Linkerd (since 2.15) can also bring VMs into the mesh.</li>
             </ul>
         </section>
 
