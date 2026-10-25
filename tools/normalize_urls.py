@@ -70,6 +70,7 @@ BOT_BLOCKED_DOMAINS = [
     'blackhat.com', 'euvd.enisa.europa.eu', 'gitconnected.com',
     'jobs.sap.com', 'programs.com', 'trustoncloud.com',
     'careersinaudit.com',
+    'root-me.org',  # Anubis wall. Lychee excludes the host. Resolving it would follow the challenge page.
 ]
 
 # Extend shortener list with Amazon short links
