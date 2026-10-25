@@ -892,6 +892,7 @@ csoh.org/
 │       └── cloudflare/         # Edge: zone, rules, active/active load balancer + health checks
 │
 ├── CLAUDE.md                   # Repo gotchas for humans and agents working here
+├── AGENTS.md                   # Short pointer: read and follow CLAUDE.md
 ├── CONTRIBUTING.md             # Umbrella contributing guide
 ├── CONTRIBUTING_RESOURCES.md   # Contributing resources specifically
 ├── CONTRIBUTING_CTFS.md        # Contributing CTFs specifically
