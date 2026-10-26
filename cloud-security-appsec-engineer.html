@@ -432,7 +432,7 @@
                 Dependabot, Grype, OSV-Scanner), <a class="glossary-link" href="glossary.html#term-sbom">SBOM</a> generation and attestation, artifact signing (<a class="glossary-link" href="glossary.html#term-sigstore">Sigstore</a>/cosign), and the policy that
                 enforces what your clusters or <a class="glossary-link" href="glossary.html#term-lambda">Lambda</a> functions are allowed to run. This domain is the fastest-moving part of the role right now. It didn't meaningfully exist five years ago and now it's a first-class concern at most security-mature companies.</li>
                 <li><strong><a href="kubernetes.html">Kubernetes</a> admission and <a class="glossary-link" href="glossary.html#term-service-account">workload identity</a>.</strong> Configuring admission controllers (OPA/Gatekeeper or Kyverno) with policies that enforce <a class="glossary-link" href="glossary.html#term-pss">pod security standards</a> (no privileged containers, required resource
-                limits, approved registries). Managing workload identity: <a class="glossary-link" href="glossary.html#term-irsa">IRSA</a> on AWS, Workload Identity on GCP, pod identity on Azure, so
+                limits, approved registries). Managing workload identity: <a class="glossary-link" href="glossary.html#term-irsa">IRSA</a> on AWS, Workload Identity on GCP, Workload ID on Azure, so
                 workloads authenticate to cloud services without static credentials at all. Reviewing <a class="glossary-link" href="glossary.html#term-rbac">RBAC</a> and service account permissions,
                 which have a habit of growing beyond their original scope.</li>
                 <li><strong>Secret detection and prevention.</strong> Running tools like GitGuardian, <a class="glossary-link" href="glossary.html#term-trufflehog">TruffleHog</a>, or the provider-native secret scanning to
@@ -588,7 +588,7 @@
 
             <h3>6. Workload identity is replacing long-lived secrets - and the migration is never fully done</h3>
             <p>The right answer for application credentials in cloud is workload identity: IRSA (IAM Roles for Service Accounts) on AWS, Workload
-            Identity on GCP, pod identity on Azure. The application proves who it is via the platform's identity mechanism and gets a
+            Identity on GCP, Workload ID on Azure. The application proves who it is via the platform's identity mechanism and gets a
             short-lived token, with no static key to rotate, leak, or scan for. This is a much better model than secrets mounted in
             environment variables or stored in Kubernetes secrets that live in etcd with inadequate encryption. But migrating an existing
             application estate to workload identity is an ongoing project, not a one-time migration: new services are built, new teams
@@ -834,8 +834,8 @@
 
             <h3>Container image scanning</h3>
             <p>Trivy and Grype (Anchore) are two widely used open-source options. Both scan OCI images for OS package CVEs, language ecosystem
-            vulnerabilities, and misconfiguration. Snyk Container adds <a class="glossary-link" href="glossary.html#term-reachability">reachability</a> analysis (is the vulnerable code path actually called?)
-            which reduces noise but requires deeper integration. Amazon Inspector v2 provides integrated ECR scanning with Security Hub
+            vulnerabilities, and misconfiguration. Snyk's <a class="glossary-link" href="glossary.html#term-reachability">reachability</a> analysis (is the vulnerable code path actually called?)
+            reduces noise but requires deeper integration: it is a Snyk Open Source feature that analyzes your source code, not part of Snyk Container's image scan. Amazon Inspector v2 provides integrated ECR scanning with Security Hub
             findings; GCP Artifact Registry uses Container Analysis; Azure Container Registry uses Defender for Containers. For base image
             management, distroless (Google) and Chainguard Images are the current best-practice choices for minimal attack surface. Know what's in your org's approved base image list and who maintains it. Image scanning is only useful if someone acts on the
             findings; having a clear policy for critical CVE SLAs (patch within N days or document the exception) is as important as the
@@ -898,8 +898,8 @@
                 policies per service account. EKS adds Pod Identity, a simpler newer variant. Lambda and ECS have their own workload
                 identity mechanisms (execution roles). AWS ECR has native scanning via Amazon Inspector; the findings feed into Security
                 Hub. See <a href="aws-security.html">AWS security</a>.</li>
-                <li><strong>Azure</strong> uses pod managed identity (the older, node-level VMSS approach) and Workload Identity Federation (the newer,
-                token-projection approach that mirrors IRSA). The newer approach is significantly better but not universally adopted yet. You will encounter both in the wild. Azure Defender for Containers covers AKS Kubernetes admission policy via Azure Policy
+                <li><strong>Azure</strong> had pod managed identity (the older, node-level VMSS approach, deprecated in October 2022 and supported as an AKS add-on only through September 2025) and now uses Workload Identity Federation (the newer,
+                token-projection approach that mirrors IRSA). The newer approach is significantly better, but not every cluster has migrated yet. You will encounter both in the wild. Azure Defender for Containers covers AKS Kubernetes admission policy via Azure Policy
                 for Kubernetes, which wraps OPA/Gatekeeper. Azure Container Registry has integrated vulnerability scanning. <a class="glossary-link" href="glossary.html#term-entra-id">Entra ID</a>
                 workload identity is the identity plane for everything. See <a href="azure-security.html">Azure security</a>.</li>
                 <li><strong>GCP</strong> has arguably the cleanest workload identity story: Workload Identity Federation binds Kubernetes service accounts
