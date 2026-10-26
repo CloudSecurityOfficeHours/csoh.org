@@ -165,7 +165,7 @@
           "name": "How is \"containerless\" / serverless different?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Cloud Run, Container Apps, Fargate, App Runner - these run your container image, but the platform manages the host, the kernel, the runtime sandboxing, and the scaling. You don't have a node to log into. The trade-off is reduced control (no DaemonSets, no privileged sidecars) for significantly less security surface to manage. For most application workloads, this is the right default in 2026."
+            "text": "Cloud Run, Container Apps, Fargate, App Runner: these run your container image, but the platform manages the host, the kernel, the runtime sandboxing, and the scaling. You don't have a node to log into. The trade-off is reduced control (no DaemonSets, no privileged sidecars) for significantly less security surface to manage. For most application workloads, this is the right default in 2026."
           }
         },
         {
@@ -553,16 +553,16 @@
             <h3>The fix has two parts</h3>
             <p><strong>1. Per-workload identity, not per-host.</strong> Every cloud now offers a way to give an individual workload (pod, container, function) its own short-lived cloud credentials, scoped to that workload only:</p>
             <ul>
-                <li>AWS - <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a> on EKS, <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a>, task roles on ECS, function roles on Lambda.</li>
-                <li>Azure - <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">Workload Identity</a> on AKS (federated to Entra), managed identity per Container Apps revision.</li>
-                <li>GCP - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">Workload Identity Federation</a> on GKE, per-revision service account on Cloud Run.</li>
+                <li>AWS: <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a> on EKS, <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a>, task roles on ECS, function roles on Lambda.</li>
+                <li>Azure: <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">Workload Identity</a> on AKS (federated to Entra), managed identity per Container Apps revision.</li>
+                <li>GCP: <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">Workload Identity Federation</a> on GKE, per-revision service account on Cloud Run.</li>
             </ul>
             <p>With per-workload identity, the container has only the permissions it needs. A compromise gets you that workload's credentials, not the VM's.</p>
             <p><strong>2. Block IMDS from containers entirely.</strong> Belt-and-suspenders: even with workload identity in place, the host's IMDS shouldn't be reachable from containers.</p>
             <ul>
-                <li>AWS - enforce IMDSv2 with hop-limit 1 (<code>HttpPutResponseHopLimit: 1</code>). Containers, which have at least one network hop, can't reach the metadata service through the host's interface.</li>
-                <li>Azure - block 169.254.169.254 at the iptables / <a class="glossary-link" href="glossary.html#term-network-policy">network policy</a> layer on the host.</li>
-                <li>GCP - workload identity already breaks this path; metadata server endpoints have additional <code>Metadata-Flavor: Google</code> header enforcement.</li>
+                <li>AWS: enforce IMDSv2 with hop-limit 1 (<code>HttpPutResponseHopLimit: 1</code>). Containers, which have at least one network hop, can't reach the metadata service through the host's interface.</li>
+                <li>Azure: block 169.254.169.254 at the iptables / <a class="glossary-link" href="glossary.html#term-network-policy">network policy</a> layer on the host.</li>
+                <li>GCP: workload identity already breaks this path; metadata server endpoints have additional <code>Metadata-Flavor: Google</code> header enforcement.</li>
             </ul>
             <p>If your container framework is "the VM has a god role and every container uses it" - that's the legacy pattern. Move every workload to per-pod / per-task / per-function identity. Block IMDS from containers as a hard rule.</p>
         </section>
@@ -580,7 +580,7 @@
             <h3>What containment looks like</h3>
             <ul>
                 <li><strong>Network policies.</strong> On Kubernetes, <a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener noreferrer">NetworkPolicy</a> resources define allowed ingress/egress per pod. Default-deny in production namespaces, then explicitly allow what's needed.</li>
-                <li><strong><a class="glossary-link" href="glossary.html#term-service-mesh">Service mesh</a>.</strong> Istio, Linkerd, Cilium, Consul - <a class="glossary-link" href="glossary.html#term-mtls">mTLS</a> between services, identity-based authorization, traffic-flow telemetry. Brings the "every connection is authenticated" zero-trust model down to the pod level.</li>
+                <li><strong><a class="glossary-link" href="glossary.html#term-service-mesh">Service mesh</a>.</strong> Istio, Linkerd, Cilium, Consul: <a class="glossary-link" href="glossary.html#term-mtls">mTLS</a> between services, identity-based authorization, traffic-flow telemetry. Brings the "every connection is authenticated" zero-trust model down to the pod level.</li>
                 <li><strong>Egress controls.</strong> Restrict outbound to a curated allow-list (your package registries, your dependencies, your APIs). Egress proxies (Cilium's L7 policies, <a class="glossary-link" href="glossary.html#term-nat">NAT</a> gateways with allow-list rules, service mesh egress gateways) make this practical.</li>
                 <li><strong>No direct external exposure.</strong> Containers behind a load balancer, ingress, or API gateway, never with a public IP directly on the pod.</li>
                 <li><strong>Block link-local addresses.</strong> Drop traffic to 169.254.0.0/16 from containers unless explicitly required.</li>
@@ -676,7 +676,7 @@
             <p>Runtime detection closes that gap. The dominant approach is <strong><a class="glossary-link" href="glossary.html#term-ebpf">eBPF</a></strong>-based syscall instrumentation:</p>
             <ul>
                 <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a>: <a class="glossary-link" href="glossary.html#term-cncf">CNCF</a> project, the de facto open-source runtime-security engine. Rule-based detection on syscalls, container metadata, and Kubernetes audit logs.</li>
-                <li><a href="https://tetragon.io/" target="_blank" rel="noopener noreferrer">Tetragon</a>: a Cilium sub-project under the CNCF, eBPF runtime enforcement (can <em>block</em>, not just alert).</li>
+                <li><a href="https://tetragon.io/" target="_blank" rel="noopener noreferrer">Tetragon</a>: a Cilium sub-project under the CNCF, eBPF runtime enforcement (can <em>block</em> as well as alert).</li>
                 <li><strong>CNAPP runtime modules.</strong> Wiz, Aqua, Sysdig, CrowdStrike, Defender for Containers. Same idea, packaged as managed agents with <a class="glossary-link" href="glossary.html#term-saas">SaaS</a> analytics.</li>
             </ul>
             <p>What runtime detection catches: shell spawns inside production containers, processes writing to <code>/etc/shadow</code>, network connections to known <a class="glossary-link" href="glossary.html#term-c2">C2</a> infrastructure, capability escalation, attempts to access <code>/proc/1/root</code>, anomalous outbound DNS. The signal is high; tuning the rules to fit your normal workload behavior is the work.</p>
@@ -804,7 +804,7 @@
         <section id="pitfalls">
             <h2>Common pitfalls</h2>
             <ul>
-                <li><strong>Treating containers as the security boundary.</strong> They're not. A kernel CVE makes them not. Plan for what happens when a container is compromised, not just how to prevent it.</li>
+                <li><strong>Treating containers as the security boundary.</strong> They're not. A kernel CVE makes them not. Plan for what happens when a container is compromised as well as how to prevent it.</li>
                 <li><strong>The VM god-role.</strong> All containers inherit the host's broad IAM role. One compromise = everything. Move to per-workload identity.</li>
                 <li><strong>Secrets in env vars.</strong> They land in container metadata, in logs, in <code>/proc/1/environ</code>, in <code>kubectl describe</code> output. Use a secrets store mounted as files with strict permissions, or fetched at runtime.</li>
                 <li><strong>"It's just an internal service, no need for auth."</strong> Internal containers get compromised. Authenticate every connection, even between your own services.</li>
@@ -829,7 +829,7 @@
             <ul>
                 <li><a href="https://falco.org/" target="_blank" rel="noopener noreferrer">Falco</a>: runtime security</li>
                 <li><a href="https://trivy.dev/" target="_blank" rel="noopener noreferrer">Trivy</a>: vulnerability and <a class="glossary-link" href="glossary.html#term-iac">IaC</a> scanning</li>
-                <li><a href="https://www.sigstore.dev/" target="_blank" rel="noopener noreferrer">Sigstore</a> &amp; Cosign - signing &amp; provenance</li>
+                <li><a href="https://www.sigstore.dev/" target="_blank" rel="noopener noreferrer">Sigstore</a> &amp; Cosign: signing &amp; provenance</li>
                 <li><a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gVisor</a>: user-space kernel sandbox</li>
                 <li><a href="https://katacontainers.io/" target="_blank" rel="noopener noreferrer">Kata Containers</a>: VM-isolated containers</li>
                 <li><a href="https://github.com/GoogleContainerTools/distroless" target="_blank" rel="noopener noreferrer">Distroless</a> &amp; <a href="https://www.chainguard.dev/" target="_blank" rel="noopener noreferrer">Chainguard Images</a></li>
@@ -864,7 +864,7 @@
             <p>It helps a lot: the daemon no longer runs as root, and a container compromise is no longer "the daemon's root." But it's not a silver bullet: the kernel is still shared, kernel CVEs still escape, the workload still needs to drop capabilities and run as a non-root user inside the container. Rootless removes one big foot-gun; the rest of the hardening still applies.</p>
 
             <h3>How is "containerless" / serverless different?</h3>
-            <p>Cloud Run, Container Apps, Fargate, App Runner - these run your container image, but the platform manages the host, the kernel, the runtime sandboxing, and the scaling. You don't have a node to log into. The trade-off is reduced control (no DaemonSets, no privileged sidecars) for significantly less security surface to manage. For most application workloads, this is the right default in 2026.</p>
+            <p>Cloud Run, Container Apps, Fargate, App Runner: these run your container image, but the platform manages the host, the kernel, the runtime sandboxing, and the scaling. You don't have a node to log into. The trade-off is reduced control (no DaemonSets, no privileged sidecars) for significantly less security surface to manage. For most application workloads, this is the right default in 2026.</p>
 
             <h3>How does this relate to zero trust?</h3>
             <p>Containers operationalize <a class="glossary-link" href="glossary.html#term-zero-trust">zero trust</a> at the workload layer when you do this right: per-workload identity (verify explicitly), default-deny networking (<a class="glossary-link" href="glossary.html#term-least-privilege">least privilege</a>), mTLS between services (verify continuously), runtime detection (assume breach). The container is a unit of identity as well as a unit of deployment.</p>
