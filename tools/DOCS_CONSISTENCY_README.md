@@ -64,12 +64,10 @@ dates.
 published in July and edited in August is exactly that. Rewriting the label on
 this basis is an editorial choice, not a correction.
 
-**The breach series dates by incident, not by authorship.** 0ktapus is
-2022-08-26, Log4Shell 2021-12-14, Codecov 2021-04-15 - each its incident date.
-That is not what schema.org means by `datePublished`, but it is applied
-consistently, so it is a convention rather than drift, and changing it is a
-decision about the whole series. Only January 1 is flagged, because a real
-incident has a real date.
+**`datePublished` is when the write-up was authored.** For a breach page that is
+the date the page was first committed (`git log --follow --diff-filter=A`), not
+the incident date, which belongs in the page text. A January 1 value is flagged
+as a template nobody filled in.
 
 **`N+` is a floor, and count claims are reported rather than fixed.** "300+
 glossary terms" with 317 live is true. A number in prose carries context a regex

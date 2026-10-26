@@ -87,7 +87,7 @@
           "@type": "HowToStep",
           "position": 2,
           "name": "Start LocalStack",
-          "text": "Run localstack start -d to launch the mock AWS cloud as a background Docker container."
+          "text": "Store your free LocalStack auth token with localstack auth set-token, then run localstack start -d to launch the mock AWS cloud as a background Docker container."
         },
         {
           "@type": "HowToStep",
@@ -338,7 +338,7 @@
         </section>
 
         <div class="highlight-box">
-            <p><strong>Read this before you start.</strong> LocalStack emulates the AWS <em>API surface</em>, not AWS's security <em>enforcement</em>. The free Community edition happily lets you create IAM users and attach policies, but it does not actually enforce them: a <code>Deny</code> will not stop anything. That makes LocalStack unbeatable for learning the AWS API, CLI, SDKs, Terraform, and IaC scanning, and the wrong tool for testing whether an IAM policy actually blocks an action. For that, use a real free-tier account (see the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>).</p>
+            <p><strong>Read this before you start.</strong> LocalStack emulates the AWS <em>API surface</em>, not AWS's security <em>enforcement</em>. The free Hobby plan happily lets you create IAM users and attach policies, but it does not actually enforce them: a <code>Deny</code> will not stop anything. That makes LocalStack unbeatable for learning the AWS API, CLI, SDKs, Terraform, and IaC scanning, and the wrong tool for testing whether an IAM policy actually blocks an action. For that, use a real free-tier account (see the <a href="break-and-detect-aws.html">break-it-then-catch-it walkthrough</a>).</p>
         </div>
 
         <div class="toc">
@@ -390,7 +390,9 @@ awslocal --version      # prints the underlying aws-cli version that awslocal wr
             <p><code>awslocal</code> is a one-line wrapper that calls the real <code>aws</code> CLI with <code>--endpoint-url=http://localhost:4566</code> injected, so you never have to type the endpoint. <code>tflocal</code> does the same for Terraform: it auto-points every AWS provider at LocalStack. Both call the tools you already have, so you can always fall back to <code>aws --endpoint-url=http://localhost:4566 &hellip;</code> directly.</p>
 
             <h3>2. Start LocalStack</h3>
-<div class="code-block" data-lang="bash"><pre>localstack start -d          # start the mock cloud; -d = detached, so it runs in the background and frees your shell
+            <p>Since March 2026, LocalStack will not start without an auth token. Create a free LocalStack account (the Hobby plan covers non-commercial use) and copy your auth token, then store it once:</p>
+<div class="code-block" data-lang="bash"><pre>localstack auth set-token &lt;YOUR_AUTH_TOKEN&gt;
+localstack start -d          # start the mock cloud; -d = detached, so it runs in the background and frees your shell
 localstack status services   # print a table of every emulated service (s3, iam, lambda, ...) and whether each is 'available'</pre></div>
             <p>You will see a table of services (<code>s3</code>, <code>iam</code>, <code>lambda</code>, <code>sqs</code>, &hellip;) marked <code>available</code>. LocalStack pulls its Docker image on first run, so give it a minute. Tail logs with <code>localstack logs -f</code>; stop it later with <code>localstack stop</code>.</p>
 
@@ -492,7 +494,7 @@ resource "aws_iam_access_key" "app" {
   user = aws_iam_user.app.name
 }</pre></div>
 <div class="code-block" data-lang="bash"><pre>tflocal apply -auto-approve   # actually create the resources; -auto-approve skips the interactive "yes" prompt</pre></div>
-            <p>Everything you just wrote is a real finding you will meet in production: a bucket policy with <code>Principal: "*"</code>, an access block that blocks nothing, a wildcard <code>Action: "*"</code> IAM policy, and a static access key that never rotates. LocalStack Community will happily <em>create</em> all of it (it just will not <em>enforce</em> the IAM half) - which is exactly what you want for practising the build-and-scan loop.</p>
+            <p>Everything you just wrote is a real finding you will meet in production: a bucket policy with <code>Principal: "*"</code>, an access block that blocks nothing, a wildcard <code>Action: "*"</code> IAM policy, and a static access key that never rotates. The Hobby plan will happily <em>create</em> all of it (it just will not <em>enforce</em> the IAM half) - which is exactly what you want for practising the build-and-scan loop.</p>
 
             <h3>6. Poke at what you built</h3>
 <div class="code-block" data-lang="bash"><pre># Stage a fake "loot" file in the public bucket...
@@ -522,8 +524,8 @@ trivy config .      # scan the current directory's infrastructure-as-code for th
 
             <h3>8. Tear it down</h3>
 <div class="code-block" data-lang="bash"><pre>tflocal destroy -auto-approve   # delete everything Terraform created; -auto-approve skips the confirmation prompt
-localstack stop                 # stop the container - community-edition state lives in RAM, so this wipes it clean</pre></div>
-            <p>Community-edition state lives in memory, so stopping the container wipes everything. That is a feature: every session starts from a clean slate.</p>
+localstack stop                 # stop the container - Hobby-plan state lives in RAM, so this wipes it clean</pre></div>
+            <p>Hobby-plan state lives in memory, so stopping the container wipes everything. That is a feature: every session starts from a clean slate.</p>
         </section>
 
         <section id="limits">
@@ -538,7 +540,7 @@ localstack stop                 # stop the container - community-edition state l
         <section id="mistakes">
             <h2>Common mistakes</h2>
             <ul>
-                <li><strong>Expecting IAM denies to be enforced.</strong> Community edition creates policies but does not enforce them. Use a real account to test enforcement.</li>
+                <li><strong>Expecting IAM denies to be enforced.</strong> The Hobby plan creates policies but does not enforce them. Use a real account to test enforcement.</li>
                 <li><strong>Forgetting <code>-d</code>.</strong> Without it, <code>localstack start</code> holds your terminal in the foreground.</li>
                 <li><strong>Running plain <code>terraform</code> against real AWS by accident.</strong> Always sanity-check <code>sts get-caller-identity</code> returns <code>000000000000</code>.</li>
                 <li><strong>Treating LocalStack as a security-control test-bed.</strong> It is an API and IaC learning tool, not an enforcement simulator.</li>

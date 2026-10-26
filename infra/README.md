@@ -632,7 +632,7 @@ since then with no setting changed, because deploys fell from 6.6 a day to 5.3.
 | Component | Now | Was (14-30 Sep) | Source |
 |---|---|---|---|
 | Cloudflare Load Balancing add-on (Free plan + LB) | $10.00 | $10.00 | billed, confirmed in the dashboard (no token here can read billing) |
-| Azure Blob static website | $3.63 | $3.98 | measured - $3.30 of deploy writes, $0.28 of probe operations |
+| Azure Blob static website | $3.63 | $3.98 | measured - $3.30 of deploy writes, $0.28 of other operations (probes no longer register) |
 | GCP Artifact Registry | $0.35 | $0.34 | measured - 10 images plus the day's newest, about 3 GiB; no free allowance is actually granted |
 | GCP Cloud Run (production origin) | $0.02 | $0.02 | measured - a month fits the free allowance; the 2 cents are egress |
 | AWS S3 + CloudFront | $0.00 | $0.00 | measured - $3.43 of usage ($3.34 of it PUTs), offset by credits |

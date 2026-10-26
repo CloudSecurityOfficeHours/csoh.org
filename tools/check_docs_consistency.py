@@ -57,16 +57,11 @@ EXCLUDE_DIRS = {"dist", "vendor", "node_modules", "__pycache__", "seo-audits"}
 # Markdown that is authored prose rather than generated output.
 DOC_GLOBS = ("*.md", "tools/*.md", "docs/*.md")
 
-# The breach series sets datePublished to the date of the INCIDENT rather than
-# the date the write-up was authored - 0ktapus is 2022-08-26, Log4Shell is
-# 2021-12-14, Codecov is 2021-04-15, each matching its incident. That is not
-# what schema.org means by datePublished on an Article, but it is applied
-# consistently across the series, so it is a convention and not drift. Changing
-# it is an editorial decision about the whole series, not a per-page defect.
-#
-# What that convention makes visible is January 1. A real incident has a real
-# date, so a January 1 datePublished is a page where nobody filled the template
-# in, and it breaks the series' own rule.
+# datePublished on an Article is the date the write-up was authored, not the
+# date of the incident it describes (docs/EDITORIAL_STANDARDS.md section 5).
+# For the breach series that is the date the page was first committed
+# (`git log --follow --diff-filter=A`); the incident date belongs in the page
+# text. A January 1 datePublished is a page where nobody filled the template in.
 
 # ---------------------------------------------------------------- known exceptions
 #
@@ -260,12 +255,9 @@ def check_dates(path: Path, text: str) -> tuple[list[Finding], str]:
 def check_placeholder_dates(path: Path, text: str) -> list[Finding]:
     """January 1 datePublished: the template nobody filled in.
 
-    Judged against the series' own convention (see the note above), not against
-    schema.org. A real incident has a real date, so January 1 is the tell.
-
-    REPORT only. The right value is not recoverable from the repo, and git
-    cannot supply it either: site-wide SRI and chrome sweeps touch every file,
-    so every page shares the same last-commit date.
+    REPORT only. The right value is the page's first-commit date (see the note
+    above). Its last-commit date is no use: site-wide SRI and chrome sweeps
+    touch every file, so every page shares it.
     """
     dp = DATE_PUBLISHED.search(text)
     if not dp or not dp.group(1).endswith("-01-01"):
@@ -274,7 +266,7 @@ def check_placeholder_dates(path: Path, text: str) -> list[Finding]:
         "date-placeholder", rel(path),
         f"datePublished {dp.group(1)} is a January 1 placeholder",
         fixable=False,
-        detail="Every other page in the series carries the incident's real date.",
+        detail="Use the date the page was first committed.",
     )]
 
 
