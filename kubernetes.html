@@ -597,7 +597,7 @@
                 <li><strong>Use the pod's service-account token</strong> to talk to the API server. Default token is auto-mounted into every pod. RBAC determines how far this gets: too often, to <code>cluster-admin</code> via some operator that was installed unaudited.</li>
                 <li><strong>Reach the worker node's IMDS</strong> if workload identity isn't configured. Steal the node <a class="glossary-link" href="glossary.html#term-iam">IAM</a> role. Now you have the node's full cloud permissions, which are usually broad because the node needs to pull images, mount volumes, write logs, manage load balancers.</li>
                 <li><strong>Move laterally to other pods</strong> on the same node (shared kernel) or to other pods over the flat pod network. Default-allow networking makes this trivial.</li>
-                <li><strong>Persist via a workload</strong> - deploy a new DaemonSet, create a backdoor service account, modify a ConfigMap. With cluster-admin, <a class="glossary-link" href="glossary.html#term-persistence">persistence</a> is trivial.</li>
+                <li><strong>Persist via a workload.</strong> Deploy a new DaemonSet, create a backdoor service account, modify a ConfigMap. With cluster-admin, <a class="glossary-link" href="glossary.html#term-persistence">persistence</a> is trivial.</li>
                 <li><strong>Exfiltrate</strong> via the cluster's outbound network, which is typically unrestricted to the public internet.</li>
             </ol>
             <p>Every defense on this page targets a step in that arc. Workload identity breaks step 3. Network policy breaks step 4. RBAC scoping breaks step 2 and step 5. Admission control prevents step 1's worst-case primitives (privileged pods, hostPath). Runtime detection catches steps that slip through.</p>
@@ -613,9 +613,9 @@
             <h3>The fix is workload identity</h3>
             <p>Every cloud now offers a per-pod identity that breaks both legs:</p>
             <ul>
-                <li><strong>AWS - <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a></strong> - EKS cluster runs an OIDC issuer; you annotate a Kubernetes service account with an IAM role; pods using that SA exchange the SA token for a scoped role session. <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a> is the newer, simpler alternative.</li>
-                <li><strong>Azure - <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">AKS Workload Identity</a></strong> - federated to <a class="glossary-link" href="glossary.html#term-entra-id">Entra ID</a>, same OIDC pattern.</li>
-                <li><strong>GCP - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">GKE Workload Identity</a></strong> - Kubernetes SAs map to Google service accounts via Workload Identity Federation.</li>
+                <li><strong>AWS - <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html" target="_blank" rel="noopener noreferrer">IAM Roles for Service Accounts (IRSA)</a>.</strong> EKS cluster runs an OIDC issuer; you annotate a Kubernetes service account with an IAM role; pods using that SA exchange the SA token for a scoped role session. <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html" target="_blank" rel="noopener noreferrer">EKS Pod Identity</a> is the newer, simpler alternative.</li>
+                <li><strong>Azure - <a href="https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview" target="_blank" rel="noopener noreferrer">AKS Workload Identity</a>.</strong> Federated to <a class="glossary-link" href="glossary.html#term-entra-id">Entra ID</a>, same OIDC pattern.</li>
+                <li><strong>GCP - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank" rel="noopener noreferrer">GKE Workload Identity</a>.</strong> Kubernetes SAs map to Google service accounts via Workload Identity Federation.</li>
             </ul>
             <p>Once workload identity is configured, also <strong>block IMDS from pods</strong>. On EKS, enforce IMDSv2 with hop-limit 1 (so containers can't reach the metadata interface through the host). On GKE, Workload Identity Federation deploys the GKE metadata server, which intercepts pods' metadata requests so they never reach the node's credentials; pods with <code>hostNetwork: true</code> bypass it. On AKS, pods can reach IMDS by default; the opt-in IMDS restriction (in preview) blocks non-host-network pods.</p>
             <p>Finally, <strong>disable automatic service-account token mounting</strong> for pods that don't need to talk to the API server. <code>automountServiceAccountToken: false</code> on every workload that isn't an operator. This removes one of the attacker's default tools.</p>
@@ -661,9 +661,9 @@
             <h3>Sandbox runtimes for high-risk workloads</h3>
             <p>For workloads that run customer-supplied or otherwise untrusted code, the host kernel is not enough isolation. Options:</p>
             <ul>
-                <li><strong>GKE Sandbox</strong> (gVisor) - per-pod user-space syscall sandbox.</li>
-                <li><strong>AKS Confidential Containers / Kata Containers</strong> - per-pod micro-VM.</li>
-                <li><strong>EKS on Fargate</strong> - per-pod Firecracker micro-VM; the user can't even put two of their own pods on the same kernel.</li>
+                <li><strong>GKE Sandbox</strong> (gVisor). Per-pod user-space syscall sandbox.</li>
+                <li><strong>AKS Confidential Containers / Kata Containers.</strong> Per-pod micro-VM.</li>
+                <li><strong>EKS on Fargate.</strong> Per-pod Firecracker micro-VM; the user can't even put two of their own pods on the same kernel.</li>
             </ul>
             <p>The performance cost is modest; the escape-resistance gain is significant.</p>
         </section>
@@ -728,25 +728,25 @@
             <h3>1. Encrypt etcd at rest with a KMS provider</h3>
             <p>The minimum bar. Configure the API server's <a href="https://kubernetes.io/docs/tasks/administer-cluster/kms-provider/" target="_blank" rel="noopener noreferrer">KMS encryption provider</a> so Secret resources are encrypted with a customer-managed key before being written to etcd. Managed offerings make this one toggle:</p>
             <ul>
-                <li><strong>EKS</strong> - <a href="https://docs.aws.amazon.com/eks/latest/userguide/enable-kms.html" target="_blank" rel="noopener noreferrer">Envelope encryption with AWS KMS</a>, enabled at cluster creation (or via update). Pin the KMS key in IAM so only the cluster's control-plane role can use it.</li>
-                <li><strong>AKS</strong> - <a href="https://learn.microsoft.com/en-us/azure/aks/use-kms-etcd-encryption" target="_blank" rel="noopener noreferrer">KMS etcd encryption with Azure Key Vault</a>; the cluster authenticates to <a class="glossary-link" href="glossary.html#term-key-vault">Key Vault</a> via managed identity.</li>
-                <li><strong>GKE</strong> - <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/encrypting-secrets" target="_blank" rel="noopener noreferrer">Application-layer Secrets Encryption</a> with a <a class="glossary-link" href="glossary.html#term-cloud-kms">Cloud KMS</a> key in the same project.</li>
+                <li><strong>EKS.</strong> <a href="https://docs.aws.amazon.com/eks/latest/userguide/enable-kms.html" target="_blank" rel="noopener noreferrer">Envelope encryption with AWS KMS</a>, enabled at cluster creation (or via update). Pin the KMS key in IAM so only the cluster's control-plane role can use it.</li>
+                <li><strong>AKS.</strong> <a href="https://learn.microsoft.com/en-us/azure/aks/use-kms-etcd-encryption" target="_blank" rel="noopener noreferrer">KMS etcd encryption with Azure Key Vault</a>; the cluster authenticates to <a class="glossary-link" href="glossary.html#term-key-vault">Key Vault</a> via managed identity.</li>
+                <li><strong>GKE.</strong> <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/encrypting-secrets" target="_blank" rel="noopener noreferrer">Application-layer Secrets Encryption</a> with a <a class="glossary-link" href="glossary.html#term-cloud-kms">Cloud KMS</a> key in the same project.</li>
             </ul>
             <p>This protects against etcd-snapshot <a class="glossary-link" href="glossary.html#term-exfiltration">exfiltration</a>, backup theft, and direct etcd reads. It does <em>not</em> protect against an attacker with API access: the API server will decrypt and serve. KMS encryption is necessary but not sufficient.</p>
 
             <h3>2. External Secrets Operator (ESO)</h3>
             <p><a href="https://external-secrets.io/" target="_blank" rel="noopener noreferrer">External Secrets Operator</a> is the de-facto standard. You define an <code>ExternalSecret</code> CRD that references a value in an external store (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, HashiCorp Vault, 1Password, Doppler, Infisical, Akeyless, GitHub, and many more), and ESO materializes it as a Kubernetes Secret, refreshing on a schedule. The cluster doesn't <em>own</em> the secret; the secrets manager does, and ESO is the synchronizer.</p>
             <ul>
-                <li><strong>Strengths</strong> - works with the existing app/Helm chart pattern (consume a Kubernetes Secret as env/volume), broad provider support, no app-code changes, refreshes give rotation for free.</li>
-                <li><strong>Tradeoff</strong> - the secret <em>does</em> land in etcd (encrypted via the KMS provider, ideally) and is reachable via the K8s API for anyone with RBAC.</li>
-                <li><strong>Auth pattern</strong> - the ESO controller's service account uses IRSA / Workload Identity / Azure Workload Identity to authenticate to the external store. No static secret to start the chain.</li>
+                <li><strong>Strengths.</strong> Works with the existing app/Helm chart pattern (consume a Kubernetes Secret as env/volume), broad provider support, no app-code changes, refreshes give rotation for free.</li>
+                <li><strong>Tradeoff.</strong> The secret <em>does</em> land in etcd (encrypted via the KMS provider, ideally) and is reachable via the K8s API for anyone with RBAC.</li>
+                <li><strong>Auth pattern.</strong> The ESO controller's service account uses IRSA / Workload Identity / Azure Workload Identity to authenticate to the external store. No static secret to start the chain.</li>
             </ul>
 
             <h3>3. Secrets Store CSI Driver</h3>
             <p><a href="https://secrets-store-csi-driver.sigs.k8s.io/" target="_blank" rel="noopener noreferrer">Secrets Store CSI Driver</a> mounts secrets directly from the external store as a tmpfs volume in the pod: by default they never become K8s Secret objects and never hit etcd (the optional sync-as-Secret feature does create them). Provider plugins exist for <a href="https://github.com/aws/secrets-store-csi-driver-provider-aws" target="_blank" rel="noopener noreferrer">AWS</a>, <a href="https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver" target="_blank" rel="noopener noreferrer">Azure</a>, <a href="https://github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp" target="_blank" rel="noopener noreferrer">GCP</a>, and <a href="https://developer.hashicorp.com/vault/docs/deploy/kubernetes/csi" target="_blank" rel="noopener noreferrer">Vault</a>.</p>
             <ul>
-                <li><strong>Strengths</strong> - lowest attack surface (no etcd footprint, no K8s API path), pod-scoped access enforced at mount time.</li>
-                <li><strong>Tradeoff</strong> - apps consume secrets as files instead of env vars (some retrofit needed); rotation requires the optional <code>syncSecret</code> sub-feature or pod restart.</li>
+                <li><strong>Strengths.</strong> Lowest attack surface (no etcd footprint, no K8s API path), pod-scoped access enforced at mount time.</li>
+                <li><strong>Tradeoff.</strong> Apps consume secrets as files instead of env vars (some retrofit needed); rotation requires the optional <code>syncSecret</code> sub-feature or pod restart.</li>
             </ul>
 
             <h3>4. Vault Agent Injector</h3>
