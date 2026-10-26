@@ -39,6 +39,8 @@ USAGE
                        whole-file check of every page modified since REF (default HEAD)
   labels   PAGES.txt REPORT.json [--dry-run]
                        mechanical label pass (below)
+  runin    PAGES.txt REPORT.json [--dry-run]
+                       bold-term labels to run-in heads (below)
   self-test            planted cases the check and the label pass must accept or reject
 
 LABEL PASS
@@ -56,8 +58,25 @@ shapes are converted mechanically because the replacement is unambiguous:
 Neither shape is touched inside links, code, headings, SVG, scripts or the
 generated SESSION_BLOCK and QUOTES regions. glossary.html is never passed in:
 its headwords use " - " as a separator that the cross-link tooling parses.
-A bold term followed by " - " is not converted, because a colon there makes
-the `<strong>X</strong>:` bullet that section 9 lists as a tell.
+A bold term followed by " - " is not converted here, because a colon there
+makes the `<strong>X</strong>:` bullet that section 9 lists as a tell.
+
+RUN-IN PASS
+-----------
+A bold term followed by " - " gets the site's run-in head instead:
+`<li><strong>Term</strong> - what it is</li>` becomes
+`<li><strong>Term.</strong> What it is</li>`. The term must open a block
+(li, p, dd, td, div), possibly after one emoji, follow a <br>, or follow the
+end of a sentence; several bold terms joined by "and", "or", "+", "/" or ","
+count as one label. A term followed by a parenthetical keeps it, and the period
+goes after the parenthetical: `<strong>GKE Sandbox</strong> (gVisor). Per-pod`.
+Code may sit inside the label or open the description. The
+description's first letter is capitalised unless the first word looks like an
+identifier (camelCase such as eBPF, inner dots or underscores, or a CLI name).
+A label that already ends in . ? ! or : gets no period. A label that ends in a
+decimal, a percentage, a dollar amount or an ATT&CK technique ID gets
+`</strong>: ` instead, because "CVSS 10.0." reads as part of the number and
+"T1078.004: Valid Accounts" is how technique lists are written.
 
 REWRITES.json is a list of {"id": ..., "after": ...}. A segment id is
 "<page>#<n>", numbered in page order at extraction time; offsets are only
@@ -339,6 +358,10 @@ def verify(ref: str) -> int:
     def tokens(s: str) -> list[str]:
         return [re.sub(r'\s+', ' ', m.group(0)) for m in TAG.finditer(s)]
 
+    def numbers(s: str) -> list[str]:
+        # A period or comma after a number ends the sentence or clause; "4." and "4" are the same number.
+        return sorted(n.rstrip('.,') for n in NUM.findall(text_of(_main_of(s))))
+
     def links(s: str) -> list[tuple[str, str]]:
         # Every target is pinned. Wrapped text is pinned for inline links only: a link that wraps a whole card
         # (a <p>, <div> or heading inside it) carries prose the pass may rewrite.
@@ -354,7 +377,7 @@ def verify(ref: str) -> int:
             bad[f].append('<head> changed outside FAQPage/DefinedTerm JSON-LD')
         if links(old) != links(new):
             bad[f].append('a link target or wrapped term changed')
-        if sorted(NUM.findall(text_of(_main_of(old)))) != sorted(NUM.findall(text_of(_main_of(new)))):
+        if numbers(old) != numbers(new):
             bad[f].append('numbers in <main> changed')
         if len(DASH.findall(new)) > len(DASH.findall(old)):
             bad[f].append('em/en dash added')
@@ -441,6 +464,75 @@ def labels(pages_path: str, report_path: str, dry: bool) -> int:
     return 0
 
 
+# ---- run-in pass ------------------------------------------------------------------------------------------------
+
+_BOLD = (r'<(?:strong|b)>(?:(?!</?(?:strong|b)>).){1,600}?</(?:strong|b)>'
+         r'(?:\s*\((?:[^()<]|<(?!/?(?:li|p|div|ul|ol|strong|b)\b)[^>]*>){1,400}\))?')
+RUNIN = re.compile(r'(?P<lead><(?:li|p|dd|td|div)\b[^>]*>\s*(?:[\U0001F300-\U0001FAFF☀-➿]️?\s+)?'
+                   r'|<br\s*/?>\s*|[.!?:]\s+)'
+                   rf'(?P<label>{_BOLD}(?:\s*(?:and|or|\+|/|,)\s*{_BOLD})*)'
+                   r'\s+-\s+(?P<rest>.)', re.S)
+CLI_WORDS = {'npm', 'npx', 'pip', 'pipx', 'kubectl', 'gcloud', 'gsutil', 'aws', 'az', 'jq', 'yq', 'curl', 'git',
+             'ssh', 'sudo', 'helm', 'kubeadm', 'eksctl', 'tfsec', 'trivy', 'terraform', 'tofu', 'docker', 'podman',
+             'nmap', 'pacu', 'prowler', 'steampipe', 'cloudsplaining', 'roadrecon', 'stratus', 'semgrep', 'checkov',
+             'actionlint', 'yamllint', 'shellcheck', 'ruff', 'gitleaks', 'trufflehog'}
+RUNIN_PROTECTED = PROTECTED + [r'<h[1-6]\b.*?</h[1-6]>', r'<code\b.*?</code>']
+
+
+def _identifier(word: str) -> bool:
+    return bool(re.search(r'[a-z][A-Z]|[._\\]\w', word)) or word.lower() in CLI_WORDS
+
+
+def runin_pass(s: str) -> tuple[str, list[tuple[str, str, str]]]:
+    """Return the page with bold-term " - " labels turned into run-in heads, and (kind, before, after) per change."""
+    m = re.search(r'<main\b.*?</main>', s, re.S)
+    if not m:
+        return s, []
+    spans = [(x.start(), x.end()) for p in RUNIN_PROTECTED for x in re.finditer(p, s, re.S | re.I)]
+    out, last, changes = [], 0, []
+    for x in RUNIN.finditer(s, m.start(), m.end()):
+        # A code span may sit inside the label or open the description; only the start and the " - " are protected.
+        if any(a <= x.start() < b or (a < x.start('rest') and x.end('label') < b) for a, b in spans):
+            continue
+        label, rest = x.group('label'), x.group('rest')
+        shown = text_of(label)
+        close = label.rfind('</')
+        if label.endswith(')'):
+            new_label, sep, kind = label + '.', ' ', 'run-in (parenthetical)'
+        elif shown[-1:] in '.?!:':
+            new_label, sep, kind = label, ' ', 'run-in (punctuated)'
+        elif re.search(r'\d[.,]\d+%?$|\d%$|\$[\d,]+$|\bT\d{4}(?:\.\d{3})?$', shown):
+            new_label, sep, kind = label, ': ', 'number label'
+        else:
+            new_label, sep, kind = label[:close] + '.' + label[close:], ' ', 'run-in'
+        word = re.match(r"[\w'’.\-/\\]+", s[x.start('rest'):x.start('rest') + 40])
+        if sep == ' ' and rest.islower() and rest.isascii() and not (word and _identifier(word.group(0))):
+            rest = rest.upper()
+        out.append(s[last:x.start()] + x.group('lead') + new_label + sep + rest)
+        changes.append((kind, text_of(label + ' - ' + s[x.start('rest'):x.start('rest') + 30]),
+                        text_of(new_label + sep + rest + s[x.end():x.end() + 29])))
+        last = x.end()
+    return ''.join(out) + s[last:], changes
+
+
+def runin(pages_path: str, report_path: str, dry: bool) -> int:
+    pages = [line.strip() for line in Path(pages_path).read_text().splitlines() if line.strip()]
+    report = collections.defaultdict(list)
+    for f in pages:
+        if f == 'glossary.html':
+            continue
+        s = (ROOT / f).read_text(encoding='utf-8')
+        new, changes = runin_pass(s)
+        if changes and not dry:
+            (ROOT / f).write_text(new, encoding='utf-8')
+        for kind, before, after in changes:
+            report[f].append({'kind': kind, 'before': before, 'after': after})
+    Path(report_path).write_text(json.dumps(report, indent=1, ensure_ascii=False))
+    kinds = collections.Counter(c['kind'] for v in report.values() for c in v)
+    print(f'{sum(kinds.values())} run-in conversions on {len(report)} pages: {dict(kinds)}', '(dry run)' if dry else '')
+    return 0
+
+
 # ---- self-test --------------------------------------------------------------------------------------------------
 
 def self_test() -> int:
@@ -496,6 +588,53 @@ def self_test() -> int:
         ok = got == expect and not more and again == got
         failures += not ok
         print(f'{"ok  " if ok else "FAIL"} label: {name}' + ('' if ok else f'\n      got {got}'))
+
+    runin_cases = {
+        'bold term label': ('<ul><li><strong>Term</strong> - definition here</li></ul>',
+                            '<ul><li><strong>Term.</strong> Definition here</li></ul>'),
+        'two bold terms': ('<ul><li><strong>A</strong> and <strong>B</strong> - shared idea.</li></ul>',
+                           '<ul><li><strong>A</strong> and <strong>B.</strong> Shared idea.</li></ul>'),
+        'label wrapping a link': ('<ul><li><strong><a href="a.html">X</a> / <a href="b.html">Y</a></strong> - both</li></ul>',
+                                  '<ul><li><strong><a href="a.html">X</a> / <a href="b.html">Y</a>.</strong> Both</li></ul>'),
+        'number label': ('<div class="inc-stat"><strong>CVSS 10.0</strong> - remote code execution</div>',
+                         '<div class="inc-stat"><strong>CVSS 10.0</strong>: remote code execution</div>'),
+        'tier name ending in a digit': ('<ul><li><strong>Entra ID P1</strong> - conditional access</li></ul>',
+                                        '<ul><li><strong>Entra ID P1.</strong> Conditional access</li></ul>'),
+        'hyphenated capital is not an identifier': ('<ul><li><strong>X</strong> - behavioral-AI tools</li></ul>',
+                                                    '<ul><li><strong>X.</strong> Behavioral-AI tools</li></ul>'),
+        'punctuated label': ('<ul><li><strong>Why?</strong> - because</li></ul>',
+                             '<ul><li><strong>Why?</strong> Because</li></ul>'),
+        'identifier stays lowercase': ('<ul><li><strong>CLI</strong> - kubectl does it</li></ul>',
+                                       '<ul><li><strong>CLI.</strong> kubectl does it</li></ul>'),
+        'description opening with a link': ('<ul><li><strong>Tools</strong> - <a href="t.html">trivy</a></li></ul>',
+                                            '<ul><li><strong>Tools.</strong> <a href="t.html">trivy</a></li></ul>'),
+        'run-in after a sentence': ('<p>Three kinds. <strong>Token bucket</strong> - refills over time.</p>',
+                                    '<p>Three kinds. <strong>Token bucket.</strong> Refills over time.</p>'),
+        'code inside the label': ('<ul><li><strong><code>iam:PassRole</code> + <code>ec2:Run</code></strong> - launch one</li></ul>',
+                                  '<ul><li><strong><code>iam:PassRole</code> + <code>ec2:Run</code>.</strong> Launch one</li></ul>'),
+        'description opening with code': ('<ul><li><strong>AWS</strong> - <code>aws sso login</code> first</li></ul>',
+                                          '<ul><li><strong>AWS.</strong> <code>aws sso login</code> first</li></ul>'),
+        'emoji before the label': ('<ul><li>🛠️ <strong>Security Tools</strong> - software that scans</li></ul>',
+                                   '<ul><li>🛠️ <strong>Security Tools.</strong> Software that scans</li></ul>'),
+        'parenthetical after the label': ('<ul><li><strong>GKE Sandbox</strong> (gVisor) - per-pod sandbox.</li></ul>',
+                                          '<ul><li><strong>GKE Sandbox</strong> (gVisor). Per-pod sandbox.</li></ul>'),
+        'parenthetical holding code': ('<ol><li><strong>Deploy</strong> (<code>deploy.yml</code>) - builds it</li></ol>',
+                                       '<ol><li><strong>Deploy</strong> (<code>deploy.yml</code>). Builds it</li></ol>'),
+        'series with parentheticals': ('<ul><li><strong>IRAP</strong> (Australia), <strong>C5</strong> (Germany) - local rules</li></ul>',
+                                       '<ul><li><strong>IRAP</strong> (Australia), <strong>C5</strong> (Germany). Local rules</li></ul>'),
+        'dash inside code left': ('<p><code>Done. <b>x</b> - y</code></p>', None),
+        'bold aside mid-sentence left': ('<p>Use the <strong>right</strong> - always - tool.</p>', None),
+        'heading left': ('<h3><strong>Term</strong> - subtitle</h3>', None),
+        'generated block left': ('<!-- SESSION_BLOCK_START --><ul><li><strong>Recap</strong> - notes</li></ul>'
+                                 '<!-- SESSION_BLOCK_END -->', None),
+    }
+    for name, (body, want) in runin_cases.items():
+        got, changes = runin_pass(page(body))
+        expect = page(want) if want else page(body)
+        again, more = runin_pass(got)
+        ok = got == expect and not more and again == got
+        failures += not ok
+        print(f'{"ok  " if ok else "FAIL"} run-in: {name}' + ('' if ok else f'\n      got {got}'))
     if failures:
         print(f'{failures} self-test case(s) failed')
         return 1
@@ -528,6 +667,10 @@ def main() -> int:
     lb.add_argument('pages')
     lb.add_argument('report')
     lb.add_argument('--dry-run', action='store_true')
+    ri = sub.add_parser('runin')
+    ri.add_argument('pages')
+    ri.add_argument('report')
+    ri.add_argument('--dry-run', action='store_true')
     sub.add_parser('self-test')
     args = ap.parse_args()
     if args.cmd == 'extract':
@@ -545,6 +688,8 @@ def main() -> int:
         return verify(args.ref)
     if args.cmd == 'labels':
         return labels(args.pages, args.report, args.dry_run)
+    if args.cmd == 'runin':
+        return runin(args.pages, args.report, args.dry_run)
     return self_test()
 
 

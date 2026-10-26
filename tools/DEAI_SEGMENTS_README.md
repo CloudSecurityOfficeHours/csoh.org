@@ -20,6 +20,7 @@ python3 tools/deai_segments.py apply segs.json accepted.json report.json --dry-r
 python3 tools/deai_segments.py apply segs.json accepted.json report.json
 python3 tools/deai_segments.py verify --ref HEAD
 python3 tools/deai_segments.py labels pages.txt report.json --dry-run
+python3 tools/deai_segments.py runin pages.txt report.json --dry-run
 python3 tools/deai_segments.py self-test
 ```
 
@@ -40,8 +41,17 @@ python3 tools/deai_segments.py self-test
   parentheses, but only when the expansion's initials spell the acronym. It
   never touches link text, code, headings, generated regions or
   `glossary.html`, whose headword separator the cross-link tooling parses. Bold
-  term labels are left alone: a colon there would only produce the
+  term labels are left to `runin`: a colon there would only produce the
   `<strong>X</strong>:` bullet section 9 calls a tell.
+- `runin` turns a bold term label followed by ` - ` into the site's run-in
+  head: `<strong>Term</strong> - what it is` becomes `<strong>Term.</strong>
+  What it is`. A trailing parenthetical stays outside the bold and takes the
+  period. Labels ending in a decimal, a percentage, a dollar amount or an
+  ATT&CK technique ID get a colon instead. The description keeps a lowercase
+  first letter when it opens with an identifier (`eBPF`, `kubectl`). The
+  docstring lists exactly which positions count as a label. A bold term in the
+  middle of a sentence is never touched; those need a hand edit, usually a
+  colon or parentheses. Same exclusions as `labels`.
 
 ## What the check rejects
 
