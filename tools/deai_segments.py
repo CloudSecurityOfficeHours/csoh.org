@@ -111,7 +111,8 @@ PROTECTED = [r'<!--\s*SESSION_BLOCK_START.*?SESSION_BLOCK_END\s*-->', r'<!--\s*Q
 SKIP_CLASS = re.compile(r'class="[^"]*\b(?:page-meta|pull-quote|author-card|breadcrumb|toc|share-|card-meta|'
                         r'resource-card|session-block)')
 TELLS = {
-    'dash aside': re.compile(r'\w - \w'),
+    # A closing bracket, quote or % can end the text before the dash; a $, quote or bracket can open the text after.
+    'dash aside': re.compile(r'[\w)\]"\'”’%.] - [\w($"\'“‘\[]'),
     'reversal': re.compile(r"\b(?:is|are|was) not\b[^.]{1,60}\.\s+(?:It|They|That) (?:is|are|was)\b|"
                            r"\bisn't\b[^.]{1,50}\.\s+It's\b|\bnot just\b"),
     'reveal label': re.compile(r"\bThe (?:catch|point|result|fix|lesson|upshot|bottom line|short version|good news|"
@@ -572,6 +573,10 @@ def self_test() -> int:
         'dash after a link is an aside': ('Read <a href="a.html">the guide</a> - it covers IAM first.', True),
         'dash after a bold term is an aside': ('Start with <strong>IAM</strong> - everything else depends on it.', True),
         'dash inside link text is a title': ('Watch <a href="v.html">Karpathy - Intro to LLMs</a> this week.', False),
+        'dash after a bracket is an aside': ('Use Entra ID (formerly Azure AD) - it covers users and groups.', True),
+        'dash before a dollar amount is an aside': ('Shield Advanced - $3,000 a month on a one-year term.', True),
+        'dash after a closing quote is an aside': ('He said "rotate it" - and nobody did for a year.', True),
+        'hyphen in a compound is not': ('An open-source, well-known 2-4 week project.', False),
     }
     for name, (h, want) in tell_cases.items():
         ok = ('dash aside' in tells_in(h)) == want
