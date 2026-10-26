@@ -421,7 +421,7 @@
             <p>In practice, the work breaks down across a handful of persistent domains:</p>
             <ul>
                 <li><strong>IaC scanning and <a class="glossary-link" href="glossary.html#term-guardrails">guardrails</a>.</strong> Wiring Checkov, tfsec (now part
-                of Trivy), KICS, or Terrascan into the CI pipeline so misconfigurations in Terraform, CloudFormation, CDK, or Pulumi fail
+                of Trivy), or KICS into the CI pipeline so misconfigurations in Terraform, CloudFormation, CDK, or Pulumi fail
                 the build before they reach production. Writing and tuning the rules: deciding which checks are hard blocks vs. advisory
                 warnings, and which are false positives in your environment. This includes writing custom policies in <a class="glossary-link" href="glossary.html#term-opa">OPA</a>'s <a class="glossary-link" href="glossary.html#term-rego">Rego</a> or Semgrep
                 rules for things the off-the-shelf scanners miss.</li>
@@ -475,9 +475,11 @@
                 <li><strong>Product Security Engineer</strong> - more commonly used at <a class="glossary-link" href="glossary.html#term-saas">SaaS</a> companies where the "product" is what you're securing. Tends to
                 blend AppSec and cloud security; the IaC and pipeline work may be a smaller share of the job than at a cloud-native
                 engineering org.</li>
-                <li><strong>Security Champion / Security Embedded Engineer</strong> - a variant where a security engineer is embedded within a specific
-                product team rather than sitting on a central security team. Usually a more senior role: you're expected to operate more
-                independently and translate security strategy into that team's specific context.</li>
+                <li><strong>Security engineer embedded in a product team</strong> - a variant where a security engineer sits within a specific
+                product team rather than on a central security team. Usually a more senior role: you're expected to operate more
+                independently and translate security strategy into that team's specific context. A security champion is different: a
+                member of the product team (a developer, tester or product manager, for example) who often takes on security work
+                alongside their existing role.</li>
             </ul>
             <p>The practical advice: search broadly. Use keywords from the job description (IaC scanning, Checkov, Kubernetes admission, supply chain,
             SBOM, cosign, Semgrep) rather than exact title matching. The role you want may be titled "DevSecOps Engineer" at one company and
@@ -525,7 +527,7 @@
               <text x="45" y="20" text-anchor="middle" font-weight="700" fill="#6366f1">PRODUCTION</text>
               <text x="45" y="35" text-anchor="middle" fill="#475569">Continuous scan</text>
             </g>
-            <text x="73" y="135" text-anchor="middle" font-size="9" fill="#8b5cf6">Checkov/tfsec</text>
+            <text x="73" y="135" text-anchor="middle" font-size="9" fill="#8b5cf6">Checkov/Trivy</text>
             <text x="73" y="147" text-anchor="middle" font-size="9" fill="#8b5cf6">GitGuardian</text>
             <text x="213" y="135" text-anchor="middle" font-size="9" fill="#b45309">Trivy/Grype</text>
             <text x="213" y="147" text-anchor="middle" font-size="9" fill="#b45309">Semgrep/Snyk</text>
@@ -828,7 +830,7 @@
             <p>Checkov (Bridgecrew/Prisma Cloud) is the most widely deployed open-source IaC scanner: broad provider coverage, Python-based custom
             checks, active rule updates. Trivy has converged to cover IaC alongside containers and SBOMs in a single tool, which simplifies
             CI pipeline config. KICS (Checkmarx) covers a wider range of IaC formats including Ansible and Helm. tfsec is now merged into
-            Trivy's IaC mode. Terrascan (Tenable) covers Terraform, Helm, and Dockerfiles. Most orgs run one primary scanner with custom
+            Trivy's IaC mode. Terrascan (Tenable) covered Terraform, Helm, and Dockerfiles but is now archived and no longer maintained. Most orgs run one primary scanner with custom
             rules layered on top via OPA/Conftest or Semgrep. The practical difference between scanners at the same tier is mostly the rule
             library for your specific Terraform providers and how easy custom rules are to write. Evaluate on that, not on marketing.</p>
 
@@ -865,7 +867,7 @@
             takes minutes rather than days. CodeQL (GitHub) is deeper for application security vulnerabilities in supported languages and
             integrates natively into GitHub Advanced Security. Bandit covers Python and gosec covers Go; both are useful additions to the pipeline when
             those languages are in scope. Snyk Code (commercial) adds AI-assisted fix suggestions which the teams you're partnering with
-            will find useful for adoption. The secret scanning category has matured: GitHub Advanced Security secret scanning covers 200+
+            will find useful for adoption. The secret scanning category has matured: GitHub Advanced Security secret scanning covers about 500
             credential patterns natively; GitGuardian provides higher coverage with real-time alerting and historical scanning.</p>
 
             <h3>Workload identity and secret management</h3>
@@ -899,7 +901,7 @@
                 identity mechanisms (execution roles). AWS ECR has native scanning via Amazon Inspector; the findings feed into Security
                 Hub. See <a href="aws-security.html">AWS security</a>.</li>
                 <li><strong>Azure</strong> had pod managed identity (the older, node-level VMSS approach, deprecated in October 2022 and supported as an AKS add-on only through September 2025) and now uses Workload Identity Federation (the newer,
-                token-projection approach that mirrors IRSA). The newer approach is significantly better, but not every cluster has migrated yet. You will encounter both in the wild. Azure Defender for Containers covers AKS Kubernetes admission policy via Azure Policy
+                token-projection approach that mirrors IRSA). The newer approach is significantly better, but not every cluster has migrated yet. You will encounter both in the wild. Microsoft Defender for Containers covers AKS Kubernetes admission policy via Azure Policy
                 for Kubernetes, which wraps OPA/Gatekeeper. Azure Container Registry has integrated vulnerability scanning. <a class="glossary-link" href="glossary.html#term-entra-id">Entra ID</a>
                 workload identity is the identity plane for everything. See <a href="azure-security.html">Azure security</a>.</li>
                 <li><strong>GCP</strong> has arguably the cleanest workload identity story: Workload Identity Federation binds Kubernetes service accounts
@@ -1250,7 +1252,7 @@
             accessed via API keys each carry the same supply-chain questions you ask about software dependencies: who built it,
             was the build process tampered with, are there known vulnerabilities or malicious behaviors, and is it being verified before it
             runs in production? The tooling to answer these questions is much less mature than what exists for software packages; there is
-            no OSV database for model weights and no Sigstore equivalent that the AI community has standardized on yet. The security
+            no OSV database for model weights, and model signing is still early: OpenSSF published its Model Signing specification, which uses Sigstore's signature bundle format, in 2025, but adoption across model hubs has only begun. The security
             engineers who build these practices early (model provenance verification, sandboxed model execution, IAM-scoped API key
             management for <a class="glossary-link" href="glossary.html#term-llm">LLM</a> providers) will be setting the standard others follow. It is the newest and fastest-moving lane on the
             treadmill.</p>

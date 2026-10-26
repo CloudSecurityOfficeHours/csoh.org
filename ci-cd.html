@@ -559,7 +559,7 @@
                 <li><strong>Tight scoping</strong> - trust can be scoped to <code>repo:myorg/myrepo:ref:refs/heads/main</code>. A workflow from a fork or feature branch <em>cannot</em> assume the production role.</li>
                 <li><strong>Audit clarity</strong> - every cloud API call carries the OIDC subject in <a class="glossary-link" href="glossary.html#term-cloudtrail">CloudTrail</a> / Azure activity log / Cloud Audit Logs. You can trace every production change back to a specific workflow run.</li>
             </ul>
-            <p>Long-lived access keys in CI are now considered a legacy pattern. Virtually every leak postmortem from the last several years (Travis CI 2022, CircleCI 2023, <a class="glossary-link" href="glossary.html#term-dependency-confusion">dependency confusion</a> incidents) features one. OIDC removes the secret entirely.</p>
+            <p>Long-lived access keys in CI are now considered a legacy pattern. Virtually every leak postmortem from the last several years (Travis CI 2022, CircleCI 2023) features one. OIDC removes the secret entirely.</p>
             <div class="info-box--amber u-mt-125">
                 <p><strong>Trust scoping is the security boundary.</strong> When you configure OIDC on the cloud side, the subject claim is what stands between your production role and any random pull request. Scope to <code>ref:refs/heads/main</code> at minimum. Scope to specific <code>environment:</code> claims if your CI supports them. Never accept a wildcard subject. <code>repo:org/repo:*</code> leaves the role open to every workflow run in your repo, including <code>pull_request_target</code> jobs that fork PRs can trigger; a wildcard in the repo name opens it to every repo in the org, and one in the owner opens it to repositories you don't control.</p>
             </div>
@@ -654,9 +654,9 @@
                         </tr>
                         <tr>
                             <th scope="row">Source hosting</th>
-                            <td>CodeCommit (deprecated for new) - usually GitHub</td>
+                            <td>CodeCommit - usually GitHub</td>
                             <td>Azure Repos - usually GitHub</td>
-                            <td>Cloud Source Repositories - usually GitHub</td>
+                            <td>Cloud Source Repositories (closed to new customers) - usually GitHub</td>
                         </tr>
                         <tr>
                             <th scope="row">Artifact registry</th>
@@ -674,7 +674,7 @@
                             <th scope="row">Container deploy target</th>
                             <td>ECS, <a class="glossary-link" href="glossary.html#term-eks">EKS</a>, App Runner, Lambda</td>
                             <td>AKS, Container Apps, App Service, Functions</td>
-                            <td>GKE, Cloud Run, Cloud Functions</td>
+                            <td>GKE, Cloud Run, Cloud Run functions (formerly Cloud Functions)</td>
                         </tr>
                         <tr>
                             <th scope="row">Progressive delivery</th>
@@ -724,7 +724,7 @@
                 <li><strong><a class="glossary-link" href="glossary.html#term-permission-boundary">Permission boundary</a> on the deploy role.</strong> The role can deploy your workload but can't escalate. It cannot create new IAM users, cannot change its own trust policy, cannot disable CloudTrail.</li>
                 <li><strong>CodeDeploy for canary/linear deployments</strong> on Lambda and ECS: pre-built rollout patterns with automated rollback on CloudWatch alarms.</li>
                 <li><strong>ECR + image scanning enhanced</strong> - Amazon Inspector continuous scanning on every push.</li>
-                <li><strong>State backend in S3 + DynamoDB</strong> for Terraform: versioned bucket, lock table, restricted to the deploy role.</li>
+                <li><strong>State backend in S3 with S3-native locking</strong> for Terraform: versioned bucket, <code>use_lockfile = true</code> (Terraform 1.11 deprecated DynamoDB lock tables), restricted to the deploy role.</li>
             </ul>
             <p>For the in-AWS-only path: CodePipeline orchestrates, CodeBuild runs the build, CodeDeploy handles progressive rollout. It's heavier to set up than GitHub Actions + OIDC but keeps the entire pipeline inside the AWS account boundary, which is useful for <a class="glossary-link" href="glossary.html#term-fedramp">FedRAMP</a> / regulated workloads.</p>
         </section>
@@ -785,7 +785,7 @@
             </div>
             <p>Native support varies by deploy target:</p>
             <ul>
-                <li><strong>Lambda / Cloud Functions / Azure Functions</strong> - version aliases with traffic weights; CodeDeploy or built-in traffic split.</li>
+                <li><strong>Lambda / Cloud Run functions / Azure Functions</strong> - version aliases with traffic weights; CodeDeploy or built-in traffic split.</li>
                 <li><strong>ECS / Fargate / Cloud Run / Container Apps</strong> - multiple revisions live concurrently; traffic split by weight per revision.</li>
                 <li><strong>Kubernetes (EKS / AKS / GKE)</strong> - rolling by default; canary via Argo Rollouts, Flagger, or service-mesh weights (Istio, Linkerd).</li>
                 <li><strong>VMs / instance groups</strong> - managed instance groups, ASGs with canary deployment configurations.</li>
@@ -815,7 +815,7 @@
             <p>The typical IaC pipeline shape:</p>
             <ol>
                 <li><strong>Format &amp; validate</strong> - <code>terraform fmt -check</code>, <code>terraform validate</code>. Trivially cheap, catches typos before review.</li>
-                <li><strong>Policy scan</strong> - <a class="glossary-link" href="glossary.html#term-iac-scanners">Checkov</a>, tfsec, Trivy, <a class="glossary-link" href="glossary.html#term-opa">Open Policy Agent</a> / Conftest, or your <a class="glossary-link" href="glossary.html#term-cspm">CSPM</a>/<a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a>'s IaC scanner. Blocks merges that violate <a class="glossary-link" href="glossary.html#term-guardrails">guardrails</a> (public buckets, unencrypted disks, IAM wildcards).</li>
+                <li><strong>Policy scan</strong> - <a class="glossary-link" href="glossary.html#term-iac-scanners">Checkov</a>, Trivy, <a class="glossary-link" href="glossary.html#term-opa">Open Policy Agent</a> / Conftest, or your <a class="glossary-link" href="glossary.html#term-cspm">CSPM</a>/<a class="glossary-link" href="glossary.html#term-cnapp">CNAPP</a>'s IaC scanner. Blocks merges that violate <a class="glossary-link" href="glossary.html#term-guardrails">guardrails</a> (public buckets, unencrypted disks, IAM wildcards).</li>
                 <li><strong>Plan on pull request</strong> - <code>terraform plan</code> output posted as a PR comment. Reviewers see exactly what will change.</li>
                 <li><strong>Apply on merge to main</strong> - pipeline assumes deploy role via OIDC, runs <code>terraform apply</code>, writes state to the remote backend. State backend access is restricted to the deploy role.</li>
                 <li><strong>Drift detection on a schedule</strong> - periodic plan-only runs alert when reality has drifted from code (someone clicked something in the console). Drift is the canary for broken IaC discipline.</li>

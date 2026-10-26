@@ -548,7 +548,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/moveit-cl0p.html",
      "MOVEit / Cl0p 2023 Kill Chain",
-     "An unauthenticated SQLi zero-day in file transfer software: ~2,600 organizations harvested in days.",
+     "An unauthenticated SQLi zero-day in file transfer software: more than 2,700 organizations harvested in days.",
      "Breach Kill Chain"),
     ("breaches/okta-lapsus-sitel.html",
      "Okta / LAPSUS$ 2022 Kill Chain",
