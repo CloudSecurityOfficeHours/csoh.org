@@ -120,8 +120,13 @@ TELLS = {
     'intensifier': re.compile(r'(?i)\b(?:actually|genuinely|truly|single most|highest-leverage)\b'),
     'question string': re.compile(r'\?\s+[A-Z][^.?]{3,60}\?\s+[A-Z][^.?]{3,60}\?'),
 }
-# Label separators are not asides for detection: a bold term or a link followed by " - ", and the bold term itself.
-LABEL = re.compile(r'^\s*<(?:strong|b)>.*?</(?:strong|b)>|</a>\s+-\s|<(?:strong|b)>[^<]{1,80}</(?:strong|b)>')
+# A " - " inside link text is a title separator ("Author - Title"), and link text is pinned, so it is not an aside.
+# One after a link or a bold term is an aside like any other.
+LINK_TEXT = re.compile(r'(<a\b[^>]*>)(.*?)(</a>)', re.S)
+
+
+def _sans_link_separators(h: str) -> str:
+    return LINK_TEXT.sub(lambda m: m.group(1) + re.sub(r'\s+-\s+', ' ', m.group(2)) + m.group(3), h)
 TAG = re.compile(r'<!--.*?-->|<(/?)([a-zA-Z][\w-]*)\b([^>]*?)(/?)>', re.S)
 NUM = re.compile(r'\$?\d[\d,.]*(?:k|%|\+)?')
 QUANT = re.compile(r'(?i)\b(?:all|every|almost|most|mostly|many|some|few|often|usually|typically|always|never|'
@@ -135,12 +140,12 @@ def text_of(h: str) -> str:
 
 
 def tells_in(inner: str) -> list[str]:
-    t = text_of(LABEL.sub(' ', inner))
+    t = text_of(_sans_link_separators(inner))
     return sorted(k for k, r in TELLS.items() if r.search(t))
 
 
 def asides(h: str) -> int:
-    return len(TELLS['dash aside'].findall(text_of(LABEL.sub(' ', h))))
+    return len(TELLS['dash aside'].findall(text_of(_sans_link_separators(h))))
 
 
 def quoted(t: str) -> list[str]:
@@ -194,7 +199,8 @@ def check(before: str, after: str) -> list[str]:
         return ['empty']
     if markup(before) != markup(after):
         problems.append('markup, comments, or text inside a link/code changed')
-    if sorted(NUM.findall(tb)) != sorted(NUM.findall(ta)):
+    # A period or comma after a number ends the sentence or clause; "510." and "510" are the same number.
+    if sorted(n.rstrip('.,') for n in NUM.findall(tb)) != sorted(n.rstrip('.,') for n in NUM.findall(ta)):
         problems.append('numbers changed')
     if DASH.search(after):
         problems.append('em or en dash')
@@ -550,6 +556,7 @@ def self_test() -> int:
         'aside added': (good.replace('every year', 'every year - really - now'), ['aside']),
         'quote edited': (good.replace('keeps growing fast', 'keeps growing'), ['quoted']),
         'vendor dropped': (good.replace('like Wiz ', ''), ['vendor']),
+        'number now ends a sentence': (good.replace('$130k, and the bill', '$130k. And the bill'), []),
     }
     global VENDORS
     VENDORS = ['Wiz']
@@ -560,6 +567,16 @@ def self_test() -> int:
         failures += not ok
         print(f'{"ok  " if ok else "FAIL"} {name}: {got or "accepted"}')
     VENDORS = None
+
+    tell_cases = {
+        'dash after a link is an aside': ('Read <a href="a.html">the guide</a> - it covers IAM first.', True),
+        'dash after a bold term is an aside': ('Start with <strong>IAM</strong> - everything else depends on it.', True),
+        'dash inside link text is a title': ('Watch <a href="v.html">Karpathy - Intro to LLMs</a> this week.', False),
+    }
+    for name, (h, want) in tell_cases.items():
+        ok = ('dash aside' in tells_in(h)) == want
+        failures += not ok
+        print(f'{"ok  " if ok else "FAIL"} tells: {name}')
 
     def page(body: str) -> str:
         return f'<html><head></head><body><main>{body}</main></body></html>'
