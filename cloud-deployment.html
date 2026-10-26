@@ -349,7 +349,7 @@
         <section id="big-picture">
             <h2>The big picture: defense in depth</h2>
             <p><strong>The shape, in one paragraph.</strong> One site exists in two environments. Changes land on the <code>qa</code> branch and deploy to <code>qa.csoh.org</code>, a staging copy behind a Cloudflare Access login. When it looks right, a gated one-button promotion fast-forwards <code>main</code>, and production ships <em>the same container image staging already ran</em> to three cloud origins (AWS, GCP, and Azure), which Cloudflare spreads live traffic across, active/active. Two environments, three production origins, one edge in front of all of it, and no stored cloud password anywhere in the path.</p>
-            <p>The single most important idea on this page is called <strong>defense in depth</strong>: instead of relying on one strong wall, we stack many imperfect ones. If an attacker bypasses one layer, the next one is still in their way. None of the individual controls below are unbreakable - but together, an attacker has to be lucky on every layer at once, while we only have to be lucky on one.</p>
+            <p>The most important idea on this page is called <strong>defense in depth</strong>: instead of relying on one strong wall, we stack many imperfect ones. If an attacker bypasses one layer, the next one is still in their way. None of the individual controls below are unbreakable, but together, an attacker has to be lucky on every layer at once, while we only have to be lucky on one.</p>
 
             <figure class="figure-narrow">
               <svg viewBox="0 0 560 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="dind-title dind-desc" width="560" height="560">
@@ -426,7 +426,7 @@
 
         <section id="architecture">
             <h2>Architecture diagram</h2>
-            <p>Here's the whole system in one picture: two environments on the left, the release path that feeds them on the right. Don't worry if some of the labels are unfamiliar. Every box is explained in its own section below.</p>
+            <p>The diagram below puts the whole system in one picture: two environments on the left, the release path that feeds them on the right. Don't worry if some of the labels are unfamiliar. Every box is explained in its own section below.</p>
             <figure class="figure-wide">
               <svg viewBox="0 0 880 730" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-title arch-desc" width="880" height="730">
                 <title id="arch-title">csoh.org architecture: two environments, three production origins</title>
@@ -621,9 +621,9 @@
             <h3>Why each origin is shaped the way it is</h3>
             <p>The one hard requirement: every origin must answer over <strong>HTTPS with a valid certificate</strong>, so the Cloudflare→origin leg can run at <em>Full (strict)</em> - no unencrypted or unauthenticated hop anywhere. That requirement quietly drives each choice:</p>
             <ul>
-                <li><strong>AWS - private S3 bucket behind CloudFront (with Origin Access Control).</strong> The cheap, obvious option (the S3 "static website" endpoint) is HTTP-only, which would force an unencrypted origin hop. So instead the bucket stays fully private and CloudFront serves it over HTTPS with a valid <code>*.cloudfront.net</code> cert. CloudFront's free tier covers our <a class="glossary-link" href="glossary.html#term-ingress">egress</a>; the bucket has no public access at all.</li>
-                <li><strong>GCP - Cloud Run (scale-to-zero).</strong> Its <code>*.run.app</code> URL is already HTTPS with a Google-managed cert and costs ~nothing when idle. That's why this origin is Cloud Run with no cloud load balancer in front of it. The run.app URL is a perfectly good HTTPS origin on its own. (Google Cloud Storage's website endpoint, like S3's, is HTTP-only, so Cloud Run is actually the cheaper path to an HTTPS origin on GCP.)</li>
-                <li><strong>Azure - Storage Account "static website" ($web).</strong> Azure serves the special <code>$web</code> container over a built-in <code>*.web.core.windows.net</code> HTTPS endpoint with a managed cert: no load balancer, no CDN, just static hosting. The simplest of the three.</li>
+                <li><strong>AWS: private S3 bucket behind CloudFront (with Origin Access Control).</strong> The cheap, obvious option (the S3 "static website" endpoint) is HTTP-only, which would force an unencrypted origin hop. So instead the bucket stays fully private and CloudFront serves it over HTTPS with a valid <code>*.cloudfront.net</code> cert. CloudFront's free tier covers our <a class="glossary-link" href="glossary.html#term-ingress">egress</a>; the bucket has no public access at all.</li>
+                <li><strong>GCP: Cloud Run (scale-to-zero).</strong> Its <code>*.run.app</code> URL is already HTTPS with a Google-managed cert and costs ~nothing when idle. That's why this origin is Cloud Run with no cloud load balancer in front of it. The run.app URL is a perfectly good HTTPS origin on its own. (Google Cloud Storage's website endpoint, like S3's, is HTTP-only, so Cloud Run is actually the cheaper path to an HTTPS origin on GCP.)</li>
+                <li><strong>Azure: Storage Account "static website" ($web).</strong> Azure serves the special <code>$web</code> container over a built-in <code>*.web.core.windows.net</code> HTTPS endpoint with a managed cert: no load balancer, no CDN, just static hosting. The simplest of the three.</li>
             </ul>
             <p>Notice the pattern: none of the three needs a cloud load balancer, a managed-cert dance, or a WAF product, because Cloudflare does all of that once at the edge. Each origin is reduced to "the cheapest way this vendor will hand me an HTTPS URL for a folder of files."</p>
 
@@ -761,9 +761,9 @@
                     </tr>
                     <tr>
                         <th scope="row">Runs code?</th>
-                        <td>No - static objects, no runtime identity to abuse</td>
-                        <td>Yes (nginx) - runs as a <strong>zero-IAM</strong> service account</td>
-                        <td>No - static objects, no runtime identity to abuse</td>
+                        <td>No: static objects, no runtime identity to abuse</td>
+                        <td>Yes (nginx): runs as a <strong>zero-IAM</strong> service account</td>
+                        <td>No: static objects, no runtime identity to abuse</td>
                     </tr>
                     <tr>
                         <th scope="row">Why this shape</th>
@@ -792,7 +792,7 @@
             <h3>Why that <code>www</code> redirect is written the boring way</h3>
             <p>The clever-looking version of that rule rewrites the <em>whole</em> request URL: match <code>https://www.*</code> against <code>http.request.full_uri</code> and hand back <code>https://</code> plus whatever the <code>*</code> captured. It reads as equivalent, and it isn't, because the edge runs its features in a fixed order, and <strong>dynamic redirects run before "Always Use HTTPS."</strong></p>
             <p>Follow a plaintext request through that ordering. Someone (or something, such as an old bookmark, a mail scanner, a link in a PDF) requests <code>http://www.csoh.org/about.html</code>. The rule's trigger condition is <code>http.host eq "www.csoh.org"</code>, which is true on port 80 just as much as on 443, so the rule fires. But the <em>target</em> pattern says <code>https://www.*</code>, and this URI starts with <code>http://</code>. No match. A pattern rewrite that doesn't match returns its input unchanged, so the rule emits a 301 whose <code>Location</code> is the exact URL that was just requested. The browser follows it, arrives at the same rule, gets the same answer, and loops until it gives up. In cleartext the whole time, which is the part that stings: the reader never reaches a response that could have carried an HSTS header for the <code>www</code> hostname, so the browser never learns to stop trying plain HTTP for it.</p>
-            <p>Deriving the target from <code>http.request.uri.path</code> with the scheme hardcoded removes the failure mode rather than patching it. The rule now has no way to produce a destination that isn't <code>https://csoh.org/…</code>, whatever scheme the request arrived on. The transferable lesson: <strong>at a CDN edge, know which phase your rule runs in, and never rebuild a redirect target out of a part of the request you were hoping something earlier had already normalized.</strong> State the scheme and host outright; take only the path from the caller.</p>
+            <p>Deriving the target from <code>http.request.uri.path</code> with the scheme hardcoded removes the failure mode rather than patching it. The rule now has no way to produce a destination that isn't <code>https://csoh.org/…</code>, whatever scheme the request arrived on. More generally, <strong>at a CDN edge, know which phase your rule runs in, and never rebuild a redirect target out of a part of the request you were hoping something earlier had already normalized.</strong> State the scheme and host outright; take only the path from the caller.</p>
         </section>
 
         <section id="tls">
@@ -818,7 +818,7 @@
             <p>HSTS is the highest-impact header but not the only one. Cloudflare attaches the whole set on the way out (a response-header Transform Rule), so whichever cloud served the bytes, the response a reader actually receives carries the same headers:</p>
             <ul>
                 <li><strong><a class="glossary-link" href="glossary.html#term-csp">Content Security Policy</a> (CSP).</strong> A strict policy: only first-party scripts, no inline JS, no <code>eval()</code>, only specific image and frame sources allowed. The single highest-impact defense against <a class="glossary-link" href="glossary.html#term-xss">XSS</a>, even if an attacker were able to inject a <code>&lt;script&gt;</code> tag into our HTML.</li>
-                <li><strong>X-Frame-Options: DENY</strong> + <strong>frame-ancestors 'none'</strong> in CSP - prevents anyone from embedding our pages in an iframe on their site. Stops <em>clickjacking</em>, where an attacker invisibly overlays our page under their own UI.</li>
+                <li><strong>X-Frame-Options: DENY</strong> + <strong>frame-ancestors 'none'</strong> in CSP. Prevents anyone from embedding our pages in an iframe on their site. Stops <em>clickjacking</em>, where an attacker invisibly overlays our page under their own UI.</li>
                 <li><strong>X-Content-Type-Options: nosniff.</strong> Tells the browser to trust the content-type we declared, instead of guessing from the first bytes. Closes some old MIME-confusion attacks.</li>
                 <li><strong>Referrer-Policy: strict-origin-when-cross-origin.</strong> When a reader clicks an external link from our site, the destination only sees that they came "from csoh.org," not the specific page or query parameters.</li>
                 <li><strong>Permissions-Policy.</strong> Explicitly disables camera, microphone, geolocation, payment, USB, and motion-sensor APIs. We don't use any of them, so we deny them.</li>
@@ -848,9 +848,9 @@
 
             <h3>Each origin exposes only the site, nothing else</h3>
             <ul>
-                <li><strong>AWS - the bucket is private.</strong> The S3 bucket blocks all public access; only this CloudFront distribution can read it, enforced by an Origin Access Control policy keyed to the distribution's ARN. There's no public S3 URL to find and poke at. The bucket simply isn't reachable except through the front door we built.</li>
-                <li><strong>GCP - public URL, zero-permission identity (below).</strong> Cloud Run's ingress is <code>all</code> (Cloudflare reaches the <code>run.app</code> URL directly). Public <a class="glossary-link" href="glossary.html#term-reachability">reachability</a> is fine because the container only serves static files and its identity can touch nothing else in the project.</li>
-                <li><strong>Azure - only <code>$web</code> is public.</strong> The static-website feature exposes exactly one container (<code>$web</code>); every other blob in the storage account stays private. Deploys write to <code>$web</code> through a data-plane role (below), not by making the account public.</li>
+                <li><strong>AWS: the bucket is private.</strong> The S3 bucket blocks all public access; only this CloudFront distribution can read it, enforced by an Origin Access Control policy keyed to the distribution's ARN. There's no public S3 URL to find and poke at. The bucket simply isn't reachable except through the front door we built.</li>
+                <li><strong>GCP: public URL, zero-permission identity (below).</strong> Cloud Run's ingress is <code>all</code> (Cloudflare reaches the <code>run.app</code> URL directly). Public <a class="glossary-link" href="glossary.html#term-reachability">reachability</a> is fine because the container only serves static files and its identity can touch nothing else in the project.</li>
+                <li><strong>Azure: only <code>$web</code> is public.</strong> The static-website feature exposes exactly one container (<code>$web</code>); every other blob in the storage account stays private. Deploys write to <code>$web</code> through a data-plane role (below), not by making the account public.</li>
             </ul>
 
             <h3>The compute origin's identity has zero permissions</h3>
@@ -1168,13 +1168,13 @@ OR protoPayload.@type="type.googleapis.com/google.cloud.audit.AuditLog"</pre>
             <table class="compact-table">
                 <thead><tr><th>Component</th><th>Per month</th><th>Source</th></tr></thead>
                 <tbody>
-                    <tr><td>Cloudflare Load Balancing add-on (Free plan + LB)</td><td>$10.00</td><td>billed - confirmed 13 September</td></tr>
-                    <tr><td>Azure Blob static website</td><td>$3.63</td><td>measured - $3.30 of deploy writes, $0.28 of other operations</td></tr>
-                    <tr><td>GCP Artifact Registry</td><td>$0.35</td><td>measured - 10 images plus the day's newest, about 3 GiB, no free allowance granted</td></tr>
-                    <tr><td>GCP Cloud Run (production origin)</td><td>$0.02</td><td>measured - inside the free allowance; the 2 cents are egress</td></tr>
-                    <tr><td>AWS S3 + CloudFront</td><td>$0.00</td><td>measured - $3.43 of usage, exactly offset by credits</td></tr>
-                    <tr><td>Terraform state (GCS), GCP logging, billing export</td><td>$0.00</td><td>measured - inside the free tier</td></tr>
-                    <tr><td>Staging origin (<code>qa.csoh.org</code>): Cloud Run, Worker, Access</td><td>$0.00</td><td>measured - no billing rows at all</td></tr>
+                    <tr><td>Cloudflare Load Balancing add-on (Free plan + LB)</td><td>$10.00</td><td>billed: confirmed 13 September</td></tr>
+                    <tr><td>Azure Blob static website</td><td>$3.63</td><td>measured: $3.30 of deploy writes, $0.28 of other operations</td></tr>
+                    <tr><td>GCP Artifact Registry</td><td>$0.35</td><td>measured: 10 images plus the day's newest, about 3 GiB, no free allowance granted</td></tr>
+                    <tr><td>GCP Cloud Run (production origin)</td><td>$0.02</td><td>measured: inside the free allowance; the 2 cents are egress</td></tr>
+                    <tr><td>AWS S3 + CloudFront</td><td>$0.00</td><td>measured: $3.43 of usage, exactly offset by credits</td></tr>
+                    <tr><td>Terraform state (GCS), GCP logging, billing export</td><td>$0.00</td><td>measured: inside the free tier</td></tr>
+                    <tr><td>Staging origin (<code>qa.csoh.org</code>): Cloud Run, Worker, Access</td><td>$0.00</td><td>measured: no billing rows at all</td></tr>
                     <tr><td class="compact-table__key">Total</td><td class="compact-table__key">~$14/mo</td><td class="compact-table__key">~$17 when the AWS credits lapse</td></tr>
                 </tbody>
             </table>

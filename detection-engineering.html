@@ -533,8 +533,8 @@
             <h3>AWS</h3>
             <ul>
                 <li><strong><a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html" target="_blank" rel="noopener noreferrer">CloudTrail - management events</a></strong>. The control-plane audit log. Every API call against an AWS service: <code>CreateUser</code>, <code>AssumeRole</code>, <code>PutBucketPolicy</code>, <code>StartInstance</code>. On by default for the last 90 days in the console; you must create an organization trail to ship the events to <a class="glossary-link" href="glossary.html#term-s3">S3</a> and aggregate across accounts. This is the single most important AWS log source.</li>
-                <li><strong>CloudTrail - data events</strong>. The <em>data-plane</em> audit log: <code>GetObject</code> on S3, <code>Invoke</code> on <a class="glossary-link" href="glossary.html#term-lambda">Lambda</a>, queries on DynamoDB. <strong>Off by default and per-resource scoped.</strong> Charged per event. Without it, you cannot see who read sensitive data, only who changed its permissions.</li>
-                <li><strong>CloudTrail - Insights events</strong>. Anomaly detection on the management-event stream. Surfaces unusual write-API rates and error rates. Useful as a cheap "something is up" signal.</li>
+                <li><strong>CloudTrail: data events</strong>. The <em>data-plane</em> audit log: <code>GetObject</code> on S3, <code>Invoke</code> on <a class="glossary-link" href="glossary.html#term-lambda">Lambda</a>, queries on DynamoDB. <strong>Off by default and per-resource scoped.</strong> Charged per event. Without it, you cannot see who read sensitive data, only who changed its permissions.</li>
+                <li><strong>CloudTrail: Insights events</strong>. Anomaly detection on the management-event stream. Surfaces unusual write-API rates and error rates. Useful as a cheap "something is up" signal.</li>
                 <li><strong>CloudTrail Lake</strong>. A managed event data store on top of CloudTrail with SQL query, retention controls, and <a class="glossary-link" href="glossary.html#term-federation">federation</a>. Reduces the need to ship trails into a separate SIEM for the simplest cases.</li>
                 <li><strong><a class="glossary-link" href="glossary.html#term-vpc-flow-logs">VPC Flow Logs</a></strong>. Network metadata (5-tuple + accept/reject) at the <a class="glossary-link" href="glossary.html#term-eni">ENI</a>, subnet, or <a class="glossary-link" href="glossary.html#term-vpc">VPC</a> level. Choose v5 with custom fields for the useful ones (TCP flags, traffic path, region). The default sampling and aggregation interval (1 minute) is fine for detection; raise to per-flow for forensics.</li>
                 <li><strong>Route 53 query logs</strong>. DNS resolution events from your VPCs. Crucial for <a class="glossary-link" href="glossary.html#term-c2">C2</a> / DGA detection.</li>
@@ -560,13 +560,13 @@
             <h3>GCP</h3>
             <ul>
                 <li><strong><a href="https://docs.cloud.google.com/logging/docs/audit" target="_blank" rel="noopener noreferrer">Cloud Audit Logs</a>: Admin Activity</strong>. Control-plane operations. Free, always on, 400-day retention by default at the project level. Aggregate to an org-level log sink for cross-project queryability.</li>
-                <li><strong>Cloud Audit Logs - System Event</strong>. Google-initiated events affecting your resources (live migration, automated maintenance, defender actions). Free, always on.</li>
-                <li><strong>Cloud Audit Logs - Policy Denied</strong>. Logs when an IAM or VPC-SC policy denies an action. On by default and can't be disabled (only excluded); storage is charged. Excellent attack-surface signal.</li>
-                <li><strong>Cloud Audit Logs - Data Access</strong>. The data-plane stream: reads of data in BigQuery, Cloud Storage, Pub/Sub, etc. <strong>Off by default for most services; paid.</strong> See the <a href="#data-access">data-access gotcha section</a>.</li>
+                <li><strong>Cloud Audit Logs: System Event</strong>. Google-initiated events affecting your resources (live migration, automated maintenance, defender actions). Free, always on.</li>
+                <li><strong>Cloud Audit Logs: Policy Denied</strong>. Logs when an IAM or VPC-SC policy denies an action. On by default and can't be disabled (only excluded); storage is charged. Excellent attack-surface signal.</li>
+                <li><strong>Cloud Audit Logs: Data Access</strong>. The data-plane stream: reads of data in BigQuery, Cloud Storage, Pub/Sub, etc. <strong>Off by default for most services; paid.</strong> See the <a href="#data-access">data-access gotcha section</a>.</li>
                 <li><strong>VPC Flow Logs</strong>. Network metadata at the subnet level. Granular sampling controls. Don't forget Firewall Rules Logging, which is a separate enablement.</li>
                 <li><strong>Cloud DNS query logs</strong>. DNS-side detection signal, enabled per-policy.</li>
                 <li><strong><a class="glossary-link" href="glossary.html#term-scc">Security Command Center</a> (SCC)</strong>. The aggregator: Event Threat Detection, Container Threat Detection, VM Threat Detection, Security Health Analytics. Findings stream out to Pub/Sub for SIEM ingestion. See the <a href="#native-detection">native section</a>.</li>
-                <li><strong>Access Transparency &amp; Access Approval</strong>. Logs and approvals for Google-personnel access to your data - an attestation source that's unusually well-developed on GCP.</li>
+                <li><strong>Access Transparency &amp; Access Approval</strong>. Logs and approvals for Google-personnel access to your data: an attestation source that's unusually well-developed on GCP.</li>
                 <li><strong>Google Workspace Admin SDK / Reports API</strong>. SaaS-side audit events. Pull via API or stream to BigQuery.</li>
             </ul>
 
@@ -608,14 +608,14 @@
                         </tr>
                         <tr>
                             <th scope="row">GCP</th>
-                            <td>Cloud Audit Logs - Admin Activity (free)</td>
-                            <td>Cloud Audit Logs - Data Access (paid)</td>
+                            <td>Cloud Audit Logs: Admin Activity (free)</td>
+                            <td>Cloud Audit Logs: Data Access (paid)</td>
                             <td>Off for most services; explicit opt-in in IAM audit-config</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            <p>The single most common cloud-detection blind spot is "we have CloudTrail / Activity Log / Cloud Audit Logs enabled" without realizing that the data-plane stream is a separate enablement. The result: you can see that an attacker assumed a role, but not that they then listed every object in a sensitive bucket. You can see who changed a Key Vault access policy, but not whose secret was retrieved. You can see who granted BigQuery dataset permissions, but not who exported the data.</p>
+            <p>The most common cloud-detection blind spot is "we have CloudTrail / Activity Log / Cloud Audit Logs enabled" without realizing that the data-plane stream is a separate enablement. As a result, you can see that an attacker assumed a role, but not that they then listed every object in a sensitive bucket. You can see who changed a Key Vault access policy, but not whose secret was retrieved. You can see who granted BigQuery dataset permissions, but not who exported the data.</p>
             <p>The pragmatic posture: enable data-plane logging on <em>your crown-jewel data resources</em>, scoped tightly. The cost of logging every S3 GetObject across thousands of buckets is real; the cost of logging the dozen buckets that hold customer data is trivial. Inventory first, scope deliberately, accept the bill.</p>
         </section>
 
@@ -871,13 +871,13 @@
                             <th scope="row">Control-plane audit log</th>
                             <td>CloudTrail (management events)</td>
                             <td>Activity Log (subscription / mgmt group)</td>
-                            <td>Cloud Audit Logs - Admin Activity</td>
+                            <td>Cloud Audit Logs: Admin Activity</td>
                         </tr>
                         <tr>
                             <th scope="row">Data-plane audit log</th>
                             <td>CloudTrail data events (paid, off by default)</td>
                             <td>Per-resource Diagnostic Settings (paid, off by default)</td>
-                            <td>Cloud Audit Logs - Data Access (paid, off by default except for BigQuery)</td>
+                            <td>Cloud Audit Logs: Data Access (paid, off by default except for BigQuery)</td>
                         </tr>
                         <tr>
                             <th scope="row">Identity sign-in log</th>
@@ -917,7 +917,7 @@
                         </tr>
                         <tr>
                             <th scope="row">SaaS audit (vendor's own)</th>
-                            <td>(N/A - IAM Identity Center only)</td>
+                            <td>(N/A, IAM Identity Center only)</td>
                             <td>Microsoft 365 Unified Audit Log</td>
                             <td>Google Workspace Reports API</td>
                         </tr>
