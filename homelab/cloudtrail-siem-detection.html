@@ -430,46 +430,46 @@ LIMIT 50;               -- cap the result at 50 rows</pre></div>
             <h3>4. The detection library</h3>
             <p>Each query below is a detection. Read the "why it matters" line, then run it against your telemetry.</p>
 
-            <p><strong>Root account activity</strong> - the root user should almost never make API calls.</p>
+            <p><strong>Root account activity.</strong> The root user should almost never make API calls.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, eventname, sourceipaddress
 FROM cloudtrail_logs
 WHERE useridentity.type = 'Root'      -- the account root user, which should almost never call the API
   AND eventtype = 'AwsApiCall'        -- ignore console-login/service events, keep real API actions
   AND date &gt;= date_format(current_date - interval '7' day, '%Y/%m/%d');   -- last 7 days (partition-bounded, so it's cheap)</pre></div>
-            <p><strong>Console login without MFA</strong> - a successful sign-in with no second factor.</p>
+            <p><strong>Console login without MFA.</strong> A successful sign-in with no second factor.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, sourceipaddress
 FROM cloudtrail_logs
 WHERE eventname = 'ConsoleLogin'                                            -- a sign-in to the web console
   AND json_extract_scalar(additionaleventdata, '$.MFAUsed') = 'No'         -- reach into the JSON string: no second factor
   AND json_extract_scalar(responseelements, '$.ConsoleLogin') = 'Success'; -- and the login actually succeeded</pre></div>
-            <p><strong>Access key created</strong> - a common persistence step (Pacu and manual privesc both do this).</p>
+            <p><strong>Access key created.</strong> A common persistence step (Pacu and manual privesc both do this).</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn AS actor,                                       -- who created the key
        json_extract_scalar(responseelements, '$.accessKey.userName') AS target_user -- and which user it was created FOR
 FROM cloudtrail_logs
 WHERE eventname = 'CreateAccessKey';   -- actor != target_user is the tell: someone minting a key on another user (persistence)</pre></div>
-            <p><strong>CloudTrail tampering</strong> - matches Stratus <code>aws.defense-evasion.cloudtrail-stop</code>. Someone blinding the logs is a high-severity signal.</p>
+            <p><strong>CloudTrail tampering.</strong> Matches Stratus <code>aws.defense-evasion.cloudtrail-stop</code>. Someone blinding the logs is a high-severity signal.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, eventname, requestparameters
 FROM cloudtrail_logs
 WHERE eventname IN ('StopLogging','DeleteTrail','UpdateTrail','PutEventSelectors');   -- any change that could disable or narrow logging = someone blinding the logs</pre></div>
-            <p><strong>Security group opened to the world</strong> - ingress from <code>0.0.0.0/0</code>.</p>
+            <p><strong>Security group opened to the world.</strong> Ingress from <code>0.0.0.0/0</code>.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, requestparameters
 FROM cloudtrail_logs
 WHERE eventname = 'AuthorizeSecurityGroupIngress'   -- a new inbound firewall rule was added
   AND requestparameters LIKE '%0.0.0.0/0%';         -- LIKE %..% substring-matches the "open to the whole internet" CIDR</pre></div>
-            <p><strong>S3 bucket made public</strong> - matches Stratus <code>aws.exfiltration.s3-backdoor-bucket-policy</code>.</p>
+            <p><strong>S3 bucket made public.</strong> Matches Stratus <code>aws.exfiltration.s3-backdoor-bucket-policy</code>.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, eventname, requestparameters
 FROM cloudtrail_logs
 WHERE eventname IN ('PutBucketPolicy','PutBucketAcl')    -- someone changed a bucket's policy or ACL
   AND (requestparameters LIKE '%AllUsers%'               -- the three ways "public" shows up in the request JSON:
        OR requestparameters LIKE '%"Principal":"*"%'     --   the AllUsers ACL group,
        OR requestparameters LIKE '%"Principal":{"AWS":"*"}%');   --   or a wildcard principal (either JSON shape)</pre></div>
-            <p><strong>Secret read from SSM or Secrets Manager</strong> - the quiet collection step GuardDuty often ignores. This is the detection the offensive lab proved you needed.</p>
+            <p><strong>Secret read from SSM or Secrets Manager.</strong> The quiet collection step GuardDuty often ignores. This is the detection the offensive lab proved you needed.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, eventname,
        json_extract_scalar(requestparameters, '$.name') AS param,       -- SSM: which parameter was read
        json_extract_scalar(requestparameters, '$.secretId') AS secret   -- Secrets Manager: which secret was read
 FROM cloudtrail_logs
 WHERE eventname IN ('GetParameter','GetParameters','GetSecretValue');   -- the read APIs for SSM and Secrets Manager - the quiet collection step</pre></div>
-            <p><strong>Instance credentials used off-instance</strong> - the heuristic behind GuardDuty's <code>InstanceCredentialExfiltration</code>. An assumed role that belongs to an EC2 instance profile, but whose calls come from a non-AWS source IP, means the role's credentials walked out of the instance.</p>
+            <p><strong>Instance credentials used off-instance.</strong> The heuristic behind GuardDuty's <code>InstanceCredentialExfiltration</code>. An assumed role that belongs to an EC2 instance profile, but whose calls come from a non-AWS source IP, means the role's credentials walked out of the instance.</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventtime, useridentity.arn, sourceipaddress, eventname
 FROM cloudtrail_logs
 WHERE useridentity.type = 'AssumedRole'     -- a call made with temporary role credentials
@@ -528,7 +528,7 @@ DROP TABLE cloudtrail_logs;   -- removes only the Athena schema - the underlying
             <h2>Where next</h2>
             <ul>
                 <li><a href="break-and-detect-aws.html">Break it, then catch it</a>: generate the telemetry these detections hunt for.</li>
-                <li><a href="../detection-engineering.html">Detection engineering</a> and <a href="../cloud-soc.html">cloud SOC</a> - the discipline behind the queries.</li>
+                <li><a href="../detection-engineering.html">Detection engineering</a> and <a href="../cloud-soc.html">cloud SOC</a>: the discipline behind the queries.</li>
                 <li><a href="../portfolio/detection-lab.html">Detection lab portfolio project</a>: package this into a portfolio piece.</li>
                 <li><a href="../incident-response.html">Incident response</a>: what happens after a detection fires.</li>
             </ul>

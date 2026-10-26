@@ -17,7 +17,8 @@ Most documentation defects need no judgment. Paying a model to rediscover them
 every week costs tokens, phrases the same problem differently each time, produces
 site-wide PRs too large to review before `main` moves on, and buries the findings
 that actually need a person. So anything decidable lives here, and the weekly
-model pass covers accuracy, neutrality, member temperature, and reading level.
+model pass covers accuracy, neutrality, member temperature, reading level, and
+voice (§9 of the standard).
 
 ## Fixable vs reported
 

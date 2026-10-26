@@ -226,7 +226,9 @@ def derive_keys(dt_inner_html: str, denylist: set[str] | None = None) -> list[st
         for m in re.finditer(r"\(([^)]+)\)", s):
             for piece in re.split(r"\s*/\s*", m.group(1)):
                 piece = piece.strip()
-                if piece:
+                # Same cap as the expansion after a dash: past six words it is
+                # a description, not a name anyone writes in prose.
+                if piece and len(piece.split()) <= 6:
                     keys.append(piece)
 
     add_with_parens(lhs)

@@ -4,11 +4,11 @@ Adds anchor IDs to every `<dt>` in `glossary.html` and hyperlinks every glossary
 
 ## What it does
 
-1. **Assigns IDs.** Every `<dt>` gets `id="term-..."`, derived from the headword (e.g. `IAM - Identity & Access Management` → `id="term-iam"`).
+1. **Assigns IDs.** Every `<dt>` gets `id="term-..."`, derived from the headword (e.g. `IAM (Identity & Access Management)` → `id="term-iam"`).
 2. **Builds a key→slug lookup.** Term parsing lives in [`glossary_terms.py`](glossary_terms.py), shared with `crosslink_pages.py` so the two cannot drift. It pulls every alias from each `<dt>`:
-   - The primary headword and any ` / `-separated alternatives on the left of the dash.
-   - The long form on the right of the dash (when ≤6 words).
-   - Parenthetical aliases like `(K8s)` or `(Checkov / Trivy / tfsec)`.
+   - The primary headword and any ` / `-separated alternatives outside the parentheses.
+   - Parenthetical aliases: an acronym's expansion, as in `IAM (Identity & Access Management)`, or alternative names like `(K8s)` or `(Checkov / Trivy / tfsec)`. A piece longer than six words is not a key.
+   - The older `ACR - Expansion` headword form still parses, with the expansion after the dash treated the same way, but headwords use parentheses.
    - A **spaced** slash separates alternatives; an **unspaced** one is part of a single designation, so `ISO/IEC 42001` and `CI/CD` are indexed whole as well as split, and the whole form wins because keys match longest-first.
 3. **Hyperlinks every occurrence.** Walks every `<dd>` and wraps each glossary-term mention in `<a class="glossary-link" href="#term-...">`. Skips:
    - Text already inside an existing `<a>` tag (no nesting).
