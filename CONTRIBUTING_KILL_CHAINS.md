@@ -126,8 +126,9 @@ Everything below goes inside `<main class="kc-main kc-page" id="main-content">`.
   <!-- Repeat phase-lbl + kc-step for each step. -->
   <!-- Phase label classes: ph-recon ph-init ph-exec ph-cred ph-priv ph-persist ph-exfil ph-disco -->
   <!-- Step colour classes: step-r step-o step-y step-p step-b step-c step-g -->
+  <!-- Phase label text: an icon, the phase, a colon, then a short title for the step. Use a colon, not " - ". -->
 
-  <div class="phase-lbl ph-init">Initial Access</div>
+  <div class="phase-lbl ph-init">⚡ Initial Access: A Text Message From "IT"</div>
   <div class="kc-step step-r">
     <div class="step-num">01</div>
     <div class="step-body">
