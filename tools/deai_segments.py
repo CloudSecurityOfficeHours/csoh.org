@@ -140,13 +140,22 @@ def text_of(h: str) -> str:
     return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', h))).strip()
 
 
+# A hyphen hard against a tag ("pod</a>-<a>hardening") is a compound, not a spaced dash, so those tags go before
+# text_of puts a space where each one was.
+HUGGED = re.compile(r'(?:<[^>]+>)+(?=-)|(?<=-)(?:<[^>]+>)+')
+
+
+def _tell_text(h: str) -> str:
+    return text_of(HUGGED.sub('', _sans_link_separators(h)))
+
+
 def tells_in(inner: str) -> list[str]:
-    t = text_of(_sans_link_separators(inner))
+    t = _tell_text(inner)
     return sorted(k for k, r in TELLS.items() if r.search(t))
 
 
 def asides(h: str) -> int:
-    return len(TELLS['dash aside'].findall(text_of(_sans_link_separators(h))))
+    return len(TELLS['dash aside'].findall(_tell_text(h)))
 
 
 def quoted(t: str) -> list[str]:
@@ -577,6 +586,9 @@ def self_test() -> int:
         'dash before a dollar amount is an aside': ('Shield Advanced - $3,000 a month on a one-year term.', True),
         'dash after a closing quote is an aside': ('He said "rotate it" - and nobody did for a year.', True),
         'hyphen in a compound is not': ('An open-source, well-known 2-4 week project.', False),
+        'hyphen between two links is a compound': ('Its <a href="p.html">pod</a>-<a href="h.html">hardening</a> tiers.',
+                                                    False),
+        'dash between two links is an aside': ('Read <a href="a.html">one</a> - <a href="b.html">two</a> next.', True),
     }
     for name, (h, want) in tell_cases.items():
         ok = ('dash aside' in tells_in(h)) == want
