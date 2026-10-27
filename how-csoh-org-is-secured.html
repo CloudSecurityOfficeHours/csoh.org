@@ -29,7 +29,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-07-05">
-    <meta property="article:modified_time" content="2026-07-05">
+    <meta property="article:modified_time" content="2026-10-27">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="Security Engineering">
     <meta property="article:tag" content="Content-Security-Policy">
@@ -77,7 +77,7 @@
         }
       },
       "datePublished": "2026-07-05",
-      "dateModified": "2026-07-05",
+      "dateModified": "2026-10-27",
       "mainEntityOfPage": "https://csoh.org/how-csoh-org-is-secured.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -421,17 +421,18 @@ object-src 'none'</pre></div>
 
         <section id="ci">
             <h2>The CI security gates</h2>
-            <p>Several checks run on every change, so the guarantees above can't quietly erode. <strong>Five</strong> of them are <em>required status checks</em> on <code>main</code> and hard-block a merge: <code>ruff</code>, <code>actionlint</code>, <code>yamllint</code>, <code>validate-html</code>, and <code>check-urls</code>. The rest run on the pull request and report there, and the two live checks at the end run after publish and fail the deploy itself:</p>
+            <p>Several checks run on every change, so the guarantees above can't quietly erode. <strong>Six</strong> of them are <em>required status checks</em> on <code>main</code> and hard-block a merge: <code>ruff</code>, <code>actionlint</code>, <code>yamllint</code>, <code>validate-html</code>, <code>check-urls</code>, and <code>check-mobile-layout</code>. The rest run on the pull request and report there, and the two live checks at the end run after publish and fail the deploy itself:</p>
             <ul>
                 <li><strong>No inline scripts.</strong> Rejects any executable inline <code>&lt;script&gt;</code>, keeping the strict CSP enforceable.</li>
                 <li><strong>URL safety.</strong> Every outbound link is checked so we don't ship a link to a hijacked or malicious domain.</li>
                 <li><strong>HTML validation.</strong> The W3C validator plus checks for structured-data (JSON-LD) validity and image dimensions.</li>
                 <li><strong>Workflow, YAML, and Python lint.</strong> actionlint (with shellcheck), yamllint, and ruff catch mistakes in the automation itself before it runs.</li>
+                <li><strong>Mobile layout.</strong> Renders a sample of pages at phone width and fails the pull request on horizontal overflow, tap targets under 40px, or a hero heading that spills past the viewport.</li>
                 <li><strong>Live security-header drift.</strong> After each publish, a checker reads the header values out of the Cloudflare Terraform in this repo and compares them against what csoh.org actually serves, over 40 cache-busted requests so it lands on every origin behind the load balancer. A control declared in Git but not present at the edge is worth nothing, so any missing or altered header fails the deploy rather than sitting there unnoticed. Scope, stated plainly: this gate covers the edge. The CloudFront policy and the nginx config are not read by CI.</li>
                 <li><strong>Live asset integrity.</strong> The same job fetches the published home page, re-derives the SHA-384 hash of every versioned asset it references (anything carrying a <code>?v=</code> cache-bust key) from what the edge actually returns, and compares it with the <code>integrity</code> attribute the page declares, so a stale cache or a bad publish is caught in CI instead of in someone's browser. Scope, stated plainly again: that is the four assets every page shares (<code>style.css</code>, <code>theme.js</code>, <code>main.js</code>, the analytics loader) plus <code>noscript.css</code>, not the per-page scripts and not the un-versioned MiniSearch bundle. Those are covered by the same SRI mechanism in the browser, just not by this gate.</li>
             </ul>
             <p><strong>Making the last two <em>required</em> took a change to the workflows first</strong>, and the reason is a trap worth passing on. Both <code>validate-html</code> and <code>check-urls</code> originally carried a <code>paths:</code> filter on their pull-request trigger, so they only ran when HTML or link-bearing files changed. A workflow that <code>paths:</code> filters out does not start, and a workflow that does not start produces no check run at all: not a skipped one, not a neutral one, nothing. GitHub waits forever for a required check that never reports, so a pull request touching only Python or Terraform would have been unmergeable with no visible failure to fix. The fix is to drop the <code>paths:</code> filter from the <code>pull_request</code> trigger and move the "is there anything to do here?" decision <em>inside</em> the job, so it always starts, always reports, and finishes in seconds when there is nothing to check. Both workflow files say so in a comment at the trigger, because the tempting cleanup is to put the filter back.</p>
-            <p>You do not have to take the list on faith. The ruleset is public and readable without a token: <code>curl https://api.github.com/repos/CloudSecurityOfficeHours/csoh.org/rulesets/12819332</code> lists all five contexts under <code>required_status_checks</code>. (What the anonymous view omits is <code>bypass_actors</code>, which is written out in full on the <a href="cloud-deployment.html">deployment page</a> instead.)</p>
+            <p>You do not have to take the list on faith. The ruleset is public and readable without a token: <code>curl https://api.github.com/repos/CloudSecurityOfficeHours/csoh.org/rulesets/12819332</code> lists all six contexts under <code>required_status_checks</code>. (What the anonymous view omits is <code>bypass_actors</code>, which is written out in full on the <a href="cloud-deployment.html">deployment page</a> instead.)</p>
             <p>All of these are read-only: they inspect the source and the published site, and none of them can modify the site or post on our behalf. The workflows are in the public repo if you want to read them.</p>
         </section>
 
@@ -446,7 +447,7 @@ object-src 'none'</pre></div>
             <ul>
                 <li><strong>Grade the headers:</strong> run csoh.org through <a href="https://securityheaders.com/?q=csoh.org" target="_blank" rel="noopener noreferrer">securityheaders.com</a> and <a href="https://developer.mozilla.org/en-US/observatory" target="_blank" rel="noopener noreferrer">Mozilla Observatory</a>.</li>
                 <li><strong>Read the headers directly:</strong> <code>curl -sI https://csoh.org</code> and look for the CSP, HSTS, X-Frame-Options, Permissions-Policy, and Cross-Origin lines.</li>
-                <li><strong>Confirm the CSP blocks inline script:</strong> open the browser console on any page and try to inject a <code>&lt;script&gt;</code> - you get a CSP violation instead of execution.</li>
+                <li><strong>Confirm the CSP blocks inline script:</strong> open the browser console on any page and try to inject a <code>&lt;script&gt;</code>. You get a CSP violation instead of execution.</li>
                 <li><strong>Check SRI:</strong> view source and confirm every shared-asset <code>&lt;link&gt;</code>/<code>&lt;script&gt;</code> carries an <code>integrity="sha384-..."</code> attribute.</li>
                 <li><strong>Check the live headers against the repo:</strong> clone the repository and run <code>python3 tools/check_edge_headers.py</code>. It parses the header names and values out of the Terraform and asserts them against what csoh.org returns, exiting non-zero on any mismatch. Point it elsewhere with <code>--url</code> if you want to test a single origin. This is the same check our deploy pipeline runs, so you are grading us with our own instrument.</li>
                 <li><strong>Check HSTS preload status:</strong> look up csoh.org on <a href="https://hstspreload.org/?domain=csoh.org" target="_blank" rel="noopener noreferrer">hstspreload.org</a>.</li>
