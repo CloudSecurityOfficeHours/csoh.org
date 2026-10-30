@@ -247,7 +247,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
 | [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls <!--count:feeds-->63<!--/count--> RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
-| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the six `resources-*.html` category pages; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is `resources-*.html` only |
+| [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the eight `resources-*.html` category pages; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is those pages only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - human approves and merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
 | [`update-counts.yml`](.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every site count (JSON-LD `numberOfItems`, OG-card subtitles) from the real cards and refreshes the count share-cards | N/A - commits directly |
@@ -272,8 +272,8 @@ below for the full walk-through.
 | Workflow | When | What it does | Blocks PR? |
 | --- | --- | --- | --- |
 | [`security-impact-review.yml`](.github/workflows/security-impact-review.yml) | PR opened/updated by anyone other than the owner or `csoh-ci` | Two layers over the PR diff: `tools/pr_security_triage.py` applies fixed rules and sets the verdict, then a Claude Code pass writes an advisory narrative that *cannot* change it. Posts one sticky comment. Uses `pull_request_target` so it runs before the fork-approval gate - read that file's header before touching it | Run goes red; not a required check |
-| [`lint.yml`](.github/workflows/lint.yml) | every push + PR | `actionlint` + `ruff` + `yamllint` in parallel | Yes |
-| [`validate-html.yml`](.github/workflows/validate-html.yml) | push/PR on `**.html` or `**.md` + Mon 07:00 | Far more than its name suggests. W3C HTML5 validation, plus seven repo gates: inline-script (CSP), SVG dimensions (CLS), JSON-LD, crosslink coverage, glossary integrity, docs consistency, and README/Markdown-link coverage | Yes, with PR comment |
+| [`lint.yml`](.github/workflows/lint.yml) | every PR, and push to `main` | `actionlint` + `ruff` + `yamllint` in parallel | Yes |
+| [`validate-html.yml`](.github/workflows/validate-html.yml) | every PR; push to `main` when HTML, Markdown, or a gate's inputs change; Mon 07:00 | Far more than its name suggests. W3C HTML5 validation, plus fourteen repo gates: inline scripts, SVG dimensions, JSON-LD, crosslink coverage, glossary integrity, docs consistency, FAQ parity, README links, code-block languages, card ids, recap videos, private invites, theme.js, and news dates | Yes, with PR comment |
 | [`check-url-safety.yml`](.github/workflows/check-url-safety.yml) | every PR + Mon 06:30 | Flags phishing patterns, suspicious TLDs, shortener domains | Yes |
 | [`check-mobile-layout.yml`](.github/workflows/check-mobile-layout.yml) | every PR, push to `main` on html/css/js + Mon 07:20 | Drives Playwright/Chromium at mobile widths and fails on overflow, tap-target, and layout regressions | Yes |
 | [`check-broken-links.yml`](.github/workflows/check-broken-links.yml) | PRs on `**.html`/`**.tf` + Mon 06:00 | Lychee crawl of every link, including the published Terraform comments; PR comment on failures. A broken link never fails the job - a crawl that *did not run* always does | No - link rot is everywhere |
@@ -365,7 +365,7 @@ QA run and is therefore unpromotable.
 - JS: `theme.js` is a separate, **render-blocking** script in `<head>`, above the stylesheet. It reads that `localStorage` value and stamps `data-theme` before first paint. Without it a visitor whose stored choice differs from their OS sees a flash of the wrong theme, because `main.js` loads at the end of `<body>` and the `prefers-color-scheme` branch has already painted by the time it runs
 - It cannot live inside `main.js` (too late) or in an inline `<script>` (the CSP drops it, see below), which is why it is a third file rather than a few lines somewhere else. `tools/add_theme_script.py` stamps the tag into every page and `validate-html.yml` gates on `--check`, so a new page cannot ship without it
 
-**Hover Tooltips** (the six `resources-*.html` category pages)
+**Hover Tooltips** (the eight `resources-*.html` category pages)
 - Each `.resource-card` has a `data-tooltip` attribute with an extended 2-3 sentence description
 - A single reusable `<div class="resource-tooltip">` is appended to `<body>` by `initTooltips()` in `main.js`
 - Event delegation on `#main-content` (mouseover/mousemove/mouseout) with a 300ms show delay
@@ -373,7 +373,7 @@ QA run and is therefore unpromotable.
 - Hidden on touch devices via `@media (hover: none) and (pointer: coarse)`
 - Dark mode styled via `[data-theme="dark"] .resource-tooltip`
 - Tooltip text is NOT used by the in-page filter, but `build_search_index.py` *does* index it (`TOOLTIP_RE` in `emit_card_docs`), so a term that appears only in a tooltip is findable from site search and not from the box on the page itself
-- The tooltip is mouse-only: `initTooltips()` binds mouseover/mousemove/mouseout and nothing else, and `aria-describedby` is set only while hovering. Touch users are excluded by CSS on purpose, keyboard users by omission. It is ~170 KB of attribute text across the six pages, which every visitor downloads and only pointer users can read
+- The tooltip is mouse-only: `initTooltips()` binds mouseover/mousemove/mouseout and nothing else, and `aria-describedby` is set only while hovering. Touch users are excluded by CSS on purpose, keyboard users by omission. The `data-tooltip` text on all eight category pages is downloaded with the page, and only pointer users can read it
 
 **Search & Filtering** (two different mechanisms)
 - *On a category page*: `main.js` reads that page's cards from the DOM and filters on title, description and tags. The input keeps `id="searchInput"` precisely so this existing code attaches with no change
@@ -418,10 +418,10 @@ QA run and is therefore unpromotable.
 - See [tools/CHECK_READING_LIST_STALENESS_README.md](tools/CHECK_READING_LIST_STALENESS_README.md) for the discovery rules and known limitations
 
 **Resources Auto-Refresh** (`.github/workflows/update-resources.yml`)
-- Mondays at 14:00 UTC, `anthropics/claude-code-action@v1` invokes Claude with a structured prompt to research and add 2-3 new resources to each of the six `resources-*.html` category pages (CTF, Labs, Tools, Certs, AI Security, Job Search)
+- Mondays at 14:00 UTC, `anthropics/claude-code-action@v1` invokes Claude with a structured prompt to research and add 2-3 new resources to each of the eight `resources-*.html` category pages (CTF, Labs, Tools, Certifications, AI Security, Job Search, Newsletters, GitHub Projects)
 - Auth: `CLAUDE_CODE_OAUTH_TOKEN` (subscription quota, not API billing) + the `csoh-ci` GitHub App for write-scoped PRs + `CSOH_PAT` to approve the bot's own PR so auto-merge can satisfy the "1 required approval" rule
 - The model checks for duplicates by grepping for URL + name before adding, follows the existing resource-card HTML pattern, and bumps the `<span id="visibleCount">` counter
-- **Auto-merge only fires when the diff is purely the six `resources-*.html` category pages** - `resources.html` itself is excluded, because the hub's counts are generated and a card added there would be both misplaced and overwritten.** If Claude touches anything else, the PR stays open with a banner asking for human review - important safety valve
+- **Auto-merge only fires when the diff is purely the eight `resources-*.html` category pages.** `resources.html` itself is excluded, because the hub's counts are generated and a card added there would be both misplaced and overwritten. If Claude touches anything else, the PR stays open with a banner asking for human review. That is the safety valve.
 - **The `--allowedTools` list must not contain any shell entry.** It is `Read,Edit,Glob,Grep,WebSearch,WebFetch` - every entry an in-process tool, no `Bash(...)` pattern of any kind. `Bash(python3:*)` matches `python3 -c '<anything>'`, which is arbitrary code execution and makes the rest of the allowlist decorative. Less obviously, `Bash(grep:*)` or `Bash(wc:*)` would be a read primitive over the entire runner filesystem including `/proc/self/environ`, because `grep` takes a path like nearly every Unix command. The built-in `Grep` tool that remains searches the checked-out workspace and is not a shell. This step reads pages it does not control (`WebFetch` / `WebSearch`) in a job that also holds `id-token: write` and the `csoh-ci` App token, so a prompt injection in a fetched page is a realistic path to those credentials. If a future prompt genuinely needs Python, add a checked-in script to `tools/` and allowlist that exact path - never the interpreter
 - **The `csoh-ci` App token is minted *after* the Claude step, not before it.** The mint step sits immediately above `create-pull-request`, so the repo-write credential does not exist on the runner while the model is reading the open web. Moving it to the top of the job, which is where mint steps usually go, silently removes that protection
 - **The job's `actions/checkout` sets `persist-credentials: false`** so the App token isn't left in `.git/config` for the model's step to read. This is safe because `peter-evans/create-pull-request` is handed the token explicitly. Don't drop it while re-arranging the job
@@ -550,7 +550,7 @@ it checks is pinned with `ignore_changes = [rules]`, so a header edited in Git
 can pass `terraform apply` without ever reaching the edge. See the `File
 Reference` entry below.
 
-### Linting (run by `lint.yml` on every push/PR)
+### Linting (run by `lint.yml` on every PR and on push to `main`)
 
 ```bash
 # One-time install (Homebrew on macOS; Linux: apt or pip equivalents)
@@ -817,7 +817,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `main.js` | Search, filters, dark mode, card icons, tooltips, code-block copy + highlighting, heading anchors, TOC scroll-spy, back-to-top | Changing site behavior |
 | `theme.js` | Render-blocking anti-flash theme stamp in `<head>` | Rarely -- stamped by `tools/add_theme_script.py`, gated in CI |
 | `resources-*.html` | Resource cards, one page per category | Adding/editing resources |
-| `resources.html` | The category hub: search plus six generated category cards | Rarely - its counts are generated |
+| `resources.html` | The category hub: search plus eight generated category cards | Rarely, because its counts are generated |
 | `news.html` | News article display | **Don't edit** -- auto-generated |
 | `feed.xml` | RSS feed | **Don't edit** -- auto-generated |
 | `update_news.py` | News feed aggregation script | Adding/removing RSS sources |

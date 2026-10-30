@@ -1096,7 +1096,7 @@ The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five
 | Workflow | When | What it does |
 |---|---|---|
 | [`update-news.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml) | every 3h | Pulls <!--count:feeds-->63<!--/count--> RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
-| [`update-resources.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries per `resources.html` section; auto-merges only if the diff is `resources.html` alone |
+| [`update-resources.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the eight `resources-*.html` category pages; auto-merges only if the diff is those pages |
 | [`update-counts.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
 | [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens a PR for a human to approve and merge |
 | [`site-update-deploy.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI, URL safety, normalization, schema, sitemap, previews |
@@ -1111,9 +1111,9 @@ The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five
 
 | Workflow | When | Blocks the PR? |
 |---|---|---|
-| [`lint.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/lint.yml) | every push + PR | Yes - `actionlint` + `ruff` + `yamllint` |
-| [`validate-html.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml) | push/PR on `*.html` + Mon 07:00 | Yes, with a PR comment - W3C HTML5 validator |
-| [`check-url-safety.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-url-safety.yml) | PRs on `*.html` + Mon 06:30 | Yes - phishing patterns, suspicious TLDs, shortener domains |
+| [`lint.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/lint.yml) | every PR, and push to `main` | Yes - `actionlint` + `ruff` + `yamllint` |
+| [`validate-html.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/validate-html.yml) | every PR; push to `main` when HTML, Markdown, or a gate's inputs change; Mon 07:00 | Yes, with a PR comment - W3C HTML5 validator |
+| [`check-url-safety.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-url-safety.yml) | every PR (the scan runs when HTML changed); Mon 06:30 | Yes - phishing patterns, suspicious TLDs, shortener domains |
 | [`check-broken-links.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/check-broken-links.yml) | PRs on `*.html` + Mon 06:00 | No - lychee crawl, PR comment only (link rot is everywhere) |
 | [`security-impact-review.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/security-impact-review.yml) | PRs from anyone who is not the repo owner or `csoh-ci` | No - deterministic triage via [`tools/pr_security_triage.py`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/pr_security_triage.py), plus a review layer, posted as a PR comment |
 

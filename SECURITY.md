@@ -361,7 +361,7 @@ CI workflows authenticate to GitHub via a **GitHub App** (`csoh-ci`) rather than
 | `normalize-urls.yml` | `csoh-ci` App | n/a | via PR (human reviews + merges) |
 | `site-update-deploy.yml` | `csoh-ci` App | n/a (housekeeping only - deploy is `deploy.yml`) | direct (App is on ruleset bypass) |
 | `update-counts.yml` | `csoh-ci` App | n/a (recomputes counts weekly) | direct (App is on ruleset bypass) |
-| `update-resources.yml` | `csoh-ci` App (checked out with `persist-credentials: false`) + `CSOH_PAT` (for auto-approve) + `CLAUDE_CODE_OAUTH_TOKEN` (model auth) | n/a | via PR + auto-merge, only if the diff is `resources.html` alone |
+| `update-resources.yml` | `csoh-ci` App (checked out with `persist-credentials: false`) + `CSOH_PAT` (for auto-approve) + `CLAUDE_CODE_OAUTH_TOKEN` (model auth) | n/a | via PR + auto-merge, only if the diff is the eight `resources-*.html` category pages |
 | `deploy.yml` | auto-injected `GITHUB_TOKEN` (`id-token: write` for OIDC) | **keyless OIDC - no key** (GCP WIF, AWS IAM role, Azure federated cred) | no |
 | `lint.yml`, `validate-html.yml`, `check-broken-links.yml`, `check-url-safety.yml` | auto-injected `GITHUB_TOKEN` | n/a | no |
 | `check-pagespeed.yml`, `run-seo-audit.yml`, `check-reading-list-staleness.yml`, `check-meeting-staleness.yml`, `check-conference-staleness.yml` | auto-injected `GITHUB_TOKEN` (the three staleness checkers add `issues: write`; PageSpeed/SEO auditors stay `contents: read` and open issues via App/PAT) | n/a | no |
