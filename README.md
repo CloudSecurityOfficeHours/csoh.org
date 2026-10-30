@@ -254,7 +254,7 @@ The community Signal chat and how to join the conversation between Friday sessio
 Free-tier setups across AWS / Azure / GCP, budget guardrails, kill-switches, and the lab progression that builds a real portfolio without a surprise bill.
 
 ### 🎓 Cloud Security Certifications ([`cloud-security-certifications.html`](https://csoh.org/cloud-security-certifications.html))
-Side-by-side comparison of the major cloud security certifications - CCSK, CCSP, AWS Security Specialty, Microsoft AZ-500/SC-100, Google PCSE, and CKS. Includes a comparison table, recommended paths by role (career switcher / established engineer / senior architect / detection specialist), and an FAQ.
+Side-by-side comparison of the major cloud security certifications - CCSK, CCSP, AWS Security Specialty, Microsoft SC-500/SC-100, Google PCSE, and CKS. Includes a comparison table, recommended paths by role (career switcher / established engineer / senior architect / detection specialist), and an FAQ.
 
 ### ✅ Cloud Security Best Practices ([`cloud-security-best-practices.html`](https://csoh.org/cloud-security-best-practices.html))
 Practitioner's checklist of the controls that actually prevent breaches, ordered by what shows up as root cause in our breach kill chains. Covers identity, configuration, network, data, detection, supply chain, workloads, AI, governance - plus an explicit "anti-patterns" section.
