@@ -69,7 +69,7 @@ EXCLUDE_FILES: set[str] = {
 # Bucket Blunder"). They are the bulk of the index's weight and the least
 # useful thing to match on.
 CARD_PAGES: set[str] = {
-    # resources.html is a hub of six category pages; its category cards are
+    # resources.html is a hub of category pages; its category cards are
     # navigation rather than resources, so it is not a card page.
     "resources-ctf-challenges.html",
     "resources-labs-training.html",
@@ -551,7 +551,7 @@ def load_synonyms() -> dict[str, list[str]]:
     return norm
 
 
-# resources.html is a hub of six category pages, and needs two things the big
+# resources.html is a hub of category pages, and needs two things the big
 # index cannot cheaply give it: a slug -> page lookup, so an old
 # /resources.html#card-<slug> link can be forwarded to whichever page now holds
 # that card, and something small enough to fetch for in-page search. Reusing

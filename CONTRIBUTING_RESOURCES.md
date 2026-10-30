@@ -9,11 +9,11 @@ Welcome! This guide will walk you through **adding a new resource** to our commu
 
 > 🤖 **Heads up: there's a weekly bot too.** Every Monday at 14:00 UTC, an
 > automated workflow (`.github/workflows/update-resources.yml`) uses Claude
-> Code to research and propose 2-3 new resources for each of the six
-> `resources-*.html` category pages. The bot opens a PR for review - if the
-> diff is purely those pages, the PR auto-merges; otherwise it waits for a
-> human. **Your human-submitted PRs are still very welcome** - they
-> complement the bot, never conflict with it. The bot intentionally errs on
+> Code to research and propose 2-3 new resources for each of the eight
+> `resources-*.html` category pages. The bot opens a PR for review. If the
+> diff is purely those pages, the PR auto-merges. Otherwise it waits for a
+> human. **Your human-submitted PRs are still very welcome.** They
+> complement the bot. The bot intentionally errs on
 > the side of well-known, well-documented sources; humans tend to surface
 > the more obscure, higher-signal finds. Both are valuable.
 

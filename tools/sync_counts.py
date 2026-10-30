@@ -58,7 +58,7 @@ CATEGORY_META = {
                     "Open-source cloud security projects on GitHub, from CSPM and IaC scanning to Kubernetes, supply chain, IAM and detection, plus CSOH's own repositories"),
 }
 
-# Short display-key aliases for the six resource categories, so a marker reads
+# Short display-key aliases for the resource categories, so a marker reads
 # <!--count:cat_ai_floor--> rather than repeating the section id.
 CATEGORY_ALIASES = {
     "ctf-challenges": "ctf",
@@ -186,7 +186,7 @@ def _collectionpage_block(categories: list[str], floor: int) -> str:
 
 
 def rebuild_resources(html: str) -> str:
-    """resources.html is a hub: its CollectionPage enumerates the six category
+    """resources.html is a hub: its CollectionPage enumerates the category
     pages and nothing else. Each category page carries an ItemList of its
     own, written by rebuild_category_page()."""
     floor = floor10(len(unique_resources(all_category_html())))
@@ -663,7 +663,7 @@ def cards_per_category() -> dict:
 
     Counted per section rather than deduped site-wide: these figures describe
     what a reader sees under one heading, and a number of entries are filed under
-    two categories, so the six section totals sum to more than `resources`. That is
+    two categories, so the per-category totals sum to more than `resources`. That is
     correct for both - they answer different questions.
     """
     out = {}

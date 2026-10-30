@@ -91,7 +91,7 @@ PAGES = [
      "760+ Cloud Security Resources",
      "CTFs, labs, tools, certifications, and AI-security resources - curated by the CSOH community.",
      "Directory"),
-    # The six category pages resources.html became a hub for. No counts in
+    # The category pages resources.html became a hub for. No counts in
     # these titles on purpose: the text is baked into a JPG, so a number here
     # goes stale silently and no gate reads pixels.
     ("resources-ctf-challenges.html",
