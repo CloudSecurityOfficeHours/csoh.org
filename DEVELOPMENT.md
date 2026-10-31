@@ -211,7 +211,7 @@ csoh.org/
 │
 │  ── Per-breach pages and meeting recaps ──
 ├── breaches/                        # 46 per-breach kill chain pages (split from breach-timeline.html)
-├── meetings/                        # 118 per-meeting recap pages (split from meetings.html)
+├── meetings/                        # 119 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (search-indexed as guide; not cross-linked)
 ├── howto/                           # 16 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
