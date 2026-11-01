@@ -61,7 +61,7 @@ PREVIEW_IGNORE_URLS = {
     'https://www.sophos.com/en-us/content/state-of-ransomware',
     'https://blog.lastpass.com/posts/2023/03/security-incident-update-recommended-actions',
     'https://otx.alienvault.com/',
-    'https://www.cyber.gov.au/about-us/advisories',
+    'https://www.cyber.gov.au/alerts-and-advisories',
     # Conferences pages with bot detection / JS-rendered hero / login walls
     # that defeat headless screenshots - keep their existing placeholder JPGs.
     'https://www.rsaconference.com/',
