@@ -95,7 +95,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 |---|---|
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from <!--count:feeds-->63<!--/count--> sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
-| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->46<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
+| 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->53<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
 | 📅 [Year in Review](https://csoh.org/cloud-breach-year-in-review.html) | Annual (and half-year) reviews of the cloud/SaaS/supply-chain breaches that defined each period |
 
 ### Careers
@@ -538,7 +538,7 @@ A community-maintained library of **step-by-step cloud breach reconstructions**,
 
 ### Current incidents covered
 
-All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
+All <!--count:breaches-->53<!--/count--> reconstructions, one row each. Techniques are the first four steps of that page's own kill chain, in order.
 
 | Incident | Year | Provider | Key Techniques |
 |---|---|---|---|
@@ -581,6 +581,7 @@ All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniqu
 | [UNC6040 / Salesforce Vishing](https://csoh.org/breaches/unc6040-salesforce-vishing.html) | 2025 | Salesforce / SaaS | T1566.004, T1684.001, T1204.001, T1528 |
 | [Storm-2949 / Entra ID SSPR](https://csoh.org/breaches/storm-2949-entra-sspr.html) | 2026 | Azure / Entra ID | T1621, T1098.005, T1556.006, T1530 |
 | [Mini Shai-Hulud / TanStack npm](https://csoh.org/breaches/mini-shai-hulud-tanstack.html) | 2026 | npm / GitHub Actions | T1195.002, T1552.001, T1550.001, T1567.001 |
+| [Storm-3168 / Azure](https://csoh.org/breaches/storm-3168-jadepuffer-azure.html) | 2026 | Azure | T1552.001, T1580, T1552, T1485 |
 | [Suspected AI-Assisted AWS Compromise](https://csoh.org/breaches/ai-assisted-aws-72-hours.html) | 2026 | AWS | T1078.004, T1580, T1619, T1648 |
 | [LiteLLM / PyPI (TeamPCP)](https://csoh.org/breaches/litellm-pypi-teampcp.html) | 2026 | PyPI / CI | T1195.001, T1552, T1546, T1613 |
 | [Vercel / Context.ai OAuth](https://csoh.org/breaches/vercel-context-ai-oauth.html) | 2026 | Google Workspace / SaaS | T1528, T1199, T1078, T1580 |
@@ -588,6 +589,12 @@ All <!--count:breaches-->46<!--/count--> reconstructions, one row each. Techniqu
 | [Megalodon / GitHub Actions](https://csoh.org/breaches/megalodon-github-actions.html) | 2026 | GitHub Actions | T1552.005, T1078, T1053, T1041 |
 | [Hugging Face / OpenAI Agent](https://csoh.org/breaches/huggingface-openai-agent.html) | 2026 | AI / LLM (Hugging Face) | T1588.007, T1211, T1190, T1593 |
 | [Hugging Face Agent Intrusion (full timeline)](https://csoh.org/breaches/huggingface-agent-intrusion-timeline.html) | 2026 | AI / LLM (Hugging Face) | T1102.002, T1611, T1552.005, T1078.004 |
+| [CHAINDROP / keyv](https://csoh.org/breaches/chaindrop-keyv-npm.html) | 2026 | npm | T1195.002, T1059.007, T1552.001, T1195.001 |
+| [Black October / AI Platforms](https://csoh.org/breaches/black-october-ai-platforms.html) | 2026 | AI developer platforms / AWS Bedrock | T1552.001, T1078.004, T1552.007, T1021 |
+| [Storm-0940 / ConnectWise](https://csoh.org/breaches/storm-0940-connectwise.html) | 2026 | Entra ID / M365 | T1588.007, T1110.003, T1199, T1078.004 |
+| [VAPOR PANDA / ARTEX](https://csoh.org/breaches/vapor-panda-artex.html) | 2026 | Hybrid cloud (AI-driven) | T1588.007, T1190, T1606, T1552.005 |
+| [LiteLLM 1.107.0](https://csoh.org/breaches/litellm-1-107-release-hijack.html) | 2026 | PyPI / GHCR / Docker Hub | T1552.001, T1078, T1528, T1677 |
+| [PHP2Shell / PAN-OS](https://csoh.org/breaches/php2shell-pan-os.html) | 2026 | PHP / PAN-OS | T1595.002, T1587.004, T1190, T1068 |
 
 The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 H1](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)).
 
@@ -708,7 +715,7 @@ csoh.org/
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
-├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 46 chains
+├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 53 chains
 ├── cloud-breach-year-in-review.html       # Every-year hub for the reviews below
 ├── cloud-breach-year-in-review-2021-2022.html # 2021-2022 review
 ├── cloud-breach-year-in-review-2023.html  # 2023 review
@@ -797,7 +804,7 @@ csoh.org/
 ├── google66d489593949bd4c.html # Google Search Console verification token
 │
 │  ── Subdirectory page sets ──
-├── breaches/                   # 46 per-breach kill chain pages (Capital One, SolarWinds, etc.)
+├── breaches/                   # 53 per-breach kill chain pages (Capital One, SolarWinds, etc.)
 ├── meetings/                   # 119 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
@@ -1344,7 +1351,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->308<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->315<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1355,7 +1362,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->294<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->119<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->301<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->119<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

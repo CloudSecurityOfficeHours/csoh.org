@@ -576,6 +576,7 @@ def sync_llms(disp: dict, apply: bool) -> tuple[bool, list[str]]:
         (r"\d+\+ weekly sessions", f"{disp['meetings_floor']} weekly sessions"),
         (r"\d+ independent sources", f"{disp['feeds']} independent sources"),
         (r"\d+\+ terms in plain English", f"{disp['glossary_terms_floor']} terms in plain English"),
+        (r"Lessons From \d+ Cloud Breaches", f"Lessons From {disp['breaches']} Cloud Breaches"),
     ]
     changed = []
     for pat, rep in rules:

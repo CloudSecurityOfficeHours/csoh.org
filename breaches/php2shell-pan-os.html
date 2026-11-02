@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="How two PHP memory flaws became root on Palo Alto firewalls: a leaked disclosure, per-version exploits, Fragnesia, and a path into Active Directory.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="PHP2Shell / PAN-OS Firewalls 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, PHP2Shell, CVE-2026-109618, CVE-2026-109619, Fragnesia, CVE-2026-46300, PAN-OS, Palo Alto firewall compromise, CL-UNK-1280">
+    <title>PHP2Shell / PAN-OS Firewalls 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/php2shell-pan-os.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/php2shell-pan-os.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/php2shell-pan-os.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="PHP2Shell / PAN-OS Firewalls 2026 Breach Kill Chain">
+    <meta property="og:description" content="Mass scanning mostly failed, because PHP2Shell exploits must fit each build. Appliances share one build, and 25 Palo Alto systems were rooted.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-01">
+    <meta property="article:modified_time" content="2026-11-01">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="PHP2Shell / PAN-OS Firewalls 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="PHP2Shell">
+    <meta property="article:tag" content="CVE-2026-109618">
+    <meta property="article:tag" content="CVE-2026-109619">
+    <meta property="article:tag" content="Fragnesia">
+    <meta property="article:tag" content="CVE-2026-46300">
+    <meta property="article:tag" content="PAN-OS">
+    <meta property="article:tag" content="Palo Alto firewall compromise">
+    <meta property="article:tag" content="CL-UNK-1280">
+    <meta property="og:url" content="https://csoh.org/breaches/php2shell-pan-os.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/php2shell-pan-os.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="PHP2Shell / PAN-OS Firewalls 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Mass scanning mostly failed, because PHP2Shell exploits must fit each build. Appliances share one build, and 25 Palo Alto systems were rooted.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/php2shell-pan-os.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=a1c52606" as="style"
+        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="stylesheet" href="/style.css?v=a1c52606"
+        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="stylesheet" href="/breach-timeline.css?v=95deadd4" integrity="sha384-a4EXbuH6LtXikTxHKYOI7HZgPOWLNGk9X11dWhrNxgMU6oPutelSJcQNI3xZU4s/">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "PHP2Shell / PAN-OS - Two PHP Memory Bugs → A Disclosure That Leaked Early → Exploits Tuned Per Firmware Version → Root in Under 15 Minutes → The Firewall Manager, Then Active Directory",
+  "description": "How two PHP memory flaws became root on Palo Alto firewalls: a leaked disclosure, per-version exploits, Fragnesia, and a path into Active Directory.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-01",
+  "dateModified": "2026-11-01",
+  "mainEntityOfPage": "https://csoh.org/breaches/php2shell-pan-os.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "PHP2Shell and the PAN-OS management interface campaign",
+    "description": "Two memory-safety flaws in core PHP were disclosed in October 2026. On October 23 and 24 an operator chained a private exploit for them with a Linux kernel flaw to take root on Palo Alto Networks firewalls with internet-exposed management interfaces, then reached a firewall management server and Active Directory in a US government-affiliated network."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "The PHP Group"
+    },
+    {
+      "@type": "Organization",
+      "name": "Palo Alto Networks"
+    },
+    {
+      "@type": "Organization",
+      "name": "Dream"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "PHP2Shell / PAN-OS Firewalls 2026",
+      "item": "https://csoh.org/breaches/php2shell-pan-os.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">PHP2Shell / PAN-OS Firewalls 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>PHP2Shell / PAN-OS Firewalls 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="php2shell-pan-os-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">October 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-blue">PHP / PAN-OS</span>
+    </div>
+    <h2 class="inc-title">PHP2Shell / PAN-OS - Two PHP Memory Bugs &rarr; A Disclosure That Leaked Early &rarr; Exploits Tuned Per Firmware Version &rarr; Root in Under 15 Minutes &rarr; The Firewall Manager, Then Active Directory</h2>
+    <p class="inc-summary">PHP2Shell covers two memory-safety flaws in core PHP, <a class="glossary-link" href="../glossary.html#term-cve">CVE</a>-2026-109618 and CVE-2026-109619, each scored 9.2 under <a class="glossary-link" href="../glossary.html#term-cvss">CVSS</a> 4.0, with affected code reaching back to PHP 5.4. Calif reported the flaw to PHP on August 11, and OpenAI and Wiz then reported the same root cause or further attack vectors. The CVE IDs began circulating on October 20, before the fixes shipped on October 21, and Amazon has traced the first exploitation attempt to October 17, four days before disclosure. Mass exploitation then ran into a practical limit: a working exploit has to fit the target's exact PHP build and configuration. As of October 28 Wordfence knew of no WordPress site compromised this way, despite more than 77,000 related requests. <strong>Appliances are the exception, because every device on a release runs the same build.</strong> On October 23 and 24 an operator used a private exploit tuned to specific PAN-OS versions, chained it with the Fragnesia Linux kernel flaw, and took root on Palo Alto Networks firewalls with internet-exposed management interfaces. Dream recovered the operator's toolkit and reports 25 systems rooted across the United States, Japan, Taiwan and South Korea, including a firewall management server in a US government-affiliated network, from which the operator reached <a class="glossary-link" href="../glossary.html#term-active-directory">Active Directory</a>. Unit 42 says it independently verified the tooling and the reported results. Most of what follows in the directory has an unknown outcome, and the page says so where it applies.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>25 systems</strong> rooted in the documented campaign, per Dream</div>
+      <div class="inc-stat"><strong>Under 15 minutes</strong> from unauthenticated connection to persistent root webshell</div>
+      <div class="inc-stat"><strong>22.6 million</strong> exposed PHP instances potentially vulnerable, per Cortex Xpanse</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> CL-UNK-1280, Unit 42's tracking name as cited by Dream; assessed Chinese-speaking</div>
+    </div>
+    <p class="inc-summary"><strong>Disclosure:</strong> research published by Wiz is one of the sources cited on this page, and the site's author works at Wiz. Every source is linked so you can read it directly.</p>
+    <a class="pm-link" href="https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers" target="_blank" rel="noopener">📄 Dream - Chained PHP2Shell exploit roots 25 servers ↗</a>
+    <a class="pm-link" href="https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/" target="_blank" rel="noopener">📄 Unit 42 - Threat brief on PHP2Shell ↗</a>
+    <a class="pm-link" href="https://security.paloaltonetworks.com/CVE-2026-109618" target="_blank" rel="noopener">📄 Palo Alto Networks - Product advisory ↗</a>
+    <a class="pm-link" href="https://www.tenable.com/blog/php2shell-one-week-later-why-one-exploit-doesnt-work-everywhere" target="_blank" rel="noopener">📄 Tenable - Why one exploit does not work everywhere ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🔍 Reconnaissance: 19,000 Firewalls Narrowed to 240</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">FOFA listed about 19,000 internet-facing PAN-OS firewalls, and a country and version filter cut that to 240</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1595/002/" target="_blank" rel="noopener">T1595.002 - Vulnerability Scanning</a>
+        </div>
+        <p class="step-desc">The target lists Dream recovered show a plain funnel. The FOFA internet search platform supplied about 19,000 internet-facing PAN-OS firewalls. A fingerprinting scanner running 200 concurrent threads got responses from about 5,000. The operator then kept devices in the United States, Japan, Taiwan and South Korea on the 12.1 and 12.2 branches, which left 240 targets.</p>
+        <p class="step-desc">Every one of those devices was reachable because its management interface had been exposed. Palo Alto Networks says the interface is not internet-exposed by default and puts the affected share at about 0.02% of its installed base. Dream reads the four countries as a sign of Chinese state-aligned targeting, and that reading is Dream's interpretation.</p>
+        <div class="step-code">
+          <span class="hl">Source:</span> FOFA, about 19,000 internet-facing PAN-OS firewalls<br>
+          <span class="hl">Fingerprinted:</span> about 5,000 responded, 200 concurrent threads<br>
+          <span class="hl">Filter:</span> US, Japan, Taiwan, South Korea; PAN-OS 12.1 and 12.2<br>
+          <span class="hl">Result:</span> 240 targets<br>
+          <span class="hl">Palo Alto's figure:</span> about 0.02% of its installed base internet-facing and affected
+        </div>
+        <div class="step-tags"><span class="stag">FOFA</span><span class="stag">PAN-OS</span><span class="stag">Target Funnel</span><span class="stag">T1595.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-recon">🧰 Resource Development: An Exploit Calibrated to the Firmware</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The exploit shipped with a profile for each PAN-OS version, which is what made one tool reusable</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1587/004/" target="_blank" rel="noopener">T1587.004 - Develop Capabilities: Exploits</a>
+        </div>
+        <p class="step-desc">Public proofs of concept were a poor guide to this bug. PHP's security team said it identified no functional exploit at the time of release, and Tenable spent a week showing why: the memory layout an exploit relies on shifts with the PHP build, server API, extensions and runtime settings. Five deliberately vulnerable sites Tenable exposed to the internet had not been compromised as of October 29, though four of them came down on October 24, and its own working exploit needed tuning to one setup.</p>
+        <p class="step-desc">An appliance removes that obstacle. Dream recovered 11 JSON version profiles: two for the 11.1 branch on PHP 7.4.33 and nine for 12.1 and 12.2 on PHP 8.0.30. One of the nine had been calibrated against a running virtual machine, and the rest used offsets derived from the binary without live testing. Tenable's advice for appliances is to go by the vendor's build, since PHP version numbers do not apply.</p>
+        <p class="step-desc">The <a class="glossary-link" href="../glossary.html#term-ai">AI</a> angle is narrower than the headlines. Dream found Claude Code installed in the attack infrastructure, the aiscan platform configured with DeepSeek and Kimi, and scripts whose structure suggests AI-assisted development. It also says it has no direct evidence that AI tools wrote the exploit or the post-exploitation scripts, and that the operation does not appear fully autonomous.</p>
+        <div class="step-code">
+          <span class="hl">Profiles:</span> 11 JSON files, one per tested PAN-OS version<br>
+          <span class="hl">11.1 branch:</span> PHP 7.4.33, 2 provisional profiles<br>
+          <span class="hl">12.1 and 12.2:</span> PHP 8.0.30, 1 calibrated and 8 provisional<br>
+          <span class="hl">Why it worked:</span> every device on a release shares one build, so one calibration carries over
+        </div>
+        <div class="step-tags"><span class="stag">Custom Exploit</span><span class="stag">Version Profiles</span><span class="stag">Shared Build</span><span class="stag">T1587.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: No Credentials Needed</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">A staged exploit against PHP's upload-progress handling gave code execution on the management web server</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing Application</a>
+        </div>
+        <p class="step-desc">Both flaws concern what PHP leaves behind after a fatal error. For CVE-2026-109618, PHP updates a hash table's counters before allocating the key, so an allocation that exceeds <code>memory_limit</code> abandons a half-built entry that shutdown cleanup still processes. CVE-2026-109619 leaves worker-wide state pointing at freed memory, which a later request on the same worker can reach. PHP processes the request before any application code runs, so application-level authentication offers no protection.</p>
+        <p class="step-desc">Dream describes a custom build aimed at PHP's <code>session.upload_progress</code> mechanism on the PAN-OS management web server: memory exhaustion, an information leak, a stale-reference setup, then a final request that yields code execution as the low-privileged <code>nobody</code> user. Palo Alto's advisory scopes the issue to the management web interface, meaning the HTTPS web UI and XML API, and says GlobalProtect and Captive Portal are not impacted.</p>
+        <div class="step-code">
+          <span class="hl">Flaws:</span> CVE-2026-109618 (out-of-memory corruption), CVE-2026-109619 (stale global state), both CVSS 4.0 9.2<br>
+          <span class="hl">Target:</span> PAN-OS management web interface, PHP 8.0.30 on 12.1 and 12.2<br>
+          <span class="hl">Stages:</span> memory exhaustion, information leak, stale-reference setup, code execution<br>
+          <span class="hl">Result:</span> code execution as nobody, with no credentials
+        </div>
+        <div class="step-tags"><span class="stag">CVE-2026-109618</span><span class="stag">CVE-2026-109619</span><span class="stag">session.upload_progress</span><span class="stag">T1190</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">⬆️ <a class="glossary-link" href="../glossary.html#term-privilege-escalation">Privilege Escalation</a>: Fragnesia</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">A Linux kernel flaw overwrote the <a class="glossary-link" href="../glossary.html#term-pam">PAM</a> configuration, so su root needed no password</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1068/" target="_blank" rel="noopener">T1068 - Exploitation for Privilege Escalation</a>
+        </div>
+        <p class="step-desc">A shell as <code>nobody</code> on a firewall gets an attacker very little, so the operator brought a second exploit. CVE-2026-46300, known as Fragnesia, is a privilege-escalation flaw in the kernel's XFRM ESP-in-TCP code. Dream says it was used to overwrite <code>/etc/pam.d/su</code> to accept all authentication, after which <code>su root</code> succeeded without a password.</p>
+        <p class="step-desc">Dream says the final stage's single HTTP request carried both exploits, with no credentials, and that the chain from an unauthenticated HTTPS connection to a persistent root webshell takes under 15 minutes. A batch runner worked five targets at a time with a 30-minute timeout on each, and 24 of the 240 were rooted. <a class="glossary-link" href="../glossary.html#term-cisa">CISA</a> added Fragnesia to its <a class="glossary-link" href="../glossary.html#term-kev">Known Exploited Vulnerabilities</a> catalog on October 28.</p>
+        <div class="step-code">
+          <span class="hl">Flaw:</span> CVE-2026-46300 (Fragnesia), XFRM ESP-in-TCP<br>
+          <span class="hl">Method:</span> overwrite /etc/pam.d/su so su root accepts anything<br>
+          <span class="hl">Automation:</span> batch runner, 5 targets at a time, 1,800-second timeout<br>
+          <span class="hl">Yield:</span> 24 of 240 firewalls rooted
+        </div>
+        <div class="step-tags"><span class="stag">Fragnesia</span><span class="stag">CVE-2026-46300</span><span class="stag">PAM</span><span class="stag">T1068</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>: Park Most, Work a Few</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Most victims received a 103-byte webshell and were left alone</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1505/003/" target="_blank" rel="noopener">T1505.003 - Server Software Component: Web Shell</a>
+        </div>
+        <p class="step-desc">The operator's next move was triage. A 103-byte PHP root webshell went to <code>/unauth/php/change_password.php</code>, confirmed by running <code>id</code>. For 22 of the 24 rooted firewalls that was all: no tunnel and no tools. Dream says they remain parked with active webshells, and that the operator could return at any time.</p>
+        <p class="step-desc">The first firewall in the US government-affiliated network fell at 18:14 UTC on October 23 during the batch run, crashed shortly afterwards and never came back. Hours earlier, SecurityWeek's round-up had reported no confirmed compromise from any vendor. A second firewall, whose certificate data tied it to the same organization, had only timed out in the batch. Once the first firewall's configuration suggested a government affiliation, the operator ran a dedicated campaign against the second.</p>
+        <div class="step-code">
+          <span class="hl">Webshell:</span> /unauth/php/change_password.php, 103 bytes<br>
+          <span class="hl">Parked:</span> 22 firewalls, webshell only<br>
+          <span class="hl">Prioritized:</span> 2 firewalls in one US government-affiliated network<br>
+          <span class="hl">First firewall:</span> rooted 18:14 UTC October 23, crashed, did not return
+        </div>
+        <div class="step-tags"><span class="stag">Webshell</span><span class="stag">Target Triage</span><span class="stag">T1505.003</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 Command and Control: The Firewall as a Bridge</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">An eight-port reverse SSH tunnel put the internal network within the operator's reach</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1572/" target="_blank" rel="noopener">T1572 - Protocol Tunneling</a>
+        </div>
+        <p class="step-desc">The second firewall was exploited at 10:09 UTC on October 24 and got the full treatment. Dream describes an eight-port reverse SSH tunnel to operator infrastructure, reaching domain controllers over LDAP, LDAPS and RDP, along with the firewall management server, GlobalProtect infrastructure and a SOCKS5 proxy.</p>
+        <p class="step-desc">A systemd service and an <code>rc.local</code> hook launched scripts from <code>/usr/local/lib/.panops/</code>, so the access survived a reboot. iox, a Chinese-developed tunneling utility, was among the recovered tools. Dream says the tunnel and webshells are likely still active and could not confirm it.</p>
+        <div class="step-code">
+          <span class="hl">Tunnel:</span> reverse SSH, 8 ports, firewall to operator infrastructure<br>
+          <span class="hl">Reached:</span> domain controllers (LDAP, LDAPS, RDP), firewall management server, SOCKS5 proxy<br>
+          <span class="hl">Boot survival:</span> systemd service plus rc.local hook<br>
+          <span class="hl">Tooling:</span> iox tunneling utility, about 40 post-exploitation scripts
+        </div>
+        <div class="step-tags"><span class="stag">Reverse SSH</span><span class="stag">iox</span><span class="stag">systemd</span><span class="stag">T1572</span><span class="stag">T1543.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: What a Firewall Holds</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Root decrypted the LDAP <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> and exposed the private keys and SAML settings on the device</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Credentials in Files</a>
+        </div>
+        <p class="step-desc">A firewall that authenticates VPN users keeps a directory credential on the device. With root the operator had the master key, decrypted the LDAP service account password from the configuration, and hardcoded it into later scripts. Private keys for HA replication, SSL/<a class="glossary-link" href="../glossary.html#term-tls">TLS</a> and device authentication came off the filesystem, along with the full network topology.</p>
+        <p class="step-desc">The haul also included a SAML <a class="glossary-link" href="../glossary.html#term-idp">IdP</a> configuration with <code>validate-idp-certificate: no</code>, which Dream lists among weak security settings and does not tie to a specific device. None of this depended on PHP. A perimeter device carries the organization's trust relationships, and a rooted one hands them over.</p>
+        <div class="step-code">
+          <span class="hl">Decrypted:</span> LDAP service account password, using the master key available at root<br>
+          <span class="hl">Taken:</span> private keys for HA replication, SSL/TLS and device authentication<br>
+          <span class="hl">Also taken:</span> complete network topology<br>
+          <span class="hl">Weakness found:</span> SAML IdP config with validate-idp-certificate: no
+        </div>
+        <div class="step-tags"><span class="stag">LDAP Bind Account</span><span class="stag">Private Keys</span><span class="stag">SAML</span><span class="stag">T1552.001</span><span class="stag">T1552.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a>: The Manager of Every Firewall</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The same chain, sent through the tunnel, took the server that manages all of the organization's firewalls</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1210/" target="_blank" rel="noopener">T1210 - Exploitation of Remote Services</a>
+        </div>
+        <p class="step-desc">At 11:35 UTC on October 24, under 90 minutes after the second firewall, the operator exploited a central firewall management server through the tunnel. That brought the total to 25. Dream says this server manages all of the organization's firewalls and held LDAP connectivity to Active Directory because it authenticates VPN users. Dream does not name the product.</p>
+        <div class="step-code">
+          <span class="hl">Time:</span> 11:35 UTC October 24, under 90 minutes after the second firewall<br>
+          <span class="hl">Target:</span> central firewall management server, reached through the tunnel<br>
+          <span class="hl">Why it mattered:</span> control over every firewall, plus LDAP connectivity to Active Directory
+        </div>
+        <div class="step-tags"><span class="stag">Management Plane</span><span class="stag">Pivot</span><span class="stag">T1210</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery: Directory Enumeration, Then Unknowns</div>
+    <div class="kc-step step-o">
+      <div class="step-num">09</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">LDAP enumeration of the directory is confirmed, and the outcome of the spray, backdoor accounts and SAML theft is unknown</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1087/002/" target="_blank" rel="noopener">T1087.002 - Account Discovery: Domain Account</a>
+        </div>
+        <p class="step-desc">Dream confirms full enumeration of users and groups over LDAP. The recovered scripts went further: a password spray against all users on a domain with <code>lockoutThreshold=0</code>, backdoor user accounts in every OU, machine accounts through <code>MachineAccountQuota</code>, <a class="glossary-link" href="../glossary.html#term-acl">ACL</a> chain analysis, SAML signing key extraction from Keycloak configuration, and probing Keycloak for an authentication bypass.</p>
+        <p class="step-desc">The results of those runs were not among the artifacts Dream recovered, so treat every item in that list as attempted. Dream also lists the full extent of the compromise in this environment as unknown.</p>
+        <div class="step-code">
+          <span class="hl">Confirmed:</span> full LDAP enumeration of users and groups<br>
+          <span class="hl">Outcome unknown:</span> password spray, backdoor users, machine accounts, SAML key extraction<br>
+          <span class="hl">Domain setting:</span> lockoutThreshold=0, so spraying triggered no lockout<br>
+          <span class="hl">Dream's limit:</span> attack results were not in the recovered artifacts
+        </div>
+        <div class="step-tags"><span class="stag">LDAP Enumeration</span><span class="stag">lockoutThreshold=0</span><span class="stag">Keycloak</span><span class="stag">T1087.002</span><span class="stag">T1110.003</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact: The Wider Record, and What Was Walked Back</div>
+    <div class="kc-step step-y">
+      <div class="step-num">10</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Beyond PAN-OS the record shows huge exposure, real shells on honeypots, and several claims corrected</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing Application</a>
+        </div>
+        <p class="step-desc">Amazon found the earliest attempt in its MadPot honeypots on October 17, from an address tied to a commercial anonymization network. It says it is unclear whether the attempt would have succeeded on real systems, or how the actor got exploit details early. The PHP Foundation's account of the embargo describes several breaks: the CVE IDs began circulating at about 15:00 UTC on October 20 with no technical details, Calif mistakenly published a video of its proof of concept, and Chainguard published images containing the fix at 07:41 UTC on October 21, more than six hours before the coordinated release. Amazon puts the earliest proofs of concept at around 02:00 UTC that day.</p>
+        <p class="step-desc">On October 24 Adel Karimi's honeypots recorded 35 successful shell executions on PHP 8.4.26 under Apache mod_php, and Karimi cautioned that this single-worker profile is not a measure of reliability on other configurations. CISA added both CVEs to its Known Exploited Vulnerabilities catalog on October 26 with a federal deadline of October 29. Palo Alto Networks confirmed active exploitation of exposed management interfaces on October 29.</p>
+        <p class="step-desc">Several early claims did not hold. Sophos corrected a report of a successful Mirai-variant install to an attempt. Unit 42 retracted an October 23 update about an attack on a European government agency because it could not tie the initial access to these CVEs. Arctic Wolf saw PHP2Shell-themed requests that appeared to reuse older session-poisoning and deserialization tricks. The large exposure counts, 22.6 million from Cortex Xpanse and about 30.3 million from Censys, measure potentially vulnerable services, and a version match does not prove exploitability.</p>
+        <p class="step-desc">A separate flaw, CVE-2026-115560, had no patch when BleepingComputer reported it on October 26. It needs an unusual combination of configuration and application code, and PHP's interim mitigation is the same <code>session.upload_progress.enabled=0</code> setting.</p>
+        <div class="step-code">
+          <span class="hl">October 17:</span> first attempt in Amazon's MadPot telemetry<br>
+          <span class="hl">October 20:</span> CVE IDs begin circulating, no technical details<br>
+          <span class="hl">October 21:</span> fixes ship: 8.5.12, 8.4.27, 8.3.36, 8.2.35<br>
+          <span class="hl">October 24:</span> 35 shell executions on honeypots<br>
+          <span class="hl">October 26:</span> both CVEs added to <a class="glossary-link" href="../glossary.html#term-cisa-kev">CISA KEV</a><br>
+          <span class="hl">October 29:</span> Palo Alto confirms active exploitation
+        </div>
+        <div class="step-tags"><span class="stag">MadPot</span><span class="stag">CISA KEV</span><span class="stag">Honeypots</span><span class="stag">T1190</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Take management interfaces off the internet.</strong> Everything in this chain began at a management interface reachable from anywhere. Palo Alto's guidance is to remove internet access immediately and restrict the interface to trusted internal addresses or a <a class="glossary-link" href="../glossary.html#term-bastion-host">jump box</a>. Apply the same rule to every appliance you run, whichever vendor made it, and alert when one becomes reachable.</div>
+        <div class="def-item"><strong>Patch the PHP that serves requests, then restart it.</strong> The fixed releases are 8.5.12, 8.4.27, 8.3.36 and 8.2.35, and PHP published source backports for 7.4, 8.0 and 8.1. Updating an application does not update its runtime. Rebuild container images, include software that bundles its own interpreter, restart every worker, and remember that the command-line PHP may differ from the one serving traffic. For appliances, follow the vendor's fixed build, such as the PAN-OS hotfixes in Palo Alto's advisory.</div>
+        <div class="def-item"><strong>Use interim settings only until the patch lands.</strong> PHP's mitigations include <code>session.upload_progress.enabled=0</code>, <code>memory_limit=-1</code> paired with a cgroup <code>memory.max</code>, and <code>fatal_error_backtraces=0</code> where supported. Avoid <code>RLIMIT_AS</code> and <code>RLIMIT_DATA</code>, which can trigger the allocation failures the exploit depends on. All of these reduce exposure, and none replaces the fixed release.</div>
+        <div class="def-item"><strong>Begin any investigation no later than October 17.</strong> That is Amazon's earliest published sighting. Look for web workers spawning shells, PHP memory-exhaustion errors reported at Unknown on line 0, Apache segmentation faults, POST requests containing <code>PHP_SESSION_UPLOAD_PROGRESS</code>, and unusually large <code>PHPSESSID</code> cookies. These signals do not confirm exploitation on their own. The flaws can also disclose process memory without any code execution, so rotate secrets that exposed workers handled even if you find no shell.</div>
+        <div class="def-item"><strong>Treat a rooted firewall as a directory compromise.</strong> On PAN-OS, hunt for <code>/unauth/php/change_password.php</code> and <code>/usr/local/lib/.panops/</code>. If you find either, assume the attacker holds the LDAP service account, the device's private keys and its configuration. Rotate those, reissue certificates, and review the directory for new users and machine accounts rather than stopping at the firewall.</div>
+        <div class="def-item"><strong>Fix the directory settings this operator went looking for.</strong> A <code>lockoutThreshold</code> of zero makes spraying free, a default <code>MachineAccountQuota</code> lets ordinary accounts add machines, and SAML configuration that skips certificate validation weakens assertion checking. Each one helps turn a foothold on a firewall into a path to the domain. On Linux hosts you run yourself, patch the kernel too: Fragnesia is what took this chain from a low-privileged worker to root.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers" target="_blank" rel="noopener">Dream - PAN-OS campaign</a>
+        <a class="src-link" href="https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/" target="_blank" rel="noopener">Unit 42 - Threat brief</a>
+        <a class="src-link" href="https://security.paloaltonetworks.com/CVE-2026-109618" target="_blank" rel="noopener">Palo Alto Networks - Advisory</a>
+        <a class="src-link" href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">PHP - Release announcement</a>
+        <a class="src-link" href="https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/" target="_blank" rel="noopener">PHP Foundation - Release and embargo account</a>
+        <a class="src-link" href="https://arcticwolf.com/resources/blog/php2shell-critical-php-vulnerabilities-enable-unauthenticated-remote-code-execution/" target="_blank" rel="noopener">Arctic Wolf - Exploitation analysis</a>
+        <a class="src-link" href="https://php2shell.com" target="_blank" rel="noopener">PHP2Shell - Research disclosure</a>
+        <a class="src-link" href="https://www.wiz.io/blog/php2shell-php-rce" target="_blank" rel="noopener">Wiz - PHP2Shell research</a>
+        <a class="src-link" href="https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/" target="_blank" rel="noopener">Datadog Security Labs - Analysis and detection</a>
+        <a class="src-link" href="https://aws.amazon.com/blogs/security/amazon-threat-intelligence-identifies-php2shell-exploitation-prior-to-public-disclosure-in-madpot/" target="_blank" rel="noopener">Amazon - Exploitation before disclosure</a>
+        <a class="src-link" href="https://www.tenable.com/blog/php2shell-one-week-later-why-one-exploit-doesnt-work-everywhere" target="_blank" rel="noopener">Tenable - One week later</a>
+        <a class="src-link" href="https://www.securityweek.com/php2shell-attacks-root-palo-alto-firewalls-but-fail-against-wordpress/" target="_blank" rel="noopener">SecurityWeek - PAN-OS and WordPress</a>
+        <a class="src-link" href="https://www.securityweek.com/mirai-botnet-operators-join-php2shell-attacks-as-aslr-bypass-exploits-emerge/" target="_blank" rel="noopener">SecurityWeek - October 23 round-up</a>
+        <a class="src-link" href="https://www.bleepingcomputer.com/news/security/php2shell-security-flaws-now-sucessfully-exploited-in-the-wild/" target="_blank" rel="noopener">BleepingComputer - Exploited in the wild</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../vulnerability-management.html">Vulnerability management</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="litellm-1-107-release-hijack.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

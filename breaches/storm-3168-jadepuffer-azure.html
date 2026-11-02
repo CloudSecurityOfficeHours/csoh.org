@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Microsoft's account of Storm-3168: two Azure service principals, 15 hours of quiet discovery, then a seven-minute burst of deletions aimed at backup and recovery.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Storm-3168 / JADEPUFFER Azure Destruction 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, Storm-3168, JADEPUFFER, Azure service principal compromise, storage account deletion, ListKeys, Azure Backup, Site Recovery, resource locks, cloud destruction">
+    <title>Storm-3168 / JADEPUFFER Azure Destruction 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/storm-3168-jadepuffer-azure.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/storm-3168-jadepuffer-azure.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/storm-3168-jadepuffer-azure.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Storm-3168 / JADEPUFFER Azure Destruction 2026 Breach Kill Chain">
+    <meta property="og:description" content="Two service principals, 15 hours of reads, then 100+ storage deletions in about seven minutes. A secret posted in a GitHub issue is a possible, unconfirmed source.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-01">
+    <meta property="article:modified_time" content="2026-11-01">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Storm-3168 / JADEPUFFER Azure Destruction 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="Storm-3168">
+    <meta property="article:tag" content="JADEPUFFER">
+    <meta property="article:tag" content="Azure service principal compromise">
+    <meta property="article:tag" content="storage account deletion">
+    <meta property="article:tag" content="ListKeys">
+    <meta property="article:tag" content="Azure Backup">
+    <meta property="article:tag" content="Site Recovery">
+    <meta property="article:tag" content="resource locks">
+    <meta property="article:tag" content="cloud destruction">
+    <meta property="og:url" content="https://csoh.org/breaches/storm-3168-jadepuffer-azure.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/storm-3168-jadepuffer-azure.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Storm-3168 / JADEPUFFER Azure Destruction 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Two service principals, 15 hours of reads, then 100+ storage deletions in about seven minutes. A secret posted in a GitHub issue is a possible, unconfirmed source.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/storm-3168-jadepuffer-azure.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=a1c52606" as="style"
+        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="stylesheet" href="/style.css?v=a1c52606"
+        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="stylesheet" href="/breach-timeline.css?v=95deadd4" integrity="sha384-a4EXbuH6LtXikTxHKYOI7HZgPOWLNGk9X11dWhrNxgMU6oPutelSJcQNI3xZU4s/">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Storm-3168 / JADEPUFFER - Two Compromised Service Principals → 15 Hours of Reads → 100+ Storage Deletions in Seven Minutes → Recovery Locks Attacked → Storage Keys Collected",
+  "description": "Microsoft's account of Storm-3168: two Azure service principals, 15 hours of quiet discovery, then a seven-minute burst of deletions aimed at backup and recovery.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-01",
+  "dateModified": "2026-11-01",
+  "mainEntityOfPage": "https://csoh.org/breaches/storm-3168-jadepuffer-azure.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Storm-3168 destructive activity in an Azure tenant",
+    "description": "In early June 2026 two compromised service principals in one Azure tenant enumerated the environment for about 15 hours, then attempted bulk deletion of storage accounts and application resources and collected storage keys. Microsoft associates the activity with JADEPUFFER, which it tracks as Storm-3168."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Organization",
+      "name": "Sysdig"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Storm-3168 / JADEPUFFER Azure Destruction 2026",
+      "item": "https://csoh.org/breaches/storm-3168-jadepuffer-azure.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Storm-3168 / JADEPUFFER Azure Destruction 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Storm-3168 / JADEPUFFER Azure Destruction 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="storm-3168-jadepuffer-azure-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">June 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure">Azure</span>
+    </div>
+    <h2 class="inc-title">Storm-3168 / JADEPUFFER - Two Compromised Service Principals &rarr; 15 Hours of Reads &rarr; 100+ Storage Deletions in Seven Minutes &rarr; Recovery Locks Attacked &rarr; Storage Keys Collected</h2>
+    <p class="inc-summary">Microsoft published this account on September 25, 2026, describing activity from early June. It associates the activity with JADEPUFFER, the actor Sysdig reported in July, and tracks it as Storm-3168. Two compromised service principals in one Azure <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> did the work. One spent about 15 and a half hours on reconnaissance. The other ran discovery, then a destructive burst of about seven minutes covering more than 100 storage account deletion attempts plus a <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a>, a Function App and an App Service plan, along with attempts to strip recovery locks. It then collected storage keys. The operations followed the identities' existing Azure role assignments. <strong>Two caveats belong next to the headline.</strong> Microsoft could not confirm how the principals were compromised: a <a class="glossary-link" href="../glossary.html#term-service-principal">service principal</a>'s client secret had been posted in a public GitHub issue, and Microsoft could not confirm that secret was used. And while Sysdig reports JADEPUFFER as the first documented agentic ransomware operation and Microsoft's title says agentic-driven, the evidence Microsoft publishes for this activity (timing, division of work, overlapping token streams) strongly indicates automated or scripted execution and does not directly show an <a class="glossary-link" href="../glossary.html#term-ai">AI</a> agent at work. Microsoft did not observe a ransom note or confirm <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a>.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>~15.5 hours</strong> of reconnaissance by the first service principal</div>
+      <div class="inc-stat"><strong>~7 minutes</strong> for 100+ storage deletion attempts and other deletions</div>
+      <div class="inc-stat"><strong>30+</strong> successful ListKeys calls after the destruction ended</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> Storm-3168, associated with JADEPUFFER, per Microsoft</div>
+    </div>
+    <a class="pm-link" href="https://www.microsoft.com/en-us/security/blog/2026/09/25/storm-3168-agentic-driven-cloud-attacks-using-compromised-service-principals/" target="_blank" rel="noopener">📄 Microsoft - Storm-3168: agentic-driven cloud attacks using compromised service principals ↗</a>
+    <a class="pm-link" href="https://www.sysdig.com/blog/jadepuffer-agentic-ransomware-for-automated-database-extortion" target="_blank" rel="noopener">📄 Sysdig - JADEPUFFER ↗</a>
+    <a class="pm-link" href="https://www.bleepingcomputer.com/news/security/jadepuffer-ransomware-used-ai-agent-to-automate-entire-attack/" target="_blank" rel="noopener">📄 BleepingComputer - JADEPUFFER background ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ Possible <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: A Secret in a Public Issue</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">A service principal's client ID, secret and tenant ID had been posted in a public GitHub issue</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Credentials in Files</a>
+        </div>
+        <p class="step-desc">An employee of the affected organization had posted a service principal's client ID, client secret and tenant ID in plaintext in a public GitHub issue. The secret was later removed from the issue, and it stayed in the public edit history.</p>
+        <p class="step-desc">Microsoft is careful here. It could not confirm that this secret was used, it does not say which of the two principals the secret belonged to, and it says it is unclear how the service principal was first compromised. Storm-3168 infrastructure also probed Azure App Services belonging to other customers, and Microsoft found no App Service to Azure Resource Manager credential path for this tenant.</p>
+        <div class="step-code">
+          <span class="hl">Posted:</span> client ID, client secret, tenant ID, in a public GitHub issue<br>
+          <span class="hl">Removed:</span> from the issue, and still in the edit history<br>
+          <span class="hl">Confirmed as the source:</span> no; Microsoft could not confirm it
+        </div>
+        <div class="step-tags"><span class="stag">Service Principal</span><span class="stag">GitHub Issue</span><span class="stag">Exposed Secret</span><span class="stag">T1552.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery: Fifteen Hours of Reads</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">One service principal spent about 15 and a half hours enumerating the tenant</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+        </div>
+        <p class="step-desc">The first service principal made more than 300 successful read operations over about 15 hours and 30 minutes, listing VMs, subscriptions, resource groups and resources. Both principals shared Storm-3168 infrastructure, a network fingerprint and the user agent <code>python-requests/2.34.2</code>.</p>
+        <p class="step-desc">About 90 minutes after the first principal started, the second enumerated VMs and resource groups across two subscriptions in five seconds. Microsoft cites timing like this, the division of work between principals, and overlapping token streams as strong indications of automated or scripted execution.</p>
+        <div class="step-code">
+          <span class="hl">First principal:</span> 300+ reads over about 15 hours 30 minutes<br>
+          <span class="hl">Second principal:</span> two subscriptions enumerated in five seconds<br>
+          <span class="hl">Shared traits:</span> same infrastructure and user agent, python-requests/2.34.2
+        </div>
+        <div class="step-tags"><span class="stag">Azure Resource Manager</span><span class="stag">Enumeration</span><span class="stag">python-requests</span><span class="stag">T1580</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: Looking for Stored Secrets</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">About 16 hours later the second principal listed App Service configuration stores</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
+        </div>
+        <p class="step-desc">About 16 hours after that discovery, the second principal listed App Service configuration stores, which Microsoft says was possibly a search for exposed credentials. An OpenSearch lookup failed. Seventy seconds later it attempted <code>ListKey</code> on a storage account that did not exist, and that failure came less than a second before the destruction began.</p>
+        <div class="step-code">
+          <span class="hl">Listed:</span> App Service configuration stores<br>
+          <span class="hl">Failed:</span> an OpenSearch lookup, and ListKey on a non-existent account<br>
+          <span class="hl">Next:</span> destruction, less than a second later
+        </div>
+        <div class="step-tags"><span class="stag">App Service</span><span class="stag">Configuration Stores</span><span class="stag">T1552</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact: Seven Minutes</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">More than 100 storage deletion attempts ran in about seven minutes, along with a Key Vault, a Function App and an App Service plan</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1485/" target="_blank" rel="noopener">T1485 - Data Destruction</a>
+        </div>
+        <p class="step-desc">The burst lasted about seven minutes and included more than 100 storage account deletion attempts, most of which succeeded, plus the deletion of one Key Vault, one Function App and one App Service plan in the same resource group. Multiple parallel SQL database deletion attempts all failed because the requests used an unsupported API version.</p>
+        <p class="step-desc">The principal held ordinary roles: group-granted Storage Account Contributor, direct Contributor, and direct SQL DB Contributor. It used five unique tokens, four for deletion and one for inventory and key retrieval, and two of the deletion tokens were active in the same 70-second window. Resource locks and deletion protection blocked deletion attempts for a few of the storage accounts, which makes them the controls that visibly worked in this incident.</p>
+        <div class="step-code">
+          <span class="hl">Storage:</span> 100+ deletion attempts, most succeeded<br>
+          <span class="hl">Also deleted:</span> 1 Key Vault, 1 Function App, 1 App Service plan<br>
+          <span class="hl">Failed:</span> SQL deletions, unsupported API version<br>
+          <span class="hl">Blocked by:</span> resource locks and deletion protection, for a few storage accounts<br>
+          <span class="hl">Roles:</span> Storage Account Contributor, Contributor, SQL DB Contributor
+        </div>
+        <div class="step-tags"><span class="stag">Storage Deletion</span><span class="stag">Key Vault</span><span class="stag">Resource Locks</span><span class="stag">T1485</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">💥 Impact: Recovery Under Attack</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The principal tried to remove Site Recovery and Azure Backup locks, and failed</div>
+          <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">T1490 - Inhibit System Recovery</a>
+        </div>
+        <p class="step-desc">The destruction targeted backup and recovery resources, which could impair recovery. Attempts to remove Azure Site Recovery locks and an Azure Backup protection lock were unsuccessful. In all, the second principal attempted more than 150 destructive or credential-collection operations in a 35-minute window.</p>
+        <p class="step-desc">Microsoft assesses this as consistent with tactics that can support ransomware and extortion, and it stops there: it did not observe a ransom note or confirm successful <a class="glossary-link" href="../glossary.html#term-data-exfiltration">data exfiltration</a>. Sysdig's earlier JADEPUFFER report describes something more complete in a different environment, a ransom table and encrypted Nacos configuration on a database server, after initial access through <a class="glossary-link" href="../glossary.html#term-cve">CVE</a>-2025-3248 in Langflow.</p>
+        <div class="step-code">
+          <span class="hl">Attempted:</span> removal of Site Recovery locks and an Azure Backup protection lock<br>
+          <span class="hl">Result:</span> unsuccessful<br>
+          <span class="hl">Window:</span> 150+ destructive or credential operations in 35 minutes<br>
+          <span class="hl">Not observed:</span> a ransom note, or confirmed exfiltration
+        </div>
+        <div class="step-tags"><span class="stag">Azure Backup</span><span class="stag">Site Recovery</span><span class="stag">T1490</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: Collecting Keys After the Damage</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">About 30 minutes after the destruction ended, the principal collected storage keys with 30+ ListKeys calls</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
+        </div>
+        <p class="step-desc">The final phase reversed the usual order. About 30 minutes after the last destruction, the second principal listed storage accounts and made more than 30 successful <code>ListKeys</code> requests, returning access keys for storage accounts including Site Recovery related ones. A similarly named account in the same resource group had been spared from deletion and was then targeted for key retrieval.</p>
+        <p class="step-desc">Those keys work independently of the service principal, so disabling it does not revoke them. Microsoft notes that the collection could enable future data access. It reports no Key Vault secret retrieval: the vault was deleted.</p>
+        <div class="step-code">
+          <span class="hl">Timing:</span> about 30 minutes after the final destruction<br>
+          <span class="hl">Calls:</span> 30+ successful ListKeys requests<br>
+          <span class="hl">Why it matters:</span> storage keys outlive the service principal<br>
+          <span class="hl">Key Vault:</span> deleted, with no secret retrieval reported
+        </div>
+        <div class="step-tags"><span class="stag">ListKeys</span><span class="stag">Storage Keys</span><span class="stag">T1552</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Treat any publicly posted credential as compromised.</strong> Removing a secret from an issue leaves it in the edit history and does nothing to invalidate it. Rotate first. Scan issues and pull request comments as well as code, since this one sat in an issue. Microsoft's advice is explicit that removal does not invalidate a credential.</div>
+        <div class="def-item"><strong>Replace client secrets with <a class="glossary-link" href="../glossary.html#term-service-account">workload identity</a>.</strong> A client secret works from anywhere. Managed identities and federated credentials remove the long-lived secret altogether, and they are the durable answer to this initial access path.</div>
+        <div class="def-item"><strong>Keep Contributor away from automation that does not need it.</strong> Three ordinary role assignments were enough for this entire chain. Restrict each service principal to what its workload requires, at the narrowest scope, and review group-granted roles, which are easy to miss in a per-identity review.</div>
+        <div class="def-item"><strong>Use resource locks and independent recovery.</strong> Locks and deletion protection blocked a few of the deletions, and the attempts on recovery locks failed. Put <code>CanNotDelete</code> locks on storage accounts, and keep backups in a service such as Azure Backup under an identity that production service principals cannot touch. Blob soft delete does not protect against deletion of the whole account.</div>
+        <div class="def-item"><strong>Disable shared key access on storage accounts.</strong> <code>ListKeys</code> gave this actor credentials that survive the service principal. Where workloads allow it, disable shared key authorization and use <a class="glossary-link" href="../glossary.html#term-entra-id">Entra ID</a>, and alert on <code>ListKeys</code> calls in bulk. If keys were listed in an incident, rotate them.</div>
+        <div class="def-item"><strong>Alert on the shift from reading to deleting.</strong> Microsoft recommends the <a class="glossary-link" href="../glossary.html#term-defender-for-cloud">Defender for Cloud</a> plans for Resource Manager, Storage, Key Vault, App Service and Databases. The behavior itself is simple to detect: a service principal with no history of deletion, deleting in bulk, seconds after a burst of reads. Pre-authorize someone to disable an identity without a meeting, because seven minutes leaves no time to convene one.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.microsoft.com/en-us/security/blog/2026/09/25/storm-3168-agentic-driven-cloud-attacks-using-compromised-service-principals/" target="_blank" rel="noopener">Microsoft - Storm-3168</a>
+        <a class="src-link" href="https://www.sysdig.com/blog/jadepuffer-agentic-ransomware-for-automated-database-extortion" target="_blank" rel="noopener">Sysdig - JADEPUFFER</a>
+        <a class="src-link" href="https://www.bleepingcomputer.com/news/security/jadepuffer-ransomware-used-ai-agent-to-automate-entire-attack/" target="_blank" rel="noopener">BleepingComputer - JADEPUFFER</a>
+        <a class="src-link" href="https://labs.cloudsecurityalliance.org/research/csa-research-note-storm3168-jadepuffer-azure-agentic-attack/" target="_blank" rel="noopener">Cloud Security Alliance - Research note</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1485/" target="_blank" rel="noopener">MITRE T1485</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">MITRE T1490</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../azure-security.html">Azure security</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="huggingface-openai-agent.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="ai-assisted-aws-72-hours.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
