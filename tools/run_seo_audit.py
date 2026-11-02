@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import re
 import sys
 from pathlib import Path
@@ -109,7 +110,9 @@ def audit_page(path: Path) -> dict:
         add("critical", "on-page", f"{rel}: missing meta description")
         desc = ""
     else:
-        desc = desc_m.group(1).strip()
+        # Length is the decoded text. An entity such as &amp; is one
+        # character in the SERP and five in the source.
+        desc = html.unescape(desc_m.group(1).strip())
         if not desc:
             add("critical", "on-page", f"{rel}: empty meta description")
 
