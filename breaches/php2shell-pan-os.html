@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
-    <meta name="description" content="How two PHP memory flaws became root on Palo Alto firewalls: a leaked disclosure, per-version exploits, Fragnesia, and a path into Active Directory.">
+    <meta name="description" content="The full PHP2Shell record: a bug class from 2004, a broken embargo, government shutdowns, failed mass scanning, and a tuned exploit that rooted Palo Alto firewalls.">
     <meta name="author" content="Cloud Security Office Hours">
-    <meta name="keywords" content="PHP2Shell / PAN-OS Firewalls 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, PHP2Shell, CVE-2026-109618, CVE-2026-109619, Fragnesia, CVE-2026-46300, PAN-OS, Palo Alto firewall compromise, CL-UNK-1280">
+    <meta name="keywords" content="PHP2Shell / PAN-OS Firewalls 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, PHP2Shell, CVE-2026-109618, CVE-2026-109619, CVE-2026-115560, Fragnesia, CVE-2026-46300, PAN-OS, Palo Alto firewall compromise, CL-UNK-1280, Elastic Beanstalk, Azure App Service, Cloud Run, mod_php, PHP-FPM">
     <title>PHP2Shell / PAN-OS Firewalls 2026 Kill Chain - CSOH</title>
 
     <link rel="canonical" href="https://csoh.org/breaches/php2shell-pan-os.html">
@@ -19,7 +19,7 @@
     <meta name="apple-mobile-web-app-title" content="CSOH">
 
     <meta property="og:title" content="PHP2Shell / PAN-OS Firewalls 2026 Breach Kill Chain">
-    <meta property="og:description" content="Mass scanning mostly failed, because PHP2Shell exploits must fit each build. Appliances share one build, and 25 Palo Alto systems were rooted.">
+    <meta property="og:description" content="From a 2004 bug class to rooted Palo Alto firewalls: the broken embargo, the shutdowns, why mass scanning failed, and who patches what across AWS, Azure and Google Cloud.">
     <meta property="og:site_name" content="Cloud Security Office Hours">
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
@@ -37,16 +37,22 @@
     <meta property="article:tag" content="PHP2Shell">
     <meta property="article:tag" content="CVE-2026-109618">
     <meta property="article:tag" content="CVE-2026-109619">
+    <meta property="article:tag" content="CVE-2026-115560">
     <meta property="article:tag" content="Fragnesia">
     <meta property="article:tag" content="CVE-2026-46300">
     <meta property="article:tag" content="PAN-OS">
     <meta property="article:tag" content="Palo Alto firewall compromise">
     <meta property="article:tag" content="CL-UNK-1280">
+    <meta property="article:tag" content="Elastic Beanstalk">
+    <meta property="article:tag" content="Azure App Service">
+    <meta property="article:tag" content="Cloud Run">
+    <meta property="article:tag" content="mod_php">
+    <meta property="article:tag" content="PHP-FPM">
     <meta property="og:url" content="https://csoh.org/breaches/php2shell-pan-os.html">
     <meta property="og:image" content="https://csoh.org/img/og/breaches/php2shell-pan-os.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="PHP2Shell / PAN-OS Firewalls 2026 Breach Kill Chain">
-    <meta name="twitter:description" content="Mass scanning mostly failed, because PHP2Shell exploits must fit each build. Appliances share one build, and 25 Palo Alto systems were rooted.">
+    <meta name="twitter:description" content="From a 2004 bug class to rooted Palo Alto firewalls: the broken embargo, the shutdowns, why mass scanning failed, and who patches what across AWS, Azure and Google Cloud.">
     <meta name="twitter:image" content="https://csoh.org/img/og/breaches/php2shell-pan-os.jpg">
 
     <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
@@ -66,8 +72,8 @@
 {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
-  "headline": "PHP2Shell / PAN-OS - Two PHP Memory Bugs → A Disclosure That Leaked Early → Exploits Tuned Per Firmware Version → Root in Under 15 Minutes → The Firewall Manager, Then Active Directory",
-  "description": "How two PHP memory flaws became root on Palo Alto firewalls: a leaked disclosure, per-version exploits, Fragnesia, and a path into Active Directory.",
+  "headline": "PHP2Shell / PAN-OS - A Bug Class From 2004 → An Embargo That Broke in Stages → Mass Scanning That Mostly Failed → Exploits Tuned Per Firmware Version → 25 Palo Alto Systems Rooted → Active Directory",
+  "description": "The full PHP2Shell record: a bug class from 2004, a broken embargo, government shutdowns, failed mass scanning, and a tuned exploit that rooted Palo Alto firewalls.",
   "author": {
     "@type": "Organization",
     "name": "Cloud Security Office Hours",
@@ -95,8 +101,8 @@
   "articleSection": "Cloud Security Breach Analysis",
   "about": {
     "@type": "Event",
-    "name": "PHP2Shell and the PAN-OS management interface campaign",
-    "description": "Two memory-safety flaws in core PHP were disclosed in October 2026. On October 23 and 24 an operator chained a private exploit for them with a Linux kernel flaw to take root on Palo Alto Networks firewalls with internet-exposed management interfaces, then reached a firewall management server and Active Directory in a US government-affiliated network."
+    "name": "PHP2Shell vulnerabilities and the PAN-OS management interface campaign",
+    "description": "Two memory-safety flaws in core PHP were disclosed in October 2026 after the embargo broke. Mass scanning mostly failed because exploits must fit each deployment. On October 23 and 24 an operator chained a private exploit with a Linux kernel flaw to take root on Palo Alto Networks firewalls with internet-exposed management interfaces, then reached a firewall management server and Active Directory in a US government-affiliated network."
   },
   "mentions": [
     {
@@ -110,6 +116,18 @@
     {
       "@type": "Organization",
       "name": "Dream"
+    },
+    {
+      "@type": "Organization",
+      "name": "Amazon Web Services"
+    },
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Organization",
+      "name": "Google Cloud"
     },
     {
       "@type": "Organization",
@@ -346,15 +364,17 @@
       <span class="sev-badge sev-critical">Critical</span>
       <span class="prov-tag prov-blue">PHP / PAN-OS</span>
     </div>
-    <h2 class="inc-title">PHP2Shell / PAN-OS - Two PHP Memory Bugs &rarr; A Disclosure That Leaked Early &rarr; Exploits Tuned Per Firmware Version &rarr; Root in Under 15 Minutes &rarr; The Firewall Manager, Then Active Directory</h2>
-    <p class="inc-summary">PHP2Shell covers two memory-safety flaws in core PHP, <a class="glossary-link" href="../glossary.html#term-cve">CVE</a>-2026-109618 and CVE-2026-109619, each scored 9.2 under <a class="glossary-link" href="../glossary.html#term-cvss">CVSS</a> 4.0, with affected code reaching back to PHP 5.4. Calif reported the flaw to PHP on August 11, and OpenAI and Wiz then reported the same root cause or further attack vectors. The CVE IDs began circulating on October 20, before the fixes shipped on October 21, and Amazon has traced the first exploitation attempt to October 17, four days before disclosure. Mass exploitation then ran into a practical limit: a working exploit has to fit the target's exact PHP build and configuration. As of October 28 Wordfence knew of no WordPress site compromised this way, despite more than 77,000 related requests. <strong>Appliances are the exception, because every device on a release runs the same build.</strong> On October 23 and 24 an operator used a private exploit tuned to specific PAN-OS versions, chained it with the Fragnesia Linux kernel flaw, and took root on Palo Alto Networks firewalls with internet-exposed management interfaces. Dream recovered the operator's toolkit and reports 25 systems rooted across the United States, Japan, Taiwan and South Korea, including a firewall management server in a US government-affiliated network, from which the operator reached <a class="glossary-link" href="../glossary.html#term-active-directory">Active Directory</a>. Unit 42 says it independently verified the tooling and the reported results. Most of what follows in the directory has an unknown outcome, and the page says so where it applies.</p>
+    <h2 class="inc-title">PHP2Shell / PAN-OS - A Bug Class From 2004 &rarr; An Embargo That Broke in Stages &rarr; Mass Scanning That Mostly Failed &rarr; Exploits Tuned Per Firmware Version &rarr; 25 Palo Alto Systems Rooted &rarr; Active Directory</h2>
+    <p class="inc-summary">PHP2Shell covers two memory-safety flaws in core PHP, <a class="glossary-link" href="../glossary.html#term-cve">CVE</a>-2026-109618 and CVE-2026-109619, each scored 9.2 under <a class="glossary-link" href="../glossary.html#term-cvss">CVSS</a> 4.0, with affected code reaching back to PHP 5.4. The bug class dates to 2004, and a 2024 audit saw the problem without proving it could be exploited. Calif reported it to PHP on August 11, and OpenAI and Wiz followed with the same root cause or further attack vectors. The CVE IDs leaked on October 20, the embargo broke in stages, and governments across Europe pulled services offline as a precaution. Amazon reported the earliest known attempt, against a honeypot, dated October 17. Mass exploitation then ran into a practical limit: a working exploit has to fit the target's build, configuration and worker model. As of October 28 Wordfence knew of no WordPress site compromised this way, despite more than 77,000 related requests. <strong>Tenable points to the exception: appliances, where many devices share one build, so one calibrated exploit can reach them.</strong> On October 23 and 24 an operator used a private exploit tuned to specific PAN-OS versions, chained it with the Fragnesia Linux kernel flaw, and took root on Palo Alto Networks firewalls with internet-exposed management interfaces. Dream recovered the toolkit and reports 24 of 240 targeted firewalls rooted plus a 25th system, a firewall management server in a US government-affiliated network, from which the operator reached <a class="glossary-link" href="../glossary.html#term-active-directory">Active Directory</a>. Unit 42 says it independently verified the tooling and results. This page runs in order: the flaws and the disclosure, the scanning and first working exploits, the PAN-OS kill chain, then what changed on cloud platforms and what is still unresolved.</p>
     <div class="inc-stats">
-      <div class="inc-stat"><strong>25 systems</strong> rooted in the documented campaign, per Dream</div>
+      <div class="inc-stat"><strong>25 systems</strong> rooted in the PAN-OS campaign, per Dream</div>
       <div class="inc-stat"><strong>Under 15 minutes</strong> from unauthenticated connection to persistent root webshell</div>
-      <div class="inc-stat"><strong>22.6 million</strong> exposed PHP instances potentially vulnerable, per Cortex Xpanse</div>
-      <div class="inc-stat"><strong>Threat actor:</strong> CL-UNK-1280, Unit 42's tracking name as cited by Dream; assessed Chinese-speaking</div>
+      <div class="inc-stat"><strong>20 requests or fewer</strong> for the exploit that won the Steal My Bitcoin challenge, by the winner's account</div>
+      <div class="inc-stat"><strong>Under 53%</strong> of initially affected organizations still vulnerable after a week, per Wiz</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> CL-UNK-1280 for the PAN-OS campaign, Unit 42's name as cited by Dream; assessed Chinese-speaking</div>
     </div>
     <p class="inc-summary"><strong>Disclosure:</strong> research published by Wiz is one of the sources cited on this page, and the site's author works at Wiz. Every source is linked so you can read it directly.</p>
+    <a class="pm-link" href="https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/" target="_blank" rel="noopener">📄 PHP Foundation - Release and embargo account ↗</a>
     <a class="pm-link" href="https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers" target="_blank" rel="noopener">📄 Dream - Chained PHP2Shell exploit roots 25 servers ↗</a>
     <a class="pm-link" href="https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/" target="_blank" rel="noopener">📄 Unit 42 - Threat brief on PHP2Shell ↗</a>
     <a class="pm-link" href="https://security.paloaltonetworks.com/CVE-2026-109618" target="_blank" rel="noopener">📄 Palo Alto Networks - Product advisory ↗</a>
@@ -362,9 +382,140 @@
   </div>
   <div class="kill-chain">
 
-    <div class="phase-lbl ph-recon">🔍 Reconnaissance: 19,000 Firewalls Narrowed to 240</div>
+    <div class="phase-lbl ph-recon">🕰️ Background: A Bug Class From 2004</div>
     <div class="kc-step step-r">
       <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The bug class dates to 2004, and a 2024 audit saw the problem without proving it could be exploited</div>
+        </div>
+        <p class="step-desc">Calif's write-up starts with Stefan Esser's 2004 memory-limit <a class="glossary-link" href="../glossary.html#term-rce">remote code execution</a> bug. A PHP bug report filed in November 2019 described out-of-memory conditions from long multipart variables. In 2024 an audit by OSTIF and Quarkslab turned up a related issue, and a PHP core developer fixing one of its findings saw the first signs of the problem behind CVE-2026-109618. The PHP Foundation says a potential exploit was theorized then, with no concrete vectors found, and Calif says the lack of proven exploitation is why it stayed unfixed.</p>
+        <p class="step-desc">The 2026 work began from that history. Calif joined OpenAI's Patch the Planet initiative on July 30, found its first out-of-memory trigger on August 1, reported to PHP on August 11, and saw PHP confirm its proof of concept on August 15. Calif says an <a class="glossary-link" href="../glossary.html#term-llm">LLM</a> assistant helped search for memory-limit bypasses, an audit agent spotted the ordering bug in PHP's hash table code, and a model generalized that pattern into the session upload-progress finding. Its author argues the models needed steering from someone who knew the target's vulnerability history.</p>
+        <p class="step-desc">OpenAI independently reported the same root cause, and further attack vectors followed from Wiz on August 24 and OpenAI on September 18. Wiz says it used Gemini 4 Argon, GPT-5.6 Sol and its own Atlas tooling. Calif reports pre-authentication code execution against specific versions of WordPress, Drupal, Joomla, MediaWiki, Magento and Nextcloud. Fixes shipped about ten weeks after the first report.</p>
+        <div class="step-code">
+          <span class="hl">2004:</span> Stefan Esser's memory-limit remote code execution<br>
+          <span class="hl">2019:</span> PHP bug 78876, out-of-memory conditions from long multipart variables<br>
+          <span class="hl">2024:</span> OSTIF and Quarkslab audit; first signs of the problem, no concrete vectors<br>
+          <span class="hl">August 11, 2026:</span> Calif's first report to PHP<br>
+          <span class="hl">October 21, 2026:</span> fixed releases published
+        </div>
+        <div class="step-tags"><span class="stag">Stefan Esser</span><span class="stag">Quarkslab</span><span class="stag">Patch the Planet</span><span class="stag"><a class="glossary-link" href="../glossary.html#term-ai">AI</a>-Assisted Discovery</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-recon">🧬 Background: What the Flaws Do</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Both CVEs come from what PHP leaves behind when a request is interrupted, and the risk depends on how PHP is deployed</div>
+        </div>
+        <p class="step-desc">CVE-2026-109618 comes from PHP's use of <code>longjmp()</code> to escape on an out-of-memory error. If the allocation fails while request memory is only partly set up, request shutdown can read or branch on invalid state. PHP's advisory lists several ways to force that failure with an ordinary request: a multipart request with no usable content length gets past <code>post_max_size</code>, a part can carry unlimited headers, and empty file fields with nested names multiply allocations without counting toward <code>max_file_uploads</code>.</p>
+        <p class="step-desc">CVE-2026-109619 is stale state: a worker keeps global pointers into memory owned by a previous request. Exploiting it takes a producer request that leaves the state behind and a consumer request that reads it before initialization, and both must reach the same worker. Session upload progress can play both roles, is on by default, and does not need the application to call <code>session_start()</code>. Wiz says the flaws can also disclose live worker memory through an oversized <code>PHPSESSID</code> cookie, with no code execution at all, and that this memory may hold passwords, tokens and API keys from other requests.</p>
+        <p class="step-desc">Deployment decides a great deal. PHP rates Apache mod_php highest because shutdown runs even when startup fails, so the attack lands before any application code runs, and it validated full code execution there with default limits. PHP-FPM exits the child on a startup failure, which limits exposure. The official 9.2 score reflects high attack complexity and attack requirements. The 10.0 that circulated with the leak was wrong.</p>
+        <div class="step-code">
+          <span class="hl">Apache mod_php:</span> full code execution validated with default limits; PHP's highest risk<br>
+          <span class="hl">PHP-FPM:</span> no complete exploit shown for 109618; upload-progress path validated with a suitable application operation<br>
+          <span class="hl">FrankenPHP:</span> likely susceptible by source analysis, per PHP<br>
+          <span class="hl">LiteSpeed (LSAPI):</span> application-specific exploits likely, not validated<br>
+          <span class="hl">Fixed releases:</span> 8.5.12, 8.4.27, 8.3.36, 8.2.35<br>
+          <span class="hl">End of life:</span> source backports for 7.4, 8.0 and 8.1; no PHP project fix for 5.4 to 7.3
+        </div>
+        <div class="step-tags"><span class="stag">longjmp</span><span class="stag">Use-After-Free</span><span class="stag">Memory Disclosure</span><span class="stag">mod_php</span><span class="stag">PHP-FPM</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-recon">📣 Disclosure: An Embargo That Broke in Stages</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The CVE IDs leaked, PHP moved its release up a day, and the embargo kept breaking</div>
+        </div>
+        <p class="step-desc">Tags and tarballs for the fixed releases were built on October 19, with publication planned for 14:00 UTC on October 22. At about 15:00 UTC on October 20 the two CVE IDs began circulating online, with a wrong release time and the wrong CVSS score, and PHP says no technical details leaked. PHP moved the release to 14:00 UTC on October 21. That left about 23 hours with a public warning and no installable patch.</p>
+        <p class="step-desc">More breaks followed. Around 20:00 UTC on October 20 Calif mistakenly published a video of its proof of concept, and copies spread after it was deleted. The PHP Foundation says the video helped speed up other proofs of concept, and that mitigation advice given to critical infrastructure providers from about 23:00 UTC may also have leaked. Amazon puts the earliest proofs of concept at around 02:00 UTC on October 21. By the Foundation's account, Chainguard published images containing the fix at 07:41 UTC, more than six hours before the coordinated release, and it calls that a unilateral break of the embargo.</p>
+        <p class="step-desc">One attempt predates all of this. Amazon found it in its MadPot honeypots dated October 17, from an address tied to a commercial anonymization network. Amazon says it is unclear whether these early attempts would have succeeded on real systems, or how the actor got exploit details ahead of disclosure.</p>
+        <div class="step-code">
+          <span class="hl">October 17:</span> earliest attempt found in Amazon's MadPot telemetry<br>
+          <span class="hl">October 19:</span> tags and tarballs built, not published<br>
+          <span class="hl">October 20, ~15:00 UTC:</span> CVE IDs circulate; release moved up a day<br>
+          <span class="hl">October 20, ~20:00 UTC:</span> Calif's video published by mistake<br>
+          <span class="hl">October 21, 03:02 UTC:</span> Cloudflare <a class="glossary-link" href="../glossary.html#term-waf">WAF</a> protections active by default<br>
+          <span class="hl">October 21, 07:41 UTC:</span> Chainguard publishes fixed images, per the PHP Foundation<br>
+          <span class="hl">October 21, 13:31 UTC:</span> fixed releases begin to publish
+        </div>
+        <div class="step-tags"><span class="stag">Embargo</span><span class="stag">Chainguard</span><span class="stag">MadPot</span><span class="stag">Coordinated Disclosure</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">🏛️ Reaction: Patch or Go Offline</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Agencies told organizations to patch or go offline, and many pulled services before any confirmed exploitation</div>
+        </div>
+        <p class="step-desc"><a class="glossary-link" href="../glossary.html#term-cisa">CISA</a> told organizations that could not update immediately, or that still ran PHP 8.1 or earlier, to take PHP systems offline until patched. The NSA said much the same on October 21 and the FBI on October 23, and the FBI, like CISA, told organizations to look for vendor products that bundle PHP. The UK's NCSC warned against limiting discovery to outdated versions.</p>
+        <p class="step-desc">Governments across Europe went further on October 21. eBuilder Security's round-up of official statements lists Germany's federal IT provider ITZBund, French prefecture websites, Belgian foreign ministry sites, the Czech government and Finland's state IT centre Valtori. The Dutch list was the longest: NCSC-NL took down its own site, and the Port of Rotterdam, Overheid.nl, the KNVB and many hospitals followed. SecurityWeek reported 32 UK services unavailable and four partly unavailable, largely as a precaution. As of October 22 that round-up described the shutdowns reported so far as precautionary, with no government reporting a breach. Belgium's foreign ministry acted after reports of attacks, though its cybersecurity centre had recorded none against Belgian sites.</p>
+        <p class="step-desc">Assessments then cooled. By October 23 NCSC-NL said exploitation was complex and that large-scale exploitation was less likely than it had estimated, while still telling organizations to patch at once. CISA added both CVEs to its <a class="glossary-link" href="../glossary.html#term-kev">Known Exploited Vulnerabilities</a> catalog on October 26 with a federal deadline of October 29. The Register notes the listing does not say how many production systems were breached.</p>
+        <div class="step-code">
+          <span class="hl">CISA, October 21:</span> update, or take PHP systems offline; applies to PHP 8.1 and earlier too<br>
+          <span class="hl">NSA, October 21:</span> inventory, patch, or take the system offline<br>
+          <span class="hl">FBI, October 23:</span> inventory vendor products that bundle PHP<br>
+          <span class="hl">Offline:</span> Germany, France, Belgium, Czech Republic, Finland, Netherlands; UK services<br>
+          <span class="hl">NCSC-NL, October 23:</span> large-scale exploitation less likely than estimated<br>
+          <span class="hl"><a class="glossary-link" href="../glossary.html#term-cisa-kev">CISA KEV</a>, October 26:</span> both CVEs, federal deadline October 29
+        </div>
+        <div class="step-tags"><span class="stag">CISA</span><span class="stag">NSA</span><span class="stag">FBI</span><span class="stag">NCSC</span><span class="stag">Precautionary Shutdowns</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">📡 Mass Scanning: Loud and Mostly Unsuccessful</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Attempts ran into the millions, and little of what looked like exploitation is shown to have worked</div>
+        </div>
+        <p class="step-desc">SecurityWeek reported that attempts ran into the millions. Delft University's <a class="glossary-link" href="../glossary.html#term-threat-intelligence">Threat Intelligence</a> Lab tracked more than 50,000 exploitation requests from over 600 addresses across 70 countries, and 171 of those addresses went beyond probing to send exploit code or droppers. Wordfence recorded over 77,000 related requests from more than 2,000 addresses and, as of October 28, knew of no compromised WordPress site. Cato Networks said about 96% of the attacks it blocked targeted CVE-2026-109618.</p>
+        <p class="step-desc">Much of that traffic failed on the targets it hit, and success depended on the target. As of October 27 Wiz's telemetry showed no successful end-to-end exploitation: two variants of an open-source kit hit request-size limits or failed to obtain memory addresses in the attempts it captured, even though two of those same source addresses succeeded against the honeypots in the next step. A PHP2Shell-branded tool relied on session poisoning and a separate local file inclusion endpoint, exploiting neither CVE. Arctic Wolf saw similar requests that appeared to reuse older session-poisoning and deserialization tricks.</p>
+        <p class="step-desc">SOCRadar found an operator's open server holding a lab-tested exploit for PHP 8.4.26 under mod_php, with a calibration profile for the official Apache container image. It depended on a debug-style setup: visible errors, a very low memory limit and a single Apache worker. The operator screened about 20 live sites and probed 11 closely, and none met the preconditions. Hunt.io counted 123 servers targeted from that host with none exploited. Sophos saw a blocked attempt to install Potassium, which it believes is a Mirai variant, and Hunt.io separately attributes the PHP2Shell traffic it observed to a Mirai-style botnet active since at least May.</p>
+        <p class="step-desc">Attribution is thin. CYFIRMA reports a suspected North Korean effort, based on Korean-language operator chat, targeting pattern and past Lazarus tradecraft, with 216 hosts on a captured target list and 581 claimed by the operators. It says claims of web-shell deployment are self-reported and not confirmed per host. Its fourth version raised confidence in the Lazarus link from moderate to high without explanation, and without reporting the infrastructure overlap or confirmed compromises its first version said would raise it. That first version cautioned that language alone could reflect a Korean-speaking criminal crew. CISA's alert names no actor.</p>
+        <div class="step-code">
+          <span class="hl">Delft University:</span> 50,000+ requests, 600+ addresses, 70 countries; 171 sent exploits or droppers<br>
+          <span class="hl">Wordfence:</span> 77,000+ requests, no compromised WordPress site as of October 28<br>
+          <span class="hl">Wiz:</span> no end-to-end exploitation in its telemetry as of October 27<br>
+          <span class="hl">SOCRadar:</span> about 20 sites screened, none met the preconditions<br>
+          <span class="hl">CYFIRMA:</span> suspected DPRK; web-shell claims self-reported
+        </div>
+        <div class="step-tags"><span class="stag">Scanning</span><span class="stag">Failed Exploits</span><span class="stag">Mirai</span><span class="stag">Unconfirmed Attribution</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🎯 Working Exploits: Favorable Targets First</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Working exploits appeared within days, and each needed the right conditions or tuning</div>
+        </div>
+        <p class="step-desc">The first solid proof came from honeypots. On October 24 Adel Karimi's sensors recorded 35 shells across three targets running PHP 8.4.26 under single-worker Apache mod_php, from two source addresses. The report ties each shell to an execution-stage request and a <code>/bin/sh</code> process started by an Apache worker, with memory leaks guiding the chain to each target's randomized layout. The activity fits CVE-2026-109618, attackers tried to fetch more with PHP, curl and wget, and no second stage was downloaded. Karimi says this deliberately favorable profile does not measure reliability on other worker counts, builds or applications. GreyNoise later said it had seen at least six successful exploitations.</p>
+        <p class="step-desc">James Pavur then tested the hard version of the question. His Steal My Bitcoin challenge, launched on October 24, offered Bitcoin for code execution on a vulnerable server behind Nginx with a 1 MB request limit. After Pavur apparently added a PHP endpoint around 13:00 UTC on October 25, UK pentester Jaydip Modhwadia won at 15:47 UTC. By his account, his Python script needed at most 20 HTTP requests, and it got past ASLR, which early reports had treated as a major barrier. Alon Gal of Hudson Rock said this shows PHP2Shell can be weaponized against a live target, and cautioned that it was a sophisticated, target-specific exploit and no sign that autonomous AI agents could compromise PHP servers at scale.</p>
+        <p class="step-desc">Other teams reached the same place. Tenable says Trail of Bits reported exploits against PHP 8.2 through 8.5, with demo shells on MediaWiki, Symfony, Laravel and phpBB. VulnCheck built one for x86-64 with ASLR on and error display off, available only to its customers. Tenable's own week of testing found exploits had to be fitted to each target, and five sites it left exposed had not been compromised as of October 29, though four of them came down on October 24. Researchers still disagree on how much of a barrier that is, and Wiz expects it to shrink over time.</p>
+        <div class="step-code">
+          <span class="hl">Honeypots:</span> 35 shells, three targets, single-worker mod_php, PHP 8.4.26<br>
+          <span class="hl">Second stage:</span> none downloaded<br>
+          <span class="hl">Steal My Bitcoin:</span> won October 25, 20 requests or fewer by the winner's account, ASLR bypassed<br>
+          <span class="hl">Commercial:</span> VulnCheck exploit for x86-64 with ASLR on, customers only<br>
+          <span class="hl">Reliability:</span> not measured on other worker counts, builds or applications
+        </div>
+        <div class="step-tags"><span class="stag">Honeypots</span><span class="stag">Steal My Bitcoin</span><span class="stag">ASLR Bypass</span><span class="stag">CVE-2026-109618</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-recon">🔍 The PAN-OS Chain, Reconnaissance: 19,000 Firewalls Narrowed to 240</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">FOFA listed about 19,000 internet-facing PAN-OS firewalls, and a country and version filter cut that to 240</div>
@@ -384,8 +535,8 @@
     </div>
 
     <div class="phase-lbl ph-recon">🧰 Resource Development: An Exploit Calibrated to the Firmware</div>
-    <div class="kc-step step-o">
-      <div class="step-num">02</div>
+    <div class="kc-step step-r">
+      <div class="step-num">08</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">The exploit shipped with a profile for each PAN-OS version, which is what made one tool reusable</div>
@@ -393,7 +544,7 @@
         </div>
         <p class="step-desc">Public proofs of concept were a poor guide to this bug. PHP's security team said it identified no functional exploit at the time of release, and Tenable spent a week showing why: the memory layout an exploit relies on shifts with the PHP build, server API, extensions and runtime settings. Five deliberately vulnerable sites Tenable exposed to the internet had not been compromised as of October 29, though four of them came down on October 24, and its own working exploit needed tuning to one setup.</p>
         <p class="step-desc">An appliance removes that obstacle. Dream recovered 11 JSON version profiles: two for the 11.1 branch on PHP 7.4.33 and nine for 12.1 and 12.2 on PHP 8.0.30. One of the nine had been calibrated against a running virtual machine, and the rest used offsets derived from the binary without live testing. Tenable's advice for appliances is to go by the vendor's build, since PHP version numbers do not apply.</p>
-        <p class="step-desc">The <a class="glossary-link" href="../glossary.html#term-ai">AI</a> angle is narrower than the headlines. Dream found Claude Code installed in the attack infrastructure, the aiscan platform configured with DeepSeek and Kimi, and scripts whose structure suggests AI-assisted development. It also says it has no direct evidence that AI tools wrote the exploit or the post-exploitation scripts, and that the operation does not appear fully autonomous.</p>
+        <p class="step-desc">The AI angle is narrower than the headlines. Dream found Claude Code installed in the attack infrastructure, the aiscan platform configured with DeepSeek and Kimi, and scripts whose structure suggests AI-assisted development. It also says it has no direct evidence that AI tools wrote the exploit or the post-exploitation scripts, and that the operation does not appear fully autonomous.</p>
         <div class="step-code">
           <span class="hl">Profiles:</span> 11 JSON files, one per tested PAN-OS version<br>
           <span class="hl">11.1 branch:</span> PHP 7.4.33, 2 provisional profiles<br>
@@ -405,14 +556,14 @@
     </div>
 
     <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: No Credentials Needed</div>
-    <div class="kc-step step-y">
-      <div class="step-num">03</div>
+    <div class="kc-step step-o">
+      <div class="step-num">09</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">A staged exploit against PHP's upload-progress handling gave code execution on the management web server</div>
           <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing Application</a>
         </div>
-        <p class="step-desc">Both flaws concern what PHP leaves behind after a fatal error. For CVE-2026-109618, PHP updates a hash table's counters before allocating the key, so an allocation that exceeds <code>memory_limit</code> abandons a half-built entry that shutdown cleanup still processes. CVE-2026-109619 leaves worker-wide state pointing at freed memory, which a later request on the same worker can reach. PHP processes the request before any application code runs, so application-level authentication offers no protection.</p>
+        <p class="step-desc">The flaws work here the way the background steps describe. PHP processes the request before any application code runs, so the management interface's own login offers no protection.</p>
         <p class="step-desc">Dream describes a custom build aimed at PHP's <code>session.upload_progress</code> mechanism on the PAN-OS management web server: memory exhaustion, an information leak, a stale-reference setup, then a final request that yields code execution as the low-privileged <code>nobody</code> user. Palo Alto's advisory scopes the issue to the management web interface, meaning the HTTPS web UI and XML API, and says GlobalProtect and Captive Portal are not impacted.</p>
         <div class="step-code">
           <span class="hl">Flaws:</span> CVE-2026-109618 (out-of-memory corruption), CVE-2026-109619 (stale global state), both CVSS 4.0 9.2<br>
@@ -425,15 +576,15 @@
     </div>
 
     <div class="phase-lbl ph-priv">⬆️ <a class="glossary-link" href="../glossary.html#term-privilege-escalation">Privilege Escalation</a>: Fragnesia</div>
-    <div class="kc-step step-p">
-      <div class="step-num">04</div>
+    <div class="kc-step step-y">
+      <div class="step-num">10</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">A Linux kernel flaw overwrote the <a class="glossary-link" href="../glossary.html#term-pam">PAM</a> configuration, so su root needed no password</div>
           <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1068/" target="_blank" rel="noopener">T1068 - Exploitation for Privilege Escalation</a>
         </div>
         <p class="step-desc">A shell as <code>nobody</code> on a firewall gets an attacker very little, so the operator brought a second exploit. CVE-2026-46300, known as Fragnesia, is a privilege-escalation flaw in the kernel's XFRM ESP-in-TCP code. Dream says it was used to overwrite <code>/etc/pam.d/su</code> to accept all authentication, after which <code>su root</code> succeeded without a password.</p>
-        <p class="step-desc">Dream says the final stage's single HTTP request carried both exploits, with no credentials, and that the chain from an unauthenticated HTTPS connection to a persistent root webshell takes under 15 minutes. A batch runner worked five targets at a time with a 30-minute timeout on each, and 24 of the 240 were rooted. <a class="glossary-link" href="../glossary.html#term-cisa">CISA</a> added Fragnesia to its <a class="glossary-link" href="../glossary.html#term-kev">Known Exploited Vulnerabilities</a> catalog on October 28.</p>
+        <p class="step-desc">Dream says the final stage's single HTTP request carried both exploits, with no credentials, and that the chain from an unauthenticated HTTPS connection to a persistent root webshell takes under 15 minutes. A batch runner worked five targets at a time with a 30-minute timeout on each, and 24 of the 240 were rooted. CISA added Fragnesia to its Known Exploited Vulnerabilities catalog on October 28.</p>
         <div class="step-code">
           <span class="hl">Flaw:</span> CVE-2026-46300 (Fragnesia), XFRM ESP-in-TCP<br>
           <span class="hl">Method:</span> overwrite /etc/pam.d/su so su root accepts anything<br>
@@ -445,8 +596,8 @@
     </div>
 
     <div class="phase-lbl ph-persist">🔐 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>: Park Most, Work a Few</div>
-    <div class="kc-step step-b">
-      <div class="step-num">05</div>
+    <div class="kc-step step-p">
+      <div class="step-num">11</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">Most victims received a 103-byte webshell and were left alone</div>
@@ -465,8 +616,8 @@
     </div>
 
     <div class="phase-lbl ph-exec">🔀 Command and Control: The Firewall as a Bridge</div>
-    <div class="kc-step step-c">
-      <div class="step-num">06</div>
+    <div class="kc-step step-b">
+      <div class="step-num">12</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">An eight-port reverse SSH tunnel put the internal network within the operator's reach</div>
@@ -485,8 +636,8 @@
     </div>
 
     <div class="phase-lbl ph-cred">🔑 Credential Access: What a Firewall Holds</div>
-    <div class="kc-step step-g">
-      <div class="step-num">07</div>
+    <div class="kc-step step-c">
+      <div class="step-num">13</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">Root decrypted the LDAP <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> and exposed the private keys and SAML settings on the device</div>
@@ -505,8 +656,8 @@
     </div>
 
     <div class="phase-lbl ph-exec">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a>: The Manager of Every Firewall</div>
-    <div class="kc-step step-r">
-      <div class="step-num">08</div>
+    <div class="kc-step step-g">
+      <div class="step-num">14</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">The same chain, sent through the tunnel, took the server that manages all of the organization's firewalls</div>
@@ -523,8 +674,8 @@
     </div>
 
     <div class="phase-lbl ph-disco">🔍 Discovery: Directory Enumeration, Then Unknowns</div>
-    <div class="kc-step step-o">
-      <div class="step-num">09</div>
+    <div class="kc-step step-r">
+      <div class="step-num">15</div>
       <div class="step-body">
         <div class="step-hdr">
           <div class="step-title">LDAP enumeration of the directory is confirmed, and the outcome of the spray, backdoor accounts and SAML theft is unknown</div>
@@ -542,59 +693,132 @@
       </div>
     </div>
 
-    <div class="phase-lbl ph-impact">💥 Impact: The Wider Record, and What Was Walked Back</div>
-    <div class="kc-step step-y">
-      <div class="step-num">10</div>
+    <div class="phase-lbl ph-disco">☁️ Cloud Platforms: Who Owns the Patch</div>
+    <div class="kc-step step-o">
+      <div class="step-num">16</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Beyond PAN-OS the record shows huge exposure, real shells on honeypots, and several claims corrected</div>
-          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing Application</a>
+          <div class="step-title">On cloud platforms, whoever owns the runtime owns the patch, and the line moves from service to service</div>
         </div>
-        <p class="step-desc">Amazon found the earliest attempt in its MadPot honeypots on October 17, from an address tied to a commercial anonymization network. It says it is unclear whether the attempt would have succeeded on real systems, or how the actor got exploit details early. The PHP Foundation's account of the embargo describes several breaks: the CVE IDs began circulating at about 15:00 UTC on October 20 with no technical details, Calif mistakenly published a video of its proof of concept, and Chainguard published images containing the fix at 07:41 UTC on October 21, more than six hours before the coordinated release. Amazon puts the earliest proofs of concept at around 02:00 UTC that day.</p>
-        <p class="step-desc">On October 24 Adel Karimi's honeypots recorded 35 successful shell executions on PHP 8.4.26 under Apache mod_php, and Karimi cautioned that this single-worker profile is not a measure of reliability on other configurations. CISA added both CVEs to its Known Exploited Vulnerabilities catalog on October 26 with a federal deadline of October 29. Palo Alto Networks confirmed active exploitation of exposed management interfaces on October 29.</p>
-        <p class="step-desc">Several early claims did not hold. Sophos corrected a report of a successful Mirai-variant install to an attempt. Unit 42 retracted an October 23 update about an attack on a European government agency because it could not tie the initial access to these CVEs. Arctic Wolf saw PHP2Shell-themed requests that appeared to reuse older session-poisoning and deserialization tricks. The large exposure counts, 22.6 million from Cortex Xpanse and about 30.3 million from Censys, measure potentially vulnerable services, and a version match does not prove exploitability.</p>
-        <p class="step-desc">A separate flaw, CVE-2026-115560, had no patch when BleepingComputer reported it on October 26. It needs an unusual combination of configuration and application code, and PHP's interim mitigation is the same <code>session.upload_progress.enabled=0</code> setting.</p>
+        <p class="step-desc">The three big clouds drew the line in different places, and a managed service label does not settle it. On AWS, Amazon WorkMail was patched for customers. Elastic Beanstalk has updated platforms for PHP 8.2 through 8.5, which Managed Platform Updates apply at the next maintenance window, and everyone else must update the platform version. <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a> has no managed PHP runtime, so custom runtimes, container images and Bref users must redeploy. AWS cannot update running Lightsail instances in place, and tells customers to create new instances from updated blueprints and migrate. Amazon EMR on <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> is affected when clusters include Ganglia on releases up to 6.15.0, and CodeBuild's curated images carry the fix from October 30, which matters for builds that start a PHP server and use pinned or custom images.</p>
+        <p class="step-desc">On Azure, App Service on Linux, Static Web Apps and Logic Apps run updated built-in runtimes, and Linux apps on the Extended channel should move to Standard or Latest. The built-in PHP runtimes on App Service for Windows are end of life, so Microsoft says to move to Linux or bring a supported runtime. VMs and scale sets that use automatic guest patching or automatic OS image upgrades get fixes within their maintenance windows, on Linux distributions such as Azure Linux and Ubuntu. Microsoft updates PHP preinstalled on its hosted Azure DevOps images, image by image, while self-hosted agents and job containers are yours.</p>
+        <p class="step-desc">On Google Cloud, App Engine standard on PHP 8.2 or later is patched automatically, and older runtimes must upgrade. App Engine flexible needs a redeploy. Cloud Run and Cloud Run functions are patched automatically only with automatic base image updates enabled. <a class="glossary-link" href="../glossary.html#term-eks">GKE</a> is entirely on the customer. PHP 5.5, 7.2, 7.3, 7.4 and 8.1 runtimes will not be patched.</p>
+        <p class="step-desc">Two rules hold everywhere. Custom images and containers carry their own PHP, so updating the host does nothing for them. And a package update on disk leaves the vulnerable code running: Google notes that <code>libphp.so</code> and <code>php-fpm</code> stay resident in workers until they restart. Wiz's October 27 post says it had not seen successful end-to-end exploitation in its own telemetry, and that is a statement about its data at the time. A compromised worker runs with whatever identity the platform gave it, which is the reason to scope that identity tightly.</p>
         <div class="step-code">
-          <span class="hl">October 17:</span> first attempt in Amazon's MadPot telemetry<br>
-          <span class="hl">October 20:</span> CVE IDs begin circulating, no technical details<br>
-          <span class="hl">October 21:</span> fixes ship: 8.5.12, 8.4.27, 8.3.36, 8.2.35<br>
-          <span class="hl">October 24:</span> 35 shell executions on honeypots<br>
-          <span class="hl">October 26:</span> both CVEs added to <a class="glossary-link" href="../glossary.html#term-cisa-kev">CISA KEV</a><br>
-          <span class="hl">October 29:</span> Palo Alto confirms active exploitation
+          <span class="hl">Provider patched:</span> Amazon WorkMail; Static Web Apps and Logic Apps built-in runtimes; App Engine standard 8.2+<br>
+          <span class="hl">Provider patched, conditions apply:</span> Elastic Beanstalk with Managed Platform Updates; App Service on Linux on a supported version and channel; Cloud Run with automatic base image updates<br>
+          <span class="hl">You redeploy:</span> Lambda custom runtimes, Lightsail, App Engine flexible, GKE, EKS and <a class="glossary-link" href="../glossary.html#term-ecs">ECS</a> images, custom containers<br>
+          <span class="hl">You migrate:</span> App Service for Windows built-in PHP; PHP 8.1 and earlier<br>
+          <span class="hl">Check:</span> EMR on EC2 with Ganglia; pinned CodeBuild images; Azure DevOps job containers
         </div>
-        <div class="step-tags"><span class="stag">MadPot</span><span class="stag">CISA KEV</span><span class="stag">Honeypots</span><span class="stag">T1190</span></div>
+        <div class="step-tags"><span class="stag">AWS</span><span class="stag">Azure</span><span class="stag">Google Cloud</span><span class="stag">Containers</span><span class="stag">Shared Responsibility</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">📦 Hidden PHP: Products That Bundle It</div>
+    <div class="kc-step step-y">
+      <div class="step-num">17</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Warnings about bundled PHP held up, because vendors kept finding it in their own products</div>
+        </div>
+        <p class="step-desc">PAN-OS was the sharpest case and not the only one. Oracle's alert lists eight Communications products, Oracle Secure Backup and Solaris 11, and it was still adding products on October 26. Sophos took its legacy MyUTM licensing portal offline on October 21 and says it found no evidence of exploitation to date. AWS's own list includes Ganglia on EMR and WorkMail. NCSC-NL warned that PHP is embedded in appliances and management interfaces that administrators may not be able to update themselves.</p>
+        <p class="step-desc">Palo Alto's advisory also shows how a vendor scopes this. It lists the affected PAN-OS branches and fixed hotfixes, lists its cloud services as not currently affected, and says Cortex XCORE and WildFire Cloud were impacted until patched on October 21 and 22. Qualys data from more than 10,000 customers shows the scale of the inventory problem: of 156 million PHP installations with a known version, 110 million ran end-of-life releases from 5.4 to 8.1.</p>
+        <div class="step-code">
+          <span class="hl">Oracle:</span> 8 Communications products, Secure Backup, Solaris 11<br>
+          <span class="hl">Sophos:</span> MyUTM portal offline October 21, no evidence of exploitation<br>
+          <span class="hl">Palo Alto:</span> PAN-OS 10.2 through 12.2 affected; hotfixes listed by branch<br>
+          <span class="hl">Qualys:</span> 110 million of 156 million known-version installs end of life
+        </div>
+        <div class="step-tags"><span class="stag">Oracle</span><span class="stag">Sophos</span><span class="stag">Bundled PHP</span><span class="stag">End of Life</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">🧾 The Record So Far: Exposure, Patching, Corrections</div>
+    <div class="kc-step step-p">
+      <div class="step-num">18</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Exposure counts differ by more than 20 times, exposure fell quickly, and several early claims were withdrawn</div>
+        </div>
+        <p class="step-desc">Exposure figures depend on what is counted, and a version match does not prove exploitability. Silas Cutler roughly estimated 1.3 million potentially vulnerable hosts, Shodan showed about 1.9 million PHP hosts, VirusTotal about 5.1 million, Cortex Xpanse 22.6 million instances, Censys's dashboard about 30.3 million services on an affected version on October 29, per Tenable, and Bitsight nearly 37 million systems running PHP or related software.</p>
+        <p class="step-desc">Exposure fell quickly in the first week. Wiz says organizations with an exposed vulnerable instance fell by about 47.9%, though it cannot split that between patching, retirement and restricted access, and notes that changes in scan coverage can also move the numbers. Qualys counted only 199,000 instances patched in the first 12 hours. The PHP project published no fix for 5.4 through 7.3, so those installs need a vendor backport or an upgrade.</p>
+        <p class="step-desc">Several early claims did not hold. Sophos corrected a report of a successful Mirai-variant install to an attempt. Unit 42 retracted an October 23 update describing an attack on a European government agency, including stolen password hashes and an NTLM relay, because it could not tie the initial access to these CVEs. BankInfoSecurity notes that Sophos and Palo Alto Networks each reported working exploits and later retracted those claims.</p>
+        <p class="step-desc">The story is not finished. CVE-2026-115560 is a separate flaw that the October 21 releases do not fix. It affects applications that change <code>session.serialize_handler</code> to <code>php</code> at runtime with upload progress enabled, PHP calls exploitation unlikely in practice, and the fix is planned for a regular release. Datadog notes the counter-before-allocation pattern remains in PHP and expects more variants. PHP 8.4.27 and 8.5.12 also shipped a regression that can crash some SimpleXML applications, from an unrelated garbage collector fix.</p>
+        <div class="step-code">
+          <span class="hl">Exposure:</span> 1.3 million to 37 million, by method<br>
+          <span class="hl">Patching:</span> organizations exposed down about 47.9% in a week, per Wiz<br>
+          <span class="hl">Withdrawn:</span> Unit 42's European agency update; Sophos's Mirai report<br>
+          <span class="hl">Still open:</span> CVE-2026-115560, fix due in a regular release<br>
+          <span class="hl">Expected:</span> more variants, per Datadog
+        </div>
+        <div class="step-tags"><span class="stag">Exposure</span><span class="stag">Retractions</span><span class="stag">CVE-2026-115560</span></div>
       </div>
     </div>
 
     <div class="def-box">
       <h3>🛡 How to Defend Against This Chain</h3>
       <div class="def-items">
-        <div class="def-item"><strong>Take management interfaces off the internet.</strong> Everything in this chain began at a management interface reachable from anywhere. Palo Alto's guidance is to remove internet access immediately and restrict the interface to trusted internal addresses or a <a class="glossary-link" href="../glossary.html#term-bastion-host">jump box</a>. Apply the same rule to every appliance you run, whichever vendor made it, and alert when one becomes reachable.</div>
-        <div class="def-item"><strong>Patch the PHP that serves requests, then restart it.</strong> The fixed releases are 8.5.12, 8.4.27, 8.3.36 and 8.2.35, and PHP published source backports for 7.4, 8.0 and 8.1. Updating an application does not update its runtime. Rebuild container images, include software that bundles its own interpreter, restart every worker, and remember that the command-line PHP may differ from the one serving traffic. For appliances, follow the vendor's fixed build, such as the PAN-OS hotfixes in Palo Alto's advisory.</div>
-        <div class="def-item"><strong>Use interim settings only until the patch lands.</strong> PHP's mitigations include <code>session.upload_progress.enabled=0</code>, <code>memory_limit=-1</code> paired with a cgroup <code>memory.max</code>, and <code>fatal_error_backtraces=0</code> where supported. Avoid <code>RLIMIT_AS</code> and <code>RLIMIT_DATA</code>, which can trigger the allocation failures the exploit depends on. All of these reduce exposure, and none replaces the fixed release.</div>
-        <div class="def-item"><strong>Begin any investigation no later than October 17.</strong> That is Amazon's earliest published sighting. Look for web workers spawning shells, PHP memory-exhaustion errors reported at Unknown on line 0, Apache segmentation faults, POST requests containing <code>PHP_SESSION_UPLOAD_PROGRESS</code>, and unusually large <code>PHPSESSID</code> cookies. These signals do not confirm exploitation on their own. The flaws can also disclose process memory without any code execution, so rotate secrets that exposed workers handled even if you find no shell.</div>
+        <div class="def-item"><strong>Take management interfaces off the internet.</strong> Everything in the PAN-OS chain began at a management interface reachable from anywhere. Palo Alto's guidance is to remove internet access immediately and restrict the interface to trusted internal addresses or a <a class="glossary-link" href="../glossary.html#term-bastion-host">jump box</a>. Apply the same rule to every appliance you run, and alert when one becomes reachable.</div>
+        <div class="def-item"><strong>Find every PHP, then patch the one serving requests.</strong> Inventory AMIs, container images, <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> workloads, <a class="glossary-link" href="../glossary.html#term-serverless">serverless</a> functions, appliances and products that bundle PHP, and do not stop at old versions, as the NCSC warns. The fixed releases are 8.5.12, 8.4.27, 8.3.36 and 8.2.35, with source backports for 7.4, 8.0 and 8.1. The PHP project published no fix for 5.4 to 7.3, so those need a vendor backport or an upgrade, and PHP 8.2 itself reaches end of life on December 31, 2026. Compare the full package revision with your vendor's advisory, because backports do not always change the version. For appliances, follow the vendor's fixed build.</div>
+        <div class="def-item"><strong>Know who patches each cloud runtime.</strong> Check each service against the provider's bulletin instead of assuming that managed means patched. Turn on Managed Platform Updates and automatic base image updates where you rely on them, redeploy everything built from a custom image, and move off App Service for Windows built-in PHP and any runtime on 8.1 or earlier.</div>
+        <div class="def-item"><strong>Restart workers, and capture memory first if you see signs of probing.</strong> A package update on disk leaves vulnerable code running until PHP-FPM, Apache, FrankenPHP or LiteSpeed restarts. Google's guidance is to capture worker memory before patching or rebooting a server showing active probing or anomalous <code>PHPSESSID</code> cookies, because a restart destroys that evidence. During mass scanning almost every exposed host sees probes, so in practice reserve this for anomalous cookies or signs of compromise, isolate that host first, as the FBI advises, and do not let it hold up patching the rest.</div>
+        <div class="def-item"><strong>Treat a WAF as time, and do not call it a fix.</strong> AWS WAF, Azure WAF, <a class="glossary-link" href="../glossary.html#term-cloud-armor">Cloud Armor</a> and Cloudflare all shipped rules, and each vendor says they do not replace patching. Cloudflare says attackers mutated payloads to try to bypass its rules and that, for the related CVE-2026-115560, customers who changed <code>session.upload_progress.name</code> are not covered. Rules cover only traffic that passes through them, and rules in detection-only mode block nothing.</div>
+        <div class="def-item"><strong>Treat interim settings as partial.</strong> PHP's advisories say no configuration fully mitigates these flaws. Set <code>session.upload_progress.enabled=0</code> in <code>php.ini</code> or the pool configuration, not with <code>ini_set()</code> or <code>.user.ini</code>, and restart every worker. PHP advises leaving it off after patching if you do not use the feature, and it is also the interim answer to CVE-2026-115560. On PHP 8.5, also set <code>fatal_error_backtraces=0</code>. <code>memory_limit=-1</code> removes the predictable limit, but an allocation failure can still reach the bug, so pair it with a container or cgroup limit as an availability boundary, check that nothing restores a finite limit, and put one back after patching. Avoid <code>RLIMIT_AS</code> and <code>RLIMIT_DATA</code>, which can cause the failure you are trying to prevent.</div>
+        <div class="def-item"><strong>Look back further than the patch date.</strong> Begin no later than October 17, Amazon's earliest published sighting. Sophos recommends reviewing from August 1. Look for <code>Set-Cookie: PHPSESSID</code> values over 256 bytes, bursts of 50 to 150 <code>OPTIONS *</code> keep-alive connections, rapid interleaved 500 and 200 POST responses, POST requests containing <code>PHP_SESSION_UPLOAD_PROGRESS</code>, and <code>sh</code>, <code>curl</code> or <code>wget</code> spawned by a PHP worker. No single signal confirms exploitation. Memory disclosure may leave no shell at all, so rotate secrets that exposed workers handled.</div>
         <div class="def-item"><strong>Treat a rooted firewall as a directory compromise.</strong> On PAN-OS, hunt for <code>/unauth/php/change_password.php</code> and <code>/usr/local/lib/.panops/</code>. If you find either, assume the attacker holds the LDAP service account, the device's private keys and its configuration. Rotate those, reissue certificates, and review the directory for new users and machine accounts rather than stopping at the firewall.</div>
-        <div class="def-item"><strong>Fix the directory settings this operator went looking for.</strong> A <code>lockoutThreshold</code> of zero makes spraying free, a default <code>MachineAccountQuota</code> lets ordinary accounts add machines, and SAML configuration that skips certificate validation weakens assertion checking. Each one helps turn a foothold on a firewall into a path to the domain. On Linux hosts you run yourself, patch the kernel too: Fragnesia is what took this chain from a low-privileged worker to root.</div>
+        <div class="def-item"><strong>Fix the directory settings this operator went looking for.</strong> A <code>lockoutThreshold</code> of zero makes spraying free, a default <code>MachineAccountQuota</code> lets ordinary accounts add machines, and SAML configuration that skips certificate validation weakens assertion checking. Each one helps turn a foothold on a firewall into a path to the domain. On Linux hosts you run yourself, patch the kernel too: Fragnesia, public since May, is what took this chain from a low-privileged worker to root.</div>
       </div>
     </div>
 
     <div class="src-box">
       <h4>Primary Sources</h4>
       <div class="src-links">
+        <a class="src-link" href="https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/" target="_blank" rel="noopener">PHP Foundation - Release and embargo account</a>
+        <a class="src-link" href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w" target="_blank" rel="noopener">PHP - Advisory, RCE via OOM corruption</a>
+        <a class="src-link" href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp" target="_blank" rel="noopener">PHP - Advisory, RCE via stale global state</a>
+        <a class="src-link" href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">PHP - Release announcement</a>
+        <a class="src-link" href="https://scherzer.dev/Blog/20261022-php2shell-timeline" target="_blank" rel="noopener">Daniel Scherzer - PHP2Shell timeline</a>
+        <a class="src-link" href="https://calif.io/php2shell" target="_blank" rel="noopener">Calif - Discovery write-up</a>
+        <a class="src-link" href="https://php2shell.com" target="_blank" rel="noopener">PHP2Shell - Research disclosure</a>
+        <a class="src-link" href="https://www.wiz.io/blog/php2shell-php-rce" target="_blank" rel="noopener">Wiz - PHP2Shell research</a>
+        <a class="src-link" href="https://wiz.io/blog/php2shell-exploitation-so-far" target="_blank" rel="noopener">Wiz - Exploitation and remediation trends</a>
         <a class="src-link" href="https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers" target="_blank" rel="noopener">Dream - PAN-OS campaign</a>
         <a class="src-link" href="https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/" target="_blank" rel="noopener">Unit 42 - Threat brief</a>
         <a class="src-link" href="https://security.paloaltonetworks.com/CVE-2026-109618" target="_blank" rel="noopener">Palo Alto Networks - Advisory</a>
-        <a class="src-link" href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">PHP - Release announcement</a>
-        <a class="src-link" href="https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/" target="_blank" rel="noopener">PHP Foundation - Release and embargo account</a>
-        <a class="src-link" href="https://arcticwolf.com/resources/blog/php2shell-critical-php-vulnerabilities-enable-unauthenticated-remote-code-execution/" target="_blank" rel="noopener">Arctic Wolf - Exploitation analysis</a>
-        <a class="src-link" href="https://php2shell.com" target="_blank" rel="noopener">PHP2Shell - Research disclosure</a>
-        <a class="src-link" href="https://www.wiz.io/blog/php2shell-php-rce" target="_blank" rel="noopener">Wiz - PHP2Shell research</a>
-        <a class="src-link" href="https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/" target="_blank" rel="noopener">Datadog Security Labs - Analysis and detection</a>
+        <a class="src-link" href="https://aws.amazon.com/security/security-bulletins/2026-143-aws/" target="_blank" rel="noopener">AWS - Security bulletin 2026-143</a>
         <a class="src-link" href="https://aws.amazon.com/blogs/security/amazon-threat-intelligence-identifies-php2shell-exploitation-prior-to-public-disclosure-in-madpot/" target="_blank" rel="noopener">Amazon - Exploitation before disclosure</a>
+        <a class="src-link" href="https://www.microsoft.com/en-us/msrc/blog/2026/10/patch-now-php2shell-brotli-emudhra-guidance-for-customers" target="_blank" rel="noopener">Microsoft - MSRC guidance for customers</a>
+        <a class="src-link" href="https://devblogs.microsoft.com/devops/php2shell-and-azure-devops-what-to-check/" target="_blank" rel="noopener">Microsoft - Azure DevOps guidance</a>
+        <a class="src-link" href="https://cloud.google.com/blog/products/identity-security/responding-to-core-php-vulnerabilities-cve-2026-109618-cve-2026-109619" target="_blank" rel="noopener">Google Cloud - Response guidance</a>
+        <a class="src-link" href="https://blog.cloudflare.com/php-vulnerabilities-waf-protection/" target="_blank" rel="noopener">Cloudflare - WAF protections</a>
+        <a class="src-link" href="https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching" target="_blank" rel="noopener">CISA - PHP alert</a>
+        <a class="src-link" href="https://www.cisa.gov/news-events/alerts/2026/10/26/cisa-adds-two-known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener">CISA - KEV additions</a>
+        <a class="src-link" href="https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4630238/nsa-advisory-critical-patches-recommended-for-php-vulnerabilities/" target="_blank" rel="noopener">NSA - Advisory</a>
+        <a class="src-link" href="https://www.ic3.gov/PSA/2026/PSA261023" target="_blank" rel="noopener">FBI - Public service announcement</a>
+        <a class="src-link" href="https://www.ncsc.gov.uk/news/critical-security-issue-affecting-php" target="_blank" rel="noopener">UK NCSC - Alert</a>
+        <a class="src-link" href="https://www.ncsc.nl/en/alerts/update-php-vulnerabilities-remain-a-reason-for-immediate-patching" target="_blank" rel="noopener">NCSC-NL - Updated assessment</a>
+        <a class="src-link" href="https://github.com/NCSC-NL/php2shell" target="_blank" rel="noopener">NCSC-NL - PHP2Shell information repository</a>
+        <a class="src-link" href="https://www.oracle.com/security-alerts/alert-cve-2026-109618.html" target="_blank" rel="noopener">Oracle - Security alert</a>
+        <a class="src-link" href="https://www.sophos.com/en-us/security-advisories/sophos-sa-20261021-php2shell" target="_blank" rel="noopener">Sophos - Advisory</a>
+        <a class="src-link" href="https://github.com/0x4D31/honeypot-data/blob/main/reports/php2shell/2026-10-24-confirmed-rce.md" target="_blank" rel="noopener">Adel Karimi - Honeypot report</a>
+        <a class="src-link" href="https://socradar.io/blog/php2shell-exploit-tooling-attacker-server/" target="_blank" rel="noopener">SOCRadar - Exposed attacker server</a>
+        <a class="src-link" href="https://www.cyfirma.com/research/cyfirma-threat-advisory-suspected-dprk-campaign-staging-php2shell-targeting-against-global-php-infrastructure/" target="_blank" rel="noopener">CYFIRMA - Suspected DPRK advisory</a>
+        <a class="src-link" href="https://arcticwolf.com/resources/blog/php2shell-critical-php-vulnerabilities-enable-unauthenticated-remote-code-execution/" target="_blank" rel="noopener">Arctic Wolf - Exploitation analysis</a>
+        <a class="src-link" href="https://securitylabs.datadoghq.com/articles/php2shell-critical-vulnerabilities-in-php/" target="_blank" rel="noopener">Datadog Security Labs - Analysis and detection</a>
+        <a class="src-link" href="https://www.tenable.com/blog/php2shell-cve-2026-109618-cve-2026-109619-frequently-asked-questions-about-critical-php-remote" target="_blank" rel="noopener">Tenable - FAQ</a>
         <a class="src-link" href="https://www.tenable.com/blog/php2shell-one-week-later-why-one-exploit-doesnt-work-everywhere" target="_blank" rel="noopener">Tenable - One week later</a>
+        <a class="src-link" href="https://blog.qualys.com/vulnerabilities-threat-research/2026/10/20/php-announces-critical-security-release-for-two-vulnerabilities" target="_blank" rel="noopener">Qualys - Exposure and patching data</a>
+        <a class="src-link" href="https://www.theregister.com/a/5305429" target="_blank" rel="noopener">The Register - Steal My Bitcoin</a>
+        <a class="src-link" href="https://www.theregister.com/a/5305681" target="_blank" rel="noopener">The Register - CISA and Delft figures</a>
+        <a class="src-link" href="https://therecord.media/php2shell-successful-exploitation-reports-emerge" target="_blank" rel="noopener">The Record - GreyNoise and Dream</a>
         <a class="src-link" href="https://www.securityweek.com/php2shell-attacks-root-palo-alto-firewalls-but-fail-against-wordpress/" target="_blank" rel="noopener">SecurityWeek - PAN-OS and WordPress</a>
         <a class="src-link" href="https://www.securityweek.com/mirai-botnet-operators-join-php2shell-attacks-as-aslr-bypass-exploits-emerge/" target="_blank" rel="noopener">SecurityWeek - October 23 round-up</a>
+        <a class="src-link" href="https://www.securityweek.com/php2shell-exploitation-moves-from-probes-to-working-shells/" target="_blank" rel="noopener">SecurityWeek - Probes to working shells</a>
+        <a class="src-link" href="https://www.bankinfosecurity.com/honeypots-now-recording-in-the-wild-php2shell-exploits-a-33206" target="_blank" rel="noopener">BankInfoSecurity - Honeypots and retractions</a>
         <a class="src-link" href="https://www.bleepingcomputer.com/news/security/php2shell-security-flaws-now-sucessfully-exploited-in-the-wild/" target="_blank" rel="noopener">BleepingComputer - Exploited in the wild</a>
+        <a class="src-link" href="https://thehackernews.com/2026/10/php2shell-exploitation-hits-government.html" target="_blank" rel="noopener">The Hacker News - Scanning and exposure</a>
+        <a class="src-link" href="https://ebuildersecurity.se/en/cyber-news/php2shell-government-websites-offline-europe/" target="_blank" rel="noopener">eBuilder Security - European shutdowns</a>
       </div>
     </div>
 
@@ -604,9 +828,11 @@
   <h4>Related defense topics</h4>
   <div class="src-links">
     <a class="src-link" href="../vulnerability-management.html">Vulnerability management</a>
+    <a class="src-link" href="../aws-security.html">AWS security</a>
+    <a class="src-link" href="../azure-security.html">Azure security</a>
+    <a class="src-link" href="../gcp-security.html">GCP security</a>
     <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
     <a class="src-link" href="../incident-response.html">Incident response</a>
-    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
   </div>
 </div>
         <nav class="incident-pager" aria-label="Other breach kill chains">
