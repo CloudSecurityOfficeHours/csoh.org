@@ -150,6 +150,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-10-22 | 99 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.72s · CLS 0.009 · TBT 18ms · FCP 1.65s |
 | 2026-10-26 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.20s · CLS 0.009 · TBT 0ms · FCP 1.05s |
 | 2026-10-26 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.20s · CLS 0.000 · TBT 0ms · FCP 1.20s |
+| 2026-11-02 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 0.81s · CLS 0.000 · TBT 9ms · FCP 0.81s |
 
 ## How to use
 
