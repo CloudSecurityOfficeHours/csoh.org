@@ -171,7 +171,7 @@ Cross-cutting entry points that sit outside the topic menus (everything else liv
 
 | Resource | What it is |
 |---|---|
-| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->760+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
+| 🛡️ [Resources Directory](https://csoh.org/resources.html) | <!--count:resources_floor-->750+<!--/count--> tools, labs, CTFs, certifications - top-level nav link, auto-refreshed weekly |
 | 🔍 [Site-wide Search](https://csoh.org/search.html) | MiniSearch full-text index across every page, with section-anchor results and synonym expansion |
 
 ---
@@ -386,7 +386,7 @@ Version-control fundamentals - branching, commits, pull requests, and history hy
 The site's own security model as a worked example: the strict CSP and the rest of the security-header set, SRI on every shared asset, keyless OIDC deploys with no long-lived cloud credentials, the GitHub App / PAT split in CI, the URL-safety and broken-link gates, and the WAF and edge controls in front of all three origins. The fourth "Behind the Scenes" page - it is the security counterpart to the deploy, Actions, and Terraform explainers.
 
 ### 📚 Resources ([`resources.html`](https://csoh.org/resources.html))
-Comprehensive catalog of **<!--count:resources_floor-->760+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->8<!--/count--> categories:
+Comprehensive catalog of **<!--count:resources_floor-->750+<!--/count--> cloud security resources** organized by <!--count:resource_categories-->8<!--/count--> categories:
 
 #### 🎯 CTF Challenges & Vulnerable Environments (<!--count:cat_ctf_floor-->80+<!--/count--> entries)
 - **CloudGoat** - Open-source, AWS vulnerable environments by Rhino Security Labs
@@ -498,7 +498,7 @@ A hub for the session-digest series: what the room actually said about a topic a
 
 ### 🚩 Cloud CTFs ([`ctfs.html`](https://csoh.org/ctfs.html))
 Dedicated directory for hands-on cloud CTF challenges:
-- **<!--count:ctfs-->53<!--/count--> challenges** across AWS, Azure, GCP, Kubernetes, and AI security
+- **<!--count:ctfs-->50<!--/count--> challenges** across AWS, Azure, GCP, Kubernetes, and AI security
 - Includes the full Wiz Cloud Security Championship calendar
 - Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING_CTFS.md)
 
@@ -711,7 +711,7 @@ csoh.org/
 ├── incident-response.html      # IR lifecycle, EC2/EKS/Lambda evidence, memory forensics
 ├── cloud-pentesting.html       # AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound
 ├── threat-research.html        # Curated cloud threat research directory
-├── ctfs.html                   # Dedicated cloud CTF directory (53 challenges)
+├── ctfs.html                   # Dedicated cloud CTF directory (50 challenges)
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
