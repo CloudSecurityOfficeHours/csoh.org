@@ -98,6 +98,7 @@ Track audit scores over time. Add a new row each time `/seo-audit` is run. Lower
 | 2026-10-26 | **99** | 100 | 97 | 100 | 99 | 100 | 0 | 3 | [report](2026-10-26-auto-1.md) |
 | 2026-10-26 | **100** | 100 | 100 | 100 | 100 | 100 | 0 | 0 | [report](2026-10-26-auto-2.md) |
 | 2026-11-02 | **99** | 100 | 95 | 100 | 100 | 100 | 1 | 3 | [report](2026-11-02.md) |
+| 2026-11-02 | **100** | 100 | 98 | 100 | 100 | 100 | 0 | 2 | [report](2026-11-02-auto-1.md) |
 
 ## PageSpeed Insights - homepage (https://csoh.org/)
 
@@ -150,6 +151,7 @@ Each cell is `Performance / Accessibility / Best Practices / SEO` (out of 100). 
 | 2026-10-22 | 99 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.72s · CLS 0.009 · TBT 18ms · FCP 1.65s |
 | 2026-10-26 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.20s · CLS 0.009 · TBT 0ms · FCP 1.05s |
 | 2026-10-26 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 1.20s · CLS 0.000 · TBT 0ms · FCP 1.20s |
+| 2026-11-02 | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 | Mobile: LCP 0.81s · CLS 0.000 · TBT 9ms · FCP 0.81s |
 
 ## How to use
 
