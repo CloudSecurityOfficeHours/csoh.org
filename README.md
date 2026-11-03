@@ -498,7 +498,7 @@ A hub for the session-digest series: what the room actually said about a topic a
 
 ### 🚩 Cloud CTFs ([`ctfs.html`](https://csoh.org/ctfs.html))
 Dedicated directory for hands-on cloud CTF challenges:
-- **<!--count:ctfs-->50<!--/count--> challenges** across AWS, Azure, GCP, Kubernetes, and AI security
+- **<!--count:ctfs-->52<!--/count--> challenges** across AWS, Azure, GCP, Kubernetes, and AI security
 - Includes the full Wiz Cloud Security Championship calendar
 - Submit a new CTF with `python3 tools/submit_ctf.py` - see [CONTRIBUTING_CTFS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/CONTRIBUTING_CTFS.md)
 
@@ -711,7 +711,7 @@ csoh.org/
 ├── incident-response.html      # IR lifecycle, EC2/EKS/Lambda evidence, memory forensics
 ├── cloud-pentesting.html       # AWS/Azure/GCP attack paths, Pacu/ROADtools/BloodHound
 ├── threat-research.html        # Curated cloud threat research directory
-├── ctfs.html                   # Dedicated cloud CTF directory (50 challenges)
+├── ctfs.html                   # Dedicated cloud CTF directory (52 challenges)
 │
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)

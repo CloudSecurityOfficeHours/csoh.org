@@ -100,7 +100,7 @@ You don't have to generate a preview image yourself. When a PR with a new card l
 
 | URL | Image filename |
 |---|---|
-| `https://flaws.cloud/` | `flaws-cloud.jpg` |
+| `http://flaws.cloud/` | `flaws-cloud.jpg` |
 | `https://github.com/Semperis/EntraGoat` | `github-com-semperis-entragoat.jpg` |
 | `https://cloudhuntinggames.com/` | `cloudhuntinggames-com.jpg` |
 
