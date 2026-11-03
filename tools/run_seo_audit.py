@@ -101,7 +101,10 @@ def audit_page(path: Path) -> dict:
         add("critical", "on-page", f"{rel}: missing <title>")
         title = ""
     else:
-        title = title_m.group(1).strip()
+        # Same as the description: an entity is one character in the
+        # SERP and several in the source. "IAM &amp; Cloud Identity - CSOH"
+        # is 31 characters raw and 27 decoded.
+        title = html.unescape(title_m.group(1).strip())
         if not title:
             add("critical", "on-page", f"{rel}: empty <title>")
 
