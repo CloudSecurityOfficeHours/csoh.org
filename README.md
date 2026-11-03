@@ -721,7 +721,7 @@ csoh.org/
 ├── cloud-breach-year-in-review-2023.html  # 2023 review
 ├── cloud-breach-year-in-review-2024.html  # 2024 review
 ├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
-├── cloud-breach-year-in-review-2026-h1.html  # 2026 first-half review (Jan-Jul 2026)
+├── cloud-breach-year-in-review-2026-h1.html  # 2026 mid-year review (Jan-Jul 2026)
 ├── kevin-mitnick.html          # Special resource page
 │
 │  ── Governance + AI ──

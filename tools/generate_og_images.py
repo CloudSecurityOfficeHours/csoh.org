@@ -371,7 +371,7 @@ PAGES = [
      "Five years of cloud and SaaS breaches, one review per year - and what changed between them.",
      "Threat Library"),
     ("cloud-breach-year-in-review-2026-h1.html",
-     "2026 Cloud Breaches: The First Half",
+     "2026 Cloud Breaches: Mid-Year Review",
      "The year AI stopped being a topic and became a participant. A mid-year review, January to July.",
      "Year in Review"),
     ("cloud-breach-year-in-review-2024.html",
