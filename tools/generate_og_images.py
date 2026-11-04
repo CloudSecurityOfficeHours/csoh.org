@@ -784,6 +784,10 @@ PAGES = [
      "Falco Rules",
      "One event in, one verdict out: Falco's rules on CloudTrail and system calls, and what it cannot count.",
      "How-To Guide"),
+    ("howto/python-cloud-sdks.html",
+     "Python and the Cloud SDKs",
+     "boto3 scripts that check every page, Region and account, as the right identity, and say what they missed.",
+     "How-To Guide"),
 ]
 
 
