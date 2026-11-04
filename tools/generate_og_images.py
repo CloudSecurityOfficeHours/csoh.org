@@ -784,6 +784,10 @@ PAGES = [
      "Falco Rules",
      "One event in, one verdict out: Falco's rules on CloudTrail and system calls, and what it cannot count.",
      "How-To Guide"),
+    ("howto/semgrep-rules.html",
+     "Semgrep Rules",
+     "Patterns that read code's structure, rules tested both ways, and five failures that print no error.",
+     "How-To Guide"),
 ]
 
 

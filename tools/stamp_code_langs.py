@@ -98,6 +98,14 @@ OVERRIDES: dict[str, str] = {
     # `resource "..."` header for, so it reaches the end and lands on text.
     '032aef2d6a34': 'python',
     '5b5f9d81d992': 'python',
+    # howto/semgrep-rules.html. A Semgrep pattern for a Python call, shown on
+    # its own line: a bare call with no keyword the Python rule keys on.
+    '940d779b87af': 'python',
+    # Semgrep's scan summary. Its bullet lines read as shell to the fallback.
+    '9069ab5979fb': 'text',
+    # A Semgrep rule whose pattern quotes a Terraform `resource "..."` header,
+    # which the HCL rule takes for a Terraform file.
+    '18a649b64529': 'yaml',
 }
 
 
