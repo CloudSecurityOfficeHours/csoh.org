@@ -2,7 +2,9 @@
 """Mobile layout regression check.
 
 Renders a representative sample of pages at iPhone-13 viewport and asserts:
-  1. The page has no horizontal overflow at the body or document level.
+  1. The page has no horizontal overflow at the body or document level, and
+     nothing inside a horizontal scroller starts left of the scroller's edge,
+     where scrolling can't reach it.
   2. With the hamburger menu OPEN:
      - Every nav link / button is fully inside the viewport horizontally.
      - Tap targets are ≥ 40px tall (Apple's 44pt guideline minus a hair).
@@ -130,6 +132,41 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
             f"horizontal overflow: body={overflow['body']}px, html={overflow['html']}px, "
             f"viewport={overflow['vw']}px (window.innerWidth={overflow['innerWidth']}px - "
             f"a value above the viewport means the browser shrank the page to fit)"
+        )
+
+    # --- 1b. Nothing starts before the left edge of its own scroller.
+    # A wide table inside an `overflow-x: auto` wrapper scrolls only to the
+    # right, so any part of it placed left of the wrapper's inner edge can never
+    # be brought into view. Check 1 can't see this: the overflow is inside the
+    # wrapper, and negative overflow adds nothing to any scrollWidth. Direct
+    # children only, since a scroller's own child is what gets offset.
+    stranded = page.evaluate(
+        """() => {
+            // getAttribute, not className: an SVG element's className is an object.
+            const label = el => [el.tagName.toLowerCase(),
+                ...(el.getAttribute('class') || '').trim().split(/\\s+/).filter(Boolean)].join('.');
+            const bad = [];
+            for (const sc of document.querySelectorAll('main *')) {
+                const cs = getComputedStyle(sc);
+                if (!/auto|scroll/.test(cs.overflowX) || sc.scrollLeft !== 0) continue;
+                const start = sc.getBoundingClientRect().left + sc.clientLeft;
+                for (const child of sc.children) {
+                    const r = child.getBoundingClientRect();
+                    if (r.width > 0 && r.left < start - 1) {
+                        bad.push({ child: label(child),
+                                   scroller: label(sc),
+                                   left: r.left, start });
+                    }
+                }
+            }
+            return bad;
+        }"""
+    )
+    for s in stranded:
+        failures.append(
+            f"content starts before its scroller: {s['child']} at left={s['left']:.0f} inside "
+            f"{s['scroller']} (inner edge {s['start']:.0f}); its first "
+            f"{s['start'] - s['left']:.0f}px can't be scrolled into view"
         )
 
     # --- 2. Open the hamburger menu and inspect.
