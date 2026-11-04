@@ -67,6 +67,7 @@ SHELL_CMDS = (
     'bunzip2', 'tar', 'unzip', 'wget', 'stratus', 'kubescape', 'kube-bench',
     'lychee', 'html5validator', 'gh', 'make', 'bash', 'sh', 'source', 'test',
     'cedar', 'celpy', 'kind-config', 'terraform-local',
+    'kyverno',
 )
 
 # Blocks the heuristics get wrong, keyed by a stable hash of their text.
@@ -98,6 +99,9 @@ OVERRIDES: dict[str, str] = {
     # `resource "..."` header for, so it reaches the end and lands on text.
     '032aef2d6a34': 'python',
     '5b5f9d81d992': 'python',
+    # The policy report `kyverno apply --policy-report` prints on the Kyverno
+    # guide: YAML, but output to read, not a file to save.
+    '9a0ef8d062cd': 'text',
 }
 
 
@@ -220,6 +224,10 @@ SELF_TEST = [
     ('yaml', 'id: 1b2c3d4e-0000-4000-8000-000000000000\nname: Denied burst\nquery: |\n  AWSCloudTrail\n  | summarize n = count() by SourceIpAddress\n  | where n >= 5'),
     # A test report opening on a log level is output, not YAML.
     ('text', 'INFO: Testing analysis items in .\nLab.CloudTrail.TrailTampering\n    [PASS] backup-svc stops the trail'),
+    # kyverno CLI results: the `->` must not make them bash, nor the summary YAML.
+    ('text', 'Applying 1 policy rule(s) to 5 resource(s)...\npolicy p -> resource shop/Pod/root failed:\n1 -  denied'),
+    ('text', 'pass: 10, fail: 0, warn: 2, error: 0, skip: 0\n0'),
+    ('bash', 'kyverno test tests/'),
     # Falco alert output, with a `<NA>` that looks like a shell redirect.
     ('text', '2026-09-27T18:57:33.415876851+0000: Warning /etc/shadow read (command=cat /etc/shadow) k8s_pod_name=<NA>'),
     ('datadog', 'source:cloudtrail @evt.name:StopLogging'),
@@ -285,6 +293,14 @@ def classify(raw: str) -> str:
     # otherwise read the level as a mapping key; a YAML file never opens on an
     # all-capitals key like these.
     if re.match(r'(INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL|FATAL):\s', first):
+        return 'text'
+    # The kyverno CLI's results are output. `kyverno apply` opens on
+    # `Applying N policy rule(s) to N resource(s)...` and closes on a
+    # `pass: N, fail: N, ...` summary; the `->` in its result lines would
+    # otherwise land the block on bash, and an opening `Warning: <file>:`
+    # deprecation notice or a bare summary line on YAML.
+    if re.search(r'^Applying \d+ policy rule\(s\) to \d+ resource\(s\)', body_text, re.M) or \
+       re.search(r'^pass: \d+, fail: \d+, warn: \d+, error: \d+, skip: \d+', body_text, re.M):
         return 'text'
 
     # --- languages with a distinctive keyword ------------------------------

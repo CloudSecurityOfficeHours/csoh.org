@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-11-03">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="cloud security how to">
@@ -65,7 +65,7 @@
       "description": "Hands-on guides to the languages cloud security runs on: OPA, CEL and IAM policy, jq, regex, Sigma and YARA, and SIEM query languages from SPL and KQL to SQL.",
       "url": "https://csoh.org/cloud-security-how-to.html",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-09-27",
+      "dateModified": "2026-11-03",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -84,7 +84,7 @@
       "mainEntity": {
         "@type": "ItemList",
         "name": "Cloud security how-to guides",
-        "numberOfItems": 16,
+        "numberOfItems": 17,
         "itemListElement": [
           {
             "@type": "ListItem",
@@ -181,6 +181,12 @@
             "position": 16,
             "name": "Falco rules",
             "url": "https://csoh.org/howto/falco-rules.html"
+          },
+          {
+            "@type": "ListItem",
+            "position": 17,
+            "name": "Kyverno policies",
+            "url": "https://csoh.org/howto/kyverno.html"
           }
         ]
       }
@@ -400,7 +406,7 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-09-27">Last updated <strong>2026-09-27</strong></time> &middot; <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 
         <section id="intro">
             <p>Cloud security has a set of small languages sitting underneath almost everything practical. A policy that blocks a deploy is <a class="glossary-link" href="glossary.html#term-rego">Rego</a> or CEL. A detection that fires in your <a class="glossary-link" href="glossary.html#term-siem">SIEM</a> is <a class="glossary-link" href="glossary.html#term-sigma">Sigma</a> compiled into something else. A vulnerability feed is OVAL. The command that answers "which of our roles can do this" is jq or JMESPath. The document that decides whether a request succeeds is <a class="glossary-link" href="glossary.html#term-iam">IAM</a> JSON or Cedar.</p>
@@ -450,6 +456,11 @@
                     <h3><a href="howto/cel-policy-expressions.html">CEL policy expressions</a></h3>
                     <p>The expression language embedded in the <a class="glossary-link" href="glossary.html#term-kubernetes">Kubernetes</a> API server and Google Cloud IAM. Macros, the presence check that decides whether your policy fails open or closed, and a real admission policy rolled out safely.</p>
                     <div class="resource-tags"><span class="tag">Intermediate</span><span class="tag">Kubernetes</span><span class="tag">GCP</span><span class="tag">~90m</span></div>
+                </div>
+                <div class="resource-card" data-icon="🛂">
+                    <h3><a href="howto/kyverno.html">Kyverno policies</a></h3>
+                    <p>Kubernetes admission policy written as Kubernetes resources. The CEL policy types that replace ClusterPolicy, autogen for Pod controllers, mutation and generation, image signatures, tests in CI, and the quiet ways a policy stops checking anything.</p>
+                    <div class="resource-tags"><span class="tag">Intermediate</span><span class="tag">Kubernetes</span><span class="tag">Local / $0</span><span class="tag">~2h</span></div>
                 </div>
                 <div class="resource-card" data-icon="🚨">
                     <h3><a href="howto/sigma-and-yara.html">Sigma and YARA</a></h3>
@@ -584,14 +595,15 @@
         <section id="compare">
             <h2>Choosing between the policy languages</h2>
             <p>Rego, CEL, and Cedar overlap enough to be confusing and differ enough that picking the wrong one is expensive. The short version:</p>
-            <div class="table-scroll">
-            <table class="comparison-table">
+            <div class="comparison-table">
+            <table>
                 <thead>
                     <tr>
                         <th scope="col">&nbsp;</th>
                         <th scope="col">Rego (<a class="glossary-link" href="glossary.html#term-opa">OPA</a>)</th>
                         <th scope="col">CEL</th>
                         <th scope="col">Cedar</th>
+                        <th scope="col">Kyverno</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -600,41 +612,47 @@
                         <td>A separate engine: <a class="glossary-link" href="glossary.html#term-sidecar">sidecar</a>, service, or CLI</td>
                         <td>In-process, inside the host that is deciding</td>
                         <td>A library, or Amazon Verified Permissions</td>
+                        <td>A webhook service in the cluster, plus a CLI</td>
                     </tr>
                     <tr>
                         <th scope="row">Best at</th>
                         <td>Arbitrary policy over arbitrary JSON</td>
                         <td>Fast boolean checks on one object</td>
                         <td>Who may do what to which resource</td>
+                        <td>Kubernetes objects: validate, mutate, generate, verify images</td>
                     </tr>
                     <tr>
                         <th scope="row">Can consult external data</th>
                         <td>Yes, that is a core feature</td>
                         <td>No, only what the host supplies</td>
                         <td>Only the entity store you provide</td>
+                        <td>Yes: cluster lookups, API calls, cached global context</td>
                     </tr>
                     <tr>
                         <th scope="row">Static validation</th>
                         <td><code>opa check --strict</code>, plus Regal</td>
                         <td>Type-checked against the host's schema</td>
                         <td>Full schema validation, including typos</td>
+                        <td>Schema checks when applied; <code>kyverno test</code> for behavior</td>
                     </tr>
                     <tr>
                         <th scope="row">Typical use</th>
                         <td>Terraform and Kubernetes manifests in CI</td>
                         <td>Kubernetes admission, GCP IAM conditions</td>
                         <td>Application authorization</td>
+                        <td>Kubernetes admission, and reports on what already runs</td>
                     </tr>
                     <tr>
                         <th scope="row">Main cost</th>
                         <td>A component to deploy and keep available</td>
                         <td>Cannot express anything needing a join</td>
                         <td>Narrower scope by design</td>
+                        <td>A component to run, and a webhook that can fail open</td>
                     </tr>
                 </tbody>
             </table>
             </div>
-            <p>A rough decision rule that holds up in practice: if the question is "may this principal do this to this resource", reach for Cedar. If it is "is this configuration acceptable" and the answer depends only on the configuration itself, reach for CEL, especially where a host already embeds it. If the answer depends on anything outside the object being judged, that is Rego, and the deployment cost is the price of the capability.</p>
+            <p>A rough decision rule that holds up in practice: if the question is "may this principal do this to this resource", reach for Cedar. If it is "is this configuration acceptable" and the answer depends only on the configuration itself, reach for CEL, especially where a host already embeds it. If the answer depends on anything outside the object being judged, that is Rego, and the deployment cost is the price of the capability. Kyverno is a policy engine rather than a language: since version 1.19 deprecated its older format, its policies are written in CEL, with an engine around them that can also change and create resources, verify image signatures, and report on what is already running. Reach for it when Kubernetes policy needs those, and your team would rather keep policy as Kubernetes resources than run OPA.</p>
         </section>
 
         <section id="next" class="cta-section">
