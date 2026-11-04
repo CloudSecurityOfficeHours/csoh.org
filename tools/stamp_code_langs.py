@@ -82,6 +82,14 @@ OVERRIDES: dict[str, str] = {
     'd22e81180d9a': 'text',    # `yr scan -s` match listing
     '5698e5b22db5': 'text',    # Sigma compiled to Splunk SPL
     'adaf4a9ed8d4': 'text',    # infra/terraform/ directory tree
+    # Script output on howto/python-cloud-sdks.html whose `name: value` lines
+    # read as YAML mapping keys to the heuristic.
+    'ea93b8482117': 'text',    # security groups read from a sample response
+    '2cdd948d8796': 'text',    # whoami.py as alice
+    'f7f7e2b2e327': 'text',    # whoami.py as the auditor (shown twice)
+    '22552a791347': 'text',    # whoami.py with leftover build-bot keys
+    '783957bf9a23': 'text',    # last line of an AccessDenied traceback
+    '734a97cb517f': 'text',    # stale access keys
     # A GCP IAM condition: CEL, but with none of the macros the CEL rule keys on.
     '1f26d44948fb': 'cel',
     # A lone HCL attribute (`name = "..."`, spaces around the =) quoted without

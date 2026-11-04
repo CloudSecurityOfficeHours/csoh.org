@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Read and fix cloud security scripts in Python: boto3 paginators, every Region and account, honest error handling and the credential chain, on a free local lab.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="boto3 tutorial, boto3 paginator, python cloud security automation, boto3 all regions, boto3 assume role every account, boto3 ClientError handling, aws credential chain, moto mock aws, azure sdk for python, google cloud python client">
+    <title>Python and the cloud SDKs: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/python-cloud-sdks.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/python-cloud-sdks.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/python-cloud-sdks.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Python and the cloud SDKs, hands-on - CSOH">
+    <meta property="og:description" content="Read and fix cloud security scripts in Python: boto3 paginators, every Region and account, honest error handling and the credential chain, on a free local lab.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="python">
+    <meta property="article:tag" content="boto3">
+    <meta property="article:tag" content="aws sdk">
+    <meta property="article:tag" content="security automation">
+    <meta property="article:tag" content="azure sdk">
+    <meta property="article:tag" content="google cloud">
+    <meta property="og:url" content="https://csoh.org/howto/python-cloud-sdks.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/python-cloud-sdks.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Python and the cloud SDKs, hands-on">
+    <meta name="twitter:description" content="Read and fix cloud security scripts in Python: boto3 paginators, every Region and account, honest error handling and the credential chain, on a free local lab.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/python-cloud-sdks.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=a1c52606" as="style"
+        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="stylesheet" href="/style.css?v=a1c52606"
+        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Python and the cloud SDKs, hands-on",
+      "description": "Read and fix cloud security scripts in Python: boto3 paginators, every Region and account, honest error handling and the credential chain, on a free local lab.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-11-03",
+      "dateModified": "2026-11-03",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Install boto3 and moto",
+          "text": "Create a virtual environment and install pinned boto3 and moto releases, so the lab behaves the same for every reader."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Start the lab",
+          "text": "Run lab.py, which starts moto on localhost and fills it with a pretend AWS organization: four accounts, IAM users and roles, security groups in four Regions and four S3 buckets."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Find out who you are",
+          "text": "Call get_caller_identity before anything else, and see leftover environment-variable keys win over AWS_PROFILE."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Read every page",
+          "text": "Count IAM roles with one call, a hand-written loop and a paginator, and see why only the paginator finds all 137."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Cover every enabled Region",
+          "text": "Use describe_regions to visit every Region the account has enabled, including an opt-in Region."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Let errors say what they could not check",
+          "text": "Catch ClientError, treat only the error codes that are answers as answers, report the rest, set retries explicitly and exit non-zero when anything was not checked."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Cover every account in the organization",
+          "text": "Page through list_accounts, read State rather than Status, assume an audit role in each member account and report the accounts you could not enter."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Python and the cloud SDKs, hands-on",
+          "item": "https://csoh.org/howto/python-cloud-sdks.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Python and the cloud SDKs</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Python and the cloud SDKs, hands-on</h1>
+        <p>Most cloud security scripts are a loop over API calls, and when one goes wrong it usually still prints a tidy list. Learn enough Python to read and change those scripts, and the five habits that decide whether the list is true, on a pretend AWS organization that runs on your own computer.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+<div class="info-box--blue">
+    <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal, Python 3.10 or newer, and some practice reading code in any language. No AWS account: the lab runs on your computer, and nothing on this page talks to AWS.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order, in zsh on macOS, with boto3 1.43.123 and moto 5.2.5 on Python 3.12.16 and 3.13.18. Every output shown is pasted from that run, and a planted error made the same script fail, so the check can fail. The Azure and Google Cloud notes were checked against azure-identity 1.27.0, azure-mgmt-resource-subscriptions 1.0.0, google-auth 2.62.1 and google-cloud-compute 1.56.0 with their network calls replaced by fakes, and against Microsoft's and Google's documentation. They were not run against a real subscription or project.</p>
+</div>
+
+<section id="intro">
+    <h2>Python for security automation</h2>
+    <p>A security script answers a question about a whole estate, such as which access keys are stale or which firewall rules let in the whole internet, by calling the cloud provider's API (application programming interface) in a loop and printing what matched. In Python those calls go through the provider's SDK (software development kit): boto3 for AWS (Amazon Web Services), the Azure SDK for Python, and the Google Cloud client libraries. The <a href="../learning-path.html">learning path</a> asks for one scripting language, Python by default, and sets the bar at reading and changing other people's scripts. This page is pitched at that bar. It is not a Python course: it explains each piece of Python as the scripts use it.</p>
+    <p>The Python is the easy half. The harder half is that the SDKs make it easy to ask a narrower question than you meant and get a confident answer to it. A list call returns one page and mentions the rest in a field nobody reads. A client talks to one Region. An <code>except</code> written for one expected error also swallows AccessDenied. The credentials come from somewhere you did not expect. An organization-wide loop skips the accounts it could not get into. None of these raises an error. Each one produces a shorter list, and a short list of findings looks like good news.</p>
+    <p>boto3 comes first because it has the most of these traps and because the lab can run it for free. Where Azure or Google Cloud has the same trap, a short paragraph says what it looks like there.</p>
+</section>
+
+<div class="toc">
+    <h2>On this page</h2>
+    <ol>
+        <li><a href="#model">Every result has a scope</a></li>
+        <li><a href="#walkthrough">Walk-through: a pretend organization, five silent failures</a></li>
+        <li><a href="#exercises">Hands-on exercises</a></li>
+        <li><a href="#mistakes">Common mistakes</a></li>
+        <li><a href="#next">Where next</a></li>
+    </ol>
+</div>
+
+<section id="model">
+    <h2>Every result has a scope</h2>
+    <p>Read every script's output as a claim with five conditions attached: <em>as this identity, on the pages it read, in these Regions, in these accounts, among the calls that worked.</em> An empty list is good news only when all five are what you meant. Each step of the walk-through takes one condition, runs a script that gets it wrong without complaint, and then changes the script so that it either gets it right or says what it could not check.</p>
+    <p>First, the Python those scripts are made of. Every boto3 call returns the API's answer as plain Python data. This block needs nothing installed:</p>
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
+response = {
+    "SecurityGroups": [
+        {"GroupName": "debug-ssh", "IpPermissions": [
+            {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]},
+        {"GroupName": "office-ssh", "IpPermissions": []},
+    ],
+    "NextToken": "page-2-starts-here",
+}
+for group in response["SecurityGroups"]:
+    rules = group["IpPermissions"]
+    print(f"{group['GroupName']}: {len(rules)} inbound rule(s)")
+print("more pages?", "NextToken" in response)
+print("Marker:", response.get("Marker"))
+PY</pre></div>
+<div class="code-block" data-lang="text"><pre>debug-ssh: 1 inbound rule(s)
+office-ssh: 0 inbound rule(s)
+more pages? True
+Marker: None</pre></div>
+    <p>That is the shape of a real <code>describe_security_groups</code> answer, cut down. Curly braces make a <em>dictionary</em>, which maps names (keys) to values, and square brackets make a <em>list</em>. <code>response["SecurityGroups"]</code> reads a key and stops the script with a <code>KeyError</code> if it is missing; <code>response.get("Marker")</code> reads one and gives <code>None</code>, Python's "nothing", if it is missing. <code>for</code> runs the indented lines once per item, and in Python the indentation is what marks the lines that belong to the loop. An <code>f"..."</code> string fills in whatever is in <code>{braces}</code>, and <code>in</code> asks "is this key here?". The last two lines show the first silent failure: the answer says another page exists, and nothing makes you read it.</p>
+</section>
+
+<section id="walkthrough">
+    <h2>Walk-through: a pretend organization, five silent failures</h2>
+    <p>The lab is an AWS organization running inside moto, an open-source AWS emulator for Python, on your computer. You are in the management account, <code>123456789012</code>, and the organization has three member accounts: prod, dev and sandbox. The management account has 137 <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) roles, six users with access keys of various ages, security groups in four Regions (one of them an opt-in Region), and four <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service) buckets, one of which your audit identity is not allowed to read. You audit it as a user called <code>auditor</code>.</p>
+
+    <h3>1. Install boto3 and moto</h3>
+    <p>Run <code>python3 --version</code> first. boto3 and moto need Python 3.10 or newer, and the <code>python3</code> that comes with macOS is older. If yours is, install a newer Python from python.org or your package manager and use its name (for example <code>python3.12</code>) instead of <code>python3</code> on the second line.</p>
+<div class="code-block" data-lang="bash"><pre>mkdir -p ~/sdk-lab &amp;&amp; cd ~/sdk-lab
+python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install --quiet 'boto3==1.43.123' 'moto[server]==5.2.5'
+python3 -c "import boto3, moto; print(boto3.__version__, moto.__version__)"</pre></div>
+<div class="code-block" data-lang="text"><pre>1.43.123 5.2.5</pre></div>
+    <p>The second line makes a private Python for the lab (a virtual environment) and switches to it, so nothing is installed system-wide. In a new terminal, <code>cd ~/sdk-lab &amp;&amp; . .venv/bin/activate</code> switches back. Keep the version pins: boto3 releases several times a week, and moto's behaviour changes between releases. The quotes around <code>moto[server]</code> matter in zsh, which otherwise reads the square brackets as a file-name pattern and refuses the command.</p>
+
+    <h3>2. Start the lab</h3>
+    <p>Paste the whole block, including the final <code>EOF</code> line. It writes <code>lab.py</code> and starts it. You do not need to follow every line: it is scaffolding, and none of it appears in the scripts you write.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; lab.py &lt;&lt;'EOF'
+"""lab.py: a pretend AWS organization on your own computer.
+
+Starts moto, an AWS emulator, at http://localhost:8101, fills it with the
+accounts, users, security groups and buckets this guide audits, then waits.
+Ctrl-C stops it, and everything in it is forgotten. Nothing here talks to AWS.
+"""
+import datetime, json, logging, pathlib, time
+import boto3
+import moto.organizations.utils
+from moto import settings
+from moto.core.responses import ActionResult
+from moto.core.utils import utcnow
+from moto.ec2.models.availability_zones_and_regions import Region, RegionsAndZonesBackend
+from moto.ec2.responses.availability_zones_and_regions import AvailabilityZonesAndRegions
+from moto.iam.models import AccessKeyLastUsed, iam_backends
+from moto.organizations.models import organizations_backends
+from moto.server import ThreadedMotoServer
+
+URL = "http://localhost:8101"
+MGMT, PROD, DEV, SANDBOX = "123456789012", "111111111111", "222222222222", "333333333333"
+HERE = pathlib.Path(__file__).resolve().parent
+
+# Moto lists every Region as usable. A real account can use the 17 Regions
+# AWS enables by default plus any opt-in Region someone has turned on, so
+# the lab copies that: me-central-1 (UAE) is opted in, other opt-in Regions are not.
+DEFAULT_ON = {"us-east-1", "us-east-2", "us-west-1", "us-west-2", "ca-central-1",
+              "sa-east-1", "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1",
+              "eu-north-1", "ap-south-1", "ap-northeast-1", "ap-northeast-2",
+              "ap-northeast-3", "ap-southeast-1", "ap-southeast-2"}
+RegionsAndZonesBackend.regions = [
+    Region(r, f"ec2.{r}.amazonaws.com",
+           "opt-in-not-required" if r in DEFAULT_ON else
+           "opted-in" if r == "me-central-1" else "not-opted-in")
+    for r in boto3.session.Session().get_available_regions("ec2")]
+
+def describe_regions(self):
+    regions = self.ec2_backend.describe_regions(self._get_param("RegionNames", []))
+    if not self._get_bool_param("AllRegions", False):
+        regions = [r for r in regions if r.opt_in_status != "not-opted-in"]
+    return ActionResult({"Regions": regions})
+AvailabilityZonesAndRegions.describe_regions = describe_regions
+
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+ThreadedMotoServer(ip_address="127.0.0.1", port=8101, verbose=False).start()
+
+def client(service, region="us-east-1", creds=None):
+    creds = creds or {"aws_access_key_id": "lab", "aws_secret_access_key": "lab"}
+    return boto3.client(service, region_name=region, endpoint_url=URL, **creds)
+
+def into(account):
+    c = client("sts").assume_role(RoleArn=f"arn:aws:iam::{account}:role/OrganizationAccountAccessRole",
+                                  RoleSessionName="lab-setup")["Credentials"]
+    return {"aws_access_key_id": c["AccessKeyId"], "aws_secret_access_key": c["SecretAccessKey"],
+            "aws_session_token": c["SessionToken"]}
+
+def policy(*statements):
+    return json.dumps({"Version": "2012-10-17", "Statement": list(statements)})
+
+READ = {"Effect": "Allow", "Resource": "*",
+        "Action": ["iam:Get*", "iam:List*", "ec2:Describe*", "s3:Get*", "s3:List*",
+                   "organizations:Describe*", "organizations:List*"]}
+
+def open_group(name, port, region, creds=None, cidr="0.0.0.0/0"):
+    ec2 = client("ec2", region, creds)
+    gid = ec2.create_security_group(GroupName=name, Description=name)["GroupId"]
+    rng = {"Ipv6Ranges": [{"CidrIpv6": cidr}]} if ":" in cidr else {"IpRanges": [{"CidrIp": cidr}]}
+    perm = {"IpProtocol": "-1"} if port is None else {"IpProtocol": "tcp", "FromPort": port, "ToPort": port}
+    ec2.authorize_security_group_ingress(GroupId=gid, IpPermissions=[{**perm, **rng}])
+
+# The organization: you are in the management account, 123456789012.
+org = client("organizations")
+org.create_organization(FeatureSet="ALL")
+organizations_backends[MGMT]["aws"].accounts[0].name = "management"
+moto.organizations.utils.make_random_account_id = iter([PROD, DEV, SANDBOX]).__next__
+for name in ["prod", "dev", "sandbox"]:
+    org.create_account(Email=f"{name}@example.com", AccountName=name)
+
+# An audit role in each member account, trusting the auditor user.
+for account in [PROD, DEV, SANDBOX]:
+    iam = client("iam", creds=into(account))
+    iam.create_role(RoleName="audit-readonly", AssumeRolePolicyDocument=policy(
+        {"Effect": "Allow", "Action": "sts:AssumeRole",
+         "Principal": {"AWS": f"arn:aws:iam::{MGMT}:user/auditor"}}))
+    iam.put_role_policy(RoleName="audit-readonly", PolicyName="read", PolicyDocument=policy(READ))
+open_group("prod-bastion", 22, "us-west-2", into(PROD))
+open_group("sandbox-test", None, "us-east-1", into(SANDBOX))
+
+# IAM in the management account: 137 roles, so the list is longer than one page.
+iam = client("iam")
+for n in range(1, 138):
+    iam.create_role(RoleName=f"workload-{n:03d}", AssumeRolePolicyDocument=policy(
+        {"Effect": "Allow", "Action": "sts:AssumeRole", "Principal": {"Service": "ec2.amazonaws.com"}}))
+
+# Users and their keys. Moto cannot create old keys, so the lab ages them:
+# (user, days since the key was created, days since it was last used, active?)
+KEYS = [("alice", 400, 2, True), ("bob", 300, 120, True), ("carol", 5, None, True),
+        ("dave", 150, None, True), ("dave", 500, 400, False),
+        ("build-bot", 200, 0, True), ("auditor", 0, None, True)]
+creds = {}
+for user, created, used, active in KEYS:
+    if user not in iam_backends[MGMT]["global"].users:
+        iam.create_user(UserName=user)
+    key = iam.create_access_key(UserName=user)["AccessKey"]
+    creds[user] = (key["AccessKeyId"], key["SecretAccessKey"])
+    if not active:
+        iam.update_access_key(UserName=user, AccessKeyId=key["AccessKeyId"], Status="Inactive")
+    stored = iam_backends[MGMT]["global"].users[user].access_keys[-1]
+    stored.create_date = utcnow() - datetime.timedelta(days=created)
+    if used is not None:
+        stored.last_used = AccessKeyLastUsed(utcnow() - datetime.timedelta(days=used), "iam", "us-east-1")
+iam.put_user_policy(UserName="auditor", PolicyName="audit", PolicyDocument=policy(
+    READ,
+    # The auditor may assume the audit role in prod and dev. sandbox joined the
+    # organization after this list was written, and nobody added it.
+    {"Effect": "Allow", "Action": "sts:AssumeRole",
+     "Resource": [f"arn:aws:iam::{PROD}:role/audit-readonly", f"arn:aws:iam::{DEV}:role/audit-readonly"]},
+    {"Effect": "Deny", "Action": "s3:*", "Resource": ["arn:aws:s3:::csoh-lab-payroll-exports",
+                                                      "arn:aws:s3:::csoh-lab-payroll-exports/*"]}))
+iam.put_user_policy(UserName="build-bot", PolicyName="ci", PolicyDocument=policy(
+    {"Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::csoh-lab-build-artifacts/*"}))
+
+# Security groups in four Regions, one of them opt-in.
+open_group("web-public", 443, "us-east-1")
+open_group("debug-ssh", 22, "us-east-1")
+open_group("legacy-rdp", 3389, "eu-west-1")
+open_group("ipv6-everything", None, "ap-southeast-2", cidr="::/0")
+open_group("temp-postgres", 5432, "me-central-1")
+client("ec2").create_security_group(GroupName="office-ssh", Description="office-ssh")
+
+# Buckets: Block Public Access on, off, partly on, and one the auditor may not read.
+s3 = client("s3")
+ALL_ON = dict.fromkeys(["BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets"], True)
+for bucket, bpa in [("csoh-lab-cloudtrail", ALL_ON), ("csoh-lab-web-assets", None),
+                    ("csoh-lab-build-artifacts", {**ALL_ON, "BlockPublicPolicy": False}),
+                    ("csoh-lab-payroll-exports", ALL_ON)]:
+    s3.create_bucket(Bucket=bucket)
+    if bpa:
+        s3.put_public_access_block(Bucket=bucket, PublicAccessBlockConfiguration=bpa)
+s3.put_bucket_policy(Bucket="csoh-lab-cloudtrail", Policy=policy(
+    {"Effect": "Allow", "Principal": {"Service": "cloudtrail.amazonaws.com"},
+     "Action": "s3:PutObject", "Resource": "arn:aws:s3:::csoh-lab-cloudtrail/*"}))
+
+# From here on every request is checked against the caller's IAM policies.
+settings.INITIAL_NO_AUTH_ACTION_COUNT = 0
+
+(HERE / "aws").mkdir(exist_ok=True)
+(HERE / "aws" / "config").write_text(
+    "[default]\nregion = us-east-1\n\n[profile auditor]\nregion = us-east-1\n")
+(HERE / "aws" / "credentials").write_text("".join(
+    f"[{profile}]\naws_access_key_id = {creds[user][0]}\naws_secret_access_key = {creds[user][1]}\n\n"
+    for profile, user in [("default", "alice"), ("auditor", "auditor")]))
+(HERE / "build-bot.env").write_text(
+    f"export AWS_ACCESS_KEY_ID={creds['build-bot'][0]}\nexport AWS_SECRET_ACCESS_KEY={creds['build-bot'][1]}\n")
+(HERE / "lab.env").write_text(
+    "unset AWS_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_DEFAULT_REGION\n"
+    f"export AWS_ENDPOINT_URL={URL}\n"
+    f"export AWS_CONFIG_FILE={HERE}/aws/config\n"
+    f"export AWS_SHARED_CREDENTIALS_FILE={HERE}/aws/credentials\n")
+print(f"Lab running at {URL}. Leave this terminal open; Ctrl-C stops it.", flush=True)
+try:
+    while True:
+        time.sleep(3600)
+except KeyboardInterrupt:
+    print("Lab stopped.")
+EOF
+python3 lab.py</pre></div>
+<div class="code-block" data-lang="text"><pre>Lab running at http://localhost:8101. Leave this terminal open; Ctrl-C stops it.</pre></div>
+    <p>The lab listens only on your own computer, at <code>localhost</code> port 8101 (moto's usual port, 5000, is often taken on a Mac by macOS's AirPlay Receiver). It builds the organization, then writes four files beside itself: an AWS config file and credentials file under <code>aws/</code>, <code>build-bot.env</code>, which step 3 uses, and <code>lab.env</code>, which points every AWS tool in a terminal at the lab. Three parts of it change moto rather than fill it: moto lists every Region as usable and ignores the difference between default and opt-in Regions, it cannot create an access key that is already old, and it gives new accounts random IDs. The lab corrects all three so the walk-through behaves like a real account and your output matches this page. The last setting before the files makes moto check every request against the caller's IAM policies, so an AccessDenied in the lab is a real refusal.</p>
+
+    <h3>3. Find out who you are (identity)</h3>
+    <p>Leave the lab running and open a second terminal. Everything from here on runs there. The last command on the first line loads <code>lab.env</code>, which clears any AWS settings already in that terminal and points boto3 at the lab. Skip it and these scripts read whatever AWS account your own credentials point at.</p>
+<div class="code-block" data-lang="bash"><pre>cd ~/sdk-lab &amp;&amp; . .venv/bin/activate &amp;&amp; . ./lab.env
+cat &gt; whoami.py &lt;&lt;'EOF'
+import boto3
+
+session = boto3.Session()
+me = session.client("sts").get_caller_identity()
+print("account: ", me["Account"])
+print("identity:", me["Arn"])
+print("found in:", session.get_credentials().method)
+print("region:  ", session.region_name)
+EOF
+python3 whoami.py</pre></div>
+<div class="code-block" data-lang="text"><pre>account:  123456789012
+identity: arn:aws:iam::123456789012:user/alice
+found in: shared-credentials-file
+region:   us-east-1</pre></div>
+    <p><code>get_caller_identity</code> asks AWS <a class="glossary-link" href="../glossary.html#term-sts">STS</a> (Security Token Service) which identity signed the request. It needs no permissions, so it works for any valid credentials, and every script that reports on an account should call it first and print the answer. This one ran as alice, the <code>[default]</code> profile in the credentials file, and not as the auditor. <code>found in</code> is where boto3 found the credentials, and <code>region</code> is the Region its clients will talk to unless told otherwise. Ask for the auditor's profile:</p>
+<div class="code-block" data-lang="text"><pre>AWS_PROFILE=auditor python3 whoami.py</pre></div>
+<div class="code-block" data-lang="text"><pre>account:  123456789012
+identity: arn:aws:iam::123456789012:user/auditor
+found in: shared-credentials-file
+region:   us-east-1</pre></div>
+    <p>That is the identity the rest of the page needs. Now repeat a common afternoon: earlier you were debugging the <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> (continuous integration) pipeline and exported its access key into this terminal, and now you run the audit with the auditor's profile.</p>
+<div class="code-block" data-lang="text"><pre>. ./build-bot.env
+AWS_PROFILE=auditor python3 whoami.py</pre></div>
+<div class="code-block" data-lang="text"><pre>account:  123456789012
+identity: arn:aws:iam::123456789012:user/build-bot
+found in: env
+region:   us-east-1</pre></div>
+    <p><strong>You asked for the auditor and got build-bot.</strong> boto3 tries a fixed list of places for credentials and stops at the first that has some. Environment variables (<code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code>) come third in <a href="https://docs.aws.amazon.com/boto3/latest/guide/credentials.html" target="_blank" rel="noopener noreferrer">boto3's credential order</a>, ahead of the profiles in the credentials file, and <code>AWS_PROFILE</code> does not override them. Passing the profile in code, <code>boto3.Session(profile_name="auditor")</code>, does override them: botocore removes the environment-variable step when a profile is given that way. The AWS CLI (command-line interface) behaves the same way, and <code>--profile</code> on its command line does override environment keys. In this lab the mix-up shows at once, because build-bot may only upload to one bucket, so any audit that lists anything fails. A build identity with read access everywhere would produce a complete, plausible report about the wrong permissions. Clear the leftover keys and set the auditor for the rest of the page:</p>
+<div class="code-block" data-lang="text"><pre>unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+export AWS_PROFILE=auditor
+python3 whoami.py</pre></div>
+<div class="code-block" data-lang="text"><pre>account:  123456789012
+identity: arn:aws:iam::123456789012:user/auditor
+found in: shared-credentials-file
+region:   us-east-1</pre></div>
+    <p>A script that should only ever run against one account can go further and stop when the account ID is not the one it expects.</p>
+    <p>On Azure, <code>DefaultAzureCredential</code> from the azure-identity library has the same shape of chain: a <a class="glossary-link" href="../glossary.html#term-service-principal">service principal</a> set in environment variables comes first, then <a class="glossary-link" href="../glossary.html#term-service-account">workload identity</a>, then managed identity, and your Azure CLI login comes well after those, so leftover service-principal variables such as <code>AZURE_CLIENT_SECRET</code> win over the account you think you logged in with, and so does a virtual machine's managed identity when the script runs on one. At <code>INFO</code> log level it says which one it used, in a line that reads <code>DefaultAzureCredential acquired a token from ...</code>.</p>
+    <p>On Google Cloud, Application Default Credentials (ADC) take the credentials file named by <code>GOOGLE_APPLICATION_CREDENTIALS</code> before the credentials that <code>gcloud auth application-default login</code> saved, and <a href="https://cloud.google.com/docs/authentication/application-default-credentials" target="_blank" rel="noopener noreferrer">the account you signed in with through plain <code>gcloud auth login</code> is not one of the places ADC looks</a>. <code>google.auth.default()</code> returns the credentials it chose and their project, so print them.</p>
+
+    <h3>4. Read every page</h3>
+    <p>A list call returns one page of results. <a href="https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListRoles.html" target="_blank" rel="noopener noreferrer">IAM's <code>ListRoles</code></a> returns up to 100 roles per call unless asked for a different number, says whether more exist in <code>IsTruncated</code>, and hands back a <code>Marker</code> to continue from. Count the roles three ways:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; roles.py &lt;&lt;'EOF'
+import boto3
+
+iam = boto3.client("iam")
+
+first = iam.list_roles()
+print("one call:         ", len(first["Roles"]), "roles, IsTruncated =", first["IsTruncated"])
+
+roles, extra = [], {}
+while True:
+    page = iam.list_roles(**extra)
+    roles.extend(page["Roles"])
+    if "NextToken" not in page:
+        break
+    extra = {"NextToken": page["NextToken"]}
+print("hand-written loop:", len(roles), "roles")
+
+roles = []
+for page in iam.get_paginator("list_roles").paginate():
+    roles.extend(page["Roles"])
+print("paginator:        ", len(roles), "roles")
+EOF
+python3 roles.py</pre></div>
+<div class="code-block" data-lang="text"><pre>one call:          100 roles, IsTruncated = True
+hand-written loop: 100 roles
+paginator:         137 roles</pre></div>
+    <p>The single call stops at 100 and says so in a field the script never checks. The hand-written loop is the kind people copy from an <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) script: EC2 and many other services call their continuation field <code>NextToken</code>, IAM calls it <code>Marker</code>, so the loop sees no <code>NextToken</code> after the first page and stops, as if it had finished. (<code>while True:</code> repeats until <code>break</code>, and <code>**extra</code> passes the dictionary's contents as named arguments.) A <em>paginator</em> knows each operation's own field names and keeps calling until the last page, so <code>get_paginator(...).paginate()</code> is the habit: when <code>client.can_paginate("operation_name")</code> is <code>True</code>, use it.</p>
+    <p>"No more pages" is a signal only the API can give, and two details make guessing it worse. IAM's documentation says it may return fewer than the page size even when more results exist, so a short page is not a last page. <a href="https://docs.aws.amazon.com/organizations/latest/APIReference/API_ListAccounts.html" target="_blank" rel="noopener noreferrer">AWS Organizations</a> goes further: its list calls can occasionally return an <em>empty</em> page while more results remain, and only a missing <code>NextToken</code> means you are done. A loop that stops on an empty page is wrong there, and a paginator is not.</p>
+    <p>The Azure SDK and Google's <code>google-cloud-*</code> libraries page for you: the <code>ItemPaged</code> object an Azure list method returns follows <code>nextLink</code> as you loop over it, and Google's pagers follow <code>next_page_token</code>. The one-page bug comes back when a script skips the SDK, calls the REST (representational state transfer) API with <code>requests</code> and ignores <code>nextLink</code> or <code>nextPageToken</code>, or uses Google's older <code>googleapiclient</code> discovery client, where each <code>execute()</code> returns one page.</p>
+
+    <h3>5. Cover every enabled Region</h3>
+    <p>A boto3 client talks to one Region: the <code>region_name</code> you pass, or else the <code>AWS_DEFAULT_REGION</code> environment variable, or else the profile's <code>region</code> setting. boto3 ignores <code>AWS_REGION</code>, which the AWS CLI does read, so in a terminal where only <code>AWS_REGION</code> is set, the CLI and your script can be looking at different Regions. Security groups, like most resources, live in a Region. This script lists the non-default groups in the client's Region, then in every Region the account has enabled:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; regions.py &lt;&lt;'EOF'
+import boto3
+
+def group_names(ec2):
+    names = []
+    for page in ec2.get_paginator("describe_security_groups").paginate():
+        for group in page["SecurityGroups"]:
+            if group["GroupName"] != "default":
+                names.append(group["GroupName"])
+    return names
+
+ec2 = boto3.client("ec2")
+print(f"{ec2.meta.region_name} only: {group_names(ec2)}")
+
+enabled = [r["RegionName"] for r in ec2.describe_regions()["Regions"]]
+print(len(enabled), "Regions enabled for this account:")
+for region in sorted(enabled):
+    names = group_names(boto3.client("ec2", region_name=region))
+    if names:
+        print(f"  {region}: {names}")
+EOF
+python3 regions.py</pre></div>
+<div class="code-block" data-lang="text"><pre>us-east-1 only: ['web-public', 'debug-ssh', 'office-ssh']
+18 Regions enabled for this account:
+  ap-southeast-2: ['ipv6-everything']
+  eu-west-1: ['legacy-rdp']
+  me-central-1: ['temp-postgres']
+  us-east-1: ['web-public', 'debug-ssh', 'office-ssh']</pre></div>
+    <p><code>def</code> defines a function, a named block that runs when called and hands back what <code>return</code> gives it. Here it lets the same code run once per Region. The first line is what a script that never names a Region sees: three groups, and nothing about the three Regions it did not look at. <a href="https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeRegions.html" target="_blank" rel="noopener noreferrer"><code>describe_regions</code></a> returns the Regions enabled for the account, and <code>AllRegions=True</code> adds the disabled ones, each with an <code>OptInStatus</code>.</p>
+    <p>One of the 18 needs explaining. <a href="https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-regions.html" target="_blank" rel="noopener noreferrer">AWS enables 17 Regions in every commercial account</a>, the ones launched before 20 March 2019. Newer Regions are opt-in: disabled until someone turns them on, and then as usable as any other. The lab account has opted in to <code>me-central-1</code> (United Arab Emirates), and a database port is open to the internet there. A script with a hard-coded list of the usual Regions never looks there, and neither does a reviewer who knows the account "only uses us-east-1". Ask the account, every run.</p>
+    <p>Not everything is regional. IAM and Organizations are global, so one client covers them, and S3's <code>list_buckets</code> returns every bucket whatever its Region. Azure draws the line elsewhere: a subscription is the unit, and calls such as <code>network_security_groups.list_all()</code> in azure-mgmt-network return a subscription's resources in every Azure region at once. On Google Cloud, <a class="glossary-link" href="../glossary.html#term-vpc">VPC</a> (virtual private cloud) firewall rules are global within a project, though organization, folder and network firewall policies also decide what gets in and have list calls of their own, and for regional and zonal resources the Compute library's <code>aggregated_list</code> covers every region and zone of one project. On both, the boundary a script forgets is the subscription or the project, which step 7 comes back to.</p>
+
+    <h3>6. Let errors say what they could not check</h3>
+    <p>When a call fails, boto3 raises <code>ClientError</code>, and the error code AWS sent is in <code>err.response["Error"]["Code"]</code>. Some codes are answers: <code>NoSuchBucketPolicy</code> means the bucket has no bucket policy. Others mean the script did not find out, such as <code>AccessDenied</code> or a throttling code after the retries run out. This script treats them alike:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; policies_naive.py &lt;&lt;'EOF'
+import boto3
+
+s3 = boto3.client("s3")
+for bucket in s3.list_buckets()["Buckets"]:
+    try:
+        s3.get_bucket_policy(Bucket=bucket["Name"])
+        print(bucket["Name"], "has a bucket policy")
+    except Exception:
+        print(bucket["Name"], "has no bucket policy")
+EOF
+python3 policies_naive.py</pre></div>
+<div class="code-block" data-lang="text"><pre>csoh-lab-cloudtrail has a bucket policy
+csoh-lab-web-assets has no bucket policy
+csoh-lab-build-artifacts has no bucket policy
+csoh-lab-payroll-exports has no bucket policy</pre></div>
+    <p>The last line is false. The auditor is not allowed to read anything about <code>csoh-lab-payroll-exports</code>, so the call was refused, and <code>except Exception:</code> turned the refusal into an answer. <code>try:</code> runs the indented lines, and when one of them raises an error Python jumps to the <code>except</code> block that matches it; <code>Exception</code> matches nearly everything, so no failure can get past it. Catch only <code>ClientError</code>, act on the codes that are answers, and keep a list of everything else:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; policies.py &lt;&lt;'EOF'
+import sys
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
+
+s3 = boto3.client("s3", config=Config(retries={"mode": "standard", "total_max_attempts": 10}))
+has_policy, no_policy, not_checked = [], [], []
+
+for page in s3.get_paginator("list_buckets").paginate():
+    for bucket in page["Buckets"]:
+        name = bucket["Name"]
+        try:
+            s3.get_bucket_policy(Bucket=name)
+            has_policy.append(name)
+        except ClientError as err:
+            code = err.response["Error"]["Code"]
+            if code == "NoSuchBucketPolicy":
+                no_policy.append(name)
+            else:
+                not_checked.append(f"{name} ({code})")
+
+print("has a policy:", has_policy)
+print("no policy:   ", no_policy)
+print("NOT CHECKED: ", not_checked)
+sys.exit(1 if not_checked else 0)
+EOF
+python3 policies.py; echo "exit code: $?"</pre></div>
+<div class="code-block" data-lang="text"><pre>has a policy: ['csoh-lab-cloudtrail']
+no policy:    ['csoh-lab-web-assets', 'csoh-lab-build-artifacts']
+NOT CHECKED:  ['csoh-lab-payroll-exports (AccessDenied)']
+exit code: 1</pre></div>
+    <p>The bucket is now reported as not checked, with the reason, and the script exits with code 1, so a scheduler or CI job that runs it sees an incomplete result as a failure. <code>sys.exit(1 if not_checked else 0)</code> is a one-line if-else: 1 when the list has anything in it, 0 when it is empty. The bucket listing now uses a paginator too: AWS <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html" target="_blank" rel="noopener noreferrer">strongly recommends paginated <code>ListBuckets</code> requests</a> and rejects unpaginated ones from accounts allowed more than 10,000 buckets.</p>
+    <p>The <code>Config</code> line sets the retry behaviour instead of leaving it to the default. In the version pinned here, boto3's default is <a href="https://docs.aws.amazon.com/boto3/latest/guide/retries.html" target="_blank" rel="noopener noreferrer">legacy retry mode</a>, which makes at most five attempts in all and retries a shorter list of throttling codes than standard mode does. In this botocore release a new environment variable can already switch the default, so setting the mode yourself keeps the behaviour from changing under you. Use <code>total_max_attempts</code>, which counts every attempt, rather than <code>max_attempts</code>, which in a <code>Config</code> counts only the retries. When the attempts run out, the throttling code (such as <code>Throttling</code>, <code>RequestLimitExceeded</code> or <code>SlowDown</code>) lands in the <code>NOT CHECKED</code> list with everything else.</p>
+    <p>Not every failure needs catching. Run the same script as alice, who has no permissions, and the very first call fails outside the <code>try</code>:</p>
+<div class="code-block" data-lang="bash"><pre>AWS_PROFILE=default python3 policies.py 2&gt;&amp;1 | tail -n 1</pre></div>
+<div class="code-block" data-lang="text"><pre>botocore.errorfactory.AccessDenied: An error occurred (AccessDenied) when calling the ListBuckets operation: Access Denied</pre></div>
+    <p>A crash with a traceback is a loud failure, which is fine. The failure to fear is the quiet one. A network failure is loud in the same way: botocore raises it as a <code>BotoCoreError</code>, such as <code>EndpointConnectionError</code>, not as a <code>ClientError</code>, so this script stops on one instead of listing it. (<code>2&gt;&amp;1 | tail -n 1</code> sends the error output through <code>tail</code>, which keeps only the last line of the traceback.) Azure has the same split: the SDK raises <code>HttpResponseError</code> from <code>azure.core.exceptions</code> with a <code>status_code</code>, 403 for a refusal and 404 for something that does not exist, while Google's client libraries raise exceptions from <code>google.api_core.exceptions</code>, such as <code>Forbidden</code> and <code>PermissionDenied</code> for a refusal and <code>NotFound</code> for a missing resource. A broad <code>except</code> turns all of them into "nothing found".</p>
+
+    <h3>7. Cover every account in the organization</h3>
+    <p>One identity normally sees one account. To audit an organization you list its accounts, then in each one assume a role that trusts your audit identity, and use the temporary credentials that <code>assume_role</code> returns. This script counts the IAM roles in every account:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; org_roles.py &lt;&lt;'EOF'
+import sys
+import boto3
+from botocore.exceptions import ClientError
+
+ROLE = "audit-readonly"
+home = boto3.Session()
+my_account = home.client("sts").get_caller_identity()["Account"]
+
+def session_in(account_id):
+    if account_id == my_account:
+        return home
+    creds = home.client("sts").assume_role(
+        RoleArn=f"arn:aws:iam::{account_id}:role/{ROLE}",
+        RoleSessionName="security-audit")["Credentials"]
+    return boto3.Session(aws_access_key_id=creds["AccessKeyId"],
+                         aws_secret_access_key=creds["SecretAccessKey"],
+                         aws_session_token=creds["SessionToken"],
+                         region_name=home.region_name)
+
+def count_roles(session):
+    iam = session.client("iam")
+    return sum(len(page["Roles"]) for page in iam.get_paginator("list_roles").paginate())
+
+not_checked = []
+for page in home.client("organizations").get_paginator("list_accounts").paginate():
+    for account in page["Accounts"]:
+        label = f"{account['Name']} ({account['Id']})"
+        if account["State"] != "ACTIVE":
+            print(f"{label}: skipped, state is {account['State']}")
+            continue
+        try:
+            print(f"{label}: {count_roles(session_in(account['Id']))} roles")
+        except ClientError as err:
+            not_checked.append(label)
+            print(f"{label}: NOT CHECKED, {err.response['Error']['Code']}")
+
+sys.exit(1 if not_checked else 0)
+EOF
+python3 org_roles.py; echo "exit code: $?"</pre></div>
+<div class="code-block" data-lang="text"><pre>management (123456789012): 137 roles
+prod (111111111111): 2 roles
+dev (222222222222): 2 roles
+sandbox (333333333333): NOT CHECKED, AccessDenied
+exit code: 1</pre></div>
+    <p><code>session_in()</code> returns a boto3 session for any account: the one you are in already, or a new session built from the role's temporary credentials. The auditor's own policy lets it assume the audit role in prod and dev only. sandbox joined later, nobody added it, so AWS refused the role and the script says so. <a class="glossary-link" href="../glossary.html#term-assumerole">AssumeRole</a> is also refused when the role does not exist under that exact name (role names are case sensitive when you assume one), when its trust policy does not name you, or when you fail one of its conditions, and <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot_roles.html" target="_blank" rel="noopener noreferrer">IAM's troubleshooting guide</a> lists what to check. Write that loop with <code>except Exception: continue</code> and it prints three accounts and exits 0.</p>
+    <p>Three details from the AWS documentation shape this loop. First, read <code>State</code> and not <code>Status</code>: AWS said it would retire the account <code>Status</code> field from the <a href="https://docs.aws.amazon.com/organizations/latest/APIReference/API_Account.html" target="_blank" rel="noopener noreferrer">Organizations API</a> on 9 September 2026. A script that tests <code>account.get("Status") != "ACTIVE"</code> gets <code>None</code> once the field is gone, and its "skip inactive accounts" line then skips every account. Second, <code>list_accounts</code> works only from the management account or from a member account that is a delegated administrator, so an audit that runs from a separate security account needs that account registered as one. Third, accounts created through Organizations come with a role named <code>OrganizationAccountAccessRole</code> by default, but it grants full administrator access, and <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_create-cross-account-role.html" target="_blank" rel="noopener noreferrer">accounts invited into the organization do not get it</a> unless someone creates it. Many organizations deploy their own read-only audit role to every account instead, as the lab does. Then every account that joins later needs the role, and in the lab it also needs adding to the auditor's policy.</p>
+    <p>On Azure, the subscription is the boundary: <code>SubscriptionClient(credential).subscriptions.list()</code> lists the subscriptions your credential can see, and the rest of a script runs per subscription. In azure-mgmt-resource 25.0.0 that client moved into its own package, azure-mgmt-resource-subscriptions, which azure-mgmt-resource does not install for you. Older scripts that import it from <code>azure.mgmt.resource</code> fail until you install that package and import from <code>azure.mgmt.resource.subscriptions</code>. On Google Cloud the project is the boundary, and <code>ProjectsClient().search_projects()</code> in google-cloud-resource-manager lists the projects you can see. On both clouds a subscription or project your identity cannot see is missing from that list, with no error at all, so compare the count with what the organization says it has.</p>
+</section>
+
+<section id="exercises">
+    <h2>Hands-on exercises</h2>
+    <p>These are the questions people script most often. Write each one in <code>~/sdk-lab</code> with the lab still running, as the auditor, and compare your output with the answer.</p>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 1</span>
+        <p>List every IAM user with an active access key that has not been used for 90 days. <a class="glossary-link" href="../glossary.html#term-security-hub">AWS Security Hub</a> <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a>, AWS's cloud security posture management service, uses the same 90-day line in its control <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/iam-controls.html" target="_blank" rel="noopener noreferrer">IAM.8</a>. The calls you need are <code>list_users</code>, <code>list_access_keys</code> and <code>get_access_key_last_used</code>.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>cat &gt; stale_keys.py &lt;&lt;'EOF'
+import datetime
+import boto3
+
+LIMIT = datetime.timedelta(days=90)
+now = datetime.datetime.now(datetime.timezone.utc)
+iam = boto3.client("iam")
+
+for page in iam.get_paginator("list_users").paginate():
+    for user in page["Users"]:
+        name = user["UserName"]
+        for key_page in iam.get_paginator("list_access_keys").paginate(UserName=name):
+            for key in key_page["AccessKeyMetadata"]:
+                if key["Status"] != "Active":
+                    continue
+                used = iam.get_access_key_last_used(AccessKeyId=key["AccessKeyId"])["AccessKeyLastUsed"]
+                if "LastUsedDate" in used:
+                    idle, how = now - used["LastUsedDate"], "last used"
+                else:
+                    idle, how = now - key["CreateDate"], "never used, created"
+                if idle &gt; LIMIT:
+                    print(f"{name}: {how} {idle.days} days ago")
+EOF
+python3 stale_keys.py</pre></div>
+<div class="code-block" data-lang="text"><pre>bob: last used 120 days ago
+dave: never used, created 150 days ago</pre></div>
+            <p>dave's key is the one a first attempt misses. <a href="https://docs.aws.amazon.com/IAM/latest/APIReference/API_AccessKeyLastUsed.html" target="_blank" rel="noopener noreferrer">For a key that has never been used, AWS leaves <code>LastUsedDate</code> out</a> and sets <code>ServiceName</code> and <code>Region</code> to <code>"N/A"</code>. So <code>used["LastUsedDate"]</code> crashes on it, which is loud and fine, while <code>if used.get("LastUsedDate") and ...</code> quietly treats a key that has sat unused for 150 days as not stale. A never-used key is measured from its <code>CreateDate</code>, which is why carol's five-day-old key is not on the list. dave's second key is inactive and is skipped, since it cannot sign anything until someone turns it back on. The times boto3 returns carry a time zone, so <code>now</code> must have one too (<code>datetime.timezone.utc</code>): subtracting a time without one from a time with one raises <code>TypeError</code>.</p>
+            <p>For a large account, IAM's credential report (<code>generate_credential_report</code>, then <code>get_credential_report</code>) gives the same dates for every user in one CSV (comma-separated values) file instead of three calls per key, and writes <code>N/A</code> where a key was never used. IAM makes a new report at most every four hours, so it can be up to four hours behind.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 2</span>
+        <p>List every <a class="glossary-link" href="../glossary.html#term-security-group">security group</a> with an inbound rule open to the whole internet, in every enabled Region, with the protocol and port. Make the work a function that takes a boto3 session, because Exercise 4 reuses it.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>cat &gt; open_sgs.py &lt;&lt;'EOF'
+import boto3
+
+WORLD = {"0.0.0.0/0", "::/0"}
+
+def describe(rule):
+    if rule["IpProtocol"] == "-1":
+        return "all traffic"
+    low, high = rule.get("FromPort"), rule.get("ToPort")
+    return f"{rule['IpProtocol']} {low if low == high else f'{low}-{high}'}"
+
+def open_groups(session):
+    found = []
+    ec2 = session.client("ec2")
+    for region in sorted(r["RegionName"] for r in ec2.describe_regions()["Regions"]):
+        regional = session.client("ec2", region_name=region)
+        for page in regional.get_paginator("describe_security_groups").paginate():
+            for group in page["SecurityGroups"]:
+                for rule in group["IpPermissions"]:
+                    sources = [r["CidrIp"] for r in rule.get("IpRanges", [])]
+                    sources += [r["CidrIpv6"] for r in rule.get("Ipv6Ranges", [])]
+                    for source in WORLD.intersection(sources):
+                        found.append(f"{region} {group['GroupName']} ({group['GroupId']}): "
+                                     f"{describe(rule)} from {source}")
+    return sorted(found)
+
+if __name__ == "__main__":
+    for line in open_groups(boto3.Session()):
+        print(line)
+EOF
+python3 open_sgs.py</pre></div>
+<div class="code-block" data-lang="text"><pre>ap-southeast-2 ipv6-everything (sg-7febd3ce0102d6546): all traffic from ::/0
+eu-west-1 legacy-rdp (sg-ddfad65ca6f049189): tcp 3389 from 0.0.0.0/0
+me-central-1 temp-postgres (sg-be8767ea2416195ef): tcp 5432 from 0.0.0.0/0
+us-east-1 debug-ssh (sg-c225ead533fca7440): tcp 22 from 0.0.0.0/0
+us-east-1 web-public (sg-f3b1db538cdbb826c): tcp 443 from 0.0.0.0/0</pre></div>
+            <p>Your group IDs will differ; moto makes new ones each time the lab starts. Three of the five are outside us-east-1, and the first is the one most scripts miss: its rule allows <code>::/0</code>, the whole IPv6 internet, which <a href="https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_IpPermission.html" target="_blank" rel="noopener noreferrer">the API returns in <code>Ipv6Ranges</code></a>, not in <code>IpRanges</code>. A script that reads only <code>IpRanges</code> reports four groups. The same rule uses protocol <code>-1</code>, which means every protocol and every port, and it has no <code>FromPort</code> at all, so <code>rule["FromPort"]</code> would crash there; <code>rule.get()</code> does not. Only <code>IpPermissions</code>, the inbound rules, is checked. <code>IpPermissionsEgress</code> holds the outbound rules, where allowing everything is the usual default.</p>
+            <p><code>WORLD.intersection(sources)</code> keeps the sources that are in the set <code>WORLD</code>. The last two lines run only when the file is run as a script, not when another script imports its function, which Exercise 4 relies on. Whether <code>web-public</code> is a finding is a question for a person: port 443 open to everyone is normal for a public load balancer. The script's job is the list, and it has one gap to know about: a rule can take its sources from a managed prefix list (<code>PrefixListIds</code>), which this script does not expand, so check what your prefix lists contain.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 3</span>
+        <p>List every S3 bucket that S3 Block Public Access does not fully protect. Each of the four settings can be on for the bucket, for the whole account, or both. Report which settings are off at both levels, and report any bucket you could not check.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>cat &gt; bpa.py &lt;&lt;'EOF'
+import sys
+import boto3
+from botocore.exceptions import ClientError
+
+SETTINGS = ["BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets"]
+session = boto3.Session()
+account_id = session.client("sts").get_caller_identity()["Account"]
+
+def missing(config):
+    return [name for name in SETTINGS if not config.get(name)]
+
+try:
+    account = session.client("s3control").get_public_access_block(AccountId=account_id)
+    account_off = missing(account["PublicAccessBlockConfiguration"])
+except ClientError as err:
+    if err.response["Error"]["Code"] != "NoSuchPublicAccessBlockConfiguration":
+        raise
+    account_off = SETTINGS
+print("account level, off:", ", ".join(account_off) or "none")
+
+s3 = session.client("s3")
+not_checked = []
+for page in s3.get_paginator("list_buckets").paginate():
+    for bucket in page["Buckets"]:
+        name = bucket["Name"]
+        try:
+            config = s3.get_public_access_block(Bucket=name)["PublicAccessBlockConfiguration"]
+            bucket_off = missing(config)
+        except ClientError as err:
+            code = err.response["Error"]["Code"]
+            if code != "NoSuchPublicAccessBlockConfiguration":
+                not_checked.append(f"{name} ({code})")
+                continue
+            bucket_off = SETTINGS
+        off_at_both = [setting for setting in bucket_off if setting in account_off]
+        if off_at_both:
+            print(f"{name}: off at both levels: {', '.join(off_at_both)}")
+
+print("NOT CHECKED:", not_checked)
+sys.exit(1 if not_checked else 0)
+EOF
+python3 bpa.py; echo "exit code: $?"</pre></div>
+<div class="code-block" data-lang="text"><pre>account level, off: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets
+csoh-lab-web-assets: off at both levels: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets
+csoh-lab-build-artifacts: off at both levels: BlockPublicPolicy
+NOT CHECKED: ['csoh-lab-payroll-exports (AccessDenied)']
+exit code: 1</pre></div>
+            <p><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html" target="_blank" rel="noopener noreferrer">S3 applies the most restrictive combination</a> of the bucket's and the account's settings, so a setting is really off only when it is off at both levels. The account-level settings come from the S3 Control API (<code>s3control</code>), not from <code>s3</code>. One error code is an answer: <code>NoSuchPublicAccessBlockConfiguration</code>, from either level, means nothing is configured there, so all four settings are off at that level. Any other code means not checked. Turn on all four settings at the account level and the bucket lines disappear, because the account then covers every bucket.</p>
+            <p>S3 Block Public Access can also be set for a whole AWS Organizations organization through an S3 policy. That needs no extra call: account-level settings inherit it, and <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_control_GetPublicAccessBlock.html" target="_blank" rel="noopener noreferrer">the account-level <code>GetPublicAccessBlock</code> returns the effective configuration</a>, organization policy included. Settings that are off do not make a bucket public: they mean Block Public Access will not stop a bucket policy or <a class="glossary-link" href="../glossary.html#term-acl">ACL</a> (access control list) that makes it public. AWS Security Hub CSPM's control S3.8 checks the bucket-level settings.</p>
+        </details>
+    </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 4</span>
+        <p>Run Exercise 2's check in every active account in the organization, assuming <code>audit-readonly</code> in each member account, and finish with the accounts you could not check.</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>cat &gt; org_open_sgs.py &lt;&lt;'EOF'
+import sys
+import boto3
+from botocore.exceptions import ClientError
+from open_sgs import open_groups
+
+home = boto3.Session()
+my_account = home.client("sts").get_caller_identity()["Account"]
+not_checked = []
+
+for page in home.client("organizations").get_paginator("list_accounts").paginate():
+    for account in page["Accounts"]:
+        if account["State"] != "ACTIVE":
+            continue
+        try:
+            session = home
+            if account["Id"] != my_account:
+                creds = home.client("sts").assume_role(
+                    RoleArn=f"arn:aws:iam::{account['Id']}:role/audit-readonly",
+                    RoleSessionName="security-audit")["Credentials"]
+                session = boto3.Session(aws_access_key_id=creds["AccessKeyId"],
+                                        aws_secret_access_key=creds["SecretAccessKey"],
+                                        aws_session_token=creds["SessionToken"],
+                                        region_name=home.region_name)
+            for line in open_groups(session):
+                print(account["Name"], line)
+        except ClientError as err:
+            not_checked.append(f"{account['Name']} ({err.response['Error']['Code']})")
+
+print("NOT CHECKED:", not_checked)
+sys.exit(1 if not_checked else 0)
+EOF
+python3 org_open_sgs.py; echo "exit code: $?"</pre></div>
+<div class="code-block" data-lang="text"><pre>management ap-southeast-2 ipv6-everything (sg-7febd3ce0102d6546): all traffic from ::/0
+management eu-west-1 legacy-rdp (sg-ddfad65ca6f049189): tcp 3389 from 0.0.0.0/0
+management me-central-1 temp-postgres (sg-be8767ea2416195ef): tcp 5432 from 0.0.0.0/0
+management us-east-1 debug-ssh (sg-c225ead533fca7440): tcp 22 from 0.0.0.0/0
+management us-east-1 web-public (sg-f3b1db538cdbb826c): tcp 443 from 0.0.0.0/0
+prod us-west-2 prod-bastion (sg-efdb8f9beeb14faa8): tcp 22 from 0.0.0.0/0
+NOT CHECKED: ['sandbox (AccessDenied)']
+exit code: 1</pre></div>
+            <p><code>from open_sgs import open_groups</code> loads the function from Exercise 2's file, which is why that file keeps its own printing behind <code>if __name__ == "__main__":</code>. prod adds a <a class="glossary-link" href="../glossary.html#term-bastion-host">bastion host</a> with SSH (Secure Shell) open to the world in us-west-2, a Region no single-account, single-Region script would have looked in. sandbox has a group open to all traffic in us-east-1 that this run cannot see, and the last line is the only place that shows. That line is the point of the exercise: the report says which part of the organization it covers.</p>
+            <p>One refinement: if one Region fails inside <code>open_groups()</code>, for example because a <a class="glossary-link" href="../glossary.html#term-scp">service control policy</a> (SCP) blocks that Region, the whole account lands in <code>NOT CHECKED</code>. Moving a <code>try</code> inside the Region loop would report the Region instead, and keep the rest of the account's results.</p>
+        </details>
+    </div>
+</section>
+
+<section id="mistakes">
+    <h2>Common mistakes</h2>
+    <ul>
+        <li><strong>Calling a list operation once.</strong> IAM's list calls page at 100, Organizations' <code>ListAccounts</code> at 20 at most, and other services at sizes of their own. Use a paginator wherever <code>can_paginate()</code> says one exists.</li>
+        <li><strong>Hand-writing a pagination loop.</strong> Each service names its continuation field: <code>Marker</code> in IAM and <code>NextToken</code> in EC2 and Organizations, and S3 varies by operation. S3 uses <code>ContinuationToken</code> for <code>ListBuckets</code> but <code>NextContinuationToken</code> for <code>ListObjectsV2</code>. A loop that checks the wrong one stops after the first page, and one that stops on an empty or short page stops early.</li>
+        <li><strong>Trusting <code>AWS_PROFILE</code> with keys in the environment.</strong> Environment variables win over it. Print <code>get_caller_identity()</code> at the top of the script, or pass <code>profile_name</code> in code.</li>
+        <li><strong>Looking in one Region, or in a fixed list.</strong> Ask <code>describe_regions()</code> every run, so opt-in Regions someone enabled last month are included.</li>
+        <li><strong>Setting <code>AWS_REGION</code> for a boto3 script.</strong> boto3 reads <code>AWS_DEFAULT_REGION</code> and ignores <code>AWS_REGION</code>, so the script quietly uses the profile's Region instead.</li>
+        <li><strong><code>except Exception: pass</code>, or <code>continue</code>.</strong> It turns AccessDenied, throttling and network failures into "nothing found". Catch <code>ClientError</code>, handle the codes that are answers, and report the rest.</li>
+        <li><strong>Reading a field that might be missing with <code>.get()</code> and treating <code>None</code> as "fine".</strong> A never-used access key has no <code>LastUsedDate</code>, a rule for all traffic has no <code>FromPort</code>, and AWS said it would retire the account <code>Status</code> field. Decide what a missing value means before you write the comparison.</li>
+        <li><strong>Exiting 0 from an incomplete audit.</strong> A scheduled job can only see the exit code. Exit non-zero whenever anything was not checked.</li>
+        <li><strong>Expecting a list call to return everything about each item.</strong> <code>list_roles</code> leaves out each role's last-used date, tags and permissions boundary; <code>get_role</code> returns them, one role per call.</li>
+    </ul>
+</section>
+
+<section id="next" class="cta-section">
+    <h2>Where next</h2>
+    <ul>
+        <li><a href="jq-and-jmespath.html">jq and JMESPath</a> for one-off questions at the command line, where a script would be too much, including the AWS CLI's <code>--query</code>.</li>
+        <li><a href="iam-policy-languages.html">IAM policy languages</a> for reading the policies these scripts list, starting with why a policy that says Allow can grant nothing.</li>
+        <li><a href="panther-python-detections.html">Panther Python detections</a> for Python in a different job: one log event in, true or false out.</li>
+        <li><a href="../homelab/localstack-aws-lab.html">The LocalStack AWS lab</a> for a longer-lived pretend AWS, deployed with <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a>, to point these scripts at.</li>
+        <li>The <a href="https://docs.aws.amazon.com/boto3/latest/guide/paginators.html" target="_blank" rel="noopener noreferrer">boto3 paginators guide</a>, <a href="https://learn.microsoft.com/en-us/azure/developer/python/sdk/azure-sdk-overview" target="_blank" rel="noopener noreferrer">the Azure SDK for Python overview</a>, <a href="https://cloud.google.com/python/docs/reference" target="_blank" rel="noopener noreferrer">Google's Python client library reference</a> and <a href="https://docs.getmoto.org/" target="_blank" rel="noopener noreferrer">moto's documentation</a>.</li>
+    </ul>
+</section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
