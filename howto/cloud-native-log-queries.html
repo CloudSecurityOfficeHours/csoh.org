@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-03">
-    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-04">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="cloudwatch logs insights">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-03",
-      "dateModified": "2026-11-03",
+      "dateModified": "2026-11-04",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -351,10 +351,10 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
 <div class="info-box--blue">
-    <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> for the first half, an AWS account that is not production, with the AWS CLI version 2 and <code>jq</code>; for the second, a Google Cloud project that is not production, with the gcloud CLI. Either half works on its own. The lab is 24 events, about 9 KB, well inside the free allowances AWS and Google list for log data, and the last step of each half deletes what you made.</p>
-    <p class="u-mt-075"><strong>How this page was checked:</strong> neither engine runs on your own computer, and this page was written without access to either cloud, so its queries have not been run against CloudWatch Logs Insights or Cloud Logging. Every command, operator, function, limit and default was checked against AWS's and Google's documentation on 3 November 2026, and the results described are what those documented rules give for the lab file, worked out by a local script rather than captured from either service. The shell blocks were run as printed, in bash and in an interactive zsh on macOS (AWS CLI 2.39.2, Google Cloud SDK 585.0.0, jq 1.8.2), against a local stand-in for both services' APIs, which shows that each command sends what the page says it sends and nothing more.</p>
+    <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> for the first half, an AWS account that is not production, with the AWS CLI version 2 and <code>jq</code>; for the second, a Google Cloud project that is not production, with the gcloud CLI. Either half works on its own. The lab is 24 events, about 9 KB, well inside the free allowances AWS and Google list for log data, and the last step of each half deletes what you made, apart from one AWS metric that cannot be deleted and costs nothing once unused.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> every query and command on this page was run as printed on 4 November 2026, the first half against CloudWatch Logs in us-east-1 and the second against Cloud Logging and Cloud Monitoring in a project that is not production, from macOS with AWS CLI 2.39.2, Google Cloud SDK 585.0.0 and jq 1.8.2. Every result described is what came back, including the September load refused without an error, the alarm's <code>OK</code> and <code>ALARM</code>, the log-based alert naming <code>backup-svc</code>, and the Logs Explorer's five-minute default. The two audit-log filters in the second half's step 8 ran in the same project, which had no matching entries, so only their syntax was tested. Limits and timings the lab cannot reach, such as the 200-field limit, retention deletion and the one-day window of <code>gcloud logging read</code>, were checked against AWS's and Google's documentation on 3 November 2026. The shell blocks were also run in bash and in an interactive zsh against a local stand-in for both services' APIs, which shows that each command sends what the page says it sends and nothing more.</p>
 </div>
 
 <section id="intro">
@@ -472,7 +472,7 @@ jq -c '.results[] | map(select(.field != "@ptr") | {(.field): .value}) | add' &l
 jq -r '"(\(.results | length) rows, \(.statistics.recordsScanned | floor) records scanned)"' &lt;&lt;&lt; "$r"
 EOF
 chmod +x lq</pre></div>
-    <p>Save a query in a file and run <code>./lq &lt; query.txt</code>, or run <code>./lq</code>, paste, and press Ctrl-D. The last line it prints counts the rows and the log events the query read: zero records scanned means the time range or the log group missed your data, which an empty result alone never tells you. Now check what arrived:</p>
+    <p>Save a query in a file and run <code>./lq &lt; query.txt</code>, or run <code>./lq</code>, paste, and press Ctrl-D. The last line it prints counts the rows and the log events the query read. Zero records scanned is what you see when the time range or the log group missed your data, but not only then: Logs Insights can pass over events that cannot match a filter without reading them, and counts those separately, as <code>estimatedRecordsSkipped</code>, so <code>filter eventName = "NoSuchEvent"</code> reads none of the lab's events. A query with no filter reads every event in range. Start with one, and check what arrived:</p>
 <div class="code-block" data-lang="logs insights"><pre>stats count(*) as events, count(eventName) as parsed</pre></div>
     <p>Expect one row: <code>events</code> 24 and <code>parsed</code> 24. <code>stats</code> computes totals; <code>count(*)</code> counts events, and <code>count(eventName)</code> counts only the events that have a field called <code>eventName</code>. Logs Insights finds the fields of a JSON event by itself and names nested ones with dots, such as <code>userIdentity.userName</code>, so every CloudTrail field is ready to filter on. If some events had not been read as JSON, <code>parsed</code> would come out smaller, and a filter on a field that was never found matches nothing without complaint. Two limits sit behind that: Logs Insights extracts at most 200 fields from one JSON event (the <code>parse</code> command reads the rest from <code>@message</code>, the raw event), and a field whose value is JSON written as a string stays one opaque value until <code>jsonParse()</code> opens it.</p>
 
@@ -551,6 +551,7 @@ aws cloudwatch describe-alarms --alarm-names csoh-lab-refused-calls --query 'Met
 <div class="code-block" data-lang="bash"><pre>aws cloudwatch delete-alarms --alarm-names csoh-lab-refused-calls
 aws logs delete-metric-filter --log-group-name csoh-lab-cloudtrail --filter-name refused-calls
 aws logs delete-log-group --log-group-name csoh-lab-cloudtrail</pre></div>
+    <p>One thing stays: the <code>RefusedCalls</code> metric in the <code>CSOHLab</code> namespace. CloudWatch metrics cannot be deleted. AWS charges for a custom metric only in hours when data is sent to it, so this one costs nothing from now on; it drops out of the console after two weeks without data and expires after 15 months.</p>
 </section>
 
 <section id="google">
@@ -633,7 +634,7 @@ gcloud monitoring policies create --policy-from-file=trail-tamper-alert.json</pr
     <p>The filter is step 3's query, with its quotes escaped for JSON. <code>labelExtractors</code> copies the actor's name into the notification, <code>notificationRateLimit</code> allows one notification per five minutes, and <code>autoClose</code> closes the alert after 30 minutes, the shortest Google allows. The policy lists no <code>notificationChannels</code>, so its alerts appear only on Monitoring's <strong>Alerting</strong> page until you add one. Its documentation names the ATT&amp;CK technique, <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002 Disable or Modify Cloud Log</a>, under the Defense Impairment tactic, which ATT&amp;CK added in version 19. The command prints the policy's name, <code>projects/PROJECT_ID/alertPolicies/POLICY_ID</code>; keep it for the clean-up. Like a metric filter, the policy matches entries as they arrive, so the <code>StopLogging</code> already in the log does not fire it. Write the negative case, wait a few minutes and see that no alert opens, then write the positive case:</p>
 <div class="code-block" data-lang="bash"><pre>gcloud logging write cloudtrail-lab "$(grep -F GetCallerIdentity cloudtrail-lab.jsonl)" --payload-type=json
 gcloud logging write cloudtrail-lab "$(grep -F StopLogging cloudtrail-lab.jsonl)" --payload-type=json</pre></div>
-    <p>After the second, expect an alert for the policy on the Alerting page, naming <code>backup-svc</code>. Then delete the policy (paste the name the create command printed) and the log, both without a confirmation prompt:</p>
+    <p>After the second, expect an alert for the policy on the Alerting page within a minute or so, naming <code>backup-svc</code> in its summary. Then delete the policy (paste the name the create command printed) and the log, both without a confirmation prompt:</p>
 <div class="code-block" data-lang="bash"><pre>gcloud monitoring policies delete projects/PROJECT_ID/alertPolicies/POLICY_ID --quiet
 gcloud logging logs delete cloudtrail-lab --quiet</pre></div>
 
@@ -732,6 +733,7 @@ jsonPayload.errorCode:* NOT jsonPayload.errorCode="AccessDenied"</pre></div>
         <li><strong>Querying the wrong place or time.</strong> Logs Insights reads only the log groups and time range you select; the Logs Explorer opens on its default scope and the last five minutes; <code>gcloud logging read</code> reads one day unless told otherwise. An empty result from any of them proves nothing until you have checked those.</li>
         <li><strong>Trusting a load because the command succeeded.</strong> PutLogEvents refuses old and future events in a field of its reply, and Cloud Logging accepts entries older than a bucket's retention and stores none of them. Count what arrived.</li>
         <li><strong>Copying old logs into a new log group.</strong> Logs Insights cannot read events dated before the group was created, even ones CloudWatch Logs accepted.</li>
+        <li><strong>Misspelling the first command.</strong> Logs Insights runs <code>filtr eventName = "StopLogging"</code> without an error and returns nothing, exactly as if no event matched, while a misspelled command after a <code>|</code>, such as <code>fieldz</code>, is refused as a malformed query. When a query that should find something finds nothing, read it again before you read the result.</li>
         <li><strong>Filtering on a field that was never extracted.</strong> A non-JSON event, a field past the 200th, or JSON stored as a string all give a filter nothing to match. Compare <code>count(*)</code> with <code>count(field)</code>.</li>
         <li><strong>Counting one spelling of a refusal.</strong> A rule that counts only <code>AccessDenied</code> misses EC2's <code>Client.UnauthorizedOperation</code>, under-counts, and stays silent.</li>
         <li><strong>Writing <code>bin(600s)</code>.</strong> Logs Insights caps seconds at 60 and builds one-minute buckets without a word. Write <code>10m</code>.</li>
