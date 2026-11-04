@@ -122,6 +122,10 @@ OVERRIDES: dict[str, str] = {
     # A Semgrep rule whose pattern quotes a Terraform `resource "..."` header,
     # which the HCL rule takes for a Terraform file.
     '18a649b64529': 'yaml',
+    # An ~/.aws/config profile on portfolio/prowler-audit.html. INI, which
+    # main.js has no tokens for; its `# In ~/.aws/config` comment and `=`
+    # lines read as shell to the fallback, and bash would invite a paste.
+    'd3401c9d2944': 'text',
 }
 
 
