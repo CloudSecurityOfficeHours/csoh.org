@@ -1170,8 +1170,8 @@ misreport layout (e.g. `clientWidth` of 0).
   featured OG card grid; a few legacy `img/og/*.webp` siblings remain for pages
   that still render an OG asset through `<picture>`.
 - **`img/thumbs/`**: 3:2 glyph tiles from `tools/generate_thumbnails.py`, for
-  compact card grids (today: `what-practitioners-think.html`), where an OG
-  card's text is illegible.
+  compact card grids (`topics.html` and `what-practitioners-think.html`),
+  where an OG card's text is illegible.
 
 `.resource-card .resource-preview` crops to a fixed box with `object-fit:
 cover` for third-party screenshots; the `--og` and `--thumb` modifiers pin the
