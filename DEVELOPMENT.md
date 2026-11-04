@@ -215,7 +215,7 @@ csoh.org/
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (search-indexed as guide; not cross-linked)
 ├── howto/                           # 17 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
-│                                    #   CEL, Kyverno, Sigma/YARA, IAM+Cedar, Azure Policy, and the SIEM detection languages
+│                                    #   CEL, Kyverno, Sigma/YARA, IAM+Cedar, Azure Policy, Semgrep, and the SIEM detection languages
 │                                    #   (SPL, KQL, ES|QL/EQL, SQL, ...), Python/boto3 (search-indexed, cross-linked)
 │
 │  ── Shared assets ──
