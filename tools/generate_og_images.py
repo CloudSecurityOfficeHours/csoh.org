@@ -788,6 +788,10 @@ PAGES = [
      "Python and the Cloud SDKs",
      "boto3 scripts that check every page, Region and account, as the right identity, and say what they missed.",
      "How-To Guide"),
+    ("howto/cloud-native-log-queries.html",
+     "Logs Insights and Cloud Logging",
+     "The first queries of an investigation, in AWS and Google Cloud, and the defaults that hide events.",
+     "How-To Guide"),
 ]
 
 
