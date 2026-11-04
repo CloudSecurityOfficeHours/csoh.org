@@ -11,8 +11,8 @@ conflated.
 
 An OG image is a 1200x630 social embed: a big headline, a subtitle, a
 footer, all sized to be read at full width in a Slack or LinkedIn unfurl.
-Compact card grids (today: what-practitioners-think.html) render their
-thumbnail 197-303px wide. An OG card in that slot gives a 6px subtitle and
+Compact card grids (topics.html and what-practitioners-think.html)
+render their thumbnail 197-303px wide. An OG card in that slot gives a 6px subtitle and
 a headline that just repeats the <h3> directly beneath it. The homepage no
 longer uses a thumbnail or featured-OG card grid; its first screen is three
 doors and the next session.
@@ -104,6 +104,48 @@ THUMBS = [
     ("digest-supply-chain",        "links",           "#fb923c", "Supply chain"),
     ("digest-regulation",          "scales",          "#94a3b8", "Regulation"),
     ("digest-conferences",         "mic",             "#f472b6", "Conferences"),
+
+    # topics.html. Eight cards reuse tiles above: what-is-cloud-security,
+    # shared-responsibility, cspm-vs-cnapp, aws-security, azure-security,
+    # gcp-security, iam, zero-trust. Accents differ from each card's grid
+    # neighbours. The label is the category word; the card heading names
+    # the page.
+    ("cnapp-to-ai-app",            "spark",           "#c084fc", "Platform"),
+    ("cloud-security-best-practices", "checklist",    "#fbbf24", "Practice"),
+    ("vendor-landscape",           "compass",         "#fb923c", "Vendors"),
+    ("glossary",                   "book",            "#60a5fa", "Glossary"),
+    ("faq",                        "help",            "#f472b6", "FAQ"),
+    ("cloud-security-comparison",  "columns",         "#818cf8", "Versus"),
+    ("containers",                 "box",             "#2dd4bf", "Containers"),
+    ("kubernetes",                 "hex",             "#a78bfa", "Cluster"),
+    ("serverless",                 "bolt",            "#fbbf24", "Functions"),
+    ("service-mesh-security",      "nodes",           "#818cf8", "Mesh"),
+    ("ci-cd",                      "chevrons",        "#fb7185", "Pipeline"),
+    ("landing-zones",              "blueprint",       "#4ade80", "Zones"),
+    ("non-human-identity",         "bot",             "#fb923c", "Machines"),
+    ("data-security",              "database",        "#38bdf8", "Data"),
+    ("network-security",           "share",           "#34d399", "Network"),
+    ("api-security",               "code",            "#f472b6", "APIs"),
+    ("saas-security",              "apps",            "#facc15", "SaaS"),
+    ("threat-modeling",            "tree",            "#fb7185", "Threats"),
+    ("human-risk",                 "user-alert",      "#60a5fa", "People"),
+    ("vulnerability-management",   "bug",             "#4ade80", "Vulns"),
+    ("backup-dr",                  "vault",           "#ff9d2e", "Backup"),
+    ("cloud-logging",              "scroll",          "#22d3ee", "Logs"),
+    ("working-a-finding",          "flag",            "#ff9d2e", "Findings"),
+    ("cloud-soc",                  "eye",             "#a78bfa", "SOC"),
+    ("detection-engineering",      "crosshair",       "#f472b6", "Detect"),
+    ("incident-response",          "alert",           "#facc15", "Response"),
+    ("cloud-pentesting",           "terminal",        "#7dd37d", "Pentest"),
+    ("grc",                        "scales",          "#c084fc", "GRC"),
+    ("compliance-frameworks",      "award",           "#4aa3f0", "Frameworks"),
+    ("ai-learning",                "cap",             "#38bdf8", "Learn"),
+    ("ai-ml-security",             "chip",            "#c084fc", "Models"),
+    ("mcp-security",               "plug",            "#fbbf24", "MCP"),
+    ("cloud-deployment",           "upload",          "#60a5fa", "Deploy"),
+    ("github-actions",             "workflow",        "#f87171", "Actions"),
+    ("terraform",                  "blocks",          "#34d399", "Terraform"),
+    ("version-control",            "branch",          "#fb7185", "Git"),
 ]
 
 
