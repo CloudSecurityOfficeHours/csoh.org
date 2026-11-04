@@ -98,6 +98,8 @@ on:
       # anything a step reads has to be able to trigger the step.
       - 'tools/sync_recap_videos.py'
       - 'tools/update_presentations_schema.py'
+      # The latest-recap gate's verdict changes with its tool.
+      - 'tools/sync_latest_recap.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step.
@@ -408,6 +410,20 @@ jobs:
         run: |
           set -o pipefail
           python3 tools/sync_recap_videos.py --check 2>&1 | tee check-recap-videos.log
+
+      # The "Latest recap" link on sessions.html is the one <a> carrying
+      # data-latest-recap, stamped by sync_latest_recap.py, which add_meeting.py
+      # runs after every recap. It goes stale only when a recap page lands
+      # without add_meeting.py or the hook is removed, so a failure always has a
+      # cause in the diff. Unconditional, like the recap-recording gate: a new
+      # recap page changes the verdict. The self-test runs first as the
+      # control, so a detector that stopped matching cannot report clean.
+      - name: Assert sessions.html links the newest recap
+        id: latest-recap
+        run: |
+          set -o pipefail
+          python3 tools/sync_latest_recap.py --self-test 2>&1 | tee check-latest-recap.log
+          python3 tools/sync_latest_recap.py --check 2>&1 | tee -a check-latest-recap.log
 
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which

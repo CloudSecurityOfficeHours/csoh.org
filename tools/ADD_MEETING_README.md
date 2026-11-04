@@ -18,6 +18,7 @@ The script:
 6. Adds a `<url>` entry to `sitemap.xml` and a record to `meetings-search-index.json`.
 7. Fixes broken entities common in Apple Notes exports (`&quot` → `"`, `&amp` → `&`).
 8. Regenerates `recaps.xml` (the recap RSS feed) by shelling out to [`generate_recaps_rss.py`](generate_recaps_rss.py), so the feed never lags the recap index. Best-effort: a feed that fails to rebuild prints a warning but does not fail the publish, since the recap page itself is already written by that point.
+9. Points the "Latest recap" link on `sessions.html` at the newest recap on disk by shelling out to [`sync_latest_recap.py`](sync_latest_recap.py). It reads the newest date from `meetings/`, not the date being published, so replacing an older recap leaves the link alone. Best-effort like the feed; `validate-html.yml` runs the same tool with `--check`, so a link that failed to update fails the PR.
 
 Re-running with the same date is idempotent - the existing page is replaced in place.
 
@@ -107,8 +108,8 @@ An empty `<h2>Summary</h2>` placeholder (as produced by some Apple Notes transcr
   ```
 
   **Why rebuild the index first.** `add_meeting.py` does insert a record for the new recap into `meetings-search-index.json`, so the injector will see it either way. The catch is that the record is built from the *parsed note*, while `build_meetings_search_index.py` rebuilds from the *rendered pages*. Any hand-edit you make to a recap page after publishing (and the review checklist in [BACKFILL_ZOOM_SUMMARIES_README.md](BACKFILL_ZOOM_SUMMARIES_README.md) tells you to make several: headline, mis-transcribed names, sensitive framing) leaves the index holding the pre-edit text. Since scoring runs against that text, a recap can be selected or skipped on wording you already removed. Rebuilding is fast and always safe, so just do it first. See [INJECT_SESSION_BLOCKS_README.md](INJECT_SESSION_BLOCKS_README.md).
-- **Commits and pushes.** Stage and commit the changes yourself - the script never touches git. Affected files: `meetings/YYYY-MM-DD.html` (new), `meetings.html`, `meetings-search-index.json`, `recaps.xml`, `sitemap.xml`, and the previously-newest meeting page (its pager is patched). If you also ran the two optional passes above, add the topic pages they touched.
-- **Removing meetings.** To remove a stale meeting, delete `meetings/YYYY-MM-DD.html`, the matching card in `meetings.html`, the search-index record, and the sitemap entry. Fix the pager on neighboring meeting pages by hand.
+- **Commits and pushes.** Stage and commit the changes yourself - the script never touches git. Affected files: `meetings/YYYY-MM-DD.html` (new), `meetings.html`, `meetings-search-index.json`, `recaps.xml`, `sitemap.xml`, `sessions.html`, and the previously-newest meeting page (its pager is patched). If you also ran the two optional passes above, add the topic pages they touched.
+- **Removing meetings.** To remove a stale meeting, delete `meetings/YYYY-MM-DD.html`, the matching card in `meetings.html`, the search-index record, and the sitemap entry. Fix the pager on neighboring meeting pages by hand. If it was the newest recap, run `python3 tools/sync_latest_recap.py` so `sessions.html` stops linking it.
 - **Renaming/redating.** If you got the date wrong, delete the old page and re-run the tool with the corrected note.
 
 ## Requirements

@@ -13,6 +13,8 @@ a file (HTML or plain text). The script:
    the older neighbor gets a "Newer meeting →" link to the new page and the
    newer neighbor (if any) gets an "← Older meeting" link back to it.
 4. Adds an entry to sitemap.xml and meetings-search-index.json.
+5. Regenerates recaps.xml, and points the "Latest recap" link on
+   sessions.html at the newest recap on disk (tools/sync_latest_recap.py).
 
 Supported input formats:
 
@@ -795,6 +797,25 @@ def regenerate_recaps_feed() -> None:
               file=sys.stderr)
 
 
+def sync_latest_recap_link() -> None:
+    """Point the "Latest recap" link on sessions.html at the newest recap.
+
+    The tool reads the newest date from meetings/ rather than taking this
+    recap's, so replacing an older recap leaves the link alone. Best-effort for
+    the same reason as the feed: the recap is already written. A failure here
+    is not silent, because validate-html.yml runs the same tool with --check.
+    """
+    script = Path(__file__).parent / "sync_latest_recap.py"
+    result = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        print(f"  {result.stdout.strip()}")
+    else:
+        print(f"  warning: sessions.html latest-recap link not updated "
+              f"({result.stderr.strip()})", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Publish a CSOH meeting recap.")
     parser.add_argument("note", type=Path, nargs="?",
@@ -866,6 +887,7 @@ def main(argv: list[str] | None = None) -> int:
     update_search_index(meeting, headline)
     print("  updated meetings.html, sitemap.xml, meetings-search-index.json")
     regenerate_recaps_feed()
+    sync_latest_recap_link()
     return 0
 
 
