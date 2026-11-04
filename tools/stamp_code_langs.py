@@ -53,7 +53,11 @@ DATA_LANG_RE = re.compile(r'\s*data-lang="[^"]*"')
 KNOWN = {'bash', 'json', 'yaml', 'rego', 'hcl', 'sql', 'python',
          'xml', 'cedar', 'yara', 'cel', 'regex', 'text',
          # The SIEM query languages of the howto/ detection guides.
-         'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog'}
+         'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog',
+         # The cloud providers' own log query languages. main.js has no
+         # tokens for them, so like text and regex they get a label and a
+         # copy button but no colouring.
+         'logs insights', 'cloud logging'}
 
 # Shell verbs that make a block bash even when its first line is a comment.
 SHELL_CMDS = (
@@ -159,8 +163,26 @@ SPL_OPERATORS = (r'stats|eventstats|streamstats|timechart|chart|eval|table|rex'
                  r'|outputlookup|appendpipe|foreach|xyseries|untable')
 
 
+# CloudWatch Logs Insights opens on one of its commands, in lower case, and
+# every later line is a `| command` or an indented continuation. `stats` and
+# `fields` are SPL and Sumo Logic operators too, but those queries open with a
+# search or a scope, never with the bare command.
+LOGS_INSIGHTS_FIRST = r'(fields|filter|stats|sort|limit|parse|display|dedup)\s'
+# The Google Cloud Logging query language is one Boolean filter over LogEntry
+# fields, so it opens on `log_id(` or on a LogEntry field path compared with
+# `=`, `:` or `!=`. A gcloud command carrying such a filter is still a command,
+# and is decided before this is reached.
+CLOUD_LOGGING_FIRST = (r'(log_id\(|(NOT\s+)?(jsonPayload|protoPayload)\.[\w.@"]+\s*(!?=|:|=~|!~)'
+                       r'|logName\s*(=|:)|resource\.type\s*(=|:))')
+
+
 def _detection_language(first: str, body_text: str) -> str | None:
     """Classify a SIEM query block, or return None if it is not one."""
+    if re.match(LOGS_INSIGHTS_FIRST, first) and \
+       all(re.match(r'(\||\s)', ln) for ln in body_text.splitlines()[1:] if ln.strip()):
+        return 'logs insights'
+    if re.match(CLOUD_LOGGING_FIRST, first):
+        return 'cloud logging'
     if re.match(r'(FROM|ROW|SHOW|TS)\s', first) and \
        re.search(r'(^|\s)\|\s*(' + ESQL_COMMANDS + r')\b', body_text, re.M):
         return 'esql'
@@ -228,6 +250,17 @@ SELF_TEST = [
     ('bash', "docker exec lab splunk search 'index=x | stats count by y'"),
     ('bash', 'cat events.log | sort | uniq -c'),
     ('sql', 'SELECT eventName, count(*)\nFROM ct\nGROUP BY eventName'),
+    ('logs insights', 'filter eventName = "StopLogging"\n| fields eventTime, sourceIPAddress'),
+    ('logs insights', 'stats count(*) as events, count(eventName) as parsed'),
+    ('logs insights', 'filter a = 1 and b = 2\n  and c = 3\n| stats count(*) as n by d\n| filter n >= 5'),
+    ('cloud logging', 'log_id("cloudtrail-lab")\njsonPayload.eventName="StopLogging"'),
+    ('cloud logging', 'jsonPayload.eventName="StopLogging"'),
+    ('cloud logging', 'protoPayload.methodName="SetIamPolicy"\nprotoPayload.serviceName="iam.googleapis.com"'),
+    # The near misses: commands that carry either language stay bash, and a
+    # YAML key called filter stays YAML.
+    ('bash', "aws logs start-query --log-group-name g --query-string 'filter a = 1 | stats count(*)'"),
+    ('bash', "gcloud logging read 'log_id(\"x\") jsonPayload.a=\"b\"' --limit=5"),
+    ('yaml', 'filter: errorCode\nfields: [a, b]'),
 ]
 
 

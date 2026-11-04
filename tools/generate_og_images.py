@@ -784,6 +784,10 @@ PAGES = [
      "Falco Rules",
      "One event in, one verdict out: Falco's rules on CloudTrail and system calls, and what it cannot count.",
      "How-To Guide"),
+    ("howto/cloud-native-log-queries.html",
+     "Logs Insights and Cloud Logging",
+     "The first queries of an investigation, in AWS and Google Cloud, and the defaults that hide events.",
+     "How-To Guide"),
 ]
 
 
