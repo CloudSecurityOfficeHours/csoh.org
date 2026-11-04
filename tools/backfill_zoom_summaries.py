@@ -30,7 +30,7 @@ Usage:
     # Replace existing dates too (will clobber Apple-Notes-sourced content)
     python3 tools/backfill_zoom_summaries.py --replace-existing
 
-    # Check the tag inference against its planted cases (no Zoom access)
+    # Check tag inference and the chatter guard against planted cases (no Zoom access)
     python3 tools/backfill_zoom_summaries.py --self-test
 """
 
@@ -231,7 +231,7 @@ TAG_CASES: list[tuple[str, str, str, bool]] = [
 ]
 
 
-def run_self_test() -> int:
+def _tag_self_test() -> int:
     """Prove both directions of the keyword matching before anyone trusts it."""
     failures = []
     for label, text, tag, should_attach in TAG_CASES:
@@ -248,6 +248,33 @@ def run_self_test() -> int:
     print(f"✓ tag inference: {len(TAG_CASES)} cases correct "
           f"({n_attach} must attach, {len(TAG_CASES) - n_attach} must not)")
     return 0
+
+
+def _chatter_self_test() -> int:
+    """Prove the chatter guard flags each planted shape, under the right label,
+    and leaves every benign control alone."""
+    failures = []
+    for label, text, wanted in CHATTER_CASES:
+        got = chatter_findings(f"# CSOH 2000-01-07\n\n## Quick recap\n\n{text}\n")
+        if got != wanted:
+            failures.append(f"{label}: flagged {got or 'nothing'}, wanted {wanted or 'nothing'}")
+        print(f"  {'FLAG' if got else 'keep'}  {label}")
+    n_flag = sum(1 for c in CHATTER_CASES if c[2])
+    print()
+    if failures:
+        for f in failures:
+            print(f"  FAIL: {f}", file=sys.stderr)
+        return 1
+    print(f"✓ chatter guard: {len(CHATTER_CASES)} cases correct "
+          f"({n_flag} flagged, {len(CHATTER_CASES) - n_flag} benign controls)")
+    return 0
+
+
+def run_self_test() -> int:
+    """Run every planted-case suite. Each runs even if an earlier one fails, so
+    one broken suite cannot hide the state of the other."""
+    results = [_tag_self_test(), _chatter_self_test()]
+    return 1 if any(results) else 0
 
 
 NOISE_TITLE_RE = re.compile(
@@ -388,6 +415,145 @@ def _strip_action_item_sections(markdown: str) -> str:
     return section_re.sub(maybe_strip, markdown)
 
 
+# Zoom narrating the call instead of the discussion: the host's screen-share
+# audio, a microphone that failed, who flew in overnight, the recording notice.
+# The strippers above see only ### subsections, and this lands mostly in the
+# quick recap, where nothing can be cut safely. A quick recap is often one
+# paragraph, and the chatter shares sentences with the real opening ("the
+# host then opened the session, noted that Bo was present after a midnight
+# flight, and asked if anyone new wanted to introduce themselves"), so dropping
+# sentences would leave half-sentences or an empty recap that reads as
+# finished. These rules therefore FLAG rather than strip: the recap still
+# publishes, and main() lists the date at the top of the publish PR as
+# needing a rewrite.
+#
+# Each rule is (label, pattern). The label is what the PR names, and the PR
+# never quotes Zoom's text. Keep the patterns narrow: a recap that discusses a
+# music-streaming breach, audio deepfakes, an AI project that writes song
+# lyrics, or Session Manager recording is real content. NOISE_TITLE_RE is not
+# reused here for that reason: its "song lyrics" alternative fires on a real
+# topic about using AI to write lyrics. CHATTER_CASES holds both kinds; run
+# --self-test after any edit.
+CHATTER_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("screen-share audio or music", re.compile(
+        r"\baudio from [^.]{0,60}?\bscreen-?shar"
+        r"|\bscreen-?shar\w* (?:audio|music|songs?)\b"
+        r"|\bscreen[- ]?share display(?:s|ed|ing)? [^.]{0,40}?\blyrics\b"
+        r"|\bplay(?:ed|ing|s)? (?:several |some |a few |various |a series of "
+        r"|a medley of |a number of )?(?:songs?|music|tracks|tunes)\b"
+        r"|\b(?:shar|play)(?:es|ed|ing) (?:audio clips|music)\b"
+        r"|\bmusic sharing\b"
+        r"|\brecitation of (?:song )?lyrics\b"
+        r"|\bsongs? (?:including|such as|like)\b"
+        r"|\bmusic (?:ended|stopped|faded|cut out|continued|was playing)\b",
+        re.IGNORECASE)),
+    ("audio or microphone trouble", re.compile(
+        r"\bwrong (?:microphone|mic|audio (?:input|device|source))\b"
+        r"|\b(?:microphone|mic|audio) (?:issues?|problems?|trouble|difficulties|glitch(?:es)?)\b"
+        r"|\b(?:difficulties|trouble|problems|issues) with (?:the |his |her |their )?"
+        r"(?:audio|microphone|mic)\b"
+        r"|\b(?:difficulties|trouble|problems|issues) with the sound\b"
+        # "could not hear back from the vendor" is ordinary prose.
+        r"|\b(?:could not|couldn[’']t|(?:was|were) unable to|can[’']t|cannot) hear\b"
+        r"(?! (?:back|from|about|of)\b)",
+        re.IGNORECASE)),
+    ("travel remark", re.compile(
+        r"\b(?:midnight|red-?eye|overnight|late-night) flight\b", re.IGNORECASE)),
+    # "the meeting", never "the session" or "the call": Session Manager
+    # sessions and vishing calls are recorded in real recap topics.
+    ("recording notice", re.compile(
+        r"\b(?:the|this) meeting (?:was|is) being recorded\b", re.IGNORECASE)),
+]
+
+
+def chatter_findings(markdown: str) -> list[str]:
+    """Labels of the CHATTER_RULES that the publishable recap text trips, in
+    rule order. Reads everything after the H1, so it covers the quick recap and
+    any topic subsection the strippers kept."""
+    body = re.sub(r"\A# [^\n]*\n", "", markdown)
+    return [label for label, rx in CHATTER_RULES if rx.search(body)]
+
+
+# Planted cases for chatter_findings, run by --self-test.
+#
+# The flagged cases are sentences of the shape Zoom wrote into a published
+# quick recap, plus the audio-trouble and music narration found in earlier
+# published recaps. The controls are what the patterns could plausibly catch
+# by mistake. The AI-lyrics control is the wording of a real recap topic, and
+# the controls marked live are prose on the site.
+CHATTER_CASES: list[tuple[str, str, list[str]]] = [
+    # (label, recap text, labels that must fire; [] means must not flag)
+    ("screen-share audio playing songs",
+     "The meeting began with a long period of audio from the host's "
+     "screen-sharing, which played several songs including \"The Next Episode\".",
+     ["screen-share audio or music"]),
+    ("music ended, attendees could not hear the host",
+     "After the music ended, Ann, Bo, and Cy noted they could not hear the host.",
+     ["screen-share audio or music", "audio or microphone trouble"]),
+    ("wrong microphone",
+     "The host explained that their Mac had selected the wrong microphone.",
+     ["audio or microphone trouble"]),
+    ("midnight flight",
+     "The host then opened the session, noted that Bo was present after a "
+     "midnight flight, and asked if anyone new wanted to introduce themselves.",
+     ["travel remark"]),
+    ("recording reminder",
+     "Cy asked a question, and Di reminded the group that the meeting "
+     "was being recorded.",
+     ["recording notice"]),
+    ("technical difficulties with audio",
+     "The meeting included technical difficulties with audio at the beginning.",
+     ["audio or microphone trouble"]),
+    ("technical issues with audio",
+     "The team discussed updates, including technical issues with audio during "
+     "the meeting.",
+     ["audio or microphone trouble"]),
+    ("sharing audio clips",
+     "The meeting began with the host sharing audio clips with abstract lyrics.",
+     ["screen-share audio or music"]),
+    ("music sharing",
+     "The meeting began with casual conversation and music sharing before "
+     "transitioning to IAM.",
+     ["screen-share audio or music"]),
+    ("recitation of song lyrics",
+     "The meeting began with a recitation of song lyrics and casual conversation.",
+     ["screen-share audio or music"]),
+    ("screen share displaying lyrics",
+     "At the start there is a screen share displaying what appears to be song lyrics.",
+     ["screen-share audio or music"]),
+    ("chatter in a kept topic subsection",
+     "Real opening.\n\n### Cloud Security Office Hours Discussion\n\nThe "
+     "meeting included technical difficulties with audio at the beginning.",
+     ["audio or microphone trouble"]),
+    # --- controls: none of these may be flagged ---
+    ("music-streaming breach",
+     "Members discussed a breach at a music streaming service that exposed "
+     "account emails.", []),
+    ("audio deepfakes",
+     "The group looked at audio deepfakes used to impersonate a CFO on a call.", []),
+    ("AI project that writes song lyrics (recap prose)",
+     "Ann shared a personal project of using AI to create song lyrics.", []),
+    ("'played a role' (live prose)",
+     "Analysts assess that AI-assisted workflows played a role in the intrusion.", []),
+    ("presenter audio check (live present.html prose)",
+     "Test your share and audio a few minutes before we start.", []),
+    ("Session Manager recording",
+     "Session Manager sessions are being recorded to S3 for audit.", []),
+    ("vishing call recorded",
+     "The caller told the help desk the call was being recorded.", []),
+    ("could not hear back",
+     "The team could not hear back from the vendor for three weeks.", []),
+    ("free flight from a chatbot (live prose)",
+     "Someone tricked a customer-service chatbot into giving them a free flight.", []),
+    ("voicemail greeting recorded (live prose)",
+     "Mitnick recorded an out-of-office greeting in his own voice.", []),
+    ("microphone permissions",
+     "Mobile apps that request microphone permissions they never use.", []),
+    ("sound design",
+     "The panel praised a sound problem statement for the threat model.", []),
+]
+
+
 def build_markdown(summary: dict, pacific_date: str) -> str:
     content = summary.get("summary_content", "").strip()
     if not content:
@@ -434,11 +600,22 @@ def main() -> int:
     parser.add_argument("--target-hour", type=int, default=7, help="Pacific hour for CSOH filter (default 7).")
     parser.add_argument("--hour-slack", type=int, default=90, help="Minutes either side of --target-hour (default 90).")
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
-    parser.add_argument("--self-test", action="store_true", help="Run the tag-inference cases and exit; contacts nothing.")
+    parser.add_argument("--self-test", action="store_true",
+                        help="Run the tag-inference and chatter-guard cases and exit; contacts nothing.")
+    parser.add_argument("--review-notes", type=Path, default=None,
+                        help="Write one Markdown bullet per published recap that the chatter guard "
+                             "flagged. The file is always (re)written, empty when nothing was flagged, "
+                             "so a stale list can never survive into a later run.")
     args = parser.parse_args()
 
     if args.self_test:
         return run_self_test()
+
+    # Truncate before anything can fail, so a run that dies early leaves an
+    # empty list rather than the previous run's.
+    review_notes: list[str] = []
+    if args.review_notes:
+        args.review_notes.write_text("", encoding="utf-8")
 
     z.load_dotenv(args.env_file)
     missing = [k for k in ("ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET") if not os.environ.get(k)]
@@ -552,6 +729,12 @@ def main() -> int:
         md_path = staging / f"csoh-{date}.md"
         md_path.write_text(md, encoding="utf-8")
 
+        # Flag, never strip: see CHATTER_RULES for why.
+        chatter = chatter_findings(md)
+        if chatter:
+            print(f"  [review {date}] recap narrates the call itself "
+                  f"({'; '.join(chatter)}); rewrite it before merging", file=sys.stderr)
+
         if args.dry_run:
             print(f"  [dry] {date}  tags={tags}  md={md_path.name}")
             continue
@@ -560,12 +743,17 @@ def main() -> int:
         if rc == 0:
             successes += 1
             print(f"  [ok ] {date}  tags={tags}")
+            if chatter:
+                review_notes.append(f"`meetings/{date}.html`: {'; '.join(chatter)}")
         else:
             failures.append((date, f"add_meeting rc={rc}"))
             print(f"  [fail] {date}  add_meeting exited {rc}", file=sys.stderr)
 
+    if args.review_notes:
+        args.review_notes.write_text("".join(f"- {n}\n" for n in review_notes), encoding="utf-8")
     print(
-        f"\nDone. published={successes}  failures={len(failures)}  dry_run={args.dry_run}",
+        f"\nDone. published={successes}  failures={len(failures)}  "
+        f"flagged={len(review_notes)}  dry_run={args.dry_run}",
         file=sys.stderr,
     )
     for date, reason in failures:

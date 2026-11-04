@@ -63,7 +63,8 @@ python3 tools/backfill_zoom_summaries.py --limit 5
 # Also replace dates already on the page (clobbers hand-authored content)
 python3 tools/backfill_zoom_summaries.py --replace-existing
 
-# Check tag inference against its planted cases (no Zoom access needed)
+# Check tag inference and the chatter guard against their planted cases
+# (no Zoom access needed)
 python3 tools/backfill_zoom_summaries.py --self-test
 ```
 
@@ -75,7 +76,8 @@ python3 tools/backfill_zoom_summaries.py --self-test
 - `--months-back N` - how far back to scan (default 60).
 - `--target-hour H` / `--hour-slack MINS` - Pacific time target for the Friday filter (defaults: 7:00 PT, 90-minute slack).
 - `--env-file PATH` - use a non-default `.env`.
-- `--self-test` - run the tag-inference cases and exit. Needs no credentials and contacts nothing.
+- `--review-notes PATH` - write one Markdown bullet per published recap that the chatter guard flagged (see below). The file is rewritten on every run, empty when nothing was flagged. `publish-recaps.yml` puts its contents at the top of the PR body.
+- `--self-test` - run the tag-inference and chatter-guard cases and exit. Needs no credentials and contacts nothing.
 
 ## How it selects the summary per date
 
@@ -112,6 +114,26 @@ page. `build_markdown()` removes three classes of it:
 
 If a new flavor of noise shows up, add a phrase to the relevant regex rather than
 editing the published HTML, so the fix applies to every future backfill.
+
+## What gets flagged instead of stripped
+
+Zoom sometimes narrates the call rather than the discussion: the host's
+screen-share music, attendees who could not hear, a wrong microphone, who flew in
+overnight, a reminder that the meeting is being recorded. This lands mostly in the
+quick recap, which the strippers above never touch, and it shares sentences with
+the real opening, so no rule can cut it without leaving half-sentences or an empty
+recap that looks finished.
+
+`chatter_findings()` matches these shapes with `CHATTER_RULES` and returns rule
+labels. The recap still publishes; the run prints a `[review YYYY-MM-DD]` line, and
+with `--review-notes` the date and labels go into a warning at the top of the
+publish PR. The PR names labels only and never quotes Zoom's text. Rewrite a
+flagged recap from its staged markdown and re-run `add_meeting.py`.
+
+Keep the rules narrow. A recap about a music-streaming breach, audio deepfakes, an
+AI project that writes song lyrics, or Session Manager recording is real content,
+and `CHATTER_CASES` holds those as controls beside the planted chatter. Run
+`--self-test` after any edit.
 
 ## Review checklist after a run
 
