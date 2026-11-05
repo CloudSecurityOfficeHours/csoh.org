@@ -804,6 +804,10 @@ PAGES = [
      "Semgrep Rules",
      "Patterns that read code's structure, rules tested both ways, and five failures that print no error.",
      "How-To Guide"),
+    ("howto/osquery-and-velociraptor.html",
+     "osquery and Velociraptor",
+     "Question a suspect Linux VM in SQL and VQL, collect the evidence, and catch the queries that see nothing.",
+     "How-To Guide"),
 ]
 
 

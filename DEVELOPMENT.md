@@ -149,7 +149,7 @@ csoh.org/
 ├── cloud-security-interview-questions.html # Interview questions with model answers
 ├── cloud-security-resume-guide.html # Resume structure and phrasing
 ├── cloud-security-home-lab.html     # Free-tier setups, budget guardrails, kill-switches
-├── cloud-security-how-to.html       # Hub for 21 how-to guides (in `howto/`)
+├── cloud-security-how-to.html       # Hub for 22 how-to guides (in `howto/`)
 ├── cloud-security-certifications.html # CCSK / CCSP / AWS / Azure / GCP / CKS comparison
 ├── cloud-security-portfolio-projects.html # Hub for 7 portfolio walkthroughs (in `portfolio/`)
 ├── mentorship.html                  # Community mentorship program
@@ -214,9 +214,9 @@ csoh.org/
 ├── meetings/                        # 119 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (search-indexed as guide; not cross-linked)
-├── howto/                           # 21 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
+├── howto/                           # 22 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
 │                                    #   CEL, Kyverno, Sigma/YARA, IAM+Cedar, Azure Policy, Semgrep, and the SIEM detection languages
-│                                    #   (SPL, KQL, ES|QL/EQL, SQL, ...), Python/boto3 (search-indexed, cross-linked)
+│                                    #   (SPL, KQL, ES|QL/EQL, SQL, ...), Python/boto3, osquery/Velociraptor (search-indexed, cross-linked)
 │
 │  ── Shared assets ──
 ├── style.css                        # All site styles (includes dark mode)
@@ -384,7 +384,7 @@ QA run and is therefore unpromotable.
 **Code Blocks** (every page that carries one)
 - The markup is `<div class="code-block" data-lang="..."><pre>...</pre></div>`. `tools/stamp_code_langs.py` classifies each block and writes the `data-lang`; `validate-html.yml` gates on `--check`, so a new block cannot ship unlabelled
 - The **language label is CSS**, not an element: `.code-block[data-lang]::before` renders `attr(data-lang)`. A reader with JavaScript off still sees whether a block is shell or a policy file. Only the copy button needs script. Same reasoning as the `<noscript>` nav fallback - localhost and a modern browser are not the only ways this site gets read
-- `initCodeBlocks()` in `main.js` adds the copy button and runs `highlightCode()`, a dependency-free highlighter covering bash, yaml, json, rego, hcl, sql, python, xml, cedar, yara, and cel, plus the SIEM query languages of the `howto/` detection guides: spl, kql, esql, eql, yara-l, sumo logic, and datadog. Its `CODE_LANGS` list must stay in step with the stamper's `KNOWN`, and `--check` fails on a language `main.js` cannot render. `KNOWN` also holds labels `main.js` shows without colouring: text, regex, logs insights and cloud logging
+- `initCodeBlocks()` in `main.js` adds the copy button and runs `highlightCode()`, a dependency-free highlighter covering bash, yaml, json, rego, hcl, sql, python, xml, cedar, yara, and cel, plus the SIEM query languages of the `howto/` detection guides: spl, kql, esql, eql, yara-l, sumo logic, and datadog. Its `CODE_LANGS` list must stay in step with the stamper's `KNOWN`, and `--check` fails on a language `main.js` cannot render. `KNOWN` also holds labels `main.js` shows without colouring: text, regex, logs insights, cloud logging and vql
 - The SIEM languages are all pipelines of `|`, which would otherwise fall through to bash, and several share commands (`| where`, `| sort`, `| lookup`), so each is recognised only by something no other language here writes: `summarize` or `project` for KQL, capitalised `| STATS` after a `FROM` for ES|QL, `_sourceCategory=` or `| json` for Sumo Logic, `index=` or `| stats` for SPL, an `events:` section for YARA-L (tested before YARA, which would claim it), a bare lower-case command (`filter`, `stats`, `fields`) on the first line for CloudWatch Logs Insights, and `log_id(` or a `jsonPayload.`/`protoPayload.` comparison for the Cloud Logging query language. A shell command that carries a query (`curl ... -d 'index=x | stats count'`) stays bash. `--check` classifies planted blocks (`SELF_TEST`) before the real pages and refuses a verdict if any comes back wrong. When changing a rule, diff every existing block's classification before and after: the SIEM rules were added without changing any of the 194 blocks that existed then
 - Copy puts the exact code on the clipboard with none of the button's own text in it. Highlighting alters no character of any block (verified across 67 blocks against the raw HTML)
 - The copy button sits in the header bar. Blocks with no bar (`data-lang="text"`, the `<br>` shape and `pre.code-block`) reserve an empty band across the top instead, so the button never covers code at any width or scroll position. The bar, the band and the button share one height, `--cb-bar` (44px on touch devices). The band is dropped where there is no button: with JavaScript off, and in print. To check, intersect each button's rect with `Range.getClientRects()` over the block's text, character by character, at 375 and 1280, with and without touch emulation
