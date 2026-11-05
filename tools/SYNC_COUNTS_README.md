@@ -13,15 +13,7 @@ python3 tools/sync_counts.py --check    # exit 1 if anything is out of sync (no 
 
 `--check` is what CI runs, via [`update-counts.yml`](../.github/workflows/update-counts.yml) every Monday at 07:30 UTC.
 
-Typical output:
-
-```
-Canonical counts: resources=485, meetings=107, breaches=45, feeds=62, glossary_terms=317,
-ctfs=52, conferences=26, long_form=83, vendors=308, vendor_categories=32, og_images=249,
-resource_categories=6, sitemap_urls=265, news_banners=58, faq_pages=64,
-author_card_pages=91, schema_types=39
-All counts already in sync.
-```
+Typical output is one line of `key=value` pairs (every key in the table below), then `All counts already in sync.` when nothing moved. Run `--check` to see the live numbers. They change as soon as a card or a page is added, so this doc does not freeze them.
 
 ## Where the counts come from
 
@@ -49,7 +41,7 @@ Nothing is configured. Each number is derived from the thing it describes:
 | `schema_types` | Distinct schema.org `@type` values across the site |
 
 `cards_per_category` counts per section rather than deduping site-wide, so the
-six section totals sum to more than `resources`, because a number of entries
+per-section totals sum to more than `resources`, because a number of entries
 are filed under two categories. Both figures are correct; they answer different questions.
 
 ## What it rewrites
@@ -94,7 +86,7 @@ The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so 
 
 **5. `llms.txt`** - plain text, so regex rather than markers. Markdown docs get the same treatment via `MD_PROSE_RULES`, for counts that sit inside a fenced code block where a marker would render as literal text - README.md's directory tree is the case that forced this. Same discipline as the HTML rules: each pattern is anchored to the words around the number, never generic.
 
-**6. OG-card subtitles in `generate_og_images.py`.** Meetings use the exact count; resources and glossary terms use a floored `N+`. `sync_counts.py` only edits the script; `update-counts.yml` notices that edit and re-renders the three count-bearing cards (`index.html`, `resources.html`, `meetings.html`) rather than rebuilding all ~105 top-level images.
+**6. OG-card subtitles in `generate_og_images.py`.** Meetings use the exact count; resources and glossary terms use a floored `N+`. `sync_counts.py` only edits the script; `update-counts.yml` notices that edit and re-renders the three count-bearing cards (`index.html`, `resources.html`, `meetings.html`) rather than rebuilding every OG card.
 
 ## When to run it
 
