@@ -96,7 +96,17 @@ OVERRIDES: dict[str, str] = {
     '783957bf9a23': 'text',    # last line of an AccessDenied traceback
     '734a97cb517f': 'text',    # stale access keys
     # A GCP IAM condition: CEL, but with none of the macros the CEL rule keys on.
-    '1f26d44948fb': 'cel',
+    '36e4e24eba33': 'cel',
+    # howto/cel-policy-expressions.html: cel.py and kubectl output, which the
+    # `->` and `error:` openings land on bash and YAML, and two `DOC=file
+    # python3 ...` commands, which have no quote after the `=` for the
+    # NAME=value rule to see.
+    'b9f649a1c425': 'text',
+    '6f2cda4302d8': 'text',
+    '7017567bac61': 'text',
+    'aadacb437fd3': 'text',
+    '072a6e7c62de': 'bash',
+    '0eebe63da033': 'bash',
     # A lone HCL attribute (`name = "..."`, spaces around the =) quoted without
     # its enclosing resource block. Broadening the HCL rule to catch it would
     # also swallow Python assignments, so it is named here instead.

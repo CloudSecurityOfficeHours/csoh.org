@@ -7,7 +7,7 @@
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="description" content="Common Expression Language for cloud security: macros, the has() rule that decides fail open or closed, a real Kubernetes admission policy.">
     <meta name="author" content="Shawn Nunley">
-    <meta name="keywords" content="cel tutorial, common expression language, validatingadmissionpolicy, kubernetes cel admission, gcp iam conditions cel, x-kubernetes-validations, cel macros all exists, cel vs rego">
+    <meta name="keywords" content="cel tutorial, common expression language, validatingadmissionpolicy, kubernetes cel admission, gcp iam conditions cel, x-kubernetes-validations, cel macros all exists, cel vs rego, gcp custom organization policy constraints">
     <title>CEL policy expressions: a hands-on how-to - CSOH</title>
 
     <link rel="canonical" href="https://csoh.org/howto/cel-policy-expressions.html">
@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-11-04">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="cel">
@@ -35,6 +35,7 @@
     <meta property="article:tag" content="validatingadmissionpolicy">
     <meta property="article:tag" content="gcp iam conditions">
     <meta property="article:tag" content="policy as code">
+    <meta property="article:tag" content="organization policy">
     <meta property="og:url" content="https://csoh.org/howto/cel-policy-expressions.html">
     <meta property="og:image" content="https://csoh.org/img/og/howto/cel-policy-expressions.jpg">
     <meta name="twitter:card" content="summary_large_image">
@@ -59,10 +60,10 @@
       "@type": "HowTo",
       "name": "CEL policy expressions, hands-on",
       "description": "Common Expression Language for cloud security: macros, the has() rule that decides fail open or closed, a real Kubernetes admission policy.",
-      "totalTime": "PT90M",
+      "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-08-24",
+      "dateModified": "2026-11-04",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -126,6 +127,12 @@
           "position": 8,
           "name": "Use the authorizer variable",
           "text": "Gate a privileged capability on an RBAC check so the exception is granted and audited like any other permission."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
+          "name": "Write a Google Cloud custom constraint",
+          "text": "Write a custom organization policy constraint whose CEL condition checks the resource's REST fields, evaluate it locally, test it with Policy Simulator and a dry-run policy, then enforce it."
         }
       ]
     }
@@ -351,25 +358,26 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
-            <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Python for the expression lab; Docker and <code>kind</code> if you want to run the admission policy for real</p>
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Python 3.10 or later for the expression lab; Docker and <code>kind</code> if you want to run the admission policy for real; a Google Cloud organization, and the right to change its policies, if you want to enforce the custom constraint</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block on this page and ran it on 4 November 2026 on an Apple silicon Mac, and the outputs shown are pasted from that run; a planted error in a block made the script fail, so the check can fail. The CEL ran in cel-python 0.5.0 on Python 3.10, the expression lab's shell blocks in a clean interactive zsh, and exercise 4's <a class="glossary-link" href="../glossary.html#term-rego">Rego</a> in <a class="glossary-link" href="../glossary.html#term-opa">OPA</a> 1.22.0, with a <code>package</code> line added. The <code>kind</code> lines in step 5 ran on kind 0.33.0 (Kubernetes 1.37.0) and printed the refusal shown. Every Kubernetes object, including the exercise answers, was applied to a local Kubernetes 1.37.0 API server (the kube-apiserver and etcd binaries the Kubernetes project publishes for envtest), with the CRD schema and the bare <code>validations</code> lists wrapped in the smallest complete object that holds them. The IAM condition in step 6 was evaluated by cel-python with test values, not by IAM. For the Google Cloud section, no constraint or organization policy was created and none of its <code>gcloud</code> commands was run, since each is an organization-level change: the files were parsed with the Google Cloud SDK 585.0.0's own readers, the commands were checked against its help, the conditions were evaluated locally against JSON shaped like the Cloud Storage API's bucket resource, and what Google's evaluator does with them comes from Google's documentation as of 4 November 2026.</p>
         </div>
 
         <section id="intro">
             <h2>The policy language that lives inside the thing it governs</h2>
             <p>Common Expression Language is deliberately small. It is not Turing complete, it has no side effects, and every expression is guaranteed to terminate. Those three properties sound like limitations, and they are exactly why CEL is everywhere: if evaluation cannot loop forever and cannot reach out to the network, it is safe to run inside a hot path.</p>
-            <p>So CEL runs where a general-purpose policy engine cannot. It is embedded in the Kubernetes API server itself, in Google Cloud IAM's condition evaluator, in <a class="glossary-link" href="../glossary.html#term-envoy">Envoy</a>, in Firebase security rules, and in CRD field validation. There is no <a class="glossary-link" href="../glossary.html#term-sidecar">sidecar</a>, no webhook, no extra network hop, and nothing to be unavailable at the moment a decision is needed.</p>
+            <p>So CEL runs where a general-purpose policy engine cannot. It is embedded in the Kubernetes API server itself, in Google Cloud IAM's condition evaluator and Google Cloud's custom organization policy constraints, in <a class="glossary-link" href="../glossary.html#term-envoy">Envoy</a>, in Firebase security rules, and in CRD field validation. There is no <a class="glossary-link" href="../glossary.html#term-sidecar">sidecar</a>, no webhook, no extra network hop, and nothing to be unavailable at the moment a decision is needed.</p>
             <p>That is the real contrast with <a href="opa-rego.html">OPA and Rego</a>, and it is worth having a clear view of it because the two are increasingly presented as alternatives:</p>
             <ul>
-                <li><strong><a class="glossary-link" href="../glossary.html#term-rego">Rego</a></strong> is a full policy language evaluated by a separate engine. It can join across documents, load external data, and express arbitrarily complex logic. It costs you a component to deploy, secure, and keep available.</li>
+                <li><strong>Rego</strong> is a full policy language evaluated by a separate engine. It can join across documents, load external data, and express arbitrarily complex logic. It costs you a component to deploy, secure, and keep available.</li>
                 <li><strong>CEL</strong> is an expression evaluated in-process by the host. It cannot do joins or fetch data. It also cannot be down, cannot add latency you did not already have, and cannot be bypassed by a network failure.</li>
             </ul>
             <p>For "no privileged containers in this namespace", CEL is straightforwardly the better answer now that it is built in. For "no image outside our registry unless the team owns a documented exception recorded in this other system", it is the wrong tool and no amount of cleverness fixes that.</p>
         </section>
 
         <div class="highlight-box">
-            <p><strong>Learning CEL is two separate jobs, and only one of them is the language.</strong> The syntax is small enough to learn in an afternoon. The other job, which is where the actual time goes, is learning what variables each host hands you. Kubernetes admission gives you <code>object</code>, <code>oldObject</code>, <code>request</code>, <code>params</code>, <code>authorizer</code>, <code>namespaceObject</code>, and <code>variables</code>. GCP IAM gives you <code>request.time</code>, <code>resource.name</code>, <code>resource.type</code>, and friends. Same language, entirely different vocabulary.</p>
+            <p><strong>Learning CEL is two separate jobs, and only one of them is the language.</strong> The syntax is small enough to learn in an afternoon. The other job, which is where the actual time goes, is learning what variables each host hands you. Kubernetes admission gives you <code>object</code>, <code>oldObject</code>, <code>request</code>, <code>params</code>, <code>authorizer</code>, <code>namespaceObject</code>, and <code>variables</code>. GCP IAM gives you <code>request.time</code>, <code>resource.name</code>, <code>resource.type</code>, and friends. A Google Cloud custom constraint gives you <code>resource</code>, the REST representation of the thing being created or updated. Same language, entirely different vocabulary.</p>
         </div>
 
         <div class="toc">
@@ -377,6 +385,7 @@
             <ol>
                 <li><a href="#model">Expressions, macros, and the activation</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#org-policy">Google Cloud custom organization policy constraints</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
                 <li><a href="#next">Where next</a></li>
@@ -396,11 +405,11 @@
                 <li><code>has(x.field)</code> tests presence, which is not the same as testing truth.</li>
             </ul>
             <p>That last one is the thing to internalise first. Reading a field that is not there is an <em>error</em> in CEL, not a false and not a null. An error propagates and the whole expression fails, which in Kubernetes admission means the policy's <code>failurePolicy</code> decides your fate. <code>has()</code> before you dereference an optional field is not defensive style, it is the difference between a working policy and one that fails open or blocks every deployment.</p>
-<div class="code-block" data-lang="cel"><pre># Errors, if any container omits securityContext:
+<div class="code-block" data-lang="cel"><pre>// Errors, if any container omits securityContext:
 object.spec.containers.all(c, c.securityContext.runAsNonRoot == true)
 
-# Correct: presence-check first. && short-circuits, so the right-hand
-# side is never evaluated when has() is false.
+// Correct: presence-check first. && short-circuits, so the right-hand
+// side is never evaluated when has() is false.
 object.spec.containers.all(c,
   has(c.securityContext) &amp;&amp; c.securityContext.runAsNonRoot == true)</pre></div>
         </section>
@@ -425,9 +434,9 @@ cat &gt; pod.json &lt;&lt;'EOF'
 EOF
 
 cat &gt; cel.py &lt;&lt;'EOF'
-import sys, json, celpy
+import os, sys, json, celpy
 env = celpy.Environment()
-doc = celpy.json_to_cel(json.load(open('pod.json')))
+doc = celpy.json_to_cel(json.load(open(os.environ.get('DOC', 'pod.json'))))
 for src in sys.argv[1:]:
     print(f"{src}\n  -> {env.program(env.compile(src)).evaluate(doc)}\n")
 EOF
@@ -491,7 +500,7 @@ metadata:
   name: "require-resource-limits-prod.csoh.org"
 spec:
   policyName: "require-resource-limits.csoh.org"
-  # Deny | Warn | Audit. Warn and Audit can be combined; Deny stands alone.
+  # Deny | Warn | Audit. Audit combines with either; Deny and Warn cannot be combined.
   validationActions: [Deny]
   matchResources:
     namespaceSelector:
@@ -512,16 +521,18 @@ spec:
             <p>That two-binding pattern is how you roll a policy out without an outage. Bind it as <code>[Warn, Audit]</code> everywhere first, read the audit log for a week to find out what it would have blocked, and only then add a <code>Deny</code> binding scoped to the namespaces you have cleaned up.</p>
 
             <h3>5. Try it on a throwaway cluster</h3>
-<div class="code-block" data-lang="bash"><pre>kind create cluster --name cel-lab       # any recent Kubernetes; VAP is GA in 1.30+
+            <p>Save the policy and both bindings from step 4 in one file, <code>policy.yaml</code>, with a <code>---</code> line between the policy and the first binding. Any recent Kubernetes will do, since <code>ValidatingAdmissionPolicy</code> is GA from 1.30.</p>
+<div class="code-block" data-lang="bash"><pre>kind create cluster --name cel-lab
 kubectl apply -f policy.yaml
 
 kubectl create namespace prod
 kubectl label namespace prod environment=production
 
-# Should be rejected, with your message
 kubectl -n prod create deployment bad --image=nginx:latest
 
 kind delete cluster --name cel-lab</pre></div>
+            <p>The <code>create deployment</code> line should be refused with the message of the first validation it fails:</p>
+<div class="code-block" data-lang="text"><pre>error: failed to create deployment: deployments.apps "bad" is forbidden: ValidatingAdmissionPolicy 'require-resource-limits.csoh.org' with binding 'require-resource-limits-prod.csoh.org' denied request: every container must set a memory limit</pre></div>
 
             <h3>6. Two other places the same expressions turn up</h3>
             <p><strong>CRD field validation.</strong> The same CEL, attached to a schema, so an invalid custom resource is rejected on write with no controller involved:</p>
@@ -530,37 +541,131 @@ kind delete cluster --name cel-lab</pre></div>
   properties:
     spec:
       type: object
+      required: [tier, retentionDays]
       properties:
         retentionDays: { type: integer }
         tier:          { type: string }
       x-kubernetes-validations:
         - rule: "self.tier != 'archive' || self.retentionDays &gt;= 365"
           message: "archive tier requires at least 365 days retention"
-        # self.oldSelf is available for transition rules on update
+        # oldSelf is available for transition rules on update
         - rule: "self.retentionDays &gt;= oldSelf.retentionDays"
           message: "retention may be increased but never reduced"
           optionalOldSelf: false</pre></div>
             <p><strong>Google Cloud IAM conditions.</strong> Same language, completely different variables, and a genuinely useful control:</p>
-<div class="code-block" data-lang="cel"><pre># Grant applies only during a maintenance window, and only to one bucket.
+<div class="code-block" data-lang="cel"><pre>// Grant expires on 1 September 2026, for buckets named acme-backups*.
 request.time &lt; timestamp("2026-09-01T00:00:00Z") &amp;&amp;
 resource.type == "storage.googleapis.com/Bucket" &amp;&amp;
 resource.name.startsWith("projects/_/buckets/acme-backups")</pre></div>
             <p>Time-bound IAM grants are one of the highest-value, least-used features in Google Cloud, and they are a CEL expression in a text box. The same instinct works for AWS through IAM condition keys and for Azure through <a class="glossary-link" href="../glossary.html#term-abac">ABAC</a> conditions, though neither of those uses CEL.</p>
+            <p>Google Cloud has a third place for the same expressions, custom organization policy constraints, and its failure modes differ enough from Kubernetes to get <a href="#org-policy">a section of their own</a> after this walk-through.</p>
 
             <h3>7. The authorizer variable</h3>
             <p>Kubernetes admission hands your expression an <code>authorizer</code>, which lets a policy ask the API server's own <a class="glossary-link" href="../glossary.html#term-rbac">RBAC</a> a question. This is unusual and worth knowing about, because it lets you write "this is allowed, but only for principals who already hold a specific permission" without maintaining a parallel list of who those are.</p>
 <div class="code-block" data-lang="yaml"><pre>validations:
   - expression: &gt;-
+      !has(object.spec.template.spec.hostNetwork) ||
       !object.spec.template.spec.hostNetwork ||
       authorizer.group('policy.csoh.org').resource('hostnetwork')
                 .check('use').allowed()
     message: "hostNetwork requires the hostnetwork/use permission"</pre></div>
+            <p>The first line is the <code>has()</code> lesson again. A Deployment that leaves <code>hostNetwork</code> out, or sets it to <code>false</code>, reaches the expression with no <code>hostNetwork</code> key at all, so without the check the expression errors and <code>failurePolicy</code> decides, which with <code>Fail</code> refuses every ordinary Deployment from anyone who lacks the permission.</p>
             <p>The privilege becomes an ordinary RBAC grant on a virtual resource, which means it is granted, reviewed, and audited by the same machinery as everything else, rather than by an annotation somebody added to a namespace two years ago.</p>
+        </section>
+
+        <section id="org-policy">
+            <h2>Google Cloud custom organization policy constraints</h2>
+            <p>Google Cloud's Organization Policy Service lets you write your own constraints on resource fields, and the condition is CEL. For many Google Cloud teams it is where they first meet CEL, because a custom constraint is what you write when the predefined constraints do not restrict the field you care about. The language is the one above. The evaluator, the variables and the ways it fails without telling you are different, so the failures come first here.</p>
+
+            <h3>Two objects, and the first one does nothing</h3>
+            <p>A <strong>custom constraint</strong> is the rule: a resource type, the methods it applies to, a condition and an action. It belongs to an organization, and creating it enforces nothing, as <a href="https://docs.cloud.google.com/organization-policy/reference/rest/v2/organizations.customConstraints" target="_blank" rel="noopener noreferrer">Google's API reference</a> says in as many words. An <strong>organization policy</strong> turns it on for an organization, folder or project, and by default everything below inherits it. That is the policy and binding split from step 4 again, and it fails the same way: a constraint with no policy looks deployed and does nothing.</p>
+<div class="code-block" data-lang="yaml"><pre>name: organizations/ORGANIZATION_ID/customConstraints/custom.bucketRequirePap
+resourceTypes:
+- storage.googleapis.com/Bucket
+methodTypes:
+- CREATE
+- UPDATE
+condition: "resource.iamConfiguration.publicAccessPrevention == 'enforced'"
+actionType: ALLOW
+displayName: Buckets must enforce public access prevention
+description: Set public access prevention to enforced on this bucket.</pre></div>
+            <p>Save that as <code>bucket-pap.yaml</code>. Field by field, from <a href="https://docs.cloud.google.com/organization-policy/create-custom-constraints" target="_blank" rel="noopener noreferrer">Google's guide to custom constraints</a>:</p>
+            <ul>
+                <li><code>name</code> ends in <code>custom.</code> followed by up to 70 letters and numbers.</li>
+                <li><code>resourceTypes</code> names a REST resource, and only types on Google's <a href="https://docs.cloud.google.com/organization-policy/reference/custom-constraint-supported-services" target="_blank" rel="noopener noreferrer">supported services list</a> can be constrained.</li>
+                <li><code>methodTypes</code> is <code>CREATE</code>, or <code>CREATE</code> and <code>UPDATE</code>. <code>UPDATE</code> on its own is not supported.</li>
+                <li><code>condition</code> is CEL, up to 1,000 characters.</li>
+                <li><code>actionType: ALLOW</code> lets a request through only when the condition is true and blocks everything else. <code>DENY</code> blocks a request when the condition is true.</li>
+                <li><code>description</code> is the error message the person whose request was refused reads, so say how to fix it.</li>
+            </ul>
+
+            <h3>Where it fails without telling you</h3>
+            <p>Missing fields behave differently from Kubernetes, and in two directions. The condition is checked against typed fields, so a field the request leaves out is not an error: CEL reads it as its type's default, an empty string, <code>false</code>, zero or an empty list. Google's own <a href="https://docs.cloud.google.com/storage-transfer/docs/custom-constraints" target="_blank" rel="noopener noreferrer">Storage Transfer example</a> shows this, refusing a job sent with no logging configuration as an ordinary violation of the constraint, not as an evaluation error. That makes a <code>DENY</code> on a bad value fragile. <code>publicAccessPrevention == 'inherited'</code> catches a request that says <code>inherited</code>, and Google does not document whether a bucket created without the field reaches the condition with the API's default filled in or with an empty string. The <code>ALLOW</code> form above refuses both, so prefer the form whose safe outcome does not depend on the answer.</p>
+            <p>Map keys go the other way. Reading a label the bucket does not have, <code>resource.labels['env']</code>, is an error, and there is no <code>failurePolicy</code> to choose: Google says the error blocks the create, and for buckets the update too, wherever the policy is enforced. Test the key first with <code>'env' in resource.labels</code>, the <code>has()</code> lesson from the top of this page. <a href="https://docs.cloud.google.com/storage/docs/custom-constraints" target="_blank" rel="noopener noreferrer">Google's Cloud Storage page</a> also advises tags rather than labels in bucket conditions, because labels are less tightly controlled.</p>
+            <p>Existing resources are not checked. A constraint is enforced when a resource is created or updated and at no other time, so enforcing one neither reports nor fixes the buckets you already have; Google's Cloud Storage page says existing resources must be updated before a new constraint applies to them. With <code>UPDATE</code> listed, <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/custom-org-policies" target="_blank" rel="noopener noreferrer">Google's GKE page</a> adds that changes to a cluster already in violation are blocked unless they resolve it.</p>
+            <p>Method mistakes are mostly loud. Google will not save a constraint that names a method its resource type does not support (its example is <code>UPDATE</code> on Compute Engine images). The quiet one is listing only <code>CREATE</code> for a setting an update can change: a bucket created with public access prevention enforced can have it switched off later with <code>gcloud storage buckets update --no-public-access-prevention</code>, and a <code>CREATE</code>-only constraint never sees that. Some resource types accept only <code>CREATE</code>, Dataflow jobs and <a class="glossary-link" href="../glossary.html#term-vpc">VPC</a> routes among them, and for those nothing checks later changes at all.</p>
+
+            <h3>What <code>resource</code> holds, and which CEL you get</h3>
+            <p><code>resource</code> is the resource as its REST API represents it, so the condition uses the API's field names: <code>iamConfiguration.publicAccessPrevention</code>, not the <code>public_access_prevention</code> that a plain <code>gcloud storage buckets describe</code> prints (add <code>--raw</code> to see the API's names). Each service publishes the fields you may use, and it is a subset. Cloud Storage offers public access prevention, versioning, retention and labels, among others, and nothing for ACLs or IAM policies.</p>
+            <p>The CEL is a subset too. Google's general guide covers integer, string, boolean, list and map fields; comparisons; <code>matches</code>, <code>startsWith</code>, <code>endsWith</code> and <code>contains</code>; <code>size()</code> and <code>has()</code>; and the <code>all()</code> and <code>exists()</code> macros. Past that it varies by service. Cloud Storage's examples use <code>in</code>, Pub/Sub's and <a class="glossary-link" href="../glossary.html#term-cloud-kms">Cloud KMS</a>'s use <code>duration()</code>, and constraints on IAM allow policies do not support <code>==</code>, <code>in</code> or <code>startsWith</code> on role bindings at all, supplying functions such as <code>RoleNameMatches()</code> instead. <code>filter()</code>, <code>map()</code> and <code>exists_one()</code> from the macro list at the top of this page are not in Google's list, so check the service's page before you reach for one.</p>
+
+            <h3>Evaluate the condition before Google does</h3>
+            <p>The <code>cel.py</code> harness from step 1 reads <code>pod.json</code> unless <code>DOC</code> names another file. Give it two buckets shaped like the Cloud Storage JSON API's response, trimmed to the fields that matter here, one compliant and one not:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; bucket-ok.json &lt;&lt;'EOF'
+{"resource": {"kind": "storage#bucket", "name": "acme-audit-logs",
+  "location": "US-EAST1", "storageClass": "STANDARD",
+  "iamConfiguration": {"publicAccessPrevention": "enforced",
+    "uniformBucketLevelAccess": {"enabled": true}},
+  "versioning": {"enabled": true}, "labels": {"team": "security"}}}
+EOF
+
+cat &gt; bucket-open.json &lt;&lt;'EOF'
+{"resource": {"kind": "storage#bucket", "name": "acme-web-assets",
+  "location": "US", "storageClass": "STANDARD",
+  "iamConfiguration": {"publicAccessPrevention": "inherited",
+    "uniformBucketLevelAccess": {"enabled": false}},
+  "labels": {"team": "web"}}}
+EOF
+
+DOC=bucket-ok.json python3 cel.py "resource.iamConfiguration.publicAccessPrevention == 'enforced'"
+DOC=bucket-open.json python3 cel.py "resource.iamConfiguration.publicAccessPrevention == 'enforced'"</pre></div>
+<div class="code-block" data-lang="text"><pre>resource.iamConfiguration.publicAccessPrevention == 'enforced'
+  -&gt; True
+
+resource.iamConfiguration.publicAccessPrevention == 'enforced'
+  -&gt; False</pre></div>
+            <p>True lets the first bucket through, because the action is <code>ALLOW</code>. False refuses the second, with your <code>description</code> as the message. Know the harness's limit: every JSON object here is a map, so a missing key is an error locally even where Google would read a typed field's default. Treat a local error as a question to answer: is that a typed field, which Google reads as its default, or a map key, which Google refuses?</p>
+
+            <h3>Test, then enforce</h3>
+            <p>Two Google tools answer different questions. <a href="https://docs.cloud.google.com/policy-intelligence/docs/test-organization-policies" target="_blank" rel="noopener noreferrer">Policy Simulator for Organization Policy</a>, generally available since July 2025, answers "what already breaks this?": it takes a constraint and a policy that are not yet set and lists the existing resources that would violate them. A <a href="https://docs.cloud.google.com/organization-policy/test-policies" target="_blank" rel="noopener noreferrer">dry-run policy</a>, generally available since December 2023, answers "what would this have blocked?": its rules sit under <code>dryRunSpec</code> instead of <code>spec</code>, violations go to the audit logs, and nothing is denied. Google suggests the simulator first, then a dry run.</p>
+            <p>The <code>gcloud</code> commands below were not run for this page: three of them change an organization's policies, and the simulator needs an organization to run against. The files they read were written and parsed, and the command syntax was checked against Google Cloud SDK 585.0.0. Replace <code>ORGANIZATION_ID</code> and <code>PROJECT_ID</code> first; <code>gcloud projects get-ancestors PROJECT_ID</code> prints the organization a project sits in.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; bucket-pap-dryrun.yaml &lt;&lt;'EOF'
+name: projects/PROJECT_ID/policies/custom.bucketRequirePap
+dryRunSpec:
+  rules:
+  - enforce: true
+EOF
+
+cat &gt; bucket-pap-live.yaml &lt;&lt;'EOF'
+name: projects/PROJECT_ID/policies/custom.bucketRequirePap
+spec:
+  rules:
+  - enforce: true
+EOF
+
+gcloud policy-intelligence simulate orgpolicy \
+  --organization=ORGANIZATION_ID \
+  --custom-constraints=bucket-pap.yaml \
+  --policies=bucket-pap-live.yaml
+gcloud org-policies set-custom-constraint bucket-pap.yaml
+gcloud org-policies set-policy bucket-pap-dryrun.yaml
+gcloud org-policies set-policy bucket-pap-live.yaml --update-mask=spec</pre></div>
+            <p>Keep the dry-run and live rules in separate files. Google's examples put <code>spec</code> and <code>dryRunSpec</code> in one file and set it with <code>--update-mask=dryRunSpec</code>, but the source of <code>gcloud org-policies set-policy</code> shows that when no policy exists yet it ignores the mask, prints a warning, and creates the policy from the whole file, so the live <code>spec</code> enforces on the first run. The last command uses <code>--update-mask=spec</code> so the dry run stays in place beside the live rules. Google says a policy can take up to 15 minutes to take effect.</p>
         </section>
 
         <section id="exercises">
             <h2>Hands-on exercises</h2>
-            <p>Run these with the <code>cel.py</code> harness and <code>pod.json</code> from step 1.</p>
+            <p>Run these with the <code>cel.py</code> harness from step 1. Exercises 1 and 2 read <code>pod.json</code>; exercise 5 reads the bucket files from the Google Cloud section.</p>
 
             <div class="exercise">
                 <span class="exercise__label">Exercise 1</span>
@@ -630,6 +735,21 @@ matchConstraints:
                     <p>The larger thing Rego can do is consult <code>data</code>: an allowlist of registries loaded from elsewhere, a mapping of namespaces to permitted teams, anything requiring a join. CEL has no equivalent. Kubernetes closes part of that gap with <code>paramKind</code> and <code>params</code>, which let a binding point at a real cluster object holding configuration, so the allowlist becomes a resource you can RBAC and version rather than a literal in the expression. That is a genuinely good pattern and worth reaching for the moment a policy contains a hardcoded list.</p>
                 </details>
             </div>
+            <div class="exercise">
+                <span class="exercise__label">Exercise 5</span>
+                <p>A colleague writes a custom constraint on <code>storage.googleapis.com/Bucket</code> with <code>actionType: DENY</code> to stop buckets labelled <code>exposure: public</code>. The condition is <code>resource.labels['exposure'] == 'public'</code>. Run it against <code>bucket-ok.json</code> from the Google Cloud section, say what it does in Google Cloud to a bucket with no <code>exposure</code> label, and fix it.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>DOC=bucket-ok.json python3 cel.py "resource.labels['exposure'] == 'public'"</pre></div>
+                    <p>Locally it is an error, and the last line of what it prints says why:</p>
+<div class="code-block" data-lang="text"><pre>celpy.evaluation.CELEvalError: ('no such key', &lt;class 'KeyError'&gt;, (StringType('exposure'),))</pre></div>
+                    <p>In Google Cloud a missing map key is a <code>BAD_CONDITION</code> error, and the error blocks the request. So a constraint written to stop public buckets refuses every bucket without an <code>exposure</code> label. Test for the key first:</p>
+<div class="code-block" data-lang="bash"><pre>DOC=bucket-ok.json python3 cel.py "'exposure' in resource.labels &amp;&amp; resource.labels['exposure'] == 'public'"</pre></div>
+<div class="code-block" data-lang="text"><pre>'exposure' in resource.labels &amp;&amp; resource.labels['exposure'] == 'public'
+  -&gt; False</pre></div>
+                    <p>False means the <code>DENY</code> lets the bucket through.</p>
+                </details>
+            </div>
         </section>
 
         <section id="mistakes">
@@ -643,6 +763,12 @@ matchConstraints:
                 <li><strong>Expecting PCRE in <code>matches()</code>.</strong> It is RE2, so no lookahead, no lookbehind, no backreferences. Same constraint the <a href="regex-for-security.html">regex page</a> covers.</li>
                 <li><strong>Hardcoding lists in expressions.</strong> Use <code>paramKind</code> and <code>params</code> so the list is a reviewable cluster object.</li>
                 <li><strong>Ignoring the cost budget.</strong> Kubernetes bounds how expensive an expression may be and rejects ones that exceed it. Deeply nested macros over large collections are the usual cause, and the rejection happens when you apply the policy, not when it runs.</li>
+                <li><strong>Setting a Google Cloud custom constraint and stopping there.</strong> It enforces nothing until an organization policy turns it on, and nothing warns you.</li>
+                <li><strong>Expecting a new custom constraint to find what already breaks it.</strong> It is checked on create and update only. Policy Simulator lists the existing violations.</li>
+                <li><strong>Listing only <code>CREATE</code> for a setting an update can change.</strong> The resource is checked once and can be changed back later without the constraint seeing it.</li>
+                <li><strong>Reading a label or other map key in a custom constraint without testing for it.</strong> The error blocks the request, so a <code>DENY</code> meant for a few resources refuses every one without the key.</li>
+                <li><strong>Denying the bad value of a field a request can leave out.</strong> The request may never carry the bad value for the condition to match. Require the good value with <code>ALLOW</code> instead.</li>
+                <li><strong>Putting <code>spec</code> and <code>dryRunSpec</code> in the first policy file you set.</strong> gcloud ignores <code>--update-mask</code> when it creates a policy, so the live rules enforce at once.</li>
             </ul>
         </section>
 
@@ -655,6 +781,7 @@ matchConstraints:
                 <li><a href="../kubernetes.html">Kubernetes security</a> for admission control in the context of the rest of the cluster's controls.</li>
                 <li><a href="../homelab/kubernetes-security-lab.html">The Kubernetes security lab</a> if you want a cluster to enforce these against, with something worth blocking already running in it.</li>
                 <li><a href="https://cel.dev/" target="_blank" rel="noopener noreferrer">cel.dev</a> for the language spec, and <a href="https://kubernetes.io/docs/reference/using-api/cel/" target="_blank" rel="noopener noreferrer">the Kubernetes CEL reference</a> for the variables and limits that apply inside the API server.</li>
+                <li><a href="https://docs.cloud.google.com/organization-policy/reference/custom-constraint-supported-services" target="_blank" rel="noopener noreferrer">Google's list of services that support custom constraints</a>, which links to each service's page of fields, methods and example conditions.</li>
             </ul>
         </section>
 
