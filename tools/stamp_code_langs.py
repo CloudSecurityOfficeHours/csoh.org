@@ -53,7 +53,13 @@ DATA_LANG_RE = re.compile(r'\s*data-lang="[^"]*"')
 KNOWN = {'bash', 'json', 'yaml', 'rego', 'hcl', 'sql', 'python',
          'xml', 'cedar', 'yara', 'cel', 'regex', 'text',
          # The SIEM query languages of the howto/ detection guides.
-         'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog'}
+         'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog',
+         # The cloud providers' own log query languages, CrowdStrike's CQL
+         # and Velociraptor's VQL. main.js has no tokens for them, so like
+         # text and regex they get a label and a copy button but no
+         # colouring. VQL and CQL blocks read as SQL, SPL or shell to the
+         # heuristics, so each one is named in OVERRIDES.
+         'logs insights', 'cloud logging', 'cql', 'vql'}
 
 # Shell verbs that make a block bash even when its first line is a comment.
 SHELL_CMDS = (
@@ -67,6 +73,7 @@ SHELL_CMDS = (
     'bunzip2', 'tar', 'unzip', 'wget', 'stratus', 'kubescape', 'kube-bench',
     'lychee', 'html5validator', 'gh', 'make', 'bash', 'sh', 'source', 'test',
     'cedar', 'celpy', 'kind-config', 'terraform-local',
+    'kyverno',
 )
 
 # Blocks the heuristics get wrong, keyed by a stable hash of their text.
@@ -82,8 +89,26 @@ OVERRIDES: dict[str, str] = {
     'd22e81180d9a': 'text',    # `yr scan -s` match listing
     '5698e5b22db5': 'text',    # Sigma compiled to Splunk SPL
     'adaf4a9ed8d4': 'text',    # infra/terraform/ directory tree
+    # Script output on howto/python-cloud-sdks.html whose `name: value` lines
+    # read as YAML mapping keys to the heuristic.
+    'ea93b8482117': 'text',    # security groups read from a sample response
+    '2cdd948d8796': 'text',    # whoami.py as alice
+    'f7f7e2b2e327': 'text',    # whoami.py as the auditor (shown twice)
+    '22552a791347': 'text',    # whoami.py with leftover build-bot keys
+    '783957bf9a23': 'text',    # last line of an AccessDenied traceback
+    '734a97cb517f': 'text',    # stale access keys
     # A GCP IAM condition: CEL, but with none of the macros the CEL rule keys on.
-    '1f26d44948fb': 'cel',
+    '36e4e24eba33': 'cel',
+    # howto/cel-policy-expressions.html: cel.py and kubectl output, which the
+    # `->` and `error:` openings land on bash and YAML, and two `DOC=file
+    # python3 ...` commands, which have no quote after the `=` for the
+    # NAME=value rule to see.
+    'b9f649a1c425': 'text',
+    '6f2cda4302d8': 'text',
+    '7017567bac61': 'text',
+    'aadacb437fd3': 'text',
+    '072a6e7c62de': 'bash',
+    '0eebe63da033': 'bash',
     # A lone HCL attribute (`name = "..."`, spaces around the =) quoted without
     # its enclosing resource block. Broadening the HCL rule to catch it would
     # also swallow Python assignments, so it is named here instead.
@@ -98,6 +123,64 @@ OVERRIDES: dict[str, str] = {
     # `resource "..."` header for, so it reaches the end and lands on text.
     '032aef2d6a34': 'python',
     '5b5f9d81d992': 'python',
+    # The policy report `kyverno apply --policy-report` prints on the Kyverno
+    # guide: YAML, but output to read, not a file to save.
+    '9a0ef8d062cd': 'text',
+    # howto/semgrep-rules.html. A Semgrep pattern for a Python call, shown on
+    # its own line: a bare call with no keyword the Python rule keys on.
+    '940d779b87af': 'python',
+    # Semgrep's scan summary. Its bullet lines read as shell to the fallback.
+    '9069ab5979fb': 'text',
+    # A Semgrep rule whose pattern quotes a Terraform `resource "..."` header,
+    # which the HCL rule takes for a Terraform file.
+    '18a649b64529': 'yaml',
+    # howto/osquery-and-velociraptor.html: the VQL queries, which the SQL rule
+    # would otherwise claim.
+    'd1c3f8857709': 'vql', '3ac2c68bed27': 'vql', 'bffab4691b1d': 'vql',
+    '1ad2707ee211': 'vql', '67534b3878ca': 'vql', '2cade0f1e694': 'vql',
+    '7a7f984a7bbf': 'vql', 'da0754e979e2': 'vql', '0e9a78f15e58': 'vql',
+    'e5d01a493563': 'vql', 'cb0ebc9e0828': 'vql', '8295c4537350': 'vql',
+    '3831b499b3de': 'vql',
+    # Its outputs that read as JSON or YAML (one-row VQL results, apt's
+    # debconf notice, an excerpt of an artifact definition), and commands
+    # that start with a word the shell rule does not know (time, velociraptor).
+    '8d634db2877f': 'text', '518301807669': 'text', '9551455e3ef2': 'text',
+    '59c95e703514': 'text', '70f3d4870df7': 'text', '44ed92507ed6': 'text',
+    '4dff6b634ec2': 'text', '69771af1b513': 'text', '94997bace720': 'text',
+    'fcffd75fd341': 'bash', '9ba7819f7eb5': 'bash',
+    # An ~/.aws/config profile on portfolio/prowler-audit.html. INI, which
+    # main.js has no tokens for; its `# In ~/.aws/config` comment and `=`
+    # lines read as shell to the fallback, and bash would invite a paste.
+    'd3401c9d2944': 'text',
+    # validate-policy findings and an AWS CLI error on howto/iam-policy-languages.html.
+    # JSON and a line starting `aws:` to the heuristic, but output to read.
+    '97d170e1550e': 'text',    # `[]`, no findings (shown twice)
+    '503813854e97': 'text',    # one RCP warning
+    'af30dc2225cc': 'text',    # an RCP error and a warning
+    '98d2836cb579': 'text',    # AWSOrganizationsNotInUseException
+    # What `az graph query` prints on howto/kusto-kql.html: JSON, but output
+    # to read, not a file to save.
+    '8a97e79ae7ef': 'text',
+    # howto/crowdstrike-logscale.html. CQL shares `| table` with SPL and
+    # `field="value"` with shell assignments, and its function calls fall
+    # through to the bash fallback, so no heuristic separates it safely.
+    '0ed034859910': 'cql',     # eventName="StopLogging"
+    'c4147888982f': 'cql',     # ... | table([...])
+    '0e6de292e26e': 'cql',     # the OR-before-AND query
+    '775ae995e9c5': 'cql',     # the parser
+    '3075f4dd6255': 'cql',     # groupBy(#type, ...)
+    'f0b277e4c434': 'cql',     # timeSource := if(...)
+    'efc47bde9eee': 'cql',     # D1
+    'e34c6e79c3c5': 'cql',     # D4, naive
+    '86269ca5c309': 'cql',     # D4
+    '4eecc2da70fa': 'cql',     # D2, naive
+    'faeb3db6822f': 'cql',     # the error-code control
+    'b25b2f3755dd': 'cql',     # D2
+    '7ebadfa0dd44': 'cql',     # D2 in buckets
+    '933b44abc82a': 'cql',     # D3, correlate()
+    'f4a26dd171f5': 'cql',     # D5
+    '160ec13dd52e': 'cql',     # test(eventName == StopLogging)
+    '6102caf07b84': 'cql',     # distinct identities per address
 }
 
 
@@ -159,8 +242,26 @@ SPL_OPERATORS = (r'stats|eventstats|streamstats|timechart|chart|eval|table|rex'
                  r'|outputlookup|appendpipe|foreach|xyseries|untable')
 
 
+# CloudWatch Logs Insights opens on one of its commands, in lower case, and
+# every later line is a `| command` or an indented continuation. `stats` and
+# `fields` are SPL and Sumo Logic operators too, but those queries open with a
+# search or a scope, never with the bare command.
+LOGS_INSIGHTS_FIRST = r'(fields|filter|stats|sort|limit|parse|display|dedup)\s'
+# The Google Cloud Logging query language is one Boolean filter over LogEntry
+# fields, so it opens on `log_id(` or on a LogEntry field path compared with
+# `=`, `:` or `!=`. A gcloud command carrying such a filter is still a command,
+# and is decided before this is reached.
+CLOUD_LOGGING_FIRST = (r'(log_id\(|(NOT\s+)?(jsonPayload|protoPayload)\.[\w.@"]+\s*(!?=|:|=~|!~)'
+                       r'|logName\s*(=|:)|resource\.type\s*(=|:))')
+
+
 def _detection_language(first: str, body_text: str) -> str | None:
     """Classify a SIEM query block, or return None if it is not one."""
+    if re.match(LOGS_INSIGHTS_FIRST, first) and \
+       all(re.match(r'(\||\s)', ln) for ln in body_text.splitlines()[1:] if ln.strip()):
+        return 'logs insights'
+    if re.match(CLOUD_LOGGING_FIRST, first):
+        return 'cloud logging'
     if re.match(r'(FROM|ROW|SHOW|TS)\s', first) and \
        re.search(r'(^|\s)\|\s*(' + ESQL_COMMANDS + r')\b', body_text, re.M):
         return 'esql'
@@ -220,6 +321,10 @@ SELF_TEST = [
     ('yaml', 'id: 1b2c3d4e-0000-4000-8000-000000000000\nname: Denied burst\nquery: |\n  AWSCloudTrail\n  | summarize n = count() by SourceIpAddress\n  | where n >= 5'),
     # A test report opening on a log level is output, not YAML.
     ('text', 'INFO: Testing analysis items in .\nLab.CloudTrail.TrailTampering\n    [PASS] backup-svc stops the trail'),
+    # kyverno CLI results: the `->` must not make them bash, nor the summary YAML.
+    ('text', 'Applying 1 policy rule(s) to 5 resource(s)...\npolicy p -> resource shop/Pod/root failed:\n1 -  denied'),
+    ('text', 'pass: 10, fail: 0, warn: 2, error: 0, skip: 0\n0'),
+    ('bash', 'kyverno test tests/'),
     # Falco alert output, with a `<NA>` that looks like a shell redirect.
     ('text', '2026-09-27T18:57:33.415876851+0000: Warning /etc/shadow read (command=cat /etc/shadow) k8s_pod_name=<NA>'),
     ('datadog', 'source:cloudtrail @evt.name:StopLogging'),
@@ -228,6 +333,17 @@ SELF_TEST = [
     ('bash', "docker exec lab splunk search 'index=x | stats count by y'"),
     ('bash', 'cat events.log | sort | uniq -c'),
     ('sql', 'SELECT eventName, count(*)\nFROM ct\nGROUP BY eventName'),
+    ('logs insights', 'filter eventName = "StopLogging"\n| fields eventTime, sourceIPAddress'),
+    ('logs insights', 'stats count(*) as events, count(eventName) as parsed'),
+    ('logs insights', 'filter a = 1 and b = 2\n  and c = 3\n| stats count(*) as n by d\n| filter n >= 5'),
+    ('cloud logging', 'log_id("cloudtrail-lab")\njsonPayload.eventName="StopLogging"'),
+    ('cloud logging', 'jsonPayload.eventName="StopLogging"'),
+    ('cloud logging', 'protoPayload.methodName="SetIamPolicy"\nprotoPayload.serviceName="iam.googleapis.com"'),
+    # The near misses: commands that carry either language stay bash, and a
+    # YAML key called filter stays YAML.
+    ('bash', "aws logs start-query --log-group-name g --query-string 'filter a = 1 | stats count(*)'"),
+    ('bash', "gcloud logging read 'log_id(\"x\") jsonPayload.a=\"b\"' --limit=5"),
+    ('yaml', 'filter: errorCode\nfields: [a, b]'),
 ]
 
 
@@ -285,6 +401,14 @@ def classify(raw: str) -> str:
     # otherwise read the level as a mapping key; a YAML file never opens on an
     # all-capitals key like these.
     if re.match(r'(INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL|FATAL):\s', first):
+        return 'text'
+    # The kyverno CLI's results are output. `kyverno apply` opens on
+    # `Applying N policy rule(s) to N resource(s)...` and closes on a
+    # `pass: N, fail: N, ...` summary; the `->` in its result lines would
+    # otherwise land the block on bash, and an opening `Warning: <file>:`
+    # deprecation notice or a bare summary line on YAML.
+    if re.search(r'^Applying \d+ policy rule\(s\) to \d+ resource\(s\)', body_text, re.M) or \
+       re.search(r'^pass: \d+, fail: \d+, warn: \d+, error: \d+, skip: \d+', body_text, re.M):
         return 'text'
 
     # --- languages with a distinctive keyword ------------------------------

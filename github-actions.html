@@ -58,10 +58,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
-    <link rel="preload" href="/style.css?v=a1c52606" as="style"
-        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
-    <link rel="stylesheet" href="/style.css?v=a1c52606"
-        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="preload" href="/style.css?v=c50d5a31" as="style"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+    <link rel="stylesheet" href="/style.css?v=c50d5a31"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
 
     <script type="application/ld+json">
     {
@@ -824,7 +824,7 @@ done</pre></div>
                 <li><strong>Avoid <code>pull_request_target</code> unless you fully understand it.</strong> It runs in the context of the base branch with full secrets, on code from a fork. Footgun. The <a href="breach-timeline.html">breach kill chains</a> page covers an attack pattern that exploited this on a major OSS project.</li>
                 <li><strong>Don't echo secrets, don't log them, don't write them to artifacts.</strong> Even if it's "just a debug step you'll remove later."</li>
                 <li><strong>Use OIDC for cloud credentials when you can.</strong> AWS, GCP, and Azure all support short-lived federated tokens via OIDC, with no long-lived access keys to leak. This is exactly how CSOH deploys: every publish job federates a short-lived token to its cloud, so there's not a single static cloud key in the repo. See <a href="terraform.html">how we wire it in Terraform</a> and <a href="cloud-deployment.html">our deploy architecture</a>.</li>
-                <li><strong>Treat <code>${{ github.event.* }}</code> as untrusted input</strong> when interpolating into shell. PR titles, branch names, and commit messages can contain attacker-controlled strings. Use <code>${VAR}</code> from <code>env:</code> instead of inline <code>${{ }}</code> in run blocks.</li>
+                <li><strong>Treat <code>${{ github.event.* }}</code> as untrusted input</strong> when interpolating into shell. PR titles, branch names, and commit messages can contain attacker-controlled strings. Use <code>${VAR}</code> from <code>env:</code> instead of inline <code>${{ }}</code> in run blocks. <a href="howto/semgrep-rules.html#step-7">The Semgrep rules guide</a> builds and tests a rule that finds this pattern in your workflows.</li>
                 <li><strong>Pin your cloud's OIDC trust to the full subject, not just the repository.</strong> <code>assertion.repository == 'owner/repo'</code> is the condition everyone writes first, and it trusts every workflow in the repo on every branch. Require the subject too (ours is <code>repo:&lt;owner&gt;/&lt;repo&gt;:environment:production</code> on all three clouds, plus <code>environment:qa</code> on GCP for the QA deployer), and let the GitHub Environment's deployment-branch rule carry the branch restriction, so there is one place to change rather than three.</li>
                 <li><strong>Never allowlist a bare interpreter</strong> when you hand an agent, bot, or plugin a list of permitted commands. <code>python3</code>, <code>node</code>, <code>perl</code>, <code>sh</code>, and <code>bash</code> all take a <code>-c</code> flag, so allowlisting one of them is allowlisting everything and silently voids the rest of the list. Allowlist a checked-in script path instead. This is non-negotiable in any job that reads web pages, issue text, or feeds.</li>
                 <li><strong>Set <code>persist-credentials: false</code> on <code>actions/checkout</code> unless a later step really does push.</strong> By default checkout stores the token it used in <code>.git/config</code> as an <code>http.extraheader</code>, where it stays for the whole job and any step can read it back out as a file. When the steps that need the token are passed it explicitly, the copy on disk is pure downside.</li>

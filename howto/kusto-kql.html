@@ -7,7 +7,7 @@
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="description" content="Learn KQL from zero on a local Kusto engine: filter, parse, count and join CloudTrail, catch the query that returns nothing, and write a Sentinel analytics rule.">
     <meta name="author" content="Shawn Nunley">
-    <meta name="keywords" content="kql tutorial, kusto query language, kusto emulator, microsoft sentinel analytics rule yaml, awscloudtrail kql, kql has vs contains, kql join innerunique, kql parse_json, cloudtrail detection kql">
+    <meta name="keywords" content="kql tutorial, kusto query language, kusto emulator, microsoft sentinel analytics rule yaml, awscloudtrail kql, kql has vs contains, kql join innerunique, kql parse_json, cloudtrail detection kql, azure resource graph kql, az graph query">
     <title>Kusto Query Language (KQL): a hands-on how-to - CSOH</title>
 
     <link rel="canonical" href="https://csoh.org/howto/kusto-kql.html">
@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-04">
+    <meta property="article:modified_time" content="2026-11-04">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="kql">
@@ -35,6 +35,7 @@
     <meta property="article:tag" content="azure data explorer">
     <meta property="article:tag" content="cloudtrail">
     <meta property="article:tag" content="detection engineering">
+    <meta property="article:tag" content="azure resource graph">
     <meta property="og:url" content="https://csoh.org/howto/kusto-kql.html">
     <meta property="og:image" content="https://csoh.org/img/og/howto/kusto-kql.jpg">
     <meta name="twitter:card" content="summary_large_image">
@@ -48,10 +49,10 @@
     <link rel="dns-prefetch" href="https://buymeacoffee.com">
 
     <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
-    <link rel="preload" href="/style.css?v=a1c52606" as="style"
-        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
-    <link rel="stylesheet" href="/style.css?v=a1c52606"
-        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="preload" href="/style.css?v=c50d5a31" as="style"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+    <link rel="stylesheet" href="/style.css?v=c50d5a31"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
 
     <script type="application/ld+json">
     {
@@ -62,7 +63,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-04",
+      "dateModified": "2026-11-04",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -138,6 +139,36 @@
           "position": 10,
           "name": "Test the rule both ways",
           "text": "Count what two consecutive scheduled runs would see and confirm one alerts and the other stays silent."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 11,
+          "name": "Run an Azure Resource Graph query",
+          "text": "Add the Azure CLI's resource-graph extension, count your resources by type, and read count, total_records and skip_token before the rows."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 12,
+          "name": "Fetch every page",
+          "text": "See the CLI return 100 rows of thousands, ask for 1,000 at a time, follow the skip token, and see a query ending in take lose its token."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 13,
+          "name": "Check the query's scope",
+          "text": "Add a subscription you cannot read to the list and see it dropped from the answer without a warning."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 14,
+          "name": "Count absent properties before filtering",
+          "text": "Count storage accounts missing each setting, and see an absent key policy fall outside both sides of a 90-day threshold."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 15,
+          "name": "Read both address fields of network rules",
+          "text": "Expand each network security group's rules and check sourceAddressPrefix and sourceAddressPrefixes together, on your groups and on two inline rules."
         }
       ]
     }
@@ -363,15 +394,15 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-04">Last updated <strong>2026-10-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
-    <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker with 4 GB of memory to spare and several gigabytes of disk, and Python 3. No Azure account. On an Apple silicon Mac, turn on Docker Desktop's Rosetta setting first (step 1); without Docker, use a free Azure Data Explorer cluster.</p>
-    <p class="u-mt-075"><strong>How this page was checked:</strong> every command and query was run as printed against the Kusto emulator (Azure Data Explorer engine 1.0.9766.21061, the <code>latest</code> image of 27 September 2026) in Docker Desktop on an Apple silicon Mac under Rosetta, and every output is pasted from that run. Not run: the free-cluster route, and the analytics rule inside a Microsoft Sentinel workspace. The rule's query runs here like every other, and the rule file uses only fields that Microsoft's own published <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> rules use.</p>
+    <p><strong>Time:</strong> ~2 hours, and about 30 minutes more for Azure Resource Graph &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker with 4 GB of memory to spare and several gigabytes of disk, and Python 3. No Azure account for the walk-through. On an Apple silicon Mac, turn on Docker Desktop's Rosetta setting first (step 1); without Docker, use a free Azure Data Explorer cluster. The Azure Resource Graph part needs the Azure CLI, signed in to a subscription you can read.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> every command and query in the walk-through and in Exercises 1 to 4 was run as printed against the Kusto emulator (Azure Data Explorer engine 1.0.9766.21061, the <code>latest</code> image of 27 September 2026) in Docker Desktop on an Apple silicon Mac under Rosetta, and every output is pasted from that run. Not run: the free-cluster route, and the analytics rule inside a Microsoft Sentinel workspace. The rule's query runs here like every other, and the rule file uses only fields that Microsoft's own published <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> rules use. The Azure Resource Graph part and Exercise 5 were run as printed on 4 November 2026 with Azure CLI 2.91.0 and its <code>resource-graph</code> extension 2.1.1, in zsh and in bash on macOS, against a subscription holding one storage account and no network security groups, with read-only queries; outputs are pasted from that run, with request timestamps and IDs replaced. Where that subscription had nothing to find, the page says so and shows the control. What it could not show comes from Microsoft's documentation and the CLI's source, not a run: the global <code>--subscription</code> option (the test identity could read only one subscription), subscriptions added after sign-in, how the CLI writes network rules, what older storage accounts hold, and what <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a> accepts. Azure PowerShell's <code>Search-AzGraph</code> was not run.</p>
 </div>
 
 <section id="intro">
     <h2>One query language across Microsoft's security data</h2>
-    <p>Kusto is the query engine behind Azure Data Explorer, and KQL is the language you use to ask it questions. The same language runs in Azure Monitor Logs, in Microsoft Sentinel (which keeps its data in Log Analytics workspaces), in advanced hunting in Microsoft Defender XDR, and in Microsoft Fabric. Analysts in a security operations centre (SOC) write it to hunt through logs; detection engineers write it so that a <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system can run it on a schedule and raise alerts.</p>
+    <p>Kusto is the query engine behind Azure Data Explorer, and KQL is the language you use to ask it questions. The same language runs in Azure Monitor Logs, in Microsoft Sentinel (which keeps its data in Log Analytics workspaces), in advanced hunting in Microsoft Defender XDR, and in Microsoft Fabric, and a subset of it in Azure Resource Graph, which describes what is deployed rather than what happened (<a href="#resource-graph">its own part, below</a>). Analysts in a security operations centre (SOC) write it to hunt through logs; detection engineers write it so that a <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system can run it on a schedule and raise alerts.</p>
     <p>The distinction that matters most: <strong>a query only reads.</strong> It names a table, reshapes it and hands back a table, and it cannot change any data. <strong>A management command starts with a dot</strong> (<code>.create</code>, <code>.ingest</code>, <code>.show</code>) and changes or inspects the database itself. Commands belong to Azure Data Explorer and Fabric, which is why this lab can use a few of them to build its table. In Sentinel you never create <code>AWSCloudTrail</code>: Sentinel's Amazon Web Services (AWS) connectors fill it, and you write only queries.</p>
     <p>So the lab runs on the Kusto emulator, the Azure Data Explorer engine in a free Docker container, and builds a table with Sentinel's name for it, using Sentinel's column names and types. Every query operator and function used here is one Microsoft documents as available in Sentinel, so what you write carries across.</p>
 </section>
@@ -381,6 +412,7 @@
     <ol>
         <li><a href="#model">Tables in, tables out</a></li>
         <li><a href="#walkthrough">Walk-through: one leaked key, five detections</a></li>
+        <li><a href="#resource-graph">Azure Resource Graph: KQL for what is deployed</a></li>
         <li><a href="#exercises">Hands-on exercises</a></li>
         <li><a href="#mistakes">Common mistakes</a></li>
         <li><a href="#next">Where next</a></li>
@@ -451,7 +483,7 @@ EOF</pre></div>
  1.0.9766.21061 | 2026-09-27T11:42:02Z | Engine      | 2026.09.27.1134-2638-cb0a545-master |
 (1 row)</pre></div>
     <p>Your build will be newer if Microsoft has published one since. The emulator starts with one database, <code>NetDefaultDB</code>, and <code>kql.py</code> sends everything there.</p>
-    <p><strong>No Docker, or the emulator will not start?</strong> Create a <a href="https://learn.microsoft.com/en-us/azure/data-explorer/start-for-free" target="_blank" rel="noopener noreferrer">free Azure Data Explorer cluster</a>. It needs a Microsoft account or a Microsoft Entra user identity, not an Azure subscription or a credit card, and Microsoft grants one free cluster for a year, for commercial or non-commercial use, with about 100 GB of storage. Run each KQL block on this page in its web query editor instead of through <code>kql.py</code>; step 2 notes the one difference.</p>
+    <p><strong>No Docker, or the emulator will not start?</strong> Create a <a href="https://learn.microsoft.com/en-us/azure/data-explorer/start-for-free" target="_blank" rel="noopener noreferrer">free Azure Data Explorer cluster</a>. It needs a <a class="glossary-link" href="../glossary.html#term-msa">Microsoft account</a> or a Microsoft Entra user identity, not an Azure subscription or a credit card, and Microsoft grants one free cluster for a year, for commercial or non-commercial use, with about 100 GB of storage. Run each KQL block on this page in its web query editor instead of through <code>kql.py</code>; step 2 notes the one difference.</p>
 
     <h3>2. Load the lab data</h3>
 <div class="code-block" data-lang="bash"><pre>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
@@ -697,6 +729,148 @@ EOF</pre></div>
     <p>The 10:10 run sees the attacker's seven refusals and raises an alert; the 10:00 run sees one of the application's and none of the attacker's, and stays silent. Keep a check like this with the rule as its test, one window that must alert and one that must not: the second is what catches a rule that fires on everything.</p>
 </section>
 
+<section id="resource-graph">
+    <h2>Azure Resource Graph: KQL for what is deployed</h2>
+    <p>Everything above asks about events: what happened, when, and from where. A security team also asks what exists now and how it is configured, the posture question, and in Azure that is what Azure Resource Graph answers. It indexes the resources Azure Resource Manager knows about, updated shortly after they change and by a regular full scan, and you query it in a subset of KQL. Microsoft describes it as a free service and throttles queries, and the recommendations of Microsoft <a class="glossary-link" href="../glossary.html#term-defender-for-cloud">Defender for Cloud</a> and the compliance results of Azure Policy can be queried there too.</p>
+    <p>The data has a different shape from a log. There is no <code>TimeGenerated</code>: each row is one resource as it is now, with fixed columns such as <code>id</code>, <code>name</code>, <code>type</code>, <code>location</code>, <code>resourceGroup</code>, <code>subscriptionId</code> and <code>tags</code>, and its configuration in <code>properties</code>. Four mistakes return a short answer with no error, and they lead this part: a first page that looks complete, a scope smaller than you think, a setting that is absent rather than false, and an address in the field you did not check. You need the Azure command-line interface (CLI), signed in to a subscription you can read. Nothing here creates or changes anything.</p>
+
+    <h3>1. Run a query, and read the fields around the rows</h3>
+<div class="code-block" data-lang="bash"><pre>az extension add --name resource-graph</pre></div>
+<div class="code-block" data-lang="bash"><pre>az graph query -q "Resources | summarize Resources = count() by type"</pre></div>
+<div class="code-block" data-lang="text"><pre>{
+  "count": 1,
+  "data": [
+    {
+      "Resources": 1,
+      "type": "microsoft.storage/storageaccounts"
+    }
+  ],
+  "skip_token": null,
+  "total_records": 1
+}</pre></div>
+    <p>The subscription this page was checked against holds one storage account, so the answer is short. The rows are in <code>data</code>; the fields around them describe the page you got: <code>count</code> rows in it, <code>total_records</code> in the whole result, and a <code>skip_token</code> when there is more to fetch. Read those before the rows. Note that <code>type</code> comes back in lower case. <code>Resources</code> is one of about forty tables Microsoft lists; the ones a security review reaches for first are:</p>
+    <ul>
+        <li><code>Resources</code>: most resource types and their configuration.</li>
+        <li><code>ResourceContainers</code>: subscriptions, resource groups and management groups.</li>
+        <li><code>SecurityResources</code>: Defender for Cloud's assessments, secure scores, alerts and regulatory compliance.</li>
+        <li><code>PolicyResources</code>: Azure Policy definitions, assignments and compliance states.</li>
+        <li><code>AuthorizationResources</code>: role assignments and role definitions.</li>
+        <li><code>ResourceChanges</code>: recent changes to resources.</li>
+    </ul>
+    <p>Microsoft's <a href="https://learn.microsoft.com/en-us/azure/governance/resource-graph/concepts/query-language" target="_blank" rel="noopener noreferrer">query language page</a> lists the tables, and every one it names was accepted on the day this page was checked. <code>&lt;table&gt; | distinct type</code> shows what one holds in your estate.</p>
+
+    <h3>2. Pages: 100 rows unless you ask</h3>
+    <p>The CLI asks for 100 rows unless you pass <code>--first</code>, which goes up to 1,000 (its <a href="https://github.com/Azure/azure-cli-extensions/blob/main/src/resource-graph/azext_resourcegraph/_validators.py" target="_blank" rel="noopener noreferrer">source sets the 100</a>). Beyond that you ask for the next page with the <code>skip_token</code> the last one returned. None of this is an error. <code>FeatureResources</code>, Azure's catalogue of preview features, runs to thousands of rows even in a nearly empty subscription, so it shows the effect:</p>
+<div class="code-block" data-lang="bash"><pre>az graph query -q "FeatureResources | project id | order by id asc" --query '{count: count, total_records: total_records, more: skip_token != `null`}' -o table</pre></div>
+<div class="code-block" data-lang="text"><pre>Count    Total_records    More
+-------  ---------------  ------
+100      6580             True</pre></div>
+    <p>A script that reads only <code>data</code> gets 100 rows and no hint of the other 6,480. Ask for the largest page and follow the token until <code>More</code> is <code>False</code>; here is the second page:</p>
+<div class="code-block" data-lang="bash"><pre>export Q="FeatureResources | project id | order by id asc"
+TOKEN=$(az graph query -q "$Q" --first 1000 --query skip_token -o tsv)
+az graph query -q "$Q" --first 1000 --skip-token "$TOKEN" --query '{count: count, total_records: total_records, more: skip_token != `null`}' -o table
+az graph query -q "$Q | take 500" --query '{count: count, total_records: total_records, more: skip_token != `null`}' -o table</pre></div>
+<div class="code-block" data-lang="text"><pre>Count    Total_records    More
+-------  ---------------  ------
+1000     6580             True
+Count    Total_records    More
+-------  ---------------  ------
+100      500              False</pre></div>
+    <p>The last command is the quiet one. A query that uses <code>take</code> or <code>limit</code> gets no skip token, so the other 400 rows cannot be paged to, and only <code>total_records</code> points to them. Sort before paging, as here: Microsoft warns that without a sort the rows returned are random and not repeatable. From here on, a helper does this checking for you: like <code>kql.py</code>, it reads one query, always asks for 1,000 rows, and prints the paging fields under the table.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; arg.py &lt;&lt;'EOF'
+# arg.py: send one Resource Graph query (on stdin) through the Azure CLI, asking
+# for the largest page, and print the rows as a table with the paging fields.
+import json, subprocess, sys
+run = subprocess.run(["az", "graph", "query", "--first", "1000", "-o", "json",
+                      "-q", sys.stdin.read().strip()], capture_output=True, text=True)
+if run.returncode:
+    sys.exit(run.stderr.strip())
+result = json.loads(run.stdout)
+show = lambda v: "" if v is None else v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
+cols = list(result["data"][0]) if result["data"] else []
+rows = [cols] + [[show(r.get(c)) for c in cols] for r in result["data"]]
+width = [max(len(r[i]) for r in rows) for i in range(len(cols))]
+for n, row in enumerate(rows if cols else []):
+    print((" " + " | ".join(v.ljust(w) for v, w in zip(row, width))).rstrip())
+    if n == 0:
+        print("+".join("-" * (w + 2) for w in width))
+more = "more pages: follow skip_token" if result["skip_token"] else "no more pages"
+print(f"({result['count']} of {result['total_records']} rows; {more})")
+EOF</pre></div>
+
+    <h3>3. Scope: what you can read, as the CLI saw it at sign-in</h3>
+    <p>Unless you pass <code>--subscriptions</code> or <code>--management-groups</code>, the CLI sends the subscriptions it stored when you signed in (the list <code>az account list</code> reads), and Resource Graph answers for those you can read. Microsoft's <a href="https://learn.microsoft.com/en-us/azure/governance/resource-graph/overview" target="_blank" rel="noopener noreferrer">overview</a> says a subscription added since then stays out until the context is refreshed, which signing in again does; <code>az account list --refresh</code> also re-reads the list. The global <code>--subscription</code> option, which picks the subscription for most <code>az</code> commands, does not narrow this one: the <a href="https://github.com/Azure/azure-cli-extensions/blob/main/src/resource-graph/azext_resourcegraph/custom.py" target="_blank" rel="noopener noreferrer">extension's source</a> builds its list without it. And a subscription ID you cannot read, here the all-zero one, is left out of the answer, not refused:</p>
+<div class="code-block" data-lang="bash"><pre>SUB=$(az account show --query id -o tsv)
+az graph query -q "ResourceContainers | where type == 'microsoft.resources/subscriptions' | count" --subscriptions "$SUB" 00000000-0000-0000-0000-000000000000 --query data -o table</pre></div>
+<div class="code-block" data-lang="text"><pre>Count
+-------
+1</pre></div>
+    <p>Two subscriptions asked for, one counted, and no warning. Ask for the unreadable one alone and the service refuses:</p>
+<div class="code-block" data-lang="bash"><pre>az graph query -q "ResourceContainers | where type == 'microsoft.resources/subscriptions' | count" --subscriptions 00000000-0000-0000-0000-000000000000</pre></div>
+<div class="code-block" data-lang="text"><pre>ERROR: {
+    "code": "BadRequest",
+    "message": "Please provide below info when asking for support: timestamp = &lt;time&gt;, correlationId = &lt;id&gt;.",
+    "details": [
+        {
+            "code": "NoValidSubscriptionsInQueryRequest",
+            "message": "There must be at least one subscription that is eligible to contain resources. Given: '00000000-0000-0000-0000-000000000000'."
+        }
+    ]
+}</pre></div>
+    <p>Management groups show the same contrast: for the identity this page was checked with, <code>ResourceContainers</code> listed none and said nothing, while <code>az account management-group list</code> was refused with <code>AuthorizationFailed</code>. An empty answer means nothing you can read, which is not the same as nothing there, so count the subscriptions in the answer, as above, against the ones you expected.</p>
+
+    <h3>4. Properties: the setting that is not there</h3>
+    <p>A resource's configuration sits in <code>properties</code>, a <code>dynamic</code> column, so the dot reaches into it with no <code>parse_json()</code> (walk-through step 5 needed one because Sentinel stores its JSON as text). What it holds depends on the resource type, and a setting nobody changed is often absent rather than false. Microsoft documents that a storage account's <code>allowSharedKeyAccess</code> <a href="https://learn.microsoft.com/en-us/azure/storage/common/shared-key-authorization-prevent" target="_blank" rel="noopener noreferrer">is not set by default</a> and that the account accepts Shared Key authorization when it is null or true. Against an absent value, <code>==</code>, <code>&lt;</code> and <code>&gt;</code> are all false (only <code>!=</code> is true), so <code>where properties.allowSharedKeyAccess == true</code> skips exactly the accounts nobody configured. Before you filter on a property, count how often it is missing:</p>
+<div class="code-block" data-lang="kql"><pre>Resources
+| where type == 'microsoft.storage/storageaccounts'
+| extend Days = toint(properties.keyPolicy.keyExpirationPeriodInDays)
+| summarize Accounts = count(), Over90 = countif(Days &gt; 90), AtMost90 = countif(Days &lt;= 90),
+    NoKeyPolicy = countif(isnull(properties.keyPolicy)),
+    SharedKeyUnset = countif(isnull(properties.allowSharedKeyAccess)),
+    PublicUnset = countif(isnull(properties.allowBlobPublicAccess))</pre></div>
+<div class="code-block" data-lang="text"><pre> Accounts | AtMost90 | NoKeyPolicy | Over90 | PublicUnset | SharedKeyUnset
+----------+----------+-------------+--------+-------------+----------------
+ 1        | 0        | 1           | 0      | 0           | 0
+(1 of 1 rows; no more pages)</pre></div>
+    <p>Run it with <code>python3 arg.py &lt; file.kql</code>, or paste it after <code>python3 arg.py</code> and press Ctrl-D. The CLI sorts each row's fields by name, which is why the columns are alphabetical. The one account here sets both access settings but has no <code>keyPolicy</code>, its <a href="https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage" target="_blank" rel="noopener noreferrer">reminder to rotate its access keys</a>, and the two threshold columns show what that does: it is neither over 90 days nor at most 90, so a rule written either way passes it by. Write the documented default into the query, as in <code>coalesce(tobool(properties.allowSharedKeyAccess), true)</code>, or test <code>isnull()</code> beside the value.</p>
+    <p><code>allowBlobPublicAccess</code> is less settled. Microsoft's <a href="https://github.com/Azure/azure-rest-api-specs/tree/main/specification/storage/resource-manager/Microsoft.Storage/Storage/stable" target="_blank" rel="noopener noreferrer">API specification</a> described the default interpretation of an unset value as true up to API version 2022-09-01 and as false from 2023-01-01, but its <a href="https://learn.microsoft.com/en-us/azure/storage/blobs/anonymous-read-access-prevent" target="_blank" rel="noopener noreferrer">remediation guide</a> still says an account can show it blank in Resource Graph, and the audit policy in that guide flags every account where it is not <code>false</code>, absent included. Some settings are not meant to be false at all: Key Vault's API <a href="https://learn.microsoft.com/en-us/rest/api/keyvault/keyvault/vaults/get" target="_blank" rel="noopener noreferrer">does not accept false</a> for <code>enablePurgeProtection</code>, so look for vaults where it is not true.</p>
+
+    <h3>5. Network rules: the address in the other field</h3>
+    <p>A <a class="glossary-link" href="../glossary.html#term-nsg">network security group</a> (NSG) rule names its source in <code>sourceAddressPrefix</code>, one value, or in <code>sourceAddressPrefixes</code>, an array, and destinations and ports have the same pair. When the Azure CLI <a href="https://github.com/Azure/azure-cli/blob/dev/src/azure-cli/azure/cli/command_modules/network/custom.py" target="_blank" rel="noopener noreferrer">creates a rule</a>, it puts one address in the singular field and two or more in the array, so a check of <code>sourceAddressPrefix</code> alone misses any rule that lists the internet among other ranges. This query reads both, after turning each group's <code>securityRules</code> array into one row per rule:</p>
+<div class="code-block" data-lang="kql"><pre>Resources
+| where type == 'microsoft.network/networksecuritygroups'
+| mv-expand rule = properties.securityRules limit 2000
+| where rule.properties.access == 'Allow' and rule.properties.direction == 'Inbound'
+| mv-expand Source = array_concat(pack_array(rule.properties.sourceAddressPrefix),
+                                  rule.properties.sourceAddressPrefixes) to typeof(string)
+| where Source in ('*', '0.0.0.0/0', 'Internet')
+| project Nsg = name, Rule = tostring(rule.name), Source</pre></div>
+<div class="code-block" data-lang="text"><pre>(0 of 0 rows; no more pages)</pre></div>
+    <p><code>mv-expand</code> stops after 128 elements of each array unless you give it a <code>limit</code>, and does not say so; a group can hold <a href="https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits" target="_blank" rel="noopener noreferrer">2,000 rules</a>, which is also the largest <code>limit</code> Resource Graph accepts. The subscription behind this page has no network security groups (step 1), so the query has nothing to find. To watch it work, give it two rules in the shape Resource Manager returns, written inline with <code>dynamic()</code> on one row of any table:</p>
+<div class="code-block" data-lang="kql"><pre>ResourceContainers
+| take 1
+| mv-expand rule = dynamic([
+    {'name': 'ssh-any', 'properties': {'access': 'Allow', 'direction': 'Inbound',
+        'sourceAddressPrefix': '*'}},
+    {'name': 'rdp-list', 'properties': {'access': 'Allow', 'direction': 'Inbound',
+        'sourceAddressPrefixes': ['198.51.100.0/24', '0.0.0.0/0']}}])
+| where rule.properties.access == 'Allow' and rule.properties.direction == 'Inbound'
+| mv-expand Source = array_concat(pack_array(rule.properties.sourceAddressPrefix),
+                                  rule.properties.sourceAddressPrefixes) to typeof(string)
+| where Source in ('*', '0.0.0.0/0', 'Internet')
+| project Rule = tostring(rule.name), Source, SingularField = tostring(rule.properties.sourceAddressPrefix)
+| order by Rule asc</pre></div>
+<div class="code-block" data-lang="text"><pre> Rule     | SingularField | Source
+----------+---------------+-----------
+ rdp-list |               | 0.0.0.0/0
+ ssh-any  | *             | *
+(2 of 2 rows; no more pages)</pre></div>
+    <p>A check of the singular field reads only <code>SingularField</code>, which is empty for <code>rdp-list</code>, the rule that admits <code>0.0.0.0/0</code>.</p>
+
+    <h3>6. What the language leaves out</h3>
+    <p>Resource Graph runs a <a href="https://learn.microsoft.com/en-us/azure/governance/resource-graph/concepts/query-language" target="_blank" rel="noopener noreferrer">subset of KQL</a>, and unlike the four failures above, a missing piece fails loudly. In the test for this page it refused <code>let</code> (write the subquery inside the <code>join</code> instead), the anti and semi joins (<code>kind=leftanti</code> fails with <code>UnsupportedJoinFlavor</code>; use <code>kind=leftouter</code> and keep the rows whose right-hand columns are empty), and <code>getschema</code>, <code>search</code>, <code>datatable</code>, <code>range</code>, <code>mv-apply</code>, <code>lookup</code> and <code>make-series</code>. Microsoft documents the join kinds <code>innerunique</code> (still the default), <code>inner</code>, <code>leftouter</code> and <code>fullouter</code>, and some tables cannot be joined in the same query. Table names are not case-sensitive here, but <code>==</code> still is.</p>
+</section>
+
 <section id="exercises">
     <h2>Hands-on exercises</h2>
 
@@ -793,6 +967,29 @@ relevantTechniques:
             <p><code>isempty(ErrorCode)</code> keeps only calls that succeeded, so this returns step 4's single row: the <code>StopLogging</code> call went through. Microsoft's library puts refused attempts in a separate, low-severity rule, <code>AWS_ClearStopChangeTrailLogs.yaml</code>. In ATT&amp;CK v19.2 this behaviour is <a href="https://attack.mitre.org/techniques/T1685/002/" target="_blank" rel="noopener noreferrer">T1685.002 Disable or Modify Cloud Log</a>, under the new Defense Impairment tactic (TA0112): T1562.008 is revoked, and TA0005, which Sentinel still calls <code>DefenseEvasion</code>, is renamed Stealth. Neither new name is in Sentinel's tactic list yet, and Microsoft's content checks reject <code>T1685.002</code> because no tactic they know contains it. Map to what your platform accepts, and expect the mapping to move when it catches up.</p>
         </details>
     </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 5</span>
+        <p>Before a review, a colleague counts storage accounts in Resource Graph and gets zero, although Resource Graph step 1 found one. What happened, and what should they have run first?</p>
+<div class="code-block" data-lang="kql"><pre>Resources
+| where type == 'Microsoft.Storage/storageAccounts'
+| count</pre></div>
+<div class="code-block" data-lang="text"><pre> Count
+-------
+ 0
+(1 of 1 rows; no more pages)</pre></div>
+        <details>
+            <summary>Show the answer</summary>
+            <p>Ask the data how it spells the value you are filtering on, with no filter at all. That is step 1's question:</p>
+<div class="code-block" data-lang="kql"><pre>Resources
+| summarize Resources = count() by type</pre></div>
+<div class="code-block" data-lang="text"><pre> Resources | type
+-----------+-----------------------------------
+ 1         | microsoft.storage/storageaccounts
+(1 of 1 rows; no more pages)</pre></div>
+            <p>Resource Graph returns <code>type</code> in lower case and <code>==</code> is case-sensitive, so the filter matched nothing, and a query that could not work printed the same zero as an empty estate. Use <code>=~</code>, which ignores case (walk-through step 4), or copy the value as the control printed it. Property names are case-sensitive too: <code>properties.AllowSharedKeyAccess</code> is null even on an account that sets <code>allowSharedKeyAccess</code>, which is Resource Graph step 4's absent setting by another route.</p>
+        </details>
+    </div>
 </section>
 
 <section id="mistakes">
@@ -807,6 +1004,10 @@ relevantTechniques:
         <li><strong>Filtering with <code>ago()</code> before checking the data's dates.</strong> Old data, lab data and a time picker set to the last 24 hours all return nothing. Run <code>min(TimeGenerated)</code> and <code>max(TimeGenerated)</code> first.</li>
         <li><strong>Binning inside a scheduled rule.</strong> A bucket boundary can split a burst so that neither half reaches the threshold. Count over the whole lookback.</li>
         <li><strong>Believing a load because it reported rows.</strong> JSON ingested without a mapping arrives as rows of nulls. Look inside before you query.</li>
+        <li><strong>Taking the CLI's first page for the answer.</strong> <code>az graph query</code> returns 100 rows unless you pass <code>--first</code> (at most 1,000). Compare <code>count</code> with <code>total_records</code> and follow <code>skip_token</code>; a query ending in <code>take</code> or <code>limit</code> gets no token at all.</li>
+        <li><strong>Reading an empty Resource Graph answer as "none exist".</strong> It covers only the subscriptions the CLI stored at sign-in, and of those only the ones you can read; the rest drop out without a word.</li>
+        <li><strong>Filtering on a property that may be absent.</strong> <code>== true</code>, <code>== false</code> and <code>&gt; 90</code> all skip a resource that lacks the property. Count the absent ones first, and write the documented default into the query.</li>
+        <li><strong>Checking only <code>sourceAddressPrefix</code>.</strong> A rule with several addresses keeps them in <code>sourceAddressPrefixes</code>. Read both, and give <code>mv-expand</code> a <code>limit</code>, or it stops at 128 rules.</li>
     </ul>
 </section>
 
@@ -815,6 +1016,8 @@ relevantTechniques:
     <ul>
         <li><a href="sigma-and-yara.html">Sigma and YARA</a>, for writing a detection once in a vendor-neutral format and converting it for a SIEM such as Sentinel.</li>
         <li><a href="splunk-spl.html">Splunk SPL</a> (Search Processing Language) and <a href="elastic-esql-eql.html">Elastic ES|QL and EQL</a> (Elasticsearch Query Language and Event Query Language), the same five detections on the same 24 events in other query languages.</li>
+        <li><a href="cloud-native-log-queries.html">CloudWatch Logs Insights and Cloud Logging queries</a>, the same lab in AWS's and Google Cloud's own log query languages, which play the part in those clouds that KQL plays in Azure's Log Analytics.</li>
+        <li><a href="azure-policy.html">Azure Policy</a>, whose compliance results are among the rows in Resource Graph's <code>PolicyResources</code> table.</li>
         <li><a href="../detection-engineering.html">Detection engineering</a> for the lifecycle around a rule: testing, tuning, versioning and retiring it.</li>
         <li><a href="../homelab/cloudtrail-siem-detection.html">The CloudTrail to SIEM lab</a>, to send real CloudTrail from your own account somewhere these queries can run.</li>
         <li><a href="https://learn.microsoft.com/en-us/kusto/query/tutorials/common-tasks-microsoft-sentinel?view=microsoft-sentinel" target="_blank" rel="noopener noreferrer">Microsoft's common tasks with KQL for Microsoft Sentinel</a> and <a href="https://github.com/Azure/Azure-Sentinel" target="_blank" rel="noopener noreferrer">the Azure-Sentinel repository</a>, where reading Microsoft's own rules is the quickest way to learn the idioms.</li>

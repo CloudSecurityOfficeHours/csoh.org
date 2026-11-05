@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Kyverno 1.19 with its CLI and no cluster: ValidatingPolicy, autogen, mutate, generate, image signatures, CI tests, and the quiet ways a policy does nothing.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="kyverno tutorial, kyverno validatingpolicy, kyverno cli test, kyverno clusterpolicy deprecated, kyverno policy examples, kyverno autogen, kyverno anchors, kyverno jmespath, kyverno imagevalidatingpolicy, kubernetes admission policy">
+    <title>Kyverno policies: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/kyverno.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/kyverno.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/kyverno.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Kyverno policies, hands-on - CSOH">
+    <meta property="og:description" content="Kyverno 1.19 with its CLI and no cluster: ValidatingPolicy, autogen, mutate, generate, image signatures, CI tests, and the quiet ways a policy does nothing.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="kyverno">
+    <meta property="article:tag" content="kubernetes admission">
+    <meta property="article:tag" content="validatingpolicy">
+    <meta property="article:tag" content="cel">
+    <meta property="article:tag" content="image signatures">
+    <meta property="article:tag" content="policy as code">
+    <meta property="og:url" content="https://csoh.org/howto/kyverno.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/kyverno.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kyverno policies, hands-on">
+    <meta name="twitter:description" content="Kyverno 1.19 with its CLI and no cluster: ValidatingPolicy, autogen, mutate, generate, image signatures, CI tests, and the quiet ways a policy does nothing.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/kyverno.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=c50d5a31" as="style"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+    <link rel="stylesheet" href="/style.css?v=c50d5a31"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Kyverno policies, hands-on",
+      "description": "Kyverno 1.19 with its CLI and no cluster: ValidatingPolicy, autogen, mutate, generate, image signatures, CI tests, and the quiet ways a policy does nothing.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-11-03",
+      "dateModified": "2026-11-03",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Install the kyverno CLI and make a lab",
+          "text": "Install the Kyverno 1.19 command-line tool, which runs every policy type against YAML files with no cluster."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Write five Pods and a Deployment",
+          "text": "Create test resources that each get runAsNonRoot right or wrong in a different way."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Write a first ValidatingPolicy",
+          "text": "Match Pods with matchConstraints, check them with a CEL expression, and read the CLI's results and exit code."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Handle the field that is not there",
+          "text": "See a lenient default pass a Pod that never set the field, then cover init and ephemeral containers and Pod-level inheritance."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Catch the match that never matches",
+          "text": "Misspell a resource and watch the CLI report nothing and exit 0, then make that case fail."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Use autogen for Pod controllers",
+          "text": "Check a Deployment with a Pod policy, and see how one extra match rule switches autogen off."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Choose Deny, Audit or Warn and a failure policy",
+          "text": "Set validationActions and failurePolicy deliberately, knowing the CLI reports a failure either way."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Read reports for existing resources",
+          "text": "Produce a policy report and learn why existing resources are reported, never blocked."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
+          "name": "Mutate and generate",
+          "text": "Default a seccomp profile with a MutatingPolicy and create a default-deny NetworkPolicy with a GeneratingPolicy."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 10,
+          "name": "Verify image signatures",
+          "text": "Check a keyless Sigstore signature on a Kubernetes release image with an ImageValidatingPolicy, both ways."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 11,
+          "name": "Test policies in CI",
+          "text": "Declare expected results in a kyverno-test.yaml, prove the test fails on a planted bug, and run it in GitHub Actions."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 12,
+          "name": "Read a legacy ClusterPolicy",
+          "text": "Read match and exclude, patterns with anchors, and deny conditions with JMESPath, then map them to the new types."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Kyverno policies, hands-on",
+          "item": "https://csoh.org/howto/kyverno.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Kyverno</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Kyverno policies, hands-on</h1>
+        <p>Kyverno judges requests to the <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> API server against policies that are themselves Kubernetes resources. Since version 1.19 deprecated the older format, the logic inside those policies is written in CEL (Common Expression Language). Learn the current policy types with the free <code>kyverno</code> command-line tool, with no cluster, then learn to read the older <code>ClusterPolicy</code> that existing clusters still run.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> the <code>kyverno</code> command-line interface (CLI), from Homebrew or a release download, and a terminal. Network access for step 10 only. No cluster and no cloud account.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> every command, policy and test on this page, including the exercise answers, was run as printed with the Kyverno CLI 1.19.2 (the Homebrew build) on an Apple silicon Mac, in zsh, and the outputs shown are what it printed, less its terminal colors. No cluster was used, because Docker was not available when the page was written, so everything said about a running cluster (webhooks, failure policies, timeouts, background scans and the report objects) comes from Kyverno's 1.19 documentation, its Helm chart and its source code; none of it was observed. Step 10 fetched real signatures from <code>registry.k8s.io</code> and the public <a class="glossary-link" href="../glossary.html#term-sigstore">Sigstore</a> services. The GitHub Actions workflow in step 11 was not run on GitHub; its commands were run locally. The page was also run with the Kyverno 1.20.0-rc.1 CLI, published on 2 November 2026: it gave the same verdicts for every current policy type, with small differences in how it prints messages and test tables, and refused the legacy <code>ClusterPolicy</code> in step 12 and exercise 3 with an error saying that 1.20 no longer runs or accepts them.</p>
+        </div>
+
+        <section id="intro">
+            <h2>Policies that are Kubernetes resources</h2>
+            <p>Kyverno is an open-source (Apache 2.0) policy engine for Kubernetes, and a graduated project of the Cloud Native Computing Foundation (<a class="glossary-link" href="../glossary.html#term-cncf">CNCF</a>) since March 2026. It runs inside the cluster as a handful of controllers. The admission controller is a webhook: before the API server stores an object, it sends Kyverno the create, update or delete request, and Kyverno can reject it, change it, or let it through. Other controllers scan resources that already exist and write what they find into reports, create resources on a trigger, and delete resources on a schedule.</p>
+            <p>A Kyverno policy is itself a Kubernetes resource: YAML you <code>kubectl apply</code>, review in git, and protect with <a class="glossary-link" href="../glossary.html#term-rbac">RBAC</a> (role-based access control) like any other object. Gatekeeper, the admission controller built on the <a class="glossary-link" href="../glossary.html#term-opa">Open Policy Agent</a> (OPA), keeps its policies as Kubernetes resources too, and traditionally writes its checks in <a class="glossary-link" href="../glossary.html#term-rego">Rego</a>, a separate policy language. Kyverno's checks are CEL, the expression language Kubernetes itself uses for admission policies.</p>
+            <p>There are two generations of Kyverno policy, and the difference decides what you should write today:</p>
+            <ul>
+                <li><strong>Legacy, <code>kyverno.io/v1</code>:</strong> <code>ClusterPolicy</code> and its namespaced twin <code>Policy</code>. Each holds rules that match resources by kind, then check them with YAML patterns and JMESPath expressions. Kyverno 1.19 (August 2026) deprecated them. Its documentation says they are removed in 1.20, and the 1.20 release candidate keeps existing objects readable but no longer runs them or accepts new ones. 1.19 is the last release that runs them.</li>
+                <li><strong>Current, <code>policies.kyverno.io/v1</code>:</strong> <code>ValidatingPolicy</code>, <code>MutatingPolicy</code>, <code>GeneratingPolicy</code>, <code>DeletingPolicy</code> and <code>ImageValidatingPolicy</code>, each with a <code>Namespaced</code> variant. The logic is CEL, and a <code>ValidatingPolicy</code> has the same shape as Kubernetes' own ValidatingAdmissionPolicy, with more around it. They arrived in 1.14 and 1.15 and reached their stable <code>v1</code> API in 1.17.</li>
+            </ul>
+            <p>So this page writes the current types, and step 12 teaches you to read the legacy ones, which you will meet in running clusters, in blog posts and in older copies of Kyverno's policy library, and will need to migrate. Everything runs in the <code>kyverno</code> CLI, which applies any policy type to YAML files on your laptop at no cost. The CEL itself is covered on the <a href="cel-policy-expressions.html">CEL guide</a>; this page assumes no more of it than it explains.</p>
+        </section>
+
+        <section id="silent">
+            <h2>Five quiet ways a Kyverno policy does nothing</h2>
+            <p>A Kyverno policy that never sees the request it was written for raises no error and blocks nothing. These five are what this page is built around, and each is shown running in the step named.</p>
+            <ol>
+                <li><strong>It reports when you meant it to block.</strong> A legacy <code>ClusterPolicy</code> with no failure action defaults to Audit: the violating resource is created and the violation goes into a report. A <code>ValidatingPolicy</code> with no <code>validationActions</code> defaults to Deny, so a migration can flip a policy's behavior without anyone deciding to. The CLI reports a failure either way. (Steps <a href="#step-7">7</a> and <a href="#step-12">12</a>.)</li>
+                <li><strong>The webhook fails open.</strong> With <code>failurePolicy: Ignore</code>, a request goes through unchecked whenever Kyverno is down or slower than the webhook timeout, which is 10 seconds by default. A <code>GeneratingPolicy</code> always works that way, and a default install leaves admission requests in <code>kube-system</code>, <code>kube-public</code>, <code>kube-node-lease</code> and Kyverno's own namespace unchecked. (Step <a href="#step-7">7</a>.)</li>
+                <li><strong>The match never matches.</strong> Write <code>Pods</code>, <code>pod</code> or <code>Pod</code> where Kubernetes says <code>pods</code>, or name the wrong API group, and the policy judges nothing: the CLI prints zeros and exits 0. Add one exclusion to a <a class="glossary-link" href="../glossary.html#term-pod">Pod</a> policy and it quietly stops checking Deployments. (Steps <a href="#step-5">5</a> and <a href="#step-6">6</a>.)</li>
+                <li><strong>A missing field passes.</strong> <code>orValue(true)</code> in CEL and the <code>=()</code> anchor in a legacy pattern both pass a container that never set the field. A check on <code>containers</code> alone misses init and ephemeral containers, and an image check passes every image outside its glob. (Steps <a href="#step-4">4</a>, <a href="#step-10">10</a> and <a href="#step-12">12</a>.)</li>
+                <li><strong>Existing resources stay as they are.</strong> Admission judges requests, so a new policy affects only what is created or changed after it. What was already running is judged by the background scan, hourly by default, which writes reports and blocks nothing, even when the policy is set to deny. (Step <a href="#step-8">8</a>.)</li>
+            </ol>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">A policy judges only the requests it is sent</a></li>
+                <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>A policy judges only the requests it is sent</h2>
+            <p>The one idea that makes Kyverno click is that your expression is the last step of a chain, and most failures happen earlier in the chain. In a cluster, an object reaches your policy's check only when every one of these is true:</p>
+            <ul>
+                <li><strong>The API server sends the request, and Kyverno keeps it.</strong> Kyverno registers webhooks for the operations and resources its policies match, minus the namespaces its install excludes, then drops any request its resource filters name. Anything else never reaches a policy.</li>
+                <li><strong>Kyverno answers in time.</strong> If its pods are down, or a policy takes longer than the webhook timeout, the webhook's failure policy decides, and nothing of yours runs.</li>
+                <li><strong>There is a request at all.</strong> Admission sees creates, updates and deletes. A Pod that was running before the policy existed sends nothing until someone changes it.</li>
+                <li><strong>The policy selects it.</strong> The match, any match conditions, and any exception all have to let it through to the check.</li>
+            </ul>
+            <p>The CLI skips the whole chain. <code>kyverno apply</code> hands every resource file straight to every policy, so a clean run proves your expression is right and says nothing about whether the policy will see anything. Keep those two questions apart, whether the check is right and whether anything reaches it, and the rest of this page follows.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through</h2>
+
+            <h3 id="step-1">1. Install the CLI and make a lab</h3>
+            <p>On macOS or Linux with Homebrew:</p>
+<div class="code-block" data-lang="bash"><pre>brew install kyverno
+kyverno version
+mkdir -p ~/kyverno-lab/policies &amp;&amp; cd ~/kyverno-lab</pre></div>
+            <p>The first line of <code>kyverno version</code> should read <code>Version: 1.19.2</code> or later in the 1.19 series. Without Homebrew, download <code>kyverno-cli_v1.19.2_</code> followed by your platform from the <a href="https://github.com/kyverno/kyverno/releases/tag/v1.19.2" target="_blank" rel="noopener noreferrer">1.19.2 release page</a>, unpack it, and put the <code>kyverno</code> binary on your <code>PATH</code>. The 1.20 release candidate gives the same results for steps 2 to 11, printed slightly differently, and refuses the legacy policies in step 12 and exercise 3, which need a 1.19 CLI.</p>
+
+            <h3 id="step-2">2. The lab: five Pods and a Deployment</h3>
+            <p>The lab is one rule, "no container may run as root", and six resources that get it right or wrong in different ways. Kubernetes enforces it when a container's <code>securityContext.runAsNonRoot</code> is <code>true</code>, and a container that does not set it inherits the Pod's <code>spec.securityContext.runAsNonRoot</code>. Save this as <code>pods.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># pods.yaml: five Pods, each getting runAsNonRoot right or wrong its own way
+apiVersion: v1
+kind: Pod
+metadata: {name: web, namespace: shop}
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+      securityContext: {runAsNonRoot: true}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: root, namespace: shop}
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+      securityContext: {runAsNonRoot: false}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: unset, namespace: shop}
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: inherits, namespace: shop}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: init, namespace: shop}
+spec:
+  initContainers:
+    - name: setup
+      image: ghcr.io/acme/setup:0.9
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+      securityContext: {runAsNonRoot: true}</pre></div>
+            <p>The right answers: <code>web</code> and <code>inherits</code> are compliant. <code>root</code> asks for root, <code>unset</code> never says, and <code>init</code> has a compliant app container behind an init container, <code>setup</code>, that may run as root. Save this as <code>deploy.yaml</code>, a Deployment whose Pod template never says either:</p>
+<div class="code-block" data-lang="yaml"><pre># deploy.yaml: a Deployment whose Pod template does not set runAsNonRoot
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: shop}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: api}
+  template:
+    metadata:
+      labels: {app: api}
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/acme/api:3.0.2</pre></div>
+
+            <h3 id="step-3">3. Your first ValidatingPolicy</h3>
+            <p>Save this as <code>policies/run-as-non-root.yaml</code>. It is a reasonable first attempt, and steps 4 to 6 find what is wrong with it:</p>
+<div class="code-block" data-lang="yaml"><pre># policies/run-as-non-root.yaml: first attempt
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: run-as-non-root
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: &gt;-
+        object.spec.containers.all(c,
+          c.?securityContext.?runAsNonRoot.orValue(false) == true)
+      message: every container must set securityContext.runAsNonRoot to true</pre></div>
+            <p>A <code>ValidatingPolicy</code> is cluster-wide; a <code>NamespacedValidatingPolicy</code> with the same fields applies only inside its own namespace, so a team can own its rules without cluster-admin rights. <code>matchConstraints</code> says which requests the policy wants, in the API server's own terms: the API group (<code>""</code> is the core group that Pods live in), the version, the operations, and the resource's plural, lowercase name. <code>validations</code> is a list of CEL expressions, each of which must be true. <code>object</code> is the resource in the request. <code>c.?securityContext</code> is CEL's optional field access, which gives "no value" instead of an error when the field is missing, and <code>orValue(false)</code> supplies the value to use in that case. Run it:</p>
+<div class="code-block" data-lang="bash"><pre>kyverno apply policies/run-as-non-root.yaml --resource pods.yaml
+echo $?</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 5 resource(s)...
+policy run-as-non-root -&gt; resource shop/Pod/root failed:
+1 -  every container must set securityContext.runAsNonRoot to true
+policy run-as-non-root -&gt; resource shop/Pod/unset failed:
+1 -  every container must set securityContext.runAsNonRoot to true
+policy run-as-non-root -&gt; resource shop/Pod/inherits failed:
+1 -  every container must set securityContext.runAsNonRoot to true
+
+pass: 2, fail: 3, warn: 0, error: 0, skip: 0
+1</pre></div>
+            <p>Each failing resource is named with the message, and the summary counts results: <code>pass</code> and <code>fail</code> are verdicts, <code>error</code> means the expression itself failed to evaluate, and <code>skip</code> means a condition or exception excluded the resource. The exit status is 1 because something failed, which is what makes the command usable as a gate in <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> (continuous integration). Two of the five verdicts are wrong: <code>inherits</code> is compliant and failed, and <code>init</code> is not and passed.</p>
+
+            <h3 id="step-4">4. The field that is not there</h3>
+            <p>Start with the mistake that looks like a fix. If <code>inherits</code> fails because its container says nothing, it is tempting to treat "says nothing" as compliant:</p>
+<div class="code-block" data-lang="bash"><pre>sed 's/orValue(false)/orValue(true)/' policies/run-as-non-root.yaml &gt; lenient.yaml
+kyverno apply lenient.yaml --resource pods.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 5 resource(s)...
+policy run-as-non-root -&gt; resource shop/Pod/root failed:
+1 -  every container must set securityContext.runAsNonRoot to true
+
+pass: 4, fail: 1, warn: 0, error: 0, skip: 0</pre></div>
+            <p><code>inherits</code> passes now, for the wrong reason, and so does <code>unset</code>, which may well run as root: a container that does not set <code>runAsNonRoot</code> runs as whatever user its image names, and many images name root. The default you give a missing field is the policy's verdict on everyone who forgot, so it belongs on the strict side. The right fix follows Kubernetes' own rule: use the container's value if it has one, otherwise the Pod's, otherwise fail. Then do the same for every kind of container a Pod can have. Replace <code>policies/run-as-non-root.yaml</code> with:</p>
+<div class="code-block" data-lang="yaml"><pre># policies/run-as-non-root.yaml: every container, with Pod-level inheritance
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: run-as-non-root
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: containers
+      expression: &gt;-
+        object.spec.containers +
+        object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
+    - name: podDefault
+      expression: object.spec.?securityContext.?runAsNonRoot.orValue(false)
+    - name: offenders
+      expression: &gt;-
+        variables.containers.filter(c,
+          c.?securityContext.?runAsNonRoot.orValue(variables.podDefault) != true)
+  validations:
+    - expression: size(variables.offenders) == 0
+      messageExpression: &gt;-
+        'may run as root: ' + variables.offenders.map(c, c.name).join(', ')</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply policies/run-as-non-root.yaml --resource pods.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 5 resource(s)...
+policy run-as-non-root -&gt; resource shop/Pod/root failed:
+1 -  may run as root: app
+policy run-as-non-root -&gt; resource shop/Pod/unset failed:
+1 -  may run as root: app
+policy run-as-non-root -&gt; resource shop/Pod/init failed:
+1 -  may run as root: setup
+
+pass: 2, fail: 3, warn: 0, error: 0, skip: 0</pre></div>
+            <p>All five verdicts are right. <code>variables</code> are named CEL expressions that later expressions read as <code>variables.name</code>, which keeps the validation itself one short line. <code>messageExpression</code> builds the message with CEL, so the denial names the container to fix; a denial that says what to change saves a support ticket every time it fires. Kyverno's own Pod Security policies do the same container arithmetic, because a check on <code>containers</code> alone is the commonest way to miss an init container and every container that <code>kubectl debug</code> adds.</p>
+
+            <h3 id="step-5">5. The match that never matches</h3>
+            <p><code>resources</code> wants the plural, lowercase name that the API server uses in URLs, which is the <code>NAME</code> column of <code>kubectl api-resources</code>. Write the kind instead and see what happens:</p>
+<div class="code-block" data-lang="bash"><pre>sed 's/resources: \[pods\]/resources: [Pods]/' policies/run-as-non-root.yaml &gt; typo.yaml
+kyverno apply typo.yaml --resource pods.yaml
+echo $?</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 5 resource(s)...
+
+pass: 0, fail: 0, warn: 0, error: 0, skip: 0
+0</pre></div>
+            <p>Five resources, no verdicts, exit status 0. <code>[pod]</code>, <code>[Pod]</code>, <code>apiGroups: [core]</code> and <code>apiVersions: [v1beta1]</code> all do the same. Nothing in the run tells you the policy is dead, and a CI job that checks only the exit status goes green. <code>--warn-no-pass</code> turns "nothing passed" into a separate exit status:</p>
+<div class="code-block" data-lang="bash"><pre>kyverno apply typo.yaml --resource pods.yaml --warn-exit-code 3 --warn-no-pass
+echo $?</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 5 resource(s)...
+
+pass: 0, fail: 0, warn: 0, error: 0, skip: 0
+exit as no objects satisfied policy
+3</pre></div>
+            <p>That catches a run where nothing passes at all. It counts across the whole run, though: give <code>kyverno apply</code> a folder of policies in which one is dead and the others pass something, and it exits 0. Catching one dead policy among many needs a statement of what each policy should find, which is what <code>kyverno test</code> in step 11 is for.</p>
+            <p>Besides <code>resourceRules</code>, <code>matchConstraints</code> takes a <code>namespaceSelector</code> (namespace labels), an <code>objectSelector</code> (the resource's labels) and <code>excludeResourceRules</code>, and the policy can add <code>matchConditions</code>, CEL expressions that must all be true for the policy to apply. Scope with them sparingly: step 6 shows what one of them costs.</p>
+
+            <h3 id="step-6">6. Autogen: one Pod policy, every Pod controller</h3>
+            <p>Most Pods are created by a controller such as a Deployment. Run the policy against the lab's Deployment:</p>
+<div class="code-block" data-lang="bash"><pre>kyverno apply policies/run-as-non-root.yaml --resource deploy.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 1 resource(s)...
+policy run-as-non-root -&gt; resource shop/Deployment/api failed:
+1 -  may run as root: api
+
+pass: 0, fail: 1, warn: 0, error: 0, skip: 0</pre></div>
+            <p>The policy matches only Pods, yet it judged the Deployment. This is <strong>autogen</strong>: for a policy that matches Pods, Kyverno generates variants for DaemonSets, Deployments, ReplicaSets, StatefulSets, Jobs and CronJobs, rewriting <code>object.spec</code> to the Pod template's path in each. That is why the variables in step 4 still worked. Without autogen, the Deployment would be accepted and its ReplicaSet would then fail to create Pods, so <code>kubectl apply</code> would succeed and the trouble would show up later, as a rollout that never completes and a <code>ReplicaFailure</code> condition on the Deployment.</p>
+            <p>Autogen runs only when the match is exactly one rule for core <code>v1</code> <code>pods</code>, with no <code>objectSelector</code>, no <code>excludeResourceRules</code> and no <code>resourceNames</code>. Suppose you widen the policy to cover the ephemeral containers that <code>kubectl debug</code> adds, which arrive as an update to the <code>pods/ephemeralcontainers</code> subresource. Save this as <code>ephemeral.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># ephemeral.yaml: the same policy, also matching kubectl debug
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: run-as-non-root-wide
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [pods/ephemeralcontainers]
+  variables:
+    - name: containers
+      expression: &gt;-
+        object.spec.containers +
+        object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
+    - name: podDefault
+      expression: object.spec.?securityContext.?runAsNonRoot.orValue(false)
+    - name: offenders
+      expression: &gt;-
+        variables.containers.filter(c,
+          c.?securityContext.?runAsNonRoot.orValue(variables.podDefault) != true)
+  validations:
+    - expression: size(variables.offenders) == 0
+      messageExpression: &gt;-
+        'may run as root: ' + variables.offenders.map(c, c.name).join(', ')</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply ephemeral.yaml --resource deploy.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 1 resource(s)...
+
+pass: 0, fail: 0, warn: 0, error: 0, skip: 0</pre></div>
+            <p>The second rule switched autogen off, and the Deployment is no longer judged at all. Two ways to keep coverage: keep each Pod policy's match to plain <code>pods</code> and put the ephemeral-container check in a policy of its own, or do what Kyverno's own Pod Security policies do and list every controller in <code>resourceRules</code>, finding the Pod spec with a variable. Either way, put the exemptions you will be asked for ("except the debug Pod") in a PolicyException, which leaves the match, and so autogen, alone.</p>
+
+            <h3 id="step-7">7. Deny, Audit, Warn, and failing open</h3>
+            <p><code>validationActions</code> says what a failed check does in a cluster: <code>Deny</code> rejects the request, <code>Audit</code> admits it and records the failure in a report, and <code>Warn</code> admits it and sends the client a warning that <code>kubectl</code> prints. <code>Audit</code> and <code>Warn</code> can be combined. Left out, it is <code>Deny</code>. Now change it and watch what the CLI says:</p>
+<div class="code-block" data-lang="bash"><pre>sed 's/validationActions: \[Deny\]/validationActions: [Audit]/' policies/run-as-non-root.yaml &gt; audit.yaml
+kyverno apply audit.yaml --resource pods.yaml
+echo $?</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 5 resource(s)...
+policy run-as-non-root -&gt; resource shop/Pod/root failed:
+1 -  may run as root: app
+policy run-as-non-root -&gt; resource shop/Pod/unset failed:
+1 -  may run as root: app
+policy run-as-non-root -&gt; resource shop/Pod/init failed:
+1 -  may run as root: setup
+
+pass: 2, fail: 3, warn: 0, error: 0, skip: 0
+1</pre></div>
+            <p>Exactly the same output as the denying version. The CLI reports whether each resource passes the check, and has no notion of what a cluster would do with a failure. Its <code>--audit-warn</code> flag changes each failure's label to <code>failed as audit warning</code>, but in 1.19.2 it does that for every <code>ValidatingPolicy</code>, including ones set to <code>Deny</code>, and leaves the counts and the exit status as they were, so it cannot tell the two apart for you either. Whether a policy blocks is a line in its YAML, and the only place to check it is there.</p>
+            <p>The rest of what decides a policy's behavior in a cluster is settings that a run on your laptop never exercises. These are the defaults in Kyverno 1.19:</p>
+            <div class="table-scroll">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Setting</th>
+                        <th scope="col">Default, and what it means</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row"><code>validationActions</code></th>
+                        <td><code>[Deny]</code>: a failed check rejects the request. A legacy <code>ClusterPolicy</code> defaults the other way, to Audit (step 12).</td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><code>failurePolicy</code></th>
+                        <td><code>Fail</code>: if Kyverno cannot answer, or the expression errors, the request is rejected. <code>Ignore</code> lets it through unchecked. A <code>GeneratingPolicy</code> always uses <code>Ignore</code>.</td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><code>timeoutSeconds</code></th>
+                        <td>10, set under <code>webhookConfiguration</code>: how long the API server waits for Kyverno (1 to 30 seconds) before the failure policy decides.</td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><code>evaluation.<wbr>admission.<wbr>enabled</code></th>
+                        <td><code>true</code>: the policy judges requests at admission.</td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><code>evaluation.<wbr>background.<wbr>enabled</code></th>
+                        <td><code>true</code>: the policy also judges existing resources in the background scan (step 8).</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+            <p>Two settings outside the policy matter as much. The admission controller's <code>--forceFailurePolicyIgnore</code> flag (Helm value <code>features.forceFailurePolicyIgnore.enabled</code>, off by default) turns every policy's failure policy into <code>Ignore</code>, so the cluster fails open whenever Kyverno is unavailable. And the default install excludes namespaces: its webhooks skip <code>kube-system</code> and Kyverno's own namespace, and its resource filters also skip <code>kube-public</code>, <code>kube-node-lease</code> and kinds such as <code>Event</code>, <code>Node</code> and <code>ReplicaSet</code>. A policy can match everything and still never be asked about a Pod in <code>kube-system</code> at admission. The background scan of step 8 does report on those namespaces, because by default it ignores the resource filters.</p>
+            <p>The exclusions exist for a reason. With <code>failurePolicy: Fail</code> and Kyverno down, every matching request is rejected, and if that included the system Pods that would bring Kyverno back, the cluster could not recover on its own. Kyverno's troubleshooting guide covers that case by deleting its webhook configurations so the API server stops calling it, and they are recreated when Kyverno comes back. The safe pattern is <code>Fail</code> plus at least three admission-controller replicas, with the exclusions left alone, rather than <code>Ignore</code>.</p>
+
+            <h3 id="step-8">8. Existing resources, background scans and reports</h3>
+            <p>Admission sees requests, so on the day you apply a new denying policy, nothing already running changes. Kyverno's answer for existing resources is the <strong>background scan</strong>: the reports controller re-checks matching resources periodically, every hour by default, and records the results. It never blocks or deletes anything, whatever <code>validationActions</code> says. Ask the CLI for the same kind of report:</p>
+<div class="code-block" data-lang="bash"><pre>kyverno apply policies/run-as-non-root.yaml --resource pods.yaml --policy-report</pre></div>
+            <p>After the usual summary it prints a report with one entry per verdict. The first is:</p>
+<div class="code-block" data-lang="text"><pre>apiVersion: openreports.io/v1alpha1
+kind: ClusterReport
+metadata:
+  name: merged
+results:
+- message: 'may run as root: app'
+  policy: run-as-non-root
+  properties:
+    cel.validationIndex: "0"
+    process: background scan
+  resources:
+  - apiVersion: v1
+    kind: Pod
+    name: root
+    namespace: shop
+  result: fail</pre></div>
+            <p>and it ends with the same counts as the summary. In a cluster, Kyverno 1.19 writes these by default as <code>PolicyReport</code> objects (one per namespaced resource, in its namespace) and <code>ClusterPolicyReport</code> objects (for cluster-scoped resources), in the <code>wgpolicyk8s.io/v1alpha2</code> API group; the <code>openreports.io</code> format the CLI prints is an alpha alternative you can switch the cluster to. Either way, a report is where you find out what a new policy would break before you let it deny anything, and where you find the resources it never will.</p>
+            <p>Results from admission also land in reports, including for <code>Audit</code>, which is the point of <code>Audit</code>. Set <code>evaluation.background.enabled: false</code> only for a policy that reads something that exists only in an admission request, such as who made it.</p>
+
+            <h3 id="step-9">9. Mutate and generate</h3>
+            <p>A <code>MutatingPolicy</code> changes the resource on its way in. This one gives every new Pod that does not set one the <code>RuntimeDefault</code> seccomp profile, the container runtime's standard filter on which system calls a container may make. Save it as <code>default-seccomp.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># default-seccomp.yaml: give Pods the RuntimeDefault seccomp profile if they set none
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: default-seccomp
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchConditions:
+    - name: no-seccomp-profile-yet
+      expression: &gt;-
+        !has(object.spec.securityContext) ||
+        !has(object.spec.securityContext.seccompProfile)
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: &gt;-
+          Object{
+            spec: Object.spec{
+              securityContext: Object.spec.securityContext{
+                seccompProfile: Object.spec.securityContext.seccompProfile{
+                  type: "RuntimeDefault"
+                }
+              }
+            }
+          }</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply default-seccomp.yaml --resource pods.yaml</pre></div>
+            <p>It prints each mutated Pod. This is <code>unset</code>:</p>
+<div class="code-block" data-lang="text"><pre>policy default-seccomp applied to shop/Pod/unset:
+apiVersion: v1
+kind: Pod
+metadata:
+    name: unset
+    namespace: shop
+spec:
+    containers:
+        - image: ghcr.io/acme/web:2.1.0
+          name: app
+    securityContext:
+        seccompProfile:
+            type: RuntimeDefault</pre></div>
+            <p>The <code>ApplyConfiguration</code> patch is an object with only the fields to set, merged the way server-side apply merges; a <code>JSONPatch</code> patch type is there for edits that a merge cannot express. The <code>matchConditions</code> entry is what keeps the policy from overwriting a profile someone chose. In 1.19.2 the CLI prints each mutated Pod twice and counts each twice in its summary line; add <code>-t</code> for a table with one row per Pod. In a cluster, mutation happens before validation, so a <code>ValidatingPolicy</code> sees the Pod after this policy has changed it.</p>
+            <p>A <code>GeneratingPolicy</code> creates other resources when a trigger resource appears. A classic one gives every new namespace a NetworkPolicy that denies all incoming traffic until someone allows it. Save these as <code>default-deny.yaml</code> and <code>namespace.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># default-deny.yaml: every new namespace gets a deny-all-ingress NetworkPolicy
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [namespaces]
+  variables:
+    - name: ns
+      expression: object.metadata.name
+    - name: netpol
+      expression: &gt;-
+        [{
+          "apiVersion": dyn("networking.k8s.io/v1"),
+          "kind": dyn("NetworkPolicy"),
+          "metadata": dyn({"name": "default-deny-ingress", "namespace": variables.ns}),
+          "spec": dyn({"podSelector": {}, "policyTypes": ["Ingress"]})
+        }]
+  generate:
+    - expression: generator.Apply(variables.ns, variables.netpol)</pre></div>
+<div class="code-block" data-lang="yaml"><pre># namespace.yaml: the trigger
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply default-deny.yaml --resource namespace.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 1 resource(s)...
+
+policy default-deny-ingress applied to /Namespace/payments:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: default-deny-ingress
+    namespace: payments
+spec:
+    podSelector: {}
+    policyTypes:
+        - Ingress
+
+---
+
+
+Generate:
+Generation completed successfully.
+pass: 1, fail: 0, warn: 0, error: 0, skip: 0</pre></div>
+            <p><code>generator.Apply</code> takes the namespace to create in and a list of resources, and <code>dyn()</code> tells CEL's type checker to accept a map of mixed value types. <code>synchronize</code> keeps the NetworkPolicy matching the policy, and puts it back if someone deletes it. Generation is not part of the admission decision: the namespace is admitted, and Kyverno's background controller then creates the NetworkPolicy from a queued request, retrying a failed one three times before giving up. If the background controller is down, or lacks the RBAC permissions to create the kind you generate, you get the namespace without the NetworkPolicy, and nothing rejects anything.</p>
+
+            <h3 id="step-10">10. Verify image signatures</h3>
+            <p>An <code>ImageValidatingPolicy</code> checks container images rather than resource fields: who signed them, and what attestations (signed statements about how an image was built, such as an <a class="glossary-link" href="../glossary.html#term-sbom">SBOM</a> (software bill of materials) or <a class="glossary-link" href="../glossary.html#term-provenance">provenance</a>) they carry. It works with Sigstore's <code>cosign</code> signatures and with Notary. Kubernetes signs its own release images with Sigstore's "keyless" signing, which ties each signature to an <a class="glossary-link" href="../glossary.html#term-oidc">OpenID Connect</a> identity rather than a long-lived key, so its images make a real test. This step reaches the network: it reads signatures from <code>registry.k8s.io</code> and checks them against Sigstore's public services. Save <code>signed-images.yaml</code> and <code>images.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># signed-images.yaml: images from registry.k8s.io must be signed by the Kubernetes release team
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: k8s-images-signed
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchImageReferences:
+    - glob: "registry.k8s.io/*"
+  attestors:
+    - name: k8s
+      cosign:
+        keyless:
+          identities:
+            - issuer: https://accounts.google.com
+              subject: krel-trust@k8s-releng-prod.iam.gserviceaccount.com
+  validations:
+    - expression: &gt;-
+        images.containers.map(image,
+          verifyImageSignatures(image, [attestors.k8s])).all(n, n &gt; 0)
+      message: registry.k8s.io images must be signed by the Kubernetes release team</pre></div>
+<div class="code-block" data-lang="yaml"><pre># images.yaml: one image the policy covers and one it does not
+apiVersion: v1
+kind: Pod
+metadata: {name: pause, namespace: shop}
+spec:
+  containers:
+    - name: pause
+      image: registry.k8s.io/pause:3.10@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: toolbox, namespace: shop}
+spec:
+  containers:
+    - name: tools
+      image: docker.io/library/busybox:1.37</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply signed-images.yaml --resource images.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 2 resource(s)...
+
+pass: 2, fail: 0, warn: 0, error: 0, skip: 0</pre></div>
+            <p>Two passes, and only one of them means anything. <code>pause</code> passed because its signature checked out against the named identity. <code>toolbox</code> passed because <code>busybox</code> is outside <code>matchImageReferences</code>, and an image outside the globs is not checked at all. A policy scoped to your own registry says nothing about images pulled from anywhere else, so pair it with a policy that allows only the registries you trust. Now break the identity to prove the check can fail:</p>
+<div class="code-block" data-lang="bash"><pre>sed 's/krel-trust@/someone-else@/' signed-images.yaml &gt; wrong-signer.yaml
+kyverno apply wrong-signer.yaml --resource images.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 2 resource(s)...
+policy k8s-images-signed -&gt; resource shop/Pod/pause failed:
+1 - k8s-images-signed registry.k8s.io images must be signed by the Kubernetes release team
+
+pass: 1, fail: 1, warn: 0, error: 0, skip: 0</pre></div>
+            <p>The <code>pause</code> image is referenced by digest because of three defaults under <code>validationConfigurations</code>: <code>mutateDigest</code> rewrites a tag to the digest it currently points at, <code>verifyDigest</code> requires a digest, and <code>required</code> requires that every matched image was verified. The CLI applies the last two but rewrites nothing, so on your laptop a tag-only reference fails with <code>does not have a digest</code>. <code>attestations</code> and <code>verifyAttestationSignatures()</code> extend the same policy to signed build provenance and software bills of materials; the <a href="https://kyverno.io/docs/policy-types/image-validating-policy/" target="_blank" rel="noopener noreferrer">ImageValidatingPolicy documentation</a> has the full set.</p>
+
+            <h3 id="step-11">11. Test policies in CI</h3>
+            <p><code>kyverno apply</code> tells you what happened. <code>kyverno test</code> compares what happened with what you said should happen, per policy and per resource, which is the only way to notice a policy that quietly stopped matching. Save this as <code>tests/run-as-non-root/kyverno-test.yaml</code> (paths in it are relative to the file):</p>
+<div class="code-block" data-lang="yaml"><pre># tests/run-as-non-root/kyverno-test.yaml: what the policy must find, both ways
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: run-as-non-root
+policies:
+  - ../../policies/run-as-non-root.yaml
+resources:
+  - ../../pods.yaml
+  - ../../deploy.yaml
+results:
+  - policy: run-as-non-root
+    isValidatingPolicy: true
+    kind: Pod
+    resources: [web, inherits]
+    result: pass
+  - policy: run-as-non-root
+    isValidatingPolicy: true
+    kind: Pod
+    resources: [root, unset, init]
+    result: fail
+  - policy: run-as-non-root
+    isValidatingPolicy: true
+    kind: Deployment
+    resources: [api]
+    result: fail</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno test tests/</pre></div>
+<div class="code-block" data-lang="text"><pre>Loading test  ( tests/run-as-non-root/kyverno-test.yaml ) ...
+  Loading values/variables ...
+  Loading policies ...
+  Loading resources ...
+  Loading exceptions ...
+  Applying 1 policy to 6 resources with 0 exceptions ...
+  Checking results ...
+
+│────│─────────────────│──────│─────────────────────────────│────────│────────│
+│ ID │ POLICY          │ RULE │ RESOURCE                    │ RESULT │ REASON │
+│────│─────────────────│──────│─────────────────────────────│────────│────────│
+│ 1  │ run-as-non-root │      │ v1/Pod/shop/web             │ Pass   │ Ok     │
+│ 2  │ run-as-non-root │      │ v1/Pod/shop/inherits        │ Pass   │ Ok     │
+│ 3  │ run-as-non-root │      │ v1/Pod/shop/root            │ Pass   │ Ok     │
+│ 4  │ run-as-non-root │      │ v1/Pod/shop/unset           │ Pass   │ Ok     │
+│ 5  │ run-as-non-root │      │ v1/Pod/shop/init            │ Pass   │ Ok     │
+│ 6  │ run-as-non-root │      │ apps/v1/Deployment/shop/api │ Pass   │ Ok     │
+│────│─────────────────│──────│─────────────────────────────│────────│────────│
+
+
+Test Summary: 6 tests passed and 0 tests failed</pre></div>
+            <p>In this table <code>Pass</code> means "the result was what you expected", so <code>root</code> passing the test means it failed the policy, as it should. A test that cannot fail proves nothing, so break the policy on purpose, run the test, and put the policy back:</p>
+<div class="code-block" data-lang="bash"><pre>cp policies/run-as-non-root.yaml keep.yaml
+sed 's/orValue(variables.podDefault)/orValue(true)/' keep.yaml &gt; policies/run-as-non-root.yaml
+kyverno test tests/
+echo $?
+mv keep.yaml policies/run-as-non-root.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>│ 4  │ run-as-non-root │      │ v1/Pod/shop/unset           │ Fail   │ Want fail, got pass │
+│ 5  │ run-as-non-root │      │ v1/Pod/shop/init            │ Fail   │ Want fail, got pass │
+│ 6  │ run-as-non-root │      │ apps/v1/Deployment/shop/api │ Fail   │ Want fail, got pass │
+
+Test Summary: 3 tests passed and 3 tests failed
+
+Error: 3 tests failed
+1</pre></div>
+            <p>Those are the rows that changed: a one-word edit let through every resource that relies on the default, the Deployment included. A test also fails a dead match: with the <code>[Pods]</code> typo from step 5, every row reads <code>Not found</code> and the test exits 1. Two flags close the remaining gaps. <code>kyverno test</code> on a folder that exists but holds no <code>kyverno-test.yaml</code> prints <code>No test yamls available</code> and exits 0, so tests that were moved or renamed stop running without failing CI; <code>--require-tests</code> makes that an error. A path that does not exist at all is an error either way. <code>--warnings-as-errors</code> fails the run if any policy uses a deprecated type, which catches a <code>ClusterPolicy</code> added to the repository after you migrated. A GitHub Actions job that runs both checks on every pull request:</p>
+<div class="code-block" data-lang="yaml"><pre># .github/workflows/kyverno.yaml
+name: kyverno
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  policies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: kyverno/action-install-cli@fcee92fca5c883169ef9927acf543e0b5fc58289  # v0.2.0
+        with:
+          release: v1.19.2
+      - run: kyverno test tests/ --require-tests --warnings-as-errors
+      - run: kyverno apply policies/ --resource manifests/ --warnings-as-errors --warn-exit-code 3 --warn-no-pass</pre></div>
+            <p>The first <code>run</code> proves the policies behave; the second judges the manifests in the pull request against them, with <code>manifests/</code> standing for wherever your repository keeps them. It carries <code>--warn-no-pass</code> because <code>kyverno apply</code> does not treat a missing policy path as an error: point it at a mistyped folder and it prints <code>Applying 0 policy rule(s)</code> and exits 0. Both actions are pinned to a commit rather than a tag, so a moved tag cannot change what runs. Pin the CLI version too, and change it on purpose: running your tests against the next release before upgrading the cluster is the cheapest upgrade check there is.</p>
+
+            <h3 id="step-12">12. Reading a legacy ClusterPolicy</h3>
+            <p>Here is the check from step 4 written the pre-1.19 way, plus a second rule that denies privileged containers. Save <code>legacy.yaml</code>, and <code>privileged.yaml</code> for the second rule to catch:</p>
+<div class="code-block" data-lang="yaml"><pre># legacy.yaml: two rules in the kyverno.io/v1 format that 1.20 stops running
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: legacy-pod-rules
+spec:
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system]
+      validate:
+        message: every container must set securityContext.runAsNonRoot to true
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(runAsNonRoot): true
+    - name: no-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "privileged containers: {{ request.object.spec.containers[?securityContext.privileged].name }}"
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.containers[?securityContext.privileged == `true`] | length(@) }}"
+                operator: GreaterThan
+                value: 0</pre></div>
+<div class="code-block" data-lang="yaml"><pre># privileged.yaml: one compliant container, one privileged
+apiVersion: v1
+kind: Pod
+metadata: {name: debug, namespace: shop}
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+      securityContext: {runAsNonRoot: true}
+    - name: shell
+      image: ghcr.io/acme/debug:0.3
+      securityContext: {runAsNonRoot: true, privileged: true}</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply legacy.yaml --resource pods.yaml --resource privileged.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Warning: legacy.yaml: kyverno.io/v1 ClusterPolicy is deprecated and will be removed in a future release; migrate to ValidatingPolicy, MutatingPolicy, GeneratingPolicy or ImageValidatingPolicy (policies.kyverno.io), see https://kyverno.io/docs/guides/migration-to-cel/
+
+Applying 6 policy rule(s) to 6 resource(s)...
+policy legacy-pod-rules -&gt; resource shop/Pod/root failed:
+1 - run-as-non-root validation error: every container must set securityContext.runAsNonRoot to true. rule run-as-non-root failed at path /spec/containers/0/securityContext/runAsNonRoot/
+policy legacy-pod-rules -&gt; resource shop/Pod/debug failed:
+1 - no-privileged privileged containers: ["shell"]
+
+pass: 10, fail: 2, warn: 0, error: 0, skip: 0</pre></div>
+            <p>Read it from the top. A <code>ClusterPolicy</code> applies cluster-wide and a <code>Policy</code> only in its own namespace. Each rule has a <code>match</code> and an optional <code>exclude</code>, each with <code>any</code> (at least one entry must apply) or <code>all</code> (every entry must), and each entry filters on <code>kinds</code>, <code>names</code>, <code>namespaces</code>, label selectors, or who made the request. Kinds are written as kinds, <code>Pod</code>, optionally as <code>group/version/Kind</code>; misspell one and the CLI reports zeros, just as in step 5. "6 policy rule(s)" is two rules plus autogen's variants, which a legacy policy gets for Pod rules by default.</p>
+            <p><code>pattern</code> is an overlay: the resource must look like the YAML under it, and a plain field in the pattern must exist in the resource. Values can be wildcards (<code>?*</code> means "any non-empty value") or comparisons (<code>&gt;3</code>, <code>!*:latest</code>). <strong>Anchors</strong> change what a field means:</p>
+            <ul>
+                <li><code>=(field)</code>, equality: if the field is present, it must match. If it is absent, the check passes.</li>
+                <li><code>(field)</code>, conditional: if this matches, check the rest of the pattern; if it does not, skip.</li>
+                <li><code>^(field)</code>, existence: at least one element of the list must match.</li>
+                <li><code>X(field)</code>, negation: the field must not be present.</li>
+                <li><code>&lt;(field)</code>, global: if this does not match, skip the whole rule.</li>
+                <li><code>+(field)</code>, add if not present, which appears in mutate rules.</li>
+            </ul>
+            <p>Look at the results with that in mind. <code>unset</code> and <code>init</code> passed. Both <code>=()</code> anchors are equality anchors, so a container with no <code>securityContext</code> satisfies the pattern, which is exactly the lenient default of step 4 in another syntax. Remove the anchors and <code>unset</code> fails, but so does <code>inherits</code>, and the pattern still sees only <code>containers</code>.</p>
+            <p><code>deny</code> is the other way to validate: the request is denied when the conditions hold. The <code>{{ }}</code> are variables, written in JMESPath, a query language for JSON (JavaScript Object Notation) that is also built into the AWS CLI, and that the <a href="jq-and-jmespath.html">jq and JMESPath guide</a> teaches. <code>request.object</code> is the resource; <code>containers[?securityContext.privileged == `true`]</code> is a filter projection keeping the privileged containers, and <code>| length(@)</code> counts them. The backticks around <code>true</code> make it a JSON literal, and exercise 3 shows what happens with quotes instead. In CEL the whole rule is one expression, <code>!object.spec.containers.exists(c, c.?securityContext.?privileged.orValue(false))</code>, with the logic turned around because a <code>deny</code> condition says what is forbidden and a validation says what must be true.</p>
+            <p>Now check the enforcement mode. Neither rule sets <code>failureAction</code>, so both fall back to the policy-wide default, and <code>--audit-warn</code> shows what that is:</p>
+<div class="code-block" data-lang="bash"><pre>kyverno apply legacy.yaml --resource pods.yaml --resource privileged.yaml --audit-warn
+echo $?</pre></div>
+<div class="code-block" data-lang="text"><pre>pass: 10, fail: 0, warn: 2, error: 0, skip: 0
+0</pre></div>
+            <p>The two failures became warnings and the exit status 0: both rules are in Audit mode. A legacy policy blocks only where a rule says <code>failureAction: Enforce</code>, the deprecated policy-wide <code>validationFailureAction</code> says <code>Enforce</code>, or a per-namespace override (<code>failureActionOverrides</code>) does, so a policy written to block that never says so only ever reports. For a legacy policy that is in one mode throughout, <code>--audit-warn</code> does show the difference, unlike for the new types: with <code>Enforce</code> the failures stay failures. Legacy validate rules also default to <code>allowExistingViolations: true</code>, which lets an update through to a resource that already violated the rule before the update.</p>
+            <p>To migrate, Kyverno's <a href="https://kyverno.io/docs/guides/migration-to-cel/" target="_blank" rel="noopener noreferrer">migration guide</a> maps every field. The ones that matter most:</p>
+            <div class="table-scroll">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Legacy <code>ClusterPolicy</code></th>
+                        <th scope="col">Current types</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>One policy, many rules of different kinds</td>
+                        <td>One policy type per action: <code>ValidatingPolicy</code>, <code>MutatingPolicy</code>, <code>GeneratingPolicy</code>, <code>ImageValidatingPolicy</code>, <code>DeletingPolicy</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>match</code> on <code>kinds</code>; <code>exclude</code></td>
+                        <td><code>matchConstraints.resourceRules</code> on group, version and plural resource; <code>excludeResourceRules</code>; <code>matchConditions</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>pattern</code>, <code>anyPattern</code>, <code>foreach</code></td>
+                        <td>CEL in <code>validations</code>, using <code>all()</code>, <code>exists()</code> and optional fields</td>
+                    </tr>
+                    <tr>
+                        <td><code>deny</code> conditions</td>
+                        <td>CEL in <code>validations</code>, with the logic inverted</td>
+                    </tr>
+                    <tr>
+                        <td><code>context</code> and JMESPath variables</td>
+                        <td><code>variables</code>, plus Kyverno's CEL libraries for lookups and API calls</td>
+                    </tr>
+                    <tr>
+                        <td><code>failureAction</code>, default <strong>Audit</strong></td>
+                        <td><code>validationActions</code>, default <strong>Deny</strong></td>
+                    </tr>
+                    <tr>
+                        <td><code>allowExistingViolations</code>, <code>failureActionOverrides</code></td>
+                        <td>Not supported; Kyverno points to PolicyExceptions instead</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+            <p>The default in the last row but one is the trap: a legacy policy that was quietly auditing becomes, translated field for field, a policy that denies. Decide which you want and write it down in <code>validationActions</code>. Then run the old and new policies side by side with the CLI against the same resources, as this step and step 4 did, before deleting anything. Kyverno's documentation also describes <code>--warnings-as-errors</code> and the <code>kyverno_deprecated_api_requests_total</code> metric for finding legacy policies that are still in use.</p>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+            <p>Run these in <code>~/kyverno-lab</code>, with the files from the walk-through.</p>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>This policy is meant to cap Deployments at 10 replicas. Save it as <code>replicas.yaml</code>, make a 50-replica copy of the Deployment named <code>big</code> with <code>sed 's/replicas: 2/replicas: 50/; s/name: api,/name: big,/' deploy.yaml &gt; big.yaml</code>, and run the policy against both. Why does nothing fail, and what are the two fixes?</p>
+<div class="code-block" data-lang="yaml"><pre># replicas.yaml: meant to cap Deployments at 10 replicas
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: max-replicas
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [Deployments]
+  validations:
+    - expression: object.spec.replicas &lt;= 10
+      message: at most 10 replicas</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>Deployments live in the <code>apps</code> API group, not the core group <code>""</code>, and the resource name is <code>deployments</code>. Either mistake alone makes the policy match nothing. Fixed, as <code>replicas-fixed.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># replicas-fixed.yaml: apps group, plural lowercase resource
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: max-replicas
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments]
+  validations:
+    - expression: object.spec.?replicas.orValue(1) &lt;= 10
+      message: at most 10 replicas</pre></div>
+<div class="code-block" data-lang="bash"><pre>sed 's/replicas: 2/replicas: 50/; s/name: api,/name: big,/' deploy.yaml &gt; big.yaml
+kyverno apply replicas.yaml --resource deploy.yaml --resource big.yaml --warn-exit-code 3 --warn-no-pass
+echo $?
+kyverno apply replicas-fixed.yaml --resource deploy.yaml --resource big.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 2 resource(s)...
+
+pass: 0, fail: 0, warn: 0, error: 0, skip: 0
+exit as no objects satisfied policy
+3
+
+Applying 1 policy rule(s) to 2 resource(s)...
+policy max-replicas -&gt; resource shop/Deployment/big failed:
+1 -  at most 10 replicas
+
+pass: 1, fail: 1, warn: 0, error: 0, skip: 0</pre></div>
+                    <p>The copy gets its own name because the 1.19.2 CLI crashes, with <code>panic: deployments.apps "api" already exists</code>, when two resources in one run share a kind, namespace and name, which is easy to hit with a base manifest and an overlay of it. The fixed policy also reads <code>replicas</code> optionally: a Deployment manifest may leave it out, and the API server fills in 1 when it stores the object, but a file on your laptop has no such default, and reading a missing field in CEL is an error.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>Write a policy that rejects Pods running a <code>latest</code> image. Test it against these four Pods, saved as <code>tags.yaml</code>. Try <code>!c.image.endsWith(':latest')</code> first and see which Pods it lets through.</p>
+<div class="code-block" data-lang="yaml"><pre># tags.yaml: four ways to name an image
+apiVersion: v1
+kind: Pod
+metadata: {name: pinned, namespace: shop}
+spec:
+  containers: [{name: app, image: "ghcr.io/acme/web:2.1.0"}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: latest, namespace: shop}
+spec:
+  containers: [{name: app, image: "nginx:latest"}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: untagged, namespace: shop}
+spec:
+  containers: [{name: app, image: "nginx"}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: local, namespace: shop}
+spec:
+  containers: [{name: app, image: "registry.local:5000/tools"}]</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>The string check catches only <code>latest</code>. An image with no tag means <code>latest</code> too, so <code>untagged</code> and <code>local</code> are just as unpinned, and the colon in <code>registry.local:5000</code> is a port, which defeats most hand-written string checks. Kyverno's CEL image library parses the reference the way a container runtime does. Saved as <code>policies/no-latest.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre># policies/no-latest.yaml: parse the image reference instead of matching strings
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: no-latest
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: &gt;-
+        object.spec.containers.all(c, image(c.image).tag() != 'latest')
+      messageExpression: &gt;-
+        'unpinned images: ' + object.spec.containers
+          .filter(c, image(c.image).tag() == 'latest')
+          .map(c, c.image).join(', ')</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply policies/no-latest.yaml --resource tags.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 4 resource(s)...
+policy no-latest -&gt; resource shop/Pod/latest failed:
+1 -  unpinned images: nginx:latest
+policy no-latest -&gt; resource shop/Pod/untagged failed:
+1 -  unpinned images: nginx
+policy no-latest -&gt; resource shop/Pod/local failed:
+1 -  unpinned images: registry.local:5000/tools
+
+pass: 1, fail: 3, warn: 0, error: 0, skip: 0</pre></div>
+                    <p><code>image(c.image).tag()</code> reports <code>latest</code> for all three. A stricter version requires a digest instead, with <code>image(c.image).containsDigest()</code>, which is the only reference that cannot change under you. Like step 3, this checks <code>containers</code> only; use step 4's variable to cover the rest.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>In <code>legacy.yaml</code>, change <code>== `true`</code> in the <code>no-privileged</code> rule to <code>== 'true'</code>, which looks like the same thing. Predict what happens to <code>debug</code>, run it, then write the rule as a <code>ValidatingPolicy</code> and confirm the CEL version catches <code>debug</code> and passes the five Pods in <code>pods.yaml</code>.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="bash"><pre>sed "s/privileged == \`true\`/privileged == 'true'/" legacy.yaml &gt; legacy-quoted.yaml
+kyverno apply legacy-quoted.yaml --resource privileged.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 6 policy rule(s) to 1 resource(s)...
+
+pass: 2, fail: 0, warn: 0, error: 0, skip: 0</pre></div>
+                    <p><code>debug</code> passes both rules. In JMESPath, single quotes make a string, so the filter compares the boolean <code>true</code> in the Pod with the string <code>"true"</code>, finds no match, and the count is 0. The rule still loads, still runs, and denies nothing. The <a href="jq-and-jmespath.html">jq and JMESPath guide</a> has the same trap in its JMESPath step. CEL does not protect you from the same slip. Kyverno reads a Pod's fields as dynamic values, so <code>c.?securityContext.?privileged.orValue(false) == 'true'</code> is quietly false for every container too; CEL rejects the comparison only when it can see both types before it runs. Drop the comparison and use the boolean itself:</p>
+<div class="code-block" data-lang="yaml"><pre># no-privileged.yaml: the legacy deny rule as a ValidatingPolicy
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: no-privileged
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: &gt;-
+        !object.spec.containers.exists(c,
+          c.?securityContext.?privileged.orValue(false))
+      messageExpression: &gt;-
+        'privileged containers: ' + object.spec.containers
+          .filter(c, c.?securityContext.?privileged.orValue(false))
+          .map(c, c.name).join(', ')</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno apply no-privileged.yaml --resource privileged.yaml --resource pods.yaml</pre></div>
+<div class="code-block" data-lang="text"><pre>Applying 1 policy rule(s) to 6 resource(s)...
+policy no-privileged -&gt; resource shop/Pod/debug failed:
+1 -  privileged containers: shell
+
+pass: 5, fail: 1, warn: 0, error: 0, skip: 0</pre></div>
+                    <p>Here <code>orValue(false)</code> is the right default: a container that does not ask for privileged mode does not get it.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>Write <code>tests/no-latest/kyverno-test.yaml</code> for your exercise 2 policy, run <code>kyverno test tests/</code>, then prove the test can fail by putting the <code>endsWith</code> version in place.</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="yaml"><pre># tests/no-latest/kyverno-test.yaml
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: no-latest
+policies:
+  - ../../policies/no-latest.yaml
+resources:
+  - ../../tags.yaml
+results:
+  - policy: no-latest
+    isValidatingPolicy: true
+    kind: Pod
+    resources: [pinned]
+    result: pass
+  - policy: no-latest
+    isValidatingPolicy: true
+    kind: Pod
+    resources: [latest, untagged, local]
+    result: fail</pre></div>
+<div class="code-block" data-lang="bash"><pre>kyverno test tests/
+cp policies/no-latest.yaml keep.yaml
+sed 's/image(c.image).tag() != .latest./!c.image.endsWith(":latest")/' keep.yaml &gt; policies/no-latest.yaml
+kyverno test tests/ --fail-only
+echo $?
+mv keep.yaml policies/no-latest.yaml</pre></div>
+                    <p>The first run passes all ten rows, four for <code>no-latest</code> and six for <code>run-as-non-root</code>, because <code>kyverno test tests/</code> runs every test file under the folder. With the string check in place, the second run, where <code>--fail-only</code> prints only the failures, ends with:</p>
+<div class="code-block" data-lang="text"><pre>Test Summary: 2 out of 10 tests failed
+Aggregated Failed Test Cases :
+│────│───────────│──────│──────────────────────│────────│─────────────────────│
+│ ID │ POLICY    │ RULE │ RESOURCE             │ RESULT │ REASON              │
+│────│───────────│──────│──────────────────────│────────│─────────────────────│
+│ 1  │ no-latest │      │ v1/Pod/shop/untagged │ Fail   │ Want fail, got pass │
+│ 2  │ no-latest │      │ v1/Pod/shop/local    │ Fail   │ Want fail, got pass │
+│────│───────────│──────│──────────────────────│────────│─────────────────────│
+Error: 2 tests failed
+1</pre></div>
+                    <p>The <code>sed</code> swaps only the validation, so the message is still built with <code>image()</code>; that does not matter, because the test compares verdicts and ignores messages.</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Writing a new <code>ClusterPolicy</code>.</strong> 1.19 is the last release that runs them. Anything you write today should be one of the <code>policies.kyverno.io/v1</code> types.</li>
+                <li><strong>Trusting a green <code>kyverno apply</code>.</strong> A policy that matches nothing exits 0. Give every policy a <code>kyverno test</code> file with results both ways, and run it with <code>--require-tests</code>.</li>
+                <li><strong>Leaving the action to the default.</strong> Legacy rules default to Audit, the current types to Deny, and the CLI reports a failure either way. Write <code>validationActions</code> in every policy.</li>
+                <li><strong>Defaulting a missing field to compliant.</strong> <code>orValue(true)</code> and the <code>=()</code> anchor both pass a container that never set the field. Default to the strict value unless absence is safe, as it is for <code>privileged</code>.</li>
+                <li><strong>Checking <code>containers</code> only.</strong> Init and ephemeral containers run too. Join the three lists, as in step 4.</li>
+                <li><strong>Putting exemptions in the match.</strong> An <code>excludeResourceRules</code> entry, an <code>objectSelector</code> or a second resource rule on a Pod policy switches autogen off, and the Deployments stop being judged. Use a PolicyException, and remember that exceptions do nothing until enabled: the Helm chart ships with <code>features.policyExceptions.enabled</code> set to false. When you turn it on, set <code>features.policyExceptions.namespace</code> too, because left empty, Kyverno honors exceptions from every namespace, and anyone who can create one anywhere can exempt their own workloads. The CLI applies any exception you hand it, so it can disagree with the cluster.</li>
+                <li><strong>Assuming system namespaces are covered.</strong> The default install never sends Kyverno a request from <code>kube-system</code>, and filters several other namespaces and kinds. Cover them another way, or change the exclusions knowing why they are there.</li>
+                <li><strong>Fixing availability with <code>Ignore</code>.</strong> <code>failurePolicy: Ignore</code>, or <code>--forceFailurePolicyIgnore</code> on the admission controller, means every outage of Kyverno is an outage of your policy too. Run more replicas instead.</li>
+                <li><strong>Expecting a new policy to clean up.</strong> Denying policies leave existing resources running. Read the background scan's reports, then fix or redeploy what they list.</li>
+                <li><strong>Scoping an image policy to one registry and stopping there.</strong> An image outside <code>matchImageReferences</code> passes unchecked. Pair it with a rule that allows only registries you trust.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="cel-policy-expressions.html">CEL policy expressions</a> for the language inside these policies, and for ValidatingAdmissionPolicy, which runs inside the API server with no webhook when you need nothing Kyverno adds.</li>
+                <li><a href="opa-rego.html">OPA and Rego</a>, the engine behind OPA Gatekeeper, for policy that has to work outside Kubernetes as well as inside it.</li>
+                <li><a href="jq-and-jmespath.html">jq and JMESPath</a> for the JMESPath in legacy policies, and for reading the JSON <code>kubectl</code> and the cloud CLIs give you.</li>
+                <li><a href="../kubernetes.html#admission">Kubernetes security</a> for where admission control fits among the cluster's other controls, and <a href="../containers.html#supply-chain">container supply chain security</a> for what to do about image signing before admission.</li>
+                <li><a href="../homelab/kubernetes-security-lab.html">The Kubernetes security lab</a> for a cluster to install Kyverno in, with something worth blocking already running in it.</li>
+                <li>Kyverno's <a href="https://kyverno.io/docs/policy-types/overview/" target="_blank" rel="noopener noreferrer">policy types</a>, <a href="https://kyverno.io/docs/guides/testing-policies/" target="_blank" rel="noopener noreferrer">testing</a> and <a href="https://kyverno.io/docs/guides/troubleshooting/" target="_blank" rel="noopener noreferrer">troubleshooting</a> documentation, and its <a href="https://github.com/kyverno/policies" target="_blank" rel="noopener noreferrer">policy library</a>, whose folders ending in <code>-vpol</code>, <code>-mpol</code>, <code>-gpol</code>, <code>-ivpol</code> and <code>-dpol</code> hold the current types, each with its own tests.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

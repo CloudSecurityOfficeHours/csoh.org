@@ -1371,6 +1371,29 @@ main :is(
     transform: translateX(-50%);
 }
 
+/* A break-out element inside another one, such as a .comparison-table or
+   .matrix-table inside a .table-scroll wrapper, fills its parent instead of
+   breaking out a second time. The wrapper already has the width and does the
+   scrolling. Centred again, a table wider than its wrapper is shifted left by
+   translateX(-50%) of its own width, so its first columns sit before the
+   scroller's start, where overflow can't be scrolled to. Both lists match the
+   break-out rule above; a class added there belongs in both here too. */
+main :is(
+    .figure-wide, .arch-figure, .killchain-figure, .workflow-figure,
+    .diagram-figure, .cnapp-figure,
+    .comparison-table, .table-scroll, .matrix-table, .matrix-table--wide,
+    pre.code-block
+) :is(
+    .figure-wide, .arch-figure, .killchain-figure, .workflow-figure,
+    .diagram-figure, .cnapp-figure,
+    .comparison-table, .table-scroll, .matrix-table, .matrix-table--wide,
+    pre.code-block
+) {
+    width: 100%;
+    margin-left: 0;
+    transform: none;
+}
+
 /* Wiz Championship calendar (ctfs.html). These rules live here and not in
    the page because the CSP drops inline <style> blocks in production.
 
@@ -2950,7 +2973,14 @@ footer {
    em size depends on how deeply the element happens to be nested. If you add
    an em font-size, be able to say which of those two kinds it is. */
 
+/* position: relative because initCodeBlocks() in main.js appends an
+   absolutely positioned .cb-copy button to every .code-block, of every shape,
+   and the block has to be that button's containing block. A block that is not
+   positioned hands the button to <body>: it lands at the top right of the
+   page, where the header is static below 1024px, so it sits over the
+   hamburger and takes the tap meant for the menu. */
 .code-block {
+    position: relative;
     background-color: #f5f5f5;
     border-left: 4px solid var(--primary-color);
     padding: 1rem;
@@ -7019,7 +7049,8 @@ picture {
    Everything here is keyed off [data-lang], which tools/stamp_code_langs.py
    stamps onto `<div class="code-block"><pre>` blocks only. The site also has
    a `<div class="code-block">` shape holding <br>-separated text, some of
-   which is not code at all; those match none of these rules.
+   which is not code at all, and a few `<pre class="code-block">`. Those
+   match only the copy button's rules and its band.
 
    The language label is a ::before on the container rather than an element
    injected by main.js, so a reader with JavaScript off still sees it. Only
@@ -7036,11 +7067,16 @@ picture {
     word-break: break-word;
 }
 
+/* The height of the strip the copy button sits in: the header bar on
+   labelled blocks, the empty band on blocks with no bar. The bar, the band
+   and the button all read this one value so they always line up. Touch
+   devices raise it in the hover:none query below. */
+.code-block { --cb-bar: 1.75rem; }
+
 /* The container stops scrolling and stops padding; the <pre> inside takes
    over both. Without this the header bar scrolls sideways out of view along
    with a long line of code. */
 .code-block[data-lang] {
-    position: relative;
     padding: 0;
     overflow: visible;
     border-radius: 0 6px 6px 0;
@@ -7055,7 +7091,7 @@ picture {
     display: flex;
     align-items: center;
     box-sizing: border-box;
-    min-height: 1.75rem;
+    min-height: var(--cb-bar);
     padding: 0 1rem;
     border-bottom: 1px solid rgba(15, 23, 42, 0.1);
     font-size: var(--fs-12);
@@ -7066,21 +7102,39 @@ picture {
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 /* `text` is the honest label for scanner output and directory trees, but it
-   tells a reader nothing, so it is not worth a row of chrome. */
-.code-block[data-lang="text"]::before { content: none; }
-.code-block[data-lang="text"] > pre { padding-top: 1rem; }
-/* No header bar to sit in, so float clear of the first line of content. */
-.code-block[data-lang="text"] .cb-copy,
-.code-block:not([data-lang]) .cb-copy { top: 0.35rem; right: 0.35rem; }
+   tells a reader nothing, so these blocks get no label and no rule line.
+   They still get a copy button, as do the older <br> shape and
+   pre.code-block, which carry no data-lang at all. With no bar to hold it,
+   the button would sit over the end of the first line or two, so these
+   blocks reserve an empty band across the top instead: the button takes the
+   same place it has in a bar, and code starts below it whatever the line
+   length, scroll position or button label.
 
-/* Height is pinned to the header bar's min-height so the two line up exactly.
-   Blocks with no bar (data-lang="text", and the older <br> shape that carries
-   no data-lang at all) get the floating placement below instead. */
+   The band is a ::before so it adds to the padding each shape already has
+   (at least 0.75rem), which is why it is half a rem short of the bar: the
+   first line clears the button by a quarter to half a rem. */
+.code-block[data-lang="text"]::before,
+.code-block:not([data-lang])::before {
+    content: "";
+    display: block;
+    min-height: calc(var(--cb-bar) - 0.5rem);
+    padding: 0;
+    border-bottom: 0;
+}
+.code-block[data-lang="text"] > pre { padding-top: 1rem; }
+/* No script means no button, and print hides it, so neither needs the band.
+   A browser that predates the scripting query keeps the band, which is the
+   safe way round. */
+@media print, (scripting: none) {
+    .code-block[data-lang="text"]::before,
+    .code-block:not([data-lang])::before { content: none; }
+}
+
 .cb-copy {
     position: absolute;
     top: 0;
     right: 0.375rem;
-    height: 1.75rem;
+    height: var(--cb-bar);
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -7114,11 +7168,11 @@ picture {
 .cb-copy[data-state="done"] { color: #0f6b3f; opacity: 1; }
 /* Touch devices: the button is always visible because there is no hover to
    reveal it, and style.css already gives every button a 44px minimum touch
-   target. That is taller than the 28px header bar, so grow the bar to match
-   rather than shrink the target below the guideline. */
+   target. That is taller than the 28px header bar, so grow the bar and the
+   band to match rather than shrink the target below the guideline. */
 @media (hover: none) {
-    .cb-copy { opacity: 1; height: 44px; }
-    .code-block[data-lang]::before { min-height: 44px; }
+    .code-block { --cb-bar: 44px; }
+    .cb-copy { opacity: 1; }
 }
 
 /* Syntax tokens. Ratios against #f5f5f5 (light) and #121c28 (dark) are all

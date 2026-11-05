@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Azure Policy's definition language hands-on: modes, aliases, count, effects and remediation, built around the five ways a policy silently does nothing.">
+    <meta name="author" content="Shawn Nunley">
+    <meta name="keywords" content="azure policy tutorial, azure policy definition structure, azure policy mode indexed vs all, azure policy aliases, azure policy count expression, deployifnotexists, azure policy remediation task, enforcementmode donotenforce, azure rbac conditions abac">
+    <title>Azure Policy definitions: a hands-on how-to - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/howto/azure-policy.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/howto/azure-policy.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/howto/azure-policy.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="author" type="text/plain" href="/humans.txt">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Azure Policy definitions, hands-on - CSOH">
+    <meta property="og:description" content="Azure Policy's definition language hands-on: modes, aliases, count, effects and remediation, built around the five ways a policy silently does nothing.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:author" content="Shawn Nunley">
+    <meta property="article:section" content="How-To">
+    <meta property="article:tag" content="azure policy">
+    <meta property="article:tag" content="policy as code">
+    <meta property="article:tag" content="azure governance">
+    <meta property="article:tag" content="network security groups">
+    <meta property="article:tag" content="azure rbac conditions">
+    <meta property="article:tag" content="remediation">
+    <meta property="og:url" content="https://csoh.org/howto/azure-policy.html">
+    <meta property="og:image" content="https://csoh.org/img/og/howto/azure-policy.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Azure Policy definitions, hands-on">
+    <meta name="twitter:description" content="Azure Policy's definition language hands-on: modes, aliases, count, effects and remediation, built around the five ways a policy silently does nothing.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/howto/azure-policy.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=c50d5a31" as="style"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+    <link rel="stylesheet" href="/style.css?v=c50d5a31"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "Azure Policy definitions, hands-on",
+      "description": "Azure Policy's definition language hands-on: modes, aliases, count, effects and remediation, built around the five ways a policy silently does nothing.",
+      "totalTime": "PT2H",
+      "image": "https://csoh.org/banner.png",
+      "datePublished": "2026-11-03",
+      "dateModified": "2026-11-03",
+      "author": {
+        "@type": "Person",
+        "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
+        "name": "Shawn Nunley",
+        "url": "https://csoh.org/about-shawn-nunley.html"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Cloud Security Office Hours",
+        "url": "https://csoh.org/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://csoh.org/banner.png"
+        }
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Know what you can test locally",
+          "text": "Nothing local runs Azure Policy's engine, so check that definitions are well formed with jq and test their behaviour in a throwaway resource group."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Make the lab",
+          "text": "Choose the subscription, then create a tagged resource group and a network security group before any policy exists."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Create the first attempt",
+          "text": "Create a deny definition that checks only the single-port form of a security rule."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Write the corrected rule",
+          "text": "Check both the single and list forms with count, and create the definition once with its mode and once without, to see the CLI default to Indexed."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Assign and test",
+          "text": "Assign four versions of the rule and a tag policy to the resource group, then create rules and read compliance to see which assignment saw what."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 6,
+          "name": "Enforce the corrected rule",
+          "text": "Switch the trial assignment from DoNotEnforce to Default and confirm that a two-port SSH rule is denied."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Remediate the existing resource",
+          "text": "Run a remediation task so the modify policy tags the resource that existed before it."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Clean up",
+          "text": "Remove the role assignment, assignments, definitions and resource group, and confirm nothing is left."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://csoh.org/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "How-To Guides",
+          "item": "https://csoh.org/cloud-security-how-to.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Azure Policy definitions, hands-on",
+          "item": "https://csoh.org/howto/azure-policy.html"
+        }
+      ]
+    }
+    </script>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html" aria-current="page">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../cloud-security-how-to.html">How-To Guides</a></li>
+            <li><span aria-current="page">Azure Policy</span></li>
+        </ol>
+    </nav>
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Azure Policy definitions, hands-on</h1>
+        <p>Azure Policy decides which changes Azure Resource Manager accepts, and reports which resources break your rules. Most broken policies fail quietly, evaluating nothing or matching nothing while the compliance page shows green. Learn the definition language by building those failures in a throwaway resource group, then fixing them.</p>
+        <div class="cta-buttons">
+            <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
+            <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
+        </div>
+    </section>
+    <main class="container contribute-article" id="main-content">
+        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <div class="info-box--blue">
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a subscription you may experiment in, where you can create policy definitions and assign roles on one resource group (Owner covers both); the Azure CLI (command-line interface); and <code>jq</code>. Azure Policy has no charge on Azure resources, and the lab creates only network security groups, which run nothing.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> no policy was created or assigned in Azure to write this page, so none of the <code>az</code> commands in the walk-through has been run against Azure, and the results it describes are what Microsoft's documentation says should happen. What did run: every policy definition was parsed as JSON (JavaScript Object Notation) and its rule validated against Microsoft's published policy rule schema; every alias was checked against the alias lists Azure returns for <code>Microsoft.Network</code> and <code>Microsoft.Insights</code> (read-only calls, 3 November 2026); every <code>az</code> option was checked against the help of Azure CLI 2.91.0, and the CLI's handling of port lists against its source; and every shell block was run in bash and zsh with a stand-in for <code>az</code> to catch quoting errors, with the <code>jq</code> steps run for real. The role assignment conditions section was checked against Microsoft's documentation only.</p>
+        </div>
+
+        <section id="intro">
+            <h2>A rule engine in front of every change</h2>
+            <p>Every create, update and delete in Azure passes through Azure Resource Manager, whether it comes from the portal, the CLI, <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> or a software development kit. Azure Policy is the rule engine inside that path. A policy definition is a JSON document that pairs a condition with an effect: if a resource looks like this, deny the request, or record the resource as non-compliant, or change it, or deploy something beside it. An assignment applies a definition to a scope, which is a management group, a subscription, a resource group or a single resource. From then on Azure checks every matching request against it and re-checks existing resources on a schedule.</p>
+            <p>Platform and cloud security teams write policy to set <a class="glossary-link" href="../glossary.html#term-guardrails">guardrails</a> that hold whichever tool a team deploys with. Governance, risk and compliance (<a class="glossary-link" href="../glossary.html#term-grc">GRC</a>) engineers assign Microsoft's regulatory compliance initiatives, such as those for the Center for Internet Security (CIS) benchmarks, the US National Institute of Standards and Technology's Special Publication 800-53 and the Payment Card Industry Data Security Standard (<a class="glossary-link" href="../glossary.html#term-pci-dss">PCI DSS</a>), which are collections of policy definitions assigned like any other. Either way, someone has to read and write the definition language, and that is what this page teaches, with one running example: a rule against Secure Shell (SSH) open to the internet on a <a class="glossary-link" href="../glossary.html#term-nsg">network security group</a>, written wrong first and then right, in a throwaway resource group.</p>
+        </section>
+
+        <div class="highlight-box">
+            <p><strong>A policy acts only on what it can see, and a comparison against a property it cannot see is false.</strong> Azure evaluates the JSON that Resource Manager holds for a request or a resource: only the resource types the definition's mode admits, only the properties present in that JSON, and only at the moments evaluation runs. When the JSON is not shaped the way the author pictured, a test such as <code>equals</code> or <code>in</code> is false, a false condition means the effect does not apply, and the resource is reported as compliant, with no warning anywhere. Each failure in the next section is a version of this. The exceptions are deliberate: <code>exists: false</code>, and <code>not</code> around a positive test, are true when a property is absent, which is how Microsoft's own built-in definitions catch a missing setting.</p>
+        </div>
+
+        <section id="silent">
+            <h2>Five ways a policy silently does nothing</h2>
+            <p>These five never produce an error. Each one leaves an assignment in place that looks like a control, with a compliance page to match. The walk-through below reproduces all five in one resource group, and fixes them.</p>
+            <ol>
+                <li><strong>Indexed mode on a type that cannot be tagged.</strong> A definition in <code>Indexed</code> mode evaluates only resource types that support tags and location. Resource groups, subscriptions and child resources such as the rules inside a network security group are never evaluated. A definition created without a mode gets <code>Indexed</code>: that is the API's default, and so the Azure CLI's when you pass only the rule, even if the file you took it from says <code>All</code>.</li>
+                <li><strong>An audit effect read as enforcement.</strong> <code>audit</code> writes a warning to the <a class="glossary-link" href="../glossary.html#term-cloudtrail">activity log</a> and marks the resource non-compliant, and the request goes through. Fifty audit assignments report problems and stop none of them.</li>
+                <li><strong>A condition on a property that is absent.</strong> A <code>field</code> condition reads a property from the request or the stored resource. If the property is not in that JSON, a comparison such as <code>equals</code> is false, the resource does not match, and it is reported compliant. Network security group rules carry ports as either <code>destinationPortRange</code> or <code>destinationPortRanges</code>, never both, so a policy written against one form passes every rule written in the other.</li>
+                <li><strong>An assignment in <code>DoNotEnforce</code> mode.</strong> The assignment is evaluated and reports non-compliance, but its effect never runs and nothing reaches the activity log. It is the right way to trial a deny and an easy setting to forget.</li>
+                <li><strong>Resources that already existed.</strong> <code>deny</code>, <code>append</code> and <code>modify</code> act on create and update requests. Resources that already break the rule are marked non-compliant and left as they are until someone changes them, or until a remediation task runs, which only <code>modify</code> and <code>deployIfNotExists</code> support.</li>
+            </ol>
+            <p>One failure runs the other way. If a template function inside a condition errors, for example <code>substring()</code> asked for three characters of a two-character name, the evaluation fails, and Azure treats a failed evaluation as a deny. A typo there blocks deployments instead of letting them through.</p>
+        </section>
+
+        <div class="toc">
+            <h2>On this page</h2>
+            <ol>
+                <li><a href="#model">Anatomy of a definition</a></li>
+                <li><a href="#effects">Effects</a></li>
+                <li><a href="#assignments">Assignments, initiatives and when evaluation runs</a></li>
+                <li><a href="#walkthrough">Walk-through</a></li>
+                <li><a href="#code">Policy as code</a></li>
+                <li><a href="#rbac">Role assignment conditions</a></li>
+                <li><a href="#exercises">Hands-on exercises</a></li>
+                <li><a href="#mistakes">Common mistakes</a></li>
+                <li><a href="#next">Where next</a></li>
+            </ol>
+        </div>
+
+        <section id="model">
+            <h2>Anatomy of a definition</h2>
+            <p>Here is the first attempt at the running example, as it would sit in a repository. It is meant to deny any network security group rule that lets SSH in from anywhere, and step 5 of the walk-through shows why it does not.</p>
+<div class="code-block" data-lang="json"><pre>{
+  "properties": {
+    "displayName": "Deny SSH from the internet (first attempt)",
+    "mode": "All",
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Network/networkSecurityGroups/securityRules" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/access", "equals": "Allow" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/direction", "equals": "Inbound" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange", "equals": "22" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/sourceAddressPrefix", "in": ["*", "Internet", "0.0.0.0/0"] }
+        ]
+      },
+      "then": { "effect": "deny" }
+    }
+  }
+}</pre></div>
+            <p>The parts:</p>
+            <ul>
+                <li><code>displayName</code>, with optional <code>description</code> and <code>metadata</code>, describe the definition. Its name and ID are not in the file: they belong to the resource the definition becomes when you create it, under a management group or a subscription. That location also limits where it can be assigned.</li>
+                <li><code>mode</code> decides which resource types are evaluated at all. <code>All</code> covers resource groups, subscriptions and every resource type. <code>Indexed</code> covers only types that support tags and location. Microsoft recommends <code>All</code> in most cases and <code>Indexed</code> for policies that enforce tags or location, so that resources unable to carry them don't fill the report as non-compliant. A rule on resource groups or subscriptions needs <code>All</code>. There are also resource provider modes, such as <code>Microsoft.Kubernetes.Data</code> for <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> clusters and <code>Microsoft.KeyVault.Data</code> for the keys, secrets and certificates inside <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a>, which the service itself evaluates.</li>
+                <li><code>policyRule</code> holds <code>if</code>, the condition, and <code>then</code>, which names one effect.</li>
+                <li><code>parameters</code>, absent here, declare values that each assignment fills in, each with a type and optionally <code>allowedValues</code> and a <code>defaultValue</code>. A rule reads one as <code>[parameters('name')]</code>. The corrected definition in step 4 makes its effect a parameter, so the same definition can be assigned as Audit in one place and Deny in another.</li>
+            </ul>
+
+            <h3>Fields and aliases</h3>
+            <p>A condition starts with what it reads. <code>field</code> reads from the resource. A few names work on every resource type: <code>type</code>, <code>name</code>, <code>fullName</code>, <code>kind</code>, <code>location</code>, <code>id</code>, <code>identity.type</code>, and <code>tags</code> or <code>tags['owner']</code>. Everything else is reached through an <strong>alias</strong>. <code>Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange</code> is an alias for the path <code>properties.destinationPortRange</code> inside a rule, and Azure keeps that mapping for each API (application programming interface) version, so one definition works whichever version a client sends.</p>
+            <p>Aliases come from each resource provider. List them for one resource type:</p>
+<div class="code-block" data-lang="bash"><pre>az provider show --namespace Microsoft.Network --expand "resourceTypes/aliases" --query "resourceTypes[?resourceType=='networkSecurityGroups/securityRules'].aliases[].name" -o tsv</pre></div>
+            <p>The first lines of that list on 3 November 2026:</p>
+<div class="code-block" data-lang="text"><pre>Microsoft.Network/networkSecurityGroups/securityRules/protocol
+Microsoft.Network/networkSecurityGroups/securityRules/sourcePortRange
+Microsoft.Network/networkSecurityGroups/securityRules/sourcePortRanges[*]
+Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange
+Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]</pre></div>
+            <p>A rule has no <code>tags</code> alias because a rule cannot be tagged, which is why <code>Indexed</code> mode skips it. Only some aliases can be written by the <code>modify</code> effect, and Azure marks those <code>Modifiable</code>. Filter for them:</p>
+<div class="code-block" data-lang="bash"><pre>az provider show --namespace Microsoft.Network --expand "resourceTypes/aliases" --query "resourceTypes[?resourceType=='networkSecurityGroups/securityRules'].aliases[] | [?defaultMetadata.attributes=='Modifiable'].name" -o tsv</pre></div>
+            <p>Microsoft's Azure Policy extension for Visual Studio Code also shows the alias for a property when you hover over it in a resource's JSON. If a property has no alias, no condition can read it.</p>
+
+            <h3>Conditions and logic</h3>
+            <p>A condition is a field (or a value) and one operator: <code>equals</code>, <code>notEquals</code>, <code>in</code>, <code>notIn</code>, <code>like</code> and <code>notLike</code> (with one <code>*</code> wildcard), <code>contains</code>, <code>containsKey</code>, <code>exists</code>, <code>less</code>, <code>greater</code> and their <code>OrEquals</code> forms, and <code>match</code>, where <code>#</code> stands for a digit, <code>?</code> for a letter and <code>.</code> for any character. String comparisons ignore case, except <code>match</code> and <code>notMatch</code>, which have <code>matchInsensitively</code> forms. Conditions combine with <code>allOf</code> (and), <code>anyOf</code> (or) and <code>not</code>, nested as deep as you need.</p>
+            <p>Use <code>value</code> in place of <code>field</code> to test the result of a template function or a parameter. Most Azure Resource Manager template functions are available, plus a few that exist only in policy: <code>field()</code>, <code>current()</code>, <code>ipRangeContains()</code>, <code>addDays()</code>, <code>policy()</code> and <code>requestContext().apiVersion</code>. This is where the fail-closed case lives: a function that errors fails the evaluation, which counts as a deny. Wrap risky calls in <code>if()</code>, as Microsoft's own example does:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "value": "[if(greaterOrEquals(length(field('name')), 3), substring(field('name'), 0, 3), 'not starting with abc')]",
+  "equals": "abc"
+}</pre></div>
+
+            <h3>Arrays and count</h3>
+            <p>An alias ending in <code>[*]</code> selects every member of an array, and a plain <code>field</code> condition on it is true only when <em>every</em> member satisfies it. So <code>destinationPortRanges[*]</code> <code>equals</code> <code>"22"</code> is false for a rule allowing 22 and 443, and true for a rule with no port list at all, because no member breaks it. That is rarely the question you meant. <code>count</code> asks the question directly: it evaluates its <code>where</code> condition once for each member and compares the number that matched.</p>
+<div class="code-block" data-lang="json"><pre>{
+  "count": {
+    "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+    "where": {
+      "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+      "in": ["22", "*"]
+    }
+  },
+  "greater": 0
+}</pre></div>
+            <p>Inside <code>where</code>, the same alias refers to the one member being counted. A <strong>value count</strong> does the same over a literal array or an array parameter, naming the current member with <code>name</code> and reading it with <code>current()</code>. A rule may hold up to five field counts per array and ten value counts.</p>
+        </section>
+
+        <section id="effects">
+            <h2>Effects</h2>
+            <p>Each definition has exactly one effect. The effect decides what a match does, and when.</p>
+            <div class="comparison-table"><table>
+                <thead><tr><th scope="col" class="ct-row-head">Effect</th><th scope="col">What a match does</th><th scope="col">When it acts</th><th scope="col">Existing resources</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">audit</th><td>Writes a warning to the activity log and marks the resource non-compliant. The request succeeds.</td><td>Create and update, and every compliance scan</td><td>Marked non-compliant</td></tr>
+                    <tr><th scope="row">deny</th><td>Fails the request with 403 Forbidden before it reaches the resource provider.</td><td>Create and update</td><td>Marked non-compliant, left as they are</td></tr>
+                    <tr><th scope="row">modify</th><td>Adds, replaces or removes tags, and adds or replaces properties whose alias is Modifiable, in the request itself.</td><td>Create and update</td><td>Marked non-compliant until a remediation task fixes them</td></tr>
+                    <tr><th scope="row">append</th><td>Adds fields to the request, and acts as a deny if that would overwrite a different value.</td><td>Create and update</td><td>Marked non-compliant, no remediation</td></tr>
+                    <tr><th scope="row">auditIfNotExists</th><td>Looks for a related resource, such as a diagnostic setting on a key vault, and audits if none matches.</td><td>After the resource provider succeeds, 10 minutes later by default</td><td>Marked non-compliant</td></tr>
+                    <tr><th scope="row">deployIfNotExists</th><td>The same check, then deploys a Resource Manager template when nothing matches.</td><td>After the resource provider succeeds</td><td>Marked non-compliant until a remediation task fixes them</td></tr>
+                    <tr><th scope="row">denyAction</th><td>Blocks a delete of matching resources. <code>delete</code> is the only action it supports.</td><td>Delete requests</td><td>Reported as Protected</td></tr>
+                    <tr><th scope="row">disabled</th><td>Nothing. Used through a parameter to switch one assignment off.</td><td>Never</td><td>Reported compliant</td></tr>
+                </tbody></table></div>
+            <p>Three more are specialised: <code>manual</code> lets a person attest compliance, as in regulatory initiatives; <code>mutate</code> changes Kubernetes objects in Azure Kubernetes Service; and <code>addToNetworkGroup</code> serves Azure Virtual Network Manager.</p>
+            <p>When several assignments apply to one request, Azure evaluates each independently, and the result is the most restrictive. Within a request, <code>disabled</code> is checked first, then <code>append</code> and <code>modify</code>, then <code>deny</code>, then <code>audit</code>, so a modify can make a request compliant before a deny sees it. <code>auditIfNotExists</code> and <code>deployIfNotExists</code> run after the resource provider reports success.</p>
+            <p>The two existence effects carry their target in <code>details</code>. This rule audits key vaults that have no diagnostic setting sending any logs, in the shape Microsoft's built-in Key Vault definitions use:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "if": { "field": "type", "equals": "Microsoft.KeyVault/vaults" },
+  "then": {
+    "effect": "auditIfNotExists",
+    "details": {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "existenceCondition": {
+        "count": {
+          "field": "Microsoft.Insights/diagnosticSettings/logs[*]",
+          "where": { "field": "Microsoft.Insights/diagnosticSettings/logs[*].enabled", "equals": "true" }
+        },
+        "greaterOrEquals": 1
+      }
+    }
+  }
+}</pre></div>
+            <p><code>modify</code> and <code>deployIfNotExists</code> change resources, so their <code>details</code> must list <code>roleDefinitionIds</code>, the roles their changes need. An assignment of either needs a <a class="glossary-link" href="../glossary.html#term-service-account">managed identity</a> holding those roles. Remediation tasks and <code>deployIfNotExists</code> deployments run as that identity, while evaluation always uses the identity of whoever sent the request. The portal grants the roles when it creates the assignment; the CLI and the software development kits do not, unless you ask, as step 5 does.</p>
+            <p><code>denyAction</code> has edges worth knowing before relying on it: deleting a parent still deletes its children and extension resources, so protecting a diagnostic setting does not stop someone deleting the storage account it belongs to; and when a whole resource group is deleted, only a definition in <code>Indexed</code> mode can block it, through its <code>cascadeBehaviors</code> setting; one in <code>All</code> mode never does.</p>
+        </section>
+
+        <section id="assignments">
+            <h2>Assignments, initiatives and when evaluation runs</h2>
+            <p>A definition does nothing until it is assigned. An assignment names the definition and a scope, and everything below that scope inherits it: assigned at a management group, it applies to every subscription, resource group and resource underneath. The assignment also carries:</p>
+            <ul>
+                <li><strong>Parameters</strong>, the values for this scope, such as <code>{"effect": {"value": "Deny"}}</code>.</li>
+                <li><strong><code>enforcementMode</code></strong>: <code>Default</code> applies the effect. <code>DoNotEnforce</code> evaluates and reports but never applies the effect on create or update and writes no activity log entry; remediation tasks can still be run. <code>Enroll</code> enforces only for scopes that opt in through enrollment resources, for staged roll-outs.</li>
+                <li><strong>Exclusions</strong> (<code>notScopes</code>), scopes removed from evaluation entirely.</li>
+                <li><strong>Non-compliance messages</strong>, shown to whoever is denied. A denial that says what to fix saves a ticket.</li>
+                <li><strong>An identity</strong>, for <code>modify</code> and <code>deployIfNotExists</code>, plus a <code>location</code> when it is system-assigned.</li>
+            </ul>
+            <p>Microsoft recommends exclusions for broad, permanent bypasses, such as a test environment, and <strong>exemptions</strong> for specific or time-bound ones. For an exception to a security control, prefer the exemption. An excluded scope drops out of the compliance report and is visible only in the assignment's <code>notScopes</code>; an exempted resource stays in the report as Exempt, can carry an expiry date, and creating one needs a permission on the assignment itself, so the exception stays visible and reviewable.</p>
+            <p>An <strong>initiative</strong> (a policy set definition) groups definitions so they are assigned, parameterised and reported together. Microsoft's regulatory compliance initiatives are initiatives with hundreds of members. This one wraps the corrected SSH rule from the walk-through and passes its own parameter through:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "properties": {
+    "displayName": "Network guardrails",
+    "parameters": {
+      "sshEffect": { "type": "String", "allowedValues": ["Audit", "Deny", "Disabled"], "defaultValue": "Audit" }
+    },
+    "policyDefinitions": [
+      {
+        "policyDefinitionReferenceId": "noInternetSsh",
+        "policyDefinitionId": "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/policyDefinitions/csoh-lab-ssh",
+        "parameters": { "effect": { "value": "[parameters('sshEffect')]" } }
+      }
+    ]
+  }
+}</pre></div>
+            <p>Evaluation happens at these moments, according to Microsoft's documentation:</p>
+            <ul>
+                <li>When a resource is created or updated, in the request itself. The compliance result for that one resource appears about 15 minutes later.</li>
+                <li>When an assignment is created or updated. It takes about five minutes to apply, then the resources in scope are evaluated.</li>
+                <li>Once every 24 hours, in a standard compliance scan of every assignment.</li>
+                <li>On demand: <code>az policy state trigger-scan --resource-group &lt;group&gt;</code>.</li>
+            </ul>
+            <p>Resource types under <code>Microsoft.Resources</code> are never evaluated, except subscriptions and resource groups.</p>
+        </section>
+
+        <section id="walkthrough">
+            <h2>Walk-through</h2>
+
+            <h3>1. Know what you can test locally</h3>
+            <p>Nothing on your own machine runs Azure Policy's engine. The Visual Studio Code extension can evaluate a definition against a resource, but it needs an Azure sign-in, and Microsoft documents that its evaluation feature does not work on macOS or Linux. PSRule for Azure has an experimental feature that converts policy assignments, exported from Azure, into its own rules for checking templates before deployment: useful in a pipeline, but a translation of your policy rather than Azure evaluating it. Locally you can check that a definition is well-formed JSON with the parts it needs. Whether it does what you meant is decided in Azure, so the test bed is a throwaway resource group with every assignment scoped to it.</p>
+            <p>Run the steps in one terminal: later steps reuse a variable set in step 2.</p>
+
+            <h3>2. Choose the subscription and make the lab</h3>
+<div class="code-block" data-lang="bash"><pre>az account show --query "{name:name, id:id}" -o table</pre></div>
+            <p>Check that it is the subscription you mean to use. The definitions in steps 3 and 4 are created in it but do nothing until assigned, and every assignment is scoped to the lab resource group. Keep the subscription ID for later steps:</p>
+<div class="code-block" data-lang="bash"><pre>SUB=$(az account show --query id -o tsv)</pre></div>
+            <p>Create the resource group, tagged with an owner that step 7 copies onto resources, and one network security group before any policy exists:</p>
+<div class="code-block" data-lang="bash"><pre>az group create --name csoh-policy-lab --location eastus --tags owner=platform-team</pre></div>
+<div class="code-block" data-lang="bash"><pre>az network nsg create --resource-group csoh-policy-lab --name lab-nsg-before</pre></div>
+
+            <h3>3. Create the first attempt</h3>
+            <p>Save the definition from the anatomy section as a file:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; ssh-naive.json &lt;&lt;'EOF'
+{
+  "properties": {
+    "displayName": "Deny SSH from the internet (first attempt)",
+    "mode": "All",
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Network/networkSecurityGroups/securityRules" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/access", "equals": "Allow" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/direction", "equals": "Inbound" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange", "equals": "22" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/sourceAddressPrefix", "in": ["*", "Internet", "0.0.0.0/0"] }
+        ]
+      },
+      "then": { "effect": "deny" }
+    }
+  }
+}
+EOF</pre></div>
+            <p>The CLI takes the parts of a definition as separate options, so pull each one out of the file with <code>jq</code>. This creates a definition in the subscription; it has no effect until step 5 assigns it.</p>
+<div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-ssh-naive --display-name "$(jq -r .properties.displayName ssh-naive.json)" --mode "$(jq -r .properties.mode ssh-naive.json)" --rules "$(jq -c .properties.policyRule ssh-naive.json)"</pre></div>
+
+            <h3>4. Write the corrected rule, and create it twice</h3>
+            <p>The corrected rule checks both forms of each property: the single <code>destinationPortRange</code> and the list <code>destinationPortRanges</code>, and the same for the source. It treats <code>*</code> (every port) like 22, and makes the effect a parameter. Like the first attempt, it judges rules created on their own, the way <code>az network nsg rule create</code> sends them; exercise 3 covers rules sent inside the network security group's own request.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; ssh.json &lt;&lt;'EOF'
+{
+  "properties": {
+    "displayName": "SSH must not be open to the internet",
+    "description": "Inbound Allow rules from any source must not include port 22, in either the single or the list form of the rule.",
+    "mode": "All",
+    "metadata": { "version": "1.0.0", "category": "Network" },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "allowedValues": ["Audit", "Deny", "Disabled"],
+        "defaultValue": "Audit",
+        "metadata": { "displayName": "Effect", "description": "Audit, Deny or Disabled" }
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Network/networkSecurityGroups/securityRules" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/access", "equals": "Allow" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/direction", "equals": "Inbound" },
+          {
+            "anyOf": [
+              { "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange", "in": ["22", "*"] },
+              {
+                "count": {
+                  "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+                  "where": {
+                    "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+                    "in": ["22", "*"]
+                  }
+                },
+                "greater": 0
+              }
+            ]
+          },
+          {
+            "anyOf": [
+              { "field": "Microsoft.Network/networkSecurityGroups/securityRules/sourceAddressPrefix", "in": ["*", "Internet", "0.0.0.0/0"] },
+              {
+                "count": {
+                  "field": "Microsoft.Network/networkSecurityGroups/securityRules/sourceAddressPrefixes[*]",
+                  "where": {
+                    "field": "Microsoft.Network/networkSecurityGroups/securityRules/sourceAddressPrefixes[*]",
+                    "in": ["*", "Internet", "0.0.0.0/0"]
+                  }
+                },
+                "greater": 0
+              }
+            ]
+          }
+        ]
+      },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}
+EOF</pre></div>
+            <p>Create it the careful way, with the mode from the file:</p>
+<div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-ssh --display-name "$(jq -r .properties.displayName ssh.json)" --mode "$(jq -r .properties.mode ssh.json)" --params "$(jq -c .properties.parameters ssh.json)" --rules "$(jq -c .properties.policyRule ssh.json)"</pre></div>
+            <p>Then create it again the way most people first do, passing the rule and parameters and nothing else:</p>
+<div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-ssh-indexed --params "$(jq -c .properties.parameters ssh.json)" --rules "$(jq -c .properties.policyRule ssh.json)"</pre></div>
+<div class="code-block" data-lang="bash"><pre>az policy definition show --name csoh-lab-ssh-indexed --query mode -o tsv</pre></div>
+            <p>Expect <code>Indexed</code>: Azure CLI 2.91.0 documents <code>Indexed</code> as the default for <code>--mode</code>, and nothing in the rule says otherwise. Same rule, same file, and as step 5 shows, this one never evaluates a single network security group rule.</p>
+            <p>The last definition copies the resource group's <code>owner</code> tag onto any resource that lacks one. It is a <code>modify</code> policy, so it names the role its change needs: Tag Contributor.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; inherit-owner.json &lt;&lt;'EOF'
+{
+  "properties": {
+    "displayName": "Inherit the owner tag from the resource group",
+    "mode": "Indexed",
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "tags['owner']", "exists": "false" },
+          { "value": "[resourceGroup().tags['owner']]", "notEquals": "" }
+        ]
+      },
+      "then": {
+        "effect": "modify",
+        "details": {
+          "roleDefinitionIds": [
+            "/providers/Microsoft.Authorization/roleDefinitions/4a9ae827-6dc8-4573-8ac7-8239d42aa03f"
+          ],
+          "operations": [
+            { "operation": "add", "field": "tags['owner']", "value": "[resourceGroup().tags['owner']]" }
+          ]
+        }
+      }
+    }
+  }
+}
+EOF</pre></div>
+            <p>Here <code>Indexed</code> is correct: only resources that can carry tags should be judged on one.</p>
+<div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-inherit-owner --display-name "$(jq -r .properties.displayName inherit-owner.json)" --mode "$(jq -r .properties.mode inherit-owner.json)" --rules "$(jq -c .properties.policyRule inherit-owner.json)"</pre></div>
+
+            <h3>5. Assign everything to the lab, and test</h3>
+            <p>Every command here names the resource group. Without <code>--resource-group</code> or <code>--scope</code>, <code>az policy assignment create</code> assigns at the whole subscription.</p>
+<div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-ssh-naive --policy csoh-lab-ssh-naive --resource-group csoh-policy-lab</pre></div>
+<div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-ssh-indexed --policy csoh-lab-ssh-indexed --resource-group csoh-policy-lab --params '{"effect": {"value": "Deny"}}'</pre></div>
+<div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-ssh-audit --policy csoh-lab-ssh --resource-group csoh-policy-lab --params '{"effect": {"value": "Audit"}}'</pre></div>
+<div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-ssh-trial --policy csoh-lab-ssh --resource-group csoh-policy-lab --params '{"effect": {"value": "Deny"}}' --enforcement-mode DoNotEnforce</pre></div>
+            <p>The tag policy gets a system-assigned managed identity, granted Tag Contributor on the lab group only:</p>
+<div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-inherit-owner --policy csoh-lab-inherit-owner --resource-group csoh-policy-lab --mi-system-assigned --location eastus --role "Tag Contributor" --identity-scope "/subscriptions/$SUB/resourceGroups/csoh-policy-lab"</pre></div>
+            <p>So four assignments carry an SSH rule: the first attempt as a deny, the corrected rule as a deny in <code>Indexed</code> mode, the corrected rule as an audit, and the corrected rule as a deny that is not enforced. Assignments take about five minutes to apply. Then try the plainest violation, SSH from anywhere, with one port:</p>
+<div class="code-block" data-lang="bash"><pre>az network nsg rule create --resource-group csoh-policy-lab --nsg-name lab-nsg-before --name allow-ssh --priority 100 --direction Inbound --access Allow --protocol Tcp --source-address-prefixes '*' --destination-port-ranges 22</pre></div>
+            <p>This should fail with <code>RequestDisallowedByPolicy</code>, and the error lists the assignments that denied it. Expect <code>lab-ssh-naive</code> alone. <code>lab-ssh-trial</code> matches too but is not enforced, and <code>lab-ssh-indexed</code> never looked. If the rule is created instead, the assignments have not applied yet: delete it with <code>az network nsg rule delete --resource-group csoh-policy-lab --nsg-name lab-nsg-before --name allow-ssh</code>, wait a few minutes and try again.</p>
+            <p>Now the same rule as someone who also wants web traffic on port 443 would write it, with two ports:</p>
+<div class="code-block" data-lang="bash"><pre>az network nsg rule create --resource-group csoh-policy-lab --nsg-name lab-nsg-before --name allow-ssh-https --priority 110 --direction Inbound --access Allow --protocol Tcp --source-address-prefixes '*' --destination-port-ranges 22 443 --query "{name:name, destinationPortRange:destinationPortRange, destinationPortRanges:destinationPortRanges}"</pre></div>
+            <p>Expect it to be created: SSH open to the internet in a resource group with four assignments that carry a rule against it. The output shows why the first attempt missed it: given more than one port, the CLI sends the list form, <code>destinationPortRanges</code>, and leaves <code>destinationPortRange</code> out. The first attempt's condition on <code>destinationPortRange</code> has nothing to compare, so it is false. <code>lab-ssh-indexed</code> has the right condition but never evaluates rules. <code>lab-ssh-audit</code> matched and let it through, because that is what audit does, and <code>lab-ssh-trial</code> matched and is not enforced.</p>
+            <p>Create a second network security group, now that the tag policy is assigned. The <code>modify</code> effect should add the tag in the request itself:</p>
+<div class="code-block" data-lang="bash"><pre>az network nsg create --resource-group csoh-policy-lab --name lab-nsg-after --query "NewNSG.tags"</pre></div>
+            <p>Expect <code>{"owner": "platform-team"}</code>. Then ask for a compliance scan of the lab, which can take several minutes, and read the results:</p>
+<div class="code-block" data-lang="bash"><pre>az policy state trigger-scan --resource-group csoh-policy-lab</pre></div>
+<div class="code-block" data-lang="bash"><pre>az policy state list --resource-group csoh-policy-lab --query "[].{assignment:policyAssignmentName, state:complianceState, resource:resourceId}" -o table</pre></div>
+            <p>Look at the rows for <code>allow-ssh-https</code>. <code>lab-ssh-naive</code> evaluated it and calls it Compliant: that is the absent-property failure, recorded as a pass. <code>lab-ssh-audit</code> and <code>lab-ssh-trial</code> call it NonCompliant, which is the corrected rule working, reported and not enforced. <code>lab-ssh-indexed</code> has no row for any rule: it was never evaluated. And <code>lab-nsg-before</code> is NonCompliant for <code>lab-inherit-owner</code>, because it existed before the policy did.</p>
+
+            <h3>6. Enforce the corrected rule</h3>
+            <p>The trial assignment reported what it would have blocked. Switch it to enforcing:</p>
+<div class="code-block" data-lang="bash"><pre>az policy assignment update --name lab-ssh-trial --resource-group csoh-policy-lab --enforcement-mode Default</pre></div>
+            <p>After a few minutes, try a two-port rule again:</p>
+<div class="code-block" data-lang="bash"><pre>az network nsg rule create --resource-group csoh-policy-lab --nsg-name lab-nsg-before --name allow-ssh-rdp --priority 120 --direction Inbound --access Allow --protocol Tcp --source-address-prefixes '*' --destination-port-ranges 22 3389</pre></div>
+            <p>Expect <code>RequestDisallowedByPolicy</code> from <code>lab-ssh-trial</code>. Note what has not changed: <code>allow-ssh-https</code> is still there and SSH is still open. A deny stops new requests and leaves existing resources as they are, so the cleanup of what is already wrong is a separate job: a remediation task where the effect supports one, and a person where it does not.</p>
+            <p>One request shape is still not covered. An Azure Resource Manager template, a Bicep file or Terraform's inline <code>security_rule</code> blocks can send rules inside the network security group's own request, and that request's type is <code>Microsoft.Network/networkSecurityGroups</code>, so this definition's first condition is false for it. Exercise 3 adds the branch that reads the group's own list of rules.</p>
+
+            <h3>7. Remediate the existing resource</h3>
+            <p><code>lab-nsg-before</code> has no owner tag, and will not get one until something changes it. A remediation task applies the <code>modify</code> operation to existing non-compliant resources, using the assignment's identity:</p>
+<div class="code-block" data-lang="bash"><pre>az policy remediation create --name lab-fix-owner --policy-assignment lab-inherit-owner --resource-group csoh-policy-lab</pre></div>
+<div class="code-block" data-lang="bash"><pre>az policy remediation show --name lab-fix-owner --resource-group csoh-policy-lab --query "{state:provisioningState, deployments:deploymentStatus}"</pre></div>
+<div class="code-block" data-lang="bash"><pre>az network nsg show --resource-group csoh-policy-lab --name lab-nsg-before --query tags</pre></div>
+            <p>When the task reports <code>Succeeded</code>, the tag is <code>{"owner": "platform-team"}</code>. Had the identity lacked Tag Contributor on this group, the task would have failed, which is the usual result of creating a <code>modify</code> assignment from the CLI without <code>--role</code>.</p>
+
+            <h3>8. Clean up</h3>
+            <p>Remove the identity's role assignment first, while the identity still exists:</p>
+<div class="code-block" data-lang="bash"><pre>PRINCIPAL=$(az policy assignment show --name lab-inherit-owner --resource-group csoh-policy-lab --query identity.principalId -o tsv)</pre></div>
+<div class="code-block" data-lang="bash"><pre>az role assignment delete --assignee-object-id "$PRINCIPAL" --role "Tag Contributor" --scope "/subscriptions/$SUB/resourceGroups/csoh-policy-lab"</pre></div>
+<div class="code-block" data-lang="bash"><pre>for a in lab-ssh-naive lab-ssh-indexed lab-ssh-audit lab-ssh-trial lab-inherit-owner; do az policy assignment delete --name $a --resource-group csoh-policy-lab; done</pre></div>
+<div class="code-block" data-lang="bash"><pre>for d in csoh-lab-ssh-naive csoh-lab-ssh-indexed csoh-lab-ssh csoh-lab-inherit-owner; do az policy definition delete --name $d; done</pre></div>
+<div class="code-block" data-lang="bash"><pre>az group delete --name csoh-policy-lab --yes</pre></div>
+            <p>Confirm nothing is left: the first command should print <code>[]</code> and the second <code>false</code>.</p>
+<div class="code-block" data-lang="bash"><pre>az policy definition list --query "[?starts_with(name, 'csoh-lab')].name"</pre></div>
+<div class="code-block" data-lang="bash"><pre>az group exists --name csoh-policy-lab</pre></div>
+        </section>
+
+        <section id="code">
+            <h2>Policy as code</h2>
+            <p>Definitions and assignments are JSON, so they belong in a repository, reviewed in pull requests and deployed by a pipeline instead of edited in the portal. Microsoft's recommended workflow has four stages:</p>
+            <ol>
+                <li>Keep each definition and its assignments as files, and have the pipeline update Azure whenever they change.</li>
+                <li>Assign a new or changed definition with <code>DoNotEnforce</code> to a scope far from production, a resource group or subscription kept for testing, and read the compliance results for false positives and false negatives. Microsoft's guidance names the cases to cover: create and update requests, compliant and non-compliant resources, and a property missing from the resource.</li>
+                <li>Test remediation for <code>modify</code> and <code>deployIfNotExists</code> definitions: the task succeeds, compliance updates, and the resource really changed.</li>
+                <li>Switch the assignment to <code>Default</code>, then widen its scope one environment at a time.</li>
+            </ol>
+            <p>The pipeline is <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) like any other: give it its own identity, signing in through <a class="glossary-link" href="../glossary.html#term-wif">workload identity federation</a> (<a class="glossary-link" href="../glossary.html#term-oidc">OpenID Connect</a>, OIDC) rather than with a stored secret, and only the rights it needs to write definitions and assignments. Deploy whole files, so that the mode in git is the mode in Azure. The <code>jq</code> extraction in step 3 does that, and so do Bicep and Terraform when the mode is written into the resource. A missing mode is filled in as <code>Indexed</code> by the API itself, whatever deploys the file, so a check in the pipeline should refuse a file without one. This one runs locally on the lab files, and prints nothing when all three are complete:</p>
+<div class="code-block" data-lang="bash"><pre>for f in ssh-naive.json ssh.json inherit-owner.json; do jq -e '.properties.mode and .properties.policyRule.if and .properties.policyRule.then.effect' "$f" &gt;/dev/null || echo "incomplete: $f"; done</pre></div>
+            <p>Before trusting its silence, make it fail once: delete the <code>"mode"</code> line from a copy of <code>ssh.json</code>, run it on the copy, and it should print the copy's name.</p>
+        </section>
+
+        <section id="rbac">
+            <h2>Role assignment conditions</h2>
+            <p>Azure Policy governs what resources look like. Azure <a class="glossary-link" href="../glossary.html#term-rbac">role-based access control</a> (RBAC) governs who may act on them, and its role assignments can carry a <strong>condition</strong>, an <a class="glossary-link" href="../glossary.html#term-abac">attribute-based access control</a> (ABAC) check that narrows what the role grants. A condition only narrows what the role grants; it cannot explicitly deny access. Conditions are available on role assignments that include Blob Storage or Queue Storage data actions, such as reading blobs only in one container or only with a given blob index tag, and on role assignments that let someone create or delete role assignments, which is where they matter most for security.</p>
+            <p>Giving someone Owner or User Access Administrator so that they can grant access lets them grant anything, including Owner. The safer delegation, from Microsoft's own example, is the Role Based Access Control Administrator role with a condition limiting which roles may be assigned and removed. This one allows only Backup Contributor and Backup Reader:</p>
+<div class="code-block" data-lang="text"><pre>(
+ (
+  !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
+ )
+ OR
+ (
+  @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {5e467623-bb1f-42f4-a55d-6e525e11384b, a795c7a0-d4a2-40c1-ae25-d81f01202912}
+ )
+)
+AND
+(
+ (
+  !(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})
+ )
+ OR
+ (
+  @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {5e467623-bb1f-42f4-a55d-6e525e11384b, a795c7a0-d4a2-40c1-ae25-d81f01202912}
+ )
+)</pre></div>
+            <p>Read each half as an if-then. <code>!(ActionMatches{...})</code> is true for every action except the one named, so any other action the role grants passes straight through; only the named action has to satisfy the expression after <code>OR</code>. That is the shape of every condition, and it is this language's version of the absent-property failure: an action the condition does not name is not constrained at all. Microsoft's example needs two halves because the attribute comes from different places. A new assignment's role is in the request (<code>@Request</code>); an existing one's is on the resource (<code>@Resource</code>). With only the first half, the delegate could remove anyone's role assignments.</p>
+            <p>A condition can be added when the role is assigned or to an existing assignment, in the portal's condition editor or with the CLI, where <code>az role assignment create</code> takes <code>--condition</code> and <code>--condition-version 2.0</code> (both marked preview in Azure CLI 2.91.0). The two role IDs above are Backup Contributor and Backup Reader; look up any role's ID with <code>az role definition list --name "Backup Reader" --query "[0].name" -o tsv</code>.</p>
+        </section>
+
+        <section id="exercises">
+            <h2>Hands-on exercises</h2>
+            <p>Exercises 1 to 3 build on the walk-through's definitions, and 1 and 2 can be checked in the lab before you clean up. Exercise 6 is about role assignment conditions.</p>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 1</span>
+                <p>A colleague "fixes" the first attempt by replacing its port condition with this one. Which of the lab's rules would the new policy deny: <code>allow-ssh</code> (port 22), <code>allow-ssh-https</code> (22 and 443), and a rule allowing only port 80 from anywhere?</p>
+<div class="code-block" data-lang="json"><pre>{
+  "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+  "equals": "22"
+}</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>It denies <code>allow-ssh</code> and the port 80 rule, and allows <code>allow-ssh-https</code>: wrong in both directions.</p>
+                    <p>A <code>field</code> condition on a <code>[*]</code> alias is true only when every member of the array satisfies it. <code>allow-ssh-https</code> has the list <code>["22", "443"]</code>, and 443 is not 22, so the condition is false and the rule is allowed. The single-port rules have no list at all, because the CLI sends one port as <code>destinationPortRange</code>. An empty or missing array satisfies an every-member condition, since no member breaks it, so the condition is true for both, whatever the port. The fix is a <code>count</code> with <code>greater</code> 0, as in <code>ssh.json</code>, together with a separate check of the single form.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 2</span>
+                <p>With the corrected rule enforcing, someone creates a rule with <code>--destination-port-ranges 20-25</code>. Is it denied? If not, write a condition that catches a range containing 22 in the single form.</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>It is allowed. <code>"20-25"</code> is one string, not in <code>["22", "*"]</code>, so nothing matches. A range has to be split and compared as numbers, and the split guarded so that a value without a hyphen, or no value at all, never reaches <code>int()</code>, because an evaluation that errors becomes a deny. This is the guard Microsoft's own definition used:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "value": "[if(and(not(empty(field('Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange'))), contains(field('Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange'), '-')), and(lessOrEquals(int(first(split(field('Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange'), '-'))), 22), greaterOrEquals(int(last(split(field('Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange'), '-'))), 22)), 'false')]",
+  "equals": "true"
+}</pre></div>
+                    <p>Add it to the port <code>anyOf</code>, and do the same inside the <code>count</code> for the list form, reading the member with <code>first(field('...destinationPortRanges[*]'))</code>, since inside <code>where</code> the <code>field()</code> function returns a one-member array. Microsoft's deprecated built-in definition "SSH access from the Internet should be blocked" used this approach. This is why policies on network rules grow long, and why a test resource for every form of the property, single, list and range, matters more than reading the rule twice.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 3</span>
+                <p>Templates, Bicep and Terraform's inline <code>security_rule</code> blocks can create a network security group with its rules inside the same request. Would <code>lab-ssh-trial</code>, now enforcing, deny a group created that way with an inbound SSH rule from anywhere? Write the condition that would.</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>Expect not. That request's type is <code>Microsoft.Network/networkSecurityGroups</code>, so the corrected rule's first condition, a type check for <code>securityRules</code>, is false, and nothing else in it is tested. Microsoft's documentation describes no separate request-time evaluation of rules sent this way, so treat it as a gap until you have tested it by deploying such a group to the lab. The group exposes its rules as an array, and <code>count</code> can test each one:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "allOf": [
+    { "field": "type", "equals": "Microsoft.Network/networkSecurityGroups" },
+    {
+      "count": {
+        "field": "Microsoft.Network/networkSecurityGroups/securityRules[*]",
+        "where": {
+          "allOf": [
+            { "field": "Microsoft.Network/networkSecurityGroups/securityRules[*].access", "equals": "Allow" },
+            { "field": "Microsoft.Network/networkSecurityGroups/securityRules[*].direction", "equals": "Inbound" },
+            {
+              "anyOf": [
+                { "field": "Microsoft.Network/networkSecurityGroups/securityRules[*].destinationPortRange", "in": ["22", "*"] },
+                { "not": { "field": "Microsoft.Network/networkSecurityGroups/securityRules[*].destinationPortRanges[*]", "notIn": ["22", "*"] } }
+              ]
+            },
+            {
+              "anyOf": [
+                { "field": "Microsoft.Network/networkSecurityGroups/securityRules[*].sourceAddressPrefix", "in": ["*", "Internet", "0.0.0.0/0"] },
+                { "not": { "field": "Microsoft.Network/networkSecurityGroups/securityRules[*].sourceAddressPrefixes[*]", "notIn": ["*", "Internet", "0.0.0.0/0"] } }
+              ]
+            }
+          ]
+        }
+      },
+      "greater": 0
+    }
+  ]
+}</pre></div>
+                    <p>Inside <code>where</code>, <code>securityRules[*]</code> names the one rule being counted, so <code>securityRules[*].destinationPortRanges[*]</code> is that rule's list of ports. <code>not</code> around <code>notIn</code> is the other way to say "any member": every member outside the list, negated. It is false for an empty list, which is what you want here. To use it, wrap the corrected rule's <code>allOf</code> and this one in an <code>anyOf</code>, so the definition covers both request shapes.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 4</span>
+                <p>Write a definition that denies creating or updating a resource group without an <code>owner</code> tag. What mode must it use, and what would happen with the other one?</p>
+                <details>
+                    <summary>Show the answer</summary>
+<div class="code-block" data-lang="json"><pre>{
+  "properties": {
+    "displayName": "Resource groups must have an owner tag",
+    "mode": "All",
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Resources/subscriptions/resourceGroups" },
+          { "field": "tags['owner']", "exists": "false" }
+        ]
+      },
+      "then": { "effect": "deny" }
+    }
+  }
+}</pre></div>
+                    <p><code>All</code>. In <code>Indexed</code> mode resource groups are never evaluated, so the definition would be valid, assignable and silent, and its compliance page would show no applicable resources, which is easy to read as no violations. Microsoft's guidance is specific here: tag and location policies use <code>Indexed</code>, except those aimed at resource groups or subscriptions, which use <code>All</code> and name the type.</p>
+                    <p>An assignment can sit only on a resource group that already exists, so catching the creation of one needs an assignment at the subscription or above. That is beyond a one-group lab: assign it there with <code>DoNotEnforce</code> first and read the compliance results.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 5</span>
+                <p>A deny assignment for "no SSH from the internet" has been in place for a month, and a colleague cites the empty activity log, no denials at all, as evidence that nobody has tried. What do you check?</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>First the assignment's <code>enforcementMode</code>: under <code>DoNotEnforce</code> nothing is denied and nothing is written to the activity log, so an empty log is exactly what it produces. Then the compliance results, which are recorded either way: <code>az policy state list --filter "complianceState eq 'NonCompliant'"</code> for that assignment. Then the definition's <code>mode</code>, since in <code>Indexed</code> mode a rule policy has no applicable resources and nothing to deny. Then the condition itself, against a test resource in each property form. An empty log shows that nothing was denied, which is consistent with all four of these failures, and with nobody trying.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 6</span>
+                <p>A delegate holds Role Based Access Control Administrator at a subscription with only the first half of the condition in the role assignment conditions section. Can they assign Owner? Can they remove the Owner assignment of the person who delegated to them?</p>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>They cannot assign Owner: <code>roleAssignments/write</code> is named, so a new assignment must use one of the two allowed roles. They can remove role assignments made at that scope, Owner included (subject to Azure's default refusal to remove a subscription's last Owner), because <code>roleAssignments/delete</code> is not named, so <code>!(ActionMatches{...})</code> is true for it and the condition passes it through. A condition constrains the actions it names and nothing else, which is why Microsoft's example has a second half for delete.</p>
+                </details>
+            </div>
+        </section>
+
+        <section id="mistakes">
+            <h2>Common mistakes</h2>
+            <ul>
+                <li><strong>Leaving the mode to a default.</strong> A definition without a mode is <code>Indexed</code>, whether it came from <code>az policy definition create</code> without <code>--mode</code> or from a template that left it out, and child resources, resource groups and subscriptions are then never evaluated. (Azure PowerShell defaults to <code>All</code> instead.) Deploy the whole file, and check the mode with <code>az policy definition show</code>.</li>
+                <li><strong>Checking one form of a property.</strong> Many resources express a setting in more than one way: a single value or a list, a newer property or an older default. Microsoft's own built-in "Storage accounts should prevent shared key access" matches when <code>allowSharedKeyAccess</code> does not exist or is empty, as well as when it is true, because an account with the property unset allows shared key access.</li>
+                <li><strong>Using a <code>[*]</code> field condition to mean "any member".</strong> It means every member, and it is true for an empty array. Use <code>count</code>.</li>
+                <li><strong>Treating audit as a control.</strong> It is a report. Count your assignments by effect before saying what is enforced.</li>
+                <li><strong>Leaving a trial in <code>DoNotEnforce</code>.</strong> Give every trial an end date and a named owner, and list assignments in that mode as part of review.</li>
+                <li><strong>Expecting a deny to clean up.</strong> Existing resources stay as they are. Plan the cleanup of what is already wrong, and use remediation tasks where the effect supports them.</li>
+                <li><strong>Creating a <code>modify</code> or <code>deployIfNotExists</code> assignment from the CLI without a role.</strong> The portal grants the identity its roles; the CLI does so only with <code>--role</code> and <code>--identity-scope</code>, and otherwise remediation fails.</li>
+                <li><strong>Assigning without a scope.</strong> <code>az policy assignment create</code> with neither <code>--resource-group</code> nor <code>--scope</code> assigns at the whole subscription.</li>
+                <li><strong>Excluding instead of exempting.</strong> An exclusion hides a scope from the report. An exemption keeps it visible, with a reason and an expiry.</li>
+                <li><strong>A template function that can error.</strong> A failed evaluation is a deny. Guard functions such as <code>substring()</code> and <code>split()</code> with <code>if()</code>.</li>
+            </ul>
+        </section>
+
+        <section id="next" class="cta-section">
+            <h2>Where next</h2>
+            <ul>
+                <li><a href="../azure-security.html">Azure security</a> for where policy sits among the platform's other controls.</li>
+                <li><a href="iam-policy-languages.html">Identity and access management (IAM) policy languages</a> for the Amazon Web Services (AWS) side: identity policies, service control policies and Cedar, which make a different set of silent mistakes.</li>
+                <li><a href="opa-rego.html">Open Policy Agent (OPA) and Rego</a> for checking Terraform plans before they reach Azure, which catches the same mistakes earlier and on any cloud.</li>
+                <li><a href="kusto-kql.html">Kusto Query Language (KQL)</a>, because Azure Resource Graph answers compliance questions across subscriptions in it.</li>
+                <li><a href="../cloud-security-grc-engineer.html">The GRC engineer role</a> for how compliance initiatives turn into evidence.</li>
+                <li>Microsoft's <a href="https://learn.microsoft.com/azure/governance/policy/concepts/definition-structure-basics" target="_blank" rel="noopener noreferrer">definition structure reference</a>, the <a href="https://learn.microsoft.com/azure/governance/policy/concepts/effect-basics" target="_blank" rel="noopener noreferrer">effects reference</a>, and the <a href="https://github.com/Azure/azure-policy" target="_blank" rel="noopener noreferrer">built-in definitions on GitHub</a>, which are the best examples of handling every form of a property.</li>
+            </ul>
+        </section>
+
+        <aside class="author-card"><picture><source srcset="/img/authors/shawn-nunley.webp" type="image/webp"><img class="author-card__avatar" src="/img/authors/shawn-nunley.jpg" alt="Shawn Nunley" width="80" height="80" loading="lazy" decoding="async"></picture><div class="author-card__body"><p class="author-card__kicker">About the author</p><p class="author-card__name"><a href="/about-shawn-nunley.html" rel="author">Shawn Nunley</a></p><p class="author-card__bio">Founder of Cloud Security Office Hours and Solutions Architect at Wiz. In technology since 1983 and in cloud since the early colocation era at Exodus Communications (1999), now specializing in cloud security across AWS, Azure, and Google Cloud. <a href="/about-shawn-nunley.html">Read more &rarr;</a></p></div></aside>
+    </main>
+
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

@@ -49,10 +49,10 @@
     <link rel="dns-prefetch" href="https://img.youtube.com">
 
     <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
-    <link rel="preload" href="/style.css?v=a1c52606" as="style"
-        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
-    <link rel="stylesheet" href="/style.css?v=a1c52606"
-        integrity="sha384-JdvEnaJf3HCaGsHda6GvMW1MULButcyRAB0aluizPR37Zm/R+NcCNZ+l5p13fTbj">
+    <link rel="preload" href="/style.css?v=c50d5a31" as="style"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
+    <link rel="stylesheet" href="/style.css?v=c50d5a31"
+        integrity="sha384-RejPXJTRy9nm43ams0vKF44PWe31d8Og2Nl35eK/hcA8DkAyD7D0T10yFK4uluwZ">
 
     <script type="application/ld+json">
     {
@@ -334,11 +334,11 @@
         <section id="steps">
             <h2>Step-by-step</h2>
             <h3>1. Install Prowler</h3>
-            <pre><code>pip install prowler
-prowler --version</code></pre>
+            <div class="code-block" data-lang="bash"><pre>pip install prowler
+prowler --version</pre></div>
             <h3>2. Create read-only credentials for Prowler</h3>
             <p>Don't run Prowler with admin. Prowler needs two AWS managed policies plus one small custom policy the project maintains, all read-only. Attach them to a dedicated IAM role:</p>
-            <pre><code># The two managed policies Prowler documents as its baseline.
+            <div class="code-block" data-lang="bash"><pre># The two managed policies Prowler documents as its baseline.
 aws iam attach-role-policy --role-name prowler-readonly \
   --policy-arn arn:aws:iam::aws:policy/SecurityAudit
 aws iam attach-role-policy --role-name prowler-readonly \
@@ -348,18 +348,18 @@ aws iam attach-role-policy --role-name prowler-readonly \
 curl -sO https://raw.githubusercontent.com/prowler-cloud/prowler/master/permissions/prowler-additions-policy.json
 aws iam put-role-policy --role-name prowler-readonly \
   --policy-name prowler-additions \
-  --policy-document file://prowler-additions-policy.json</code></pre>
+  --policy-document file://prowler-additions-policy.json</pre></div>
             <p><code>SecurityAudit</code> and <code>ViewOnlyAccess</code> are AWS-managed and grant no write actions. The additions policy is worth reading before you apply it: it is short, and knowing why a posture scanner needs each entry is exactly the kind of thing an interviewer asks about. The current requirements are in <a href="https://docs.prowler.com/user-guide/providers/aws/authentication" target="_blank" rel="noopener noreferrer">Prowler's AWS authentication docs</a>.</p>
             <p>Now give that role its own CLI profile, so no command in this project can accidentally run as your admin identity:</p>
-            <pre><code># In ~/.aws/config
+            <div class="code-block" data-lang="text"><pre># In ~/.aws/config
 [profile prowler-readonly]
 role_arn = arn:aws:iam::&lt;your-account-id&gt;:role/prowler-readonly
 source_profile = &lt;your-normal-profile&gt;
-region = us-east-1</code></pre>
+region = us-east-1</pre></div>
             <p>Confirm it works, and confirm it is the identity you think it is, before scanning:</p>
-            <pre><code>aws sts get-caller-identity --profile prowler-readonly</code></pre>
+            <div class="code-block" data-lang="bash"><pre>aws sts get-caller-identity --profile prowler-readonly</pre></div>
             <h3>3. Run the baseline scan</h3>
-            <pre><code>prowler aws --profile prowler-readonly --output-formats html json-ocsf</code></pre><p>This produces a comprehensive scan against more than 600 checks. Commit the HTML and JSON outputs to your repo as the <em>before</em> snapshot. Don't worry if the report is alarming on first run, because that's the point.</p>
+            <div class="code-block" data-lang="bash"><pre>prowler aws --profile prowler-readonly --output-formats html json-ocsf</pre></div><p>This produces a comprehensive scan against more than 600 checks. Commit the HTML and JSON outputs to your repo as the <em>before</em> snapshot. Don't worry if the report is alarming on first run, because that's the point.</p>
             <h3>4. Triage the findings</h3>
             <p>Open the HTML report. Group findings into four buckets:</p><ul><li><strong>Real problems to fix.</strong> Public S3 buckets, IAM users with no MFA, unused access keys, etc.</li><li><strong>Real but accepted.</strong> For example, a region you're using and don't want to restrict.</li><li><strong>Noise.</strong> Checks that don't apply to your setup.</li><li><strong>I don't understand this one.</strong> Research and document.</li></ul><p>Document each bucket in your README. The triage <em>is</em> the skill being demonstrated.</p>
             <h3>5. Remediate the real problems</h3>
