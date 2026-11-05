@@ -142,6 +142,9 @@ OVERRIDES: dict[str, str] = {
     '503813854e97': 'text',    # one RCP warning
     'af30dc2225cc': 'text',    # an RCP error and a warning
     '98d2836cb579': 'text',    # AWSOrganizationsNotInUseException
+    # What `az graph query` prints on howto/kusto-kql.html: JSON, but output
+    # to read, not a file to save.
+    '8a97e79ae7ef': 'text',
 }
 
 
