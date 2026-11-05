@@ -54,10 +54,12 @@ KNOWN = {'bash', 'json', 'yaml', 'rego', 'hcl', 'sql', 'python',
          'xml', 'cedar', 'yara', 'cel', 'regex', 'text',
          # The SIEM query languages of the howto/ detection guides.
          'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog',
-         # The cloud providers' own log query languages, and CrowdStrike's
-         # CQL. main.js has no tokens for them, so like text and regex they
-         # get a label and a copy button but no colouring.
-         'logs insights', 'cloud logging', 'cql'}
+         # The cloud providers' own log query languages, CrowdStrike's CQL
+         # and Velociraptor's VQL. main.js has no tokens for them, so like
+         # text and regex they get a label and a copy button but no
+         # colouring. VQL and CQL blocks read as SQL, SPL or shell to the
+         # heuristics, so each one is named in OVERRIDES.
+         'logs insights', 'cloud logging', 'cql', 'vql'}
 
 # Shell verbs that make a block bash even when its first line is a comment.
 SHELL_CMDS = (
@@ -132,6 +134,20 @@ OVERRIDES: dict[str, str] = {
     # A Semgrep rule whose pattern quotes a Terraform `resource "..."` header,
     # which the HCL rule takes for a Terraform file.
     '18a649b64529': 'yaml',
+    # howto/osquery-and-velociraptor.html: the VQL queries, which the SQL rule
+    # would otherwise claim.
+    'd1c3f8857709': 'vql', '3ac2c68bed27': 'vql', 'bffab4691b1d': 'vql',
+    '1ad2707ee211': 'vql', '67534b3878ca': 'vql', '2cade0f1e694': 'vql',
+    '7a7f984a7bbf': 'vql', 'da0754e979e2': 'vql', '0e9a78f15e58': 'vql',
+    'e5d01a493563': 'vql', 'cb0ebc9e0828': 'vql', '8295c4537350': 'vql',
+    '3831b499b3de': 'vql',
+    # Its outputs that read as JSON or YAML (one-row VQL results, apt's
+    # debconf notice, an excerpt of an artifact definition), and commands
+    # that start with a word the shell rule does not know (time, velociraptor).
+    '8d634db2877f': 'text', '518301807669': 'text', '9551455e3ef2': 'text',
+    '59c95e703514': 'text', '70f3d4870df7': 'text', '44ed92507ed6': 'text',
+    '4dff6b634ec2': 'text', '69771af1b513': 'text', '94997bace720': 'text',
+    'fcffd75fd341': 'bash', '9ba7819f7eb5': 'bash',
     # An ~/.aws/config profile on portfolio/prowler-audit.html. INI, which
     # main.js has no tokens for; its `# In ~/.aws/config` comment and `=`
     # lines read as shell to the fallback, and bash would invite a paste.

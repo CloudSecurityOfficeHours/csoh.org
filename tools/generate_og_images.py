@@ -812,6 +812,10 @@ PAGES = [
      "Cloud Custodian Policies",
      "YAML policies that find and fix cloud resources, and the runs that finish cleanly and find nothing.",
      "How-To Guide"),
+    ("howto/osquery-and-velociraptor.html",
+     "osquery and Velociraptor",
+     "Question a suspect Linux VM in SQL and VQL, collect the evidence, and catch the queries that see nothing.",
+     "How-To Guide"),
 ]
 
 
