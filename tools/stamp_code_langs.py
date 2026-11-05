@@ -126,6 +126,9 @@ OVERRIDES: dict[str, str] = {
     # main.js has no tokens for; its `# In ~/.aws/config` comment and `=`
     # lines read as shell to the fallback, and bash would invite a paste.
     'd3401c9d2944': 'text',
+    # What `az graph query` prints on howto/kusto-kql.html: JSON, but output
+    # to read, not a file to save.
+    '8a97e79ae7ef': 'text',
 }
 
 
