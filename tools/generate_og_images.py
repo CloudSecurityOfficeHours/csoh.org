@@ -808,6 +808,10 @@ PAGES = [
      "Semgrep Rules",
      "Patterns that read code's structure, rules tested both ways, and five failures that print no error.",
      "How-To Guide"),
+    ("howto/cloud-custodian.html",
+     "Cloud Custodian Policies",
+     "YAML policies that find and fix cloud resources, and the runs that finish cleanly and find nothing.",
+     "How-To Guide"),
 ]
 
 
