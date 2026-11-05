@@ -54,12 +54,15 @@ resource "azurerm_storage_account" "site" {
   min_tls_version = "TLS1_2"
   # Reject plain HTTP entirely; only encrypted HTTPS requests are served.
   https_traffic_only_enabled = true
-  # Static-website hosting works by serving anonymous (unauthenticated) reads
-  # from the special "$web" container. That requires public access to be
-  # permitted at the account level, which this flag does. Only $web is exposed
-  # this way; no other blob is made public, and CI never uploads sensitive
-  # files (see tools/site-publish.filter).
-  allow_nested_items_to_be_public = true # required for the $web static site
+  # Refuse anonymous (unauthenticated) reads on every container's blob
+  # endpoint (https://<account>.blob.core.windows.net/<container>/...), so no
+  # container can be made public by mistake. The static website does not need
+  # this: Azure serves the "$web" container anonymously through the separate
+  # web endpoint (*.web.core.windows.net) whatever this setting says, and that
+  # endpoint is the one Cloudflare uses as the Azure origin. Microsoft documents
+  # this in "Static website hosting in Azure Storage". CI uploads with its own
+  # signed-in identity, which this setting does not affect.
+  allow_nested_items_to_be_public = false
 
   # Tags are free-form key/value labels attached to the resource. They don't
   # change behavior - they're for humans and tooling (cost reports, "who owns
