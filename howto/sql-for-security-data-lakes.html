@@ -7,7 +7,7 @@
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="description" content="Learn SQL from zero on a CloudTrail lab in DuckDB, catch the queries that fail silently, then port the detections to Snowflake, BigQuery and Amazon Athena.">
     <meta name="author" content="Shawn Nunley">
-    <meta name="keywords" content="sql for security analysts, cloudtrail sql queries, duckdb read_json cloudtrail, sql null comparison, snowflake variant json path, bigquery json_value, athena cloudtrail table, snowflake alerts, bigquery scheduled queries, security data lake detections">
+    <meta name="keywords" content="sql for security analysts, cloudtrail sql queries, duckdb read_json cloudtrail, sql null comparison, snowflake variant json path, bigquery json_value, athena cloudtrail table, snowflake alerts, bigquery scheduled queries, security data lake detections, cloudtrail lake sql, amazon security lake ocsf athena">
     <title>SQL for security data lakes: a hands-on how-to - CSOH</title>
 
     <link rel="canonical" href="https://csoh.org/howto/sql-for-security-data-lakes.html">
@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-04">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="sql">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-04",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -138,6 +138,18 @@
           "position": 10,
           "name": "Put it on a schedule in a warehouse",
           "text": "Turn the detection into a Snowflake alert with a time-zone-safe window, and see how BigQuery scheduled queries and Athena with an external scheduler differ."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 11,
+          "name": "Query CloudTrail Lake",
+          "text": "Write the trail-tampering and MFA detections against a CloudTrail Lake event data store: its ID in FROM, element_at for map fields, and an eventTime range on every query to limit the data scanned."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 12,
+          "name": "Query CloudTrail in Amazon Security Lake",
+          "text": "Translate the detections into OCSF 1.1.0 field names for Security Lake's Athena tables, and catch the wrong class, a renamed field, millisecond times and a missing partition filter."
         }
       ]
     }
@@ -363,16 +375,16 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and DuckDB, a free database that runs on your own computer. No cloud account.</p>
-    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every command and query on this page and ran it as printed: the DuckDB steps on DuckDB 1.5.5 (macOS, Apple silicon), and every output shown is pasted from that run. No Snowflake, Google Cloud or AWS account was used, so nothing here has run on Snowflake, BigQuery or Amazon Athena themselves. Instead, the Athena queries ran on Trino 483 in Docker (Athena engine version 3 takes its SQL functions from Trino), the BigQuery queries on the open-source BigQuery emulator 0.8.1, and the Snowflake queries on fakesnow 0.11.18, a Snowflake emulator built on DuckDB. Emulators catch syntax errors but are not the services, so every construct in steps 9 and 10 was also checked against the vendor's documentation, and the Snowflake alert in step 10 was checked against the documentation only.</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every command and query on this page and ran it as printed: the DuckDB steps on DuckDB 1.5.5 (macOS, Apple silicon), and every output shown is pasted from that run. They were run again on DuckDB 2.0.0, the release the install script now fetches, with the same output. No Snowflake, Google Cloud or AWS account was used, so nothing here has run on Snowflake, BigQuery or any AWS service. Instead, step 9's Athena queries ran on Trino 483 in Docker (Athena engine version 3 takes its SQL functions from Trino), the BigQuery queries on the open-source BigQuery emulator 0.8.1, and the Snowflake queries on fakesnow 0.11.18, a Snowflake emulator built on DuckDB. Emulators catch syntax errors but are not the services, so every construct in steps 9 and 10 was also checked against the vendor's documentation, and the Snowflake alert in step 10 was checked against the documentation only. Step 12's Security Lake queries and Exercise 5 ran on Trino 484 and on DuckDB 1.5.5 and 2.0.0 over an OCSF (Open Cybersecurity Schema Framework) copy of the lab, built by following AWS's published mapping; the <code>element_at</code> and time-conversion fragments in step 12's list use functions that DuckDB lacks or defines differently, so they ran on Trino only. Step 11's queries were checked against AWS's documentation only, because running them needs a paid event data store.</p>
 </div>
 
 <section id="intro">
     <h2>One query language, many places to run it</h2>
     <p>SQL is a language for asking questions of tables. You describe the answer you want (which rows, which columns, counted or grouped how) and the database works out how to get it. Security teams write it to hunt through logs, to answer incident questions such as "what did this key do?", and to run scheduled detections over logs kept outside a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management system). Snowflake and BigQuery store data in tables and run SQL over them. Amazon Athena stores nothing itself: it runs SQL over files in Amazon <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service), such as the <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> logs that AWS (Amazon Web Services) delivers there.</p>
-    <p>The core of the language (choosing rows, counting them in groups, matching one event with another) is the same in all three, so this page teaches it in DuckDB, a free database that runs on your computer and reads the lab file directly. What changes between them is narrower: how a value inside nested JSON (JavaScript Object Notation) is reached, how time is handled, and how a query runs on a schedule. Steps 9 and 10 cover those.</p>
+    <p>The core of the language (choosing rows, counting them in groups, matching one event with another) is the same in all three, so this page teaches it in DuckDB, a free database that runs on your computer and reads the lab file directly. What changes between them is narrower: how a value inside nested JSON (JavaScript Object Notation) is reached, how time is handled, and how a query runs on a schedule. Steps 9 and 10 cover those, and steps 11 and 12 cover AWS's two managed services that run SQL over CloudTrail: CloudTrail Lake and Amazon Security Lake.</p>
 </section>
 
 <div class="toc">
@@ -381,6 +393,7 @@
         <li><a href="#model">A query describes the table you want back</a></li>
         <li><a href="#walkthrough">Walk-through: five detections in DuckDB</a></li>
         <li><a href="#warehouses">What changes in Snowflake, BigQuery and Athena</a></li>
+        <li><a href="#aws-lakes">CloudTrail Lake and Amazon Security Lake</a></li>
         <li><a href="#exercises">Hands-on exercises</a></li>
         <li><a href="#mistakes">Common mistakes</a></li>
         <li><a href="#next">Where next</a></li>
@@ -422,7 +435,7 @@ LIMIT 3;                                 -- and how many</pre></div>
 <div class="code-block" data-lang="bash"><pre>curl https://install.duckdb.org | bash
 export PATH="$HOME/.duckdb/cli/latest:$PATH"
 duckdb --version</pre></div>
-    <p>The script installs the newest release and suggests the <code>export</code> line, which lets the shell find <code>duckdb</code>. This page used 1.5.5:</p>
+    <p>The script installs the newest release and suggests the <code>export</code> line, which lets the shell find <code>duckdb</code>. This page was run on 1.5.5, shown here, and again on 2.0.0 with the same results:</p>
 <div class="code-block" data-lang="text"><pre>v1.5.5 (Variegata) d8cdaa33fd</pre></div>
 
     <h3>2. Create the lab file and load it</h3>
@@ -459,10 +472,11 @@ shasum -a 256 cloudtrail-lab.jsonl
 duckdb lab.duckdb</pre></div>
     <p>The hash must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the paste changed the file. The last command opens DuckDB's shell on a database file, <code>lab.duckdb</code>, creating it. Type the SQL in the rest of this page at its <code>D</code> prompt; <code>.exit</code> leaves. Each line of the file is one event as JSON. Load them all into a table and count them:</p>
 <div class="code-block" data-lang="sql"><pre>CREATE TABLE cloudtrail AS
-SELECT * FROM read_json('cloudtrail-lab.jsonl');
+SELECT * FROM read_json('cloudtrail-lab.jsonl',
+                        timestampformat = '%Y-%m-%dT%H:%M:%SZ');
 
 SELECT count(*) AS events FROM cloudtrail;   -- expect 24</pre></div>
-    <p><code>read_json</code> works out a column for every field and a type for every column, and <code>count(*)</code> counts rows. The table is stored in <code>lab.duckdb</code>, so it is still there the next time you open the shell.</p>
+    <p><code>read_json</code> works out a column for every field and a type for every column, and <code>count(*)</code> counts rows. <code>timestampformat</code> spells out how CloudTrail writes a time, so <code>eventTime</code> is read as a timestamp in UTC. Without it, DuckDB 2.0 reads the final <code>Z</code> as a time zone and shows every time in your computer's zone, and unless that zone is UTC, step 8's test at 10:10 finds nothing. The table is stored in <code>lab.duckdb</code>, so it is still there the next time you open the shell.</p>
 
     <h3>3. Filter rows: trail tampering (D1)</h3>
 <div class="code-block" data-lang="sql"><pre>-- D1: CloudTrail logging stopped, deleted or changed
@@ -528,7 +542,7 @@ ORDER BY events DESC;</pre></div>
 │ AccessDenied                 │      7 │
 │ Client.UnauthorizedOperation │      3 │
 └──────────────────────────────┴────────┘</pre></div>
-    <p>EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, as <a href="https://docs.aws.amazon.com/security-lake/latest/userguide/cloudtrail-query-examples-sourceversion2.html" target="_blank" rel="noopener noreferrer">AWS's example query for unauthorised attempts</a> shows, so three of the attacker's seven denials were invisible to the rule. AWS's alarm for unauthorised API calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">Security Hub CSPM control CloudWatch.2</a>, matches every code that starts with <code>AccessDenied</code> or ends in <code>UnauthorizedOperation</code>, which also takes in <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. The fix lists all four:</p>
+    <p>EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, as <a href="https://docs.aws.amazon.com/security-lake/latest/userguide/cloudtrail-query-examples-sourceversion2.html" target="_blank" rel="noopener noreferrer">AWS's example query for unauthorised attempts</a> shows, so three of the attacker's seven denials were invisible to the rule. AWS's alarm for unauthorised API (application programming interface) calls, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">Security Hub CSPM control CloudWatch.2</a>, matches every code that starts with <code>AccessDenied</code> or ends in <code>UnauthorizedOperation</code>, which also takes in <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. The fix lists all four:</p>
 <div class="code-block" data-lang="sql"><pre>-- D2: every denial code, per source address, five or more
 SELECT sourceIPAddress, count(*) AS denials
 FROM cloudtrail
@@ -677,6 +691,76 @@ ALTER ALERT d2_denied_call_burst RESUME;   -- new alerts start suspended</pre></
     <p>In BigQuery, a <a href="https://docs.cloud.google.com/bigquery/docs/scheduling-queries" target="_blank" rel="noopener noreferrer">scheduled query</a> runs at intervals of five minutes or more and passes each run's intended time as <code>@run_time</code>, so the window becomes <code>eventTime &gt;= TIMESTAMP_SUB(@run_time, INTERVAL 10 MINUTE) AND eventTime &lt; @run_time</code> (on the emulator, that fired at 10:10 and stayed silent at 09:50). The result goes to a table, and a run can be announced on Pub/Sub or, if it fails, by email; nothing reports whether the detection found anything, so something must read the result. Athena has no scheduler at all: <a href="https://repost.aws/knowledge-center/schedule-query-athena" target="_blank" rel="noopener noreferrer">AWS suggests</a> an Amazon EventBridge rule that starts an AWS <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a> function, AWS Step Functions, or cron, and whatever starts the query must supply the window.</p>
 </section>
 
+<section id="aws-lakes">
+    <h2>CloudTrail Lake and Amazon Security Lake</h2>
+    <p>AWS runs two services that store CloudTrail events and answer SQL about them, with no table of your own to define. CloudTrail Lake keeps CloudTrail's field names. Amazon Security Lake converts every event to OCSF (the Open Cybersecurity Schema Framework), a schema shared across vendors whose names are not CloudTrail's, and that conversion is where a ported detection can fail without an error.</p>
+
+    <h3>11. CloudTrail Lake: the event data store is the table</h3>
+    <p><a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-lake-service-availability-change.html" target="_blank" rel="noopener noreferrer">CloudTrail Lake closed to new customers on 31 May 2026</a>. Existing customers can keep using it; AWS says it now receives only critical bug fixes and security updates, and points newcomers to Amazon CloudWatch. It bills for the events it ingests and retains, under a one-year extendable or a seven-year retention pricing option, and for each query by the data it scans (<a href="https://aws.amazon.com/cloudtrail/pricing/" target="_blank" rel="noopener noreferrer">CloudTrail pricing</a>).</p>
+    <p>A query names an event data store, CloudTrail Lake's collection of events, by its ID: the last part of the store's Amazon Resource Name (ARN), which the console fills in when you pick the store. <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/query-limitations.html" target="_blank" rel="noopener noreferrer">Only <code>SELECT</code> is allowed</a>, with every Trino function and operator. So step 8's <code>CREATE VIEW</code> and <code>SET VARIABLE</code> have no equivalent, and for DuckDB's own functions, such as <code>time_bucket</code>, use the Athena column of step 9's table. Field names are CloudTrail's, and <code>userIdentity</code> is a struct reached with a dot, but <code>requestParameters</code>, <code>responseElements</code> and <code>additionalEventData</code> are maps from text to text. Read them with <code>element_at</code>, as AWS's examples do: <a href="https://trino.io/docs/current/functions/map.html" target="_blank" rel="noopener noreferrer">in Trino</a>, the other form, <code>additionalEventData['MFAUsed']</code>, fails the query with an error when a map lacks the key. D1 and D4, with AWS's example ID in the <code>FROM</code> line:</p>
+<div class="code-block" data-lang="sql"><pre>-- CloudTrail Lake, D1 (checked against AWS's documentation, not run)
+SELECT eventTime, eventName, userIdentity.userName AS actor, sourceIPAddress
+FROM EXAMPLE-f852-4e8f-8bd1-bcf6cEXAMPLE
+WHERE eventTime &gt;= '2026-09-15 00:00:00' AND eventTime &lt; '2026-09-16 00:00:00'
+  AND eventName IN ('StopLogging', 'DeleteTrail', 'UpdateTrail', 'PutEventSelectors');</pre></div>
+<div class="code-block" data-lang="sql"><pre>-- CloudTrail Lake, D4 (checked against AWS's documentation, not run)
+SELECT eventTime, userIdentity.userName AS user_name, sourceIPAddress
+FROM EXAMPLE-f852-4e8f-8bd1-bcf6cEXAMPLE
+WHERE eventTime &gt;= '2026-09-15 00:00:00' AND eventTime &lt; '2026-09-16 00:00:00'
+  AND eventName = 'ConsoleLogin'
+  AND element_at(responseElements, 'ConsoleLogin') = 'Success'
+  AND element_at(additionalEventData, 'MFAUsed') = 'No';</pre></div>
+    <p>The <code>eventTime</code> range on the first <code>WHERE</code> line is the cost control. Each query is billed by the data it scans, a store can keep up to ten years of events, and <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-lake-manage-costs.html" target="_blank" rel="noopener noreferrer">AWS's advice</a> is to give every query a starting and ending <code>eventTime</code>. <code>eventTime</code> is a timestamp here, and AWS's examples compare it with text written as <code>'2026-09-15 00:00:00'</code>, as above. Map keys keep CloudTrail's capitals, and in Trino a key must match exactly, so <code>element_at(additionalEventData, 'mfaused')</code> would return <code>NULL</code> on every event: Exercise 4's trap again.</p>
+
+    <h3>12. Amazon Security Lake: the same events in OCSF</h3>
+    <p><a href="https://docs.aws.amazon.com/security-lake/latest/userguide/open-cybersecurity-schema-framework.html" target="_blank" rel="noopener noreferrer">Security Lake</a> converts the logs of the AWS services you enable to OCSF, stores them as Apache Parquet files in S3, and gives each source a table per Region that you query with Athena. Each AWS source comes in two versions: version 1 writes OCSF 1.0.0-rc.2 and version 2 writes OCSF 1.1.0. This step uses version 2, whose CloudTrail management events sit in a table ending <code>cloud_trail_mgmt_2_0</code>. OCSF also sorts events into classes, and that one table holds three: Authentication (class 3002) for sign-ins such as <code>ConsoleLogin</code>, Account Change (3001) for changes to users and their keys and policies, such as <code>CreateUser</code>, and API Activity (6003) for every other call. The fields the lab uses are renamed:</p>
+    <div class="table-scroll"><table class="comparison-table">
+        <thead><tr><th scope="col">In the lab (CloudTrail)</th><th scope="col">In Security Lake (OCSF 1.1.0)</th></tr></thead>
+        <tbody>
+            <tr><td><code>eventName</code></td><td><code>api.operation</code></td></tr>
+            <tr><td><code>eventTime</code></td><td><code>time</code>, in milliseconds since 1970, and <code>time_dt</code>, a timestamp</td></tr>
+            <tr><td><code>userIdentity.userName</code></td><td><code>actor.user.name</code></td></tr>
+            <tr><td><code>sourceIPAddress</code></td><td><code>src_endpoint.ip</code></td></tr>
+            <tr><td><code>errorCode</code></td><td><code>api.response.error</code>, with CloudTrail's codes unchanged</td></tr>
+            <tr><td><code>responseElements.ConsoleLogin</code></td><td><code>status</code></td></tr>
+            <tr><td><code>additionalEventData.MFAUsed</code></td><td><code>is_mfa</code>, <code>true</code> or <code>false</code></td></tr>
+            <tr><td><code>requestParameters</code></td><td><code>api.request.data</code>, as JSON text</td></tr>
+        </tbody>
+    </table></div>
+    <p>To test the queries, this page converted the 24 lab events to OCSF 1.1.0 by following the <a href="https://github.com/ocsf/examples/tree/main/mappings/markdown/AWS/v1.1.0/CloudTrail" target="_blank" rel="noopener noreferrer">AWS CloudTrail mapping in the OCSF project's examples repository</a>, and ran them on Trino 484. The copy is a reconstruction, not Security Lake's own output. On it, each of these ran without an error. The first three gave a wrong answer, and the fourth gives the right one at a cost the result does not show:</p>
+    <ul>
+        <li><strong>The wrong class.</strong> API Activity holds every call that is not a sign-in or an account change, so <code>class_name = 'API Activity' AND api.operation = 'ConsoleLogin'</code> looks right and returns nothing: sign-ins are filed under Authentication.</li>
+        <li><strong>A CloudTrail name looked up in OCSF.</strong> Raw fields that OCSF has no place for go into <code>unmapped</code>, keyed by their CloudTrail path, such as <code>additionalEventData.MobileVersion</code>. <code>MFAUsed</code> is not among them, because OCSF moved it to <code>is_mfa</code>, so <code>element_at(unmapped, 'additionalEventData.MFAUsed') = 'No'</code> matches no event.</li>
+        <li><strong>Milliseconds read as seconds.</strong> Compared with <code>to_unixtime(TIMESTAMP '2026-09-15 10:00:00')</code>, which counts seconds, every <code>time</code> is larger, so the filter kept all 24 events where 16 is right. <code>from_unixtime(time)</code> reads it as seconds too, and puts 10:09:03 in the year 58675.</li>
+        <li><strong>No partition filter.</strong> <a href="https://docs.aws.amazon.com/security-lake/latest/userguide/subscriber-query-examples2.html" target="_blank" rel="noopener noreferrer">Version 2 is partitioned</a> by <code>time_dt</code>, <code>region</code> and <code>accountid</code>, which AWS says restricts the data each query scans, and Athena bills by the data scanned. Without a filter on them the rows that come back are the same, so nothing in the result shows the difference. AWS also says that when retention is set, every query must carry a time filter so that it reads only data that has not expired.</li>
+    </ul>
+    <p>So filter on <code>time_dt</code>, as AWS's examples do. D1 and D4:</p>
+<div class="code-block" data-lang="sql"><pre>-- Security Lake source version 2 in Athena, D1 (ran on Trino 484 and DuckDB)
+SELECT time_dt, api.operation, actor.user.name AS actor, src_endpoint.ip
+FROM "amazon_security_lake_glue_db_us_east_1"."amazon_security_lake_table_us_east_1_cloud_trail_mgmt_2_0"
+WHERE time_dt &gt;= TIMESTAMP '2026-09-15 00:00:00'
+  AND time_dt &lt;  TIMESTAMP '2026-09-16 00:00:00'
+  AND api.operation IN ('StopLogging', 'DeleteTrail', 'UpdateTrail', 'PutEventSelectors');</pre></div>
+<div class="code-block" data-lang="sql"><pre>-- Security Lake source version 2 in Athena, D4 (ran on Trino 484 and DuckDB)
+SELECT time_dt, actor.user.name AS user_name, src_endpoint.ip
+FROM "amazon_security_lake_glue_db_us_east_1"."amazon_security_lake_table_us_east_1_cloud_trail_mgmt_2_0"
+WHERE time_dt &gt;= TIMESTAMP '2026-09-15 00:00:00'
+  AND time_dt &lt;  TIMESTAMP '2026-09-16 00:00:00'
+  AND class_uid = 3002
+  AND api.operation = 'ConsoleLogin'
+  AND status = 'Success'
+  AND is_mfa = false;</pre></div>
+    <p>D1 returns <code>backup-svc</code>'s <code>StopLogging</code> at 10:09:03 from <code>203.0.113.50</code>, and D4 returns bob at 09:15:47 from <code>198.51.100.21</code>, the same answers as DuckDB gave on the raw events. When an OCSF query returns nothing, the control is the one from step 5: drop the filter and look at what is there. Grouping the day's events by class and operation shows where every sign-in went:</p>
+<div class="code-block" data-lang="sql"><pre>-- Control (ran on Trino 484 and DuckDB)
+SELECT class_name, api.operation, count(*) AS events
+FROM "amazon_security_lake_glue_db_us_east_1"."amazon_security_lake_table_us_east_1_cloud_trail_mgmt_2_0"
+WHERE time_dt &gt;= TIMESTAMP '2026-09-15 00:00:00'
+  AND time_dt &lt;  TIMESTAMP '2026-09-16 00:00:00'
+GROUP BY class_name, api.operation
+ORDER BY class_name, events DESC;</pre></div>
+    <p>It lists 15 rows. The three <code>ConsoleLogin</code> events are the whole of Authentication; Account Change holds <code>CreateUser</code> and <code>CreateAccessKey</code> twice each and <code>AttachUserPolicy</code> once; the other 16 events are API Activity.</p>
+</section>
+
 <section id="exercises">
     <h2>Hands-on exercises</h2>
 
@@ -735,6 +819,24 @@ WHERE eventName = 'ConsoleLogin';</pre></div>
             <p>It returned three rows with <code>lower_case</code> empty (<code>NULL</code>) in every one, beside <code>Yes</code>, <code>No</code> and <code>No</code>. A column of nothing but <code>NULL</code> is the signature of a wrong path, in BigQuery's <code>JSON_VALUE</code> and Athena's <code>json_extract_scalar</code> as well.</p>
         </details>
     </div>
+
+    <div class="exercise">
+        <span class="exercise__label">Exercise 5</span>
+        <p>Write D2 for Security Lake: five or more denied calls from one source address between 10:00 and 10:10. Should the query limit itself to one OCSF class?</p>
+        <details>
+            <summary>Show the answer</summary>
+<div class="code-block" data-lang="sql"><pre>-- Security Lake source version 2 in Athena, D2 (ran on Trino 484 and DuckDB)
+SELECT src_endpoint.ip, count(*) AS denials
+FROM "amazon_security_lake_glue_db_us_east_1"."amazon_security_lake_table_us_east_1_cloud_trail_mgmt_2_0"
+WHERE time_dt &gt;= TIMESTAMP '2026-09-15 10:00:00'
+  AND time_dt &lt;  TIMESTAMP '2026-09-15 10:10:00'
+  AND api.response.error IN ('AccessDenied', 'AccessDeniedException',
+                             'Client.UnauthorizedOperation', 'UnauthorizedOperation')
+GROUP BY src_endpoint.ip
+HAVING count(*) &gt;= 5;</pre></div>
+            <p>One row: <code>203.0.113.50</code> with 7. The codes in <code>api.response.error</code> are CloudTrail's, so step 5's list carries over, and the <code>GROUP BY</code> repeats the expression because Athena will not group by an output name. Leave the class out. A refused call is filed under the class of its operation, so a denied <code>CreateUser</code> would be Account Change, and a rule limited to API Activity would not count it. In the lab all seven denials happen to be API Activity, so a class filter would pass every test here and still miss a refused account change in production.</p>
+        </details>
+    </div>
 </section>
 
 <section id="mistakes">
@@ -748,7 +850,10 @@ WHERE eventName = 'ConsoleLogin';</pre></div>
         <li><strong>Treating Athena's <code>eventtime</code> as a time.</strong> In the documented table it is text, so <code>eventtime &gt;= '2026-09-15 10:00:00'</code> compares characters: the <code>T</code> in <code>2026-09-15T10:09:03Z</code> sorts after a space, and on Trino it matched all 24 events instead of 16. Convert with <code>from_iso8601_timestamp()</code> first.</li>
         <li><strong>Mixing time zones in Snowflake.</strong> A <code>TIMESTAMP_NTZ</code> carries no zone, and the default session zone is America/Los_Angeles. Convert before comparing.</li>
         <li><strong>A window that ends exactly now.</strong> <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-working-with-log-files.html" target="_blank" rel="noopener noreferrer">CloudTrail delivers logs on average about 5 minutes after the call</a>, and does not guarantee even that, so a run at 10:10 may not yet hold the 10:08 events, and the next run's window has moved past them. Lag the window, or overlap it and remove duplicate alerts.</li>
-        <li><strong>Forgetting that every run is billed.</strong> Athena, and BigQuery's on-demand pricing, charge by the data a query reads, and a detection that runs every ten minutes runs 144 times a day. Bound it by time and partition, and in BigQuery name only the columns you need.</li>
+        <li><strong>Forgetting that every run is billed.</strong> Athena, CloudTrail Lake and BigQuery's on-demand pricing charge by the data a query reads, and a detection that runs every ten minutes runs 144 times a day. Bound it by time and partition (<code>time_dt</code> in Security Lake, <code>eventTime</code> in CloudTrail Lake), and in BigQuery name only the columns you need.</li>
+        <li><strong>Looking for sign-ins under API Activity in Security Lake.</strong> OCSF files <code>ConsoleLogin</code> under Authentication, in the same table, so a query limited to the API Activity class returns nothing every day.</li>
+        <li><strong>Looking up a CloudTrail field by its old name in OCSF.</strong> A field OCSF renamed, such as <code>MFAUsed</code>, is not in <code>unmapped</code>, and an <code>element_at</code> or JSON lookup that misses returns <code>NULL</code> rather than an error. Check the mapping, then show the values without filtering on them.</li>
+        <li><strong>Treating OCSF's <code>time</code> as seconds.</strong> It counts milliseconds, so comparing it with <code>to_unixtime()</code> or converting it with <code>from_unixtime()</code> makes every event look later than the date you compare it with. Filter on <code>time_dt</code>.</li>
     </ul>
 </section>
 
