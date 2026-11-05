@@ -54,10 +54,10 @@ KNOWN = {'bash', 'json', 'yaml', 'rego', 'hcl', 'sql', 'python',
          'xml', 'cedar', 'yara', 'cel', 'regex', 'text',
          # The SIEM query languages of the howto/ detection guides.
          'spl', 'kql', 'esql', 'eql', 'yara-l', 'sumo logic', 'datadog',
-         # The cloud providers' own log query languages. main.js has no
-         # tokens for them, so like text and regex they get a label and a
-         # copy button but no colouring.
-         'logs insights', 'cloud logging'}
+         # The cloud providers' own log query languages, and CrowdStrike's
+         # CQL. main.js has no tokens for them, so like text and regex they
+         # get a label and a copy button but no colouring.
+         'logs insights', 'cloud logging', 'cql'}
 
 # Shell verbs that make a block bash even when its first line is a comment.
 SHELL_CMDS = (
@@ -145,6 +145,26 @@ OVERRIDES: dict[str, str] = {
     # What `az graph query` prints on howto/kusto-kql.html: JSON, but output
     # to read, not a file to save.
     '8a97e79ae7ef': 'text',
+    # howto/crowdstrike-logscale.html. CQL shares `| table` with SPL and
+    # `field="value"` with shell assignments, and its function calls fall
+    # through to the bash fallback, so no heuristic separates it safely.
+    '0ed034859910': 'cql',     # eventName="StopLogging"
+    'c4147888982f': 'cql',     # ... | table([...])
+    '0e6de292e26e': 'cql',     # the OR-before-AND query
+    '775ae995e9c5': 'cql',     # the parser
+    '3075f4dd6255': 'cql',     # groupBy(#type, ...)
+    'f0b277e4c434': 'cql',     # timeSource := if(...)
+    'efc47bde9eee': 'cql',     # D1
+    'e34c6e79c3c5': 'cql',     # D4, naive
+    '86269ca5c309': 'cql',     # D4
+    '4eecc2da70fa': 'cql',     # D2, naive
+    'faeb3db6822f': 'cql',     # the error-code control
+    'b25b2f3755dd': 'cql',     # D2
+    '7ebadfa0dd44': 'cql',     # D2 in buckets
+    '933b44abc82a': 'cql',     # D3, correlate()
+    'f4a26dd171f5': 'cql',     # D5
+    '160ec13dd52e': 'cql',     # test(eventName == StopLogging)
+    '6102caf07b84': 'cql',     # distinct identities per address
 }
 
 
