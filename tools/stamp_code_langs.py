@@ -126,6 +126,12 @@ OVERRIDES: dict[str, str] = {
     # main.js has no tokens for; its `# In ~/.aws/config` comment and `=`
     # lines read as shell to the fallback, and bash would invite a paste.
     'd3401c9d2944': 'text',
+    # validate-policy findings and an AWS CLI error on howto/iam-policy-languages.html.
+    # JSON and a line starting `aws:` to the heuristic, but output to read.
+    '97d170e1550e': 'text',    # `[]`, no findings (shown twice)
+    '503813854e97': 'text',    # one RCP warning
+    'af30dc2225cc': 'text',    # an RCP error and a warning
+    '98d2836cb579': 'text',    # AWSOrganizationsNotInUseException
 }
 
 

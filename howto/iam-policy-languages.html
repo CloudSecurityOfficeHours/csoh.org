@@ -7,7 +7,7 @@
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="description" content="Read AWS IAM policies the way evaluation actually works, learn the elements that invert, then write and validate Cedar policies with tests.">
     <meta name="author" content="Shawn Nunley">
-    <meta name="keywords" content="aws iam policy tutorial, iam policy evaluation logic, notaction, forallvalues null condition, cedar policy language, amazon verified permissions, access analyzer check-no-new-access, permissions boundary scp">
+    <meta name="keywords" content="aws iam policy tutorial, iam policy evaluation logic, notaction, forallvalues null condition, cedar policy language, amazon verified permissions, access analyzer check-no-new-access, permissions boundary scp, resource control policy rcp, data perimeter">
     <title>IAM policy languages and Cedar: a hands-on how-to - CSOH</title>
 
     <link rel="canonical" href="https://csoh.org/howto/iam-policy-languages.html">
@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-04">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="aws iam">
@@ -34,6 +34,7 @@
     <meta property="article:tag" content="cedar policy language">
     <meta property="article:tag" content="verified permissions">
     <meta property="article:tag" content="least privilege">
+    <meta property="article:tag" content="resource control policies">
     <meta property="article:tag" content="policy as code">
     <meta property="og:url" content="https://csoh.org/howto/iam-policy-languages.html">
     <meta property="og:image" content="https://csoh.org/img/og/howto/iam-policy-languages.jpg">
@@ -62,7 +63,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-04",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -112,18 +113,36 @@
         {
           "@type": "HowToStep",
           "position": 6,
+          "name": "Learn what a resource control policy can say",
+          "text": "Compare RCPs with SCPs: deny only, every principal, a listed set of services, and no reach into the management account or service-linked roles."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 7,
+          "name": "Build a data perimeter on S3",
+          "text": "Deny S3 access from outside the organization with an RCP, keep the exception for AWS service principals, and validate it with the RCP policy type."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 8,
+          "name": "Add confused-deputy protection",
+          "text": "Limit AWS services acting on your resources to requests made on behalf of your own organization with aws:SourceOrgID."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 9,
           "name": "Write a Cedar policy set",
           "text": "Install cedar-policy-cli and write permit and forbid rules with entity hierarchies and context conditions."
         },
         {
           "@type": "HowToStep",
-          "position": 7,
+          "position": 10,
           "name": "Add a schema and validate",
           "text": "Declare entity types and attributes, then watch cedar validate catch an attribute typo that IAM would silently ignore."
         },
         {
           "@type": "HowToStep",
-          "position": 8,
+          "position": 11,
           "name": "Evaluate real requests",
           "text": "Run cedar authorize over allow and deny cases and turn the exit codes into an authorization test suite."
         }
@@ -351,9 +370,10 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
-            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal; a Rust toolchain for the Cedar half; an AWS account only for the optional simulator step</p>
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal; a Rust toolchain for the Cedar half; AWS CLI credentials for any AWS account to run the Access Analyzer checks (no organization needed, and nothing is created)</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block on this page, including the exercise answers, and ran it as printed on 4 November 2026, each shell block in a fresh interactive zsh on an Apple silicon Mac; every output shown is pasted from that run, and a planted error made the same script fail. The AWS commands ran with AWS CLI 2.39.2 and jq 1.8.2 against an account that is not in an organization. Every policy on the page, with single statements wrapped in a policy document, went through <a class="glossary-link" href="../glossary.html#term-iam-access-analyzer">IAM Access Analyzer</a>'s <code>validate-policy</code> (the resource control policies with the RCP policy type), and <code>check-no-new-access</code> compared the step 1 policy with a copy granting one more action. <code>simulate-principal-policy</code>, run as printed, was refused because the placeholder ARN in step 4 names another account, so it was also run against a role in the test account. The Cedar half ran with cedar-policy-cli 4.14.1, installed by the <code>cargo install</code> line. No RCP was attached, because that needs an organization: what an attached RCP does, including the services it covers, what it never applies to and which requests it denies, was checked against AWS's Organizations, IAM and Access Analyzer documentation and AWS's published example policies on 4 November 2026.</p>
         </div>
 
         <section id="intro">
@@ -372,6 +392,7 @@
             <ol>
                 <li><a href="#model">The evaluation model, which is the whole game</a></li>
                 <li><a href="#walkthrough">Walk-through: AWS IAM</a></li>
+                <li><a href="#rcps">Walk-through: resource control policies</a></li>
                 <li><a href="#cedar">Walk-through: Cedar</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -384,13 +405,14 @@
             <p>AWS does not ask "does a policy allow this". It runs a fixed evaluation across every policy type that applies:</p>
             <ol>
                 <li><strong>An explicit <code>Deny</code> anywhere ends it.</strong> In any policy, of any type, at any level. Nothing overrides it.</li>
-                <li><strong>Every applicable guardrail must allow.</strong> Service control policies, resource control policies, permissions boundaries, and session policies each act as a ceiling. They do not grant anything; they cap what can be granted.</li>
+                <li><strong>Every applicable guardrail must allow.</strong> AWS checks resource control policies (RCPs) first, then service control policies (SCPs), and checks permissions boundaries and session policies after the grants. Each acts as a ceiling. They do not grant anything; they cap what can be granted.</li>
                 <li><strong>Something must actually grant it.</strong> Within one account, an allow in either the identity policy or the resource policy is generally enough. Across accounts, both sides must allow independently.</li>
                 <li><strong>Otherwise, implicit deny.</strong> Nothing is permitted by default.</li>
             </ol>
             <p>Read that as an <em>intersection</em>, not a union. The effective permission is what survives every layer, and adding a policy can only ever remove access or leave it unchanged, never add access past a ceiling above it.</p>
+            <p>The two organization ceilings face opposite ways. An <a class="glossary-link" href="../glossary.html#term-scp">SCP</a> follows the principal: it caps what users and roles in the member accounts under it can do. An RCP follows the resource: it caps what anyone, inside the organization or outside it, can do to resources in the member accounts under it. On a cross-account request the caller's SCPs and the resource owner's RCPs both apply. <a href="#rcps">The RCP walk-through</a> covers what an RCP can and cannot say.</p>
             <div class="highlight-box">
-            <p><strong>So "the policy says Allow" is not an answer to "can they do it".</strong> An <code>AdministratorAccess</code> policy attached to a role inside an organizational unit whose <a class="glossary-link" href="../glossary.html#term-scp">SCP</a> denies everything outside <code>eu-west-1</code> grants exactly nothing outside <code>eu-west-1</code>. Reading one document tells you an upper bound on that document's contribution, and nothing about the result.</p>
+            <p><strong>So "the policy says Allow" is not an answer to "can they do it".</strong> An <code>AdministratorAccess</code> policy attached to a role inside an organizational unit whose SCP denies everything outside <code>eu-west-1</code> grants exactly nothing outside <code>eu-west-1</code>. Reading one document tells you an upper bound on that document's contribution, and nothing about the result.</p>
             </div>
 
             <h3>The six questions</h3>
@@ -473,32 +495,134 @@
 
             <h3>4. Test it rather than reasoning about it</h3>
             <p>Given how many layers combine, reading is not verification. AWS has three tools that answer different questions, and all three are underused.</p>
-<div class="code-block" data-lang="bash"><pre># 1. Grammar, best practice, and security warnings on a single document.
-#    Runs offline against the policy text. Start here.
-aws accessanalyzer validate-policy \
+            <p>The first checks grammar, best practice and security warnings on a single document. It reads only the policy text you send and looks at nothing in your account. Start here: save the step 1 policy as <code>policy.json</code> and run:</p>
+<div class="code-block" data-lang="bash"><pre>aws accessanalyzer validate-policy \
   --policy-type IDENTITY_POLICY \
-  --policy-document file://policy.json
-
-# 2. Would this specific principal be allowed to do this specific thing?
-#    Evaluates the real combination of attached policies and boundaries.
-aws iam simulate-principal-policy \
+  --policy-document file://policy.json</pre></div>
+            <p>The second asks whether one specific principal may do one specific thing, evaluating the identity policies attached to it, its permissions boundary and the SCPs above its account. It does not evaluate RCPs, so a deny that comes from an RCP will not show up in its answer.</p>
+<div class="code-block" data-lang="bash"><pre>aws iam simulate-principal-policy \
   --policy-source-arn arn:aws:iam::111122223333:role/app \
   --action-names s3:GetObject \
-  --resource-arns arn:aws:s3:::acme-data/reports/q3.csv
-
-# 3. Does this new version of a policy grant anything the old one did not?
-#    A genuine CI gate: fail the pipeline if a change broadens access.
-aws accessanalyzer check-no-new-access \
+  --resource-arns arn:aws:s3:::acme-data/reports/q3.csv</pre></div>
+            <p>The third asks whether a new version of a policy grants anything the old one did not, which makes it a <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> gate: fail the pipeline if a change broadens access.</p>
+<div class="code-block" data-lang="bash"><pre>aws accessanalyzer check-no-new-access \
   --existing-policy-document file://old.json \
   --new-policy-document file://new.json \
   --policy-type IDENTITY_POLICY</pre></div>
             <p><code>check-no-new-access</code> is the one worth building a habit around. It answers a comparative question that no amount of reading reliably answers, and it turns "this refactor is equivalent, trust me" into something a pipeline can confirm. Its siblings <code>check-access-not-granted</code> and <code>check-no-public-access</code> cover "this policy must never grant these actions" and "this resource policy must not be public".</p>
         </section>
 
+        <section id="rcps">
+            <h2>Walk-through: resource control policies</h2>
+            <p>A resource control policy (RCP) is an AWS Organizations policy type, launched in November 2024, that caps what can be done to resources in the member accounts under it, whoever makes the request, root users included. That reaches principals from other organizations, which an SCP cannot, because an SCP only constrains principals in your own member accounts. Like an SCP, an RCP grants nothing.</p>
+            <div class="highlight-box">
+            <p><strong>An RCP can leave a gap, or break something, without an error.</strong> Three cases, each checked for this page:</p>
+            <ul>
+                <li>It covers only the services on AWS's list, and within them only actions that act on a resource. <code>validate-policy</code> reports <code>ec2:*</code> as an error but passes <code>s3:ListAllMyBuckets</code>, an action with no resource for the RCP to apply to (step 5).</li>
+                <li>It never applies to resources in the management account, even when it is attached to the organization root (step 5).</li>
+                <li>A perimeter that denies callers from outside your organization also denies AWS services that write to your buckets, unless it exempts them. <code>validate-policy</code> reports the missing exception as a warning, not an error (step 6).</li>
+            </ul>
+            </div>
+
+            <h3>5. What an RCP can say, next to an SCP</h3>
+            <p>The grammar is IAM's, with tighter rules. From AWS's RCP syntax and quota pages:</p>
+            <div class="table-scroll"><table class="comparison-table">
+                <thead><tr><th scope="col">Element or limit</th><th scope="col">SCP</th><th scope="col">RCP</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">Caps</th><td>users and roles in member accounts</td><td>resources in member accounts, whoever calls</td></tr>
+                    <tr><th scope="row"><code>Effect</code></th><td><code>Allow</code> or <code>Deny</code></td><td><code>Deny</code>; <code>Allow</code> appears only in <code>RCPFullAWSAccess</code></td></tr>
+                    <tr><th scope="row"><code>Principal</code></th><td>not supported</td><td>required, and only <code>"*"</code></td></tr>
+                    <tr><th scope="row"><code>Action</code></th><td>any service; <code>NotAction</code> allowed</td><td>listed services only, and never <code>"*"</code> alone in an RCP you write; no <code>NotAction</code></td></tr>
+                    <tr><th scope="row"><code>Resource</code>, <code>NotResource</code>, <code>Condition</code></th><td>supported</td><td>supported</td></tr>
+                    <tr><th scope="row">Maximum size</th><td>10,240 characters</td><td>5,120 characters</td></tr>
+                    <tr><th scope="row">Attached per root, organizational unit (OU) or account</th><td>up to 10</td><td>up to 5, counting <code>RCPFullAWSAccess</code></td></tr>
+                    <tr><th scope="row">Never applies to</th><td>users and roles in the management account; service-linked roles</td><td>resources in the management account; service-linked roles; AWS managed keys in <a class="glossary-link" href="../glossary.html#term-kms">Key Management Service</a> (KMS)</td></tr>
+                </tbody></table></div>
+            <p>Because the principal is always <code>"*"</code>, who a statement is about goes in its conditions, with keys such as <code>aws:PrincipalOrgID</code>, <code>aws:PrincipalAccount</code> and <code>aws:PrincipalIsAWSService</code>. And because you can only deny, every RCP you write subtracts from <code>RCPFullAWSAccess</code>, the AWS managed policy that Organizations attaches to the root, every OU and every account when you enable RCPs. You cannot detach it. It grants nothing; it lets every request through RCP evaluation so that your other policies decide:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Principal": "*", "Action": "*", "Resource": "*" }
+  ]
+}</pre></div>
+            <p>At launch RCPs covered five services: Amazon <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service), AWS <a class="glossary-link" href="../glossary.html#term-sts">Security Token Service</a> (STS), AWS KMS, Amazon Simple Queue Service (SQS) and AWS <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a>. <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps.html#rcp-supported-services" target="_blank" rel="noopener noreferrer">AWS's list</a> named 62 service prefixes on 4 November 2026, including Amazon DynamoDB, Amazon Elastic Container Registry, Amazon CloudWatch Logs and Amazon Cognito. Amazon Simple Notification Service (SNS), AWS <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a>, Amazon API Gateway and Amazon <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) are not on it, so no RCP protects an SNS topic or a Lambda function; <a href="https://github.com/aws-samples/data-perimeter-policy-examples" target="_blank" rel="noopener noreferrer">AWS's data-perimeter examples</a> cover SNS topics and API Gateway APIs with resource-based policies instead. The list grows, so check it rather than a copy of it.</p>
+            <p>Naming a service that is not on the list is an error to <code>validate-policy</code> run with the RCP policy type (exercise 5 shows the output): an <code>ERROR</code> finding, <code>RCP_SYNTAX_ERROR_ACTION</code>, and AWS defines errors as lines that prevent the policy from functioning. Whether Organizations would also refuse to save such a policy was not tested for this page, because that needs an organization, so treat the validator as your gate. The quieter case passes it. <code>s3:ListAllMyBuckets</code> has no resource type in AWS's Service Authorization Reference, and an RCP applies through the resource a request authorizes, so a statement denying it validates with no findings and has nothing to apply to.</p>
+            <p>Two more exemptions belong in that last row. RCPs do not restrict <code>kms:RetireGrant</code>, and an RCP never reaches resources in accounts outside its organization, even when your own principals are the ones calling. The management account exemption is the one to plan around: an RCP attached to the organization root covers every member account, delegated administrators included, and leaves the management account's buckets, keys and queues to their own policies. To see which account that is:</p>
+<div class="code-block" data-lang="bash"><pre>aws organizations describe-organization \
+  --query 'Organization.[MasterAccountId,FeatureSet]' --output text</pre></div>
+            <p>In an organization this prints the management account's ID and the feature set; RCPs are available only when that is <code>ALL</code>. Outside one, as for the account used to check this page, it prints this instead, and no RCP applies to that account at all:</p>
+<div class="code-block" data-lang="text"><pre>aws: [ERROR]: An error occurred (AWSOrganizationsNotInUseException) when calling the DescribeOrganization operation: Your account is not a member of an organization.</pre></div>
+
+            <h3>6. A data perimeter on S3</h3>
+            <p>This is the identity-perimeter statement from AWS's data-perimeter examples, cut down to S3 without its exception lists, and given a made-up organization ID. Save it as <code>rcp-perimeter.json</code>:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnforceOrgIdentities",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEqualsIfExists": { "aws:PrincipalOrgID": "o-exampleorgid" },
+        "BoolIfExists": { "aws:PrincipalIsAWSService": "false" }
+      }
+    }
+  ]
+}</pre></div>
+            <p>Run the six questions over it. It denies every principal every S3 action on every resource in the accounts under it, but only when both conditions hold, because separate conditions are joined with a logical AND: the caller is not in your organization, and the caller is not an AWS <a class="glossary-link" href="../glossary.html#term-service-principal">service principal</a>. Both operators end in <code>IfExists</code>, which makes a missing key count as a match, and here that is deliberate. A principal that belongs to no organization carries no <code>aws:PrincipalOrgID</code>, and an anonymous request carries neither key, so both are denied, and a bucket that serves the public cannot sit under this RCP. Validate it with the RCP policy type:</p>
+<div class="code-block" data-lang="bash"><pre>aws accessanalyzer validate-policy \
+  --policy-type RESOURCE_CONTROL_POLICY \
+  --policy-document file://rcp-perimeter.json \
+  --query 'findings[].{type:findingType,code:issueCode}'</pre></div>
+<div class="code-block" data-lang="text"><pre>[]</pre></div>
+            <p>No findings. Now remove the exception and validate the result:</p>
+<div class="code-block" data-lang="bash"><pre>jq 'del(.Statement[0].Condition.BoolIfExists)' rcp-perimeter.json &gt; rcp-trimmed.json
+aws accessanalyzer validate-policy \
+  --policy-type RESOURCE_CONTROL_POLICY \
+  --policy-document file://rcp-trimmed.json \
+  --query 'findings[].{type:findingType,code:issueCode}'</pre></div>
+<div class="code-block" data-lang="text"><pre>[
+    {
+        "type": "WARNING",
+        "code": "RCP_MISSING_RELATED_PRINCIPAL_CONDITION_KEY"
+    }
+]</pre></div>
+            <p>A warning, on a policy that is otherwise valid. Attached, it denies AWS services that act on your resources with their own service principal, because a service principal does not belong to your organization. AWS's own example of such a call is <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> writing logs to a bucket as <code>cloudtrail.amazonaws.com</code>. Make your pipeline fail on this warning, not only on errors. The same statement also shuts out a partner account you share a bucket with, whatever the bucket policy says; AWS's full example lists such accounts under <code>aws:PrincipalAccount</code> in the same <code>StringNotEqualsIfExists</code> block.</p>
+
+            <h3>7. Confused-deputy protection with <code>aws:SourceOrgID</code></h3>
+            <p>The exception in step 6 lets every AWS service principal through, whoever it is working for. A service acting on your bucket on behalf of someone else's resource is the confused-deputy problem from step 1, and <a href="https://github.com/aws-samples/resource-control-policy-examples" target="_blank" rel="noopener noreferrer">AWS's RCP examples</a> include a statement for it. Save it as <code>rcp-deputy.json</code>:</p>
+<div class="code-block" data-lang="json"><pre>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnforceConfusedDeputyProtection",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEqualsIfExists": { "aws:SourceOrgID": "o-exampleorgid" },
+        "Null": { "aws:SourceAccount": "false" },
+        "Bool": { "aws:PrincipalIsAWSService": "true" }
+      }
+    }
+  ]
+}</pre></div>
+            <p>All three conditions must hold for the deny: the caller is a service principal, the request carries <code>aws:SourceAccount</code> (that is what the <code>Null</code> check tests), and <code>aws:SourceOrgID</code>, the organization of the resource the service is acting for, is not yours or is missing. The <code>Null</code> check limits the deny to requests that carry <code>aws:SourceAccount</code>, so service integrations that do not use the source keys keep working; AWS's notes give Elastic Load Balancing access logs in some Regions, services that use KMS grants, and services that assume your service roles as examples.</p>
+<div class="code-block" data-lang="bash"><pre>aws accessanalyzer validate-policy \
+  --policy-type RESOURCE_CONTROL_POLICY \
+  --policy-document file://rcp-deputy.json \
+  --query 'findings[].{type:findingType,code:issueCode}'</pre></div>
+<div class="code-block" data-lang="text"><pre>[]</pre></div>
+            <p>Delete the <code>Null</code> block and <code>validate-policy</code> warns <code>RCP_MISSING_SERVICE_CONDITION_KEY_NULL_CHECK</code>; delete the <code>Bool</code> block instead and it warns <code>RCP_MISSING_RELATED_SERVICE_PRINCIPAL_CONDITION_KEY</code>. Both statements fit in one RCP, which matters because a root, OU or account takes at most five RCPs and <code>RCPFullAWSAccess</code> is one of them. AWS's <a href="https://github.com/aws-samples/data-perimeter-policy-examples/blob/main/resource_control_policies/identity_perimeter_rcp.json" target="_blank" rel="noopener noreferrer"><code>identity_perimeter_rcp.json</code></a> carries both statements across STS, KMS, SQS, Secrets Manager and more, plus statements for <a class="glossary-link" href="../glossary.html#term-oidc">OpenID Connect</a> (OIDC) <a class="glossary-link" href="../glossary.html#term-federation">federation</a>. Before attaching anything, AWS recommends starting on a test account and reading CloudTrail for access-denied errors. The policy simulator cannot help here, because it does not evaluate RCPs.</p>
+        </section>
+
         <section id="cedar">
             <h2>Walk-through: Cedar</h2>
 
-            <h3>5. Install it and write a policy set</h3>
+            <h3>8. Install it and write a policy set</h3>
 <div class="code-block" data-lang="bash"><pre>cargo install cedar-policy-cli
 cedar --version
 
@@ -524,7 +648,7 @@ forbid (
 when { resource.public == true };</pre></div>
             <p>Three structural choices to notice. The head is always principal, action, resource, so every policy is scoped the same way and can be indexed. <code>in</code> walks an entity hierarchy, so group membership is a first-class relation rather than something you fake with tags. And <code>forbid</code> beating <code>permit</code> is a property of the language, not of the service evaluating it.</p>
 
-            <h3>6. The part IAM cannot do: a schema</h3>
+            <h3>9. The part IAM cannot do: a schema</h3>
 <div class="code-block" data-lang="cedar"><pre>// store.cedarschema
 entity Group;
 entity User in [Group];
@@ -537,25 +661,26 @@ action read, write appliesTo {
     resource: [Bucket],
     context: { "mfa": Bool }
 };</pre></div>
-<div class="code-block" data-lang="bash"><pre>cedar validate --schema store.cedarschema --policies policies.cedar
-#   policy set validation passed
-#   no errors or warnings</pre></div>
+<div class="code-block" data-lang="bash"><pre>cedar validate --schema store.cedarschema --policies policies.cedar</pre></div>
+<div class="code-block" data-lang="text"><pre>  ☞ policy set validation passed
+  ╰─▶ no errors or warnings</pre></div>
             <p>Now introduce a typo. Change <code>resource.public</code> to <code>resource.publik</code> and validate again:</p>
 <div class="code-block" data-lang="text"><pre>  × policy set validation failed
-  ╰─▶ for policy `policy0`, attribute `publik` on entity type `Bucket` not found
-   ╭─[2:8]
- 2 │ when { resource.publik == true };
-   ·        ───────────────
-   ╰────
+  ╰─▶ for policy `policy1`, attribute `publik` on entity type `Bucket` not
+      found
+    ╭─[18:8]
+ 17 │ )
+ 18 │ when { resource.publik == true };
+    ·        ───────────────
+    ╰────
   help: did you mean `public`?</pre></div>
             <div class="highlight-box">
             <p><strong>This is the single most important difference between the two languages.</strong> The same typo in an IAM condition key produces a perfectly valid policy that simply never matches. No error at write time, no error at evaluation time, no signal of any kind. A <code>Deny</code> statement with a misspelled condition key is a security control that does not exist, and it looks exactly like one that does.</p>
             </div>
 
-            <h3>7. Evaluate real requests</h3>
-<div class="code-block" data-lang="bash"><pre># entities.json describes the world: who exists, what they belong to,
-# and what attributes each resource has.
-cat &gt; entities.json &lt;&lt;'EOF'
+            <h3>10. Evaluate real requests</h3>
+            <p>An entities file describes the world: who exists, what they belong to, and what attributes each resource has. Each request also needs a context, here just whether <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> was used:</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; entities.json &lt;&lt;'EOF'
 [
   {"uid": {"type":"Group","id":"security"}, "attrs": {}, "parents": []},
   {"uid": {"type":"User","id":"alice"}, "attrs": {},
@@ -567,14 +692,11 @@ cat &gt; entities.json &lt;&lt;'EOF'
 EOF
 echo '{"mfa": true}'  &gt; ctx_mfa.json
 echo '{"mfa": false}' &gt; ctx_nomfa.json</pre></div>
-<div class="code-block" data-lang="bash"><pre># In the security group, with MFA, on a private bucket   -&gt; ALLOW
-cedar authorize --schema store.cedarschema --policies policies.cedar \
+            <p>Alice is a member of <code>Group::"security"</code>, has MFA and asks for a private bucket, so this prints <code>ALLOW</code>:</p>
+<div class="code-block" data-lang="bash"><pre>cedar authorize --schema store.cedarschema --policies policies.cedar \
   --entities entities.json -c ctx_mfa.json \
-  -l 'User::"alice"' -a 'Action::"read"' -r 'Bucket::"private-logs"'
-
-# Same principal, no MFA                                  -&gt; DENY
-# Same principal, with MFA, but a public bucket           -&gt; DENY (forbid wins)
-# Not in the group at all                                 -&gt; DENY</pre></div>
+  -l 'User::"alice"' -a 'Action::"read"' -r 'Bucket::"private-logs"'</pre></div>
+            <p>Then change one thing at a time. With <code>-c ctx_nomfa.json</code> it prints <code>DENY</code>. With MFA but <code>-r 'Bucket::"public-site"'</code> it prints <code>DENY</code>, because the forbid wins. With <code>-l 'User::"bob"'</code>, who is not in the group, it prints <code>DENY</code>.</p>
             <p>Run all four. <code>cedar authorize</code> exits 0 on ALLOW and non-zero on DENY, so a shell script can assert an expected decision, which means <strong>your authorization rules can have a test suite</strong>. Writing those four cases takes two minutes and is the closest thing to a unit test that authorization logic normally gets.</p>
             <p>Amazon Verified Permissions is this engine as a managed service; it currently supports Cedar 4.5, which added the <code>is</code> operator for matching on entity type. You do not need the service to use the language: the engine is a library, and running it in-process is a perfectly normal deployment.</p>
         </section>
@@ -588,7 +710,7 @@ cedar authorize --schema store.cedarschema --policies policies.cedar \
 <div class="code-block" data-lang="json"><pre>{ "Effect": "Allow", "Action": "*", "Resource": "*" }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
-                    <p>Every <a class="glossary-link" href="../glossary.html#term-s3">S3</a> action, in <code>eu-west-1</code> only. Nothing else.</p>
+                    <p>Every S3 action, in <code>eu-west-1</code> only. Nothing else.</p>
                     <p>Work the intersection rather than the documents. The identity policy grants everything, so it constrains nothing. The permissions boundary caps the role at <code>s3:*</code>. The SCP caps the whole account at one region. The result is the overlap: <code>s3:*</code> in <code>eu-west-1</code>.</p>
                     <p>Two things worth carrying away. An administrator-level identity policy told you nothing useful, which is exactly why "the policy says Allow" is not an answer. And the boundary and the SCP are doing all the real work while being attached somewhere else entirely, so anyone reading only the role's inline policy would get this completely wrong.</p>
                     <p>One caveat to keep honest: global services such as IAM and CloudFront do not sit in <code>eu-west-1</code>, so a region-restricting SCP written without an exception list breaks them. The SCP in step 2 carries one for that reason.</p>
@@ -597,7 +719,7 @@ cedar authorize --schema store.cedarschema --policies policies.cedar \
 
             <div class="exercise">
                 <span class="exercise__label">Exercise 2</span>
-                <p>This statement was written to force <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>. Explain precisely how a request without MFA gets through, and fix it.</p>
+                <p>This statement was written to force MFA. Explain precisely how a request without MFA gets through, and fix it.</p>
 <div class="code-block" data-lang="json"><pre>{
   "Effect": "Deny",
   "Action": "*",
@@ -659,9 +781,50 @@ when { resource.owner == principal };</pre></div>
   --existing-policy-document file://old.json \
   --new-policy-document file://new.json \
   --policy-type IDENTITY_POLICY</pre></div>
-                    <p>This compares the two documents semantically rather than textually, and reports whether the new one permits anything the old one did not. Wire it into <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> and a pull request that broadens access fails, whatever the diff looks like.</p>
+                    <p>This compares the two documents semantically rather than textually, and reports whether the new one permits anything the old one did not. Wire it into CI and a pull request that broadens access fails, whatever the diff looks like.</p>
                     <p>Two things to be careful about. It compares documents, so splitting one policy into three means checking the union, not each part. And it answers only "is anything new allowed": a refactor that accidentally <em>removes</em> needed access passes cleanly, which is an outage rather than a breach but is still your problem. Pair it with <code>simulate-principal-policy</code> over the actions that must keep working.</p>
                     <p>This is the same shape as the deny-direction-only testing trap in <a href="opa-rego.html">the Rego page</a>: a check that can only fail one way is half a check.</p>
+                </details>
+            </div>
+
+            <div class="exercise">
+                <span class="exercise__label">Exercise 5</span>
+                <p>A colleague plans to attach this RCP to the organization root to keep principals from outside the organization away from S3, SNS and Lambda. Find three problems before it ships, and say which of them <code>validate-policy</code> catches.</p>
+<div class="code-block" data-lang="json"><pre>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "KeepOutsidersOut",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": ["s3:*", "sns:*", "lambda:*"],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEqualsIfExists": { "aws:PrincipalOrgID": "o-exampleorgid" }
+      }
+    }
+  ]
+}</pre></div>
+                <details>
+                    <summary>Show the answer</summary>
+                    <p>Save it as <code>rcp-exercise.json</code> and validate it as an RCP:</p>
+<div class="code-block" data-lang="bash"><pre>aws accessanalyzer validate-policy \
+  --policy-type RESOURCE_CONTROL_POLICY \
+  --policy-document file://rcp-exercise.json \
+  --query 'findings[].{type:findingType,code:issueCode}'</pre></div>
+<div class="code-block" data-lang="text"><pre>[
+    {
+        "type": "ERROR",
+        "code": "RCP_SYNTAX_ERROR_ACTION"
+    },
+    {
+        "type": "WARNING",
+        "code": "RCP_MISSING_RELATED_PRINCIPAL_CONDITION_KEY"
+    }
+]</pre></div>
+                    <p>The error is the first problem: SNS and Lambda are not on AWS's list of services RCPs apply to, so the policy cannot protect them. Drop those prefixes and protect those resources another way, such as SNS topic policies, for which AWS's data-perimeter examples include a perimeter statement.</p>
+                    <p>The warning is the second: with no <code>aws:PrincipalIsAWSService</code> exception, the deny also catches AWS services writing to your buckets with their service principals, CloudTrail log delivery among them. Add <code>"BoolIfExists": { "aws:PrincipalIsAWSService": "false" }</code> to the condition, as in step 6.</p>
+                    <p>The third problem no validator reports. Attached at the root, the RCP covers every member account and none of the management account's resources, so any bucket kept there stays outside the perimeter. The fix is in how the organization is laid out: keep data you need inside the perimeter out of the management account.</p>
                 </details>
             </div>
         </section>
@@ -677,6 +840,10 @@ when { resource.owner == principal };</pre></div>
                 <li><strong>Typos in condition keys.</strong> Silently never match. This is the failure Cedar's schema exists to eliminate, and the reason to run <code>validate-policy</code> on anything hand-written.</li>
                 <li><strong>Forgetting cross-account needs both sides.</strong> A resource policy alone is not enough when the principal lives in another account.</li>
                 <li><strong>Omitting <code>aws:SourceArn</code> or <code>aws:SourceAccount</code> on service-principal trust.</strong> This is the confused-deputy shape behind a long list of cross-tenant findings.</li>
+                <li><strong>Expecting an RCP to cover every service it names.</strong> It covers only the services on AWS's list, and only actions that act on a resource. <code>validate-policy</code> reports an unlisted service as an error; an action with no resource, such as <code>s3:ListAllMyBuckets</code>, passes with no findings and is never restricted by the RCP.</li>
+                <li><strong>Counting on an RCP to protect the management account.</strong> RCPs never apply to its resources, even when attached to the organization root.</li>
+                <li><strong>A data-perimeter RCP without the <code>aws:PrincipalIsAWSService</code> exception.</strong> It denies AWS services acting on your resources, such as CloudTrail delivering logs to a bucket, and <code>validate-policy</code> reports it only as a warning.</li>
+                <li><strong>Testing an RCP with the policy simulator.</strong> <code>simulate-principal-policy</code> does not evaluate RCPs, so its answer leaves out every deny that comes from one. Try the RCP on a test account and read CloudTrail for access-denied errors.</li>
                 <li><strong>Shipping a Cedar policy set without a schema.</strong> You give up the one advantage the language has over what you were using before.</li>
             </ul>
         </section>
