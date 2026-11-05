@@ -97,6 +97,7 @@ OVERRIDES: dict[str, str] = {
     '22552a791347': 'text',    # whoami.py with leftover build-bot keys
     '783957bf9a23': 'text',    # last line of an AccessDenied traceback
     '734a97cb517f': 'text',    # stale access keys
+    '2a2b66a6d1ad': 'text',    # Regions where no rule passes a GuardDuty finding on
     # A GCP IAM condition: CEL, but with none of the macros the CEL rule keys on.
     '36e4e24eba33': 'cel',
     # howto/cel-policy-expressions.html: cel.py and kubectl output, which the
