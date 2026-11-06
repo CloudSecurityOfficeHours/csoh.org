@@ -126,9 +126,11 @@ def create_ctf_card_html(name, url, description, tags, tooltip):
 
     img_filename = generate_image_filename(url)
 
+    # No onerror= attribute. script-src 'self' drops inline handlers, so it
+    # never ran in production. submit_resource.py documents the same choice.
     return f'''<a href="{url}" class="card-link" target="_blank" rel="noopener noreferrer">
                     <div class="resource-card"{tooltip_attr}>
-                        <img src="img/previews/{img_filename}" alt="{name} preview" class="resource-preview" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                        <img src="img/previews/{img_filename}" alt="{name} preview" class="resource-preview" loading="lazy" decoding="async">
                         <h3>{name}</h3>
                         <p>{description}</p>
                         <div class="resource-tags">
