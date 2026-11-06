@@ -163,7 +163,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 |---|---|
 | 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->119<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
-| 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 580+ community-shared URLs from live sessions, security-validated |
+| 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 570+ community-shared URLs from live sessions, security-validated |
 
 ## 📚 Reference & Practice
 
@@ -459,7 +459,7 @@ Comprehensive catalog of **<!--count:resources_floor-->750+<!--/count--> cloud s
 
 ### 💬 Chat Resources ([`chat-resources.html`](https://csoh.org/chat-resources.html))
 Community-shared resources from weekly Zoom sessions:
-- **580+ URLs** shared by community members during live sessions
+- **570+ URLs** shared by community members during live sessions
 - **Security validated** - All URLs automatically checked for malicious patterns
 - **Filterable by date, person, category** - Find resources from specific sessions
 - **Descriptive titles** - Auto-generated from page content
@@ -765,7 +765,7 @@ csoh.org/
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
 ├── meetings.html               # Weekly meeting recaps (119 entries, topic-by-topic)
-├── chat-resources.html         # Community-shared URLs from Zoom sessions (580+ URLs)
+├── chat-resources.html         # Community-shared URLs from Zoom sessions (570+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
 ├── what-practitioners-think-about-security-regulation.html
