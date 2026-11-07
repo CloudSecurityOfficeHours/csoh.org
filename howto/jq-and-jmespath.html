@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="jq">
@@ -62,7 +62,7 @@
       "totalTime": "PT90M",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-08-24",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -344,33 +344,33 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>jq and JMESPath, hands-on</h1>
-        <p>Cloud security is JSON wrangling. Two query languages cover almost all of it, they look alike, and they share nothing. Learn both properly, including the traps that return an empty result instead of an error.</p>
+        <p>Cloud tools answer in JSON, a text format for nested data, so much of cloud security work is pulling one fact out of a long JSON answer. Two query languages, jq and JMESPath, cover almost all of it. They look alike and share nothing. Learn both properly, including the mistakes that return an empty result instead of an error.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> <code>jq</code> and a terminal. No cloud account: the lab uses a sample file.</p>
         </div>
 
         <section id="intro">
             <h2>The two query languages you will use every single day</h2>
-            <p>Cloud security work is, mechanically, JSON wrangling. Every CLI returns JSON. Every API returns JSON. <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> policies are JSON, <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> events are JSON, <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> plans are JSON, and every scanner you run emits JSON. The bottleneck between "the data exists" and "I know the answer" is almost always a query you could not quite write.</p>
+            <p>JSON (JavaScript Object Notation) is a text format for structured data: objects in curly braces pair names with values, arrays (lists) sit in square brackets, and either can nest inside the other. Cloud security work is, mechanically, JSON wrangling, because nearly everything you look at arrives in it. Every CLI (command-line interface, such as the <code>aws</code> command) returns JSON. Every API (application programming interface, the way a program asks a cloud provider for something) returns JSON. <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> policies, the documents that say who may do what, are JSON. <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> events, AWS's log of API calls, are JSON. <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> plans, Terraform's preview of the changes it is about to make, are JSON, and every scanner you run emits JSON.</p>
+            <p>Those answers are often long, and the question you have is usually narrow: which users keep having their requests refused, and from where, or which servers are missing a security setting. The bottleneck between "the data exists" and "I know the answer" is almost always a query you could not quite write. A query language is how you write it: a short expression that says which parts of the JSON to keep and how to arrange them.</p>
             <p>There are two languages worth knowing, and confusing them is the most common source of wasted time here, because they look similar and share nothing.</p>
-            <ul>
-                <li><strong>jq</strong> is a standalone tool and a genuinely powerful language. It streams: a filter takes JSON values in and emits JSON values out, possibly more or fewer than it received. Use it anywhere you have a file or a pipe.</li>
-                <li><strong>JMESPath</strong> is a specification with implementations in many languages, which is exactly why AWS embedded it. It is what <code>--query</code> means in the AWS CLI and in the Azure CLI. It is a pure projection language: one input document, one output value, no streaming.</li>
-            </ul>
-            <p>Google Cloud is the odd one out and uses neither: <code>gcloud</code> has its own <code>--filter</code> and <code>--format</code> syntax. Knowing that up front saves you trying JMESPath against <code>gcloud</code> and concluding you have forgotten how to write it.</p>
+            <p>jq is a standalone tool that you run in a terminal, and a powerful language in its own right. It streams: a filter, which is what jq calls an expression, takes JSON values in and emits JSON values out, possibly more or fewer than it received. Use it anywhere you have a file or a pipe (the <code>|</code> that feeds one command's output into the next).</p>
+            <p>JMESPath is a specification, a written definition of a language, with implementations in many programming languages, which is exactly why AWS embedded it. It is what <code>--query</code> means in the AWS CLI and in the Azure CLI. It is a pure projection language, one that only picks out and reshapes parts of its input: one input document, one output value, no streaming.</p>
+            <p>Google Cloud is the odd one out and uses neither: <code>gcloud</code>, its command-line tool, has its own <code>--filter</code> and <code>--format</code> syntax. Knowing that up front saves you trying JMESPath against <code>gcloud</code> and concluding you have forgotten how to write it.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">Streams versus projections</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">Streams versus single values</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -378,21 +378,30 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Beginner here means new to jq and JMESPath. You should be comfortable typing commands into a terminal, and it helps to have looked inside a JSON file before, though the sample in step 1 is short enough to read in full. Steps 1 to 6 need no cloud account and no AWS knowledge, because they run against that sample file. Step 6 also uses Python 3 and installs the <code>jmespath</code> package with <code>pip3</code>. Steps 7 and 8 run the AWS CLI against a real account. If you have none, read them without running them: their warnings about <code>--query</code> and <code>--output text</code> apply whenever you use the AWS CLI.</p>
+            <p>Read it in order. The next section, <a href="#model">Streams versus single values</a>, explains the idea behind most jq confusion, and its three short commands need only jq. In the <a href="#walkthrough">walk-through</a>, step 1 makes a folder called <code>~/jq-lab</code> and writes five CloudTrail-style events into a file there called <code>events.json</code>. Steps 2 to 5 ask questions of that file with jq, each step adding one technique, and step 6 asks the same questions with JMESPath so you can compare the two. The <a href="#exercises">exercises</a> then ask you to write queries yourself, with each answer hidden until you select "Show the answer".</p>
+            <p>A code block labelled BASH is something to paste into your terminal, and every block has a copy button. The block labelled JMESPATH, in Exercise 2's answer, is an expression to read, not a command. zsh, the default shell on macOS, rejects a <code>#</code> comment pasted at its prompt: it runs a comment line as a command and passes a trailing comment to the command as extra arguments. Before pasting, run <code>setopt interactivecomments</code> once in each new terminal, or use bash. Step 1's block contains a line that starts <code>cat &gt; events.json &lt;&lt;'EOF'</code>, which writes every line after it, down to the one that says only <code>EOF</code>, into <code>events.json</code>. Paste the whole block at once, the <code>EOF</code> line included. Step 6 uses the same pattern with <code>python3 - &lt;&lt;'PY'</code>, which runs the lines down to <code>PY</code> as a Python program without saving them to a file. The page does not show what each command prints; the comments in each block, and the text after some, say what to look for.</p>
+            <p>If a command says it cannot open <code>events.json</code>, the terminal is no longer in the <code>~/jq-lab</code> folder that step 1 made, so run <code>cd ~/jq-lab</code> and try again. If a query prints nothing, or an empty list, do what the last of the <a href="#mistakes">common mistakes</a> advises: run it again with the filter removed, to see whether the data is there at all.</p>
+        </section>
+
         <section id="model">
-            <h2>Streams versus projections</h2>
-            <p>Almost every jq confusion traces back to one idea. <strong>jq filters produce a stream, not a value.</strong></p>
+            <h2>Streams versus single values</h2>
+            <p>Step 2 asks jq who made each request that AWS refused, identified by ARN (Amazon Resource Name, AWS's unique name for a user, role or other resource), and jq prints three ARNs, each on its own line. Step 6 asks JMESPath the same question and gets back one list holding the same three ARNs. Both answers are right. They differ in shape, and that difference is worth understanding before you start.</p>
+            <p>Almost every jq confusion traces back to one idea. <strong>jq filters produce a stream, not a value.</strong> A stream is a run of separate values, one after another. In the commands below, <code>echo</code> prints a tiny JSON object whose key <code>a</code> holds a list of three numbers, and the pipe hands it to jq. <code>.a</code> means "the value under the key <code>a</code>", and <code>.a[]</code> means "each item in it, one at a time".</p>
 <div class="code-block" data-lang="bash"><pre>echo '{"a":[1,2,3]}' | jq '.a'      # one output: the array  [1,2,3]
 echo '{"a":[1,2,3]}' | jq '.a[]'    # THREE outputs: 1, then 2, then 3
 echo '{"a":[1,2,3]}' | jq '[.a[]]'  # collect the stream back into one array</pre></div>
-            <p>Those square brackets in the third line are not decoration. Any time a jq expression produces something that looks almost right but repeated, or almost right but unwrapped, the answer is usually a missing pair of collecting brackets. <code>select()</code>, <code>map()</code>, <code>group_by()</code> and friends all become obvious once you know which of them expect a stream and which expect an array.</p>
-            <p>JMESPath has no equivalent concept. An expression takes one document and returns one JSON value, always. That constraint is why it is safe to embed in a CLI flag and why it is considerably less capable: there is no way to express "emit a line per element" because there are no lines and no emitting.</p>
+            <p>Those square brackets in the third line are not decoration. Any time a jq expression produces something that looks almost right but repeated, or almost right but unwrapped, the answer is usually a missing pair of collecting brackets. <code>select()</code>, <code>map()</code>, <code>group_by()</code> and friends all become obvious once you know which of them expect a stream and which expect an array. You will meet <code>select()</code> in <a href="#step-select">step 2</a>, and <code>group_by()</code> and <code>map()</code> working on a collected array in <a href="#step-group">step 4</a>.</p>
+            <p>JMESPath has no equivalent concept. An expression takes one document and returns one JSON value, always. That constraint is why it is safe to embed in a CLI flag and why it is considerably less capable: there is no way to express "emit a line per element" because there are no lines and no emitting. <a href="#step-jmespath">Step 6</a> shows the single value, and Exercise 2 puts the two shapes side by side.</p>
         </section>
 
         <section id="walkthrough">
             <h2>Walk-through</h2>
 
             <h3>1. Build the sample data</h3>
-            <p>This is a trimmed CloudTrail-shaped file. Everything below runs against it, so no cloud account and no credentials are needed.</p>
+            <p>This is a trimmed CloudTrail-shaped file. Each record is one API call: who made it (<code>userIdentity.arn</code>), what it was (<code>eventName</code>), where it came from (<code>sourceIPAddress</code>), and the error AWS returned (<code>errorCode</code>, which is <code>null</code>, JSON's empty value, when there was no error). Everything below runs against it, so no cloud account and no credentials are needed.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/jq-lab &amp;&amp; cd ~/jq-lab
 
 cat &gt; events.json &lt;&lt;'EOF'
@@ -415,7 +424,7 @@ cat &gt; events.json &lt;&lt;'EOF'
 ]}
 EOF</pre></div>
 
-            <h3>2. jq: navigate, then filter</h3>
+            <h3 id="step-select">2. jq: navigate, then filter</h3>
 <div class="code-block" data-lang="bash"><pre>jq '.Records | length' events.json          # 5
 
 # .Records[] streams each record; select() passes through only the
@@ -435,7 +444,7 @@ jq '[.Records[]
    events.json</pre></div>
             <p>Reshaping at the edge of a pipeline matters more than it looks. A downstream script that consumes <code>{who, what, when}</code> keeps working when AWS adds fields, moves things around, or you switch to a different source of the same facts.</p>
 
-            <h3>4. jq: the query you will actually run</h3>
+            <h3 id="step-group">4. jq: the query you will actually run</h3>
             <p>"Who is generating repeated access denials, and from where." This is a real triage question and it is four operators.</p>
 <div class="code-block" data-lang="bash"><pre>jq -r '
   [.Records[] | select(.errorCode != null)]      # collect failures into an array
@@ -458,7 +467,7 @@ jq -r '.Records[]
 # that saves you when a value contains a space or a quote.
 jq -r '[.Records[].sourceIPAddress] | unique | join(", ")' events.json</pre></div>
 
-            <h3>6. JMESPath: the same questions, different language</h3>
+            <h3 id="step-jmespath">6. JMESPath: the same questions, different language</h3>
             <p>Everything below works as an AWS CLI <code>--query</code> value. To practise without a cloud account, evaluate against the same file:</p>
 <div class="code-block" data-lang="bash"><pre>pip3 install jmespath        # brings the reference implementation
 
@@ -533,7 +542,7 @@ aws iam list-users --output json \
                 <p>Translate this jq filter into JMESPath: <code>.Records[] | select(.userIdentity.type == "IAMUser") | .userIdentity.arn</code>. Then say what is different about the output.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block" data-lang="text"><pre>Records[?userIdentity.type=='IAMUser'].userIdentity.arn</pre></div>
+<div class="code-block" data-lang="jmespath"><pre>Records[?userIdentity.type=='IAMUser'].userIdentity.arn</pre></div>
                     <p>Note the single quotes. Double quotes would make <code>IAMUser</code> a field name and silently return an empty list.</p>
                     <p>The output difference is the whole distinction between the two languages. jq emits four separate JSON strings, one per line, which a shell loop can consume directly. JMESPath returns a single JSON array, which is why <code>--query</code> pairs with <code>--output text</code> so often: the CLI has to flatten the array back into lines for you, because the language cannot.</p>
                 </details>

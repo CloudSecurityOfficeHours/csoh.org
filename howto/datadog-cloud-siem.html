@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="datadog">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -356,14 +356,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Datadog Cloud SIEM detection rules, hands-on</h1>
-        <p>A detection rule in Datadog Cloud <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) is a log search wrapped in settings that group, count and time what the search finds. Learn both from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, including the names Datadog gives CloudTrail's fields and a threshold that fails without a sound.</p>
+        <p>Datadog Cloud <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) watches the logs you send to Datadog and raises a signal for someone to review when a detection rule matches. A rule is a log search wrapped in settings that group, count and time what the search finds. Learn both from zero on 24 events from <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a>, the record Amazon Web Services (AWS) keeps of actions taken in an account, including the names Datadog gives CloudTrail's fields and a threshold that fails without a sound.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a Datadog organisation you may send test data to and create rules in (Datadog offers a 14-day free trial of its whole product suite), an API (application programming interface) key, and a terminal with <code>curl</code> and <code>jq</code>. <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> is optional (step 9).</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> Cloud SIEM runs only as a hosted service and no Datadog account was used, so none of the searches or rules on this page were executed in Datadog. Every operator and setting was checked against Datadog's documentation and the CloudTrail rules Datadog publishes (both as of 27 September 2026), and the results quoted are what those documented rules give on the lab file, worked out by a local script, not captured from Datadog. What did run: the shell step, against a local test receiver in place of Datadog's intake, and <code>terraform validate</code> on every rule with Datadog's official Terraform provider 4.22.0.</p>
@@ -371,15 +371,17 @@
 
         <section id="intro">
             <h2>A search that selects, a rule that counts</h2>
-            <p>Datadog is a hosted monitoring platform, and Cloud SIEM is its security product: it runs detection rules over the logs you send to Datadog and records a security signal whenever a rule's conditions are met. Datadog ships a large catalogue of out-of-the-box rules, and detection engineers add custom ones in the rule editor, or as code with Terraform or Datadog's API.</p>
-            <p>The distinction that matters: a rule has two halves. The <strong>query</strong> is a Log Explorer search, and a search only selects logs; it cannot count them. Everything else is a setting of the rule: how to group the matches, how many is too many, over how long, and how severe that is. "Five refusals from one address in ten minutes" is a search for refusals, a group by on the address, a case of <code>a &gt;= 5</code> and a ten-minute window.</p>
-            <p>And the search runs on processed logs. Datadog's CloudTrail pipeline maps several CloudTrail fields onto Datadog's standard attributes, and Datadog's own rules search those: the event name as <code>@evt.name</code>, the error code as <code>@error.kind</code>. A query written from the field list in AWS (Amazon Web Services) documentation is a guess about what the pipeline kept; one written from a processed log is not.</p>
+            <p>Cloud services record what happens in logs: lines of text that each record one event, such as a sign-in or a changed setting. In an Amazon Web Services (AWS) account, CloudTrail records the calls made to AWS as events, each saying who made the call, from which network address, and whether AWS refused it. Security teams send logs like these to a SIEM, a service that collects security logs and watches them for signs of an attack, so that they hear about it when, for example, someone switches off CloudTrail logging or one address is refused five times in ten minutes.</p>
+            <p>Datadog is a hosted monitoring platform, and Cloud SIEM is its security product: it runs detection rules over the logs you send to Datadog and records a security signal, an entry for an analyst to review, whenever a rule's conditions are met. Datadog ships a large catalogue of out-of-the-box rules, written by Datadog, and detection engineers, the people who write an organisation's detections, add custom ones in the rule editor, or as code with Terraform or Datadog's API.</p>
+            <p>The distinction that matters: a rule has two halves. The <strong>query</strong> is a search in Log Explorer, Datadog's page for searching logs, and a search only selects logs; it cannot count them. Everything else is a setting of the rule: how to group the matches, how many is too many, over how long, and how severe that is. "Five refusals from one address in ten minutes" is a search for refusals, a group by on the address, a case (a condition on the count) of <code>a &gt;= 5</code> and a ten-minute window.</p>
+            <p>And the search runs on processed logs, not on the events exactly as you sent them. Datadog's CloudTrail pipeline, the processing Datadog applies to each CloudTrail log as it arrives, maps several CloudTrail fields onto Datadog's standard attributes, the field names Datadog's integrations share, and Datadog's own rules search those: the event name as <code>@evt.name</code>, the error code as <code>@error.kind</code>. A query written from the field list in AWS documentation is a guess about what the pipeline kept; one written from a processed log is not.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">Searches, attributes and the renamed fields</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">Writing a search, and the renamed fields</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -387,9 +389,21 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Beginner here means new to Datadog and to writing detection rules. You should be comfortable pasting commands into a terminal and reading short records of names and values, which is what each lab event is. You do not need to know AWS well: the AWS terms the detections depend on are explained as they come up, and terms with a glossary entry link to it.</p>
+            <p>Only part of the page runs on your own computer. Step 2's commands write the lab file and prepare it there, and its <code>curl</code> line sends it to Datadog. Every search and rule runs in Datadog, so to run them you need an organisation you may send test data to, which step 1 covers. Terraform, a tool that creates resources from text files, is optional: step 9 uses it to keep the rules as code, and the rule editor builds the same rules by hand. Without an organisation you can still follow the page by reading, because each search and rule is followed by what it should find on the lab.</p>
+            <p>Read it in order. The <a href="#model">next section</a> explains how a Datadog search is written and why its names for CloudTrail's fields differ from CloudTrail's own. Its searches need the lab data in Datadog, so read them first and run them once step 2 has loaded the lab. In the <a href="#walkthrough">walk-through</a>, steps 1 to 3 set up an organisation, load the 24 lab events and check that they arrived and were processed. Steps 4 to 8 build four of the five detections listed at the start of the walk-through (D5 is the first exercise), each as a search or a rule with what it should find on the lab. Steps 5 and 6 first show a version that gives a wrong answer without any error, and steps 6 and 8 add a control: a check that must find something, run to see whether a quiet result can be trusted. Step 9 keeps the rules as Terraform code, and step 10 tests each one both ways, on events it must catch and on events it must not. The <a href="#exercises">exercises</a> then ask you to write, debug or judge a search or rule yourself, with each answer hidden until you open "Show the answer".</p>
+            <p>Each code block has a copy button, and all but one have a label in the header. A block labelled DATADOG is a search: paste it into the search bar in Log Explorer. A block labelled BASH goes into your terminal. A block labelled HCL is a Terraform rule, and step 9 says how to put them in one file. The one unlabelled block, in step 9, shows what <code>terraform validate</code> prints; everywhere else, what you should see is in the sentence after the block, which usually starts with "Expect". Step 2's first block includes the line <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+            <p>Treat each "Expect" as what should happen, not as a pasted result. As the box at the top says, no Datadog account was used, so none of the searches or rules were run in Datadog: each result is what Datadog's documented rules give on the lab file, worked out by a local script, and the documentation was read as of 27 September 2026. Field names are the part to check first. Whether CloudTrail's original names survive beside Datadog's is not documented, and the table in the next section marks one path as assumed, so step 3 has you compare a processed log with that table. The shell step was run against a local test receiver rather than Datadog, and <code>terraform validate</code> was run on every rule with Datadog's Terraform provider 4.22.0.</p>
+            <p>Some parts can wait for a second reading. Step 2's first block is long because it holds the whole lab file, so paste it without reading every line; the start of the walk-through tells the story it holds. The list of detection methods at the start of step 8 and the paragraph on ATT&amp;CK tags after step 9's <code>terraform validate</code> are side notes you can come back to.</p>
+            <p>If a search finds nothing, or a different count from the page, check what step 3 checks first: Log Explorer's time range covers the past 4 hours, all 24 logs arrived, and adding <code>@evt.name:*</code> still finds 24, which shows that Datadog's CloudTrail pipeline processed them. Keep <code>env:lab</code> in every search if your organisation already receives CloudTrail. Then check capitals, because values match exactly: <code>@evt.name:stoplogging</code> finds nothing.</p>
+        </section>
+
         <section id="model">
-            <h2>Searches, attributes and the renamed fields</h2>
-            <p>A search is a list of terms, and a log must match every term (AND is implied between them). A term is usually <code>name:value</code>. A few reserved attributes, such as <code>source</code>, <code>service</code> and <code>host</code>, are written bare; every other attribute takes an <code>@</code> in front. Tags, such as <code>env:lab</code>, are written bare too.</p>
+            <h2>Writing a search, and the renamed fields</h2>
+            <p>Suppose you want every log in which someone stopped CloudTrail logging. In CloudTrail the call's name is in a field called <code>eventName</code>, yet Datadog's own rules search for it under another name, <code>@evt.name</code>. To search with confidence you need two things: how a Datadog search is written, and which CloudTrail fields Datadog maps onto its own names as the logs arrive. This section covers both, with searches to run once step 2 has loaded the lab.</p>
+            <p>A search is a list of terms, and a log must match every term (AND is implied between them). A term is usually <code>name:value</code>. A few reserved attributes (attribute is Datadog's word for a field in a log), such as <code>source</code>, <code>service</code> and <code>host</code>, are written bare; every other attribute takes an <code>@</code> in front. Tags, such as <code>env:lab</code>, are written bare too.</p>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:StopLogging</pre></div>
             <p>Read it as: logs whose <code>source</code> is <code>cloudtrail</code>, and whose attribute <code>evt.name</code> is exactly <code>StopLogging</code>. Against the lab, one log. The value match is exact and case sensitive, and a dot in the name walks into nested JSON (JavaScript Object Notation), so <code>@userIdentity.arn</code> is the <code>arn</code> inside <code>userIdentity</code>.</p>
             <p>But CloudTrail calls that field <code>eventName</code>. When logs arrive with the source <code>cloudtrail</code>, Datadog installs its CloudTrail pipeline, which maps a few fields onto standard attributes, names Datadog's other integrations use too. Datadog's own CloudTrail rules show where they land:</p>
@@ -403,6 +417,7 @@
                     <tr><td><code>additionalEventData.MFAUsed</code></td><td><code>@additionalEventData.MFAUsed</code>, assumed</td><td>none: check a sign-in log</td></tr>
                 </tbody></table></div>
             <p>Whether the original names survive beside the new ones is not documented. A remapper deletes the field it copies unless told to keep it, yet two of Datadog's rule pages describe their match with <code>@eventName</code>. This page writes the standard names, as Datadog's rules almost always do, and when a search finds nothing, the first check is one processed log's side panel.</p>
+            <p><a href="#step-read-names">Step 3</a> has you open one and compare it with the table, and <a href="#exercises">exercise 2</a> shows what a wrong capital does to a search.</p>
         </section>
 
         <section id="walkthrough">
@@ -417,7 +432,7 @@
             </ul>
 
             <h3>1. Get an organisation you can test in</h3>
-            <p>Use a trial or a non-production organisation, never one whose signals reach an on-call rota. Note your Datadog site (such as <code>datadoghq.com</code> or <code>datadoghq.eu</code>), and create an API key in your organisation settings, on the <strong>API keys</strong> tab. Cloud SIEM analyses only the logs its filters select, so make sure it takes <code>source:cloudtrail</code>; <a href="https://docs.datadoghq.com/security/cloud_siem/guide/customize-which-logs-cloud-siem-analyzes/" target="_blank" rel="noopener noreferrer">Datadog's guide to choosing the logs Cloud SIEM analyses</a> shows the switch for your edition.</p>
+            <p>Use a trial or a non-production organisation, never one whose signals reach an on-call rota. Note your Datadog site (such as <code>datadoghq.com</code> or <code>datadoghq.eu</code>), and create an API key, the secret that lets your upload command send logs to your organisation, in your organisation settings, on the <strong>API keys</strong> tab. Cloud SIEM analyses only the logs its filters select, so make sure it takes <code>source:cloudtrail</code>; <a href="https://docs.datadoghq.com/security/cloud_siem/guide/customize-which-logs-cloud-siem-analyzes/" target="_blank" rel="noopener noreferrer">Datadog's guide to choosing the logs Cloud SIEM analyses</a> shows the switch for your edition.</p>
 
             <h3>2. Load the lab data</h3>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/datadog-lab &amp;&amp; cd ~/datadog-lab
@@ -456,7 +471,7 @@ jq -c -s '(map(.eventTime | fromdateiso8601) | max) as $last
   | map((.eventTime |= (fromdateiso8601 + $shift | todateiso8601))
         + {ddsource: "cloudtrail", service: "cloudtrail", ddtags: "env:lab", message: .eventName})' \
   cloudtrail-lab.jsonl &gt; upload.json</pre></div>
-            <p>The hash should be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>. The <code>jq</code> command moves the lab so its last event is five minutes ago, keeping every gap between events, and adds a source, a tag and the <code>message</code> field Datadog's intake requires. Next, set your site (<code>datadoghq.com</code>, <code>us3.datadoghq.com</code>, <code>us5.datadoghq.com</code>, <code>datadoghq.eu</code>, <code>ap1.datadoghq.com</code> and so on) and read your API key into a variable: after the <code>read</code> line, paste the key and press Enter. Nothing is echoed, and the key stays out of your shell history.</p>
+            <p>The hash should be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>. The <code>jq</code> command moves the lab so its last event is five minutes ago, keeping every gap between events, and adds a source, a tag and the <code>message</code> field Datadog's intake (the address that receives logs) requires. Next, set your site (<code>datadoghq.com</code>, <code>us3.datadoghq.com</code>, <code>us5.datadoghq.com</code>, <code>datadoghq.eu</code>, <code>ap1.datadoghq.com</code> and so on) and read your API key into a variable: after the <code>read</code> line, paste the key and press Enter. Nothing is echoed, and the key stays out of your shell history.</p>
 <div class="code-block" data-lang="bash"><pre>DD_SITE=datadoghq.com
 read -rs DD_API_KEY</pre></div>
 <div class="code-block" data-lang="bash"><pre>curl -sS -o /dev/null -w '%{http_code}\n' -X POST "https://http-intake.logs.$DD_SITE/api/v2/logs" \
@@ -464,13 +479,13 @@ read -rs DD_API_KEY</pre></div>
             <p>Expect <code>202</code>. <code>ddsource</code> becomes each log's <code>source</code>, which is what makes Datadog install its CloudTrail pipeline (step 3 checks that it ran); every other field arrives as an attribute of the log.</p>
             <div class="highlight-box"><p><strong>202 means accepted for processing, not stored.</strong> Datadog takes each log's date from <code>eventTime</code> and rejects any log dated more than 18 hours ago, and the lab's own dates are long past, which is why the <code>jq</code> step moves it. Count what arrived before you trust anything else.</p></div>
 
-            <h3>3. Find the logs and read their names</h3>
+            <h3 id="step-read-names">3. Find the logs and read their names</h3>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail env:lab</pre></div>
             <p>Set Log Explorer's time range to cover the past 4 hours. Expect 24 logs, their event names in the content column; if your organisation already receives CloudTrail, keep <code>env:lab</code> in every search below. Then two controls. Add <code>@evt.name:*</code>, which matches logs that have the attribute: you should still see 24. Fewer means the pipeline did not process them (Datadog installs it when the first CloudTrail log arrives): check the Pipelines page, upload again with a new tag such as <code>env:lab2</code>, and use that tag. If your edition uses Security Filters, Datadog tags each log <code>datadog.cloud_siem:true</code> or <code>false</code>; with <code>datadog.cloud_siem:true</code> added you should still see 24, or no rule will ever see the lab. Open the <code>StopLogging</code> log and compare its side panel with the table above.</p>
 
             <h3>4. Filter on one attribute: trail tampering (D1)</h3>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @evt.name:(StopLogging OR DeleteTrail OR UpdateTrail OR PutEventSelectors)</pre></div>
-            <p>Expect one log: <code>StopLogging</code> by <code>backup-svc</code> from <code>203.0.113.50</code>, the lab's 10:09:03 event (Datadog shows it at the shifted time). The other 23 are the negative case. Parentheses list alternatives for one attribute, <code>OR</code> must be in capitals, and a <code>-</code> in front of a term excludes: <code>-@evt.name:DescribeInstances</code> keeps the 21 others. Values are exact and case sensitive, so <code>@evt.name:stoplogging</code> finds nothing, while <code>*</code> stands for any run of characters: <code>@evt.name:Describe*</code> finds 5. A value containing a colon, hyphen or space needs double quotes, as ARNs (Amazon Resource Names) do: <code>@userIdentity.arn:"arn:aws:iam::111122223333:user/build-bot"</code> finds 12. Numeric attributes also take ranges such as <code>[400 TO 499]</code> once they are facets, and <code>CIDR(@network.client.ip, 203.0.113.0/24)</code> matches an address range (13 logs here), though Datadog's list of places that function works leaves out detection rules.</p>
+            <p>Expect one log: <code>StopLogging</code> by <code>backup-svc</code> from <code>203.0.113.50</code>, the lab's 10:09:03 event (Datadog shows it at the shifted time). The other 23 are the negative case. Parentheses list alternatives for one attribute, <code>OR</code> must be in capitals, and a <code>-</code> in front of a term excludes: <code>-@evt.name:DescribeInstances</code> keeps the 21 others. Values are exact and case sensitive, so <code>@evt.name:stoplogging</code> finds nothing, while <code>*</code> stands for any run of characters: <code>@evt.name:Describe*</code> finds 5. A value containing a colon, hyphen or space needs double quotes, as ARNs (Amazon Resource Names) do: <code>@userIdentity.arn:"arn:aws:iam::111122223333:user/build-bot"</code> finds 12. Numeric attributes also take ranges such as <code>[400 TO 499]</code> once they are facets (fields set up for filtering and grouping), and <code>CIDR(@network.client.ip, 203.0.113.0/24)</code> matches an address range (13 logs here), though Datadog's list of places that function works leaves out detection rules.</p>
 
             <h3>5. Nested attributes: console sign-in without MFA (D4)</h3>
 <div class="code-block" data-lang="datadog"><pre>source:cloudtrail @additionalEventData.MFAUsed:No</pre></div>
@@ -656,7 +671,7 @@ terraform validate</pre></div>
                 <p>Datadog ships a rule called <a href="https://docs.datadoghq.com/security/default_rules/208-e1f-0f9/" target="_blank" rel="noopener noreferrer">AWS console login without MFA</a>. Its page says it matches when <code>@userIdentity.sessionContext.attributes.mfaAuthenticated</code> is false. Would it catch <code>bob</code>'s sign-in in this lab?</p>
                 <details>
                     <summary>Show the answer</summary>
-                    <p>No, going by its page. The lab's sign-in events carry <code>additionalEventData.MFAUsed</code> and no <code>sessionContext</code> at all, so the attribute that rule tests is missing from every one of them. <code>MFAUsed</code> is also the field AWS's own Security Hub CSPM control CloudWatch.3 reads for this case. CloudTrail can describe MFA in more than one field, and a rule written for one of them is blind to events that carry the other. Before relying on any rule, yours or a vendor's, check that its fields exist on your own events: search for the field with <code>:*</code> and confirm it finds something.</p>
+                    <p>No, going by its page. The lab's sign-in events carry <code>additionalEventData.MFAUsed</code> and no <code>sessionContext</code> at all, so the attribute that rule tests is missing from every one of them. <code>MFAUsed</code> is also the field AWS's own Security Hub <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a> control CloudWatch.3 reads for this case. CloudTrail can describe MFA in more than one field, and a rule written for one of them is blind to events that carry the other. Before relying on any rule, yours or a vendor's, check that its fields exist on your own events: search for the field with <code>:*</code> and confirm it finds something.</p>
                 </details>
             </div>
         </section>

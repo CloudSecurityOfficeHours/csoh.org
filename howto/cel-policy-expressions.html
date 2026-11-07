@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="cel">
@@ -63,7 +63,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -351,14 +351,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>CEL policy expressions, hands-on</h1>
-        <p>CEL is small on purpose: no loops, no side effects, guaranteed to terminate. That is why it runs inside the <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> API server and inside Google Cloud <a class="glossary-link" href="../glossary.html#term-iam">IAM</a>, and why it is now the default way to write admission policy.</p>
+        <p>CEL (Common Expression Language) is a small language for single-expression rules such as "every container must set a memory limit". It is small on purpose: no loops, no way to change anything, and every expression is guaranteed to finish. That is why <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> and Google Cloud <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> run it inside their own servers, and why it is now the default way to write admission policy, the rules Kubernetes checks before it accepts a change.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Python 3.10 or later for the expression lab; Docker and <code>kind</code> if you want to run the admission policy for real; a Google Cloud organization, and the right to change its policies, if you want to enforce the custom constraint</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block on this page and ran it on 4 November 2026 on an Apple silicon Mac, and the outputs shown are pasted from that run; a planted error in a block made the script fail, so the check can fail. The CEL ran in cel-python 0.5.0 on Python 3.10, the expression lab's shell blocks in a clean interactive zsh, and exercise 4's <a class="glossary-link" href="../glossary.html#term-rego">Rego</a> in <a class="glossary-link" href="../glossary.html#term-opa">OPA</a> 1.22.0, with a <code>package</code> line added. The <code>kind</code> lines in step 5 ran on kind 0.33.0 (Kubernetes 1.37.0) and printed the refusal shown. Every Kubernetes object, including the exercise answers, was applied to a local Kubernetes 1.37.0 API server (the kube-apiserver and etcd binaries the Kubernetes project publishes for envtest), with the CRD schema and the bare <code>validations</code> lists wrapped in the smallest complete object that holds them. The IAM condition in step 6 was evaluated by cel-python with test values, not by IAM. For the Google Cloud section, no constraint or organization policy was created and none of its <code>gcloud</code> commands was run, since each is an organization-level change: the files were parsed with the Google Cloud SDK 585.0.0's own readers, the commands were checked against its help, the conditions were evaluated locally against JSON shaped like the Cloud Storage API's bucket resource, and what Google's evaluator does with them comes from Google's documentation as of 4 November 2026.</p>
@@ -366,13 +366,10 @@
 
         <section id="intro">
             <h2>The policy language that lives inside the thing it governs</h2>
-            <p>Common Expression Language is deliberately small. It is not Turing complete, it has no side effects, and every expression is guaranteed to terminate. Those three properties sound like limitations, and they are exactly why CEL is everywhere: if evaluation cannot loop forever and cannot reach out to the network, it is safe to run inside a hot path.</p>
-            <p>So CEL runs where a general-purpose policy engine cannot. It is embedded in the Kubernetes API server itself, in Google Cloud IAM's condition evaluator and Google Cloud's custom organization policy constraints, in <a class="glossary-link" href="../glossary.html#term-envoy">Envoy</a>, in Firebase security rules, and in CRD field validation. There is no <a class="glossary-link" href="../glossary.html#term-sidecar">sidecar</a>, no webhook, no extra network hop, and nothing to be unavailable at the moment a decision is needed.</p>
-            <p>That is the real contrast with <a href="opa-rego.html">OPA and Rego</a>, and it is worth having a clear view of it because the two are increasingly presented as alternatives:</p>
-            <ul>
-                <li><strong>Rego</strong> is a full policy language evaluated by a separate engine. It can join across documents, load external data, and express arbitrarily complex logic. It costs you a component to deploy, secure, and keep available.</li>
-                <li><strong>CEL</strong> is an expression evaluated in-process by the host. It cannot do joins or fetch data. It also cannot be down, cannot add latency you did not already have, and cannot be bypassed by a network failure.</li>
-            </ul>
+            <p>Kubernetes and Google Cloud both let you write rules that a new or changed resource must pass before it is accepted: every container must set a memory limit, every storage bucket must block public access. Platform and security teams write many of those rules in Common Expression Language (CEL), each as a single expression that comes out true or false.</p>
+            <p>CEL is deliberately small. It is not Turing complete, which means it cannot express every program a general-purpose language can; it has no side effects, so evaluating an expression never changes anything; and every expression is guaranteed to terminate. Those three properties sound like limitations, and they are exactly why CEL is everywhere: if evaluation cannot loop forever and cannot reach out to the network, it is safe to run inside a hot path, the code that every request passes through.</p>
+            <p>So CEL runs where a general-purpose policy engine cannot. It is embedded in the Kubernetes API server itself, the part of Kubernetes that receives every request to create or change something in a cluster. It is also in Google Cloud IAM's condition evaluator and Google Cloud's custom organization policy constraints, in <a class="glossary-link" href="../glossary.html#term-envoy">Envoy</a>, in Firebase security rules, and in CRD field validation, the checks on the new resource types that a CustomResourceDefinition (CRD) adds to a cluster. There is no <a class="glossary-link" href="../glossary.html#term-sidecar">sidecar</a> (a helper container running beside the application), no webhook (a call out to a separate service), no extra network hop, and nothing to be unavailable at the moment a decision is needed.</p>
+            <p>That is the real contrast with <a href="opa-rego.html">OPA and Rego</a>, and it is worth having a clear view of it because the two are increasingly presented as alternatives. Rego is a full policy language evaluated by a separate engine. It can join across documents, load external data, and express arbitrarily complex logic, and it costs you a component to deploy, secure, and keep available. CEL is an expression evaluated in-process by the host, the program that is already handling the request. It cannot do joins or fetch data. It also cannot be down, cannot add latency you did not already have, and cannot be bypassed by a network failure.</p>
             <p>For "no privileged containers in this namespace", CEL is straightforwardly the better answer now that it is built in. For "no image outside our registry unless the team owns a documented exception recorded in this other system", it is the wrong tool and no amount of cleverness fixes that.</p>
         </section>
 
@@ -383,7 +380,8 @@
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">Expressions, macros, and the activation</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">What a CEL policy is made of</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#org-policy">Google Cloud custom organization policy constraints</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
@@ -392,8 +390,18 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>This guide is marked intermediate. It assumes you know Kubernetes basics: that a <a class="glossary-link" href="../glossary.html#term-pod">Pod</a> is one or more containers run together, what Deployments and namespaces are, that YAML manifests describe them, and that <code>kubectl apply</code> sends a manifest to a cluster. The site's <a href="../kubernetes.html#what-is">Kubernetes security guide</a> explains Pods and namespaces, and its section on <a href="../kubernetes.html#admission">admission control</a> shows where these policies run. The Google Cloud section also assumes you know that Google Cloud groups projects into folders under an organization, which the <a href="../gcp-security.html#reference-architecture">Google Cloud security guide</a> lays out. CEL itself is taught from the start, and the lab needs Python installed but no Python knowledge.</p>
+            <p>Read the <a href="#model">next section</a> first: it shows what a CEL policy is made of, and its examples are there to read. The <a href="#walkthrough">walk-through</a> then works in a lab folder on your computer. Step 1 saves a sample Pod as <code>pod.json</code> and writes <code>cel.py</code>, a few lines of Python that evaluate each expression you give them against that sample; steps 2 and 3 run expressions through it. Steps 4 and 5 write a real Kubernetes admission policy and, if you have Docker and <code>kind</code>, try it on a throwaway cluster. Step 6 shows two other places the same expressions turn up, and step 7 shows a policy asking the cluster's own access-control rules a question. The <a href="#org-policy">Google Cloud section</a> after the walk-through applies CEL to Google Cloud's custom constraints and reuses <code>cel.py</code>. The <a href="#exercises">exercises</a> run in the same lab, with each answer hidden until you open Show the answer.</p>
+            <p>Each input block has a label at the top, and every block has a copy button. A block labelled BASH holds commands to paste into your terminal. Several of them contain a line such as <code>cat &gt; pod.json &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>pod.json</code>; paste the whole block at once, the <code>EOF</code> line included. A block labelled YAML is a Kubernetes or Google Cloud object, or part of one: save it only when the text says to, as step 5 does with step 4's policy. Blocks labelled CEL hold expressions to read, and the one labelled REGO belongs to exercise 4. An unlabelled block is output: what the command before it should print.</p>
+            <p>Where the page shows output, yours should match it. A script ran the page's code blocks on 4 November 2026, with cel-python 0.5.0 on Python 3.10 and, for step 5, kind 0.33.0, and the outputs shown are pasted from that run. Steps 1 to 3 do not show their output; step 3 says which results to look for. Two parts were not run the way you would run them. The Google Cloud IAM condition in step 6 was evaluated by cel-python with test values, not by IAM. None of the <code>gcloud</code> commands in the Google Cloud section was run, because each changes an organization's policies: they were checked against the Google Cloud SDK's help, and what Google does with a condition comes from Google's documentation.</p>
+            <p>If you work only in Kubernetes, the Google Cloud section can wait for a second reading, though exercise 5 uses it. If you work only in Google Cloud, read the next section and steps 1 to 3, skim step 4's policy and binding, which the Google Cloud section compares its own two objects to, then go to the Google Cloud section. If an expression gives a result the page does not lead you to expect, check that you are in <code>~/cel-lab</code>, where step 1 saved <code>pod.json</code> and <code>cel.py</code>; that <code>DOC</code> names the file you meant, since <code>cel.py</code> reads <code>pod.json</code> unless it does; and that your cel-python is the 0.5.0 the page used, since <code>pip3 install</code> fetches the newest release.</p>
+        </section>
+
         <section id="model">
-            <h2>Expressions, macros, and the activation</h2>
+            <h2>What a CEL policy is made of</h2>
+            <p>Say a cluster should refuse any Pod with a container that might run as root. In CEL that whole rule is one expression that comes out true for an acceptable Pod and false for any other, and the obvious first version breaks on a container that leaves out its security settings. This section covers what such an expression is built from, and why that version breaks. An expression reads variables that its host supplies: in Kubernetes admission, <code>object</code> is the resource being checked. CEL's name for that set of variables is the activation, and the highlighted box above the contents list says what three of those hosts provide.</p>
             <p>A CEL policy is one expression that evaluates to a boolean. There is no statement sequence, no assignment, no early return, and no function you define yourself. If you are reaching for those, you have hit the ceiling and should be looking at a different layer.</p>
             <p>Iteration exists, but only through <strong>macros</strong>, and only bounded by a collection you already have:</p>
             <ul>
@@ -404,7 +412,7 @@
                 <li><code>list.map(x, expression)</code> transforms each element.</li>
                 <li><code>has(x.field)</code> tests presence, which is not the same as testing truth.</li>
             </ul>
-            <p>That last one is the thing to internalise first. Reading a field that is not there is an <em>error</em> in CEL, not a false and not a null. An error propagates and the whole expression fails, which in Kubernetes admission means the policy's <code>failurePolicy</code> decides your fate. <code>has()</code> before you dereference an optional field is not defensive style, it is the difference between a working policy and one that fails open or blocks every deployment.</p>
+            <p>That last one is the thing to internalise first. Reading a field that is not there is an <em>error</em> in CEL, not a false and not a null. An error propagates and the whole expression fails, which in Kubernetes admission means the policy's <code>failurePolicy</code>, the setting that says whether an error blocks the request or lets it through, decides your fate (<a href="#step-vap">step 4</a> sets it). <code>has()</code> before you dereference an optional field is not defensive style, it is the difference between a working policy and one that fails open or blocks every deployment.</p>
 <div class="code-block" data-lang="cel"><pre>// Errors, if any container omits securityContext:
 object.spec.containers.all(c, c.securityContext.runAsNonRoot == true)
 
@@ -412,13 +420,14 @@ object.spec.containers.all(c, c.securityContext.runAsNonRoot == true)
 // side is never evaluated when has() is false.
 object.spec.containers.all(c,
   has(c.securityContext) &amp;&amp; c.securityContext.runAsNonRoot == true)</pre></div>
+            <p><a href="#step-macros">Step 3</a> runs the macros against a sample Pod, <a href="#step-authorizer">step 7</a> meets the <code>has()</code> lesson again inside a real policy, and the <a href="#org-policy">Google Cloud section</a> shows a host where missing fields behave differently.</p>
         </section>
 
         <section id="walkthrough">
             <h2>Walk-through</h2>
 
             <h3>1. Get an evaluator you can iterate in</h3>
-            <p>Writing CEL by pushing YAML at a cluster and reading admission errors is a miserable loop. Evaluate expressions locally first.</p>
+            <p>Writing CEL by pushing YAML at a cluster and reading admission errors is a miserable loop. Evaluate expressions locally first, with cel-python, an implementation of CEL written in Python.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/cel-lab &amp;&amp; cd ~/cel-lab
 pip3 install cel-python
 
@@ -452,9 +461,9 @@ python3 cel.py 'object.spec.replicas &lt;= 5'</pre></div>
   'object.metadata.name.startsWith("web")' \
   'size(object.spec.containers) == 2' \
   'object.spec.replicas &gt; 5 ? "too many" : "ok"'</pre></div>
-            <p>C-like, and mostly unsurprising. Strings are double-quoted or single-quoted, <code>in</code> tests map keys and list membership, and there is a ternary. The standard library gives you <code>startsWith</code>, <code>endsWith</code>, <code>contains</code>, <code>matches</code> (a regular expression, RE2 flavoured, so no lookaround), <code>size</code>, and duration and timestamp arithmetic.</p>
+            <p>C-like, and mostly unsurprising. Strings are double-quoted or single-quoted, <code>in</code> tests map keys and list membership, and there is a ternary, <code>a ? b : c</code>, which gives <code>b</code> when <code>a</code> is true and <code>c</code> otherwise. The standard library gives you <code>startsWith</code>, <code>endsWith</code>, <code>contains</code>, <code>matches</code> (a regular expression, RE2 flavoured, so no lookaround), <code>size</code>, and duration and timestamp arithmetic.</p>
 
-            <h3>3. Macros, which is where real policies live</h3>
+            <h3 id="step-macros">3. Macros, which is where real policies live</h3>
 <div class="code-block" data-lang="bash"><pre>python3 cel.py \
   'object.spec.containers.all(c, has(c.resources) &amp;&amp; has(c.resources.limits))' \
   'object.spec.containers.exists(c, c.image.endsWith(":latest"))' \
@@ -463,8 +472,8 @@ python3 cel.py 'object.spec.replicas &lt;= 5'</pre></div>
   'object.spec.containers.all(c, c.image.startsWith("ghcr.io/acme/"))'</pre></div>
             <p>Run these against the sample and read the results carefully. The <code>sidecar</code> container has no <code>securityContext</code> and no <code>resources</code>, and pulls <code>:latest</code> from Docker Hub, so it fails three of the five. That is a deliberately realistic shape: the workload people wrote carefully, plus the container somebody added in a hurry.</p>
 
-            <h3>4. Write a real ValidatingAdmissionPolicy</h3>
-            <p>This is native Kubernetes admission control, generally available since Kubernetes 1.30. No webhook, no controller, no certificate rotation.</p>
+            <h3 id="step-vap">4. Write a real ValidatingAdmissionPolicy</h3>
+            <p>This is native Kubernetes admission control (the API server's checks on a request to create, change or delete an object, made after it has confirmed who is asking and that they may), generally available since Kubernetes 1.30. No webhook, no controller, no certificate rotation.</p>
 <div class="code-block" data-lang="yaml"><pre>apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -560,7 +569,7 @@ resource.name.startsWith("projects/_/buckets/acme-backups")</pre></div>
             <p>Time-bound IAM grants are one of the highest-value, least-used features in Google Cloud, and they are a CEL expression in a text box. The same instinct works for AWS through IAM condition keys and for Azure through <a class="glossary-link" href="../glossary.html#term-abac">ABAC</a> conditions, though neither of those uses CEL.</p>
             <p>Google Cloud has a third place for the same expressions, custom organization policy constraints, and its failure modes differ enough from Kubernetes to get <a href="#org-policy">a section of their own</a> after this walk-through.</p>
 
-            <h3>7. The authorizer variable</h3>
+            <h3 id="step-authorizer">7. The authorizer variable</h3>
             <p>Kubernetes admission hands your expression an <code>authorizer</code>, which lets a policy ask the API server's own <a class="glossary-link" href="../glossary.html#term-rbac">RBAC</a> a question. This is unusual and worth knowing about, because it lets you write "this is allowed, but only for principals who already hold a specific permission" without maintaining a parallel list of who those are.</p>
 <div class="code-block" data-lang="yaml"><pre>validations:
   - expression: &gt;-

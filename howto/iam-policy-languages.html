@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="aws iam">
@@ -63,7 +63,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -363,14 +363,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>IAM policy languages and Cedar, hands-on</h1>
-        <p>A policy that says Allow may grant nothing at all. Learn the evaluation model that decides, the <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> elements that do the opposite of what they look like, and Cedar, which catches at write time what IAM lets fail silently.</p>
+        <p>An AWS policy that says Allow may still grant nothing at all. Learn how AWS combines every policy that applies to a request to decide whether it goes through, the parts of an <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> policy that do the opposite of what they look like, and Cedar, a policy language that catches mistakes such as a misspelled name when you write the policy, where IAM lets them fail silently.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal; a Rust toolchain for the Cedar half; AWS CLI credentials for any AWS account to run the Access Analyzer checks (no organization needed, and nothing is created)</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block on this page, including the exercise answers, and ran it as printed on 4 November 2026, each shell block in a fresh interactive zsh on an Apple silicon Mac; every output shown is pasted from that run, and a planted error made the same script fail. The AWS commands ran with AWS CLI 2.39.2 and jq 1.8.2 against an account that is not in an organization. Every policy on the page, with single statements wrapped in a policy document, went through <a class="glossary-link" href="../glossary.html#term-iam-access-analyzer">IAM Access Analyzer</a>'s <code>validate-policy</code> (the resource control policies with the RCP policy type), and <code>check-no-new-access</code> compared the step 1 policy with a copy granting one more action. <code>simulate-principal-policy</code>, run as printed, was refused because the placeholder ARN in step 4 names another account, so it was also run against a role in the test account. The Cedar half ran with cedar-policy-cli 4.14.1, installed by the <code>cargo install</code> line. No RCP was attached, because that needs an organization: what an attached RCP does, including the services it covers, what it never applies to and which requests it denies, was checked against AWS's Organizations, IAM and Access Analyzer documentation and AWS's published example policies on 4 November 2026.</p>
@@ -378,19 +378,18 @@
 
         <section id="intro">
             <h2>Reading a policy correctly is its own skill</h2>
-            <p>Almost everyone in cloud security reads IAM policies, and most people are worse at it than they believe. Not because the JSON is hard, but because the JSON is only half the input. Whether a request succeeds depends on several policy types evaluated together in a fixed order, and a document that plainly says <code>"Effect": "Allow"</code> may grant nothing at all.</p>
-            <p>Two languages are worth real study:</p>
-            <ul>
-                <li><strong>The AWS IAM policy grammar.</strong> Unavoidable, fifteen years of accumulated design decisions (IAM reached general availability in May 2011), and full of elements that do the opposite of what they appear to.</li>
-                <li><strong>Cedar.</strong> AWS's open-source authorization language, released under Apache 2.0 in 2023, the engine behind Amazon Verified Permissions, and increasingly the way application-level authorization gets written. It is what IAM might look like designed once, deliberately, with a type checker.</li>
-            </ul>
+            <p>An IAM (Identity and Access Management) policy is a JSON document that says who may do what to which AWS resources: this role may read objects in that bucket, that user may not delete anything. Almost everyone in cloud security reads IAM policies, to review a change, to investigate an incident, or to answer a question such as "can this role read the customer-data bucket?", and most people are worse at it than they believe.</p>
+            <p>Reading the JSON is the easy part. What trips people up is that the JSON is only half the input. Whether a request succeeds depends on several policy types evaluated together in a fixed order, and a document that plainly says <code>"Effect": "Allow"</code> may grant nothing at all, because other policies can cap or deny it.</p>
+            <p>Two languages are worth real study, and this page teaches both. The first is the AWS IAM policy grammar: what a policy document may contain, and what each part means. It is unavoidable, it carries fifteen years of accumulated design decisions (IAM reached general availability in May 2011), and it is full of elements that do the opposite of what they appear to. The walk-through also covers resource control policies (RCPs), a newer kind of AWS policy written in the same grammar.</p>
+            <p>The second is Cedar, AWS's open-source authorization language, released under Apache 2.0 in 2023. Authorization means deciding whether a request is allowed. Cedar is the engine behind Amazon Verified Permissions, an AWS service that makes those decisions for your own applications, and it is increasingly the way application-level authorization gets written: the checks inside an application, such as whether a user may open a given document. It is what IAM might look like designed once, deliberately, with a type checker: a tool that compares a policy with a description of your data and rejects it, before it ever runs, if it names something that is not there.</p>
             <p>Learning them together is worth more than learning either alone, because Cedar makes explicit several things IAM leaves implicit, and once you have seen the explicit version the implicit one stops surprising you.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">The evaluation model, which is the whole game</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">How AWS decides whether a request is allowed</a></li>
                 <li><a href="#walkthrough">Walk-through: AWS IAM</a></li>
                 <li><a href="#rcps">Walk-through: resource control policies</a></li>
                 <li><a href="#cedar">Walk-through: Cedar</a></li>
@@ -400,8 +399,19 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>This guide is marked intermediate. It assumes you know what IAM users, roles and policies are, have read a JSON policy document before, and have run the AWS CLI (command-line interface) with credentials set up. The resource control policy part also assumes you know that AWS Organizations runs many AWS accounts together under one management account. If any of that is new, the site's <a href="../iam.html#identity-types">IAM and cloud identity guide</a> covers the kinds of identity, and its <a href="../aws-security.html#landing-zone">AWS security guide</a> shows how an organization's accounts are laid out. Cedar is taught from the start.</p>
+            <p>Read the <a href="#model">next section</a> first. It explains how AWS combines the policies that apply to a request, and ends with six questions to ask of any policy statement. The walk-through then comes in three parts. In the <a href="#walkthrough">AWS IAM part</a>, steps 1 to 3 show short policies to read and explain the pieces that behave differently from how they look, and step 4 runs AWS's own policy-checking tools from the AWS CLI. In the <a href="#rcps">resource control policy part</a>, step 5 compares RCPs with SCPs and checks whether your account is in an organization, and steps 6 and 7 save policies as files and run AWS's validator on them; that works in any account, organization or not, because the validator reads only the policy text you send. In the <a href="#cedar">Cedar part</a>, steps 8 to 10 install Cedar and write, check and test a small policy set. The Cedar part needs no AWS account and does not depend on the AWS parts, so you can do it on its own. The <a href="#exercises">exercises</a> mix both languages, with each answer hidden until you open Show the answer.</p>
+            <p>Each input block has a label at the top, and every block has a copy button. A block labelled JSON is a policy document, or one statement from one: read it, and save it as a file when the text says to, under the name it gives. A block labelled CEDAR is a Cedar file to save in the <code>~/cedar-lab</code> folder that step 8 creates; its first line, a comment starting <code>//</code>, gives the file name. A block labelled BASH holds commands to paste into your terminal, from the folder that holds the files they name. An unlabelled block is output: what the command before it should print. Step 10 starts with <code>cat &gt; entities.json &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>entities.json</code>; paste that whole block at once, the <code>EOF</code> line included.</p>
+            <p>Your output should match the page. Every block was run as printed on 4 November 2026, with AWS CLI 2.39.2, jq 1.8.2 and cedar-policy-cli 4.14.1, against an AWS account that is not in an organization, and every output shown is pasted from that run. A few things will differ for you. In step 4, <code>simulate-principal-policy</code> names a placeholder role in another account, so AWS refuses it as printed; put the ARN (Amazon Resource Name) of a role in your own account in its place. Step 4's last command compares two files, <code>old.json</code> and <code>new.json</code>, that you make yourself; the page was checked with the step 1 policy and a copy granting one more action. In step 5, <code>describe-organization</code> prints your management account's ID and feature set instead of an error if your account is in an organization. No RCP was attached for this page, because that needs an organization, so what an attached RCP does comes from AWS's documentation and published examples, not from a run. AWS's list of the services RCPs cover also grows, and exercise 5's error depends on what is on it.</p>
+            <p>If a result differs from the page, check that you are in the folder that holds the files the command names (<code>~/cedar-lab</code> for the Cedar steps), that you saved each file under the name the page gives, and that your versions match the ones above.</p>
+        </section>
+
         <section id="model">
-            <h2>The evaluation model, which is the whole game</h2>
+            <h2>How AWS decides whether a request is allowed</h2>
+            <p>Suppose someone asks whether a role can delete objects in a bucket. You open the role's policy, and it allows <code>s3:*</code>, every action in <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service, AWS's storage for files and data). Many people stop there and answer yes, and the answer can still be no, because other policies also apply to that request. To answer correctly you need to know which policies those are and how AWS combines them.</p>
+            <p>Access is usually granted in one of two places. An identity policy is attached to a user or role, the principal making the request. A resource policy is attached to the thing being accessed, such as a bucket policy on an S3 bucket. Other kinds only set a ceiling. An organization in AWS Organizations can attach resource control policies (RCPs) and service control policies (SCPs) to its accounts; a user or role can have a permissions boundary, a cap attached to it; and a temporary session can be given a session policy, a cap passed in when the session starts.</p>
             <p>AWS does not ask "does a policy allow this". It runs a fixed evaluation across every policy type that applies:</p>
             <ol>
                 <li><strong>An explicit <code>Deny</code> anywhere ends it.</strong> In any policy, of any type, at any level. Nothing overrides it.</li>
@@ -420,12 +430,12 @@
             <ol>
                 <li><strong>Effect:</strong> Allow or Deny? Deny changes everything that follows.</li>
                 <li><strong>Principal:</strong> who? Absent means the policy is identity-based and the principal is whoever it is attached to.</li>
-                <li><strong>Action:</strong> which operations, and is it <code>Action</code> or <code>NotAction</code>?</li>
+                <li><strong>Action:</strong> which operations, and is it <code>Action</code> or <code>NotAction</code>? (<a href="#step-notaction">Step 2</a>)</li>
                 <li><strong>Resource:</strong> which objects, and is it <code>Resource</code> or <code>NotResource</code>?</li>
-                <li><strong>Condition:</strong> under what circumstances, and what happens when a key is missing?</li>
+                <li><strong>Condition:</strong> under what circumstances, and what happens when a key is missing? (<a href="#step-conditions">Step 3</a>)</li>
                 <li><strong>What type of policy is this,</strong> and therefore is it a grant or a ceiling?</li>
             </ol>
-            <p>Question six is the one people skip, and it is the one that most often makes the other five irrelevant.</p>
+            <p>Question six is the one people skip, and it is the one that most often makes the other five irrelevant. Exercise 1 is built around it.</p>
         </section>
 
         <section id="walkthrough">
@@ -448,11 +458,11 @@
   ]
 }</pre></div>
             <p>Three things in that small document are worth naming.</p>
-            <p><code>${aws:PrincipalTag/team}</code> is a <strong>policy variable</strong>, substituted at evaluation time. One statement covering every team is far better than fifty near-identical policies, and it is the standard way to do <a class="glossary-link" href="../glossary.html#term-abac">attribute-based access control</a> on AWS. Note that only single-valued context keys can be used as variables.</p>
-            <p><code>aws:PrincipalOrgID</code> is the modern answer to the <a class="glossary-link" href="../glossary.html#term-confused-deputy">confused-deputy</a> problem: the caller must belong to your organization, whoever they claim to be. Its siblings <code>aws:SourceArn</code> and <code>aws:SourceAccount</code> do the same job for service principals, and their absence is exactly what made a long list of cross-<a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> vulnerabilities possible.</p>
+            <p><code>${aws:PrincipalTag/team}</code> is a <strong>policy variable</strong>, substituted at evaluation time. One statement covering every team is far better than fifty near-identical policies, and it is the standard way to do <a class="glossary-link" href="../glossary.html#term-abac">attribute-based access control</a> on AWS. Note that only single-valued context keys can be used as variables. Context keys are the facts AWS attaches to each request, such as the caller's tags or organization, and they are what a <code>Condition</code> tests.</p>
+            <p><code>aws:PrincipalOrgID</code> is the modern answer to the <a class="glossary-link" href="../glossary.html#term-confused-deputy">confused-deputy</a> problem: the caller must belong to your organization, whoever they claim to be. Its siblings <code>aws:SourceArn</code> and <code>aws:SourceAccount</code> do the same job for service principals, the identities AWS services use when they act on your behalf, and their absence is exactly what made a long list of cross-<a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> vulnerabilities possible.</p>
             <p><strong>Wildcards are not regular expressions.</strong> Only <code>*</code> (any sequence) and <code>?</code> (any single character) exist. <code>s3:Get*</code> is fine; <code>s3:Get.*</code> matches nothing, and <code>[a-z]</code> is a literal bracket expression that will never match an action name.</p>
 
-            <h3>2. NotAction, and why it is almost always wrong</h3>
+            <h3 id="step-notaction">2. NotAction, and why it is almost always wrong</h3>
 <div class="code-block" data-lang="json"><pre>{
   "Effect": "Allow",
   "NotAction": "iam:*",
@@ -472,7 +482,7 @@
             <p>The exception list exists because those services are global and live in <code>us-east-1</code>; deny them by region and you lock yourself out of IAM. That list is also the thing people copy without updating, so treat any inherited version of this SCP as needing review rather than as settled.</p>
             <p><code>NotPrincipal</code> is worse still and the AWS documentation itself steers you away from it. If you find one, treat it as a finding.</p>
 
-            <h3>3. Conditions, and the two set operators that fail open</h3>
+            <h3 id="step-conditions">3. Conditions, and the two set operators that fail open</h3>
             <p>Multi-valued condition keys need a set operator, and the two available behave differently in the case that matters: the key not being present at all.</p>
             <ul>
                 <li><strong><code>ForAllValues</code></strong> is true when every value in the request matches something in the policy. <strong>It is also true when there are no values in the request at all.</strong></li>
@@ -545,7 +555,7 @@
     { "Effect": "Allow", "Principal": "*", "Action": "*", "Resource": "*" }
   ]
 }</pre></div>
-            <p>At launch RCPs covered five services: Amazon <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service), AWS <a class="glossary-link" href="../glossary.html#term-sts">Security Token Service</a> (STS), AWS KMS, Amazon Simple Queue Service (SQS) and AWS <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a>. <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps.html#rcp-supported-services" target="_blank" rel="noopener noreferrer">AWS's list</a> named 62 service prefixes on 4 November 2026, including Amazon DynamoDB, Amazon Elastic Container Registry, Amazon CloudWatch Logs and Amazon Cognito. Amazon Simple Notification Service (SNS), AWS <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a>, Amazon API Gateway and Amazon <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) are not on it, so no RCP protects an SNS topic or a Lambda function; <a href="https://github.com/aws-samples/data-perimeter-policy-examples" target="_blank" rel="noopener noreferrer">AWS's data-perimeter examples</a> cover SNS topics and API Gateway APIs with resource-based policies instead. The list grows, so check it rather than a copy of it.</p>
+            <p>At launch RCPs covered five services: Amazon S3 (Simple Storage Service), AWS <a class="glossary-link" href="../glossary.html#term-sts">Security Token Service</a> (STS), AWS KMS, Amazon Simple Queue Service (SQS) and AWS <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a>. <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps.html#rcp-supported-services" target="_blank" rel="noopener noreferrer">AWS's list</a> named 62 service prefixes on 4 November 2026, including Amazon DynamoDB, Amazon Elastic Container Registry, Amazon CloudWatch Logs and Amazon Cognito. Amazon Simple Notification Service (SNS), AWS <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a>, Amazon API Gateway and Amazon <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) are not on it, so no RCP protects an SNS topic or a Lambda function; <a href="https://github.com/aws-samples/data-perimeter-policy-examples" target="_blank" rel="noopener noreferrer">AWS's data-perimeter examples</a> cover SNS topics and API Gateway APIs with resource-based policies instead. The list grows, so check it rather than a copy of it.</p>
             <p>Naming a service that is not on the list is an error to <code>validate-policy</code> run with the RCP policy type (exercise 5 shows the output): an <code>ERROR</code> finding, <code>RCP_SYNTAX_ERROR_ACTION</code>, and AWS defines errors as lines that prevent the policy from functioning. Whether Organizations would also refuse to save such a policy was not tested for this page, because that needs an organization, so treat the validator as your gate. The quieter case passes it. <code>s3:ListAllMyBuckets</code> has no resource type in AWS's Service Authorization Reference, and an RCP applies through the resource a request authorizes, so a statement denying it validates with no findings and has nothing to apply to.</p>
             <p>Two more exemptions belong in that last row. RCPs do not restrict <code>kms:RetireGrant</code>, and an RCP never reaches resources in accounts outside its organization, even when your own principals are the ones calling. The management account exemption is the one to plan around: an RCP attached to the organization root covers every member account, delegated administrators included, and leaves the management account's buckets, keys and queues to their own policies. To see which account that is:</p>
 <div class="code-block" data-lang="bash"><pre>aws organizations describe-organization \

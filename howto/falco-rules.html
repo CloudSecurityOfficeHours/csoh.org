@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="falco">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -344,14 +344,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Falco rules, hands-on</h1>
-        <p><a class="glossary-link" href="../glossary.html#term-falco">Falco</a> tests every event against your rules the moment it happens: Linux system calls by default and, through plugins, cloud audit logs. Learn its YAML rule language from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, then turn the same language on a running container.</p>
+        <p><a class="glossary-link" href="../glossary.html#term-falco">Falco</a> tests every event against your rules the moment it happens, and raises an alert when one matches. By default the events are Linux system calls, the requests programs make to the operating system, such as a request to open the file that holds password hashes; through plugins they can be cloud audit logs, such as AWS's <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a>. Learn its YAML rule language from zero on a small CloudTrail lab, then turn the same language on a running container.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker (Docker Desktop is fine), <code>jq</code> and a terminal. No cloud account: the lab is a file.</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> every command and rule on this page was run with Falco 0.45.0 and falcoctl 0.14.2 in Docker Desktop 4.86.0 on an Apple silicon Mac, using the projects' native arm64 images (the amd64 images were not tested), and the outputs shown are what they printed. Step 8 ran Falco's kernel probe against Docker Desktop's Linux kernel (6.12.76-linuxkit). falcosidekick, named in step 6, was not run.</p>
@@ -359,15 +359,17 @@
 
         <section id="intro">
             <h2>Rules that judge each event as it happens</h2>
-            <p>Falco is an open-source (Apache 2.0) runtime security tool for Linux, created by Sysdig and now a graduated project of the Cloud Native Computing Foundation (<a class="glossary-link" href="../glossary.html#term-cncf">CNCF</a>). Its usual job is watching system calls, the requests every program makes to the Linux kernel, and raising an alert the moment one matches a rule. Plugins let the same engine read other event streams, among them <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> audit logs, Okta, GitHub and, on this page, AWS (Amazon Web Services) CloudTrail.</p>
-            <p>A Falco rule is a few lines of YAML: a condition that is true or false for one event, a line of output to print when it is true, and a priority. Platform and security engineers write them, often starting from the stock rules the Falco project publishes, and keep them in git like any other code.</p>
-            <p>The one distinction that matters: Falco is not a search engine. It keeps no store of past events, and no rule can look back or count. Each event is judged alone as it arrives, then forgotten. That is what lets Falco alert in real time, and it is why two of the five detections on this page have to be finished somewhere else.</p>
+            <p>A program inside a container opens <code>/etc/shadow</code>, the file that holds a Linux system's password hashes. With a rule for it loaded, Falco sees the request as it reaches the kernel, the core of the operating system, and prints an alert straight away. Watching system calls, the requests every program makes to the Linux kernel, and raising an alert the moment one matches a rule, is Falco's usual job.</p>
+            <p>Falco is an open-source (Apache 2.0) runtime security tool for Linux, meaning it watches systems while they run. It was created by Sysdig and is now a graduated project, the most mature level, of the Cloud Native Computing Foundation (<a class="glossary-link" href="../glossary.html#term-cncf">CNCF</a>). Plugins let the same engine read other event streams, among them <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> audit logs, Okta, GitHub and, on this page, AWS (Amazon Web Services) CloudTrail, the record of the calls made in an AWS account.</p>
+            <p>A Falco rule is a few lines of YAML, a plain-text format for settings: a condition that is true or false for one event, a line of output to print when it is true, and a priority. Platform and security engineers write them, often starting from the stock rules the Falco project publishes, and keep them in git like any other code.</p>
+            <p>The one distinction that matters: unlike a search engine, Falco keeps no store of past events, and no rule can look back or count. Each event is judged alone as it arrives, then forgotten. That is what lets Falco alert in real time, and it is why two of the five detections on this page have to be finished somewhere else.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">One event in, one verdict out</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">How a rule works: one event at a time</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -375,8 +377,20 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Intermediate here means you are comfortable in a terminal, have run containers with Docker, and can read YAML and JSON. You do not need to know Falco, and you need no AWS account. The lab's events are CloudTrail records, and the walk-through tells the story they record before any rule reads them; <a href="../cloud-logging.html#control">Cloud logging</a> explains what CloudTrail records in general. Step 8 watches the system calls a container's programs make, and <a href="../containers.html#what-is">Containers and cloud security</a> explains what a container is underneath, if you want that first.</p>
+            <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> shows one complete rule and the alert it prints, the idea the rest of the page builds on. In the <a href="#walkthrough">walk-through</a>, steps 1 to 3 download Falco and its plugins, convert the lab to the file shape CloudTrail writes, and point Falco at it with a control rule that matches every event. Steps 4 and 5 write rules for D1 and D4. Step 6 shows what Falco cannot do, counting (D2) and pairing two events (D3), and hands the counting to the shell. Step 7 runs Falco's stock CloudTrail rules beside yours and tunes them, and step 8 turns the same language on system calls from a running container. The <a href="#exercises">exercises</a> ask you to write and debug rules yourself, with each answer hidden under Show the answer until you open it.</p>
+            <p>In steps 3 to 7, and in the exercises, each <code>falco</code> command reads the lab file from its first event to its last, judges each event as if it had just arrived, prints an alert for every match, ends with a summary and stops. Step 8 is different: there Falco runs in the background and watches real system calls until the last command of that step removes it.</p>
+            <p>A code block labelled BASH is something to paste into your terminal. A block labelled YAML is a file to save in <code>~/falco-lab</code> under the file name in its first line, a comment such as <code># d1.yaml</code>; the rule in the next section has no such line and is there only to read. The unlabelled block under a command shows what it should print. Each block has a copy button. Step 2 starts with <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which saves every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+            <p>Every command and rule was run with the versions the page pins, Falco 0.45.0 and falcoctl 0.14.2, in Docker Desktop on an Apple silicon Mac, and the outputs shown are what they printed, so yours should match, apart from the time and container ID in step 8's alert, which come from your own run. Two things were not tested: the amd64 images that Intel and AMD machines run, and falcosidekick, the forwarder step 6 names. Step 8 also depends on Falco's kernel probe loading on your machine, and says what to do if it does not.</p>
+            <p>Some parts can wait for a second reading. The 24 lines of lab data in step 2 are scaffolding, so paste them without studying them. The paragraph on ATT&amp;CK tags at the end of step 4, and the note in step 6 on passing alerts on with falcosidekick, can wait too.</p>
+            <p>If your output differs from the page, check that you are in <code>~/falco-lab</code>: the <code>falco</code> command in steps 3 to 7 is the shell function step 3 defines, and it mounts the folder you run it from at <code>/lab</code>. Then run step 3's control again, <code>falco -r everything.yaml | tail -5</code>, which should report <code>Events detected: 24</code>. If it reports 0, check the conversion in step 2, because without <code>eventType</code> Falco reads nothing. If the control sees all 24 and one of your rules stays silent, the first item under <a href="#mistakes">Common mistakes</a> lists other ways a run goes quiet.</p>
+        </section>
+
         <section id="model">
-            <h2>One event in, one verdict out</h2>
+            <h2>How a rule works: one event at a time</h2>
+            <p>Suppose you want to hear the moment anyone stops CloudTrail logging, which an attacker can do to hide what comes next. A log search finds that event after it has been stored, when a person or a scheduled rule searches for it. Falco tests it as it arrives, against every rule you loaded.</p>
             <p>Everything in Falco follows from one idea: <strong>a rule is a test applied to each event on its own</strong>. Events arrive one at a time, Falco checks each against the loaded rules, and when a rule's condition is true it prints that rule's output with the event's values filled in. Then it moves on and remembers nothing. This is a complete rule for CloudTrail events:</p>
 <div class="code-block" data-lang="yaml"><pre>- rule: Trail stopped
   desc: Someone called StopLogging.
@@ -384,9 +398,9 @@
   output: StopLogging by %ct.user from %ct.srcip
   priority: CRITICAL
   source: aws_cloudtrail</pre></div>
-            <p><code>ct.name</code> is a <strong>field</strong>: a named value extracted from each event, here the CloudTrail <code>eventName</code>. In <code>output</code>, a field name after <code>%</code> is replaced by the event's value. <code>source</code> says which stream the rule reads. Against the lab's 24 events the condition is tested 24 times and is true once, which prints:</p>
+            <p><code>ct.name</code> is a <strong>field</strong>: a named value extracted from each event, here the CloudTrail <code>eventName</code>. In <code>output</code>, a field name after <code>%</code> is replaced by the event's value. <code>source</code> says which stream the rule reads (<a href="#step-control">step 3</a> shows what happens without it). Against the lab's 24 events the condition is tested 24 times and is true once, which prints:</p>
 <div class="code-block" data-lang="text"><pre>10:09:03.000000000: Critical StopLogging by backup-svc from 203.0.113.50</pre></div>
-            <p>Notice what a condition cannot say. It sees one event, so there is no "five times", no "within 10 minutes" and no "after a CreateUser". Counting and correlation happen in whatever receives Falco's alerts.</p>
+            <p>Notice what a condition cannot say. It sees one event, so there is no "five times", no "within 10 minutes" and no "after a CreateUser". Counting and correlation happen in whatever receives Falco's alerts, as <a href="#step-count">step 6</a> shows. <a href="#step-d1">Step 4</a> builds a fuller version of the rule above.</p>
         </section>
 
         <section id="walkthrough">
@@ -450,7 +464,7 @@ jq -s '{Records: map(.eventType = (if .eventName == "ConsoleLogin" then "AwsCons
             <p><strong>Without <code>eventType</code>, Falco reads nothing and says nothing.</strong> AWS documents <code>eventType</code> as present on every CloudTrail record, and the plugin skips any record without one. The lab file was trimmed of it, so the conversion puts it back. Leave that out and step 3 reports <code>Events detected: 0</code>, with no error and an exit code of 0: the same thing a quiet account looks like.</p>
             </div>
 
-            <h3>3. Point Falco at the file, and look at everything first</h3>
+            <h3 id="step-control">3. Point Falco at the file, and look at everything first</h3>
             <p>A Falco configuration file says where events come from and where alerts go. Save this as <code>falco-lab.yaml</code>:</p>
 <div class="code-block" data-lang="yaml"><pre># falco-lab.yaml: read one CloudTrail file instead of the kernel
 plugins:
@@ -463,7 +477,7 @@ load_plugins: [cloudtrail, json]
 plugins_hostinfo: false                 # CloudTrail events need no host /proc
 stdout_output:
   enabled: true                         # print alerts in the terminal</pre></div>
-            <p>Every Falco run from here to step 7 is the same container, so wrap it in a shell function. It mounts this folder at <code>/lab</code>, which is why the paths above start there, and <code>--disable-source syscall</code> stops Falco trying to watch the kernel as well; step 8 does that.</p>
+            <p>Every Falco run from here to step 7 is the same container, so wrap it in a shell function, a short name that stands for the longer command. It mounts this folder at <code>/lab</code>, which is why the paths above start there, and <code>--disable-source syscall</code> stops Falco trying to watch the kernel as well; step 8 does that.</p>
 <div class="code-block" data-lang="bash"><pre>falco() {
   docker run --rm --name csoh-lab-falco -v "$PWD":/lab -w /lab \
     falcosecurity/falco:0.45.0 falco -c falco-lab.yaml --disable-source syscall "$@"
@@ -484,7 +498,7 @@ Triggered rules by rule name:
    Every event: 24</pre></div>
             <p>All 24 arrived (<code>tail -5</code> keeps only Falco's closing summary). <code>-r</code> names the rules file to load, in place of the default ones. <code>evt.num</code> is each event's sequence number, so <code>evt.num &gt; 0</code> is always true; the stock CloudTrail file uses the same condition for a rule it ships switched off. Run it again without <code>tail</code> to see the 24 alerts: each starts with the event's own time and the rule's priority, and the 14 events with no error code end in <code>error=&lt;NA&gt;</code>, which is how Falco prints a field the event does not have. Leave out <code>source: aws_cloudtrail</code> and Falco assumes <code>syscall</code>, the kernel, and rejects the rule: <code>ct.</code> fields do not exist there.</p>
 
-            <h3>4. A list and a macro: trail tampering (D1)</h3>
+            <h3 id="step-d1">4. A list and a macro: trail tampering (D1)</h3>
             <p>Save this as <code>d1.yaml</code>:</p>
 <div class="code-block" data-lang="yaml"><pre># d1.yaml: D1, CloudTrail logging stopped, deleted or changed
 - list: trail_tampering_calls
@@ -534,7 +548,7 @@ Triggered rules by rule name:
 09:20:03.000000000: Warning Naive rule (user=alice ip=192.0.2.77 result=Failure)</pre></div>
             <p>The correct rule fires once, for <code>bob</code>. The naive rule also fires for <code>alice</code> at 09:20:03: her sign-in failed, and her failed sign-in records <code>MFAUsed</code> as <code>No</code> too. It carries no <code>errorCode</code> either, so the <code>call_succeeded</code> macro would not have caught it; the verdict is in <code>responseElements.ConsoleLogin</code>. <code>-o</code> sets one configuration option for this run, and <code>rule_matching=all</code> lets both rules fire on bob's event. By default only the first rule to match an event fires, which matters in step 7.</p>
 
-            <h3>6. What Falco cannot do: count (D2) and pair (D3)</h3>
+            <h3 id="step-count">6. What Falco cannot do: count (D2) and pair (D3)</h3>
             <p>D2 asks whether one source address was refused five or more times. That is a count across events, and a condition sees one event. What Falco can do is raise one alert per refused call and hand the alerts, as JSON, to something that counts: a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management system), a log store or, here, the shell. Start with the obvious rule: the denial codes go in a list, and the list holds the one code everybody knows. Save <code>d2.yaml</code>:</p>
 <div class="code-block" data-lang="yaml"><pre># d2.yaml: one alert per denied call
 - list: denied_error_codes

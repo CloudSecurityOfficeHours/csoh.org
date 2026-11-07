@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="splunk">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -350,14 +350,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Splunk SPL, hands-on</h1>
-        <p>Splunk's Search Processing Language (<a class="glossary-link" href="../glossary.html#term-detection-query-languages">SPL</a>) chooses events, then pipes them through commands that count, filter and reshape. Learn it from zero on a local Splunk Enterprise with a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, and learn to spot the search that returns nothing because it cannot work.</p>
+        <p>Splunk stores logs and lets you search them. Its Search Processing Language (<a class="glossary-link" href="../glossary.html#term-detection-query-languages">SPL</a>) picks the events you want, then counts, filters and reshapes them one step at a time. Learn it from zero on a trial copy of Splunk Enterprise on your own computer, with 24 events from AWS <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a>, the record of calls made to an AWS account, and learn to spot the search that returns nothing because it cannot work.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker with about 3 GB of memory and 3 GB of disk to spare, and a terminal. No Splunk account and no cloud account.</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> every command and search was run as printed, in order, against Splunk Enterprise 10.4.3 in Docker (image <code>splunk/splunk:10.4.3</code>, under Rosetta emulation on an Apple silicon Mac), by a script that copies each block from this page and compares the results with the output shown here. The public rule in step 9 was read from Splunk's repository and built with Splunk's own tool, contentctl-ng 1.1.1. Not run: Splunk Cloud Platform, Splunk Enterprise Security, the Splunk Add-on for AWS, and the Splunk Free licence.</p>
@@ -365,14 +365,16 @@
 
         <section id="intro">
             <h2>The language of Splunk searches</h2>
-            <p>SPL is how you ask questions of data in Splunk Enterprise, which you run yourself, and Splunk Cloud Platform, Splunk's hosted service. Splunk Enterprise Security, Splunk's <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) app, runs its detections as SPL searches too. Analysts in a security operations centre (SOC) type SPL to investigate; detection engineers save searches that run on a schedule and raise alerts.</p>
-            <p>The distinction that matters: Splunk keeps each event's raw text and works out fields when you search. A <strong>source type</strong> tells Splunk how to split the text into events, where each event's time is, and how to find the fields. When it is wrong, every search is quietly wrong, so this page checks the load before anything else.</p>
+            <p>Splunk collects logs and lets you search them. A search can answer an incident question such as "who stopped our audit logging, and from where?", or count something, such as how many times each address was refused. SPL is how you ask those questions of data in Splunk Enterprise, which you run yourself, and Splunk Cloud Platform, Splunk's hosted service. Splunk Enterprise Security, Splunk's <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) app, runs its detections as SPL searches too; a SIEM gathers security logs in one place and raises alerts from them.</p>
+            <p>Analysts in a security operations centre (SOC), the team that watches for attacks and responds to them, type SPL to investigate. Detection engineers save searches that run on a schedule and raise alerts.</p>
+            <p>One thing about how Splunk works matters from the start. Splunk keeps each event's raw text and works out its fields, the named values such as <code>eventName</code> that searches filter on, when you search. A <strong>source type</strong> tells Splunk how to split the text into events, where each event's time is, and how to find the fields. When it is wrong, every search is quietly wrong, so this page checks the load before anything else (<a href="#step-load">step 2</a>).</p>
             <p>Splunk also publishes <a href="https://help.splunk.com/en/splunk-enterprise/search/spl2-overview/what-is-new-and-different-in-spl2-" target="_blank" rel="noopener noreferrer">SPL2</a>, a newer version of the language, and the search bar in Splunk Enterprise 10.4 offers to convert a search to it. Saved searches, alerts and Splunk's public detection library, all used on this page, are SPL.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
+                <li><a href="#how-to-use">How to use this guide</a></li>
                 <li><a href="#model">A search is a pipeline</a></li>
                 <li><a href="#walkthrough">Walk-through: one leaked key, five detections</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
@@ -381,8 +383,19 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Beginner here means new to Splunk and to query languages. You should be comfortable typing commands into a terminal and have Docker installed. You do not need to know AWS: the AWS terms the lab depends on are explained as they come up, and terms with a glossary entry link to it.</p>
+            <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> explains how every search is built. Its example needs the lab data, so read it first and run it once step 2 is done. In the <a href="#walkthrough">walk-through</a>, steps 1 and 2 start Splunk in Docker, load 24 CloudTrail events and check that they arrived intact. Steps 3 to 6 build four of the five detections listed in <a href="#step-load">step 2</a>, one per step. Steps 4 and 5 start with a search that looks right and returns the wrong answer without an error, then show why and fix it. Steps 7 and 8 turn one detection into an alert that runs on a schedule and test it, and step 9 reads one of Splunk's published rules. The <a href="#exercises">exercises</a> then ask you to write the fifth detection and repair broken searches yourself, with each answer hidden until you click Show the answer.</p>
+            <p>A code block labelled BASH is something to paste into your terminal, and each block has a copy button. A block labelled SPL is a search: type <code>./spl</code>, paste the search, press Enter, then Ctrl-D, or paste it into Splunk Web, as the end of step 1 explains. The unlabelled block under it, when there is one, shows what you should see. Some BASH blocks start with a line such as <code>cat &gt; spl &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>spl</code>. Paste the whole block at once, the <code>EOF</code> line included. The YAML block in step 9 is part of one of Splunk's rule files, there to read.</p>
+            <p>Your output should match the page line for line. A script ran every command and search here in order against Splunk Enterprise 10.4.3 in Docker and compared the results with the output shown, and Splunk Web shows the same rows as a table. Splunk Cloud Platform, Splunk Enterprise Security, the Splunk Add-on for AWS and the Splunk Free licence were not run, so what the page says about them may not match what you see if you use them.</p>
+            <p>The 24 lines of lab data in step 2 can be pasted without reading them, since the hash check under the block tells you whether the paste worked. And step 9, on Splunk's published rules, can wait for a second reading: it matters most once you start running rules that other people wrote.</p>
+            <p>If your output differs from the page, check that you are in <code>~/splunk-lab</code>, the folder step 1 creates, because <code>./spl</code>, the password file and the lab file are all there. Then repeat step 2's two checks: the file's hash, and the count of 24 events, each with its own time. In Splunk Web, check that the time range picker says All time. And check that you started the image step 1 names, <code>splunk/splunk:10.4.3</code>, the version this page was checked on.</p>
+        </section>
+
         <section id="model">
             <h2>A search is a pipeline</h2>
+            <p>Suppose you want to know who changed anything in the account that morning, and how many changes each of them made. You would first set aside the events that changed something, then count them per user. An SPL search is written in that order: a chain of steps, each handing its results to the next, which is why it is called a pipeline.</p>
             <p>The part before the first pipe character, <code>|</code>, is the <strong>base search</strong>: it chooses events. <code>index=</code> says where to look, and every term after it must match (AND is implied; write <code>OR</code> and <code>NOT</code> in capitals). <code>field=value</code> matches one field. After that, each <code>|</code> hands the results so far to one command, which reshapes them and passes them on. Once step 2 has loaded the lab, try:</p>
 <div class="code-block" data-lang="spl"><pre>index=cloudtrail readOnly=false
 | stats count BY userIdentity.userName</pre></div>
@@ -391,14 +404,14 @@
 alice                     2
 backup-svc                1
 build-bot                 3</pre></div>
-            <p>Read it left to right: the base search keeps the six events that changed something (<code>readOnly=false</code>), and <code>stats</code> turns them into one row per identity. A command sees only what the command before it produced, so every prefix of a search is a search you can run. To debug one, delete commands from the end until the output stops surprising you.</p>
+            <p>Read it left to right: the base search keeps the six events that changed something (<code>readOnly=false</code>), and <code>stats</code> turns them into one row per identity. A command sees only what the command before it produced, so every prefix of a search is a search you can run. To debug one, delete commands from the end until the output stops surprising you; <a href="#step-burst">step 5</a> does that to find out why a detection never fires.</p>
         </section>
 
         <section id="walkthrough">
             <h2>Walk-through: one leaked key, five detections</h2>
 
             <h3>1. Start Splunk Enterprise in Docker</h3>
-            <p>Splunk publishes Splunk Enterprise as the <a href="https://hub.docker.com/r/splunk/splunk" target="_blank" rel="noopener noreferrer"><code>splunk/splunk</code> image</a>, for x86-64 processors only. On an Apple silicon Mac, Docker Desktop runs it under Rosetta emulation when that option is on in its settings; this page was checked that way, and the container took about two minutes to start and one to restart. The two <code>SPLUNK_</code> settings accept the licence and the <a href="https://www.splunk.com/en_us/legal/splunk-general-terms.html" target="_blank" rel="noopener noreferrer">Splunk General Terms</a> for you, so read them first. The first line creates a throwaway admin password for this container only.</p>
+            <p>Splunk publishes Splunk Enterprise as the <a href="https://hub.docker.com/r/splunk/splunk" target="_blank" rel="noopener noreferrer"><code>splunk/splunk</code> image</a>, for x86-64 processors (the Intel and AMD kind) only. On an Apple silicon Mac, Docker Desktop runs it under Rosetta emulation when that option is on in its settings; this page was checked that way, and the container took about two minutes to start and one to restart. The two <code>SPLUNK_</code> settings accept the licence and the <a href="https://www.splunk.com/en_us/legal/splunk-general-terms.html" target="_blank" rel="noopener noreferrer">Splunk General Terms</a> for you, so read them first. The first line creates a throwaway admin password for this container only. The last line waits, checking every ten seconds, until Docker reports the container healthy.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/splunk-lab &amp;&amp; cd ~/splunk-lab
 openssl rand -hex 12 &gt; .splunk-password
 docker run -d --name splunk-lab --platform linux/amd64 \
@@ -420,8 +433,8 @@ EOF
 chmod +x spl</pre></div>
             <p>To run a search, type <code>./spl</code>, paste the search, press Enter, then Ctrl-D. Or use Splunk Web: open <code>http://localhost:8000</code>, sign in as <code>admin</code> with the password in <code>.splunk-password</code>, choose <strong>Search &amp; Reporting</strong>, set the time range picker to <strong>All time</strong> (it starts at Last 24 hours, which shows none of the lab), and paste the search. Splunk Web shows the same rows as a table, in UTC (Coordinated Universal Time), the container's time zone. The first sign-in also tells you that sharing of product usage data with Splunk is on: to stop it, open <strong>Settings &gt; Instrumentation</strong>, click the gear next to <strong>Usage Data</strong> and switch Usage Data off (licence and software version data have no switch).</p>
 
-            <h3>2. Load the lab data, then check what arrived</h3>
-            <p>The lab is 24 Amazon Web Services (AWS) CloudTrail events from one morning, trimmed to the fields this page uses but keeping CloudTrail's real field names and nesting. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user, has leaked. From <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) instances and <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> secrets (and is mostly refused), lists the <a class="glossary-link" href="../glossary.html#term-s3">Simple Storage Service</a> (S3) buckets, then creates a user <code>backup-svc</code>, attaches <code>AdministratorAccess</code> to it, gives it an access key and uses it to stop CloudTrail logging. Around that runs an ordinary morning: sign-ins, one of them without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) and one failed; an administrator creating a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a>; an application refused the same S3 object three times; a CI role describing instances. The page builds five detections from it:</p>
+            <h3 id="step-load">2. Load the lab data, then check what arrived</h3>
+            <p>The lab is 24 Amazon Web Services (AWS) CloudTrail events from one morning, trimmed to the fields this page uses but keeping CloudTrail's real field names and nesting. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user, has leaked; an access key is the credential a program signs its AWS requests with. From <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) instances and <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> secrets (and is mostly refused), lists the <a class="glossary-link" href="../glossary.html#term-s3">Simple Storage Service</a> (S3) buckets, then creates a user <code>backup-svc</code>, attaches <code>AdministratorAccess</code> (AWS's ready-made policy that allows every action) to it, gives it an access key and uses it to stop CloudTrail logging. Around that runs an ordinary morning: sign-ins, one of them without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) and one failed; an administrator creating a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a>; an application refused the same S3 object three times; a CI role describing instances. The page builds five detections from it:</p>
             <ul>
                 <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
                 <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
@@ -456,7 +469,7 @@ chmod +x spl</pre></div>
 {"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
 EOF
 shasum -a 256 cloudtrail-lab.jsonl</pre></div>
-            <p>The hash must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the file changed on the way. Now create an index (a named store of events) and the source type, and load the file once with <code>oneshot</code>:</p>
+            <p>The hash, a fingerprint of the file's exact contents, must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the file changed on the way. Now create an index (a named store of events) and the source type, and load the file once with <code>oneshot</code>:</p>
 <div class="code-block" data-lang="bash"><pre>PW=$(cat .splunk-password)
 curl -sk -u "admin:$PW" -o /dev/null -w '%{http_code}\n' https://localhost:8089/services/data/indexes -d name=cloudtrail
 curl -sk -u "admin:$PW" -o /dev/null -w '%{http_code}\n' https://localhost:8089/servicesNS/nobody/search/configs/conf-props \
@@ -468,7 +481,7 @@ docker exec -u splunk splunk-lab /opt/splunk/bin/splunk add oneshot /tmp/cloudtr
 201
 WARNING: Server Certificate Hostname Validation is disabled. Please see server.conf/[sslConfig]/cliVerifyServerName for details.
 Oneshot '/tmp/cloudtrail-lab.jsonl' added</pre></div>
-            <p><code>201</code> means created. <code>-k</code> lets <code>curl</code> accept the container's self-signed certificate, which is reasonable only because it is your own machine. <code>SHOULD_LINEMERGE=false</code> makes each line one event; <code>TIME_PREFIX</code> and <code>TIME_FORMAT</code> take each event's time from its <code>eventTime</code>, where <code>%Z</code> reads the trailing <code>Z</code> as UTC; <code>KV_MODE=json</code> extracts the JSON (JavaScript Object Notation) fields when you search, naming nested ones with dots, as in <code>userIdentity.userName</code>. The first three act while data arrives, so they must exist before the load. Created through the API they apply at once; typed into a <code>props.conf</code> file they would wait for a restart. Give Splunk a few seconds, then check that 24 events arrived, each with its own time rather than the time you loaded it:</p>
+            <p><code>201</code> means created. <code>-k</code> lets <code>curl</code> accept the container's self-signed certificate (one that no outside authority vouches for), which is reasonable only because it is your own machine. <code>SHOULD_LINEMERGE=false</code> makes each line one event; <code>TIME_PREFIX</code> and <code>TIME_FORMAT</code> take each event's time from its <code>eventTime</code>, where <code>%Z</code> reads the trailing <code>Z</code> as UTC; <code>KV_MODE=json</code> extracts the JSON (JavaScript Object Notation) fields when you search, naming nested ones with dots, as in <code>userIdentity.userName</code>. The first three act while data arrives, so they must exist before the load. Created through the API they apply at once; typed into a <code>props.conf</code> file they would wait for a restart. Give Splunk a few seconds, then check that 24 events arrived, each with its own time rather than the time you loaded it:</p>
 <div class="code-block" data-lang="spl"><pre>index=cloudtrail
 | eval own_time=if(_time == strptime(eventTime, "%Y-%m-%dT%H:%M:%S%Z"), "yes", "no")
 | stats count BY sourcetype own_time</pre></div>
@@ -497,7 +510,7 @@ lab:cloudtrail yes         24</pre></div>
 --------------------------- --------------------- --------------- -----------------------------
 2026-09-15 09:15:47.000 GMT bob                   198.51.100.21   Success
 2026-09-15 09:20:03.000 GMT alice                 192.0.2.77      Failure</pre></div>
-            <p>The second row is someone failing to sign in as alice, and a failed sign-in carries <code>MFAUsed</code> <code>No</code> too. AWS's own Security Hub CSPM control for sign-in without MFA, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">[CloudWatch.3]</a>, requires success as well, and so must D4 (<code>sort _time</code> just puts rows in time order):</p>
+            <p>The second row is someone failing to sign in as alice, and a failed sign-in carries <code>MFAUsed</code> <code>No</code> too. AWS's own Security Hub <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a> control for sign-in without MFA, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">[CloudWatch.3]</a>, requires success as well, and so must D4 (<code>sort _time</code> just puts rows in time order):</p>
 <div class="code-block" data-lang="spl"><pre>index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No responseElements.ConsoleLogin=Success
 | table _time userIdentity.userName sourceIPAddress</pre></div>
 <div class="code-block" data-lang="text"><pre>           _time            userIdentity.userName sourceIPAddress
@@ -505,7 +518,7 @@ lab:cloudtrail yes         24</pre></div>
 2026-09-15 09:15:47.000 GMT bob                   198.51.100.21</pre></div>
             <p>You can filter after a pipe too, with <code>where</code>, but it follows different rules. <code>where</code> compares case-sensitively, and a field name containing dots must go in single quotes: <code>| where 'additionalEventData.MFAUsed'="No"</code>. Without the quotes, <code>where</code> reads each dot as joining two strings, both empty, and silently matches nothing. Or name the field yourself with <code>spath</code>, which extracts one JSON path on demand: <code>| spath output=mfa path=additionalEventData.MFAUsed | where mfa="No"</code>. You need <code>spath</code> whenever a source type has no automatic extraction, or JSON arrives inside another field.</p>
 
-            <h3>5. Count, then threshold: the burst that never fires (D2)</h3>
+            <h3 id="step-burst">5. Count, then threshold: the burst that never fires (D2)</h3>
 <div class="code-block" data-lang="spl"><pre>index=cloudtrail errorCode=AccessDenied
 | stats count BY sourceIPAddress
 | where count &gt;= 5</pre></div>

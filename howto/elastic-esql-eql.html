@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="es|ql">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -356,14 +356,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Elastic ES|QL and EQL, hands-on</h1>
-        <p>Elasticsearch has two query languages for detection work: ES|QL (the Elasticsearch Query Language) filters, counts and reshapes events, and <a class="glossary-link" href="../glossary.html#term-detection-query-languages">EQL</a> (Event Query Language) finds events that happen in order. Learn both from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, along with the field-name contract that decides whether a rule can see your data at all.</p>
+        <p>Elasticsearch, a search engine that can hold an organization's logs, has two query languages for writing detections, the rules that look for signs of an attack: ES|QL (the Elasticsearch Query Language) filters, counts and reshapes events, and <a class="glossary-link" href="../glossary.html#term-detection-query-languages">EQL</a> (Event Query Language) finds events that happen in order. Learn both from zero on a small lab of <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> events, AWS's record of the calls made in an account, along with the field names that decide whether a rule can see your data at all.</p>
         <div class="cta-buttons">
             <a href="#setup" class="btn btn-primary">Start with the lab</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker, <code>curl</code>, <code>jq</code> and about 5 GB of free disk, plus Python 3.12 for the last step. Everything runs on your own machine at no cost, with no cloud account.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> every command and query below was run as printed, and every output pasted from that run, on Elasticsearch and Kibana 9.5.4 installed by start-local 0.14.0, with Elastic's AWS integration 7.1.4, on an Apple silicon Mac: first on the 30-day trial licence start-local turns on, then again with its licence setting changed to Basic, with identical results. The rule file in step 12 passed Elastic's own validator (elastic/detection-rules at commit 2613eb7). Not run: loading that rule into Kibana's Elastic Security app, and what <code>start.sh</code> does once the trial has expired, which is described from reading the script.</p>
@@ -371,18 +371,17 @@
 
 <section id="intro">
     <h2>Two query languages, two different questions</h2>
-    <p>Elasticsearch stores events as JSON (JavaScript Object Notation) documents in named collections called indices, and Kibana is the web interface in front of it. Elastic Security, the <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) application in Kibana, runs detection rules against those indices on a schedule. Its rules can be written in several languages, and two of them are this page's subject:</p>
-    <ul>
-        <li><strong>ES|QL</strong> starts from an index and passes a table of events through a chain of commands that filter, compute, count and sort. It runs in Kibana's Discover, through the <code>_query</code> API (application programming interface), and as the ES|QL rule type.</li>
-        <li><strong>EQL</strong> matches events by category and, its reason to exist, <em>sequences</em>: this event, then that one, sharing a value, within a time limit. It runs through the <code>_eql/search</code> API and as the Event correlation rule type.</li>
-    </ul>
-    <p>The distinction that matters: ES|QL answers "which events, and how many", and EQL answers "did this happen, and then that". A question with <em>then</em> in it belongs to EQL; a question with <em>how many</em> belongs to ES|QL.</p>
+    <p>A security team that keeps its logs in Elasticsearch cannot read every event, so it writes down the questions worth asking again and again. Was one address refused five or more times this morning? Was a new user created and then given an access key within ten minutes? Each question becomes a detection rule: a query that runs on a schedule and raises an alert when it finds a match. This page writes queries for those two detections, and three more, in two of Elastic's query languages, ES|QL and EQL.</p>
+    <p>Elasticsearch stores events as JSON (JavaScript Object Notation) documents in named collections called indices, and Kibana is the web interface in front of it. Elastic Security, the <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) application in Kibana, runs detection rules against those indices on a schedule. Its rules can be written in several languages, and two of them are this page's subject.</p>
+    <p>ES|QL starts from an index and passes a table of events through a chain of commands that filter, compute, count and sort. It runs in Kibana's Discover, the page for searching events, through the <code>_query</code> API (application programming interface, the way a program asks Elasticsearch for something), and as the ES|QL rule type. EQL matches events by category and, its reason to exist, by <em>sequence</em>: this event, then that one, sharing a value, within a time limit. It runs through the <code>_eql/search</code> API and as the Event correlation rule type.</p>
+    <p>The distinction that matters: ES|QL answers "which events, and how many", and EQL answers "did this happen, and then that". A question with <em>then</em> in it belongs to EQL; a question with <em>how many</em> belongs to ES|QL. Of the two questions above, the first is for ES|QL and the second is for EQL.</p>
     <p>A third language appears in Kibana's search bar and in many of Elastic's rules: KQL, the Kibana Query Language, which only filters. It is unrelated to the Kusto Query Language that Microsoft also abbreviates KQL, which has <a href="kusto-kql.html">its own guide</a>.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
+        <li><a href="#how-to-use">How to use this guide</a></li>
         <li><a href="#model">The one idea behind each language</a></li>
         <li><a href="#setup">Set up the lab</a></li>
         <li><a href="#esql">ES|QL walk-through</a></li>
@@ -394,9 +393,20 @@
     </ol>
 </div>
 
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Intermediate here means you are comfortable in a terminal, have run containers with Docker, can read JSON, and know what a detection rule is for; <a href="../detection-engineering.html#what-is">Detection engineering</a> covers that if it is new. You do not need to know Elasticsearch, Kibana, ES|QL or EQL, and you need no AWS account. The lab's events are CloudTrail records, and the setup section tells the story they record before any query reads them; <a href="../cloud-logging.html#control">Cloud logging</a> explains what CloudTrail records in general.</p>
+    <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> sets out the one idea behind each language. Its first query runs only once step 4 has loaded the lab, so read it now and run it then. The <a href="#setup">setup</a> has four steps: step 1 starts Elasticsearch and Kibana in Docker, step 2 saves two helper scripts that send queries, step 3 installs Elastic's AWS integration, which renames CloudTrail's fields, and step 4 loads the 24 lab events. Steps 5 to 8 teach ES|QL and steps 9 and 10 teach EQL. Each runs a query against the lab and shows what came back, and several show a draft that looks right and gives the wrong answer, a control query that shows why, and the fix. Steps 11 and 12 turn a query into a detection rule file and test it. The <a href="#exercises">exercises</a> ask you to write and debug queries yourself, with each answer hidden under Show the answer until you open it.</p>
+    <p>A code block labelled BASH is something to paste into your terminal. Blocks labelled ESQL and EQL are queries, not shell commands: run <code>./esql</code> or <code>./eql</code>, the helpers from step 2, paste the query, then press Return and Ctrl-D. The unlabelled block under a command or query shows what it should print. Each block has a copy button. Steps 2, 4 and 12 write files with a line such as <code>cat &gt; esql &lt;&lt;'EOF'</code>, which saves every line down to the one that says only <code>EOF</code> into a file called <code>esql</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+    <p>Every command and query on this page was run as printed, on the versions it pins (Elasticsearch and Kibana 9.5.4, Elastic's AWS integration 7.1.4), and every output is pasted from that run, so your output should match the page. The installer in step 1 and the validator in step 12 print messages of their own before the lines shown. Two things were not run: loading step 12's rule into Kibana's Elastic Security app, and what <code>start.sh</code> does once the 30-day trial has ended, which step 1 describes from reading the script.</p>
+    <p>Some parts can wait for a second reading. The <code>jq</code> program inside step 2's <code>eql</code> helper and the 24 lines of lab data in step 4 are scaffolding, so paste them without studying them. The licence note at the end of step 1, and step 11's account of how the D1 rule's ATT&amp;CK mapping changed between versions, can wait too.</p>
+    <p>If your output differs from the page, check where you ran the command. The helpers read <code>.env</code> from the folder they run in, so run them in <code>elastic-start-local</code>; step 12 leaves that folder for the validator and uses <code>cd ..</code> to return to it. The <code>curl</code> commands in steps 3 and 4 use the address and API key that <code>source .env</code> loaded into your shell in step 1. Then check that the load in step 4 replied <code>{"errors":false}</code>, that the count after it said 24, and that you installed the versions the page pins. A query that returns nothing where the page shows rows is what a field name your data lacks looks like, and the note at the end of step 4 shows one way that happens.</p>
+</section>
+
 <section id="model">
     <h2>The one idea behind each language</h2>
-    <p><strong>ES|QL is a chain of tables.</strong> A query starts with a source command, usually <code>FROM</code> and the indices to read (here the pattern <code>logs-aws.cloudtrail-*</code>), which produces a table: one row per event, one column per field. Each <code>|</code> (a pipe) hands the table to the next command, which returns a new table. Read a query top to bottom as a list of steps; text after <code>//</code> is a comment. Once the lab is loaded (step 4), this runs for real with the helper from step 2:</p>
+    <p>Take one question from the lab for each language. How many of the calls from the address 203.0.113.50 were refused? That is a counting question, so it goes to ES|QL, which turns events into a table and the table into counts. Was a user created and then given an access key within ten minutes? That is a question about order, so it goes to EQL, which matches a pattern of events in time. Both languages read the field names Elastic gave the events when they arrived, which is the third idea below.</p>
+    <p><strong>ES|QL is a chain of tables.</strong> A query starts with a source command, usually <code>FROM</code> and the indices to read (here the pattern <code>logs-aws.cloudtrail-*</code>), which produces a table: one row per event, one column per field. Each <code>|</code> (a pipe) hands the table to the next command, which returns a new table. Read a query top to bottom as a list of steps; text after <code>//</code> is a comment. Once the lab is loaded (<a href="#step-load">step 4</a>), this runs for real with the helper from <a href="#step-helpers">step 2</a>:</p>
 <div class="code-block" data-lang="esql"><pre>FROM logs-aws.cloudtrail-*                      // 24 rows, one per event
 | WHERE source.ip == "203.0.113.50"             // keep the 13 from one address
 | STATS calls = COUNT(*) BY event.outcome       // a new table: one row per outcome
@@ -406,8 +416,8 @@
 7              |failure
 6              |success</pre></div>
     <p>Two rows, two columns, biggest first: after <code>STATS</code> the table no longer holds events at all, only the counts you asked for.</p>
-    <p><strong>EQL is a pattern over events in time.</strong> A query names an event category, then <code>where</code>, then a condition: <code>iam where event.action == "CreateUser"</code> matches user-creation events. A <em>sequence</em> lists several such patterns in square brackets, in the order they must happen, tied together by a shared value (<code>by</code>) and a time limit (<code>with maxspan</code>). EQL returns matching events, or matching sequences with their events inside, rather than a table.</p>
-    <p><strong>Both query the field names your ingest pipeline wrote, not the raw log's.</strong> CloudTrail calls the API operation <code>eventName</code>. Elastic's AWS (Amazon Web Services) integration renames it <code>event.action</code>, following <a class="glossary-link" href="../glossary.html#term-ecs">ECS</a> (Elastic Common Schema), and every Elastic rule is written against the renamed fields. Step 3 installs that translation, because a mismatch there is the quietest way for a detection to fail.</p>
+    <p><strong>EQL is a pattern over events in time.</strong> A query names an event category, then <code>where</code>, then a condition: <code>iam where event.action == "CreateUser"</code> matches user-creation events, as long as the integration gave them that category (<a href="#step-categories">step 9</a> shows one it did not). A <em>sequence</em> lists several such patterns in square brackets, in the order they must happen, tied together by a shared value (<code>by</code>) and a time limit (<code>with maxspan</code>). EQL returns matching events, or matching sequences with their events inside, rather than a table. <a href="#step-sequences">Step 10</a> builds one.</p>
+    <p><strong>Both query the field names your ingest pipeline wrote, not the raw log's.</strong> CloudTrail calls the API operation <code>eventName</code>. Elastic's AWS (Amazon Web Services) integration renames it <code>event.action</code>, following <a class="glossary-link" href="../glossary.html#term-ecs">ECS</a> (Elastic Common Schema), and every Elastic rule is written against the renamed fields. <a href="#step-integration">Step 3</a> installs that translation, because a mismatch there is the quietest way for a detection to fail.</p>
 </section>
 
 <section id="setup">
@@ -432,7 +442,7 @@ curl -s "$ES_LOCAL_URL" -H "Authorization: ApiKey $ES_LOCAL_API_KEY" | jq -r .ve
     <p>Piping a script into <code>sh</code> runs whatever it contains, so read it first. This one creates the <code>elastic-start-local</code> folder with a Docker Compose file, a <code>.env</code> settings file and three scripts, <code>start.sh</code>, <code>stop.sh</code> and <code>uninstall.sh</code>. It starts Elasticsearch on <code>localhost:9200</code> and Kibana on <code>localhost:5601</code>, reachable only from your own machine, with passwords on and encryption off, so it is for testing only. On Apple silicon it pulls Elastic's <code>-arm64</code> images. It generates a password for the <code>elastic</code> user and an API key, prints both at the end and keeps them in <code>.env</code>, which <code>source .env</code> loads into your shell; sign in to Kibana with that user and password. Keep Kibana: step 3 uses it. When you are done, <code>./uninstall.sh</code> removes the containers, their data and the files it created, and asks separately about the images.</p>
     <p><strong>Licence:</strong> a setting in the Compose file starts Elasticsearch on a 30-day trial of Elastic's paid features, with no sign-up. The first time you run <code>./start.sh</code> after the 30 days, it switches the cluster to the free Basic licence by calling the licence API with <code>acknowledge=true</code>, which accepts that change on your behalf. Nothing here needs the trial: on Basic, ES|QL and EQL are both available, and this page gave the same results on both.</p>
 
-    <h3>2. Two helper scripts for sending queries</h3>
+    <h3 id="step-helpers">2. Two helper scripts for sending queries</h3>
     <p>Both languages travel to Elasticsearch inside a small JSON document. Rather than escaping quotes by hand for every query, save two short scripts in this folder. <code>jq</code> builds the JSON; the <a href="jq-and-jmespath.html">jq guide</a> explains it if it is new to you.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; esql &lt;&lt;'EOF'
 #!/bin/sh
@@ -457,8 +467,8 @@ EOF
 chmod +x esql eql</pre></div>
     <p><code>./esql</code> prints an ES|QL result as a text table. <code>./eql</code> runs EQL against the lab data and prints one line per event (time, action, user, target user, source address, with <code>-</code> where the event has no value); a sequence prints its shared value in brackets, then its events. Both read the query on standard input. Every query below is shown on its own: run <code>./esql</code> or <code>./eql</code>, paste the query, press Return and then Ctrl-D, or save it in a file and run <code>./esql &lt; file</code>. The ES|QL blocks also paste unchanged into Kibana's Discover.</p>
 
-    <h3>3. Install Elastic's AWS integration</h3>
-    <p>Raw CloudTrail says <code>eventName</code>, <code>sourceIPAddress</code> and <code>errorCode</code>. Elastic's AWS integration renames them to ECS names such as <code>event.action</code>, <code>source.ip</code> and <code>aws.cloudtrail.error_code</code>, and derives new fields, in an <em>ingest pipeline</em>: a list of processors that runs on each document as it arrives. The integration is a package whose assets include that pipeline, templates that declare each field's type (its <em>mapping</em>: <code>keyword</code> for exact text, <code>ip</code>, <code>date</code>, <code>boolean</code>) and dashboards. Kibana's Fleet API installs them in one call. You need neither Elastic Agent nor an AWS account, because you send the lab file yourself. Version 7.1.4 is the newest that Elastic's package registry offers for 9.5.4:</p>
+    <h3 id="step-integration">3. Install Elastic's AWS integration</h3>
+    <p>Raw CloudTrail says <code>eventName</code>, <code>sourceIPAddress</code> and <code>errorCode</code>. Elastic's AWS integration renames them to ECS names such as <code>event.action</code>, <code>source.ip</code> and <code>aws.cloudtrail.error_code</code>, and derives new fields, in an <em>ingest pipeline</em>: a list of processors that runs on each document as it arrives. The integration is a package whose assets include that pipeline, templates that declare each field's type (its <em>mapping</em>: <code>keyword</code> for exact text, <code>ip</code>, <code>date</code>, <code>boolean</code>) and dashboards. Kibana's Fleet API, which manages integrations, installs them in one call. You need neither Elastic Agent, the program that normally collects logs and sends them in, nor an AWS account, because you send the lab file yourself. Version 7.1.4 is the newest that Elastic's package registry offers for 9.5.4:</p>
 <div class="code-block" data-lang="bash"><pre>curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:5601/api/fleet/epm/packages/aws/7.1.4" \
   -H "Authorization: ApiKey $ES_LOCAL_API_KEY" -H 'kbn-xsrf: true'
 curl -s "$ES_LOCAL_URL/_ingest/pipeline/logs-aws.cloudtrail-7.1.4" -H "Authorization: ApiKey $ES_LOCAL_API_KEY" |
@@ -473,7 +483,7 @@ curl -s "$ES_LOCAL_URL/_ingest/pipeline/logs-aws.cloudtrail-7.1.4" -H "Authoriza
         <li><strong><code>event.category</code></strong> comes from a table of 91 event names. <code>StopLogging</code> is not one of them, and step 9 shows why that matters.</li>
     </ul>
 
-    <h3>4. Load the lab data</h3>
+    <h3 id="step-load">4. Load the lab data</h3>
     <p>Create the data file. The block is long: copy all of it, down to the closing <code>EOF</code>.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
 {"eventTime":"2026-09-15T08:55:12Z","eventSource":"signin.amazonaws.com","eventName":"ConsoleLogin","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"Mozilla/5.0","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"responseElements":{"ConsoleLogin":"Success"},"additionalEventData":{"MFAUsed":"Yes"}}
@@ -501,11 +511,11 @@ curl -s "$ES_LOCAL_URL/_ingest/pipeline/logs-aws.cloudtrail-7.1.4" -H "Authoriza
 {"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
 {"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
 EOF</pre></div>
-    <p>Elastic Agent would send each record in an envelope, and the integration relies on it: the record as text in a field called <code>message</code>, which the pipeline parses, and the data stream's type, dataset and namespace in <code>data_stream</code>. <code>jq</code> builds that and pairs each document with the bulk API's action line, <code>{"create":{}}</code> ("add this document"; data streams accept no other).</p>
+    <p>Elastic Agent would send each record in an envelope, and the integration relies on it: the record as text in a field called <code>message</code>, which the pipeline parses, and the data stream's type, dataset and namespace in <code>data_stream</code>. <code>jq</code> builds that and pairs each document with the bulk API's action line, <code>{"create":{}}</code> ("add this document"; data streams accept no other). The bulk API is the one that writes many documents in a single request.</p>
 <div class="code-block" data-lang="bash"><pre>jq -c '{create: {}}, {message: tojson, data_stream: {type: "logs", dataset: "aws.cloudtrail", namespace: "default"}}' cloudtrail-lab.jsonl |
   curl -s -w '\n' "$ES_LOCAL_URL/logs-aws.cloudtrail-default/_bulk?refresh=true&amp;filter_path=errors,items.*.error" \
     --data-binary @- -H "Authorization: ApiKey $ES_LOCAL_API_KEY" -H 'Content-Type: application/x-ndjson'</pre></div>
-<div class="code-block" data-lang="json"><pre>{"errors":false}</pre></div>
+<div class="code-block" data-lang="text"><pre>{"errors":false}</pre></div>
     <p>Then count what arrived, with your first ES|QL query:</p>
 <div class="code-block" data-lang="esql"><pre>FROM logs-aws.cloudtrail-* | STATS events = COUNT(*)</pre></div>
 <div class="code-block" data-lang="text"><pre>    events
@@ -602,7 +612,7 @@ EOF</pre></div>
 <section id="eql">
     <h2>EQL walk-through</h2>
 
-    <h3>9. Event queries, and the category trap (D1)</h3>
+    <h3 id="step-categories">9. Event queries, and the category trap (D1)</h3>
     <p>An EQL query is <code>category where condition</code>. The category is compared with the event's <code>event.category</code> field, and <code>any</code> means "whatever the category". Lists use lowercase <code>in</code>:</p>
 <div class="code-block" data-lang="eql"><pre>any where event.action in ("StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors")</pre></div>
 <div class="code-block" data-lang="text"><pre>events found: 1
@@ -619,7 +629,7 @@ EOF</pre></div>
 StopLogging    |null</pre></div>
     <p>None. The integration fills <code>event.category</code> from its table of 91 event names: <code>DeleteTrail</code> is in it, as <code>configuration</code>, but <code>StopLogging</code>, <code>UpdateTrail</code> and <code>PutEventSelectors</code> are not. A <code>configuration where</code> rule would catch one of the four trail-tampering actions and miss the other three without a word. Use <code>any where</code> when the condition already names the actions, and check which categories exist before you rely on one. EQL's <code>==</code> is case-sensitive too; its <code>:</code> ignores case and accepts <code>*</code> wildcards, so <code>event.action : "create*"</code> matches both <code>CreateUser</code> and <code>CreateAccessKey</code>.</p>
 
-    <h3>10. Sequences: a new user given a key within ten minutes (D3)</h3>
+    <h3 id="step-sequences">10. Sequences: a new user given a key within ten minutes (D3)</h3>
     <p>This is what EQL exists for. The question has a <em>then</em> in it: a user is created, then an access key is created for that same user, soon after. Write each event as a bracketed pattern, in order. <code>by user.target.name</code> says both must share that field's value, and <code>with maxspan=10m</code> says the whole sequence must fit inside ten minutes, counted from its first event:</p>
 <div class="code-block" data-lang="eql"><pre>sequence by user.target.name with maxspan=10m
   [iam where event.action == "CreateUser"]

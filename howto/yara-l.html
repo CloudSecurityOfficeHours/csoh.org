@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="yara-l">
@@ -62,7 +62,7 @@
       "totalTime": "PT1H30M",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -344,14 +344,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>YARA-L 2.0, hands-on</h1>
-        <p><a class="glossary-link" href="../glossary.html#term-detection-query-languages">YARA-L</a> 2.0 is the language of Google Security Operations for detection rules, searches and dashboards. Its rules match events after a parser has rewritten them into Google's Unified Data Model, so writing one means knowing where each of your fields ended up (the file-scanning <a class="glossary-link" href="../glossary.html#term-yara">YARA</a> it is named after is covered in <a href="sigma-and-yara.html">Sigma and YARA</a>).</p>
+        <p><a class="glossary-link" href="../glossary.html#term-detection-query-languages">YARA-L</a> 2.0 is the language for detection rules, searches and dashboards in Google Security Operations, Google's platform for collecting and searching security logs. Before a rule sees a log, a parser rewrites it into Google's Unified Data Model, a shared set of field names, so writing a rule means knowing where each of your fields ended up (the file-scanning <a class="glossary-link" href="../glossary.html#term-yara">YARA</a> it is named after is covered in <a href="sigma-and-yara.html">Sigma and YARA</a>).</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a text editor to read the rules against the lab file. To run them: a Google SecOps <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> you may put test data in (not production), and the <code>secops</code> command-line interface (CLI) from Google's Python software development kit (SDK).</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> YARA-L runs only inside a Google SecOps tenant. Google publishes no engine you can run locally, and even checking a rule's syntax is a call to the Google SecOps application programming interface (API), so nothing on this page has been executed: not the rules, not the searches, not the <code>secops</code> commands. Every rule was checked against Google's YARA-L documentation, Google's field-mapping reference for its <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> parser (page updated 24 September 2026) and Google's published rules in <a href="https://github.com/chronicle/detection-rules" target="_blank" rel="noopener noreferrer">chronicle/detection-rules</a>; where those sources disagree, the page says so. Expected results are worked out from the lab file, not captured from Google SecOps. The <code>secops</code> commands and flags were checked against the CLI's own <code>--help</code> (SDK 0.44.1).</p>
@@ -360,14 +360,15 @@
 
 <section id="intro">
     <h2>A detection language that reads a data model, not your logs</h2>
-    <p>Google Security Operations (Google SecOps, formerly Chronicle) is Google's SIEM. YARA-L 2.0 is its query language. Detection engineers write rules in it, which Google SecOps checks against incoming events, recording a detection each time a rule's pattern holds; analysts use the same language to search and to build dashboards. Google publishes several hundred example rules, with a style guide, in its chronicle/detection-rules repository.</p>
-    <p>The one idea to hold on to: a rule never reads a log as it arrived. A parser first rewrites every log into the Unified Data Model (UDM), a shared set of field names such as <code>principal.ip</code> and <code>metadata.product_event_type</code>, so that one rule can cover many log sources. The price is that you must know which UDM field each of your fields landed in, and that answer belongs to the parser, which Google updates. A rule that names a UDM field your parser leaves empty is accepted, runs, and never fires.</p>
-    <p>Despite the name, YARA-L is not YARA. It borrows YARA's <code>rule name { meta: ... condition: }</code> layout, but YARA matches bytes in files and YARA-L matches events in logs.</p>
+    <p>A detection rule is a standing question about your logs, such as "did anyone stop CloudTrail logging?" or "was one address refused five times in ten minutes?", which a SIEM (the platform that collects an organisation's security logs) keeps asking of the logs it receives. Google Security Operations (Google SecOps, formerly Chronicle) is Google's SIEM, and YARA-L 2.0 is its query language. Detection engineers write rules in it, which Google SecOps checks against incoming events, recording a detection each time a rule's pattern holds; analysts use the same language to search and to build dashboards. Google publishes several hundred example rules, with a style guide, in its chronicle/detection-rules repository.</p>
+    <p>The one idea to hold on to: a rule never reads a log as it arrived. Different products name the same thing differently: CloudTrail, for one, calls the caller's address <code>sourceIPAddress</code>. So that one rule can cover many log sources, a parser, which Google SecOps runs on each incoming log, first rewrites every log into the Unified Data Model (UDM), a shared set of field names such as <code>principal.ip</code> and <code>metadata.product_event_type</code>. The price is that you must know which UDM field each of your fields landed in, and that answer belongs to the parser, which Google updates. A rule that names a UDM field your parser leaves empty is accepted, runs, and never fires.</p>
+    <p>Despite the name, YARA-L and YARA are different languages. YARA-L borrows YARA's <code>rule name { meta: ... condition: }</code> layout, but YARA matches bytes in files and YARA-L matches events in logs.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
+        <li><a href="#how-to-use">How to use this guide</a></li>
         <li><a href="#model">Rules read UDM events, not log lines</a></li>
         <li><a href="#walkthrough">Walk-through: five detections on one lab file</a></li>
         <li><a href="#exercises">Hands-on exercises</a></li>
@@ -376,8 +377,20 @@
     </ol>
 </div>
 
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Intermediate here means the page assumes you know what a SIEM does, have written a detection rule or a log search in some language, and can read a CloudTrail event, a record in JSON (JavaScript Object Notation) of one call made to Amazon Web Services (AWS). It teaches YARA-L itself from the start. If detection rules are new to you, the <a href="splunk-spl.html">Splunk SPL</a> and <a href="kusto-kql.html">KQL</a> guides build the same five detections on the same lab file at beginner level, and <a href="jq-and-jmespath.html">jq and JMESPath</a> covers reading JSON.</p>
+    <p>YARA-L runs only inside a Google SecOps tenant, and even checking a rule's syntax is a call to Google's API, so apart from writing the lab file and installing the CLI, nothing on this page runs on your own computer. To run the rules you need a tenant you may put test data in, as step 1 explains. Without one, read each rule against the lab file: every rule in the walk-through is followed by "Expected on the lab", the events it should and should not catch.</p>
+    <p>Read it in order. The <a href="#model">next section</a> builds the smallest rule that works, then gives the table of where each CloudTrail field lands in UDM, which every later rule relies on; its <code>secops parser run</code> command needs a tenant and the lab file from step 1. In the <a href="#walkthrough">walk-through</a>, step 1 creates the lab file and loads it into a tenant. Steps 2 to 5 each build one of the five detections listed at the start of the walk-through (D5 is the first exercise): a rule, the reasoning behind it, and an "Expected on the lab" line that names what must fire and what must not. Steps 3 and 4 first show a naive rule that is wrong without any error, and step 4 adds a control, a search that must find something, to show why. Step 6 turns a rule file into a running detection and tests all six rules over the lab data. The <a href="#exercises">exercises</a> ask you to write or debug rules yourself, with each answer hidden until you open "Show the answer".</p>
+    <p>Each code block has a label in its header and a copy button. A block labelled YARA-L is a rule. Save each one in a file named after the rule, with <code>.yaral</code> on the end: step 2 names its file this way, and step 6's commands expect the same of the others, such as <code>lab_mfa_no_naive.yaral</code>. A block labelled BASH goes into your terminal; replace placeholders such as <code>YOUR_INSTANCE_ID</code> and <code>ru_YOUR_RULE_ID</code> with your own values first. This page has no blocks of output: what a rule or command should give is in the text after it. Step 1's first block includes the line <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+    <p>Treat each "Expected on the lab" line as what should happen, not as a captured result. As the box at the top says, nothing on this page has been executed: the rules, searches and <code>secops</code> commands were checked against Google's documentation, its field-mapping reference for the CloudTrail parser and its published rules, and the expected results were worked out from the lab file. Where Google's sources disagree, the page says so, and the parser in your tenant decides which is right, which is why the next section has you run <code>secops parser run</code> before trusting any rule. The <code>secops</code> commands and flags were checked against the CLI's own <code>--help</code> for SDK 0.44.1; if you have a different version and a command fails, check its <code>--help</code>.</p>
+    <p>Some parts can wait for a second reading. Step 1's first block is long because it holds the whole lab file, so paste it without reading every line; the start of the walk-through tells the story it holds. The notes on ATT&amp;CK versions in step 2 can also wait.</p>
+    <p>If a search or test finds less than the page expects, check first that all 24 events arrived, with step 1's last command. Every search and test on the page covers 08:00 to 12:00 UTC on 15 September 2026, the lab's own times, so keep that range. Then run <code>secops parser run</code> and compare its UDM fields with the table in the next section, and run step 4's error-code control: if your tenant's parser keeps a field somewhere else, change the field in the rules, as step 4 says for the error code.</p>
+</section>
+
 <section id="model">
     <h2>Rules read UDM events, not log lines</h2>
+    <p>Suppose you want a detection for the moment someone stops CloudTrail logging. In the lab file, the call's name is in CloudTrail's <code>eventName</code> field, but a YARA-L rule does not test <code>eventName</code>: it tests the UDM field that the parser copied the value into. So even the smallest rule needs two things from you, the parts of a rule and the place your field went, and this section shows both.</p>
     <p>A rule describes the events you want to hear about. It is built from named sections in a fixed order: <code>meta</code> (notes for people), <code>events</code> (the tests an event must pass), <code>match</code> (how to group events, and over what time window), <code>outcome</code> (values to compute for each detection) and <code>condition</code> (which events must exist for a detection), optionally followed by <code>options</code>. Only <code>meta</code>, <code>events</code> and <code>condition</code> are required. Here is the smallest useful rule for the lab file used below:</p>
 <div class="code-block" data-lang="yara-l"><pre>rule lab_stop_logging_seen {
   meta:
@@ -405,7 +418,7 @@
     </table></div>
     <p>The third column matters. Google's CloudTrail rules were last changed in January 2025; in October 2025 Google released a new version of the parser, and the reference lists what moved, including the error code. A rule copied from Google's own library can therefore compile, run and never fire. Where the current reference is silent, this page uses the form Google's rules show and says so: the only published form of the <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) value is <code>"MFAUsed: No"</code>. Google updates its parsers monthly and a tenant can opt out or roll back, so the version in your tenant is the one that counts. With a tenant and the lab file from step 1, this runs your tenant's active CloudTrail parser over the 24 lab lines and prints the UDM event it makes of each:</p>
 <div class="code-block" data-lang="bash"><pre>secops parser run --log-type AWS_CLOUDTRAIL --logs-file cloudtrail-lab.jsonl</pre></div>
-    <p>Run it before trusting any rule on this page, and again whenever a rule that used to fire goes quiet.</p>
+    <p>Run it before trusting any rule on this page, and again whenever a rule that used to fire goes quiet. <a href="#step-mfa">Step 3</a> depends on the MFA value's published form, and <a href="#step-counting">step 4</a> shows how to check where your parser keeps the error code.</p>
 </section>
 
 <section id="walkthrough">
@@ -449,7 +462,7 @@ cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
 {"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
 {"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
 EOF</pre></div>
-    <p>Reading the rules against the file needs nothing more. Running them needs a Google SecOps tenant where test data is welcome: these events describe an attack, and a tenant with live rules could raise real alerts about them. Install the SDK, sign in with Google Cloud application default credentials, point the CLI at your tenant and send the file in as CloudTrail logs. The SDK splits the file into one log per line, and the first ingest creates a forwarder named <code>Wrapper-SDK-Forwarder</code> in the tenant if none exists:</p>
+    <p>Reading the rules against the file needs nothing more. Running them needs a Google SecOps tenant where test data is welcome: these events describe an attack, and a tenant with live rules could raise real alerts about them. Install the SDK, sign in with Google Cloud application default credentials (the sign-in that Google's client libraries pick up automatically), point the CLI at your tenant and send the file in as CloudTrail logs. The SDK splits the file into one log per line, and the first ingest creates a forwarder named <code>Wrapper-SDK-Forwarder</code> in the tenant if none exists:</p>
 <div class="code-block" data-lang="bash"><pre>python3 -m venv .venv &amp;&amp; . .venv/bin/activate
 python3 -m pip install secops
 gcloud auth application-default login
@@ -489,7 +502,7 @@ secops search --query 'metadata.product_name = "AWS CloudTrail"' \
     <p>Lines under <code>events</code> must all hold; the parentheses make an either-or group. <code>outcome</code> computes values that travel with each detection: <code>$risk_score</code> is the score Google SecOps shows (the style guide suggests 35, 65, 85 and 95 from low to critical), and because <code>principal.ip</code> is a list, <code>array_distinct</code> gathers its values. There is no success test: a failed attempt to stop logging deserves an alert too, and Google's current reference does not say the parser sets <code>security_result.action</code>, the field Google's older rules test.</p>
     <p><strong>Expected on the lab:</strong> one detection, for the StopLogging call at 10:09:03 by <code>backup-svc</code> from 203.0.113.50, naming the trail. The other 23 events are the negative case. With no <code>match</code> section the rule fires once per matching event; the style guide recommends one so that related events land in a single detection.</p>
 
-    <h3>3. A nested value, and a naive rule that fires too often (D4)</h3>
+    <h3 id="step-mfa">3. A nested value, and a naive rule that fires too often (D4)</h3>
     <p>MFA status sits in a nested CloudTrail field, <code>additionalEventData.MFAUsed</code>, which the parser moves to <code>extensions.auth.auth_details</code>. The obvious rule tests only that:</p>
 <div class="code-block" data-lang="yara-l"><pre>rule lab_mfa_no_naive {
   meta:
@@ -521,7 +534,7 @@ secops search --query 'metadata.product_name = "AWS CloudTrail"' \
 }</pre></div>
     <p><strong>Expected on the lab:</strong> one detection, bob at 09:15:47 from 198.51.100.21. The negative cases are alice at 08:55:12, who used MFA, and the failed attempt. Comparisons are exact, including case; Google documents a <code>nocase</code> modifier for values whose case varies. Two lines rest on one source each, so find both in the <code>parser run</code> output: the <code>"MFAUsed: No"</code> form comes from Google's older rule, and <code>severity_details</code> from the current reference (the older rules test <code>security_result.action = "ALLOW"</code>). For sign-ins the user is in <code>target.user</code>, the account signed in to.</p>
 
-    <h3>4. Counting, and a rule that cannot fire (D2)</h3>
+    <h3 id="step-counting">4. Counting, and a rule that cannot fire (D2)</h3>
     <p>"Five or more refusals from one address within 10 minutes" needs three new pieces. A <em>placeholder variable</em> such as <code>$ip</code> captures a field's value. <code>match: $ip over 10m</code> gathers the events that share a value into groups, one per value and time window, which makes <code>$ip</code> a <em>match variable</em>. In the condition, <code>#denied</code> is the number of <code>$denied</code> events in a group. This first version matches the one error code everyone thinks of:</p>
 <div class="code-block" data-lang="yara-l"><pre>rule lab_denied_burst_naive {
   meta:

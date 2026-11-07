@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-03">
-    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="kyverno">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-03",
-      "dateModified": "2026-11-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -368,14 +368,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Kyverno policies, hands-on</h1>
-        <p>Kyverno judges requests to the <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> API server against policies that are themselves Kubernetes resources. Since version 1.19 deprecated the older format, the logic inside those policies is written in CEL (Common Expression Language). Learn the current policy types with the free <code>kyverno</code> command-line tool, with no cluster, then learn to read the older <code>ClusterPolicy</code> that existing clusters still run.</p>
+        <p>Kyverno checks requests to create, change or delete things in a <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> cluster against rules you write, such as "no container may run as root", and the rules themselves are stored in the cluster like any other Kubernetes object. Since version 1.19 deprecated the older format, the logic inside those policies is written in CEL (Common Expression Language). Learn the current policy types with the free <code>kyverno</code> command-line tool, with no cluster, then learn to read the older <code>ClusterPolicy</code> that existing clusters still run.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> the <code>kyverno</code> command-line interface (CLI), from Homebrew or a release download, and a terminal. Network access for step 10 only. No cluster and no cloud account.</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> every command, policy and test on this page, including the exercise answers, was run as printed with the Kyverno CLI 1.19.2 (the Homebrew build) on an Apple silicon Mac, in zsh, and the outputs shown are what it printed, less its terminal colors. No cluster was used, because Docker was not available when the page was written, so everything said about a running cluster (webhooks, failure policies, timeouts, background scans and the report objects) comes from Kyverno's 1.19 documentation, its Helm chart and its source code; none of it was observed. Step 10 fetched real signatures from <code>registry.k8s.io</code> and the public <a class="glossary-link" href="../glossary.html#term-sigstore">Sigstore</a> services. The GitHub Actions workflow in step 11 was not run on GitHub; its commands were run locally. The page was also run with the Kyverno 1.20.0-rc.1 CLI, published on 2 November 2026: it gave the same verdicts for every current policy type, with small differences in how it prints messages and test tables, and refused the legacy <code>ClusterPolicy</code> in step 12 and exercise 3 with an error saying that 1.20 no longer runs or accepts them.</p>
@@ -383,31 +383,19 @@
 
         <section id="intro">
             <h2>Policies that are Kubernetes resources</h2>
-            <p>Kyverno is an open-source (Apache 2.0) policy engine for Kubernetes, and a graduated project of the Cloud Native Computing Foundation (<a class="glossary-link" href="../glossary.html#term-cncf">CNCF</a>) since March 2026. It runs inside the cluster as a handful of controllers. The admission controller is a webhook: before the API server stores an object, it sends Kyverno the create, update or delete request, and Kyverno can reject it, change it, or let it through. Other controllers scan resources that already exist and write what they find into reports, create resources on a trigger, and delete resources on a schedule.</p>
+            <p>A team that runs a Kubernetes cluster usually wants some rules to hold for every workload in it: no container runs as root, every image comes from a registry the team trusts, every new namespace starts with incoming traffic blocked until someone allows it. Kyverno enforces rules like those. It is an open-source (Apache 2.0) policy engine for Kubernetes, and a graduated project of the Cloud Native Computing Foundation (<a class="glossary-link" href="../glossary.html#term-cncf">CNCF</a>) since March 2026.</p>
+            <p>It runs inside the cluster as a handful of controllers, programs that watch the cluster and act on what they find. The admission controller is a webhook: before the API server (the part of Kubernetes that receives every request and stores the cluster's objects) stores an object, it sends Kyverno the create, update or delete request, and Kyverno can reject it, change it, or let it through. Other controllers scan resources that already exist and write what they find into reports, create resources on a trigger, and delete resources on a schedule.</p>
             <p>A Kyverno policy is itself a Kubernetes resource: YAML you <code>kubectl apply</code>, review in git, and protect with <a class="glossary-link" href="../glossary.html#term-rbac">RBAC</a> (role-based access control) like any other object. Gatekeeper, the admission controller built on the <a class="glossary-link" href="../glossary.html#term-opa">Open Policy Agent</a> (OPA), keeps its policies as Kubernetes resources too, and traditionally writes its checks in <a class="glossary-link" href="../glossary.html#term-rego">Rego</a>, a separate policy language. Kyverno's checks are CEL, the expression language Kubernetes itself uses for admission policies.</p>
-            <p>There are two generations of Kyverno policy, and the difference decides what you should write today:</p>
-            <ul>
-                <li><strong>Legacy, <code>kyverno.io/v1</code>:</strong> <code>ClusterPolicy</code> and its namespaced twin <code>Policy</code>. Each holds rules that match resources by kind, then check them with YAML patterns and JMESPath expressions. Kyverno 1.19 (August 2026) deprecated them. Its documentation says they are removed in 1.20, and the 1.20 release candidate keeps existing objects readable but no longer runs them or accepts new ones. 1.19 is the last release that runs them.</li>
-                <li><strong>Current, <code>policies.kyverno.io/v1</code>:</strong> <code>ValidatingPolicy</code>, <code>MutatingPolicy</code>, <code>GeneratingPolicy</code>, <code>DeletingPolicy</code> and <code>ImageValidatingPolicy</code>, each with a <code>Namespaced</code> variant. The logic is CEL, and a <code>ValidatingPolicy</code> has the same shape as Kubernetes' own ValidatingAdmissionPolicy, with more around it. They arrived in 1.14 and 1.15 and reached their stable <code>v1</code> API in 1.17.</li>
-            </ul>
+            <p>There are two generations of Kyverno policy, and the difference decides what you should write today. The legacy generation, in the <code>kyverno.io/v1</code> API, is <code>ClusterPolicy</code> and its namespaced twin <code>Policy</code>. Each holds rules that match resources by kind, then check them with YAML patterns and JMESPath expressions. Kyverno 1.19 (August 2026) deprecated them. Its documentation says they are removed in 1.20, and the 1.20 release candidate keeps existing objects readable but no longer runs them or accepts new ones. 1.19 is the last release that runs them.</p>
+            <p>The current generation, in the <code>policies.kyverno.io/v1</code> API, has one policy type for each job: <code>ValidatingPolicy</code> checks a request, <code>MutatingPolicy</code> changes it, <code>GeneratingPolicy</code> creates other resources, <code>DeletingPolicy</code> deletes resources on a schedule, and <code>ImageValidatingPolicy</code> checks the signatures on container images. Each has a <code>Namespaced</code> variant. The logic is CEL, and a <code>ValidatingPolicy</code> has the same shape as Kubernetes' own ValidatingAdmissionPolicy, with more around it. They arrived in 1.14 and 1.15 and reached their stable <code>v1</code> API in 1.17.</p>
             <p>So this page writes the current types, and step 12 teaches you to read the legacy ones, which you will meet in running clusters, in blog posts and in older copies of Kyverno's policy library, and will need to migrate. Everything runs in the <code>kyverno</code> CLI, which applies any policy type to YAML files on your laptop at no cost. The CEL itself is covered on the <a href="cel-policy-expressions.html">CEL guide</a>; this page assumes no more of it than it explains.</p>
-        </section>
-
-        <section id="silent">
-            <h2>Five quiet ways a Kyverno policy does nothing</h2>
-            <p>A Kyverno policy that never sees the request it was written for raises no error and blocks nothing. These five are what this page is built around, and each is shown running in the step named.</p>
-            <ol>
-                <li><strong>It reports when you meant it to block.</strong> A legacy <code>ClusterPolicy</code> with no failure action defaults to Audit: the violating resource is created and the violation goes into a report. A <code>ValidatingPolicy</code> with no <code>validationActions</code> defaults to Deny, so a migration can flip a policy's behavior without anyone deciding to. The CLI reports a failure either way. (Steps <a href="#step-7">7</a> and <a href="#step-12">12</a>.)</li>
-                <li><strong>The webhook fails open.</strong> With <code>failurePolicy: Ignore</code>, a request goes through unchecked whenever Kyverno is down or slower than the webhook timeout, which is 10 seconds by default. A <code>GeneratingPolicy</code> always works that way, and a default install leaves admission requests in <code>kube-system</code>, <code>kube-public</code>, <code>kube-node-lease</code> and Kyverno's own namespace unchecked. (Step <a href="#step-7">7</a>.)</li>
-                <li><strong>The match never matches.</strong> Write <code>Pods</code>, <code>pod</code> or <code>Pod</code> where Kubernetes says <code>pods</code>, or name the wrong API group, and the policy judges nothing: the CLI prints zeros and exits 0. Add one exclusion to a <a class="glossary-link" href="../glossary.html#term-pod">Pod</a> policy and it quietly stops checking Deployments. (Steps <a href="#step-5">5</a> and <a href="#step-6">6</a>.)</li>
-                <li><strong>A missing field passes.</strong> <code>orValue(true)</code> in CEL and the <code>=()</code> anchor in a legacy pattern both pass a container that never set the field. A check on <code>containers</code> alone misses init and ephemeral containers, and an image check passes every image outside its glob. (Steps <a href="#step-4">4</a>, <a href="#step-10">10</a> and <a href="#step-12">12</a>.)</li>
-                <li><strong>Existing resources stay as they are.</strong> Admission judges requests, so a new policy affects only what is created or changed after it. What was already running is judged by the background scan, hourly by default, which writes reports and blocks nothing, even when the policy is set to deny. (Step <a href="#step-8">8</a>.)</li>
-            </ol>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#silent">Five quiet ways a Kyverno policy does nothing</a></li>
                 <li><a href="#model">A policy judges only the requests it is sent</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
@@ -416,14 +404,35 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>This guide is marked intermediate. It assumes you know Kubernetes basics: that a <a class="glossary-link" href="../glossary.html#term-pod">Pod</a> is one or more containers run together, that a Deployment keeps a set of identical Pods running, that namespaces divide up a cluster, and that YAML manifests describe all of these. The site's <a href="../kubernetes.html#what-is">Kubernetes security guide</a> explains Pods and namespaces, and its section on <a href="../kubernetes.html#admission">admission control</a> shows where Kyverno fits. You need no cluster, and no CEL beforehand: the page explains each piece of CEL it uses.</p>
+            <p>Read the two short sections after this one before the walk-through. <a href="#silent">Five quiet ways a Kyverno policy does nothing</a> lists the failures the walk-through demonstrates, and <a href="#model">the section after it</a> explains the chain a request passes through before a policy sees it. The <a href="#walkthrough">walk-through</a> then builds a lab in <code>~/kyverno-lab</code>: step 1 installs the CLI, and step 2 saves five sample Pods and a Deployment. Most steps after that follow one pattern. You save a policy, run <code>kyverno apply</code> to judge the lab's files against it, compare what it prints with the page, and read why it came out that way. To show a quiet failure, several steps then make a broken copy of a policy with a <code>sed</code> line, which writes a copy of a file with one piece of text replaced. Steps 7 to 9 also describe what a running cluster does, which the CLI cannot show you, step 11 turns the checks into tests, and step 12 reads an older style of policy. The <a href="#exercises">exercises</a> run in the same folder, with each answer hidden until you open Show the answer.</p>
+            <p>Each input block has a label at the top, and every block has a copy button. A block labelled YAML is a file to save, under the name the sentence before it gives, and its first line, a comment, repeats the name. Save it in <code>~/kyverno-lab</code>, or in the subfolder its name includes, such as <code>policies/</code>, creating that folder first if it does not exist. A block labelled BASH holds commands to paste into your terminal from <code>~/kyverno-lab</code>. An unlabelled block is output: what the command before it should print. Many commands are followed by <code>echo $?</code>, which prints the exit status of the command before it. 0 means success and any other number signals a problem, and that number is what an automated check in a pipeline looks at.</p>
+            <p>Your output should match the page line for line, apart from colors. Every command, policy and test here, the exercise answers included, was run as printed with Kyverno CLI 1.19.2 in zsh, and the outputs are what it printed; step 10 read real signatures over the network. What the page says about a running cluster was not observed, because no cluster was used: the webhooks, failure policies, timeouts, background scans and report objects described in the two sections before the walk-through and in steps 7 to 9 come from Kyverno's documentation, Helm chart and source code. The GitHub Actions workflow in step 11 was not run on GitHub, though its commands were run locally, and nothing in the lab needs it until you keep policies in a repository. The 1.20 release candidate gave the same verdicts for every current policy type, printed slightly differently, but refuses the legacy policies in step 12 and exercise 3, which need a 1.19 CLI.</p>
+            <p>If your output differs, check that you are in <code>~/kyverno-lab</code>, that <code>kyverno version</code> reports 1.19.2, the version the page used, and that <code>policies/run-as-non-root.yaml</code> holds step 4's version: step 4 replaces step 3's first attempt, and the steps after it use the replacement.</p>
+        </section>
+
+        <section id="silent">
+            <h2>Five quiet ways a Kyverno policy does nothing</h2>
+            <p>Suppose you apply a policy that refuses containers running as root, and a week later find one running anyway, with no error anywhere. Each of the five failures below can leave you there. A Kyverno policy that never sees the request it was written for raises no error and blocks nothing. These five are what this page is built around, and each is shown running in the step named. The list uses terms that those steps explain, so on a first reading take it as a map of what to watch for, and come back to it after the walk-through.</p>
+            <ol>
+                <li><strong>It reports when you meant it to block.</strong> A legacy <code>ClusterPolicy</code> with no failure action defaults to Audit: the violating resource is created and the violation goes into a report. A <code>ValidatingPolicy</code> with no <code>validationActions</code> defaults to Deny, so a migration can flip a policy's behavior without anyone deciding to. The CLI reports a failure either way. (Steps <a href="#step-7">7</a> and <a href="#step-12">12</a>.)</li>
+                <li><strong>The webhook fails open.</strong> With <code>failurePolicy: Ignore</code>, a request goes through unchecked whenever Kyverno is down or slower than the webhook timeout, which is 10 seconds by default. A <code>GeneratingPolicy</code> always works that way, and a default install leaves admission requests in <code>kube-system</code>, <code>kube-public</code>, <code>kube-node-lease</code> and Kyverno's own namespace unchecked. (Step <a href="#step-7">7</a>.)</li>
+                <li><strong>The match never matches.</strong> Write <code>Pods</code>, <code>pod</code> or <code>Pod</code> where Kubernetes says <code>pods</code>, or name the wrong API group, and the policy judges nothing: the CLI prints zeros and exits 0. Add one exclusion to a Pod policy and it quietly stops checking Deployments. (Steps <a href="#step-5">5</a> and <a href="#step-6">6</a>.)</li>
+                <li><strong>A missing field passes.</strong> <code>orValue(true)</code> in CEL and the <code>=()</code> anchor in a legacy pattern both pass a container that never set the field. A check on <code>containers</code> alone misses init and ephemeral containers, and an image check passes every image outside its glob. (Steps <a href="#step-4">4</a>, <a href="#step-10">10</a> and <a href="#step-12">12</a>.)</li>
+                <li><strong>Existing resources stay as they are.</strong> Admission judges requests, so a new policy affects only what is created or changed after it. What was already running is judged by the background scan, hourly by default, which writes reports and blocks nothing, even when the policy is set to deny. (Step <a href="#step-8">8</a>.)</li>
+            </ol>
+        </section>
+
         <section id="model">
             <h2>A policy judges only the requests it is sent</h2>
-            <p>The one idea that makes Kyverno click is that your expression is the last step of a chain, and most failures happen earlier in the chain. In a cluster, an object reaches your policy's check only when every one of these is true:</p>
+            <p>Three of those five happen before your expression ever runs. The one idea that makes Kyverno click is that your expression is the last step of a chain, and most failures happen earlier in the chain. In a cluster, an object reaches your policy's check only when every one of these is true:</p>
             <ul>
-                <li><strong>The API server sends the request, and Kyverno keeps it.</strong> Kyverno registers webhooks for the operations and resources its policies match, minus the namespaces its install excludes, then drops any request its resource filters name. Anything else never reaches a policy.</li>
-                <li><strong>Kyverno answers in time.</strong> If its pods are down, or a policy takes longer than the webhook timeout, the webhook's failure policy decides, and nothing of yours runs.</li>
-                <li><strong>There is a request at all.</strong> Admission sees creates, updates and deletes. A Pod that was running before the policy existed sends nothing until someone changes it.</li>
-                <li><strong>The policy selects it.</strong> The match, any match conditions, and any exception all have to let it through to the check.</li>
+                <li><strong>The API server sends the request, and Kyverno keeps it.</strong> Kyverno registers webhooks for the operations and resources its policies match, minus the namespaces its install excludes, then drops any request its resource filters name. Anything else never reaches a policy. (Step <a href="#step-7">7</a>.)</li>
+                <li><strong>Kyverno answers in time.</strong> If its pods are down, or a policy takes longer than the webhook timeout, the webhook's failure policy decides, and nothing of yours runs. (Step <a href="#step-7">7</a>.)</li>
+                <li><strong>There is a request at all.</strong> Admission sees creates, updates and deletes. A Pod that was running before the policy existed sends nothing until someone changes it. (Step <a href="#step-8">8</a>.)</li>
+                <li><strong>The policy selects it.</strong> The match, any match conditions, and any exception all have to let it through to the check. (Steps <a href="#step-5">5</a> and <a href="#step-6">6</a>.)</li>
             </ul>
             <p>The CLI skips the whole chain. <code>kyverno apply</code> hands every resource file straight to every policy, so a clean run proves your expression is right and says nothing about whether the policy will see anything. Keep those two questions apart, whether the check is right and whether anything reaches it, and the rest of this page follows.</p>
         </section>
@@ -487,7 +496,7 @@ spec:
     - name: app
       image: ghcr.io/acme/web:2.1.0
       securityContext: {runAsNonRoot: true}</pre></div>
-            <p>The right answers: <code>web</code> and <code>inherits</code> are compliant. <code>root</code> asks for root, <code>unset</code> never says, and <code>init</code> has a compliant app container behind an init container, <code>setup</code>, that may run as root. Save this as <code>deploy.yaml</code>, a Deployment whose Pod template never says either:</p>
+            <p>The right answers: <code>web</code> and <code>inherits</code> are compliant. <code>root</code> asks for root, <code>unset</code> never says, and <code>init</code> has a compliant app container behind an init container (one that runs to completion before the app containers start), <code>setup</code>, that may run as root. Save this as <code>deploy.yaml</code>, a Deployment whose Pod template never says either:</p>
 <div class="code-block" data-lang="yaml"><pre># deploy.yaml: a Deployment whose Pod template does not set runAsNonRoot
 apiVersion: apps/v1
 kind: Deployment

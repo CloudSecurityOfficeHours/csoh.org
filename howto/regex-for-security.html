@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-08-24">
-    <meta property="article:modified_time" content="2026-08-24">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="regex">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
-      "dateModified": "2026-08-24",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -344,29 +344,31 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Regex for security work, hands-on</h1>
-        <p>A regex that is subtly too broad is an allowlist bypass. One that is subtly too narrow is a detection that never fires. Both failures are silent. Here is how to write patterns you can defend.</p>
+        <p>A regex (regular expression) is a short pattern that matches text, and security tools use them to decide which URLs are allowed, which strings look like leaked keys and which log lines raise an alert. A pattern that is subtly too broad lets an attacker's URL past an allowlist. One that is subtly too narrow is a detection that never fires. Neither failure shows an error. Here is how to write patterns you can defend.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-08-24">Last updated <strong>2026-08-24</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner to intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal with <code>grep</code> and <code>python3</code>; <code>ripgrep</code> is useful but optional</p>
         </div>
 
         <section id="intro">
             <h2>Why regex is a security topic and not a text-editing trick</h2>
-            <p>Almost everyone in this field learns just enough regular expression syntax to search a log file, and then stops. That is a reasonable place to stop if a regex is only ever a search. It is a bad place to stop the moment a regex becomes a <em>control</em>, and in cloud security it becomes a control constantly.</p>
-            <p>A regex decides whether a URL is on your allowlist. A regex decides whether a string in a commit is a leaked credential. A regex is what a <a class="glossary-link" href="../glossary.html#term-sigma">Sigma</a> rule compiles down to inside your <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a>, what a <a class="glossary-link" href="../glossary.html#term-waf">WAF</a> matches request bodies against, what a CloudWatch Logs metric filter counts, and what a <a class="glossary-link" href="../glossary.html#term-dlp">DLP</a> scanner calls a Social Security number. In every one of those places a regex that is subtly too broad is an alert storm or a false block, and a regex that is subtly too narrow is a detection that silently never fires.</p>
-            <p>The skill this page is trying to build is not "write a regex". It is the habit of asking two questions about every pattern you meet: <strong>what does this match that I did not intend, and what does it fail to match that I did intend?</strong> Both of those failures are quiet. Neither one produces an error message.</p>
+            <p>A regular expression, or regex, is a short pattern that describes which pieces of text to match. <code>denied</code> matches any line that contains that word, and <code>^2026-08-20</code> matches only lines that start with that date. Almost everyone in this field learns just enough regular expression syntax to search a log file, and then stops. That is a reasonable place to stop if a regex is only ever a search. It is a bad place to stop the moment a regex becomes a <em>control</em>, a check that decides what is allowed or what raises an alert, and in cloud security it becomes a control constantly.</p>
+            <p>A regex decides whether a URL is on your allowlist, the list of addresses a service is allowed to fetch. A regex decides whether a string in a commit (a change saved to a git repository) is a leaked credential. A regex is what a <a class="glossary-link" href="../glossary.html#term-sigma">Sigma</a> rule, a detection rule written in a tool-neutral format, compiles down to inside your <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a>, the system that collects logs and raises alerts. It is what a <a class="glossary-link" href="../glossary.html#term-waf">WAF</a> (web application firewall) matches request bodies against, what a CloudWatch Logs metric filter counts in AWS logs, and what a <a class="glossary-link" href="../glossary.html#term-dlp">DLP</a> (data loss prevention) scanner calls a Social Security number. In every one of those places a regex that is subtly too broad is an alert storm or a false block, and a regex that is subtly too narrow is a detection that silently never fires.</p>
+            <p>The skill this page is trying to build goes beyond writing a regex: it is the habit of asking two questions about every pattern you meet. <strong>What does this match that I did not intend, and what does it fail to match that I did intend?</strong> Both of those failures are quiet. Neither one produces an error message.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
+                <li><a href="#how-to-use">How to use this guide</a></li>
                 <li><a href="#model">Two engines, two sets of rules</a></li>
+                <li><a href="#failure-directions">Too broad or too narrow: the two ways a pattern fails</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -374,16 +376,28 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Beginner to intermediate here means you can type commands into a terminal and may have searched a file with <code>grep</code>, but you need not have written a regex before: steps 1 to 4 build up the syntax as they go. Steps 6 and 7, on lookaround and catastrophic backtracking, are the intermediate half. Several steps run short Python programs. Reading a little Python helps, and the comments in each program and the paragraph after it say what it shows.</p>
+            <p>Read the two sections before the walk-through first. <a href="#model">Two engines, two sets of rules</a> explains why the same pattern can behave differently from one tool to the next, which steps 6 and 7 come back to. <a href="#failure-directions">Too broad or too narrow</a> shows the two ways a pattern fails, using a URL check. The <a href="#walkthrough">walk-through</a> opens with one block that makes a folder called <code>~/regex-lab</code> and writes two small files into it: <code>sample.log</code>, five log lines, and <code>secrets.txt</code>, four lines of which only two hold an AWS access key ID. Each step then runs patterns against those files and explains what they matched or missed. The <a href="#exercises">exercises</a> ask you to find bypasses and write patterns yourself, with each answer hidden until you select "Show the answer".</p>
+            <p>A code block labelled BASH is something to paste into your terminal, and every block has a copy button. zsh, the default shell on macOS, rejects a <code>#</code> comment pasted at its prompt: it runs a comment line as a command and passes a trailing comment to the command as extra arguments. Before pasting, run <code>setopt interactivecomments</code> once in each new terminal, or use bash. The blocks labelled REGEX hold patterns to read rather than commands to run, and the one labelled PYTHON in Exercise 1 is a line of code to study. The walk-through's first block writes its files with lines such as <code>cat &gt; sample.log &lt;&lt;'EOF'</code>, which write every line after them, down to the one that says only <code>EOF</code>, into the named file. Paste the whole block at once, both <code>EOF</code> lines included. The Python steps use the same pattern with <code>python3 - &lt;&lt;'PY'</code>, which runs the lines down to <code>PY</code> as a Python program without saving them to a file. The page does not show what each command prints; the comments in each block, and the text after some, say what to look for.</p>
+            <p>Step 6 and Exercise 2 use ripgrep (<code>rg</code>), which the box at the top of the page calls optional, so skip those commands if you have not installed it. Step 7 times a pattern, so its numbers depend on your computer; what matters is how fast they grow. If a command complains that <code>sample.log</code> or <code>secrets.txt</code> does not exist, the terminal is no longer in the <code>~/regex-lab</code> folder that the first block made, so run <code>cd ~/regex-lab</code> and try again.</p>
+        </section>
+
         <section id="model">
             <h2>Two engines, two sets of rules</h2>
-            <p>Before any syntax, know which family of engine you are writing for, because it changes both what you are allowed to write and what happens under attack.</p>
+            <p>Suppose you copy a regex from a blog post into two services. In one, written in Go, the pattern fails to compile. In the other, a validator written in Python (code that accepts or rejects input), it works, until someone sends a carefully built string and the check hangs. The pattern is the same in both. What differs is the regex engine, the code inside each tool that runs a pattern against text. Engines come in two families, and before any syntax you need to know which family you are writing for, because it changes both what you are allowed to write and what happens under attack.</p>
             <ul>
-                <li><strong>Backtracking engines</strong> (PCRE, Perl, Python's <code>re</code>, Java, .NET, JavaScript, most SIEM query languages) try alternatives and reverse out of dead ends. They support lookahead, lookbehind, and backreferences. They can also take exponential time on a hostile input.</li>
-                <li><strong>Finite-automaton engines</strong> (RE2, Go's <code>regexp</code>, the Rust <code>regex</code> crate, and therefore ripgrep by default) match in time linear in the input length, always. The price is that lookahead, lookbehind, and backreferences do not exist, because they cannot be expressed in the model.</li>
+                <li><strong>Backtracking engines</strong> (PCRE, the Perl Compatible Regular Expressions library, along with Perl, Python's <code>re</code>, Java, .NET, JavaScript, and most SIEM query languages) try alternatives and reverse out of dead ends. They support lookahead, lookbehind, and backreferences. They can also take exponential time on a hostile input.</li>
+                <li><strong>Finite-automaton engines</strong> (RE2, Go's <code>regexp</code>, the Rust <code>regex</code> crate, and therefore ripgrep by default) match in time linear in the input length, always, so twice the input takes about twice the time. The price is that lookahead, lookbehind, and backreferences do not exist, because they cannot be expressed in the model.</li>
             </ul>
-            <p>The difference between the two families explains why a pattern copied from a blog post into a Go service fails to compile, and why the same pattern copied into a Python validator is a denial-of-service risk. Google built RE2 specifically so that user-supplied patterns could be run safely, and services that accept regex from users (log platforms, WAF rule builders) almost always use it for exactly that reason.</p>
+            <p>Lookahead and lookbehind check what comes just after or just before a match without making it part of the match, and a backreference matches the same text that an earlier part of the pattern matched. <a href="#step-lookaround">Step 6</a> shows what to do when the engine has no lookaround, and <a href="#step-backtracking">step 7</a> shows a backtracking engine taking exponential time.</p>
+            <p>The difference between the two families explains both halves of the blog-post story: why the pattern fails to compile in the Go service, and why the same pattern in the Python validator is a denial-of-service risk, a way for an attacker to make the service unusable. Google built RE2 specifically so that user-supplied patterns could be run safely, and services that accept regex from users (log platforms, WAF rule builders) almost always use it for exactly that reason.</p>
+        </section>
 
-            <h3>The two failure directions, concretely</h3>
+        <section id="failure-directions">
+            <h2>Too broad or too narrow: the two ways a pattern fails</h2>
+            <p>Here is one check written three ways. Each version is meant to accept only HTTPS addresses on subdomains of <code>example.com</code>, such as <code>https://api.example.com</code>, the kind of check an allowlist or a detection rule makes. In these patterns <code>.</code> means any one character and <code>\.</code> a literal dot, <code>.*</code> means any run of characters, <code>^</code> and <code>$</code> (anchors) pin the match to the start and the end of the string, and <code>[a-z]+</code> means one or more lowercase letters. The comment line above each pattern names its mistake, and the comment after it shows a string it gets wrong.</p>
 <div class="code-block" data-lang="regex"><pre># TOO BROAD - the dot is unescaped, so it matches ANY character
 https://.*.example.com          # matches https://evilXexampleYcom
 
@@ -392,12 +406,12 @@ https://.*\.example\.com        # matches https://evil.com/?x=.example.com
 
 # TOO NARROW - anchored and escaped, but assumes lowercase and no port
 ^https://[a-z]+\.example\.com$  # misses https://API.example.com:8443</pre></div>
-            <p>All three of these are plausible-looking, and the first two are the shape of a real <a class="glossary-link" href="../glossary.html#term-ssrf">server-side request forgery</a> allowlist bypass. The third is the shape of a detection rule that quietly covers less than the author thought.</p>
+            <p>All three of these are plausible-looking, and the first two are the shape of a real <a class="glossary-link" href="../glossary.html#term-ssrf">server-side request forgery</a> allowlist bypass. The third is the shape of a detection rule that quietly covers less than the author thought. <a href="#step-anchors">Step 1</a> tries the second pattern on three URLs, and <a href="#step-scanner">step 5</a> makes the too-broad mistake in a credential scanner.</p>
         </section>
 
         <section id="walkthrough">
             <h2>Walk-through</h2>
-            <p>Build a scratch directory first. Every step below runs against these files.</p>
+            <p>Build a scratch directory, a throwaway folder for the lab, first. Every step below runs against these files.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/regex-lab &amp;&amp; cd ~/regex-lab
 
 cat &gt; sample.log &lt;&lt;'EOF'
@@ -415,7 +429,7 @@ not_a_key = XAKIAIOSFODNN7EXAMPLEX
 doc_reference = "the AKIA prefix identifies long-term keys"
 EOF</pre></div>
 
-            <h3>1. Anchors, and why they are a security control</h3>
+            <h3 id="step-anchors">1. Anchors, and why they are a security control</h3>
 <div class="code-block" data-lang="bash"><pre># -E = extended regex (POSIX ERE). Without -E, grep needs backslashes
 # in front of +, ?, |, (, and ) - a classic source of "why doesn't this work".
 grep -E 'denied' sample.log            # substring match, anywhere on the line
@@ -479,7 +493,7 @@ print(denials)      # repeated denials by principal and source IP
 PY</pre></div>
             <p><code>(?P&lt;name&gt;...)</code> is a named capture group. <code>(?:...)</code> groups without capturing, which you want whenever a group exists only so a quantifier can apply to it. Naming groups is the difference between a parser you can read next year and a wall of <code>group(4)</code>.</p>
 
-            <h3>5. Write a credential scanner</h3>
+            <h3 id="step-scanner">5. Write a credential scanner</h3>
             <p>AWS access key IDs are 20 characters: a four-character prefix plus 16 uppercase alphanumerics. <code>AKIA</code> is a long-term <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> user key. <code>ASIA</code> is a temporary <a class="glossary-link" href="../glossary.html#term-sts">STS</a> credential.</p>
 <div class="code-block" data-lang="bash"><pre># First attempt - finds the keys, and also finds the two things that are not keys
 grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' secrets.txt
@@ -494,7 +508,7 @@ grep -oE '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
 grep -oE '\b[A-Za-z0-9/+=]{40}\b' secrets.txt</pre></div>
             <p>This is the boundary of what regex can do, and knowing where that boundary is matters more than another hour of syntax. Real secret scanners pair a regex with something else: Shannon entropy over the candidate, a proximity requirement (the string must sit near <code>aws_secret_access_key</code>), and increasingly a live validity check against the provider. Regex finds candidates. It does not decide.</p>
 
-            <h3>6. Lookaround, and living without it</h3>
+            <h3 id="step-lookaround">6. Lookaround, and living without it</h3>
 <div class="code-block" data-lang="bash"><pre># Lookahead: match a key ID only when NOT followed by more alphanumerics.
 # Lookbehind: and not preceded by any either. PCRE / Python / Java only.
 python3 -c "
@@ -510,7 +524,7 @@ rg -P '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt # -P switches to PCRE2</pre
 # match the label too and take group 1.
 rg -o 'key\s*=\s*(\S+)' -r '$1' secrets.txt   # -r rewrites output to the capture</pre></div>
 
-            <h3>7. Catastrophic backtracking</h3>
+            <h3 id="step-backtracking">7. Catastrophic backtracking</h3>
             <p>A backtracking engine can be made to explore an exponential number of paths. The trigger is nested quantifiers over overlapping alternatives, followed by something that fails.</p>
 <div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re, time
