@@ -594,8 +594,11 @@ def render_card(occ: Occurrence, used_ids: set[str]) -> str:
                 f"({time_range(occ.start, occ.end, SECOND_TZ, 'ET')})")
 
     parts = [
-        f'                    <div class="resource-card" id="{card_id}" data-no-preview>',
-        f"                        <h4>{html.escape(occ.summary)}</h4>",
+        # <h3> because main.js reads every .resource-card's h3 for its icon pass
+        # and throws on a card without one; data-icon names the glyph outright,
+        # the way sessions.html's own cards do.
+        f'                    <div class="resource-card" id="{card_id}" data-no-preview data-icon="\U0001F4C5">',
+        f"                        <h3>{html.escape(occ.summary)}</h3>",
         f'                        <p class="article-date">{when}</p>',
     ]
     description = scrub_description(occ.description)
