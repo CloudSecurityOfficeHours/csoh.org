@@ -359,8 +359,8 @@
     <main class="container contribute-article" id="main-content">
         <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
-            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Python for <code>sigma-cli</code>, and <code>yara-x</code> for the YARA half. No SIEM required.</p>
-            <p class="u-mt-075"><strong>How this page was checked:</strong> the Sigma rules and commands were run as printed with sigma-cli 3.1.0 (pySigma 1.5.0, Splunk backend 2.1.0), and the YARA rules and commands with yara-x-cli 1.20.0, on an Apple silicon Mac; the outputs shown are what they printed. The install commands in steps 1 and 6 were not re-run, because both tools were already installed, and the correlation rule was converted for Splunk only.</p>
+            <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Python 3.11 to 3.14 for <code>sigma-cli</code>, and <code>yara-x</code> for the YARA half. No SIEM required.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> the Sigma rules and commands were run as printed with sigma-cli 4.0.0 (pySigma 2.0.2, Splunk backend 3.0.0), and the YARA rules and commands with yara-x-cli 1.23.0, on an Apple silicon Mac; the outputs shown are what they printed. Step 1 was run as printed, with Python 3.13.18; the install command in step 6 was not re-run, because yara-x was already installed; and the correlation rule was converted for Splunk only.</p>
         </div>
 
         <section id="intro">
@@ -389,7 +389,7 @@
             <p>Everything on this page runs on your own computer, and you do not need a SIEM: <code>sigma-cli</code> checks and converts Sigma rules without one, and YARA-X scans local files. Steps 1 and 6 install the two tools.</p>
             <p>The page has two halves, and the YARA steps use nothing from the Sigma steps, so you can start with whichever you need. In the <a href="#sigma">Sigma half</a>, steps 1 to 5 install <code>sigma-cli</code>, write one rule, check it, convert it into a Splunk search, and then add a correlation rule, a second rule that counts the first one's matches over a time window. In the <a href="#yara">YARA half</a>, steps 6 to 10 install YARA-X, write a rule and two small files to test it on, scan both, look at other kinds of condition, and format rules for review. The <a href="#exercises">exercises</a> cover both halves, with each answer hidden until you open "Show the answer".</p>
             <p>Each input block has a label in its header, and every block has a copy button. A block labelled BASH goes into your terminal. A block labelled YAML is a Sigma rule or part of one: step 2 says what to name the file, and step 5 adds to the same file. The blocks labelled YARA, in step 9 and the exercises, are rules to read and try; the rule you scan with is written by step 7. The two unlabelled blocks show what a command printed: the Splunk search in step 4 and the scan in step 8. Step 7's block starts with <code>cat &gt; demo.yar &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>demo.yar</code>, and its last two lines then make the two test files. Paste the whole block at once, the <code>EOF</code> line included.</p>
-            <p>Your output should match the page if your versions match. The box at the top says the Sigma and YARA commands were run as printed, with sigma-cli 3.1.0 (pySigma 1.5.0, Splunk backend 2.1.0) and yara-x-cli 1.20.0 on an Apple silicon Mac, and the outputs shown are what they printed; other versions may print something different. The install commands in steps 1 and 6 were not re-run, and the correlation rule in step 5 was converted for Splunk only.</p>
+            <p>Your output should match the page if your versions match. The box at the top says the Sigma and YARA commands were run as printed, with sigma-cli 4.0.0 (pySigma 2.0.2, Splunk backend 3.0.0) and yara-x-cli 1.23.0 on an Apple silicon Mac, and the outputs shown are what they printed; other versions may print something different. Step 1 was run as printed, with Python 3.13.18, the install command in step 6 was not re-run, and the correlation rule in step 5 was converted for Splunk only.</p>
             <p>Some parts can wait for a second reading: the list of value modifiers at the end of step 2, the correlation types after step 5's rule, and the two rules in step 9.</p>
             <p>If a command fails or prints something else, check that you are in the folder that holds the files (step 1 makes <code>~/detect-lab</code> and moves into it), that the rule file still has the name step 2 gave it (step 3 has you rename it as a test and then rename it back, because step 4 uses the original name), that the Splunk backend from step 1 is installed, and that you typed <code>yr</code>, not <code>yara</code>. Two failures are on purpose: the high-severity issue after the rename in step 3, and the first <code>sigma convert</code> in step 4.</p>
         </section>
@@ -399,11 +399,14 @@
             <p>Suppose your team wants an alert when one source gets AccessDenied errors from AWS again and again, a common sign that someone is trying out a leaked key. Written as a Splunk search, the detection runs only in Splunk, and a team on another SIEM would have to rewrite it. Sigma lets you write it once, as a YAML file, and convert it for each SIEM. Steps 1 to 5 build that one rule: install the tools, write the rule, check it, convert it, and then make it count a burst rather than fire on every error. Read <a href="#step-convert">step 4</a> most carefully: a Sigma rule's field names are Sigma's, and a processing pipeline has to map them onto your SIEM's.</p>
 
             <h3>1. Install the toolchain</h3>
-            <p>Make a folder for the lab, move into it, and install <code>sigma-cli</code> with pip. If you use pipx, <code>pipx install sigma-cli</code> works in place of the pip line.</p>
+            <p>sigma-cli needs Python 3.11, 3.12, 3.13 or 3.14. The <code>python3</code> that comes with macOS is 3.9, which is too old, and 3.15 does not work yet: sigma-cli depends on a package called google-re2, which has no ready-built version for 3.15, and pip's attempt to build one fails. This page uses Python 3.13. If <code>python3.13 --version</code> says the command is not found, install it with <code>brew install python@3.13</code> on a Mac, or put the <code>python3.11</code>, <code>python3.12</code> or <code>python3.14</code> you have in its place below.</p>
+            <p>Make a folder for the lab, move into it, and install <code>sigma-cli</code> into a Python virtual environment: a folder, here <code>.venv</code>, that holds its own copy of Python's packages, so the install changes nothing else on your machine. Homebrew's Python refuses a plain <code>pip install</code> outside one, with an <code>externally-managed-environment</code> error.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/detect-lab &amp;&amp; cd ~/detect-lab
-
+python3.13 -m venv .venv
+source .venv/bin/activate
 python3 -m pip install sigma-cli
 sigma version</pre></div>
+            <p>The <code>source</code> line switches this terminal to the environment, and it lasts until you close the terminal. If you come back to the lab in a new one, run <code>cd ~/detect-lab &amp;&amp; source .venv/bin/activate</code> before any <code>sigma</code> command. If you use pipx, <code>pipx install sigma-cli</code> replaces the three lines that make the environment and install into it.</p>
             <p>Backends are plugins, installed separately. See what exists first, then install the Splunk backend:</p>
 <div class="code-block" data-lang="bash"><pre>sigma plugin list
 sigma plugin install splunk</pre></div>
@@ -467,6 +470,7 @@ sigma check rule.yml</pre></div>
             <p>Which produces:</p>
 <div class="code-block" data-lang="text"><pre>errorCode="AccessDenied" NOT userIdentity.arn="arn:aws:sts::111122223333:assumed-role/config-recorder/*"</pre></div>
             <p>Read what the compiler did. <code>|startswith</code> became a trailing <code>*</code>, and <code>not</code> became <code>NOT</code>. That is the whole value proposition: the same rule targets Elastic, Sentinel, QRadar, Carbon Black, or SentinelOne by changing one flag, and each backend knows its own dialect's quirks.</p>
+            <p>Not every backend works with sigma-cli 4.0.0 yet. <code>sigma plugin install</code> refuses the Elasticsearch and QRadar backends, which <code>sigma plugin list</code> marks as not compatible. It does install the <code>kusto</code> backend for Sentinel, but after that every <code>sigma</code> command stops with an <code>ImportError</code> until you uninstall the <code>pysigma-backend-kusto</code> package.</p>
 
             <h3>5. Correlation rules</h3>
             <p>The rule above fires on a single denied event, which is noisy and not really what the title claims. "A burst" is a count over a window, and that needs a <a href="https://github.com/SigmaHQ/sigma-specification/" target="_blank" rel="noopener noreferrer">Sigma correlation rule</a>: a second YAML document that references the first by name. Append it to the same file: its <code>rules:</code> entry points at the <code>name:</code> line from step 2, and without that line sigma-cli rejects the pair because the rule is "not found in rule collection". It also needs a title of its own, or <code>sigma check</code> reports a high-severity duplicate title.</p>
@@ -484,7 +488,7 @@ correlation:
   condition:
     gte: 10
 level: high</pre></div>
-            <p>Correlation types cover <code>event_count</code>, <code>value_count</code> (distinct values, which is how you express "one principal touching many buckets"), and <code>temporal</code> (several different rules firing near each other). Backend support for correlation is genuinely uneven, so check before you build a detection strategy on it.</p>
+            <p>Correlation types include <code>event_count</code>, <code>value_count</code> (distinct values, which is how you express "one principal touching many buckets"), and <code>temporal</code> (several different rules firing near each other). Backend support for correlation is uneven, so check before you build a detection strategy on it.</p>
         </section>
 
         <section id="yara">
@@ -495,7 +499,7 @@ level: high</pre></div>
             <p>Install it with Homebrew, or with <code>cargo install yara-x-cli</code> in place of the first line, and check the version:</p>
 <div class="code-block" data-lang="bash"><pre>brew install yara-x
 yr --version</pre></div>
-            <p>YARA-X is the Rust rewrite from VirusTotal. Version 1.0 went stable in June 2025, VirusTotal runs it in production for Livehunt and Retrohunt, and the original YARA 4.x line is in maintenance mode receiving bug fixes only. The command is <code>yr</code>, not <code>yara</code>, and the subcommands are <code>scan</code>, <code>compile</code>, <code>fmt</code>, <code>dump</code>, <code>deps</code>, and <code>fix</code>.</p>
+            <p>YARA-X is the Rust rewrite from VirusTotal. Version 1.0 went stable in June 2025, VirusTotal runs it in production for Livehunt and Retrohunt, and the original YARA 4.x line is in maintenance mode receiving bug fixes only. The command is <code>yr</code>, not <code>yara</code>, and the subcommands are <code>scan</code>, <code>compile</code>, <code>fmt</code>, <code>dump</code>, <code>deps</code>, <code>fix</code>, and <code>completion</code>.</p>
             <p>Rules are broadly compatible in the direction that matters: existing YARA rules generally work on YARA-X. Do not assume the reverse.</p>
 
             <h3>7. Write a rule, and a target to test it on</h3>
@@ -566,9 +570,10 @@ rule Is_Windows_PE
             <p>Anchoring on structure rather than content is what makes a rule fast. YARA scans everything you point it at, so a rule that can rule out a file in two bytes is worth far more than one that has to search the whole thing. The <code>pe</code>, <code>elf</code>, <code>math</code>, and <code>hash</code> modules go further, exposing parsed structure such as imports, sections, and entropy.</p>
 
             <h3>10. Keep rules in git like code</h3>
-            <p><code>yr fmt</code> rewrites a rule file in canonical style. With <code>--check</code> it changes nothing and exits 1 if the file would be rewritten, which makes it a CI gate.</p>
+            <p><code>yr fmt</code> rewrites a rule file in canonical style. With <code>--check</code> it changes nothing, and if the file would be rewritten it prints the file's name and exits 1, which makes it a CI gate. Plain <code>yr fmt</code> also exits 1 whenever it rewrites a file, so in a script running under <code>set -e</code>, or as a CI step, it stops the run even though nothing is wrong.</p>
 <div class="code-block" data-lang="bash"><pre>yr fmt demo.yar
 yr fmt --check demo.yar</pre></div>
+            <p>Run in that order on the <code>demo.yar</code> from step 7, neither command prints anything. The first rewrites the file, moving the opening brace up onto the rule line and halving the indentation, and exits 1; the second finds nothing left to change and exits 0.</p>
             <p><code>yr fmt --check</code> and <code>sigma check</code> are the same idea applied to the two formats, and both belong in the same pipeline as the rules themselves.</p>
         </section>
 
@@ -621,7 +626,7 @@ yr fmt --check demo.yar</pre></div>
 }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
-                    <p>Three failures compounding. The strings are short, common English fragments; <code>any of them</code> means a single one is enough; and there is no <code>fullword</code>, so <code>$a</code> matches inside <code>always</code>, <code>software</code>, and <code>laws</code>.</p>
+                    <p>Three failures compounding. The strings are short, common English fragments; <code>any of them</code> means a single one is enough; and there is no <code>fullword</code>, so <code>$a</code> matches inside <code>laws</code>, <code>flaws</code>, and <code>draws</code>.</p>
 <div class="code-block" data-lang="yara"><pre>rule Credential_Stealer
 {
     strings:
