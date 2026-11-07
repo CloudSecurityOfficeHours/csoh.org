@@ -984,6 +984,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
 | `pr_security_triage.py` | Deterministic security triage of an untrusted PR diff, behind `security-impact-review.yml` | docstring |
+| `pr_files_to_diff.py` | Rebuilds a unified diff from the paginated pull request files API, with file modes from the git trees API, for PRs too large for GitHub's whole-PR diff. `--self-test` reads its output back through the triage parser | docstring |
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/RUN_SEO_AUDIT_README.md) |
 | `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_PAGESPEED_README.md) |
 | `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_LIGHTHOUSE_README.md) |
