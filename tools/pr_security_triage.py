@@ -35,6 +35,11 @@ HIGH finding and exits non-zero. A crawl that did not happen always fails; a
 clean crawl passes. Those are not the same result and must not share an exit
 code.
 
+The same rule covers a file that holds text but no `diff --git` header. That
+is not a diff of zero files, it is not a diff: an API error body saved under
+the diff's name looks exactly like this, and parsing it as "no files changed"
+would turn a failed fetch into a CLEAR verdict.
+
 USAGE
 -----
     python3 tools/pr_security_triage.py --diff pr.diff --meta pr.json
@@ -723,6 +728,21 @@ def main() -> int:
             )
     else:
         files = parse_diff(text)
+        if not files and not args.allow_empty_diff:
+            # Text with no file header is not a unified diff, and the usual way
+            # one arrives here is an API error body written where the diff
+            # should be. Zero parsed files must not become zero findings.
+            findings.append(
+                Finding(
+                    "HIGH",
+                    "diff-unavailable",
+                    "The diff file holds text but no file headers, so it is not a "
+                    "unified diff and NOTHING was actually reviewed. An API error "
+                    "body saved in place of the diff looks like this. Check the fetch "
+                    "step before reading anything else in this report.",
+                    [str(diff_path), text.strip().splitlines()[0][:120]],
+                )
+            )
         for check in CHECKS:
             findings.extend(check(files))
         # The two checks that also read PR metadata, so they take `meta` and
