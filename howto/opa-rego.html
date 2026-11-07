@@ -347,7 +347,7 @@
     <main class="container contribute-article" id="main-content">
         <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
-            <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner to intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal, the <code>opa</code> binary, and optionally Docker for the Conftest step</p>
+            <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner to intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and the <code>opa</code> binary, and for step 5, Conftest and Terraform with a Terraform configuration of your own to plan</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> every policy, test and command on this page, including the exercise answers, was run with OPA 1.21.2, Conftest 0.71.1 and Regal 0.43.0 on an Apple silicon Mac, and the outputs described are what they printed. The Terraform plan in step 5 was made with Terraform 1.15.7 and AWS provider 5.100.0 using dummy credentials, so its JSON is real but no AWS account was involved and nothing was applied.</p>
         </div>
 
@@ -379,7 +379,7 @@
             <h2>How to use this guide</h2>
             <p>This guide is marked beginner to intermediate. It assumes you can type commands into a terminal and read a short JSON document, and it teaches Rego from the start, so you need no policy language beforehand. Step 5 also uses Terraform, the tool that builds cloud resources from configuration files and can show the changes it plans to make before it makes them. The site's <a href="../terraform.html">Terraform page</a> explains it, using real configuration. That step needs Terraform installed and a Terraform configuration of your own to plan, which this page does not supply.</p>
             <p>Read the page in order. The <a href="#model">next section</a> explains the one idea the rest depends on, with two short policies that are there to read. In the <a href="#walkthrough">walk-through</a>, step 1 installs OPA, steps 2 and 3 write a small policy about storage buckets and run it against a JSON file, step 4 extends it to a list of buckets, step 5 points a policy at a real Terraform plan with Conftest, and steps 6 and 7 test and tidy the policy. The <a href="#exercises">exercises</a> build on the files you made, with each answer hidden until you open Show the answer. If you have no Terraform configuration to hand, save step 5's <code>policy/s3.rego</code> anyway and carry on: steps 6 and 7 test and check that file without reading a plan, though exercises 1 and 2 need one.</p>
-            <p>Each code block has a label at the top and a copy button. A REGO block with a file name just above it, such as <code>bucket.rego</code>, is a policy file, and the one labelled JSON is an input document: save each under that name in the folder you run your commands from. The other REGO blocks are rules to read, or to put into the file the step names. From step 5 on, the policies live in a folder called <code>policy</code> inside it. A block labelled BASH holds commands to paste into your terminal. Text after a <code>#</code> is a comment explaining the line. zsh, the default shell on macOS, rejects a <code>#</code> comment pasted at its prompt: it runs a comment line as a command and passes a trailing comment to the command as extra arguments. Before pasting, run <code>setopt interactivecomments</code> once in each new terminal, or use bash. This page has no separate output blocks: the sentence after most commands says what it should print, and in step 3 a comment line in the block shows it.</p>
+            <p>Each code block has a label at the top and a copy button. A REGO block with a file name just above it, such as <code>bucket.rego</code>, is a policy file, and the one labelled JSON is an input document: save each under that name in the folder you run your commands from. The other REGO blocks are rules to read, or to put into the file the step names. From step 5 on, the policies live in a folder called <code>policy</code> inside it. A block labelled BASH holds commands to paste into your terminal, and the sentence before it says what they do. Text after a <code>#</code> in a REGO block is a comment explaining the line. This page has no separate output blocks: the sentence after most commands says what it should print.</p>
             <p>What you see should match what the page describes. Every policy, test and command here, the exercise answers included, was run with OPA 1.21.2, Conftest 0.71.1 and Regal 0.43.0, and the page reports what they printed. Step 5 is the exception, because what Conftest reports depends on the Terraform configuration you plan: expect your own resource names, and no findings at all if your plan has no <code>aws_s3_bucket_public_access_block</code> resource.</p>
             <p>If a result differs from the page, check three things. First, the OPA version: the page needs 1.x, and on 0.x every policy fails to parse. Second, the folder: every command names its files without saying which folder they are in, so run it from the folder that holds them. Third, the input: steps 2 and 3 have you edit <code>bucket.json</code> by hand, so make sure it holds what the step says. In step 5, also remember that Conftest by default reads only policies in <code>package main</code>.</p>
         </section>
@@ -426,11 +426,11 @@ deny contains msg if {
             <h2>Walk-through</h2>
 
             <h3>1. Install OPA and confirm you are on 1.x</h3>
-<div class="code-block" data-lang="bash"><pre># macOS. On Linux, grab the static binary from the GitHub releases page.
-brew install opa
+            <p>On macOS, install OPA with Homebrew. On Linux, grab the static binary from the GitHub releases page.</p>
+<div class="code-block" data-lang="bash"><pre>brew install opa
 
-opa version        # confirm "Version: 1.x" - the syntax below needs it</pre></div>
-            <p>If a package manager hands you 0.x, download the binary directly from <a href="https://github.com/open-policy-agent/opa/releases" target="_blank" rel="noopener noreferrer">the releases page</a> instead. On 0.x every example here fails to parse, and the error message points at the <code>if</code> keyword rather than saying "your OPA is old", which is a confusing first hour.</p>
+opa version</pre></div>
+            <p>Confirm that <code>opa version</code> reports <code>Version: 1.x</code>: the syntax below needs it. If a package manager hands you 0.x, download the binary directly from <a href="https://github.com/open-policy-agent/opa/releases" target="_blank" rel="noopener noreferrer">the releases page</a> instead. On 0.x every example here fails to parse, and the error message points at the <code>if</code> keyword rather than saying "your OPA is old", which is a confusing first hour.</p>
 
             <h3 id="step-first-policy">2. Your first policy, evaluated from the command line</h3>
             <p><code>bucket.rego</code>:</p>
@@ -442,18 +442,16 @@ deny contains msg if {
 }</pre></div>
             <p><code>bucket.json</code>:</p>
 <div class="code-block" data-lang="json"><pre>{ "name": "prod-invoices", "encryption": { "enabled": false }, "public": true }</pre></div>
-<div class="code-block" data-lang="bash"><pre># -d loads a policy file (or directory), -i loads the input document.
-# The final argument is the query: a path into the data tree.
-opa eval -d bucket.rego -i bucket.json 'data.storage.deny'
-
-# --format pretty prints just the value instead of the full result envelope
-opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'</pre></div>
+            <p>Evaluate the policy against the input. <code>-d</code> loads a policy file (or directory), <code>-i</code> loads the input document, and the final argument is the query: a path into the data tree.</p>
+<div class="code-block" data-lang="bash"><pre>opa eval -d bucket.rego -i bucket.json 'data.storage.deny'</pre></div>
+            <p>Add <code>--format pretty</code> to print just the value instead of the full result envelope:</p>
+<div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'</pre></div>
             <p>You should get back a set containing one message. Now flip <code>enabled</code> to <code>true</code> in the input and run it again: the pretty output is <code>[]</code>, an empty set. That empty set is your "allowed" signal.</p>
 
             <h3 id="step-undefined">3. Watch undefined bite you</h3>
             <p>Delete the whole <code>encryption</code> object from <code>bucket.json</code> so it reads <code>{"name": "prod-invoices", "public": true}</code>, then run the same command.</p>
-<div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'
-# []   &lt;-- an empty deny set. The policy says this bucket is fine.</pre></div>
+<div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'</pre></div>
+            <p>It prints <code>[]</code>, an empty deny set. The policy says this bucket is fine.</p>
             <p>A bucket with no encryption configuration at all just passed a policy whose entire job is to require encryption. <code>input.encryption.enabled</code> is undefined, the body fails, no message is added. The fix is to stop asking "is it false" and start asking "is it not true":</p>
 <div class="code-block" data-lang="rego"><pre>deny contains msg if {
     not input.encryption.enabled == true        # true for false AND for missing
@@ -480,9 +478,9 @@ deny contains msg if {
             <p>There is no loop counter, no <code>break</code>, and no accumulator variable. You describe what a violation looks like and OPA finds every one of them.</p>
 
             <h3>5. Gate a real Terraform plan with Conftest</h3>
-            <p>With a real plan, it stops being a toy. Terraform can export its plan as JSON, and that JSON is just another <code>input</code> document.</p>
-<div class="code-block" data-lang="bash"><pre>terraform plan -out=tfplan.binary            # write the plan to a file
-terraform show -json tfplan.binary &gt; tfplan.json   # convert it to JSON</pre></div>
+            <p>With a real plan, it stops being a toy. Terraform can export its plan as JSON, and that JSON is just another <code>input</code> document. The first command below writes the plan to a file, and the second converts it to JSON:</p>
+<div class="code-block" data-lang="bash"><pre>terraform plan -out=tfplan.binary
+terraform show -json tfplan.binary &gt; tfplan.json</pre></div>
             <p>The interesting key is <code>resource_changes</code>: an array where each entry has an <code>address</code>, a <code>type</code>, a <code>change.actions</code> list, and <code>change.after</code> holding the resource as it will exist. The policy below checks one resource type, <code>aws_s3_bucket_public_access_block</code>, which holds an S3 bucket's settings for blocking public access, and requires its <code>block_public_acls</code> setting, which makes S3 refuse requests that would set a public <a class="glossary-link" href="../glossary.html#term-acl">ACL</a> (access control list, an older way of granting access to a bucket or an object). <code>policy/s3.rego</code>:</p>
 <div class="code-block" data-lang="rego"><pre>package main        # Conftest looks in `main` by default
 
@@ -499,12 +497,12 @@ deny contains msg if {
     not rc.change.after.block_public_acls == true
     msg := sprintf("%v does not block public ACLs", [rc.address])
 }</pre></div>
-<div class="code-block" data-lang="bash"><pre># Conftest wraps OPA and knows how to read plan JSON, YAML, Dockerfiles, and more.
-brew install conftest
+            <p>Conftest wraps OPA and knows how to read plan JSON, YAML, Dockerfiles, and more. Install it, run the policy against the plan, and print the exit code:</p>
+<div class="code-block" data-lang="bash"><pre>brew install conftest
 conftest test --policy policy/ tfplan.json
 
-echo $?    # 0 = no denials, 1 = at least one. This is your CI gate.</pre></div>
-            <p>Read the output as well as the exit code. A policy that fails to load also exits 1, so a syntax error looks exactly like a denial to a gate that checks only <code>$?</code>.</p>
+echo $?</pre></div>
+            <p>The exit code is 0 when there are no denials and 1 when there is at least one. This is your <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> gate. Read the output as well as the exit code. A policy that fails to load also exits 1, so a syntax error looks exactly like a denial to a gate that checks only <code>$?</code>.</p>
 
             <h3>6. Unit-test the policy itself</h3>
             <p>A policy is code that decides whether other code ships. Untested, it is the least trustworthy thing in the pipeline. OPA has a test runner built in: any rule named <code>test_*</code> is a test, and it passes if it evaluates to true.</p>
@@ -533,18 +531,18 @@ test_allows_compliant_bucket if {
         }]
     }
 }</pre></div>
-<div class="code-block" data-lang="bash"><pre>opa test policy/ -v      # -v names each test instead of printing only a tally</pre></div>
+            <p>Run the tests. <code>-v</code> names each test instead of printing only a tally.</p>
+<div class="code-block" data-lang="bash"><pre>opa test policy/ -v</pre></div>
 
             <h3>7. Format, check, and lint</h3>
-<div class="code-block" data-lang="bash"><pre>opa fmt -w policy/          # -w rewrites files in place, gofmt style
-opa check --strict policy/  # --strict rejects unused vars, shadowed names, and
-                            # other things that parse but almost always mean a bug
-
-# Regal is a dedicated Rego linter and catches idiom problems opa check does not.
-brew install regal
+            <p><code>opa fmt -w</code> rewrites the files in place, the way gofmt does for Go. <code>opa check --strict</code> rejects unused variables, shadowed names, and other things that parse but almost always mean a bug.</p>
+<div class="code-block" data-lang="bash"><pre>opa fmt -w policy/
+opa check --strict policy/</pre></div>
+            <p>Regal is a dedicated Rego linter and catches idiom problems <code>opa check</code> does not. Install it and lint the same folder:</p>
+<div class="code-block" data-lang="bash"><pre>brew install regal
 regal lint policy/</pre></div>
             <p>Run against this page's own <code>policy/</code> directory after <code>opa fmt</code>, Regal reports five findings and no bugs: the package name does not mirror the directory, the tests share package <code>main</code> with the policy instead of living in <code>main_test</code>, and there is no entrypoint annotation. Conftest's <code>main</code> default explains the first two. Treat each as a convention to adopt, or to switch off in Regal's configuration on purpose.</p>
-            <p>Put <code>opa check --strict</code> and <code>opa test</code> in <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> next to the gate itself. A policy repository where the policies are not tested is a repository that will eventually block a deploy for the wrong reason, and the fastest way to get policy-as-code removed from a pipeline is to have it be wrong once at a bad moment.</p>
+            <p>Put <code>opa check --strict</code> and <code>opa test</code> in CI next to the gate itself. A policy repository where the policies are not tested is a repository that will eventually block a deploy for the wrong reason, and the fastest way to get policy-as-code removed from a pipeline is to have it be wrong once at a bad moment.</p>
         </section>
 
         <section id="exercises">
@@ -580,12 +578,12 @@ regal lint policy/</pre></div>
 }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
-                    <p>Before you debug the logic, prove the iteration is finding anything at all:</p>
+                    <p>Before you debug the logic, prove the iteration is finding anything at all. An empty result, <code>[]</code>, from the first query below tells you nothing. The second lists the resource types that are in the plan, which may not be the ones your rule names.</p>
 <div class="code-block" data-lang="bash"><pre>opa eval --format pretty -d policy/ -i tfplan.json \
-  'data.main.deny'                                     # [] tells you nothing
+  'data.main.deny'
 
 opa eval --format pretty -i tfplan.json \
-  '[rc.type | some rc in input.resource_changes]'      # what types are ACTUALLY here?</pre></div>
+  '[rc.type | some rc in input.resource_changes]'</pre></div>
                     <p>If the second query lists <code>aws_vpc_security_group_ingress_rule</code> and no <code>aws_security_group_rule</code>, that is the answer. The plan defines its SSH rule with the newer resource, which takes a single <code>cidr_ipv4</code> string instead of a <code>cidr_blocks</code> list. A type filter that names a type the plan does not contain produces an empty iteration and therefore an empty deny set, forever, with no error. Against a plan that does use <code>aws_security_group_rule</code>, the rule fires as intended.</p>
                     <p>The single <code>=</code> on the port line is a separate smell, not the bug. <code>=</code> is unification: with both sides known, as here, it compares exactly as <code>==</code> would, but when one side is an unbound variable it binds instead, and the line always succeeds. Use <code>==</code> to compare and <code>:=</code> to assign. Regal flags this line ("Prefer <code>==</code> for equality comparison"); <code>opa check --strict</code> does not.</p>
                 </details>

@@ -380,7 +380,7 @@
             <h2>How to use this guide</h2>
             <p>Beginner to intermediate here means you can type commands into a terminal and may have searched a file with <code>grep</code>, but you need not have written a regex before: steps 1 to 4 build up the syntax as they go. Steps 6 and 7, on lookaround and catastrophic backtracking, are the intermediate half. Several steps run short Python programs. Reading a little Python helps, and the comments in each program and the paragraph after it say what it shows.</p>
             <p>Read the two sections before the walk-through first. <a href="#model">Two engines, two sets of rules</a> explains why the same pattern can behave differently from one tool to the next, which steps 6 and 7 come back to. <a href="#failure-directions">Too broad or too narrow</a> shows the two ways a pattern fails, using a URL check. The <a href="#walkthrough">walk-through</a> opens with one block that makes a folder called <code>~/regex-lab</code> and writes two small files into it: <code>sample.log</code>, five log lines, and <code>secrets.txt</code>, four lines of which only two hold an AWS access key ID. Each step then runs patterns against those files and explains what they matched or missed. The <a href="#exercises">exercises</a> ask you to find bypasses and write patterns yourself, with each answer hidden until you select "Show the answer".</p>
-            <p>A code block labelled BASH is something to paste into your terminal, and every block has a copy button. zsh, the default shell on macOS, rejects a <code>#</code> comment pasted at its prompt: it runs a comment line as a command and passes a trailing comment to the command as extra arguments. Before pasting, run <code>setopt interactivecomments</code> once in each new terminal, or use bash. The blocks labelled REGEX hold patterns to read rather than commands to run, and the one labelled PYTHON in Exercise 1 is a line of code to study. The walk-through's first block writes its files with lines such as <code>cat &gt; sample.log &lt;&lt;'EOF'</code>, which write every line after them, down to the one that says only <code>EOF</code>, into the named file. Paste the whole block at once, both <code>EOF</code> lines included. The Python steps use the same pattern with <code>python3 - &lt;&lt;'PY'</code>, which runs the lines down to <code>PY</code> as a Python program without saving them to a file. The page does not show what each command prints; the comments in each block, and the text after some, say what to look for.</p>
+            <p>A code block labelled BASH is something to paste into your terminal, and every block has a copy button. The blocks labelled REGEX hold patterns to read rather than commands to run, and the one labelled PYTHON in Exercise 1 is a line of code to study. The walk-through's first block writes its files with lines such as <code>cat &gt; sample.log &lt;&lt;'EOF'</code>, which write every line after them, down to the one that says only <code>EOF</code>, into the named file. Paste the whole block at once, both <code>EOF</code> lines included. The Python steps use the same pattern with <code>python3 - &lt;&lt;'PY'</code>, which runs the lines down to <code>PY</code> as a Python program without saving them to a file. The page has no output blocks. The text before a block says what it does, and the text after it says what to look for in the output.</p>
             <p>Step 6 and Exercise 2 use ripgrep (<code>rg</code>), which the box at the top of the page calls optional, so skip those commands if you have not installed it. Step 7 times a pattern, so its numbers depend on your computer; what matters is how fast they grow. If a command complains that <code>sample.log</code> or <code>secrets.txt</code> does not exist, the terminal is no longer in the <code>~/regex-lab</code> folder that the first block made, so run <code>cd ~/regex-lab</code> and try again.</p>
         </section>
 
@@ -430,11 +430,11 @@ doc_reference = "the AKIA prefix identifies long-term keys"
 EOF</pre></div>
 
             <h3 id="step-anchors">1. Anchors, and why they are a security control</h3>
-<div class="code-block" data-lang="bash"><pre># -E = extended regex (POSIX ERE). Without -E, grep needs backslashes
-# in front of +, ?, |, (, and ) - a classic source of "why doesn't this work".
-grep -E 'denied' sample.log            # substring match, anywhere on the line
-grep -E '^2026-08-20T14:06' sample.log # ^ pins to start of line
-grep -E 'success$' sample.log          # $ pins to end of line</pre></div>
+            <p><code>-E</code> tells grep to use extended regular expressions (POSIX ERE). Without <code>-E</code>, grep needs backslashes in front of <code>+</code>, <code>?</code>, <code>|</code>, <code>(</code>, and <code>)</code>, a classic source of "why doesn't this work". The first command below is a substring match, so <code>denied</code> can sit anywhere on the line. In the second, <code>^</code> pins the match to the start of the line, and in the third, <code>$</code> pins it to the end.</p>
+<div class="code-block" data-lang="bash"><pre>grep -E 'denied' sample.log
+grep -E '^2026-08-20T14:06' sample.log
+grep -E 'success$' sample.log</pre></div>
+            <p>The first prints the three denied lines. The second prints the two lines logged at 14:06, and the third prints the two lines that end in <code>success</code>.</p>
             <p>In a search, an unanchored pattern is a convenience. In a validator, an unanchored pattern is a bug, because "contains" is not "is". Prove it to yourself:</p>
 <div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re
@@ -461,13 +461,9 @@ PY</pre></div>
             <p>Whether the trailing newline matters depends entirely on what consumes the value afterwards. If it lands in a header, a log line, or a generated config file, it matters a great deal. Use <code>\A</code> and <code>\Z</code> in Python when the regex is a validator rather than a search.</p>
 
             <h3>3. Character classes, quantifiers, and greed</h3>
-<div class="code-block" data-lang="bash"><pre># Extract every source IP. [0-9]{1,3} = one to three digits.
-grep -oE '\bip=[0-9]{1,3}(\.[0-9]{1,3}){3}\b' sample.log
-
-# -o prints only the matched part rather than the whole line.
-# \b is a word boundary: a zero-width assertion between a word
-# character and a non-word character. It is what stops the pattern
-# matching the middle of a longer token.</pre></div>
+            <p>This command extracts every source IP address. <code>[0-9]{1,3}</code> means one to three digits, and <code>-o</code> prints only the matched part rather than the whole line.</p>
+<div class="code-block" data-lang="bash"><pre>grep -oE '\bip=[0-9]{1,3}(\.[0-9]{1,3}){3}\b' sample.log</pre></div>
+            <p>It prints five lines, one address per log line, each still carrying its <code>ip=</code> label. <code>\b</code> is a word boundary: a zero-width assertion between a word character and a non-word character. It is what stops the pattern matching the middle of a longer token.</p>
             <p>Quantifiers are greedy by default: they take as much as they can and then give back only if the rest of the pattern fails. Adding <code>?</code> makes them lazy, taking as little as possible. On a log line with more than one delimiter, the difference is the whole result:</p>
 <div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re
@@ -495,34 +491,28 @@ PY</pre></div>
 
             <h3 id="step-scanner">5. Write a credential scanner</h3>
             <p>AWS access key IDs are 20 characters: a four-character prefix plus 16 uppercase alphanumerics. <code>AKIA</code> is a long-term <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> user key. <code>ASIA</code> is a temporary <a class="glossary-link" href="../glossary.html#term-sts">STS</a> credential.</p>
-<div class="code-block" data-lang="bash"><pre># First attempt - finds the keys, and also finds the two things that are not keys
-grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' secrets.txt
-
-# Word boundaries reject the embedded case
+            <p>Here are two attempts. The first finds both keys, and also finds one thing that is not a key. The second adds word boundaries, which reject that embedded case.</p>
+<div class="code-block" data-lang="bash"><pre>grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' secrets.txt
 grep -oE '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt</pre></div>
-            <p>Run both. The first matches inside <code>XAKIAIOSFODNN7EXAMPLEX</code>, because nothing said the match had to start at a token boundary. The second does not. Neither can tell you anything about the prose line mentioning <code>AKIA</code>, because that line contains no 20-character key, which is the correct outcome and worth confirming rather than assuming.</p>
-            <p>Now try the other half of an AWS credential pair, and watch the approach fall apart:</p>
-<div class="code-block" data-lang="bash"><pre># A secret access key is 40 characters of base64 alphabet. As a regex
-# that is nearly content-free: it matches most git hashes, most base64
-# blobs, and a good fraction of minified JavaScript.
-grep -oE '\b[A-Za-z0-9/+=]{40}\b' secrets.txt</pre></div>
-            <p>This is the boundary of what regex can do, and knowing where that boundary is matters more than another hour of syntax. Real secret scanners pair a regex with something else: Shannon entropy over the candidate, a proximity requirement (the string must sit near <code>aws_secret_access_key</code>), and increasingly a live validity check against the provider. Regex finds candidates. It does not decide.</p>
+            <p>Run both. The first prints three matches: <code>AKIAIOSFODNN7EXAMPLE</code>, <code>ASIAIOSFODNN7EXAMPLE</code>, and <code>AKIAIOSFODNN7EXAMPLE</code> again. That third match comes from inside <code>XAKIAIOSFODNN7EXAMPLEX</code>, because nothing said the match had to start at a token boundary. The second prints only the two keys. Neither can tell you anything about the prose line mentioning <code>AKIA</code>, because that line contains no 20-character key, which is the correct outcome and worth confirming rather than assuming.</p>
+            <p>Now try the other half of an AWS credential pair, and watch the approach fall apart. A secret access key is 40 characters of the base64 alphabet. As a regex, that is nearly content-free: it matches most git hashes, most base64 blobs, and a good fraction of minified JavaScript.</p>
+<div class="code-block" data-lang="bash"><pre>grep -oE '\b[A-Za-z0-9/+=]{40}\b' secrets.txt</pre></div>
+            <p>On <code>secrets.txt</code> it prints nothing, because the file holds no run of 40 such characters. This is the boundary of what regex can do, and knowing where that boundary is matters more than another hour of syntax. Real secret scanners pair a regex with something else: Shannon entropy over the candidate, a proximity requirement (the string must sit near <code>aws_secret_access_key</code>), and increasingly a live validity check against the provider. Regex finds candidates. It does not decide.</p>
 
             <h3 id="step-lookaround">6. Lookaround, and living without it</h3>
-<div class="code-block" data-lang="bash"><pre># Lookahead: match a key ID only when NOT followed by more alphanumerics.
-# Lookbehind: and not preceded by any either. PCRE / Python / Java only.
-python3 -c "
+            <p>The pattern in this Python program matches a key ID only when it is not followed by more uppercase letters or digits (the lookahead, <code>(?![A-Z0-9])</code>), and not preceded by any either (the lookbehind, <code>(?&lt;![A-Z0-9])</code>). Only backtracking engines such as PCRE, Python and Java support lookaround. The prefix sits in a non-capturing group, <code>(?:AKIA|ASIA)</code>, because <code>findall</code> returns only the captured part when a pattern has a capturing group, and here that would be the four-letter prefix alone.</p>
+<div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import re
-print(re.findall(r'(?&lt;![A-Z0-9])(AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])',
-                 open('secrets.txt').read()))"
-
-# ripgrep defaults to the Rust regex engine, which has no lookaround.
-rg '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt    # error: look-around not supported
-rg -P '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt # -P switches to PCRE2</pre></div>
-            <p>When the engine has no lookaround, express the boundary instead of asserting it. <code>\b</code> covers most cases. Where it does not, match the surrounding character and capture only the part you want:</p>
-<div class="code-block" data-lang="bash"><pre># Instead of  (?&lt;=key = )\S+   which needs lookbehind,
-# match the label too and take group 1.
-rg -o 'key\s*=\s*(\S+)' -r '$1' secrets.txt   # -r rewrites output to the capture</pre></div>
+print(re.findall(r'(?&lt;![A-Z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])',
+                 open('secrets.txt').read()))
+PY</pre></div>
+            <p>It prints <code>['AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE']</code>: the two keys, without the copy buried in <code>XAKIAIOSFODNN7EXAMPLEX</code>.</p>
+            <p>ripgrep defaults to the Rust regex engine, which has no lookaround, so the first <code>rg</code> command below stops with a regex parse error saying that look-around is not supported. <code>-P</code> switches ripgrep to the PCRE2 engine, and with it the second command prints the one line that holds a long-term key.</p>
+<div class="code-block" data-lang="bash"><pre>rg '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt
+rg -P '(?&lt;![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt</pre></div>
+            <p>When the engine has no lookaround, express the boundary instead of asserting it. <code>\b</code> covers most cases. Where it does not, match the surrounding character and capture only the part you want. Instead of <code>(?&lt;=key = )\S+</code>, which needs lookbehind, the command below matches the label too and takes group 1. <code>-r '$1'</code> rewrites the output to that capture.</p>
+<div class="code-block" data-lang="bash"><pre>rg -o 'key\s*=\s*(\S+)' -r '$1' secrets.txt</pre></div>
+            <p>It prints the values from the <code>temp_key</code> and <code>not_a_key</code> lines. The first line does not match, because its label carries on past <code>key</code> with <code>_id</code> before the equals sign.</p>
 
             <h3 id="step-backtracking">7. Catastrophic backtracking</h3>
             <p>A backtracking engine can be made to explore an exponential number of paths. The trigger is nested quantifiers over overlapping alternatives, followed by something that fails.</p>
@@ -535,7 +525,7 @@ for n in (18, 20, 22, 24):
     evil.search(s)
     print(n, f"{time.perf_counter() - t:.3f}s")
 PY</pre></div>
-            <p>Each extra character roughly doubles the time. At 24 characters you are already waiting; at 40 the process is effectively hung. An attacker who controls the input to a validator, a log parser, or a WAF rule gets a CPU exhaustion primitive for free, and it is one of the few denial-of-service bugs that survives autoscaling, because every worker is equally stuck.</p>
+            <p>Each extra character roughly doubles the time, so the 24-character run takes about 64 times as long as the 18-character one. At the same rate, 40 characters would take about 65,000 times as long as 24, and the process is effectively hung. An attacker who controls the input to a validator, a log parser, or a WAF rule gets a CPU exhaustion primitive for free, and it is one of the few denial-of-service bugs that survives autoscaling, because every worker is equally stuck.</p>
             <p>Three defences, in order of preference: use a finite-automaton engine for anything touching untrusted input; avoid nesting a quantifier inside a quantified group when the inner alternatives can match the same text; and where neither is possible, impose a length cap on the input <em>before</em> the regex sees it.</p>
         </section>
 
@@ -594,7 +584,8 @@ D:  ^[a-z]{1,64}$</pre></div>
 <div class="code-block" data-lang="bash"><pre>grep -E 'result=denied' sample.log \
   | grep -oE '\buser=[^ ]+' \
   | sort | uniq -c | sort -rn \
-  | awk '$1 &gt; 1'          # keep only counts above one</pre></div>
+  | awk '$1 &gt; 1'</pre></div>
+                    <p>The final <code>awk</code> step keeps only counts above one, so the output is a single line: a count of 2 for <code>user=mallory</code>.</p>
                     <p><code>[^ ]+</code> is greedy up to the next space, so a username containing <code>=</code> is captured correctly, but a username containing a <em>space</em> would be truncated and would silently split into two apparent principals. Delimiter-based extraction always inherits the delimiter's ambiguity.</p>
                     <p>That is the argument for parsing structured logs as structure. <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> is JSON; running a regex over the raw JSON text to pull out <code>userIdentity.arn</code> works right up until a field contains a quote or a brace, at which point it fails in a way no test caught. Use <a href="jq-and-jmespath.html">jq</a> for JSON and save regex for the places where the data really is flat text.</p>
                 </details>

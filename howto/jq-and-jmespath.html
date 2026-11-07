@@ -382,7 +382,7 @@
             <h2>How to use this guide</h2>
             <p>Beginner here means new to jq and JMESPath. You should be comfortable typing commands into a terminal, and it helps to have looked inside a JSON file before, though the sample in step 1 is short enough to read in full. Steps 1 to 6 need no cloud account and no AWS knowledge, because they run against that sample file. Step 6 also uses Python 3 and installs the <code>jmespath</code> package with <code>pip3</code>. Steps 7 and 8 run the AWS CLI against a real account. If you have none, read them without running them: their warnings about <code>--query</code> and <code>--output text</code> apply whenever you use the AWS CLI.</p>
             <p>Read it in order. The next section, <a href="#model">Streams versus single values</a>, explains the idea behind most jq confusion, and its three short commands need only jq. In the <a href="#walkthrough">walk-through</a>, step 1 makes a folder called <code>~/jq-lab</code> and writes five CloudTrail-style events into a file there called <code>events.json</code>. Steps 2 to 5 ask questions of that file with jq, each step adding one technique, and step 6 asks the same questions with JMESPath so you can compare the two. The <a href="#exercises">exercises</a> then ask you to write queries yourself, with each answer hidden until you select "Show the answer".</p>
-            <p>A code block labelled BASH is something to paste into your terminal, and every block has a copy button. The block labelled JMESPATH, in Exercise 2's answer, is an expression to read, not a command. zsh, the default shell on macOS, rejects a <code>#</code> comment pasted at its prompt: it runs a comment line as a command and passes a trailing comment to the command as extra arguments. Before pasting, run <code>setopt interactivecomments</code> once in each new terminal, or use bash. Step 1's block contains a line that starts <code>cat &gt; events.json &lt;&lt;'EOF'</code>, which writes every line after it, down to the one that says only <code>EOF</code>, into <code>events.json</code>. Paste the whole block at once, the <code>EOF</code> line included. Step 6 uses the same pattern with <code>python3 - &lt;&lt;'PY'</code>, which runs the lines down to <code>PY</code> as a Python program without saving them to a file. The page does not show what each command prints; the comments in each block, and the text after some, say what to look for.</p>
+            <p>A code block labelled BASH is something to paste into your terminal, and every block has a copy button. The block labelled JMESPATH, in Exercise 2's answer, is an expression to read, not a command. Step 1's block contains a line that starts <code>cat &gt; events.json &lt;&lt;'EOF'</code>, which writes every line after it, down to the one that says only <code>EOF</code>, into <code>events.json</code>. Paste the whole block at once, the <code>EOF</code> line included. Step 6 uses the same pattern with <code>python3 - &lt;&lt;'PY'</code>, which runs the lines down to <code>PY</code> as a Python program without saving them to a file. The page has no output blocks. The text before a block says what it does, and the text after it says what to look for in the output.</p>
             <p>If a command says it cannot open <code>events.json</code>, the terminal is no longer in the <code>~/jq-lab</code> folder that step 1 made, so run <code>cd ~/jq-lab</code> and try again. If a query prints nothing, or an empty list, do what the last of the <a href="#mistakes">common mistakes</a> advises: run it again with the filter removed, to see whether the data is there at all.</p>
         </section>
 
@@ -390,9 +390,10 @@
             <h2>Streams versus single values</h2>
             <p>Step 2 asks jq who made each request that AWS refused, identified by ARN (Amazon Resource Name, AWS's unique name for a user, role or other resource), and jq prints three ARNs, each on its own line. Step 6 asks JMESPath the same question and gets back one list holding the same three ARNs. Both answers are right. They differ in shape, and that difference is worth understanding before you start.</p>
             <p>Almost every jq confusion traces back to one idea. <strong>jq filters produce a stream, not a value.</strong> A stream is a run of separate values, one after another. In the commands below, <code>echo</code> prints a tiny JSON object whose key <code>a</code> holds a list of three numbers, and the pipe hands it to jq. <code>.a</code> means "the value under the key <code>a</code>", and <code>.a[]</code> means "each item in it, one at a time".</p>
-<div class="code-block" data-lang="bash"><pre>echo '{"a":[1,2,3]}' | jq '.a'      # one output: the array  [1,2,3]
-echo '{"a":[1,2,3]}' | jq '.a[]'    # THREE outputs: 1, then 2, then 3
-echo '{"a":[1,2,3]}' | jq '[.a[]]'  # collect the stream back into one array</pre></div>
+<div class="code-block" data-lang="bash"><pre>echo '{"a":[1,2,3]}' | jq '.a'
+echo '{"a":[1,2,3]}' | jq '.a[]'
+echo '{"a":[1,2,3]}' | jq '[.a[]]'</pre></div>
+            <p>The first command prints one output, the array <code>[1,2,3]</code>. jq spreads it over five lines to make it readable, but it is still a single value. The second prints three outputs: <code>1</code>, then <code>2</code>, then <code>3</code>. The third collects that stream back into one array, so it prints the same thing as the first.</p>
             <p>Those square brackets in the third line are not decoration. Any time a jq expression produces something that looks almost right but repeated, or almost right but unwrapped, the answer is usually a missing pair of collecting brackets. <code>select()</code>, <code>map()</code>, <code>group_by()</code> and friends all become obvious once you know which of them expect a stream and which expect an array. You will meet <code>select()</code> in <a href="#step-select">step 2</a>, and <code>group_by()</code> and <code>map()</code> working on a collected array in <a href="#step-group">step 4</a>.</p>
             <p>JMESPath has no equivalent concept. An expression takes one document and returns one JSON value, always. That constraint is why it is safe to embed in a CLI flag and why it is considerably less capable: there is no way to express "emit a line per element" because there are no lines and no emitting. <a href="#step-jmespath">Step 6</a> shows the single value, and Exercise 2 puts the two shapes side by side.</p>
         </section>
@@ -425,24 +426,21 @@ cat &gt; events.json &lt;&lt;'EOF'
 EOF</pre></div>
 
             <h3 id="step-select">2. jq: navigate, then filter</h3>
-<div class="code-block" data-lang="bash"><pre>jq '.Records | length' events.json          # 5
-
-# .Records[] streams each record; select() passes through only the
-# ones where its condition is true and emits nothing for the rest.
-jq '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json
-
-# -r = raw output: print strings unquoted, which is what you want
-# the moment the output feeds another command.
-jq -r '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json</pre></div>
+            <p>Start by counting the records. <code>.Records</code> picks out the list of records, and <code>length</code> counts it.</p>
+<div class="code-block" data-lang="bash"><pre>jq '.Records | length' events.json</pre></div>
+            <p>It prints <code>5</code>. Next, <code>.Records[]</code> streams each record, and <code>select()</code> passes through only the ones where its condition is true and emits nothing for the rest. This command prints the ARN behind each request that AWS refused:</p>
+<div class="code-block" data-lang="bash"><pre>jq '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json</pre></div>
+            <p>You get three ARNs, the one for <code>bob</code> once and the one for <code>mallory</code> twice, each wrapped in double quotes because jq prints strings as JSON. Add <code>-r</code>, for raw output, to print strings unquoted, which is what you want the moment the output feeds another command:</p>
+<div class="code-block" data-lang="bash"><pre>jq -r '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json</pre></div>
             <p><code>select()</code> is the workhorse. Read <code>select(cond)</code> as a gate in the pipe: the value goes through unchanged if <code>cond</code> is true, and vanishes otherwise.</p>
 
             <h3>3. jq: build new objects</h3>
-<div class="code-block" data-lang="bash"><pre># Construct an object per record. The keys are yours to name.
-jq '[.Records[]
+            <p>This command constructs a new object for each record that has an error, and the brackets around the whole filter collect those objects into one array. The keys, <code>when</code>, <code>what</code>, <code>who</code> and <code>from</code>, are yours to name.</p>
+<div class="code-block" data-lang="bash"><pre>jq '[.Records[]
      | select(.errorCode != null)
      | {when: .eventTime, what: .eventName, who: .userIdentity.arn, from: .sourceIPAddress}]' \
    events.json</pre></div>
-            <p>Reshaping at the edge of a pipeline matters more than it looks. A downstream script that consumes <code>{who, what, when}</code> keeps working when AWS adds fields, moves things around, or you switch to a different source of the same facts.</p>
+            <p>It prints an array of three objects, one for each refused request. Reshaping at the edge of a pipeline matters more than it looks. A downstream script that consumes <code>{who, what, when}</code> keeps working when AWS adds fields, moves things around, or you switch to a different source of the same facts.</p>
 
             <h3 id="step-group">4. jq: the query you will actually run</h3>
             <p>"Who is generating repeated access denials, and from where." This is a real triage question and it is four operators.</p>
@@ -456,20 +454,17 @@ jq '[.Records[]
             <p>Note the shape change at each step: stream, array, array of arrays, array of objects, then back to a stream of strings for printing. <code>group_by</code> requires a sorted array and sorts for you, and it hands each group to <code>map</code> as a list, which is why <code>.[0]</code> is how you get at the shared key.</p>
 
             <h3>5. jq: emit something another tool can read</h3>
-<div class="code-block" data-lang="bash"><pre># @csv quotes and comma-joins an array. Pair it with -r or you get
-# a JSON string containing escaped quotes, which no spreadsheet wants.
-jq -r '.Records[]
+            <p><code>@csv</code> quotes the items of an array and joins them with commas, so this command prints each failed request as one line of CSV (comma-separated values). Pair it with <code>-r</code>, or you get a JSON string containing escaped quotes, which no spreadsheet wants.</p>
+<div class="code-block" data-lang="bash"><pre>jq -r '.Records[]
        | select(.errorCode != null)
        | [.eventTime, .eventName, .sourceIPAddress, .userIdentity.arn]
-       | @csv' events.json
-
-# @tsv, @sh (shell-quoted), @base64, and @uri exist too. @sh is the one
-# that saves you when a value contains a space or a quote.
-jq -r '[.Records[].sourceIPAddress] | unique | join(", ")' events.json</pre></div>
+       | @csv' events.json</pre></div>
+            <p><code>@tsv</code>, <code>@sh</code> (shell-quoted), <code>@base64</code>, and <code>@uri</code> exist too. <code>@sh</code> is the one that saves you when a value contains a space or a quote. The next command needs none of them: it collects every source IP address, drops the duplicates with <code>unique</code>, which also sorts them, and prints them on one line separated by commas.</p>
+<div class="code-block" data-lang="bash"><pre>jq -r '[.Records[].sourceIPAddress] | unique | join(", ")' events.json</pre></div>
 
             <h3 id="step-jmespath">6. JMESPath: the same questions, different language</h3>
-            <p>Everything below works as an AWS CLI <code>--query</code> value. To practise without a cloud account, evaluate against the same file:</p>
-<div class="code-block" data-lang="bash"><pre>pip3 install jmespath        # brings the reference implementation
+            <p>Everything below works as an AWS CLI <code>--query</code> value. To practise without a cloud account, evaluate against the same file. The first line uses <code>pip3</code> to install the Python package <code>jmespath</code>, which is the reference implementation of the language, and the rest runs three queries against <code>events.json</code>:</p>
+<div class="code-block" data-lang="bash"><pre>pip3 install jmespath
 
 python3 - &lt;&lt;'PY'
 import json, jmespath
@@ -490,18 +485,14 @@ PY</pre></div>
             </div>
 
             <h3>7. Against a real AWS CLI</h3>
-<div class="code-block" data-lang="bash"><pre># Public S3 buckets is not one call, so this is the shape you want:
-# a client-side query per bucket, driven by a jq-produced list.
-aws s3api list-buckets --query 'Buckets[].Name' --output text
-
-# EC2 instances without IMDSv2 enforced.
-aws ec2 describe-instances \
+            <p>Finding public <a class="glossary-link" href="../glossary.html#term-s3">S3</a> buckets takes more than one call, because whether a bucket is public is a setting on each bucket. This first command gets the list you would work through: <code>--query 'Buckets[].Name'</code> keeps only the bucket names, and <code>--output text</code> prints them as plain text separated by tabs. Checking each bucket takes a further call per bucket.</p>
+<div class="code-block" data-lang="bash"><pre>aws s3api list-buckets --query 'Buckets[].Name' --output text</pre></div>
+            <p>The next one lists <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> instances that do not enforce <a class="glossary-link" href="../glossary.html#term-imds">IMDSv2</a>, version 2 of the instance metadata service, and prints each one's instance ID and private IP address:</p>
+<div class="code-block" data-lang="bash"><pre>aws ec2 describe-instances \
   --query 'Reservations[].Instances[?MetadataOptions.HttpTokens!=`required`].[InstanceId,PrivateIpAddress]' \
-  --output text
-
-# IAM users whose access keys are old. --filters is SERVER side; --query
-# is CLIENT side. Mixing them up matters, see below.
-aws ec2 describe-instances \
+  --output text</pre></div>
+            <p>The last one prints the instance IDs of your running EC2 instances, and it filters in two different places. <code>--filters</code> works on the server side: AWS returns only the running instances. <code>--query</code> works on the client side: the CLI receives everything AWS sent back and keeps only the instance IDs. Mixing the two up matters, as the box below explains.</p>
+<div class="code-block" data-lang="bash"><pre>aws ec2 describe-instances \
   --filters 'Name=instance-state-name,Values=running' \
   --query 'Reservations[].Instances[].InstanceId'</pre></div>
             <div class="highlight-box">
@@ -509,11 +500,8 @@ aws ec2 describe-instances \
             </div>
 
             <h3>8. The combination that gets used most</h3>
-            <p>In practice the strongest move is <code>--output json</code> piped into jq, using JMESPath only for the trivial cases, rather than choosing between them.</p>
-<div class="code-block" data-lang="bash"><pre># --output text collapses nulls to the string "None" and flattens nested
-# lists with tabs, so columns silently misalign the moment a field is
-# empty. For anything you intend to parse, take JSON and use jq.
-aws iam list-users --output json \
+            <p>In practice the strongest move is <code>--output json</code> piped into jq, using JMESPath only for the trivial cases, rather than choosing between them. <code>--output text</code> collapses nulls to the string <code>None</code> and flattens nested lists with tabs, so columns silently misalign the moment a field is empty. For anything you intend to parse, take JSON and use jq. This command lists your IAM users, one per line, with each user's name and creation date separated by a tab:</p>
+<div class="code-block" data-lang="bash"><pre>aws iam list-users --output json \
   | jq -r '.Users[] | [.UserName, .CreateDate] | @tsv'</pre></div>
         </section>
 
@@ -532,8 +520,8 @@ aws iam list-users --output json \
   | sort_by(-.n)
   | .[] | "\(.n)\t\(.ip)"
 ' events.json</pre></div>
-                    <p>If your first attempt produced the counts but in the wrong order, you probably wrote <code>sort_by(.n) | reverse</code>, which is also correct. <code>sort_by(-.n)</code> is shorter and is the idiom you will see in other people's filters.</p>
-                    <p>If it produced nothing at all, check whether you dropped the collecting brackets around <code>.Records[]</code>. <code>group_by</code> needs an array; handed a stream it operates on each element separately and every group has exactly one member.</p>
+                    <p>If you wrote <code>sort_by(.n) | reverse</code> instead, that is also correct, and <code>203.0.113.99</code> still comes first with 2 events. Only the three addresses with one event each come out in the opposite order. <code>sort_by</code> keeps tied items in the order it received them, which is the order <code>group_by</code> left them in, sorted as text, and <code>reverse</code> then flips them. <code>sort_by(-.n)</code> is shorter and is the idiom you will see in other people's filters.</p>
+                    <p>If it stopped with an error that starts <code>Cannot index string with string</code>, check whether you dropped the collecting brackets around <code>.Records[]</code>. <code>group_by</code> needs an array. Without the brackets, jq hands it one record at a time, and a record is an object, so <code>group_by</code> works through that record's field values instead. The first of those is the event time, a string, and asking a string for <code>.sourceIPAddress</code> stops jq with that error.</p>
                 </details>
             </div>
 
@@ -566,9 +554,8 @@ aws iam list-users --output json \
                 <p>Write a jq filter that finds any IAM policy statement granting <code>"Action": "*"</code>, handling the fact that <code>Action</code> may be a string or an array of strings. Test it against both shapes.</p>
                 <details>
                     <summary>Show the answer</summary>
-<div class="code-block" data-lang="bash"><pre># The trick is to normalise first. In jq, wrapping a value in an array
-# and flattening is the idiomatic "make this a list either way".
-cat &gt; policy.json &lt;&lt;'EOF'
+                    <p>The trick is to normalise first. In jq, wrapping a value in an array and flattening it is the idiomatic way to say "make this a list either way". The block below writes a test policy with three statements, one whose <code>Action</code> is the string <code>"*"</code> and two whose <code>Action</code> is an array, and then runs the filter against it.</p>
+<div class="code-block" data-lang="bash"><pre>cat &gt; policy.json &lt;&lt;'EOF'
 {"Statement":[
   {"Effect":"Allow","Action":"*","Resource":"*"},
   {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject"],"Resource":"*"},
@@ -580,6 +567,7 @@ jq -r '.Statement[]
        | select(.Effect == "Allow")
        | select([.Action] | flatten | index("*"))
        | "wildcard action: \(.Action)"' policy.json</pre></div>
+                    <p>It prints two lines: <code>wildcard action: *</code> for the first statement and <code>wildcard action: ["iam:*","*"]</code> for the third. The second statement grants no wildcard, so it does not appear.</p>
                     <p><code>[.Action] | flatten</code> turns both a bare string and an array into a flat array, and <code>index("*")</code> returns the position of the first match or <code>null</code>. <code>select()</code> treats <code>null</code> as false, so the statement passes through only when the wildcard is present.</p>
                     <p>The equivalent normalise-then-compare pattern appears in the <a href="opa-rego.html">Rego page</a> for the same reason: the IAM document schema is polymorphic in several places, and any tool that reads it has to handle both shapes or it will miss findings on whichever shape it did not consider.</p>
                 </details>
@@ -591,7 +579,7 @@ jq -r '.Statement[]
             <ul>
                 <li><strong>Double quotes in JMESPath.</strong> They mean "field name", not "string". The failure is silent and reads as an empty environment.</li>
                 <li><strong>Forgetting <code>-r</code> in jq.</strong> Without it every string is emitted with quotes, and the next command in the pipe treats those quotes as part of the value.</li>
-                <li><strong>Missing collecting brackets.</strong> <code>group_by</code>, <code>sort_by</code>, <code>unique</code>, and <code>add</code> want an array. Given a stream they run per element and quietly return something plausible.</li>
+                <li><strong>Missing collecting brackets.</strong> <code>group_by</code>, <code>sort_by</code>, <code>unique</code>, and <code>add</code> want an array. Handed this page's records one at a time, each of them stops with an error, because a record is an object. The quiet failure comes when each item in the stream is itself an array: then they run on each array separately and return one plausible result per item, instead of one result for the whole set.</li>
                 <li><strong>Assuming <code>--query</code> limits what you retrieved.</strong> It filters after the fact. It is not an access control, not a cost control, and not a way to avoid reading data you should not read.</li>
                 <li><strong>Parsing <code>--output text</code>.</strong> Nulls become the literal string <code>None</code> and nested structures flatten into tabs, so columns shift whenever a field is empty. Take JSON and parse it properly.</li>
                 <li><strong>Trying JMESPath on <code>gcloud</code>.</strong> Different language entirely: <code>--filter</code> and <code>--format</code>, with their own syntax.</li>
