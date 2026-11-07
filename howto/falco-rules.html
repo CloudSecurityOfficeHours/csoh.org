@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-11-06">
+    <meta property="article:modified_time" content="2026-11-07">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="falco">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-11-06",
+      "dateModified": "2026-11-07",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -83,7 +83,7 @@
           "@type": "HowToStep",
           "position": 1,
           "name": "Get Falco, falcoctl and the plugins",
-          "text": "Run the multi-arch Falco 0.45.0 image and install the cloudtrail and json plugins and the stock CloudTrail rules with falcoctl."
+          "text": "Run the multi-arch Falco 0.45.2 image and install the cloudtrail and json plugins and the stock CloudTrail rules with falcoctl."
         },
         {
           "@type": "HowToStep",
@@ -351,10 +351,10 @@
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-07">Last updated <strong>2026-11-07</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker (Docker Desktop is fine), <code>jq</code> and a terminal. No cloud account: the lab is a file.</p>
-            <p class="u-mt-075"><strong>How this page was checked:</strong> every command and rule on this page was run with Falco 0.45.0 and falcoctl 0.14.2 in Docker Desktop 4.86.0 on an Apple silicon Mac, using the projects' native arm64 images (the amd64 images were not tested), and the outputs shown are what they printed. Step 8 ran Falco's kernel probe against Docker Desktop's Linux kernel (6.12.76-linuxkit). falcosidekick, named in step 6, was not run.</p>
+            <p class="u-mt-075"><strong>How this page was checked:</strong> every command and rule on this page was run with Falco 0.45.2 and falcoctl 0.14.3 in Docker Desktop 4.97.0 on an Apple silicon Mac, using the projects' native arm64 images (the amd64 images were not tested), and the outputs shown are what they printed. Step 8 ran Falco's kernel probe against Docker Desktop's Linux kernel (7.0.14-linuxkit). falcosidekick, named in step 6, was not run.</p>
         </div>
 
         <section id="intro">
@@ -383,7 +383,7 @@
             <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> shows one complete rule and the alert it prints, the idea the rest of the page builds on. In the <a href="#walkthrough">walk-through</a>, steps 1 to 3 download Falco and its plugins, convert the lab to the file shape CloudTrail writes, and point Falco at it with a control rule that matches every event. Steps 4 and 5 write rules for D1 and D4. Step 6 shows what Falco cannot do, counting (D2) and pairing two events (D3), and hands the counting to the shell. Step 7 runs Falco's stock CloudTrail rules beside yours and tunes them, and step 8 turns the same language on system calls from a running container. The <a href="#exercises">exercises</a> ask you to write and debug rules yourself, with each answer hidden under Show the answer until you open it.</p>
             <p>In steps 3 to 7, and in the exercises, each <code>falco</code> command reads the lab file from its first event to its last, judges each event as if it had just arrived, prints an alert for every match, ends with a summary and stops. Step 8 is different: there Falco runs in the background and watches real system calls until the last command of that step removes it.</p>
             <p>A code block labelled BASH is something to paste into your terminal. A block labelled YAML is a file to save in <code>~/falco-lab</code> under the file name in its first line, a comment such as <code># d1.yaml</code>; the rule in the next section has no such line and is there only to read. The unlabelled block under a command shows what it should print. Each block has a copy button. Step 2 starts with <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which saves every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
-            <p>Every command and rule was run with the versions the page pins, Falco 0.45.0 and falcoctl 0.14.2, in Docker Desktop on an Apple silicon Mac, and the outputs shown are what they printed, so yours should match, apart from the time and container ID in step 8's alert, which come from your own run. Two things were not tested: the amd64 images that Intel and AMD machines run, and falcosidekick, the forwarder step 6 names. Step 8 also depends on Falco's kernel probe loading on your machine, and says what to do if it does not.</p>
+            <p>Every command and rule was run with the versions the page pins, Falco 0.45.2 and falcoctl 0.14.3, in Docker Desktop on an Apple silicon Mac, and the outputs shown are what they printed, so yours should match, apart from the time and container ID in step 8's alert, which come from your own run. Two things were not tested: the amd64 images that Intel and AMD machines run, and falcosidekick, the forwarder step 6 names. Step 8 also depends on Falco's kernel probe loading on your machine, and says what to do if it does not.</p>
             <p>Some parts can wait for a second reading. The 24 lines of lab data in step 2 are scaffolding, so paste them without studying them. The paragraph on ATT&amp;CK tags at the end of step 4, and the note in step 6 on passing alerts on with falcosidekick, can wait too.</p>
             <p>If your output differs from the page, check that you are in <code>~/falco-lab</code>: the <code>falco</code> command in steps 3 to 7 is the shell function step 3 defines, and it mounts the folder you run it from at <code>/lab</code>. Then run step 3's control again, <code>falco -r everything.yaml | tail -5</code>, which should report <code>Events detected: 24</code>. If it reports 0, check the conversion in step 2, because without <code>eventType</code> Falco reads nothing. If the control sees all 24 and one of your rules stays silent, the first item under <a href="#mistakes">Common mistakes</a> lists other ways a run goes quiet.</p>
         </section>
@@ -419,13 +419,13 @@
             <h3>1. Get Falco, falcoctl and the plugins</h3>
             <p>Everything runs in containers, and the official images are published for both Intel/AMD and Arm processors, so an Apple silicon Mac runs them natively. falcoctl, the Falco project's tool for rules and plugins, installs the <code>cloudtrail</code> plugin (reads CloudTrail files), the <code>json</code> plugin (reads any value inside an event) and the stock CloudTrail rules used in step 7:</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/falco-lab/plugins ~/falco-lab/rules &amp;&amp; cd ~/falco-lab
-docker run --rm --name csoh-lab-falco falcosecurity/falco:0.45.0 falco --version
+docker run --rm --name csoh-lab-falco falcosecurity/falco:0.45.2 falco --version
 
 docker run --rm --name csoh-lab-falcoctl -u 0 -v "$PWD":/lab \
-  falcosecurity/falcoctl:0.14.2 artifact install \
+  falcosecurity/falcoctl:0.14.3 artifact install \
   cloudtrail:0.17.1 json:0.7.4 cloudtrail-rules:0.17.1 \
   --plugins-dir /lab/plugins --rulesfiles-dir /lab/rules</pre></div>
-            <p>Expect <code>Falco version: 0.45.0</code> and <code>Engine: 0.65.0</code> among the output, then <code>Signature successfully verified!</code> and <code>Artifact successfully installed</code> once per artifact. <code>-u 0</code> runs falcoctl as root, because its image's default user cannot create the configuration directory falcoctl needs. <code>plugins/</code> now holds <code>libcloudtrail.so</code> and <code>libjson.so</code>, built for your machine's architecture, and <code>rules/</code> holds <code>aws_cloudtrail_rules.yaml</code>.</p>
+            <p>Expect <code>Falco version: 0.45.2</code> and <code>Engine: 0.65.0</code> among the output, then <code>Signature successfully verified!</code> and <code>Artifact successfully installed</code> once per artifact. <code>-u 0</code> runs falcoctl as root, because its image's default user cannot create the configuration directory falcoctl needs. <code>plugins/</code> now holds <code>libcloudtrail.so</code> and <code>libjson.so</code>, built for your machine's architecture, and <code>rules/</code> holds <code>aws_cloudtrail_rules.yaml</code>.</p>
 
             <h3>2. Load the lab and give it CloudTrail's file shape</h3>
             <p>The lab file holds one JSON (JavaScript Object Notation) event per line. CloudTrail itself writes files holding one object, <code>{"Records": [...]}</code>, and that is what the cloudtrail plugin reads, from files whose names end in <code>.json</code>. One <code>jq</code> command converts it (the <a href="jq-and-jmespath.html">jq guide</a> explains <code>-s</code> and <code>map</code>):</p>
@@ -480,7 +480,7 @@ stdout_output:
             <p>Every Falco run from here to step 7 is the same container, so wrap it in a shell function, a short name that stands for the longer command. It mounts this folder at <code>/lab</code>, which is why the paths above start there, and <code>--disable-source syscall</code> stops Falco trying to watch the kernel as well; step 8 does that.</p>
 <div class="code-block" data-lang="bash"><pre>falco() {
   docker run --rm --name csoh-lab-falco -v "$PWD":/lab -w /lab \
-    falcosecurity/falco:0.45.0 falco -c falco-lab.yaml --disable-source syscall "$@"
+    falcosecurity/falco:0.45.2 falco -c falco-lab.yaml --disable-source syscall "$@"
 }</pre></div>
             <p>Before any detection, write a <strong>control rule</strong> that matches every event, so you can see what Falco actually receives. Save it as <code>everything.yaml</code>:</p>
 <div class="code-block" data-lang="yaml"><pre># everything.yaml: a control rule that matches every CloudTrail event
@@ -609,7 +609,7 @@ Triggered rules by rule name:
             <p>alice's routine user is gone, build-bot's is still there, and your D1 rule now gets its event. <code>override</code> says what to do with each key: <code>replace</code> swaps the value and <code>append</code> adds to it. An exception lists <code>fields</code>, one comparison per field (<code>comps</code>) and rows of <code>values</code>; the rule stays quiet for an event that matches a whole row. This one names the actor and the target, as Falco's documentation advises: an exception for alice alone would also hide an attacker who stole her credentials and created <code>backup-svc</code>. In a real deployment, list override files after the stock ones in the configuration's <code>rules_files</code>; the default order reads <code>/etc/falco/falco_rules.yaml</code>, then <code>falco_rules.local.yaml</code>, then the <code>/etc/falco/rules.d</code> folder.</p>
 
             <h3>8. The same language on system calls</h3>
-            <p>Falco's usual source is the kernel. Its default driver, the modern <a class="glossary-link" href="../glossary.html#term-ebpf">eBPF</a> (extended Berkeley Packet Filter) probe, attaches to a running Linux kernel and turns system calls into events. Falco's <a href="https://falco.org/docs/getting-started/falco-docker-quickstart/" target="_blank" rel="noopener noreferrer">Docker quickstart</a> says its command will not work on Docker Desktop. On Docker Desktop 4.86.0 for Apple silicon the commands below worked, with warnings that a safeguard against time-of-check to time-of-use (TOCTOU) tricks could not attach, which Falco says does not stop detection. If they fail for you, use a Linux machine. Either way, a privileged container can do, in Docker's words, almost everything that the host can do, so use a machine you own. Save <code>shadow.yaml</code>, then start Falco privileged, so the probe can load, with the Docker socket so it can name containers, and give the probe ten seconds to attach:</p>
+            <p>Falco's usual source is the kernel. Its default driver, the modern <a class="glossary-link" href="../glossary.html#term-ebpf">eBPF</a> (extended Berkeley Packet Filter) probe, attaches to a running Linux kernel and turns system calls into events. Falco's <a href="https://falco.org/docs/getting-started/falco-docker-quickstart/" target="_blank" rel="noopener noreferrer">Docker quickstart</a> says its command will not work on Docker Desktop. On Docker Desktop 4.97.0 for Apple silicon the commands below worked, with warnings that a safeguard against time-of-check to time-of-use (TOCTOU) tricks could not attach, which Falco says does not stop detection. If they fail for you, use a Linux machine. Either way, a privileged container can do, in Docker's words, almost everything that the host can do, so use a machine you own. Save <code>shadow.yaml</code>, then start Falco privileged, so the probe can load, with the Docker socket so it can name containers, and give the probe ten seconds to attach:</p>
 <div class="code-block" data-lang="yaml"><pre># shadow.yaml: a system-call rule; with no source key, the source is syscall
 - rule: Shadow file read in a container
   desc: A process in a container opened /etc/shadow, which holds password hashes, for reading.
@@ -621,7 +621,7 @@ Triggered rules by rule name:
   tags: [container, filesystem, mitre_credential_access, T1003.008]</pre></div>
 <div class="code-block" data-lang="bash"><pre>docker run -d --name csoh-lab-falco-kernel --privileged \
   -v /var/run/docker.sock:/host/var/run/docker.sock -v /proc:/host/proc:ro \
-  -v "$PWD":/lab falcosecurity/falco:0.45.0 falco -r /lab/shadow.yaml
+  -v "$PWD":/lab falcosecurity/falco:0.45.2 falco -r /lab/shadow.yaml
 sleep 10</pre></div>
             <p>Now test it both ways: one container reads <code>/etc/passwd</code>, the negative case, and one reads <code>/etc/shadow</code>, the positive. Falco writes its own log to standard error, so <code>2&gt; /dev/null</code> leaves only the alerts:</p>
 <div class="code-block" data-lang="bash"><pre>docker run --rm --name csoh-lab-falco-target alpine:3.24 cat /etc/passwd &gt; /dev/null
@@ -629,7 +629,7 @@ docker run --rm --name csoh-lab-falco-target alpine:3.24 cat /etc/shadow &gt; /d
 sleep 2
 docker logs csoh-lab-falco-kernel 2&gt; /dev/null
 docker rm -f csoh-lab-falco-kernel &gt; /dev/null</pre></div>
-<div class="code-block" data-lang="text"><pre>2026-09-27T18:57:33.415876851+0000: Warning /etc/shadow read in a container (command=cat /etc/shadow) container_id=bb8c4ab79ace container_name=csoh-lab-falco-target container_image_repository=alpine container_image_tag=3.24 k8s_pod_name=&lt;NA&gt; k8s_ns_name=&lt;NA&gt;</pre></div>
+<div class="code-block" data-lang="text"><pre>2026-11-07T05:26:22.081690796+0000: Warning /etc/shadow read in a container (command=cat /etc/shadow) container_id=3b1bf5727bee container_name=csoh-lab-falco-target container_image_repository=alpine container_image_tag=3.24 k8s_pod_name=&lt;NA&gt; k8s_ns_name=&lt;NA&gt;</pre></div>
             <p>One alert, for the shadow read; the <code>passwd</code> read stays silent. The fields after the closing parenthesis did not come from your rule: the image's default configuration appends the container plugin's suggested fields to every system-call alert (<code>append_output</code> with <code>suggested_output: true</code>). A system-call condition should open with <code>evt.type</code>: Falco uses it to test each rule against only those calls, and warns (<code>LOAD_NO_EVTTYPE</code>) about a rule without one. The image's stock rules, loaded when you pass no <code>-r</code>, include a broader version of this rule, <code>Read sensitive file untrusted</code>.</p>
         </section>
 
