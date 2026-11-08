@@ -1,0 +1,204 @@
+# =============================================================================
+# Update Calendar
+# -----------------------------------------------------------------------------
+# Four times a day, reads the public iCalendar feed of the CSOH Google
+# Calendar, expands it into the next dozen occurrences, and rewrites the event
+# cards on calendar.html as plain HTML (tools/sync_calendar.py). If the page
+# changed, opens a PR and - only when the diff is confined to calendar.html -
+# auto-approves and auto-merges it.
+#
+# This is the sibling of update-news.yml: same token dance, same safety valve,
+# a different feed. The page is static HTML on purpose. A Google Calendar embed
+# would be an iframe from a third party, which the site's CSP forbids and which
+# would send every visitor to Google; rendering in CI gives readers the same
+# information as a page of the site, with no script and no tracker.
+#
+# The merge is a push to main touching *.html, which independently triggers
+# BOTH site-update-deploy.yml (housekeeping: SRI, sitemap, previews) and
+# deploy.yml (the job that actually publishes to the three origins).
+# =============================================================================
+
+# `name` is the human label shown in the repo's Actions tab and status checks.
+name: Update Calendar
+
+# -----------------------------------------------------------------------------
+# §1 - Triggers (matches "Anatomy / §1" on github-actions.html)
+# Runs every 6 hours on a timer, on demand, or when the renderer changes.
+# -----------------------------------------------------------------------------
+# `on:` lists the events that START this workflow. Any one of them is enough.
+on:
+  # `schedule` runs the workflow on a timer; `cron` is the classic 5-field
+  # timetable (minute / hour / day-of-month / month / day-of-week), always UTC.
+  # Every 6 hours is plenty: the calendar changes rarely, and the page only
+  # moves when a session passes or a maintainer edits the calendar. The
+  # off-the-hour minute keeps it clear of update-news.yml, which runs on the
+  # hour, so the two never queue behind one another for a runner.
+  schedule:
+    - cron: '30 */6 * * *'   # 00:30, 06:30, 12:30, 18:30 UTC
+  # `workflow_dispatch` adds a "Run workflow" button in the Actions tab, so a
+  # maintainer who just edited the calendar can publish it without waiting.
+  workflow_dispatch:
+  # `push` fires when commits land in the repo. The filters narrow it to a
+  # push on `main` that touches the renderer or this file, so a change to the
+  # parsing or the PR logic is exercised on the next push rather than in up
+  # to six hours.
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/sync_calendar.py'
+      - '.github/workflows/update-calendar.yml'
+
+# -----------------------------------------------------------------------------
+# §2 - Permissions (matches "Anatomy / §2" on github-actions.html)
+# Read-only on the built-in token; writes go through the App + PAT tokens.
+# -----------------------------------------------------------------------------
+# `permissions:` sets what the automatic GITHUB_TOKEN may do. Read-only here:
+# every step that needs write access (push the branch, open the PR, enable
+# auto-merge) uses an installation token from the csoh-ci GitHub App, and the
+# approval uses CSOH_PAT, for the reasons spelled out in update-news.yml.
+permissions:
+  contents: read
+
+# -----------------------------------------------------------------------------
+# §3 - Concurrency (matches "Anatomy / §3" on github-actions.html)
+# One fixed lock so calendar refreshes queue serially and never overlap.
+# -----------------------------------------------------------------------------
+# This workflow opens a PR on its own branch and never pushes to main, so it
+# does not need the deploy-pipeline lock. Its own group means a queued site
+# update cannot cancel it mid-run, and two refreshes cannot race to the same
+# branch.
+concurrency:
+  group: update-calendar
+  cancel-in-progress: false
+
+# -----------------------------------------------------------------------------
+# §4 - Jobs and steps (matches "Anatomy / §4" on github-actions.html)
+# -----------------------------------------------------------------------------
+jobs:
+  update-calendar:
+    runs-on: ubuntu-latest
+    # The fetch is one HTTPS request and the render is milliseconds. A job
+    # that hangs on the network should fail fast, not hold the lock for the
+    # 360-minute default.
+    timeout-minutes: 10
+
+    steps:
+      # Mint a short-lived installation token from the csoh-ci GitHub App.
+      # The App authors the PR so that CSOH_PAT, a different identity, can
+      # approve it: GitHub refuses an approval from the PR's own author, and
+      # auto-merge does not honor the App's ruleset bypass for the approval
+      # requirement. Both points are explained at length in update-news.yml;
+      # this file keeps the same shape so the two cannot drift apart.
+      - name: Mint installation token
+        id: app-token
+        # Pinned to a full commit SHA, not a moving tag. The trailing comment
+        # is the human-readable release that SHA corresponds to.
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        with:
+          client-id: ${{ secrets.CSOH_CI_CLIENT_ID }}
+          private-key: ${{ secrets.CSOH_CI_PRIVATE_KEY }}
+
+      # Clone the repo onto the runner. The App token is passed so the
+      # checkout can later be pushed to a branch by the create-pull-request
+      # action; `fetch-depth: 0` brings the full history so that action can
+      # rebase its branch onto a main that has moved since the last run.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      # The renderer is standard-library Python (urllib, zoneinfo, re), so
+      # there is no `pip install` step and nothing third-party to pin.
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.x'
+
+      # Prove the renderer before trusting its output. The self-test plants a
+      # moved week, a cancelled week, a skipped week, an all-day event and a
+      # description carrying a Zoom join link, and fails unless each is
+      # handled. A refresh that cannot pass its own controls publishes nothing.
+      - name: Self-test the renderer
+        run: python3 tools/sync_calendar.py --self-test
+
+      # Fetch the public feed and rewrite the cards between the markers in
+      # calendar.html. Writes only when the rendered block differs, so a run
+      # with nothing new leaves the tree clean and the step below opens no PR.
+      - name: Render calendar.html from the Google Calendar feed
+        run: python3 tools/sync_calendar.py
+
+      # Decide whether anything changed, and whether ONLY the expected file
+      # changed. Both answers become step outputs the later steps condition on.
+      - name: Detect changed files
+        id: changes
+        run: |
+          set -euo pipefail
+          files="$(git diff --name-only; git ls-files --others --exclude-standard)"
+          if [ -z "$files" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "only_calendar_files=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          # The renderer touches calendar.html and nothing else. Any other
+          # path in the diff means something unexpected happened, and the PR
+          # then waits for a human instead of merging itself.
+          allowed="calendar.html"
+          only_allowed=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case " $allowed " in
+              *" $f "*) ;;
+              *) only_allowed=false; break ;;
+            esac
+          done <<< "$files"
+          if [ "$only_allowed" = "true" ]; then
+            echo "only_calendar_files=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "only_calendar_files=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Branch, commit, push and open the PR in one action. The App token
+      # must be the author here (never CSOH_PAT): the PAT approves below, and
+      # GitHub rejects an approval from the author's own identity.
+      - name: Create Pull Request
+        id: cpr
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: 'chore: refresh the session calendar'
+          title: 'chore: Refresh the session calendar'
+          body: |
+            This PR was automatically created by the Update Calendar workflow.
+
+            The upcoming-session cards on `calendar.html` have been re-rendered from the public feed of the CSOH Google Calendar by `tools/sync_calendar.py`.
+
+            **Changes:**
+            - Updated event cards between the calendar markers in `calendar.html`
+
+            Nothing outside those markers is touched by the renderer. If this PR shows any other change, something is wrong; read it before merging.
+          branch: update-calendar-content               # always reuses the same branch name
+          delete-branch: true                            # clean up after merge
+          labels: automated, content
+
+      # Approve with a second identity. Withheld, like the auto-merge, unless
+      # the diff is calendar-only: an approval alone would let anyone merge
+      # the PR later without a second look (see update-news.yml for why).
+      - name: Auto approve
+        if: steps.cpr.outputs.pull-request-number != '' && steps.changes.outputs.only_calendar_files == 'true'
+        run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ secrets.CSOH_PAT }}
+
+      # Let GitHub merge the PR itself once the required checks (validate-html,
+      # lint, the link crawl) are green. Only when the diff is calendar-only.
+      - name: Enable PR auto-merge when only the calendar changed
+        if: steps.changes.outputs.only_calendar_files == 'true' && steps.cpr.outputs.pull-request-number != ''
+        uses: peter-evans/enable-pull-request-automerge@a660677d5469627102a1c1e11409dd063606628d  # v3.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: squash
