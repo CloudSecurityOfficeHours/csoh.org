@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="How a developer's GitHub account was used on October 19 to swap stealer builds onto five ovhcloud-cli releases, with checksum files replaced to match.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="OVHcloud CLI Release Swap 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, OVHcloud, ovhcloud-cli, GHSA-862f-55f5-vmvw, GitHub release asset swap, immutable releases, GlassWorm, IDE extension, credential stealer, software supply chain, checksum verification">
+    <title>OVHcloud CLI Release Swap 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/ovhcloud-cli-release-swap.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/ovhcloud-cli-release-swap.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/ovhcloud-cli-release-swap.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="OVHcloud CLI Release Swap 2026 Breach Kill Chain">
+    <meta property="og:description" content="Stealer builds uploaded through a developer's GitHub account sat on five old ovhcloud-cli releases for about 94 minutes. A customer's pinned hash in CI caught the swap.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-08">
+    <meta property="article:modified_time" content="2026-11-08">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="OVHcloud CLI Release Swap 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="OVHcloud">
+    <meta property="article:tag" content="ovhcloud-cli">
+    <meta property="article:tag" content="GHSA-862f-55f5-vmvw">
+    <meta property="article:tag" content="GitHub release asset swap">
+    <meta property="article:tag" content="immutable releases">
+    <meta property="article:tag" content="GlassWorm">
+    <meta property="article:tag" content="IDE extension">
+    <meta property="article:tag" content="credential stealer">
+    <meta property="article:tag" content="software supply chain">
+    <meta property="article:tag" content="checksum verification">
+    <meta property="og:url" content="https://csoh.org/breaches/ovhcloud-cli-release-swap.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/ovhcloud-cli-release-swap.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="OVHcloud CLI Release Swap 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Stealer builds uploaded through a developer's GitHub account sat on five old ovhcloud-cli releases for about 94 minutes. A customer's pinned hash in CI caught the swap.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/ovhcloud-cli-release-swap.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=28956df2" as="style"
+        integrity="sha384-6HLQGyoZRA36tqLcf+6Vacr4bY3tr6svD1gWHbAynE2aAkAeZqNUfk3xD5XZLAKc">
+    <link rel="stylesheet" href="/style.css?v=28956df2"
+        integrity="sha384-6HLQGyoZRA36tqLcf+6Vacr4bY3tr6svD1gWHbAynE2aAkAeZqNUfk3xD5XZLAKc">
+    <link rel="stylesheet" href="/breach-timeline.css?v=95deadd4" integrity="sha384-a4EXbuH6LtXikTxHKYOI7HZgPOWLNGk9X11dWhrNxgMU6oPutelSJcQNI3xZU4s/">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "OVHcloud CLI Release Swap - IDE Extension on a Personal Laptop → Stolen Keys for a Developer's GitHub Account → Stealer Builds Uploaded Over Five Old Releases → Checksums Replaced to Match → Cloud and Kubernetes Credentials Targeted → Caught by a Pinned Hash in CI",
+  "description": "How a developer's GitHub account was used on October 19 to swap stealer builds onto five ovhcloud-cli releases, with checksum files replaced to match.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-08",
+  "dateModified": "2026-11-08",
+  "mainEntityOfPage": "https://csoh.org/breaches/ovhcloud-cli-release-swap.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "ovhcloud-cli GitHub release asset replacement",
+    "description": "On October 19, 2026, a compromised OVHcloud developer's GitHub account was used to replace the binaries on five existing releases of ovhcloud-cli, v0.11.0 through v0.15.0, with builds carrying a credential stealer, available from 12:47 to 14:21 UTC. OVHcloud traces the compromise to an extension installed on the developer's personal MacBook in October 2025."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "OVHcloud"
+    },
+    {
+      "@type": "Organization",
+      "name": "GitHub"
+    },
+    {
+      "@type": "Organization",
+      "name": "StepSecurity"
+    },
+    {
+      "@type": "Organization",
+      "name": "OpenSourceMalware"
+    },
+    {
+      "@type": "Organization",
+      "name": "The Hacker News"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "OVHcloud CLI Release Swap 2026",
+      "item": "https://csoh.org/breaches/ovhcloud-cli-release-swap.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">OVHcloud CLI Release Swap 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>OVHcloud CLI Release Swap 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="ovhcloud-cli-release-swap-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">October 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-blue">OVHcloud CLI / GitHub Releases</span>
+    </div>
+    <h2 class="inc-title">OVHcloud CLI Release Swap - IDE Extension on a Personal Laptop &rarr; Stolen Keys for a Developer's GitHub Account &rarr; Stealer Builds Uploaded Over Five Old Releases &rarr; Checksums Replaced to Match &rarr; Cloud and Kubernetes Credentials Targeted &rarr; Caught by a Pinned Hash in CI</h2>
+    <p class="inc-summary">OVHcloud published GitHub security advisory GHSA-862f-55f5-vmvw on October 20, 2026. It describes how, the day before, someone using an OVHcloud developer's compromised GitHub account replaced the binaries on five existing releases of the company's command-line tool, ovhcloud-cli v0.11.0 through v0.15.0, with a local build carrying a credential stealer. The swapped files were available from 12:47 to 14:21 UTC and went after cloud, <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a>, <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> and SSH credentials and <a class="glossary-link" href="../glossary.html#term-ai">AI</a> coding assistant data. On at least three of the releases the checksums file was replaced as well, so the published hashes matched the new files. A customer whose <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> pinned one archive's SHA-256 reported the mismatch, and OVHcloud removed the binaries 31 minutes later, suspended the account, made releases immutable across its GitHub organization and shipped a clean v0.16.0. OVHcloud traces the compromise to an extension the developer installed on a personal MacBook in October 2025. <strong>Two caveats belong next to the headline.</strong> The GlassWorm name rests on a Solana wallet and a force-push technique. OpenSourceMalware found the wallet, which appears on public GlassWorm indicator lists, in loaders force-pushed to the account's personal repositories in March 2026, and matched the amend-and-force-push method to the ForceMemo campaign, as StepSecurity also does; OVHcloud found the same wallet in the extension and says it belongs to GlassWorm. OpenSourceMalware calls the link between the March misuse and the October uploads its own inference. And OVHcloud's figure of about 250 is a download count; none of the sources reviewed here gives a number of machines that ran the binary or reports stolen credentials being used.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>12:47 to 14:21 UTC</strong> on October 19, the window the swapped binaries were available, per OVHcloud (which gives the duration as 1h33)</div>
+      <div class="inc-stat"><strong>5 releases &times; 5 platform binaries</strong> replaced, v0.11.0 through v0.15.0, per OVHcloud</div>
+      <div class="inc-stat"><strong>~250</strong> downloads during the window, from OVHcloud's download statistics</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> OpenSourceMalware's headline names GlassWorm, on the strength of a wallet on public GlassWorm indicator lists and a matching force-push technique in the account's March activity, though its report calls the March-to-October link an inference; OVHcloud ties the 2025 extension's wallet to GlassWorm and traces the account's compromise to that extension, without naming who made the October uploads</div>
+    </div>
+    <a class="pm-link" href="https://github.com/ovh/ovhcloud-cli/security/advisories/GHSA-862f-55f5-vmvw" target="_blank" rel="noopener">📄 OVHcloud - GHSA-862f-55f5-vmvw, ovhcloud-cli security incident ↗</a>
+    <a class="pm-link" href="https://github.com/ovh/ovhcloud-cli/issues/300" target="_blank" rel="noopener">📄 ovhcloud-cli issue #300 - Customer report of replaced release assets ↗</a>
+    <a class="pm-link" href="https://www.stepsecurity.io/blog/ovhcloud-cli-github-release-swap-glassworm" target="_blank" rel="noopener">📄 StepSecurity - OVHcloud CLI Compromised via GitHub Release Swap ↗</a>
+    <a class="pm-link" href="https://opensourcemalware.com/blog/glassworm-hacks-ovh-clouds-cli-tool" target="_blank" rel="noopener">📄 OpenSourceMalware - Glassworm Hacks OVH Clouds CLI tool ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: An Extension on a Personal Laptop</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">In October 2025 the developer installed the color-picker-universal extension on a personal MacBook, and OVHcloud traces the compromise to it</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1176/002/" target="_blank" rel="noopener">T1176.002 - IDE Extensions</a>
+        </div>
+        <p class="step-desc">OVHcloud's advisory places the start a year before the swap. On October 20, 2025, the developer whose GitHub account was later used installed the extension <code>color-picker-universal</code> 2.8.91 on a personal MacBook. A persistent NodeJS service was registered through a plist and communicated with <code>162.33.177[.]177</code>. The extension makes RPC calls with a Solana wallet that OVHcloud says is known to belong to the GlassWorm threat actor, citing The Hacker News's March 2026 reporting.</p>
+        <p class="step-desc">That reporting describes GlassWorm as a campaign that spreads through malicious VS Code and Cursor extensions and has moved on to taking over GitHub accounts with stolen tokens. OVHcloud does not say what the extension took from the laptop. It says the developer's OVHcloud laptop had not been compromised, as far as it knew when it wrote the advisory. As in the <a href="3cx-x-trader.html">3CX / X_TRADER</a> compromise of 2023, the chain began on an employee's personal computer.</p>
+        <div class="step-code">
+          <span class="hl">Installed:</span> color-picker-universal 2.8.91, 2025-10-20<br>
+          <span class="hl">Machine:</span> the developer's personal MacBook<br>
+          <span class="hl"><a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>:</span> a NodeJS service registered with a plist<br>
+          <span class="hl">Contacted:</span> 162.33.177[.]177<br>
+          <span class="hl">Wallet in the extension:</span> BjVeAjPrSKFiingBn4vZvghsGj9KCE8AJVtbc9S8o8SC, GlassWorm per OVHcloud
+        </div>
+        <div class="step-tags"><span class="stag">IDE Extension</span><span class="stag">Personal Device</span><span class="stag">GlassWorm</span><span class="stag">T1176.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 Persistence: A Developer Account Misused Since March</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">By March 2026 the attacker was using the developer's GitHub account, which could upload assets to ovhcloud-cli releases</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Cloud Accounts</a>
+        </div>
+        <p class="step-desc">OpenSourceMalware built its timeline from GitHub's server-side records rather than commit dates, which the pusher controls. On March 5 and 6, 2026, four of the account's personal repositories were force-pushed with a hidden <code>preinstall.js</code> loader, or the same decoder inlined in a source file. The loader reads a link from the memo of a Solana transaction, using the same wallet as the extension. OpenSourceMalware calls March 5 the earliest server-verified use of the account by the attacker, about 228 days before the swap, and treats it as an upper bound on when the attacker had a token. OVHcloud's advisory also records the March compromise and the reused wallet.</p>
+        <p class="step-desc">The account was the developer's personal GitHub account, registered to OVHcloud's GitHub organization. OVHcloud allows that, requires two-factor authentication on every account and keeps a central inventory of them. The account was not a public member of the organization and had no commits in <code>ovh/ovhcloud-cli</code>, yet it held the write access needed to upload release assets; OpenSourceMalware infers that access most likely came through the repository's owners team. OVHcloud says the October uploads used stolen keys rather than the personal MacBook, and does not say what kind of keys or how they were taken. OpenSourceMalware names an <a class="glossary-link" href="../glossary.html#term-infostealer">infostealer</a> on the developer's machine or a stolen token as the likeliest paths.</p>
+        <div class="step-code">
+          <span class="hl">Earliest attacker use:</span> 2026-03-05, server-verified, per OpenSourceMalware<br>
+          <span class="hl">March activity:</span> four personal repositories force-pushed with a loader<br>
+          <span class="hl">Account:</span> personal GitHub account in OVHcloud's organization, 2FA required<br>
+          <span class="hl">October uploads:</span> "stolen keys", type not disclosed<br>
+          <span class="hl">Same actor in March and October:</span> OpenSourceMalware's inference
+        </div>
+        <div class="step-tags"><span class="stag">GitHub Account</span><span class="stag">Force Push</span><span class="stag">Solana Memo</span><span class="stag">T1078.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access: A Local Build of a Real Commit</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The attacker compiled the CLI locally from an October 13 commit, with a stealer module named envchecker added</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
+        </div>
+        <p class="step-desc">The <code>go version -m</code> output that the customer posted in issue #300, and that OVHcloud reproduces, shows a pseudo-version built from commit <code>5ead8ef</code> with uncommitted changes. That commit was merged to main on October 13 and was never a release tag. The build used <code>-ldflags="-s -w"</code> and lacked the version flag that the project's GoReleaser configuration sets, so it did not come from the release pipeline, and the <code>v0.15.0</code> tag still pointed to its original commit. OVHcloud describes the binary as the original CLI recompiled with stripped malicious Go code, an <em>envchecker</em> module, and says the source code and build chain were not affected.</p>
+        <p class="step-desc">Two analyses read an earlier event differently. On October 15 the account deleted two branches in <code>ovh/ovhcloud-docs</code>, <code>dev/test-changest</code> and <code>test/trigger-probe</code>. StepSecurity says the names read like CI-trigger probing. OpenSourceMalware notes the account created both branches in May and September, reads the deletion as cleanup, and says GitHub's data cannot show whether the owner or the attacker made it. The <code>+dirty</code> suffix is a weak marker: The Hacker News found it on the clean v0.16.0 binary too, and StepSecurity names the pseudo-version and the missing version flag as the reliable ones.</p>
+        <div class="step-code">
+          <span class="hl">Built from:</span> 5ead8ef, merged to main 2026-10-13 08:35 UTC<br>
+          <span class="hl">Version string:</span> v0.15.1-0.20261013083505-5ead8ef9b43d+dirty<br>
+          <span class="hl">Missing:</span> the release pipeline's version ldflag<br>
+          <span class="hl">Added:</span> envchecker stealer module, stripped<br>
+          <span class="hl">Untouched:</span> source code and build chain, per OVHcloud; the v0.15.0 tag, per issue #300
+        </div>
+        <div class="step-tags"><span class="stag">Go Build</span><span class="stag">Trojanized Binary</span><span class="stag">Build <a class="glossary-link" href="../glossary.html#term-provenance">Provenance</a></span><span class="stag">T1195.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access: Same File Names on Five Old Releases</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">On October 19 the account uploaded the stealer builds over five existing releases and replaced checksum files to match</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1036/005/" target="_blank" rel="noopener">T1036.005 - Match Legitimate Resource Name or Location</a>
+        </div>
+        <p class="step-desc">OVHcloud's timeline, converted to UTC: the v0.15.0 Darwin binary was replaced at 12:47, all five targeted v0.15.0 binaries by 12:57, and the binaries on v0.14.0 back to v0.11.0 by 13:30. The replaced files were the Darwin arm64 and x86_64, Linux arm64 and x86_64, and Windows x86_64 builds; the i386, Windows arm64 and WebAssembly builds were left alone. The customer's capture from the GitHub releases API covers only v0.15.0, v0.14.0 and v0.13.0, replaced between about 12:47 and 13:12, and shows the checksums file on each of them replaced after the binaries it checked, the last at 13:11. StepSecurity and OpenSourceMalware extend that capture to all five releases and put the end at about 13:12, which OpenSourceMalware says it could not confirm independently; OVHcloud's timeline has all five replaced by 13:30. OpenSourceMalware infers the same set of files for v0.11.0 and v0.12.0. OVHcloud's advisory does not mention the checksums file.</p>
+        <p class="step-desc">OVHcloud calls the main issue a repository not configured for release immutability, so an account with write access could replace assets on releases published weeks or months earlier, at unchanged URLs. As in the <a href="tj-actions-changed-files.html">tj-actions/changed-files</a> compromise of 2025, where a stolen token moved existing version tags, a version people already trusted began delivering different code. A customer whose CI pinned the SHA-256 of the v0.15.0 Linux arm64 archive saw the job fail and opened issue #300 at 13:50 UTC. OVHcloud began investigating at 13:57, removed all the malicious binaries at 14:21, and found no changes by the account in its other repositories.</p>
+        <div class="step-code">
+          <span class="hl">First replacement:</span> 12:47 UTC, the v0.15.0 Darwin binary<br>
+          <span class="hl">Last replacement:</span> by 13:30 UTC per OVHcloud; about 13:12 per StepSecurity and OpenSourceMalware, extending the customer's capture of v0.13.0 to v0.15.0<br>
+          <span class="hl">Replaced:</span> Darwin arm64 and x86_64, Linux arm64 and x86_64, Windows x86_64<br>
+          <span class="hl">Checksums file:</span> replaced on v0.13.0 to v0.15.0 per the customer; inferred for v0.11.0 and v0.12.0<br>
+          <span class="hl">Caught by:</span> a pinned SHA-256 in a customer's CI, issue #300 at 13:50 UTC<br>
+          <span class="hl">Removed:</span> 14:21 UTC
+        </div>
+        <div class="step-tags"><span class="stag">GitHub Releases</span><span class="stag">Mutable Assets</span><span class="stag">Checksums</span><span class="stag">T1036.005</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 Execution: Install Paths That Checked Nothing</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The install script and the CLI's own upgrade command fetched the swapped archives with no hash check, while Homebrew's pinned cask would have refused them</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1204/002/" target="_blank" rel="noopener">T1204.002 - User Execution: Malicious File</a>
+        </div>
+        <p class="step-desc">StepSecurity and The Hacker News agree that <code>install.sh</code> never checks a hash, and StepSecurity says the CLI's <code>ovhcloud upgrade</code> command verifies nothing either. The Hacker News limits that path to v0.12.0, v0.13.0 and v0.14.0 installs on macOS or Linux that were set up by the script or by hand; on Homebrew and go install setups the command only prints what to run. Direct downloads and CI jobs that fetched the archives without a pinned hash were exposed for the same reason. OpenSourceMalware, StepSecurity and The Hacker News all say that <code>go install</code>, source builds and the Docker image were not exposed. OVHcloud counts about 250 downloads in the window. That is a download figure, and no source gives a count of machines that ran the binary.</p>
+        <p class="step-desc">The sources disagree on two paths. OpenSourceMalware listed a Homebrew install or upgrade as exposed. The Hacker News checked the tap's history and found no change between the September cask and the v0.16.0 cask, and StepSecurity says the cask pins per-architecture SHA-256 hashes, so Homebrew would have refused the swapped file. StepSecurity also reports that <code>install.sh</code> never worked on arm64 Linux, because it requests an asset name that was never published, which would leave arm64 Linux exposed only through the upgrade command or a manual download. The exposure lists from OpenSourceMalware and The Hacker News do not make that distinction.</p>
+        <div class="step-code">
+          <span class="hl">No hash check:</span> install.sh, ovhcloud upgrade (v0.12.0 to v0.14.0 script or manual installs, per The Hacker News), direct download, unpinned CI fetches<br>
+          <span class="hl">Refused the swap:</span> Homebrew's cask, per StepSecurity and The Hacker News<br>
+          <span class="hl">Not exposed:</span> go install, source builds, the Docker image<br>
+          <span class="hl">Downloads in the window:</span> about 250, per OVHcloud
+        </div>
+        <div class="step-tags"><span class="stag">install.sh</span><span class="stag">Self-Update</span><span class="stag">Homebrew</span><span class="stag">T1204.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: What a Developer Machine Holds</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Each run copied cloud, Kubernetes, Terraform, SSH and AI-assistant credential files into an envchecker folder that is never deleted</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Credentials In Files</a>
+        </div>
+        <p class="step-desc">OVHcloud's advisory lists what the stealer gathers: AWS credentials and configuration including <a class="glossary-link" href="../glossary.html#term-s3">S3</a>, Google Cloud, Azure, DigitalOcean's <code>doctl</code>, Docker, Kubernetes, Terraform credentials, <a class="glossary-link" href="../glossary.html#term-npm">npm</a> configuration, SSH keys, <code>.netrc</code> and the global Git configuration. It also takes local data from AI coding tools: the VS Code and Cursor state databases, the Continue extension's index, Sourcegraph Cody chat histories, the OpenCode database, Hermes agent sessions and the Claude agent's configuration directory. Besides copying files, it writes out credentials collected through various commands, which the advisory does not list.</p>
+        <p class="step-desc">On each run the binary creates a new folder in the temporary directory named <code>envchecker-</code> followed by nine or ten digits, copies the files into it and archives it. OVHcloud says the folder is never deleted, which makes it a way to check for exposure. The advisory's path list does not include <code>~/.ovh.conf</code>, where The Hacker News notes the CLI keeps OVH API credentials, but OVHcloud's advice covers every secret stored on an affected machine.</p>
+        <div class="step-code">
+          <span class="hl">Cloud:</span> ~/.aws/credentials, ~/.config/gcloud/access_tokens.db, ~/.azure/msal_token_cache.json, ~/.config/doctl/config.yaml<br>
+          <span class="hl">Clusters and infrastructure:</span> ~/.kube/config, ~/.terraform.d/credentials.tfrc.json, ~/.docker/config.json<br>
+          <span class="hl">Developer:</span> ~/.ssh, ~/.netrc, ~/.gitconfig<br>
+          <span class="hl">AI tools:</span> ~/.claude, ~/.hermes/sessions, the Cursor and VS Code state.vscdb files<br>
+          <span class="hl">Staging:</span> envchecker-&lt;9 or 10 digits&gt; in the temp directory, never deleted
+        </div>
+        <div class="step-tags"><span class="stag">Cloud Credentials</span><span class="stag">Kubeconfig</span><span class="stag">Terraform</span><span class="stag">AI Agent Data</span><span class="stag">T1552.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a>: A Solana Call, Then an Upload</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stealer made Solana RPC calls through a public endpoint and uploaded the archive to 45.32.148[.]174</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1041/" target="_blank" rel="noopener">T1041 - Exfiltration Over C2 Channel</a>
+        </div>
+        <p class="step-desc">OVHcloud calls the mechanism rudimentary, with one more elaborate part. The stealer picks one of five public Solana RPC endpoints at random and makes its calls with the wallet <code>BHaDaVbdCYFNaKZGn7yLXFneWoJHZgLiBYkHxVrjyALF</code>, then uploads the archive to <code>hxxps://45.32.148[.]174/upload</code>. OVHcloud warns that the threat actor can change this URL at any moment. In StepSecurity's replay, which ran its own rebuild because the real binaries were deleted, the upload was a JSON POST shaped like a Solana RPC request, with the archive base64-encoded inside it. StepSecurity credits that format to the advisory, which does not describe it.</p>
+        <p class="step-desc">The stealer used a different wallet. OVHcloud lists <code>BHaDa...</code> for the stealer; <code>BjVe...</code> is the wallet it ties to GlassWorm, found in the 2025 extension and the March loader. When The Hacker News wrote, no copy of a swapped archive had been analyzed in public, so nothing from the October binary had been tied to GlassWorm. OVHcloud's advisory lists five samples on VirusTotal and thanks Ivan Kwiatkowski and the VirLabs.ai malware analysis platform, ties the extension's wallet to GlassWorm, and does not name the actor behind the October uploads.</p>
+        <div class="step-code">
+          <span class="hl">Solana RPC:</span> one of five public endpoints, chosen at random<br>
+          <span class="hl">Wallet used by the stealer:</span> BHaDaVbdCYFNaKZGn7yLXFneWoJHZgLiBYkHxVrjyALF<br>
+          <span class="hl">Upload:</span> hxxps://45.32.148[.]174/upload, which OVHcloud says can change<br>
+          <span class="hl">Different wallet:</span> BjVe... in the 2025 extension and the March loader
+        </div>
+        <div class="step-tags"><span class="stag">Solana RPC</span><span class="stag">Exfiltration</span><span class="stag"><a class="glossary-link" href="../glossary.html#term-ioc">IOC</a></span><span class="stag">T1041</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>If you ran a swapped binary, rotate first, and do it from a different machine.</strong> OVHcloud's advisory lists the steps in this order: change or deactivate the secrets for every relevant service as soon as possible, delete the compromised binaries, then install v0.16.0. StepSecurity and OpenSourceMalware both say to rotate from a different machine, and StepSecurity and The Hacker News point out that updating the CLI revokes nothing already copied. None of these four sources describes a revocation trigger or destructive behavior in this stealer, unlike the watcher in the <a href="chaindrop-keyv-npm.html">CHAINDROP / keyv</a> worm, so nothing here argues for waiting. The strongest evidence is OVHcloud's advisory, which rests on the actual binaries: it gives their MD5 hashes, lists five samples on VirusTotal, thanks the VirLabs.ai malware analysis platform, and describes only collection and exfiltration. The Hacker News wrote before the advisory appeared, and StepSecurity's replay ran its own rebuild because the originals were deleted. Include OVH API keys, which OpenSourceMalware and StepSecurity both list for rotation; the CLI keeps them in <code>~/.ovh.conf</code>. OVHcloud says the stealer copies what it collects into the <code>envchecker-*</code> folder and never deletes it, so the folder is itself a copy of those secrets; StepSecurity says to delete it along with the binary, and to rebuild any machine you cannot show is clean.</div>
+        <div class="def-item"><strong>Check for exposure without running the binary.</strong> Do not run a suspect copy, even to print its version; OVHcloud's advisory says not to run it. Instead, as OVHcloud advises, compare its MD5 against the hashes in the advisory's appendix, look for an <code>envchecker-*</code> folder in the temporary directory, or go by when you downloaded it: OVHcloud says only copies downloaded between 12:47 and 14:21 UTC on October 19 are affected. <code>go version -m</code> reads the build information from the file without executing it and shows the <code>5ead8ef</code> pseudo-version; The Hacker News, StepSecurity and OpenSourceMalware all describe that check. StepSecurity and OpenSourceMalware also list <code>ovhcloud version</code> as a quick tell, but that runs the program: OVHcloud says every run starts a new collection, StepSecurity's own replay, run against its rebuild, finished exfiltrating about two seconds after that command, and The Hacker News calls running a suspect binary inadvisable. For CI, StepSecurity says to audit any job that fetched these releases between 12:47 and 14:21 UTC on October 19 and to treat credentials reachable from those runners as exposed.</div>
+        <div class="def-item"><strong>Pin artifact hashes somewhere the publisher's account cannot rewrite.</strong> The checksums file sat in the same release as the binaries and was replaced with them, so any check against it passed. The customer's CI pinned its own copy of one hash and failed, and Homebrew's cask, kept in a separate repository, pinned the original hashes. The install script and the upgrade command checked nothing. If you ship a CLI, make the installer and the self-update path verify a hash or attestation that the release page cannot change; if you consume one, pin the hash in your pipeline.</div>
+        <div class="def-item"><strong>Turn on immutable releases, and remember they cover only new ones.</strong> OVHcloud names the missing immutability setting as the main issue and has applied it to every repository in its organization. GitHub's documentation says immutability applies only to future releases, so a release published before you enable it can still have its assets replaced by an account with write access. An immutable release also gets an attestation that you can check with <code>gh release verify-asset</code>, which StepSecurity recommends for v0.16.0.</div>
+        <div class="def-item"><strong>Treat every account that can publish a release as part of your build system.</strong> The uploads came from a developer's personal GitHub account in an organization that required 2FA, and they went through with what OVHcloud calls stolen keys. Two-factor authentication applies at sign-in, and a token issued earlier is used without it. OVHcloud's next steps include linking any function that can publish a release to its centralized <a class="glossary-link" href="../glossary.html#term-iam">IAM</a>, signing commits and merges, and reviewing every GitHub account attached to its organization; OpenSourceMalware notes v0.16.0 was published by a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> rather than a person. Limit release write access to the pipeline's identity, and keep publishing credentials off machines that run unvetted IDE extensions.</div>
+        <div class="def-item"><strong>Alert on release assets that change after publication, and on amended force-pushes.</strong> The customer confirmed the swap through the GitHub releases API, which records each asset's uploader and timestamps: a different account had replaced files on releases published weeks or months earlier. OpenSourceMalware recommends alerting on force-pushes to long-idle repositories using GitHub's server-side activity timestamps rather than commit dates, and blocking Solana RPC endpoints from build hosts that have no reason to reach them.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://github.com/ovh/ovhcloud-cli/security/advisories/GHSA-862f-55f5-vmvw" target="_blank" rel="noopener">OVHcloud - GHSA-862f-55f5-vmvw</a>
+        <a class="src-link" href="https://github.com/ovh/ovhcloud-cli/issues/300" target="_blank" rel="noopener">ovhcloud-cli - Issue #300</a>
+        <a class="src-link" href="https://www.stepsecurity.io/blog/ovhcloud-cli-github-release-swap-glassworm" target="_blank" rel="noopener">StepSecurity - GitHub release swap analysis</a>
+        <a class="src-link" href="https://opensourcemalware.com/blog/glassworm-hacks-ovh-clouds-cli-tool" target="_blank" rel="noopener">OpenSourceMalware - Account timeline</a>
+        <a class="src-link" href="https://thehackernews.com/2026/10/hackers-hijack-five-ovhcloud-cli.html" target="_blank" rel="noopener">The Hacker News - Five OVHcloud CLI releases hijacked</a>
+        <a class="src-link" href="https://thehackernews.com/2026/03/glassworm-attack-uses-stolen-github.html" target="_blank" rel="noopener">The Hacker News - GlassWorm and stolen GitHub tokens</a>
+        <a class="src-link" href="https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/preventing-changes-to-your-releases" target="_blank" rel="noopener">GitHub Docs - Preventing changes to your releases</a>
+        <a class="src-link" href="https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/verifying-the-integrity-of-a-release" target="_blank" rel="noopener">GitHub Docs - Verifying the integrity of a release</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1176/002/" target="_blank" rel="noopener">MITRE T1176.002</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">MITRE T1195.002</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1036/005/" target="_blank" rel="noopener">MITRE T1036.005</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">MITRE T1552.001</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ci-cd.html">CI/CD security</a>
+    <a class="src-link" href="../version-control.html">Git &amp; version control</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="gmo-onamae-desktop-cloud.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="vapor-panda-artex.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
