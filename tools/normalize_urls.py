@@ -86,15 +86,25 @@ HTTP_ONLY_DOMAINS = {
 # --- Utility functions ---------------------------------------------------
 
 
+# Parameters that a tracking name collides with on one host, where they are
+# the content of the link rather than analytics. Google Calendar's `cid` IS the
+# calendar being subscribed to: strip it and the subscribe button on
+# calendar.html opens an empty Google Calendar. Keyed by exact host.
+CONTENT_PARAMS_BY_HOST = {
+    'calendar.google.com': {'cid', 'src', 'ctz'},
+}
+
+
 def strip_tracking_params(url):
     """Remove tracking/analytics query parameters from a URL."""
     try:
         parsed = urlparse(url)
         if not parsed.query:
             return url
+        keep = CONTENT_PARAMS_BY_HOST.get((parsed.hostname or '').lower(), set())
         params = parse_qs(parsed.query, keep_blank_values=True)
         cleaned = {k: v for k, v in params.items()
-                   if k.lower() not in TRACKING_PARAMS}
+                   if k.lower() not in TRACKING_PARAMS or k.lower() in keep}
         if cleaned == params:
             return url  # nothing stripped
         new_query = urlencode(cleaned, doseq=True) if cleaned else ''
