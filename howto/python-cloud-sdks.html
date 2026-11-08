@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-03">
-    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="python">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-03",
-      "dateModified": "2026-11-05",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -290,6 +290,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -344,14 +345,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Python and the cloud SDKs, hands-on</h1>
-        <p>Most cloud security scripts are a loop over API calls, and when one goes wrong it usually still prints a tidy list. Learn enough Python to read and change those scripts, and the five habits that decide whether the list is true, on a pretend AWS organization that runs on your own computer.</p>
+        <p>Security teams answer questions such as "which access keys has nobody used in 90 days?" with short Python scripts. Learn enough Python to read and change those scripts, and how to tell when one has quietly missed something, using a pretend AWS organization that runs free on your own computer.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-05">Last updated <strong>2026-11-05</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal, Python 3.10 or newer, and some practice reading code in any language. No AWS account: the lab runs on your computer, and nothing on this page talks to AWS.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order, in zsh on macOS, with boto3 1.43.123 and moto 5.2.5 on Python 3.12.16 and 3.13.18. Every output shown is pasted from that run, and a planted error made the same script fail, so the check can fail. The Azure and Google Cloud notes were checked against azure-identity 1.27.0, azure-mgmt-resource-subscriptions 1.0.0, google-auth 2.62.1 and google-cloud-compute 1.56.0 with their network calls replaced by fakes, and against Microsoft's and Google's documentation. They were not run against a real subscription or project. The EventBridge results come from moto's pattern matcher, which the lab connects to <code>TestEventPattern</code>; they match what EventBridge's documentation gives for those patterns, and were not run against EventBridge.</p>
@@ -359,15 +360,18 @@
 
 <section id="intro">
     <h2>Python for security automation</h2>
-    <p>A security script answers a question about a whole estate, such as which access keys are stale or which firewall rules let in the whole internet, by calling the cloud provider's API (application programming interface) in a loop and printing what matched. In Python those calls go through the provider's SDK (software development kit): boto3 for AWS (Amazon Web Services), the Azure SDK for Python, and the Google Cloud client libraries. The <a href="../learning-path.html">learning path</a> asks for one scripting language, Python by default, and sets the bar at reading and changing other people's scripts. This page is pitched at that bar. It is not a Python course: it explains each piece of Python as the scripts use it.</p>
-    <p>The Python is the easy half. The harder half is that the SDKs make it easy to ask a narrower question than you meant and get a confident answer to it. A list call returns one page and mentions the rest in a field nobody reads. A client talks to one Region. An <code>except</code> written for one expected error also swallows AccessDenied. The credentials come from somewhere you did not expect. An organization-wide loop skips the accounts it could not get into. None of these raises an error. Each one produces a shorter list, and a short list of findings looks like good news.</p>
+    <p>Much of cloud security work is answering questions that cover everything a company runs in the cloud. Which access keys has nobody used in 90 days? Which firewall rules let in the whole internet? A company's cloud can span dozens of AWS accounts, each with resources spread across Regions (the separate locations around the world where AWS runs its services), so nobody answers these by clicking through AWS's web console. Someone writes a short script instead.</p>
+    <p>The script asks the cloud provider's API (application programming interface, the way one program asks another for something) the same question once for each account and Region, and prints whatever matches. In Python those calls go through the provider's SDK (software development kit), a library that turns each API call into an ordinary Python function call: boto3 for AWS (Amazon Web Services), the Azure SDK for Python, and the Google Cloud client libraries. The <a href="../learning-path.html">learning path</a> asks for one scripting language, Python by default, and sets the bar at reading and changing other people's scripts. This page is pitched at that bar. It is not a Python course: it explains each piece of Python as the scripts use it.</p>
+    <p>The Python in these scripts is short and plain. The hard part is that a script with a mistake in it rarely crashes. It prints a shorter list. A script that looked in one Region, when the open firewall rule is in another, prints nothing at all, and an empty list of findings looks like good news. The walk-through shows five mistakes like that, each in a script that runs without an error and gives the wrong answer, and then the change that fixes it.</p>
     <p>boto3 comes first because it has the most of these traps and because the lab can run it for free. Where Azure or Google Cloud has the same trap, a short paragraph says what it looks like there. A last section turns from scripts that ask to code that is sent events: the EventBridge rules that pass <a class="glossary-link" href="../glossary.html#term-guardduty">GuardDuty</a> findings to a function, and how to test them.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
-        <li><a href="#model">Every result has a scope</a></li>
+        <li><a href="#how-to-use">How to use this guide</a></li>
+        <li><a href="#warm-up">Warm-up: what an API answer looks like in Python</a></li>
+        <li><a href="#model">Five questions to ask before you trust a result</a></li>
         <li><a href="#walkthrough">Walk-through: a pretend organization, five silent failures</a></li>
         <li><a href="#eventbridge">Findings that go nowhere: EventBridge event patterns</a></li>
         <li><a href="#exercises">Hands-on exercises</a></li>
@@ -376,10 +380,18 @@
     </ol>
 </div>
 
-<section id="model">
-    <h2>Every result has a scope</h2>
-    <p>Read every script's output as a claim with five conditions attached: <em>as this identity, on the pages it read, in these Regions, in these accounts, among the calls that worked.</em> An empty list is good news only when all five are what you meant. Each step of the walk-through takes one condition, runs a script that gets it wrong without complaint, and then changes the script so that it either gets it right or says what it could not check.</p>
-    <p>First, the Python those scripts are made of. Every boto3 call returns the API's answer as plain Python data. This block needs nothing installed:</p>
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Beginner here means new to Python and to the cloud SDKs. You should be comfortable typing commands into a terminal and have read a little code in some language, even a shell script. You do not need an AWS account, and you do not need to know AWS well: the AWS terms the scripts depend on are explained as they come up, and terms with a glossary entry link to it.</p>
+    <p>Read it in order, because each part uses the one before. The <a href="#warm-up">warm-up</a> needs nothing installed. The <a href="#model">five questions</a> after it are the idea the rest of the page is built on. In the <a href="#walkthrough">walk-through</a>, steps 1 and 2 install two Python packages and start the lab in one terminal, and steps 3 to 7 each take one of the five questions in a second terminal: a short script that looks right, the wrong answer it gives with no error, and the change that makes it either right or clear about what it could not check. The <a href="#exercises">exercises</a> then ask you to combine the steps to answer common audit questions yourself, with each answer hidden until you open it.</p>
+    <p>A code block labelled BASH is something to paste into your terminal, and each one has a copy button. The unlabelled block under it, when there is one, shows what your terminal should print. Most commands start with a line such as <code>cat &gt; roles.py &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>roles.py</code>; the block's last line then runs that file. Paste the whole block at once, the <code>EOF</code> line included. Run each one yourself: your output should match the page line for line, apart from the IDs starting <code>sg-</code> in the exercises, which moto makes up afresh each time.</p>
+    <p>Two things can wait for a second reading. The paragraphs and sentences about Azure and Google Cloud say how the same mistake looks on those clouds, so skip them on a first pass if you work in AWS. And step 2's long <code>lab.py</code> only builds the pretend organization, so paste it without reading it.</p>
+    <p>From step 3 on, if your output differs from the page, check the terminal you ran it in. Its prompt should start with <code>(.venv)</code>, which means the virtual environment from step 1 is active, and you should have run the first line of step 3 in it. Then check that the lab is still running in the other terminal. You can stop between any two steps: Ctrl-C in the lab's terminal stops the lab and forgets the organization, and <code>cd ~/sdk-lab &amp;&amp; . .venv/bin/activate &amp;&amp; python3 lab.py</code> builds the same organization again from scratch. If you also closed the second terminal, open a new one, run the first line of step 3, and if you are past step 3 run <code>export AWS_PROFILE=auditor</code> as well.</p>
+</section>
+
+<section id="warm-up">
+    <h2>Warm-up: what an API answer looks like in Python</h2>
+    <p>A boto3 call asks AWS a question and hands back AWS's answer as plain Python data, so start by reading some of that data, before installing anything. The block below runs a few lines of Python against a made-up answer typed into the script, and needs only Python itself. Its first line, <code>python3 - &lt;&lt;'PY'</code>, runs every line down to <code>PY</code> as a Python program without saving it to a file.</p>
 <div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 response = {
     "SecurityGroups": [
@@ -399,12 +411,28 @@ PY</pre></div>
 office-ssh: 0 inbound rule(s)
 more pages? True
 Marker: None</pre></div>
-    <p>That is the shape of a real <code>describe_security_groups</code> answer, cut down. Curly braces make a <em>dictionary</em>, which maps names (keys) to values, and square brackets make a <em>list</em>. <code>response["SecurityGroups"]</code> reads a key and stops the script with a <code>KeyError</code> if it is missing; <code>response.get("Marker")</code> reads one and gives <code>None</code>, Python's "nothing", if it is missing. <code>for</code> runs the indented lines once per item, and in Python the indentation is what marks the lines that belong to the loop. An <code>f"..."</code> string fills in whatever is in <code>{braces}</code>, and <code>in</code> asks "is this key here?". The last two lines show the first silent failure: the answer says another page exists, and nothing makes you read it.</p>
+    <p>That is a cut-down version of what AWS's <code>describe_security_groups</code> call returns. A <a class="glossary-link" href="../glossary.html#term-security-group">security group</a> is AWS's virtual firewall for servers and other resources: <code>IpPermissions</code> holds its inbound rules, and <code>0.0.0.0/0</code> means every address on the internet, so <code>debug-ssh</code> lets anyone on the internet reach port 22, where SSH logins happen.</p>
+    <p>Now the Python. Curly braces make a <em>dictionary</em>, which maps names (keys) to values, and square brackets make a <em>list</em>. <code>response["SecurityGroups"]</code> reads a key and stops the script with a <code>KeyError</code> if it is missing; <code>response.get("Marker")</code> reads one and gives <code>None</code>, Python's "nothing", if it is missing. <code>for</code> runs the indented lines once per item, and in Python the indentation is what marks the lines that belong to the loop. An <code>f"..."</code> string fills in whatever is in <code>{braces}</code>, and <code>in</code> asks "is this key here?".</p>
+    <p>The last two lines show the first way a script can miss something. AWS hands back long lists a page at a time, and <code>NextToken</code> is its note that another page exists. Nothing makes a script ask for that page, and a script that never asks reports whatever happened to be on the first one. <a href="#step-pages">Step 4</a> shows it happening to a real count.</p>
+</section>
+
+<section id="model">
+    <h2>Five questions to ask before you trust a result</h2>
+    <p>Suppose a script checks every security group for SSH open to the internet and prints nothing. It is tempting to report that there are none. That is only true if the script looked everywhere you meant it to, and its output does not say where it looked. So before you trust a result, and an empty one most of all, ask five questions about how it was made:</p>
+    <ol>
+        <li>Whose credentials did it run with? boto3 finds credentials in several places and uses the first it comes to, which is not always the identity you asked for. (<a href="#step-identity">Step 3</a>)</li>
+        <li>Did it read every page? As the warm-up showed, long lists arrive a page at a time. (<a href="#step-pages">Step 4</a>)</li>
+        <li>Did it look in every Region? A script looks in one Region unless it is written to look in more, and an account can have Regions turned on that nobody remembers. (<a href="#step-regions">Step 5</a>)</li>
+        <li>Did every call work? A call that AWS refused can end up reported the same way as one that found nothing. (<a href="#step-errors">Step 6</a>)</li>
+        <li>Did it cover every account? Credentials belong to one account, and a script sees only that one until it is written to step into the others. (<a href="#step-accounts">Step 7</a>)</li>
+    </ol>
+    <p>Put together, every result is a claim with five conditions attached: <em>as this identity, on the pages it read, in these Regions, among the calls that worked, in these accounts.</em> An empty list is good news only when all five are what you meant. Each step of the walk-through takes one condition, runs a script that gets it wrong without complaint, and then changes the script so that it either gets it right or says what it could not check.</p>
 </section>
 
 <section id="walkthrough">
     <h2>Walk-through: a pretend organization, five silent failures</h2>
-    <p>The lab is an AWS organization running inside moto, an open-source AWS emulator for Python, on your computer. You are in the management account, <code>123456789012</code>, and the organization has three member accounts: prod, dev and sandbox. The management account has 137 <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) roles, six users with access keys of various ages, security groups in four Regions (one of them an opt-in Region), and four <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service) buckets, one of which your audit identity is not allowed to read. GuardDuty is turned on in five Regions, with the EventBridge rules that the section after the walk-through tests. You audit it as a user called <code>auditor</code>.</p>
+    <p>The lab runs inside moto, an open-source AWS emulator for Python, on your computer. It holds an AWS organization: a group of AWS accounts run together from one management account. You are in the management account, <code>123456789012</code>, and the organization has three member accounts: prod, dev and sandbox.</p>
+    <p>The management account holds what the scripts audit. In <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) it has 137 roles, which are identities that people and programs take on for a while, and six users, each with access keys (the key pairs scripts sign their requests with) of various ages. It has security groups in four Regions, one of them an opt-in Region, and four <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service) buckets, one of which your audit identity is not allowed to read. GuardDuty, AWS's threat detection service, is turned on in five Regions, with the EventBridge rules that the section after the walk-through tests. You audit it all as a user called <code>auditor</code>.</p>
 
     <h3>1. Install boto3 and moto</h3>
     <p>Run <code>python3 --version</code> first. boto3 and moto need Python 3.10 or newer, and the <code>python3</code> that comes with macOS is older. If yours is, install a newer Python from python.org or your package manager and use its name (for example <code>python3.12</code>) instead of <code>python3</code> on the second line.</p>
@@ -648,7 +676,7 @@ python3 lab.py</pre></div>
 <div class="code-block" data-lang="text"><pre>Lab running at http://localhost:8101. Leave this terminal open; Ctrl-C stops it.</pre></div>
     <p>The lab listens only on your own computer, at <code>localhost</code> port 8101 (moto's usual port, 5000, is often taken on a Mac by macOS's AirPlay Receiver). It builds the organization, then writes four files beside itself: an AWS config file and credentials file under <code>aws/</code>, <code>build-bot.env</code>, which step 3 uses, and <code>lab.env</code>, which points every AWS tool in a terminal at the lab. Five parts of it change moto rather than fill it: moto lists every Region as usable and ignores the difference between default and opt-in Regions, it cannot create an access key that is already old, it gives new accounts random IDs, it does not answer EventBridge's <code>TestEventPattern</code> call, and once it checks permissions it refuses GuardDuty's read calls with a signature error. The lab corrects all five so the walk-through behaves like a real account and your output matches this page. The last setting before the files makes moto check every request against the caller's IAM policies, so an AccessDenied in the lab is a real refusal.</p>
 
-    <h3>3. Find out who you are (identity)</h3>
+    <h3 id="step-identity">3. Find out who you are (identity)</h3>
     <p>Leave the lab running and open a second terminal. Everything from here on runs there. The last command on the first line loads <code>lab.env</code>, which clears any AWS settings already in that terminal and points boto3 at the lab. Skip it and these scripts read whatever AWS account your own credentials point at.</p>
 <div class="code-block" data-lang="bash"><pre>cd ~/sdk-lab &amp;&amp; . .venv/bin/activate &amp;&amp; . ./lab.env
 cat &gt; whoami.py &lt;&lt;'EOF'
@@ -667,20 +695,20 @@ identity: arn:aws:iam::123456789012:user/alice
 found in: shared-credentials-file
 region:   us-east-1</pre></div>
     <p><code>get_caller_identity</code> asks AWS <a class="glossary-link" href="../glossary.html#term-sts">STS</a> (Security Token Service) which identity signed the request. It needs no permissions, so it works for any valid credentials, and every script that reports on an account should call it first and print the answer. This one ran as alice, the <code>[default]</code> profile in the credentials file, and not as the auditor. <code>found in</code> is where boto3 found the credentials, and <code>region</code> is the Region its clients will talk to unless told otherwise. Ask for the auditor's profile:</p>
-<div class="code-block" data-lang="text"><pre>AWS_PROFILE=auditor python3 whoami.py</pre></div>
+<div class="code-block" data-lang="bash"><pre>AWS_PROFILE=auditor python3 whoami.py</pre></div>
 <div class="code-block" data-lang="text"><pre>account:  123456789012
 identity: arn:aws:iam::123456789012:user/auditor
 found in: shared-credentials-file
 region:   us-east-1</pre></div>
     <p>That is the identity the rest of the page needs. Now repeat a common afternoon: earlier you were debugging the <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> (continuous integration) pipeline and exported its access key into this terminal, and now you run the audit with the auditor's profile.</p>
-<div class="code-block" data-lang="text"><pre>. ./build-bot.env
+<div class="code-block" data-lang="bash"><pre>. ./build-bot.env
 AWS_PROFILE=auditor python3 whoami.py</pre></div>
 <div class="code-block" data-lang="text"><pre>account:  123456789012
 identity: arn:aws:iam::123456789012:user/build-bot
 found in: env
 region:   us-east-1</pre></div>
     <p><strong>You asked for the auditor and got build-bot.</strong> boto3 tries a fixed list of places for credentials and stops at the first that has some. Environment variables (<code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code>) come third in <a href="https://docs.aws.amazon.com/boto3/latest/guide/credentials.html" target="_blank" rel="noopener noreferrer">boto3's credential order</a>, ahead of the profiles in the credentials file, and <code>AWS_PROFILE</code> does not override them. Passing the profile in code, <code>boto3.Session(profile_name="auditor")</code>, does override them: botocore removes the environment-variable step when a profile is given that way. The AWS CLI (command-line interface) behaves the same way, and <code>--profile</code> on its command line does override environment keys. In this lab the mix-up shows at once, because build-bot may only upload to one bucket, so any audit that lists anything fails. A build identity with read access everywhere would produce a complete, plausible report about the wrong permissions. Clear the leftover keys and set the auditor for the rest of the page:</p>
-<div class="code-block" data-lang="text"><pre>unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+<div class="code-block" data-lang="bash"><pre>unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 export AWS_PROFILE=auditor
 python3 whoami.py</pre></div>
 <div class="code-block" data-lang="text"><pre>account:  123456789012
@@ -691,7 +719,7 @@ region:   us-east-1</pre></div>
     <p>On Azure, <code>DefaultAzureCredential</code> from the azure-identity library has the same shape of chain: a <a class="glossary-link" href="../glossary.html#term-service-principal">service principal</a> set in environment variables comes first, then <a class="glossary-link" href="../glossary.html#term-service-account">workload identity</a>, then managed identity, and your Azure CLI login comes well after those, so leftover service-principal variables such as <code>AZURE_CLIENT_SECRET</code> win over the account you think you logged in with, and so does a virtual machine's managed identity when the script runs on one. At <code>INFO</code> log level it says which one it used, in a line that reads <code>DefaultAzureCredential acquired a token from ...</code>.</p>
     <p>On Google Cloud, Application Default Credentials (ADC) take the credentials file named by <code>GOOGLE_APPLICATION_CREDENTIALS</code> before the credentials that <code>gcloud auth application-default login</code> saved, and <a href="https://cloud.google.com/docs/authentication/application-default-credentials" target="_blank" rel="noopener noreferrer">the account you signed in with through plain <code>gcloud auth login</code> is not one of the places ADC looks</a>. <code>google.auth.default()</code> returns the credentials it chose and their project, so print them.</p>
 
-    <h3>4. Read every page</h3>
+    <h3 id="step-pages">4. Read every page</h3>
     <p>A list call returns one page of results. <a href="https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListRoles.html" target="_blank" rel="noopener noreferrer">IAM's <code>ListRoles</code></a> returns up to 100 roles per call unless asked for a different number, says whether more exist in <code>IsTruncated</code>, and hands back a <code>Marker</code> to continue from. Count the roles three ways:</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; roles.py &lt;&lt;'EOF'
 import boto3
@@ -723,7 +751,7 @@ paginator:         137 roles</pre></div>
     <p>"No more pages" is a signal only the API can give, and two details make guessing it worse. IAM's documentation says it may return fewer than the page size even when more results exist, so a short page is not a last page. <a href="https://docs.aws.amazon.com/organizations/latest/APIReference/API_ListAccounts.html" target="_blank" rel="noopener noreferrer">AWS Organizations</a> goes further: its list calls can occasionally return an <em>empty</em> page while more results remain, and only a missing <code>NextToken</code> means you are done. A loop that stops on an empty page is wrong there, and a paginator is not.</p>
     <p>The Azure SDK and Google's <code>google-cloud-*</code> libraries page for you: the <code>ItemPaged</code> object an Azure list method returns follows <code>nextLink</code> as you loop over it, and Google's pagers follow <code>next_page_token</code>. The one-page bug comes back when a script skips the SDK, calls the REST (representational state transfer) API with <code>requests</code> and ignores <code>nextLink</code> or <code>nextPageToken</code>, or uses Google's older <code>googleapiclient</code> discovery client, where each <code>execute()</code> returns one page.</p>
 
-    <h3>5. Cover every enabled Region</h3>
+    <h3 id="step-regions">5. Cover every enabled Region</h3>
     <p>A boto3 client talks to one Region: the <code>region_name</code> you pass, or else the <code>AWS_DEFAULT_REGION</code> environment variable, or else the profile's <code>region</code> setting. boto3 ignores <code>AWS_REGION</code>, which the AWS CLI does read, so in a terminal where only <code>AWS_REGION</code> is set, the CLI and your script can be looking at different Regions. Security groups, like most resources, live in a Region. This script lists the non-default groups in the client's Region, then in every Region the account has enabled:</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; regions.py &lt;&lt;'EOF'
 import boto3
@@ -757,8 +785,8 @@ python3 regions.py</pre></div>
     <p>One of the 18 needs explaining. <a href="https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-regions.html" target="_blank" rel="noopener noreferrer">AWS enables 17 Regions in every commercial account</a>, the ones launched before 20 March 2019. Newer Regions are opt-in: disabled until someone turns them on, and then as usable as any other. The lab account has opted in to <code>me-central-1</code> (United Arab Emirates), and a database port is open to the internet there. A script with a hard-coded list of the usual Regions never looks there, and neither does a reviewer who knows the account "only uses us-east-1". Ask the account, every run.</p>
     <p>Not everything is regional. IAM and Organizations are global, so one client covers them, and S3's <code>list_buckets</code> returns every bucket whatever its Region. Azure draws the line elsewhere: a subscription is the unit, and calls such as <code>network_security_groups.list_all()</code> in azure-mgmt-network return a subscription's resources in every Azure region at once. On Google Cloud, <a class="glossary-link" href="../glossary.html#term-vpc">VPC</a> (virtual private cloud) firewall rules are global within a project, though organization, folder and network firewall policies also decide what gets in and have list calls of their own, and for regional and zonal resources the Compute library's <code>aggregated_list</code> covers every region and zone of one project. On both, the boundary a script forgets is the subscription or the project, which step 7 comes back to.</p>
 
-    <h3>6. Let errors say what they could not check</h3>
-    <p>When a call fails, boto3 raises <code>ClientError</code>, and the error code AWS sent is in <code>err.response["Error"]["Code"]</code>. Some codes are answers: <code>NoSuchBucketPolicy</code> means the bucket has no bucket policy. Others mean the script did not find out, such as <code>AccessDenied</code> or a throttling code after the retries run out. This script treats them alike:</p>
+    <h3 id="step-errors">6. Let errors say what they could not check</h3>
+    <p>When a call fails, boto3 raises <code>ClientError</code>, and the error code AWS sent is in <code>err.response["Error"]["Code"]</code>. Some codes are answers: <code>NoSuchBucketPolicy</code> means the bucket has no bucket policy, the access rules attached to the bucket itself. Others mean the script did not find out, such as <code>AccessDenied</code> or a throttling code after the retries run out. This script treats them alike:</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; policies_naive.py &lt;&lt;'EOF'
 import boto3
 
@@ -815,7 +843,7 @@ exit code: 1</pre></div>
 <div class="code-block" data-lang="text"><pre>botocore.errorfactory.AccessDenied: An error occurred (AccessDenied) when calling the ListBuckets operation: Access Denied</pre></div>
     <p>A crash with a traceback is a loud failure, which is fine. The failure to fear is the quiet one. A network failure is loud in the same way: botocore raises it as a <code>BotoCoreError</code>, such as <code>EndpointConnectionError</code>, not as a <code>ClientError</code>, so this script stops on one instead of listing it. (<code>2&gt;&amp;1 | tail -n 1</code> sends the error output through <code>tail</code>, which keeps only the last line of the traceback.) Azure has the same split: the SDK raises <code>HttpResponseError</code> from <code>azure.core.exceptions</code> with a <code>status_code</code>, 403 for a refusal and 404 for something that does not exist, while Google's client libraries raise exceptions from <code>google.api_core.exceptions</code>, such as <code>Forbidden</code> and <code>PermissionDenied</code> for a refusal and <code>NotFound</code> for a missing resource. A broad <code>except</code> turns all of them into "nothing found".</p>
 
-    <h3>7. Cover every account in the organization</h3>
+    <h3 id="step-accounts">7. Cover every account in the organization</h3>
     <p>One identity normally sees one account. To audit an organization you list its accounts, then in each one assume a role that trusts your audit identity, and use the temporary credentials that <code>assume_role</code> returns. This script counts the IAM roles in every account:</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; org_roles.py &lt;&lt;'EOF'
 import sys
@@ -955,7 +983,7 @@ dave: never used, created 150 days ago</pre></div>
 
     <div class="exercise">
         <span class="exercise__label">Exercise 2</span>
-        <p>List every <a class="glossary-link" href="../glossary.html#term-security-group">security group</a> with an inbound rule open to the whole internet, in every enabled Region, with the protocol and port. Make the work a function that takes a boto3 session, because Exercise 4 reuses it.</p>
+        <p>List every security group with an inbound rule open to the whole internet, in every enabled Region, with the protocol and port. Make the work a function that takes a boto3 session, because Exercise 4 reuses it.</p>
         <details>
             <summary>Show the answer</summary>
 <div class="code-block" data-lang="bash"><pre>cat &gt; open_sgs.py &lt;&lt;'EOF'

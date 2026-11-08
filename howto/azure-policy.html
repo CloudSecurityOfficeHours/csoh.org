@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-03">
-    <meta property="article:modified_time" content="2026-11-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="azure policy">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-03",
-      "dateModified": "2026-11-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -290,6 +290,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -344,14 +345,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Azure Policy definitions, hands-on</h1>
-        <p>Azure Policy decides which changes Azure Resource Manager accepts, and reports which resources break your rules. Most broken policies fail quietly, evaluating nothing or matching nothing while the compliance page shows green. Learn the definition language by building those failures in a throwaway resource group, then fixing them.</p>
+        <p>Azure Policy checks changes to your Azure resources against rules you write, such as never letting SSH in from the whole internet: it can refuse a change that breaks a rule, and it reports the resources that do. Most broken policies fail quietly, evaluating nothing or matching nothing while the compliance page shows green. Learn the definition language by building those failures in a throwaway resource group, then fixing them.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-03">Last updated <strong>2026-11-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> a subscription you may experiment in, where you can create policy definitions and assign roles on one resource group (Owner covers both); the Azure CLI (command-line interface); and <code>jq</code>. Azure Policy has no charge on Azure resources, and the lab creates only network security groups, which run nothing.</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> no policy was created or assigned in Azure to write this page, so none of the <code>az</code> commands in the walk-through has been run against Azure, and the results it describes are what Microsoft's documentation says should happen. What did run: every policy definition was parsed as JSON (JavaScript Object Notation) and its rule validated against Microsoft's published policy rule schema; every alias was checked against the alias lists Azure returns for <code>Microsoft.Network</code> and <code>Microsoft.Insights</code> (read-only calls, 3 November 2026); every <code>az</code> option was checked against the help of Azure CLI 2.91.0, and the CLI's handling of port lists against its source; and every shell block was run in bash and zsh with a stand-in for <code>az</code> to catch quoting errors, with the <code>jq</code> steps run for real. The role assignment conditions section was checked against Microsoft's documentation only.</p>
@@ -359,30 +360,16 @@
 
         <section id="intro">
             <h2>A rule engine in front of every change</h2>
-            <p>Every create, update and delete in Azure passes through Azure Resource Manager, whether it comes from the portal, the CLI, <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> or a software development kit. Azure Policy is the rule engine inside that path. A policy definition is a JSON document that pairs a condition with an effect: if a resource looks like this, deny the request, or record the resource as non-compliant, or change it, or deploy something beside it. An assignment applies a definition to a scope, which is a management group, a subscription, a resource group or a single resource. From then on Azure checks every matching request against it and re-checks existing resources on a schedule.</p>
-            <p>Platform and cloud security teams write policy to set <a class="glossary-link" href="../glossary.html#term-guardrails">guardrails</a> that hold whichever tool a team deploys with. Governance, risk and compliance (<a class="glossary-link" href="../glossary.html#term-grc">GRC</a>) engineers assign Microsoft's regulatory compliance initiatives, such as those for the Center for Internet Security (CIS) benchmarks, the US National Institute of Standards and Technology's Special Publication 800-53 and the Payment Card Industry Data Security Standard (<a class="glossary-link" href="../glossary.html#term-pci-dss">PCI DSS</a>), which are collections of policy definitions assigned like any other. Either way, someone has to read and write the definition language, and that is what this page teaches, with one running example: a rule against Secure Shell (SSH) open to the internet on a <a class="glossary-link" href="../glossary.html#term-nsg">network security group</a>, written wrong first and then right, in a throwaway resource group.</p>
-        </section>
-
-        <div class="highlight-box">
-            <p><strong>A policy acts only on what it can see, and a comparison against a property it cannot see is false.</strong> Azure evaluates the JSON that Resource Manager holds for a request or a resource: only the resource types the definition's mode admits, only the properties present in that JSON, and only at the moments evaluation runs. When the JSON is not shaped the way the author pictured, a test such as <code>equals</code> or <code>in</code> is false, a false condition means the effect does not apply, and the resource is reported as compliant, with no warning anywhere. Each failure in the next section is a version of this. The exceptions are deliberate: <code>exists: false</code>, and <code>not</code> around a positive test, are true when a property is absent, which is how Microsoft's own built-in definitions catch a missing setting.</p>
-        </div>
-
-        <section id="silent">
-            <h2>Five ways a policy silently does nothing</h2>
-            <p>These five never produce an error. Each one leaves an assignment in place that looks like a control, with a compliance page to match. The walk-through below reproduces all five in one resource group, and fixes them.</p>
-            <ol>
-                <li><strong>Indexed mode on a type that cannot be tagged.</strong> A definition in <code>Indexed</code> mode evaluates only resource types that support tags and location. Resource groups, subscriptions and child resources such as the rules inside a network security group are never evaluated. A definition created without a mode gets <code>Indexed</code>: that is the API's default, and so the Azure CLI's when you pass only the rule, even if the file you took it from says <code>All</code>.</li>
-                <li><strong>An audit effect read as enforcement.</strong> <code>audit</code> writes a warning to the <a class="glossary-link" href="../glossary.html#term-cloudtrail">activity log</a> and marks the resource non-compliant, and the request goes through. Fifty audit assignments report problems and stop none of them.</li>
-                <li><strong>A condition on a property that is absent.</strong> A <code>field</code> condition reads a property from the request or the stored resource. If the property is not in that JSON, a comparison such as <code>equals</code> is false, the resource does not match, and it is reported compliant. Network security group rules carry ports as either <code>destinationPortRange</code> or <code>destinationPortRanges</code>, never both, so a policy written against one form passes every rule written in the other.</li>
-                <li><strong>An assignment in <code>DoNotEnforce</code> mode.</strong> The assignment is evaluated and reports non-compliance, but its effect never runs and nothing reaches the activity log. It is the right way to trial a deny and an easy setting to forget.</li>
-                <li><strong>Resources that already existed.</strong> <code>deny</code>, <code>append</code> and <code>modify</code> act on create and update requests. Resources that already break the rule are marked non-compliant and left as they are until someone changes them, or until a remediation task runs, which only <code>modify</code> and <code>deployIfNotExists</code> support.</li>
-            </ol>
-            <p>One failure runs the other way. If a template function inside a condition errors, for example <code>substring()</code> asked for three characters of a two-character name, the evaluation fails, and Azure treats a failed evaluation as a deny. A typo there blocks deployments instead of letting them through.</p>
+            <p>Suppose your team has agreed that no <a class="glossary-link" href="../glossary.html#term-nsg">network security group</a>, the set of firewall rules for an Azure virtual network and the machines in it, may let SSH (Secure Shell) in from the whole internet. Agreeing is the easy part. Someone will still create such a rule, from the portal, a script or an old template, and you want it refused, or at least reported. Azure Policy is the part of Azure that does that.</p>
+            <p>Every create, update and delete in Azure passes through one service, Azure Resource Manager, whether it comes from the portal, the CLI, <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> or a software development kit. Azure Policy is the rule engine inside that path. A policy definition is a JSON document that pairs a condition with an effect: if a resource looks like this, deny the request, or record the resource as non-compliant, or change it, or deploy something beside it. A definition does nothing until it is assigned. An assignment applies it to a scope, which is a management group (a container for subscriptions), a subscription, a resource group or a single resource. From then on Azure checks every matching request against it and re-checks existing resources on a schedule.</p>
+            <p>Platform and cloud security teams write policy to set <a class="glossary-link" href="../glossary.html#term-guardrails">guardrails</a> that hold whichever tool a team deploys with. Governance, risk and compliance (<a class="glossary-link" href="../glossary.html#term-grc">GRC</a>) engineers assign Microsoft's regulatory compliance initiatives, such as those for the Center for Internet Security (CIS) benchmarks, the US National Institute of Standards and Technology's Special Publication 800-53 and the Payment Card Industry Data Security Standard (<a class="glossary-link" href="../glossary.html#term-pci-dss">PCI DSS</a>), which are collections of policy definitions assigned like any other. Either way, someone has to read and write the definition language, and that is what this page teaches, with one running example: the rule against SSH open to the internet on a network security group, written wrong first and then right, in a throwaway resource group.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#silent">Five ways a policy silently does nothing</a></li>
                 <li><a href="#model">Anatomy of a definition</a></li>
                 <li><a href="#effects">Effects</a></li>
                 <li><a href="#assignments">Assignments, initiatives and when evaluation runs</a></li>
@@ -394,6 +381,33 @@
                 <li><a href="#next">Where next</a></li>
             </ol>
         </div>
+
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Intermediate here means you have worked in Azure before: you know what a subscription and a resource group are, you have run <code>az</code> commands in a terminal, and you can read JSON. You do not need to have written a policy. If the way management groups and subscriptions fit together is hazy, the <a href="../azure-security.html#landing-zones">landing zones section of the Azure security guide</a> lays it out. The <a href="jq-and-jmespath.html">jq and JMESPath guide</a> covers <code>jq</code>, which the walk-through uses to pull parts out of definition files, and JMESPath, the language of the <code>--query</code> option on <code>az</code> commands.</p>
+            <p>Start with <a href="#silent">the five ways a policy silently does nothing</a>, which the walk-through reproduces. The three sections after them, on <a href="#model">the parts of a definition</a>, <a href="#effects">effects</a> and <a href="#assignments">assignments</a>, describe the language. Read them once before the walk-through, without trying to remember every operator and effect, and come back to them as the steps use each part. The <a href="#walkthrough">walk-through</a> then builds the running example in a throwaway resource group. Step 1 says what you can and cannot test on your own machine. <a href="#step-lab">Step 2</a> makes the resource group, steps 3 and 4 write three definition files and create four definitions from them in your subscription, step 5 assigns them to the group and tests them, step 6 switches the trial assignment to enforcing, step 7 fixes a resource that existed before the policies did, and <a href="#step-cleanup">step 8</a> removes everything. The <a href="#exercises">exercises</a> come after two shorter sections, with each answer hidden under "Show the answer" until you open it. Exercises 1 and 2 can be checked in the lab, so try them before step 8's clean-up.</p>
+            <p>A code block labelled BASH is a command to paste into your terminal, and each one has a copy button. Run them all in the same terminal, because later steps reuse the <code>SUB</code> variable that step 2 sets. Steps 3 and 4 write files with a line such as <code>cat &gt; ssh.json &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>ssh.json</code>; paste the whole block at once, the <code>EOF</code> line included. Blocks labelled JSON are definitions, or parts of one, to read, and the walk-through writes the ones it needs to files itself. The role assignment condition near the end is written in a condition language of its own, also for reading. The one block of output is the list of aliases in the anatomy section, from a read-only call made on 3 November 2026.</p>
+            <p>This page shows almost no output, because none of the <code>az</code> commands in the walk-through has been run against Azure; the box at the top lists what was checked instead. Where a step says what to expect, that is what Microsoft's documentation says should happen, so your results may differ from it. The role assignment conditions section was checked against Microsoft's documentation only.</p>
+            <p>Two sections after the walk-through can wait for a second reading: <a href="#code">Policy as code</a>, on keeping definitions in a repository and deploying them from a pipeline, and <a href="#rbac">Role assignment conditions</a>, which narrow what a role lets someone do and are a separate control from Azure Policy. Only exercise 6 needs the second.</p>
+            <p>If a step does not behave as described, check three things the page depends on. The terminal: it should be the one where you ran step 2, using the subscription that <code>az account show</code> printed there. The wait: assignments take about five minutes to apply after step 5 creates them, and a compliance scan can take several minutes more; step 5 says what to do if a rule you expected to be denied is created. And the Azure CLI: the options on this page were checked against version 2.91.0.</p>
+        </section>
+
+        <section id="silent">
+            <h2>Five ways a policy silently does nothing</h2>
+            <p>Suppose you assign the SSH rule from the intro to a resource group, and someone then creates a rule there that lets SSH in from anywhere, on ports 22 and 443 together. Nothing stops them, and nothing reports an error. Depending on how the policy was written and assigned, its compliance results call the new rule compliant, record it as a problem that nobody acts on, or leave it out entirely. <a href="#step-test">Step 5</a> of the walk-through sets this up with four assignments of the rule, and the two-port rule should get past every one of them.</p>
+            <div class="highlight-box">
+                <p><strong>A policy acts only on what it can see, and a comparison against a property it cannot see is false.</strong> Azure evaluates the JSON that Resource Manager holds for a request or a resource: only the resource types the definition's mode admits, only the properties present in that JSON, and only at the moments evaluation runs. When the JSON is not shaped the way the author pictured, a test such as <code>equals</code> or <code>in</code> is false, a false condition means the effect does not apply, and the resource is reported as compliant, with no warning anywhere. Each failure below is a version of this. The exceptions are deliberate: <code>exists: false</code>, and <code>not</code> around a positive test, are true when a property is absent, which is how Microsoft's own built-in definitions catch a missing setting.</p>
+            </div>
+            <p>These five never produce an error. Each one leaves an assignment in place that looks like a control, with a compliance page to match. The walk-through reproduces all five in one resource group, at the steps linked, and fixes them.</p>
+            <ol>
+                <li><strong>Indexed mode on a type that cannot be tagged.</strong> A definition in <code>Indexed</code> mode evaluates only resource types that support tags and location. Resource groups, subscriptions and child resources such as the rules inside a network security group are never evaluated. A definition created without a mode gets <code>Indexed</code>: that is the API's default, and so the Azure CLI's when you pass only the rule, even if the file you took it from says <code>All</code>. (<a href="#step-create">steps 4</a> and <a href="#step-test">5</a>)</li>
+                <li><strong>An audit effect read as enforcement.</strong> <code>audit</code> writes a warning to the <a class="glossary-link" href="../glossary.html#term-cloudtrail">activity log</a> and marks the resource non-compliant, and the request goes through. Fifty audit assignments report problems and stop none of them. (<a href="#step-test">step 5</a>)</li>
+                <li><strong>A condition on a property that is absent.</strong> A <code>field</code> condition reads a property from the request or the stored resource. If the property is not in that JSON, a comparison such as <code>equals</code> is false, the resource does not match, and it is reported compliant. Network security group rules carry ports as either <code>destinationPortRange</code> or <code>destinationPortRanges</code>, never both, so a policy written against one form passes every rule written in the other. (<a href="#step-test">step 5</a>)</li>
+                <li><strong>An assignment in <code>DoNotEnforce</code> mode.</strong> The assignment is evaluated and reports non-compliance, but its effect never runs and nothing reaches the activity log. It is the right way to trial a deny and an easy setting to forget. (<a href="#step-test">steps 5</a> and <a href="#step-enforce">6</a>)</li>
+                <li><strong>Resources that already existed.</strong> <code>deny</code>, <code>append</code> and <code>modify</code> act on create and update requests. Resources that already break the rule are marked non-compliant and left as they are until someone changes them, or until a remediation task runs, which only <code>modify</code> and <code>deployIfNotExists</code> support. (<a href="#step-enforce">steps 6</a> and <a href="#step-remediate">7</a>)</li>
+            </ol>
+            <p>One failure runs the other way. If a template function inside a condition errors, for example <code>substring()</code> asked for three characters of a two-character name, the evaluation fails, and Azure treats a failed evaluation as a deny. A typo there blocks deployments instead of letting them through.</p>
+        </section>
 
         <section id="model">
             <h2>Anatomy of a definition</h2>
@@ -543,7 +557,7 @@ Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]</
             <p>Nothing on your own machine runs Azure Policy's engine. The Visual Studio Code extension can evaluate a definition against a resource, but it needs an Azure sign-in, and Microsoft documents that its evaluation feature does not work on macOS or Linux. PSRule for Azure has an experimental feature that converts policy assignments, exported from Azure, into its own rules for checking templates before deployment: useful in a pipeline, but a translation of your policy rather than Azure evaluating it. Locally you can check that a definition is well-formed JSON with the parts it needs. Whether it does what you meant is decided in Azure, so the test bed is a throwaway resource group with every assignment scoped to it.</p>
             <p>Run the steps in one terminal: later steps reuse a variable set in step 2.</p>
 
-            <h3>2. Choose the subscription and make the lab</h3>
+            <h3 id="step-lab">2. Choose the subscription and make the lab</h3>
 <div class="code-block" data-lang="bash"><pre>az account show --query "{name:name, id:id}" -o table</pre></div>
             <p>Check that it is the subscription you mean to use. The definitions in steps 3 and 4 are created in it but do nothing until assigned, and every assignment is scoped to the lab resource group. Keep the subscription ID for later steps:</p>
 <div class="code-block" data-lang="bash"><pre>SUB=$(az account show --query id -o tsv)</pre></div>
@@ -573,10 +587,10 @@ Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]</
   }
 }
 EOF</pre></div>
-            <p>The CLI takes the parts of a definition as separate options, so pull each one out of the file with <code>jq</code>. This creates a definition in the subscription; it has no effect until step 5 assigns it.</p>
+            <p>The CLI takes the parts of a definition as separate options, so pull each one out of the file with <code>jq</code>, a command-line tool for reading JSON. This creates a definition in the subscription; it has no effect until step 5 assigns it.</p>
 <div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-ssh-naive --display-name "$(jq -r .properties.displayName ssh-naive.json)" --mode "$(jq -r .properties.mode ssh-naive.json)" --rules "$(jq -c .properties.policyRule ssh-naive.json)"</pre></div>
 
-            <h3>4. Write the corrected rule, and create it twice</h3>
+            <h3 id="step-create">4. Write the corrected rule, and create it twice</h3>
             <p>The corrected rule checks both forms of each property: the single <code>destinationPortRange</code> and the list <code>destinationPortRanges</code>, and the same for the source. It treats <code>*</code> (every port) like 22, and makes the effect a parameter. Like the first attempt, it judges rules created on their own, the way <code>az network nsg rule create</code> sends them; exercise 3 covers rules sent inside the network security group's own request.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; ssh.json &lt;&lt;'EOF'
 {
@@ -642,7 +656,7 @@ EOF</pre></div>
 <div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-ssh-indexed --params "$(jq -c .properties.parameters ssh.json)" --rules "$(jq -c .properties.policyRule ssh.json)"</pre></div>
 <div class="code-block" data-lang="bash"><pre>az policy definition show --name csoh-lab-ssh-indexed --query mode -o tsv</pre></div>
             <p>Expect <code>Indexed</code>: Azure CLI 2.91.0 documents <code>Indexed</code> as the default for <code>--mode</code>, and nothing in the rule says otherwise. Same rule, same file, and as step 5 shows, this one never evaluates a single network security group rule.</p>
-            <p>The last definition copies the resource group's <code>owner</code> tag onto any resource that lacks one. It is a <code>modify</code> policy, so it names the role its change needs: Tag Contributor.</p>
+            <p>The last definition copies the resource group's <code>owner</code> tag onto any resource that lacks one. It is a <code>modify</code> policy, so it names the role its change needs: Tag Contributor, a built-in role for managing tags.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; inherit-owner.json &lt;&lt;'EOF'
 {
   "properties": {
@@ -673,7 +687,7 @@ EOF</pre></div>
             <p>Here <code>Indexed</code> is correct: only resources that can carry tags should be judged on one.</p>
 <div class="code-block" data-lang="bash"><pre>az policy definition create --name csoh-lab-inherit-owner --display-name "$(jq -r .properties.displayName inherit-owner.json)" --mode "$(jq -r .properties.mode inherit-owner.json)" --rules "$(jq -c .properties.policyRule inherit-owner.json)"</pre></div>
 
-            <h3>5. Assign everything to the lab, and test</h3>
+            <h3 id="step-test">5. Assign everything to the lab, and test</h3>
             <p>Every command here names the resource group. Without <code>--resource-group</code> or <code>--scope</code>, <code>az policy assignment create</code> assigns at the whole subscription.</p>
 <div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-ssh-naive --policy csoh-lab-ssh-naive --resource-group csoh-policy-lab</pre></div>
 <div class="code-block" data-lang="bash"><pre>az policy assignment create --name lab-ssh-indexed --policy csoh-lab-ssh-indexed --resource-group csoh-policy-lab --params '{"effect": {"value": "Deny"}}'</pre></div>
@@ -694,7 +708,7 @@ EOF</pre></div>
 <div class="code-block" data-lang="bash"><pre>az policy state list --resource-group csoh-policy-lab --query "[].{assignment:policyAssignmentName, state:complianceState, resource:resourceId}" -o table</pre></div>
             <p>Look at the rows for <code>allow-ssh-https</code>. <code>lab-ssh-naive</code> evaluated it and calls it Compliant: that is the absent-property failure, recorded as a pass. <code>lab-ssh-audit</code> and <code>lab-ssh-trial</code> call it NonCompliant, which is the corrected rule working, reported and not enforced. <code>lab-ssh-indexed</code> has no row for any rule: it was never evaluated. And <code>lab-nsg-before</code> is NonCompliant for <code>lab-inherit-owner</code>, because it existed before the policy did.</p>
 
-            <h3>6. Enforce the corrected rule</h3>
+            <h3 id="step-enforce">6. Enforce the corrected rule</h3>
             <p>The trial assignment reported what it would have blocked. Switch it to enforcing:</p>
 <div class="code-block" data-lang="bash"><pre>az policy assignment update --name lab-ssh-trial --resource-group csoh-policy-lab --enforcement-mode Default</pre></div>
             <p>After a few minutes, try a two-port rule again:</p>
@@ -702,14 +716,14 @@ EOF</pre></div>
             <p>Expect <code>RequestDisallowedByPolicy</code> from <code>lab-ssh-trial</code>. Note what has not changed: <code>allow-ssh-https</code> is still there and SSH is still open. A deny stops new requests and leaves existing resources as they are, so the cleanup of what is already wrong is a separate job: a remediation task where the effect supports one, and a person where it does not.</p>
             <p>One request shape is still not covered. An Azure Resource Manager template, a Bicep file or Terraform's inline <code>security_rule</code> blocks can send rules inside the network security group's own request, and that request's type is <code>Microsoft.Network/networkSecurityGroups</code>, so this definition's first condition is false for it. Exercise 3 adds the branch that reads the group's own list of rules.</p>
 
-            <h3>7. Remediate the existing resource</h3>
+            <h3 id="step-remediate">7. Remediate the existing resource</h3>
             <p><code>lab-nsg-before</code> has no owner tag, and will not get one until something changes it. A remediation task applies the <code>modify</code> operation to existing non-compliant resources, using the assignment's identity:</p>
 <div class="code-block" data-lang="bash"><pre>az policy remediation create --name lab-fix-owner --policy-assignment lab-inherit-owner --resource-group csoh-policy-lab</pre></div>
 <div class="code-block" data-lang="bash"><pre>az policy remediation show --name lab-fix-owner --resource-group csoh-policy-lab --query "{state:provisioningState, deployments:deploymentStatus}"</pre></div>
 <div class="code-block" data-lang="bash"><pre>az network nsg show --resource-group csoh-policy-lab --name lab-nsg-before --query tags</pre></div>
             <p>When the task reports <code>Succeeded</code>, the tag is <code>{"owner": "platform-team"}</code>. Had the identity lacked Tag Contributor on this group, the task would have failed, which is the usual result of creating a <code>modify</code> assignment from the CLI without <code>--role</code>.</p>
 
-            <h3>8. Clean up</h3>
+            <h3 id="step-cleanup">8. Clean up</h3>
             <p>Remove the identity's role assignment first, while the identity still exists:</p>
 <div class="code-block" data-lang="bash"><pre>PRINCIPAL=$(az policy assignment show --name lab-inherit-owner --resource-group csoh-policy-lab --query identity.principalId -o tsv)</pre></div>
 <div class="code-block" data-lang="bash"><pre>az role assignment delete --assignee-object-id "$PRINCIPAL" --role "Tag Contributor" --scope "/subscriptions/$SUB/resourceGroups/csoh-policy-lab"</pre></div>
@@ -739,7 +753,7 @@ EOF</pre></div>
             <h2>Role assignment conditions</h2>
             <p>Azure Policy governs what resources look like. Azure <a class="glossary-link" href="../glossary.html#term-rbac">role-based access control</a> (RBAC) governs who may act on them, and its role assignments can carry a <strong>condition</strong>, an <a class="glossary-link" href="../glossary.html#term-abac">attribute-based access control</a> (ABAC) check that narrows what the role grants. A condition only narrows what the role grants; it cannot explicitly deny access. Conditions are available on role assignments that include Blob Storage or Queue Storage data actions, such as reading blobs only in one container or only with a given blob index tag, and on role assignments that let someone create or delete role assignments, which is where they matter most for security.</p>
             <p>Giving someone Owner or User Access Administrator so that they can grant access lets them grant anything, including Owner. The safer delegation, from Microsoft's own example, is the Role Based Access Control Administrator role with a condition limiting which roles may be assigned and removed. This one allows only Backup Contributor and Backup Reader:</p>
-<div class="code-block" data-lang="text"><pre>(
+<div class="code-block" data-lang="condition"><pre>(
  (
   !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
  )

@@ -159,6 +159,7 @@ csoh.org/
 │
 │  ── Sessions / news / archives ──
 ├── sessions.html                    # Weekly Zoom session info
+├── calendar.html                    # Upcoming sessions, rendered from the Google Calendar feed
 ├── speakers.html                    # Guest speaker archive
 ├── present.html                     # How to pitch a talk
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
@@ -211,7 +212,7 @@ csoh.org/
 │
 │  ── Per-breach pages and meeting recaps ──
 ├── breaches/                        # 53 per-breach kill chain pages (split from breach-timeline.html)
-├── meetings/                        # 119 per-meeting recap pages (split from meetings.html)
+├── meetings/                        # 120 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                       # 7 per-project portfolio walkthroughs
 ├── homelab/                         # 4 command-line home-lab walkthroughs (search-indexed as guide; not cross-linked)
 ├── howto/                           # 24 how-to guides: OPA/Rego, regex, OVAL/SCAP, jq/JMESPath,
@@ -234,7 +235,7 @@ csoh.org/
 │                                    #   - read vendor/README.md before re-vendoring
 │
 ├── tools/                  # Python automation scripts (URL safety, normalization, previews, sitemap, presentations schema, glossary cross-linking, OG image generation incl. meeting variant, meeting → topic-page link injection, live edge-header verification)
-├── .github/workflows/      # CI/CD pipelines (21 workflows: update-news, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy, check-mobile-layout, security-impact-review, deploy-qa, promote-qa, publish-recaps, weekly-docs-review)
+├── .github/workflows/      # CI/CD pipelines (22 workflows: update-news, update-calendar, update-resources, update-counts, deploy, normalize-urls, check-broken-links, check-url-safety, check-pagespeed, check-reading-list-staleness, check-meeting-staleness, check-conference-staleness, run-seo-audit, validate-html, lint, site-update-deploy, check-mobile-layout, security-impact-review, deploy-qa, promote-qa, publish-recaps, weekly-docs-review)
 └── update_news.py          # News aggregation from 63 RSS feeds
 ```
 
@@ -247,6 +248,7 @@ Every workflow has its own header banner - but if you just want to know "what ru
 | Workflow | When | What it does | Auto-merges? |
 | --- | --- | --- | --- |
 | [`update-news.yml`](.github/workflows/update-news.yml) | every 3h | Pulls <!--count:feeds-->63<!--/count--> RSS/Atom feeds, rewrites `news.html`, `feed.xml`, `sitemap.xml`; opens a PR | Yes, if diff is news files only |
+| [`update-calendar.yml`](.github/workflows/update-calendar.yml) | every 6h | Renders the CSOH Google Calendar's public iCalendar feed into the event cards on `calendar.html` (`tools/sync_calendar.py`); opens a PR | Yes, if diff is `calendar.html` only |
 | [`update-resources.yml`](.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the eight `resources-*.html` category pages; opens a PR. Runs on a tool allowlist with no interpreter on it | Yes, if diff is those pages only |
 | [`normalize-urls.yml`](.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Strips tracking params, upgrades http→https, follows redirects; opens a PR | No - human approves and merges |
 | [`site-update-deploy.yml`](.github/workflows/site-update-deploy.yml) | push to `main` on site files | Chained housekeeping commits: SRI hashes, URL safety, normalization, sitemap, OG previews | N/A - commits directly |
@@ -829,6 +831,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/update_presentations_schema.py` | Regenerates `VideoObject` JSON-LD on `presentations.html` | **Don't edit** -- runs in CI on every deploy |
 | `tools/sync_recap_videos.py` | Carries each recorded session's link and `VideoObject` from its `presentations.html` card onto its recap in `meetings/` | **Don't edit** -- runs in CI on every deploy; gated by `--check` in `validate-html.yml` |
 | `tools/sync_next_session.py` | Stamps the next Friday session's date into the `[data-next-session]` banners and `sessions.html`'s `Event` JSON-LD (`startDate` / `endDate`), from `csoh.ics` | **Don't edit** -- runs as a fixer in the deploy build and in housekeeping; deliberately **not** gated, since the date expires weekly on its own |
+| `tools/sync_calendar.py` | Renders the next twelve occurrences from the CSOH Google Calendar's public feed into the cards between the markers on `calendar.html`, scrubbing Zoom join links and dial-in details | Changing the calendar, the horizon, or the private-host list; otherwise **don't edit** -- runs every 6 hours in `update-calendar.yml` |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
 | `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->331<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |

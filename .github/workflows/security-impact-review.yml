@@ -155,29 +155,85 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Pull the PR in as data. `--jq` writes plain fields; the diff comes back
-      # through the diff media type. Neither is executed, and the fork's code is
-      # never placed on disk as code.
+      # Pull the PR in as data. `jq` writes plain fields; the diff comes back
+      # through the diff media type or, for a PR too large for it, is rebuilt
+      # from the files endpoint by a checked-in script. Nothing is executed,
+      # and the fork's code is never placed on disk as code.
+      #
+      # Every fetch writes to a scratch name and is renamed to pr.diff only on
+      # success. `gh api` prints the error body to stdout on a failed request,
+      # and an error body saved as pr.diff is non-empty text with no file
+      # headers: it passes a byte count and parses as a diff of zero files,
+      # which reads as a CLEAR verdict for a PR nobody looked at.
       - name: Fetch PR diff and metadata as data
+        id: fetch
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
-            --header 'Accept: application/vnd.github.v3.diff' > pr.diff
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
-            --jq '{author: .user.login, title: .title, body: .body, additions, deletions, changed_files}' \
-            > pr.json
+          PR="repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"
 
-          # A silent count is a failure mode (see CLAUDE.md). Assert the fetch
-          # produced something rather than printing a size and
-          # letting an empty file flow downstream as a clean review.
-          bytes=$(wc -c < pr.diff)
-          echo "diff bytes: ${bytes}"
-          if [ "${bytes}" -eq 0 ]; then
-            echo "::error::PR diff came back empty - this run reviewed nothing."
+          # Leave the reason where the assemble step can quote it in the PR
+          # comment, remove any diff this step had already placed (a rejected
+          # diff must not be read by anything later), then end the job. Only
+          # the always() steps run after this.
+          fail() {
+            printf '%s\n' "$1" > fetch-error.txt
+            rm -f pr.diff pr.diff.part
+            echo "::error::$1"
             exit 1
+          }
+
+          gh api "${PR}" > pr-api.json \
+            || fail "The pull request metadata could not be fetched (GET ${PR} failed)."
+          jq '{author: .user.login, title: .title, body: .body, additions, deletions, changed_files}' \
+            pr-api.json > pr.json
+
+          # The whole-PR diff is the first choice: one request, and git's own
+          # headers carry file modes, renames and binary markers exactly.
+          # GitHub serves it only for PRs touching 300 files or fewer and
+          # answers HTTP 406 past that, so on any refusal the diff is rebuilt
+          # from the paginated files endpoint, with modes from the git trees
+          # API. tools/pr_files_to_diff.py says what that path can and cannot
+          # recover. Both paths are API reads of data; neither touches the
+          # PR's git objects.
+          if gh api "${PR}" --header 'Accept: application/vnd.github.v3.diff' > pr.diff.part 2> diff.err; then
+            mv pr.diff.part pr.diff
+            echo "diff source: whole-PR diff endpoint"
+          else
+            echo "whole-PR diff endpoint refused: $(tr '\n' ' ' < diff.err)"
+            rm -f pr.diff.part
+            head_sha="$(jq -r '.head.sha' pr-api.json)"
+            base_sha="$(jq -r '.base.sha' pr-api.json)"
+            gh api --paginate "${PR}/files?per_page=100" > pr-files.json \
+              || fail "The pull request files could not be fetched (GET ${PR}/files failed)."
+            gh api "repos/${GITHUB_REPOSITORY}/git/trees/${head_sha}?recursive=1" > head-tree.json \
+              || fail "The PR head tree could not be fetched (git/trees/${head_sha})."
+            gh api "repos/${GITHUB_REPOSITORY}/git/trees/${base_sha}?recursive=1" > base-tree.json \
+              || fail "The PR base tree could not be fetched (git/trees/${base_sha})."
+            python3 tools/pr_files_to_diff.py \
+              --files pr-files.json --head-tree head-tree.json --base-tree base-tree.json \
+              > pr.diff.part \
+              || fail "The diff could not be rebuilt from the files endpoint (tools/pr_files_to_diff.py failed)."
+            mv pr.diff.part pr.diff
+            echo "diff source: files endpoint"
+          fi
+          rm -f pr.diff.part diff.err pr-api.json pr-files.json head-tree.json base-tree.json
+
+          # Assert, do not print. The API's own file count is the control for
+          # whichever path produced the diff: a diff with fewer file headers
+          # than the PR has files is a partial review (the files endpoint stops
+          # at 3000), and a partial review must not pass as a whole one.
+          bytes=$(wc -c < pr.diff)
+          headers=$(grep -c '^diff --git ' pr.diff || true)
+          expected=$(jq -r '.changed_files' pr.json)
+          echo "diff bytes: ${bytes}, file headers: ${headers}, files per the API: ${expected}"
+          if [ "${bytes}" -eq 0 ]; then
+            fail "The PR diff came back empty, so this run reviewed nothing."
+          fi
+          if [ "${headers}" -ne "${expected}" ]; then
+            fail "The diff holds ${headers} file(s) but the API reports ${expected} changed, so this run would have reviewed a partial PR."
           fi
 
       # Layer 1. Fixed rules, sets the verdict. `continue-on-error` so a BLOCK
@@ -288,8 +344,44 @@ jobs:
       # the comment job never has to distinguish "no findings" from "no file".
       - name: Assemble report
         if: always()
+        env:
+          VERDICT: ${{ steps.triage.outputs.verdict }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
+
+          # No verdict means the triage step never ran (a step before it
+          # failed, the fetch most often) or ran and wrote no triage.json. Say
+          # so, quote the reason the fetch step left behind, and stop. Running
+          # the triage script here instead would read whatever is on disk, and
+          # on such a run that is nothing or a half-written fetch; the script
+          # would report it as unavailable, but "the review could not run, and
+          # here is why" is the message a maintainer can act on.
+          if [ -z "${VERDICT}" ] || [ "${VERDICT}" = "missing" ]; then
+            {
+              echo "<!-- csoh:security-impact-review -->"
+              echo "## Security impact review"
+              echo
+              echo "> **This review could not run.** No verdict was produced, so"
+              echo "> nothing about this PR has been checked. Do not read this as"
+              echo "> a clean result."
+              echo
+              if [ -s fetch-error.txt ]; then
+                echo "Reason: $(cat fetch-error.txt)"
+              else
+                echo "Reason: a step before the triage failed; the [run log](${RUN_URL}) has the error."
+              fi
+              echo
+              echo "Once the cause is fixed, re-run it from the Actions tab"
+              echo "(Security Impact Review, Run workflow, this PR's number)."
+              echo
+              echo "---"
+              echo "<sub>Held by \`security-impact-review\`. The other workflows stay"
+              echo "queued until you press **Approve and run**.</sub>"
+            } > report.md
+            exit 0
+          fi
+
           # Regenerate rather than reading back triage.md. The model step above
           # holds the Write tool, so a file it could have touched is not a
           # trustworthy source for the half of this comment that is supposed to
@@ -301,11 +393,12 @@ jobs:
           # is not what makes this safe (the pristine copy is); it is here so
           # that a workspace edit is reported rather than passed over silently.
           #
-          # This step is `if: always()`, so it can be reached on a run that died
-          # before the snapshot was taken (a failed PR fetch, say). Fall back to
-          # the workspace copy in that case - on such a run the model step never
-          # executed either, so there is nothing to have tampered with, and a
-          # missing snapshot must not turn a recoverable run into no report.
+          # This step is `if: always()`, so it can be reached on a run that
+          # produced a verdict and then died before the snapshot was taken.
+          # Fall back to the workspace copy in that case: on such a run the
+          # model step never executed either, so there is nothing to have
+          # tampered with, and a missing snapshot must not turn a recoverable
+          # run into no report.
           TRIAGE=tools/pr_security_triage.py
           if [ -f "${RUNNER_TEMP}/pr_security_triage.py" ]; then
             TRIAGE="${RUNNER_TEMP}/pr_security_triage.py"

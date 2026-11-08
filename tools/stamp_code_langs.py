@@ -59,7 +59,12 @@ KNOWN = {'bash', 'json', 'yaml', 'rego', 'hcl', 'sql', 'python',
          # text and regex they get a label and a copy button but no
          # colouring. VQL and CQL blocks read as SQL, SPL or shell to the
          # heuristics, so each one is named in OVERRIDES.
-         'logs insights', 'cloud logging', 'cql', 'vql'}
+         'logs insights', 'cloud logging', 'cql', 'vql',
+         # Input shown for reading in a language with no tokens here: a bare
+         # JMESPath expression, an Azure role assignment condition and a Sumo
+         # Logic Cloud SIEM rule expression. Each is named in OVERRIDES; as
+         # text they would render unlabelled, like output.
+         'jmespath', 'condition', 'cloud siem'}
 
 # Shell verbs that make a block bash even when its first line is a comment.
 SHELL_CMDS = (
@@ -98,6 +103,18 @@ OVERRIDES: dict[str, str] = {
     '783957bf9a23': 'text',    # last line of an AccessDenied traceback
     '734a97cb517f': 'text',    # stale access keys
     '2a2b66a6d1ad': 'text',    # Regions where no rule passes a GuardDuty finding on
+    # Commands on the same page that open on an unquoted `AWS_PROFILE=...`,
+    # `. ./file` or `unset`, none of which the shell rules key on. As text
+    # they render unlabelled, like the output block under them.
+    'b037d5b0252b': 'bash',    # AWS_PROFILE=auditor python3 whoami.py
+    'a0e03d772142': 'bash',    # load build-bot.env, then whoami.py
+    '6622ec499172': 'bash',    # unset the build-bot keys, export AWS_PROFILE
+    # The how-to guides tell readers that a labelled block is input and an
+    # unlabelled one is output. These blocks would otherwise break that.
+    'f491c28fb035': 'jmespath',    # howto/jq-and-jmespath.html, exercise 2 answer
+    'a1e1b86b058c': 'condition',   # howto/azure-policy.html, role assignment condition
+    '909ac6363402': 'cloud siem',  # howto/sumo-logic-queries.html, step 11 rule
+    '5cf39382fc0b': 'text',        # howto/elastic-esql-eql.html, the bulk load's reply
     # A GCP IAM condition: CEL, but with none of the macros the CEL rule keys on.
     '36e4e24eba33': 'cel',
     # howto/cel-policy-expressions.html: cel.py and kubectl output, which the

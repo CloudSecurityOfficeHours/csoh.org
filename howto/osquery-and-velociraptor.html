@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-04">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="osquery">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-04",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -308,6 +308,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -362,14 +363,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>osquery and Velociraptor, hands-on</h1>
-        <p>You have been handed a Linux virtual machine that may be compromised. With osquery you can ask it questions in SQL (Structured Query Language); with Velociraptor you ask in its own query language and pack the answers into evidence you can hand on. Work through a planted compromise on a stand-in machine, and learn the queries that return nothing when they cannot see, because that is how almost every mistake with these tools looks.</p>
+        <p>You have been handed a Linux virtual machine that may be compromised. With osquery you can ask it questions in SQL (Structured Query Language); with Velociraptor you ask in its own query language and pack the answers into evidence you can hand on. Work through a planted compromise on a stand-in machine, and learn why a query comes back empty when it cannot see what is there, because that is how almost every mistake with these tools looks.</p>
         <div class="cta-buttons">
             <a href="#silent" class="btn btn-primary">The seven silent failures</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Intermediate &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker and a terminal. No account and no cloud: the suspect machine is a container on your own computer.</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order on 4 November 2026: the blocks that start with <code>docker</code> through zsh on an Apple silicon Mac with Docker Desktop 29.9.2, the rest inside ubuntu:24.04 containers, with osquery 5.24.1 and Velociraptor 0.77.3 installed from their projects' GitHub releases (the arm64 builds). Every output shown is pasted from that run; process IDs, times and the hashes of files the lab writes will differ on yours. A planted error made the same script fail, so the check can fail. The script was run again with the amd64 builds under Docker Desktop's Rosetta emulation, and every block completed; its outputs differ where the architecture shows (package hashes, library paths) and in the process tables, where emulation makes every emulated program's executable <code>/run/rosetta/rosetta</code>, so the outputs shown are from the arm64 run. Two things a container cannot provide were checked another way. The cloud metadata tables were read in osquery's 5.24.1 source code and run against a stand-in metadata service written for the check: when it required session tokens, osquery fetched one and filled the row; when it withheld the token, osquery returned an empty row after 337 seconds; and the Azure table answered only once <code>/var/log/waagent.log</code> existed. Nothing was run on a real cloud instance, and <code>systemd_units</code> was seen only failing. Table platforms were checked against osquery's table definitions, and the metadata service's token and hop limit against Amazon Web Services' documentation.</p>
@@ -377,15 +378,17 @@
 
         <section id="intro">
             <h2>Two ways to question a running machine</h2>
-            <p>osquery presents an operating system as a database: processes, listening ports, user accounts, cron jobs and more than 150 other things on Linux are tables, and you read them with SQL. It began at Facebook, runs on Linux, macOS and Windows, and is open source under your choice of the Apache 2.0 licence or the GNU General Public License (GPL) 2.0. It is built to run as an agent across a fleet of machines, and its README lists several fleet managers for that, so on a cloud virtual machine (VM) it may be installed before you arrive. <code>osqueryi</code> is its interactive shell and needs nothing else running; <code>osqueryd</code> is the daemon that runs scheduled queries and records events.</p>
+            <p>When a cloud virtual machine (VM) may have been broken into, the first questions are about the machine as it is running now. Which programs are running, and which of them are waiting for network connections? Who can log in, and with which keys? What has been set up to start again after a restart? The answers are spread across many files on the machine, each in its own format. osquery and Velociraptor let you ask for them in a query language and get rows back.</p>
+            <p>osquery presents an operating system as a database: processes, listening ports, user accounts, cron jobs (commands the system runs on a schedule) and more than 150 other things on Linux are tables, and you read them with SQL. It began at Facebook, runs on Linux, macOS and Windows, and is open source under your choice of the Apache 2.0 licence or the GNU General Public License (GPL) 2.0. It is built to run as an agent across a fleet of machines, left running on each one, and its README lists several fleet managers for that, so on a cloud VM it may be installed before you arrive. <code>osqueryi</code> is its interactive shell and needs nothing else running; <code>osqueryd</code> is the daemon (the background service) that runs scheduled queries and records events.</p>
             <p>Velociraptor, from Velocidex and open source under the GNU Affero General Public License (AGPL) 3.0, is built for endpoint monitoring, digital forensics and <a class="glossary-link" href="../glossary.html#term-incident-response">incident response</a>. It is one binary that can act as a server, as a client, or on its own from the command line. Its language, VQL (Velociraptor Query Language), reads like SQL, but its sources are plugins that take arguments, and its queries are packaged as artifacts: named, documented collections that can be run on one machine or across a fleet. On a VM that has neither tool, you can copy the single binary across, collect what you need into a zip file and take the zip away.</p>
-            <p>The lab is an Ubuntu 24.04 container standing in for the suspect VM. A container runs no init system and is not in a cloud, so two things on this page cannot be shown for real: a running systemd and a cloud provider's metadata service. The page says what those tables do instead, and how that was checked.</p>
+            <p>The lab is an Ubuntu 24.04 container standing in for the suspect VM. A container runs no init system (the program, such as systemd, that starts and supervises a machine's services) and is not in a cloud, so two things on this page cannot be shown for real: a running systemd and a cloud provider's metadata service, which a VM asks for facts about itself. The page says what those tables do instead, and how that was checked.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#idea">The one idea that makes it click</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#idea">A table reports only what it could see</a></li>
                 <li><a href="#silent">Seven ways to get an empty answer</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
@@ -394,9 +397,20 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Intermediate here means you are at home on the Linux command line: moving around the file system, reading file permissions, and knowing what root and a process are. You should be able to read a SQL query that joins two tables; if joins are new, the <a href="sql-for-security-data-lakes.html">SQL for security data lakes guide</a> teaches the same SQL from zero. You need Docker able to run a container, and nothing more about it: the walk-through gives every Docker command, and the <a href="../containers.html#what-is">containers page</a> explains what a container is. If the Linux command line is the gap, the <a href="../learning-path.html#prerequisites">learning path</a> lists it among its prerequisites, with a free place to practise. You do not need to have used osquery or Velociraptor.</p>
+            <p>Read the two short sections before the walk-through. <a href="#idea">A table reports only what it could see</a> explains why a query can return nothing without an error, and <a href="#silent">the seven ways to get an empty answer</a> are the cases the walk-through shows, each linked to its step. The <a href="#walkthrough">walk-through</a> is one investigation, in order. Steps 1 and 2 start the stand-in VM, install osquery and plant the compromise. Steps 3 to 7 question the machine with osquery: what is running, who can log in, what persists, containers and cloud metadata, and the tables that record events. Steps 8 to 11 do the same with Velociraptor and end with an evidence zip carried off the machine. Each step shows a query, its output and what the output means, including what it left out. The <a href="#exercises">exercises</a> then ask you to find more on the same machine, with each answer hidden under "Show the answer" until you open it. They need the lab as the walk-through leaves it, before its final clean-up block.</p>
+            <p>Code blocks labelled BASH, SQL or VQL are input, and each has a copy button. The walk-through's first paragraph says where each kind goes: BASH blocks that start with <code>docker</code> into a terminal on your own machine, other BASH blocks into the shell inside a container, SQL blocks into <code>osqueryi</code>, and VQL blocks into the <code>vql</code> helper that step 8 defines. An unlabelled block shows what you should see. Steps 7 and 11 each write a file with a line such as <code>cat &gt; spec.yaml &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into that file; paste those blocks whole, the <code>EOF</code> line included.</p>
+            <p>Your output should match the page apart from process IDs, times, and the hashes of files the lab writes. The outputs come from the arm64 builds of osquery and Velociraptor, on an Apple silicon Mac. With the amd64 builds, package hashes and library paths differ, and under Docker Desktop's Rosetta emulation the process tables show <code>/run/rosetta/rosetta</code> as every emulated program's executable. Two things could not run in a container: what the cloud metadata tables do on a real cloud instance comes from osquery's source code and a stand-in metadata service, and <code>systemd_units</code> was seen only failing. Step 6's metadata query takes about five minutes to finish, and the wait is part of what it shows.</p>
+            <p>Some parts can wait for a second reading. Step 2 is the attacker's work, and as it says, you can paste it without reading it closely if you want the exercises to be a hunt. In step 6, the Docker engine started inside Docker, the <code>docker:dind</code> container, only gives the containers table something to find; nothing after the step depends on it. And the long paragraph at the end of step 6, on the AWS metadata service's tokens and hop limit, matters when you run osquery on a cloud instance.</p>
+            <p>If your output differs, first check where you ran the block: in a terminal on your own machine, in the container's shell, which runs as root, or at the <code>osqueryi</code> prompt. Step 4 shows how much less osquery sees when it does not run as root. A VQL block needs the <code>vql</code> helper from step 8 defined in the shell you are using, and the workstation in step 11 defines its own. Then check that the earlier steps ran, because later outputs depend on what step 2 planted and on the two changes step 7 makes.</p>
+        </section>
+
         <section id="idea">
-            <h2>The one idea that makes it click</h2>
-            <p><strong>A table is a function that runs when you query it, and it reports only what it could see.</strong> Nothing stores the rows of osquery's <code>processes</code> table. When a query names it, osquery reads <code>/proc</code> and builds the rows on the spot; <code>authorized_keys</code> opens files in home directories; <code>ec2_instance_metadata</code> makes HTTP requests. A VQL plugin such as <code>pslist()</code> or <code>glob()</code> does the same. So the answer depends on who is asking, from where, with which arguments, and whether the thing being read exists.</p>
+            <h2>A table reports only what it could see</h2>
+            <p>Suppose you ask osquery for every SSH (Secure Shell) key that would let someone log in to the suspect machine, and it lists one, root's. That reads like an answer. In the lab it is not the whole answer: a second account has the same key, and osquery never looked at that account's files. Above the result is a warning that is easy to read past, and the same query run on a schedule writes that warning to a log nobody reads. <a href="#step-4">Step 4</a> shows it happening.</p>
+            <p><strong>A table is a function that runs when you query it, and it reports only what it could see.</strong> Nothing stores the rows of osquery's <code>processes</code> table. When a query names it, osquery reads <code>/proc</code>, the directory through which the Linux kernel describes each running process, and builds the rows on the spot; <code>authorized_keys</code> opens files in home directories; <code>ec2_instance_metadata</code> makes HTTP requests. A VQL plugin such as <code>pslist()</code> or <code>glob()</code> does the same. So the answer depends on who is asking, from where, with which arguments, and whether the thing being read exists.</p>
             <p>When a table cannot see something, it does not fail. It returns fewer rows, or none, and the shell exits with status 0. An empty result from a machine with no backdoor and an empty result from a query that could not look are printed identically. Every query you rely on during an investigation needs a control: something you know is there, found by the same query run the same way.</p>
         </section>
 
@@ -420,7 +434,7 @@
             <p>Blocks labelled <code>bash</code> that start with <code>docker</code> run in a terminal on your own machine. Other <code>bash</code> blocks run in a shell inside a container, <code>sql</code> blocks are typed into <code>osqueryi</code>, and <code>vql</code> blocks into the <code>vql</code> helper defined in step 8. Process IDs, times and hashes of files the lab creates will differ on your machine.</p>
 
             <h3 id="step-1">1. Start the stand-in VM and install osquery</h3>
-            <p>The volume carries a Docker engine's socket into the VM in step 6. Start the container and open a shell in it:</p>
+            <p>The volume (storage that Docker can attach to more than one container) carries a Docker engine's socket, the file that programs use to talk to the engine, into the VM in step 6. Start the container and open a shell in it:</p>
 <div class="code-block" data-lang="bash"><pre>docker volume create csoh-osq-dsock
 docker run -d --name csoh-osq-vm --hostname web-01 -v csoh-osq-dsock:/run/dind ubuntu:24.04 sleep infinity
 docker exec -it csoh-osq-vm bash</pre></div>

@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="sql">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -314,6 +314,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -368,14 +369,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>SQL for security data lakes, hands-on</h1>
-        <p>SQL (Structured Query Language) is how you question security logs kept in a data warehouse or data lake such as Snowflake, BigQuery or Amazon Athena. Learn it from zero, free on your own computer, then see what changes in each of the three.</p>
+        <p>SQL (Structured Query Language) is how you question security logs kept in a data warehouse such as Snowflake or BigQuery, or in a data lake: files in cloud storage, queried in place by a service such as Amazon Athena. Learn it from zero, free on your own computer, then see what changes in each of the three.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and DuckDB, a free database that runs on your own computer. No cloud account.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every command and query on this page and ran it as printed: the DuckDB steps on DuckDB 1.5.5 (macOS, Apple silicon), and every output shown is pasted from that run. They were run again on DuckDB 2.0.0, the release the install script now fetches, with the same output. No Snowflake, Google Cloud or AWS account was used, so nothing here has run on Snowflake, BigQuery or any AWS service. Instead, step 9's Athena queries ran on Trino 483 in Docker (Athena engine version 3 takes its SQL functions from Trino), the BigQuery queries on the open-source BigQuery emulator 0.8.1, and the Snowflake queries on fakesnow 0.11.18, a Snowflake emulator built on DuckDB. Emulators catch syntax errors but are not the services, so every construct in steps 9 and 10 was also checked against the vendor's documentation, and the Snowflake alert in step 10 was checked against the documentation only. Step 12's Security Lake queries and Exercise 5 ran on Trino 484 and on DuckDB 1.5.5 and 2.0.0 over an OCSF (Open Cybersecurity Schema Framework) copy of the lab, built by following AWS's published mapping; the <code>element_at</code> and time-conversion fragments in step 12's list use functions that DuckDB lacks or defines differently, so they ran on Trino only. Step 11's queries were checked against AWS's documentation only, because running them needs a paid event data store.</p>
@@ -383,13 +384,15 @@
 
 <section id="intro">
     <h2>One query language, many places to run it</h2>
-    <p>SQL is a language for asking questions of tables. You describe the answer you want (which rows, which columns, counted or grouped how) and the database works out how to get it. Security teams write it to hunt through logs, to answer incident questions such as "what did this key do?", and to run scheduled detections over logs kept outside a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management system). Snowflake and BigQuery store data in tables and run SQL over them. Amazon Athena stores nothing itself: it runs SQL over files in Amazon <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service), such as the <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> logs that AWS (Amazon Web Services) delivers there.</p>
+    <p>SQL is a language for asking questions of tables, which hold data in rows and columns, like a spreadsheet. You describe the answer you want (which rows, which columns, counted or grouped how) and the database works out how to get it. Security teams write it to hunt through logs, to answer incident questions such as "what did this key do?", and to run scheduled detections (queries run on a timer that return a row for each alert) over logs kept outside a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management system), the kind of product that gathers security logs in one place and raises alerts from them.</p>
+    <p>Snowflake and BigQuery are data warehouses: they store data in tables and run SQL over them. Amazon Athena stores nothing itself: it runs SQL over files in Amazon <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service), such as the <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> logs that AWS (Amazon Web Services) delivers there, which record the calls made to an AWS account. Logs kept as files like that, and queried where they lie, are what this page means by a data lake.</p>
     <p>The core of the language (choosing rows, counting them in groups, matching one event with another) is the same in all three, so this page teaches it in DuckDB, a free database that runs on your computer and reads the lab file directly. What changes between them is narrower: how a value inside nested JSON (JavaScript Object Notation) is reached, how time is handled, and how a query runs on a schedule. Steps 9 and 10 cover those, and steps 11 and 12 cover AWS's two managed services that run SQL over CloudTrail: CloudTrail Lake and Amazon Security Lake.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
+        <li><a href="#how-to-use">How to use this guide</a></li>
         <li><a href="#model">A query describes the table you want back</a></li>
         <li><a href="#walkthrough">Walk-through: five detections in DuckDB</a></li>
         <li><a href="#warehouses">What changes in Snowflake, BigQuery and Athena</a></li>
@@ -400,9 +403,20 @@
     </ol>
 </div>
 
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Beginner here means new to SQL. You should be comfortable typing commands into a terminal. You do not need to know AWS: the AWS terms the lab depends on are explained as they come up, and terms with a glossary entry link to it.</p>
+    <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> shows how a query is put together. Its example needs the table that step 2 loads, so read it first and run it once step 2 is done. In the <a href="#walkthrough">walk-through</a>, step 1 installs DuckDB, and step 2 creates a file of 24 CloudTrail events, opens DuckDB and loads the events into a table. Steps 3 to 7 build four of the five detections listed at the top of the walk-through, with a stop at step 6 for <code>NULL</code>, SQL's marker for a missing value, which breaks a sensible-looking change to one of them. Steps 4 and 5 start with a query that looks right and returns the wrong answer without an error, then show why and fix it. Step 8 turns one detection into a query that a scheduler could run, and tests it at two times. The <a href="#exercises">exercises</a> then ask you to write the fifth detection and repair broken queries yourself, with each answer hidden until you click Show the answer.</p>
+    <p>A code block labelled BASH is something to paste into your terminal, and each block has a copy button. A block labelled SQL is a query. Up to the end of step 8, and in Exercises 1 to 3, type or paste it at the <code>D</code> prompt of the DuckDB shell that step 2 opens; in steps 9 to 12 and Exercises 4 and 5 it is written for the service the step describes. The unlabelled block under it, when there is one, shows what you should see. Step 2's BASH block contains the line <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+    <p>Up to the end of step 8, your output should match the page line for line, apart from the version line in step 1. A script ran every command and query there as printed on DuckDB 1.5.5 and pasted the output, then ran them again on DuckDB 2.0.0, the release the install script now fetches, with the same results. Nothing in steps 9 to 12 has run on Snowflake, BigQuery or any AWS service: those queries ran on emulators and on Trino, the engine Athena takes its SQL functions from, or were checked against the vendors' documentation only, and an emulator is not the service it imitates.</p>
+    <p>Steps 9 to 12 show the same detections in Snowflake, BigQuery and Athena, and in CloudTrail Lake and Amazon Security Lake, AWS's two managed services that run SQL over CloudTrail. They cannot run in the lab on your computer, so read them. If you use none of those services yet, they can wait for a second reading, along with Exercises 4 and 5, which go with them. And the 24 lines of lab data in step 2 can be pasted without reading them, since the hash check under the block tells you whether the paste worked.</p>
+    <p>If your output differs from the page, check that you started DuckDB in <code>~/sql-lab</code>, the folder step 2 creates, because the lab file and <code>lab.duckdb</code>, which holds the table, are there. Then check the file's hash under step 2 and the count of 24 events. If every time is shifted by some hours, check that the load included the <code>timestampformat</code> line; step 2 explains what DuckDB 2.0 does without it.</p>
+</section>
+
 <section id="model">
     <h2>A query describes the table you want back</h2>
-    <p>A table is rows and columns. In the lab table, <code>cloudtrail</code>, each row is one event and each column one field: <code>eventTime</code>, <code>eventName</code>, <code>sourceIPAddress</code> and so on. A query never changes the table. It describes a new table, and the database builds it. Once step 2 has loaded the data, this is a complete query:</p>
+    <p>Suppose a leaked key was used from the address <code>203.0.113.50</code>, and you want the first three calls made from there, in time order. You do not tell the database how to find them. You describe the result you want: which columns, from which table, which rows, in what order and how many. A SQL query is that description.</p>
+    <p>A table is rows and columns. In the lab table, <code>cloudtrail</code>, each row is one event and each column one field: <code>eventTime</code>, <code>eventName</code>, <code>sourceIPAddress</code> and so on. A query never changes the table. It describes a new table, and the database builds it. Once <a href="#step-load">step 2</a> has loaded the data, this is a complete query:</p>
 <div class="code-block" data-lang="sql"><pre>SELECT eventTime, eventName, errorCode   -- which columns
 FROM cloudtrail                          -- from which table
 WHERE sourceIPAddress = '203.0.113.50'   -- which rows
@@ -416,12 +430,12 @@ LIMIT 3;                                 -- and how many</pre></div>
 │ 2026-09-15 10:02:31 │ ListUsers         │ AccessDenied │
 │ 2026-09-15 10:02:38 │ ListRoles         │ AccessDenied │
 └─────────────────────┴───────────────────┴──────────────┘</pre></div>
-    <p>Read it as a sentence. Keywords such as <code>SELECT</code> ignore case, text values go in single quotes, <code>--</code> starts a comment and a semicolon ends the query. You must write the clauses in this order, but the database works in another: <code>FROM</code> first, then <code>WHERE</code>, then <code>SELECT</code>, then <code>ORDER BY</code> and <code>LIMIT</code>. Step 5 relies on that. The result is itself a table, so it can be saved and queried in turn, which step 8 does. And <code>NULL</code> in the first row is not text from the log: <code>GetCallerIdentity</code> succeeded, so it has no <code>errorCode</code> at all. Step 6 shows why that matters.</p>
+    <p>Read it as a sentence. Keywords such as <code>SELECT</code> ignore case, text values go in single quotes, <code>--</code> starts a comment and a semicolon ends the query. You must write the clauses in this order, but the database works in another: <code>FROM</code> first, then <code>WHERE</code>, then <code>SELECT</code>, then <code>ORDER BY</code> and <code>LIMIT</code>. <a href="#step-groups">Step 5</a> relies on that. The result is itself a table, so it can be saved and queried in turn, which <a href="#step-schedule">step 8</a> does. And <code>NULL</code> in the first row is not text from the log: <code>GetCallerIdentity</code> succeeded, so it has no <code>errorCode</code> at all. <a href="#step-null">Step 6</a> shows why that matters.</p>
 </section>
 
 <section id="walkthrough">
     <h2>Walk-through: five detections in DuckDB</h2>
-    <p>The lab is 24 AWS CloudTrail events, the record of calls made to AWS in one account. A <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> user's access key, <code>build-bot</code>, has leaked. From <code>203.0.113.50</code> someone checks whose key it is, tries to list <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, then creates a user, <code>backup-svc</code>, gives it administrator rights and an access key, and uses it to stop CloudTrail logging. Around that sits routine work, including a console login without <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication) and an application refused one S3 file three times. The walk-through builds five detections, the same five as the other guides in this series:</p>
+    <p>The lab is 24 AWS CloudTrail events, the record of calls made to AWS in one account. A <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> user's access key, <code>build-bot</code>, has leaked; an access key is the credential a program signs its AWS requests with. From <code>203.0.113.50</code> someone checks whose key it is, tries to list <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, then creates a user, <code>backup-svc</code>, gives it administrator rights and an access key, and uses it to stop CloudTrail logging. Around that sits routine work, including a console login without <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication) and an application refused one S3 file three times. The walk-through builds five detections, the same five as the other guides in this series:</p>
     <ul>
         <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
         <li><strong>D2, denied-call burst:</strong> one source address refused five or more times.</li>
@@ -438,7 +452,7 @@ duckdb --version</pre></div>
     <p>The script installs the newest release and suggests the <code>export</code> line, which lets the shell find <code>duckdb</code>. This page was run on 1.5.5, shown here, and again on 2.0.0 with the same results:</p>
 <div class="code-block" data-lang="text"><pre>v1.5.5 (Variegata) d8cdaa33fd</pre></div>
 
-    <h3>2. Create the lab file and load it</h3>
+    <h3 id="step-load">2. Create the lab file and load it</h3>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/sql-lab &amp;&amp; cd ~/sql-lab
 
 cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'
@@ -470,13 +484,13 @@ EOF
 
 shasum -a 256 cloudtrail-lab.jsonl
 duckdb lab.duckdb</pre></div>
-    <p>The hash must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the paste changed the file. The last command opens DuckDB's shell on a database file, <code>lab.duckdb</code>, creating it. Type the SQL in the rest of this page at its <code>D</code> prompt; <code>.exit</code> leaves. Each line of the file is one event as JSON. Load them all into a table and count them:</p>
+    <p>The hash, a fingerprint of the file's exact contents, must be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>; anything else means the paste changed the file. The last command opens DuckDB's shell on a database file, <code>lab.duckdb</code>, creating it. Type the SQL in the rest of this page at its <code>D</code> prompt; <code>.exit</code> leaves. Each line of the file is one event as JSON. Load them all into a table and count them:</p>
 <div class="code-block" data-lang="sql"><pre>CREATE TABLE cloudtrail AS
 SELECT * FROM read_json('cloudtrail-lab.jsonl',
                         timestampformat = '%Y-%m-%dT%H:%M:%SZ');
 
 SELECT count(*) AS events FROM cloudtrail;   -- expect 24</pre></div>
-    <p><code>read_json</code> works out a column for every field and a type for every column, and <code>count(*)</code> counts rows. <code>timestampformat</code> spells out how CloudTrail writes a time, so <code>eventTime</code> is read as a timestamp in UTC. Without it, DuckDB 2.0 reads the final <code>Z</code> as a time zone and shows every time in your computer's zone, and unless that zone is UTC, step 8's test at 10:10 finds nothing. The table is stored in <code>lab.duckdb</code>, so it is still there the next time you open the shell.</p>
+    <p><code>read_json</code> works out a column for every field and a type for every column, and <code>count(*)</code> counts rows. <code>timestampformat</code> spells out how CloudTrail writes a time, so <code>eventTime</code> is read as a timestamp in UTC (Coordinated Universal Time). Without it, DuckDB 2.0 reads the final <code>Z</code> as a time zone and shows every time in your computer's zone, and unless that zone is UTC, step 8's test at 10:10 finds nothing. The table is stored in <code>lab.duckdb</code>, so it is still there the next time you open the shell.</p>
 
     <h3>3. Filter rows: trail tampering (D1)</h3>
 <div class="code-block" data-lang="sql"><pre>-- D1: CloudTrail logging stopped, deleted or changed
@@ -515,7 +529,7 @@ WHERE eventName = 'ConsoleLogin'
   AND additionalEventData.MFAUsed = 'No';</pre></div>
     <p>Now only bob fires, at 09:15:47 from <code>198.51.100.21</code>; alice's sign-in with MFA and her failed one are the negative cases. AWS's own check, <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-3" target="_blank" rel="noopener noreferrer">Security Hub CSPM control CloudWatch.3</a>, pairs the same two conditions. ATT&amp;CK: <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">T1078.004 Valid Accounts: Cloud Accounts</a>.</p>
 
-    <h3>5. Count in groups: the burst that never fires (D2)</h3>
+    <h3 id="step-groups">5. Count in groups: the burst that never fires (D2)</h3>
     <p><code>GROUP BY</code> collapses the rows that share a value into one row per value, and <code>count(*)</code> then counts the rows in each group. D2 wants groups of five or more, and <code>WHERE</code> cannot test a count, because it runs before the counting; <code>HAVING</code> filters the groups afterwards:</p>
 <div class="code-block" data-lang="sql"><pre>-- D2, first attempt: AccessDenied per source address, five or more
 SELECT sourceIPAddress, count(*) AS denials
@@ -561,7 +575,7 @@ HAVING count(*) &gt;= 5;</pre></div>
     <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the same query without its threshold, or a count of the values that really exist. The control above also showed a row you did not ask about, <code>NULL</code> with 14 events, and step 6 is about that row.</p>
     </div>
 
-    <h3>6. NULL: the value that is not there</h3>
+    <h3 id="step-null">6. NULL: the value that is not there</h3>
     <p><code>NULL</code> means "no value", not an empty string. Any comparison with it, even <code>NULL = NULL</code>, gives neither true nor false but unknown, and <code>WHERE</code> keeps only the rows where its condition is true. That breaks a reasonable-looking refinement of D1: alert only when tampering worked, by skipping attempts that were denied.</p>
 <div class="code-block" data-lang="sql"><pre>-- D1, tightened (wrong): skip tampering that was denied
 SELECT eventTime, eventName, sourceIPAddress
@@ -598,7 +612,7 @@ ORDER BY created;</pre></div>
 └───────────────┴───────────┴─────────────────────┴──────────┘</pre></div>
     <p>Without the window, alice's routine work joins the results: she created <code>svc-reporting</code> and gave it a key 2 hours 37 minutes later. Any user given a key months after creation would match too, so the window is the detection, and <code>svc-reporting</code> is its negative case. ATT&amp;CK: <a href="https://attack.mitre.org/techniques/T1136/003/" target="_blank" rel="noopener noreferrer">T1136.003 Create Account: Cloud Account</a>, then <a href="https://attack.mitre.org/techniques/T1098/001/" target="_blank" rel="noopener noreferrer">T1098.001 Additional Cloud Credentials</a>.</p>
 
-    <h3>8. Make it a scheduled detection, and test it both ways</h3>
+    <h3 id="step-schedule">8. Make it a scheduled detection, and test it both ways</h3>
     <p>A detection is a query that returns no rows when all is well and one row per alert when not, run on a schedule over the most recent events. DuckDB has no scheduler of its own (cron or a pipeline job would run it), but you can build and test the query one would run. A <code>VIEW</code> saves a query under a name, and a variable stands in for the time of each run (<code>getvariable()</code> has no type until the variable is set, hence the casts):</p>
 <div class="code-block" data-lang="sql"><pre>-- D2 denied-call burst (ATT&amp;CK T1087.004, T1580): any row is an alert
 CREATE VIEW d2_denied_call_burst AS

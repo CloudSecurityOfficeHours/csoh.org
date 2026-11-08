@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-04">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="crowdstrike">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-04",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -308,6 +308,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -362,14 +363,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>CrowdStrike Query Language (CQL), hands-on</h1>
-        <p>Falcon LogScale and Falcon Next-Gen <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) both search with CQL, a pipeline of filters and functions. Learn it from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, including the precedence and quoting rules that quietly change what a query returns, then turn the searches into alerts and correlation rules.</p>
+        <p>Two CrowdStrike products, Falcon LogScale and Falcon Next-Gen <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management), search logs with CQL, a language in which each step of a query filters or reshapes the events passed on by the step before. Learn it from zero on a small lab of <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> events, AWS's record of the calls made in an account, including the rules about quotes and about the order of AND and OR that quietly change what a query returns. Then turn the searches into saved detections, which LogScale calls triggers and Next-Gen SIEM calls correlation rules.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a Falcon LogScale repository where you may add a parser and an ingest token (step 1 covers the options, including Next-Gen SIEM), and a terminal with <code>curl</code> and <code>jq</code>. <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> is optional (step 10).</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> CrowdStrike offers no way to run LogScale without an account: sign-ups to the free Community Edition closed with release 1.134 in April 2024, self-hosted LogScale needs a licence key bought from CrowdStrike, and the hosted services need a <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a>. So none of the CQL queries on this page were run. Every function, parameter, default and limit was checked against CrowdStrike's documentation (library.humio.com, current to LogScale 1.265, and developer.crowdstrike.com) on 4 November 2026, and the results described are what those documented rules give for the lab file, worked out by a local script rather than captured from LogScale. The shell steps were run as printed, in bash and zsh on macOS, against a local stand-in for the ingest address, and the correlation rule in step 10 passed <code>terraform validate</code> with Terraform 1.15.7 and CrowdStrike's provider 1.2.1 from the Terraform registry. It was never applied.</p>
@@ -377,15 +378,17 @@
 
         <section id="intro">
             <h2>One language, two CrowdStrike products</h2>
-            <p>Falcon LogScale is CrowdStrike's log management platform. It was called Humio until late 2022, which is why its documentation lives at library.humio.com. Its query language is the CrowdStrike Query Language (CQL), which older pages call the LogScale Query Language. Falcon Next-Gen SIEM searches with the same language, over CrowdStrike's own sensor data and third-party logs alike, and CrowdStrike's developer documentation describes its behavioural rules as using LogScale's <code>correlate()</code> function.</p>
+            <p>A security team that sends its logs to CrowdStrike asks them questions like these. Who switched off CloudTrail logging, and from which address? Was any address refused five or more times this morning? Was a new user given an access key minutes after it was created? Each question is a query in CQL, and a question worth asking again and again can be saved so that it raises an alert whenever it finds a match.</p>
+            <p>Falcon LogScale is CrowdStrike's log management platform: it stores logs and searches them. It was called Humio until late 2022, which is why its documentation lives at library.humio.com. Its query language is the CrowdStrike Query Language (CQL), which older pages call the LogScale Query Language. Falcon Next-Gen SIEM searches with the same language, over CrowdStrike's own sensor data (what its Falcon sensor records on the computers it is installed on) and third-party logs alike, and CrowdStrike's developer documentation describes its behavioural rules as using LogScale's <code>correlate()</code> function.</p>
             <p>Analysts type CQL into the search page (Advanced event search in Next-Gen SIEM) to investigate. Detection engineers save the queries worth repeating as triggers in LogScale, or as correlation rules in Next-Gen SIEM. A query is plain text, so it can live in git and be reviewed like code, which step 10 does.</p>
-            <p>The idea to hold on to: CQL has two small languages inside it. In a <strong>filter</strong>, such as <code>eventName="StopLogging"</code>, the left side is a field and the right side is always a value. In an <strong>expression</strong>, inside <code>test()</code> or after <code>:=</code>, a bare word is a field name and a value needs quotes. Mixing the two up, and CQL's unusual rule that OR binds tighter than AND, cause most of the silent failures on this page.</p>
+            <p>The idea to hold on to: CQL has two small languages inside it. In a <strong>filter</strong>, such as <code>eventName="StopLogging"</code>, the left side is a field and the right side is always a value. In an <strong>expression</strong>, inside <code>test()</code> or after <code>:=</code>, a bare word is a field name and a value needs quotes. Mixing the two up, and CQL's unusual rule that OR binds tighter than AND, so that OR is grouped first, cause most of the silent failures on this page.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">Filters, then functions, joined by pipes</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">How a CQL query is built</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -393,9 +396,20 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Beginner here means new to CQL and to LogScale. You should be comfortable typing commands into a terminal and changing a value in a command before you run it, and you need somewhere to run queries, which step 1 covers. You do not need to know CloudTrail's format: the walk-through tells the story the lab's events record, and the terms that matter are explained as they come up, with links to the glossary.</p>
+            <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> shows how a query is built and the AND and OR trap. Its queries find the lab's events only once step 3 has loaded them, so read it now and run them then. In the <a href="#walkthrough">walk-through</a>, steps 1 to 4 find somewhere to run CQL, create a parser and an ingest token, load the 24 lab events, and check that they arrived with the right times. Steps 5 to 9 build four of the five detections. Each runs a query against the lab and says what should come back, and steps 6 and 7 show a first draft that looks right but gives the wrong answer, then the fix; step 7 also adds a control query that shows why the draft failed. Step 10 turns the searches into saved detections, with an optional Terraform version of one, and step 11 tests an alert both ways by sending lab events again with the current time. The <a href="#exercises">exercises</a> ask you to write and debug queries yourself, with each answer hidden under Show the answer until you open it.</p>
+            <p>A code block labelled CQL is a query: paste it into the search page (Advanced event search in Next-Gen SIEM), with the time range step 4 sets. A line starting <code>//</code> is a comment, which LogScale ignores. The exception is the CQL in step 2, which is parser code and goes in the parser editor. A block labelled BASH is something to paste into your terminal, and the block labelled HCL in step 10 is a Terraform file, which you need only if you use Terraform. Each block has a copy button. The page has no output blocks: the text after a query says what should come back, usually in a sentence that starts "Expect". Step 3's block includes the line <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which saves every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Near its end are two placeholder values, for your LogScale address and the ingest token from step 2. Replace both with your own before you run the block, then paste the whole block at once, the <code>EOF</code> line included.</p>
+            <p>This page cannot promise that your results will match it. CrowdStrike offers no way to run LogScale without an account, so none of the CQL queries on this page were run: the results it describes were worked out from CrowdStrike's documentation by a local script, not captured from LogScale. The shell commands were run as printed, but against a local stand-in for LogScale's ingest address, and the Terraform in step 10 passed <code>terraform validate</code> but was never applied. Read each "Expect" as what the documentation says should happen.</p>
+            <p>Some parts can wait for a second reading. The 24 lines of lab data in step 3 are scaffolding, so paste them without studying them. The Terraform in step 10 is optional, the notes on Next-Gen SIEM in steps 1 and 10 matter only if that is where you run CQL, and the paragraph on ATT&amp;CK identifiers at the end of step 10 can wait too.</p>
+            <p>If your results differ from the page, start with the two checks in <a href="#step-check">step 4</a>: the first should show 24 events and 0 errors for <code>cloudtrail-lab</code>, and the second should show all 24 times taken from <code>eventTime</code>. Then check the time range. Step 3 moves the lab to yesterday, so the last two days cover it, and once step 11 has sent events again, set the range to the lab's own date, as that step says. If your repository holds other data, start each query with <code>#type="cloudtrail-lab"</code>, as step 4 suggests. Step 11's commands also use the address and token that step 3 set in your shell.</p>
+        </section>
+
         <section id="model">
-            <h2>Filters, then functions, joined by pipes</h2>
-            <p>LogScale stores each event as its original text, in a field called <code>@rawstring</code>, plus the named fields a <strong>parser</strong> created when the event arrived, plus <code>@timestamp</code>, the time the event happened. With the parser this page uses, nested JSON (JavaScript Object Notation) becomes dotted names: the <code>userName</code> inside <code>userIdentity</code> is the field <code>userIdentity.userName</code>.</p>
+            <h2>How a CQL query is built</h2>
+            <p>Take the first question from the lab: who stopped CloudTrail logging, and from which address? A query has to find that one event among 24 and show three of its fields, and that takes both kinds of step CQL has, a filter and a function. Start with what a query reads.</p>
+            <p>LogScale stores each event as its original text, in a field called <code>@rawstring</code>, plus the named fields a <strong>parser</strong> created when the event arrived, plus <code>@timestamp</code>, the time the event happened. With <a href="#step-parser">the parser this page uses</a>, nested JSON (JavaScript Object Notation) becomes dotted names: the <code>userName</code> inside <code>userIdentity</code> is the field <code>userIdentity.userName</code>.</p>
             <p>A query is a list of steps joined by the pipe character, <code>|</code>, and each step works on whatever the step before it passed on. A step is either a filter, which keeps the events that match, or a function, which can filter, reshape, count or join them. The smallest query is one filter:</p>
 <div class="code-block" data-lang="cql"><pre>eventName="StopLogging"</pre></div>
             <p>That returns the one event whose <code>eventName</code> is exactly <code>StopLogging</code>. The <code>=</code> compares the whole value and is case-sensitive, so <code>"stoplogging"</code> finds nothing; a <code>*</code> in the value is a wildcard. Quotes are optional around a plain word and required around spaces, special characters or keywords, and this page quotes every value. A bare word with no field, such as <code>StopLogging</code> on its own, is a free-text search across every field. Add a function to choose what to show:</p>
@@ -423,12 +437,12 @@
             <h3>1. Get somewhere to run CQL</h3>
             <p>There is nothing to install. You need one of these:</p>
             <ul>
-                <li>A repository in LogScale Cloud or a self-hosted LogScale, where your role has the Change parsers and Change Ingest tokens permissions. An empty repository of your own is ideal, so that nothing else gets counted. The free Community Edition no longer takes new sign-ups (LogScale 1.134 removed them), and self-hosted LogScale runs on a licence key that CrowdStrike sells.</li>
+                <li>A repository (LogScale's name for a separate store of events) in LogScale Cloud or a self-hosted LogScale, where your role has the Change parsers and Change Ingest tokens permissions. An empty repository of your own is ideal, so that nothing else gets counted. The free Community Edition no longer takes new sign-ups (LogScale 1.134 removed them), and self-hosted LogScale runs on a licence key that CrowdStrike sells.</li>
                 <li>A Falcon Next-Gen SIEM tenant where you may add a data connector. Its HEC/HTTP Event Data Connector (HEC is HTTP Event Collector, HTTP the Hypertext Transfer Protocol) receives data over HTTP and lets you select or create the parser, and Advanced event search runs the queries below. Step 3's upload is written for LogScale, so follow CrowdStrike's connector guide for the sending side.</li>
             </ul>
 
-            <h3>2. Create a parser and an ingest token</h3>
-            <p>In LogScale, events sent with an ingest token pass through the parser assigned to that token. In your repository, open <strong>Parsers</strong>, click <strong>New parser</strong>, name it <code>cloudtrail-lab</code>, and give it this code:</p>
+            <h3 id="step-parser">2. Create a parser and an ingest token</h3>
+            <p>In LogScale, events sent with an ingest token, a secret that lets a program send events into one repository, pass through the parser assigned to that token. In your repository, open <strong>Parsers</strong>, click <strong>New parser</strong>, name it <code>cloudtrail-lab</code>, and give it this code:</p>
 <div class="code-block" data-lang="cql"><pre>parseJson()
 | parseTimestamp(field=eventTime)</pre></div>
             <p><code>parseJson()</code> reads the raw line as JSON and turns every key into a field. <code>parseTimestamp()</code> reads <code>eventTime</code> into <code>@timestamp</code>; its default format is ISO 8601, the international standard for dates and times, which <code>2026-09-15T08:55:12Z</code> matches. Then open <strong>Settings</strong>, <strong>Ingest tokens</strong>, click <strong>+ Add token</strong>, name it, set <strong>Assigned Parser</strong> to <code>cloudtrail-lab</code>, and save. Copy the token, and treat it like a password: anyone who has it can send data into the repository, though not read it.</p>
@@ -475,9 +489,9 @@ INGEST_TOKEN='paste-your-ingest-token-here'
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
   -H "Authorization: Bearer $INGEST_TOKEN" -H 'Content-Type: application/json' \
   --data-binary @upload.json "$LOGSCALE_URL/api/v1/ingest/humio-unstructured"</pre></div>
-            <p>The <code>cat</code> line writes everything up to <code>EOF</code> into <code>cloudtrail-lab.jsonl</code>, and <code>shasum</code> prints the file's hash so you can check the copy is exact. Expect <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>, then <code>200</code>. The first <code>jq</code> line moves the lab to yesterday; only the date changes, so every time of day and every gap between events stays the same. That matters because a repository's retention applies to <code>@timestamp</code>, and CrowdStrike's documentation warns that events older than the retention period are ingested and expired at once. The second wraps each line as one message in the body that the unstructured ingest endpoint expects. Use the address of your LogScale (the <strong>Ingest tokens</strong> page shows a separate ingest address if your cluster has one). Do not post the file to <code>/api/v1/ingest/raw</code> instead: that endpoint reads the whole request body as a single event.</p>
+            <p>The <code>cat</code> line writes everything up to <code>EOF</code> into <code>cloudtrail-lab.jsonl</code>, and <code>shasum</code> prints the file's hash so you can check the copy is exact. Expect <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>, then <code>200</code>. The first <code>jq</code> line moves the lab to yesterday; only the date changes, so every time of day and every gap between events stays the same. That matters because a repository's retention, how long it keeps events, applies to <code>@timestamp</code>, and CrowdStrike's documentation warns that events older than the retention period are ingested and expired at once. The second wraps each line as one message in the body that the unstructured ingest endpoint expects. Use the address of your LogScale (the <strong>Ingest tokens</strong> page shows a separate ingest address if your cluster has one). Do not post the file to <code>/api/v1/ingest/raw</code> instead: that endpoint reads the whole request body as a single event.</p>
 
-            <h3>4. Check what arrived</h3>
+            <h3 id="step-check">4. Check what arrived</h3>
             <p>Set the search time range to the last two days, then count what arrived and whether the parser failed on any of it:</p>
 <div class="code-block" data-lang="cql"><pre>// How many events did each parser handle, and how many failed?
 groupBy(#type, function=[count(as=events), count(@error, as=errors)])</pre></div>
@@ -520,7 +534,7 @@ in(field="errorCode", values=["AccessDenied*", "*UnauthorizedOperation"])
 | _count &gt;= 5</pre></div>
             <p>Expect one row: <code>203.0.113.50</code> with 7. Without the last line, <code>192.0.2.20</code> shows 3 and stays under the threshold, which is the negative case.</p>
             <div class="highlight-box">
-            <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the same query without its threshold, or a count of the values that actually exist.</p>
+            <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the same query without its threshold, or a count of the values present in the data.</p>
             </div>
 
             <h3>8. Time windows</h3>

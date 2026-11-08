@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-07">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="panther">
@@ -62,7 +62,7 @@
       "totalTime": "PT90M",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-07",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -290,6 +290,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -344,30 +345,32 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Panther Python detections, hands-on</h1>
-        <p>A Panther rule is a Python function that looks at one log event and answers True or False, and a YAML file beside it decides when those answers become an alert. Write five detections against a sample <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> file, test them on your own computer with Panther's open-source command-line tool, and see exactly which parts only a Panther deployment can check.</p>
+        <p>Panther is a security platform that collects logs and raises alerts, and you can write its rules in Python. A rule is a short function that looks at one log event and answers True or False, and a YAML file beside it, a plain-text settings file, decides when those answers become an alert. Write five detections against a sample AWS <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> file, test them on your own computer with Panther's open-source command-line tool, and see exactly which parts only Panther itself can check.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-07">Last updated <strong>2026-11-07</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~90 minutes &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a terminal and Python 3.11 or newer. No Panther account and no AWS account: everything runs against a sample file.</p>
-    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order with <code>panther_analysis_tool</code> 1.10.0 on Python 3.12.14 and 3.13.15 (macOS, in bash and in zsh), and every output shown is pasted from that run. Two things run only inside a Panther deployment and were not executed: counting matches against a threshold (step 6 counts them with a plain-Python stand-in) and evaluating the correlation rule (in step 7 the tool skips its tests, and the page shows what that means).</p>
+    <p class="u-mt-075"><strong>How this page was checked:</strong> a script extracted every code block from this page and ran it in order with <code>panther_analysis_tool</code> 1.11.2 on Python 3.12.16 and 3.13.18 (macOS, in bash and in zsh), and every output shown is pasted from that run. Two things run only inside a Panther deployment and were not executed: counting matches against a threshold (step 6 counts them with a plain-Python stand-in) and evaluating the correlation rule (in step 7 the tool skips its tests, and the page shows what that means).</p>
 </div>
 
 <section id="intro">
     <h2>Detections as Python functions</h2>
-    <p>Panther is a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) platform. It collects logs such as AWS (Amazon Web Services) CloudTrail, adds fields of its own whose names start with <code>p_</code> (<code>p_log_type</code>, <code>p_event_time</code>), and, as each event arrives, runs every enabled rule written for that kind of log. A rule is two files, by convention with the same name: a <code>.py</code> file holding the logic and a <code>.yml</code> file, in the plain-text YAML format, holding its ID, severity, alert settings and tests. Panther recommends keeping them in version control such as git, and its open-source CLI (command-line interface), <code>panther_analysis_tool</code>, tests them on your machine and uploads them to a Panther deployment.</p>
-    <p>Detection engineers write these, but the Python involved is small: read a field, compare it, check it against a list, return the answer. This page teaches that much Python and no more, and points at the rules Panther publishes in its open <a href="https://github.com/panther-labs/panther-analysis" target="_blank" rel="noopener noreferrer">panther-analysis repository</a> as it goes. Panther also runs scheduled searches: queries in SQL (Structured Query Language) that run on a timer over the logs Panther has stored, with a Python rule applied to each row they return. You need no SQL for this page; the <a href="sql-for-security-data-lakes.html">SQL guide</a> teaches it from zero.</p>
-    <p>The distinction that matters: <strong>the Python sees one event at a time.</strong> "Five refusals from one address in ten minutes" and "a user created, then given a key" both need several events, so neither is written in Python. Counting is set in the YAML file, and a sequence is a separate correlation rule. That split also decides what you can test at home: Python rules run entirely on your machine, while thresholds and correlation rules are evaluated only by a Panther deployment.</p>
+    <p>Panther is a <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management) platform: a system that gathers security logs in one place and raises alerts from them. It collects logs such as AWS (Amazon Web Services) CloudTrail, the record of calls made to an AWS account, adds fields of its own whose names start with <code>p_</code> (<code>p_log_type</code>, <code>p_event_time</code>), and, as each event arrives, runs every enabled rule written for that kind of log. So if someone uses a stolen key to stop CloudTrail recording, that call reaches Panther as an event, and a rule that looks for it turns it into an alert.</p>
+    <p>A rule is two files, by convention with the same name: a <code>.py</code> file holding the logic, in Python, and a <code>.yml</code> file, in the plain-text YAML format, holding its ID, severity, alert settings and tests. Panther recommends keeping them in version control such as git, and its open-source CLI (command-line interface), <code>panther_analysis_tool</code>, tests them on your machine and uploads them to a Panther deployment, the running Panther system that your logs are sent to.</p>
+    <p>Rules like these are written by detection engineers, the people who build and maintain an organization's alerts, but the Python involved is small: read a field, compare it, check it against a list, return the answer. This page teaches that much Python and no more, and points at the rules Panther publishes in its open <a href="https://github.com/panther-labs/panther-analysis" target="_blank" rel="noopener noreferrer">panther-analysis repository</a> as it goes. Panther also runs scheduled searches: queries in SQL (Structured Query Language) that run on a timer over the logs Panther has stored, with a Python rule applied to each row they return. You need no SQL for this page; the <a href="sql-for-security-data-lakes.html">SQL guide</a> teaches it from zero.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
+        <li><a href="#how-to-use">How to use this guide</a></li>
         <li><a href="#model">One event in, True or False out</a></li>
+        <li><a href="#warm-up">Warm-up: a rule in a few lines of Python</a></li>
         <li><a href="#walkthrough">Walk-through: a leaked CI key, five detections</a></li>
         <li><a href="#exercises">Hands-on exercises</a></li>
         <li><a href="#mistakes">Common mistakes</a></li>
@@ -375,9 +378,25 @@
     </ol>
 </div>
 
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Beginner here means new to Panther and to writing detections. You should be comfortable typing commands into a terminal. You do not need to know Python or AWS: the page explains the little Python a rule uses as it comes up, starting with the warm-up, and the AWS terms the lab depends on are explained too, with a link wherever the glossary has an entry.</p>
+    <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> is the idea the rest of the page is built on, and the <a href="#warm-up">warm-up</a> after it runs a first rule with nothing installed but Python. In the <a href="#walkthrough">walk-through</a>, step 1 installs Panther's command-line tool, <code>pat</code>, and step 2 saves the 24 lab events. The walk-through then builds four of the five detections listed at its top. Steps 3 to 5 write the two that need only one event, and add the YAML file and tests that go with a rule. Steps 6 and 7 build the two that the Python cannot do alone, a count and a pair of events, and step 8 says how rules get into Panther. Most steps save a rule and run it over every lab event with <code>fire.py</code>, a helper that step 3 saves. In steps 5 and 6 the first draft matches too much or too little without an error, and the step then shows why and fixes it. The <a href="#exercises">exercises</a> then ask you to write the fifth detection and reason about three more rules, with each answer hidden until you click Show the answer.</p>
+    <p>A code block labelled BASH is something to paste into your terminal, and each block has a copy button. The unlabelled block under it, when there is one, shows what your terminal should print. Most BASH blocks contain a line such as <code>cat &gt; rules/trail_tampering.py &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into the file named on that line; any lines after <code>EOF</code> then run something. Paste the whole block at once, the <code>EOF</code> line included.</p>
+    <p>Your output should match the page, because a script ran every code block here in order with <code>panther_analysis_tool</code> 1.11.2, the version step 1 pins, on Python 3.12 and 3.13, and the outputs are pasted from that run. Steps 1 and 4 point out the differences you may see: <code>[notice]</code> or <code>WARNING</code> lines when a newer release of pip or <code>pat</code> exists, and tabs where the page shows spaces. Two things were not run, because only a Panther deployment does them: counting matches against a threshold, which step 6 does with <code>fire.py</code> instead, and evaluating the correlation rule in step 7, whose tests the tool skips. What the page says about those two was not checked by running them.</p>
+    <p>The 24 lines of lab data in step 2, the same file every guide in this series uses, can be pasted without reading them, and so can <code>fire.py</code> in step 3, which the page calls scaffolding rather than a rule.</p>
+    <p>If your output differs from the page, check that the virtual environment from step 1 is active; step 1 gives the command that brings it back in a new terminal. Check that you are in <code>~/panther-lab</code>, where the lab file and the <code>rules/</code> folder are, and that <code>pat --version</code> prints 1.11.2, the pinned version. Step 3's first run should report 24 events; any other number means the paste in step 2 went wrong.</p>
+</section>
+
 <section id="model">
     <h2>One event in, True or False out</h2>
-    <p>A CloudTrail event is a JSON (JavaScript Object Notation) object: named fields with values, where a value can itself hold named fields. Python reads one into a <em>dictionary</em>. A Panther rule is a function that receives one event and returns <code>True</code> (alert) or <code>False</code> (ignore). This needs nothing but Python:</p>
+    <p>Take three things an attacker with a leaked key might do: stop CloudTrail logging, be refused five times in ten minutes while trying the key out, and create a new user and give it a key of its own. The lab holds all three. The first is a single event, and one look at it is enough to say "alert". The other two are suspicious only as a group of events, and that difference decides how each one is written in Panther.</p>
+    <p>A Panther rule is a function that receives one event and returns <code>True</code> (alert) or <code>False</code> (ignore). The distinction that matters: <strong>the Python sees one event at a time.</strong> "Five refusals from one address in ten minutes" and "a user created, then given a key" both need several events, so neither is written in Python. Counting is set in the YAML file (<a href="#step-counting">step 6</a>), and a sequence is a separate correlation rule (<a href="#step-correlation">step 7</a>). That split also decides what you can test at home: Python rules run entirely on your machine, while thresholds and correlation rules are evaluated only by a Panther deployment.</p>
+</section>
+
+<section id="warm-up">
+    <h2>Warm-up: a rule in a few lines of Python</h2>
+    <p>A CloudTrail event is a JSON (JavaScript Object Notation) object: named fields with values, where a value can itself hold named fields. Python reads one into a <em>dictionary</em>. The block below needs nothing but Python: it reads two fields of a trimmed event, then runs a complete rule on it. Its first line, <code>python3 - &lt;&lt;'PY'</code>, runs every line down to <code>PY</code> as a Python program without saving it to a file.</p>
 <div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 # One trimmed CloudTrail event. Python calls this a dictionary.
 event = {"eventName": "StopLogging", "userIdentity": {"userName": "backup-svc"}}
@@ -395,7 +414,7 @@ True</pre></div>
 
 <section id="walkthrough">
     <h2>Walk-through: a leaked CI key, five detections</h2>
-    <p>The lab file tells one story. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> (continuous integration) user, has leaked. From the IP (Internet Protocol) address <code>203.0.113.50</code> someone checks whose key it is, tries to list <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, lists the <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service) buckets, then creates a user called <code>backup-svc</code>, gives it <code>AdministratorAccess</code> and an access key, and uses that new identity to stop the CloudTrail trail. Around it runs ordinary work: alice, an administrator, signs in with <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication) and creates <code>svc-reporting</code>, giving it a key hours later; bob signs in without MFA; someone fails to sign in as alice; a <code>reports-app</code> role is refused one S3 object three times in half an hour; a CI role describes instances.</p>
+    <p>The lab file tells one story. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> (continuous integration) user, has leaked; an access key is the credential a program signs its AWS requests with. From the IP (Internet Protocol) address <code>203.0.113.50</code> someone checks whose key it is, tries to list <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> (Identity and Access Management) users, <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> (Elastic Compute Cloud) resources and secrets and is mostly refused, lists the <a class="glossary-link" href="../glossary.html#term-s3">S3</a> (Simple Storage Service) buckets, then creates a user called <code>backup-svc</code>, gives it <code>AdministratorAccess</code> (AWS's ready-made policy that allows every action) and an access key, and uses that new identity to stop the CloudTrail trail. Around it runs ordinary work: alice, an administrator, signs in with <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a> (multi-factor authentication) and creates <code>svc-reporting</code>, giving it a key hours later; bob signs in without MFA; someone fails to sign in as alice; a <code>reports-app</code> role is refused one S3 object three times in half an hour; a CI role describes instances.</p>
     <p>Five detections run through the rest of the page:</p>
     <ul>
         <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
@@ -409,10 +428,10 @@ True</pre></div>
     <p>Run <code>python3 --version</code> first. <code>panther_analysis_tool</code> requires Python 3.11 or newer, and Panther tests it on 3.11. If yours is older, install a newer Python from python.org or your package manager and use its name (for example <code>python3.12</code>) instead of <code>python3</code> on the second line.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/panther-lab &amp;&amp; cd ~/panther-lab
 python3 -m venv .venv &amp;&amp; . .venv/bin/activate
-pip install --quiet panther-analysis-tool==1.10.0
+pip install --quiet panther-analysis-tool==1.11.2
 pat --version</pre></div>
-<div class="code-block" data-lang="text"><pre>1.10.0</pre></div>
-    <p>The second line makes a private Python for this lab (a virtual environment) and switches to it, so nothing is installed system-wide; in a new terminal, <code>cd ~/panther-lab &amp;&amp; . .venv/bin/activate</code> brings it back. <code>pat</code> and <code>panther_analysis_tool</code> are two names for the same program. Keep the version pin: on Python 3.10 an unpinned install does not fail but quietly installs 0.57.0 from March 2025, the last release that did not require 3.11. Each run, <code>pat</code> also asks <a class="glossary-link" href="../glossary.html#term-pypi">PyPI</a> (the Python Package Index) whether a newer release exists and prints a <code>WARNING</code> line if so.</p>
+<div class="code-block" data-lang="text"><pre>1.11.2</pre></div>
+    <p>The second line makes a private Python for this lab (a virtual environment) and switches to it, so nothing is installed system-wide; in a new terminal, <code>cd ~/panther-lab &amp;&amp; . .venv/bin/activate</code> brings it back. <code>pat</code> and <code>panther_analysis_tool</code> are two names for the same program. Keep the version pin: on Python 3.10 an unpinned install does not fail but quietly installs 0.57.0 from March 2025, the last release that did not require 3.11. Each run, <code>pat</code> also asks <a class="glossary-link" href="../glossary.html#term-pypi">PyPI</a> (the Python Package Index) whether a newer release exists and prints a <code>WARNING</code> line if so. The install line may also print two lines starting <code>[notice]</code>: pip makes the same check for itself and suggests an upgrade. They do no harm.</p>
 
     <h3>2. Load the lab data</h3>
     <p>Twenty-four events, one JSON object per line: the same file every guide in this series uses. Paste the whole block, including the final <code>EOF</code> line. Step 3 counts the events, which confirms the paste.</p>
@@ -546,7 +565,7 @@ python3 fire.py rules/console_login_no_mfa.py</pre></div>
 1 of 24 events matched. Matches per group: {'one group': 1}</pre></div>
     <p>Bob only, at 09:15:47. The failed login is the negative test this rule most needs. AWS's own check for this, control CloudWatch.3 among the <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">Security Hub CSPM CloudWatch controls</a>, and Panther's <code>AWS.Console.LoginWithoutMFA</code> both require the successful outcome too, and both test <code>MFAUsed != "Yes"</code> (<code>!=</code> means "is not equal to") rather than <code>== "No"</code>, so a successful login with the field missing still counts as no MFA. When you give this rule its YAML file, its <code>Reports</code> entry is <code>TA0001:T1078.004</code>: <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>, <a href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener noreferrer">Valid Accounts: Cloud Accounts</a>.</p>
 
-    <h3>6. Counting belongs in the YAML, not the Python (D2)</h3>
+    <h3 id="step-counting">6. Counting belongs in the YAML, not the Python (D2)</h3>
     <p>A burst of refused calls from one address is a common sign that someone is trying out a stolen key. <code>rule()</code> cannot count: it sees one event and answers once. Panther counts, using three settings. <code>dedup()</code> returns a string, and matches with the same string form one group (with no <code>dedup()</code>, Panther groups by the title). <code>Threshold</code> is how many matches a group needs before an alert is sent, and <code>DedupPeriodMinutes</code> is how long, from its first match, a group keeps counting. The first version treats <code>AccessDenied</code> as "refused":</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; rules/denied_burst.py &lt;&lt;'EOF'
 def rule(event):
@@ -570,7 +589,7 @@ python3 fire.py rules/denied_burst.py | tail -n 1</pre></div>
 <div class="code-block" data-lang="text"><pre>7 of 24 events matched. Matches per group: {'192.0.2.20': 3, '203.0.113.50': 4}</pre></div>
     <p>The final <code>| tail -n 1</code> keeps only the last line of <code>fire.py</code>'s output. The count per group is what Panther compares with <code>Threshold</code>: four from the attacker, three from reports-app, neither reaches five, <strong>so no alert</strong>. Give this rule a test each way, as in step 4, and both pass. (<code>fire.py</code> ignores time. The attacker's refusals fall within one minute, so a 10-minute period changes nothing for them; reports-app's three are spread over half an hour, which only lowers its count.)</p>
     <div class="highlight-box">
-    <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> A rule is no different, and green tests prove only that it does what you wrote, not that you wrote the right thing. Before trusting a quiet rule, drop the condition and look at what the data actually contains.</p>
+    <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> A rule is no different, and green tests prove only that it does what you wrote, not that you wrote the right thing. Before trusting a quiet rule, drop the condition and look at what the data contains.</p>
     </div>
 <div class="code-block" data-lang="bash"><pre>python3 - &lt;&lt;'PY'
 import json
@@ -578,7 +597,7 @@ from collections import Counter
 print(Counter(json.loads(line).get("errorCode") for line in open("cloudtrail-lab.jsonl")))
 PY</pre></div>
 <div class="code-block" data-lang="text"><pre>Counter({None: 14, 'AccessDenied': 7, 'Client.UnauthorizedOperation': 3})</pre></div>
-    <p>Ten refusals, spelled two ways. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, and all three of those came from the attacker. AWS's own check for unauthorised calls, Security Hub CSPM control CloudWatch.2 (on the AWS page linked in step 5), counts any error code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also covers <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. Do the same. <code>startswith()</code> and <code>endswith()</code> check how a piece of text begins and ends, and the default <code>""</code> matters: without it, an event with no <code>errorCode</code> gives <code>None</code>, which has no <code>startswith()</code>.</p>
+    <p>Ten refusals, spelled two ways. EC2 reports a refusal as <code>Client.UnauthorizedOperation</code>, and all three of those came from the attacker. AWS's own check for unauthorised calls, Security Hub <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a> control CloudWatch.2 (on the AWS page linked in step 5), counts any error code that starts with <code>AccessDenied</code> or ends with <code>UnauthorizedOperation</code>, which also covers <code>AccessDeniedException</code> and a bare <code>UnauthorizedOperation</code>. Do the same. <code>startswith()</code> and <code>endswith()</code> check how a piece of text begins and ends, and the default <code>""</code> matters: without it, an event with no <code>errorCode</code> gives <code>None</code>, which has no <code>startswith()</code>.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; rules/denied_burst.py &lt;&lt;'EOF'
 def rule(event):
     code = event.get("errorCode", "")    # "" when the call was not refused
@@ -591,7 +610,7 @@ python3 fire.py rules/denied_burst.py | tail -n 1</pre></div>
 <div class="code-block" data-lang="text"><pre>10 of 24 events matched. Matches per group: {'192.0.2.20': 3, '203.0.113.50': 7}</pre></div>
     <p>Seven from <code>203.0.113.50</code>, over the threshold of five: one alert, where the first version produced none. Now add the EC2 refusal from the lab file as a test that expects <code>true</code>, so the gap cannot reopen (written before the fix, that test fails, which proves it can). Its <code>Reports</code> entries are <code>TA0007:T1087.004</code> and <code>TA0007:T1580</code>: Discovery of cloud accounts and of cloud infrastructure. This is not a hypothetical trap. Panther's published <code>AWS.IAMUser.ReconAccessDenied</code> treats EC2 <code>Describe</code> calls as reconnaissance but accepts only <code>AccessDenied</code>, so run over the lab file it matches 3 of the attacker's 7 refusals, and the three EC2 ones never count.</p>
 
-    <h3>7. Two events, one story: signals and a correlation rule (D3)</h3>
+    <h3 id="step-correlation">7. Two events, one story: signals and a correlation rule (D3)</h3>
     <p>"A new user given an access key within ten minutes" joins two events, which one call to <code>rule()</code> never sees together. Panther's answer has two parts. First, two <em>signal</em> rules: ordinary rules with <code>CreateAlert: false</code>, which record their matches for other rules to use but alert nobody. Each returns the user name from <code>alert_context()</code> under the same key, and Panther stores it in the match's <code>p_alert_context</code> field. (<code>not event.get("errorCode")</code> is <code>True</code> when the call was not refused, and <code>default=""</code> is what <code>deep_get()</code> returns if the field is missing.)</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; rules/iam_user_created.py &lt;&lt;'EOF'
 def rule(event):
@@ -742,7 +761,7 @@ python3 fire.py rules/admin_policy_attached.py</pre></div>
         <li><strong>Returning something other than <code>True</code> or <code>False</code>.</strong> <code>return event.get("errorCode") and ...</code> hands back <code>None</code> for an event without that field, because <code>and</code> returns one of its values, and <code>pat</code> fails the test with <code>FunctionReturnTypeError</code>. Build the answer from comparisons such as <code>is not None</code>.</li>
         <li><strong>Reading fields with <code>event["name"]</code>.</strong> On an event without that field it raises <code>KeyError</code> and the test fails. Use <code>event.get()</code> and <code>event.deep_get()</code>, which return <code>None</code> or a default you choose.</li>
         <li><strong>Believing a green <code>pat test</code> for anything that is not a Python rule.</strong> Without API credentials, correlation rule tests are reported as skipped, and a Simple Detection whose test is wrong is reported as passed, both with exit code 0. The check that each <code>LogTypes</code> value exists is skipped too, so <code>AWS.CloudTrial</code> passes every local test. Run the tests with credentials in CI.</li>
-        <li><strong>Hand-writing correlation test data.</strong> A correlation test feeds in signal matches you typed, so it cannot notice when the signal rules emit a different key. Copy the values from what the signal rules actually return, as step 7 does.</li>
+        <li><strong>Hand-writing correlation test data.</strong> A correlation test feeds in signal matches you typed, so it cannot notice when the signal rules emit a different key. Copy the values the signal rules return, as step 7 does.</li>
     </ul>
 </section>
 

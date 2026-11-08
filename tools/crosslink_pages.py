@@ -194,6 +194,11 @@ DELIBERATELY_UNLINKED = {
     # sentence on any page that wants an inline link to "topics", and inserting
     # one would compete with the specific topic link that sentence should carry.
     "topics.html",
+    # Rendered from the Google Calendar feed by tools/sync_calendar.py on
+    # every refresh. Links stamped into the cards would be overwritten by
+    # the next run, and the hand-written prose is about subscribing, not
+    # about a term.
+    "calendar.html",
     "glossary.html",
     "news.html",
     "search.html",

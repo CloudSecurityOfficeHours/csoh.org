@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-03">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="cloudwatch logs insights">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-11-03",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -125,7 +125,7 @@
           "@type": "HowToStep",
           "position": 8,
           "name": "Carry the queries to Cloud Audit Logs",
-          "text": "Map the lab's fields to protoPayload fields, query sink changes, key creation and owner grants, and check which audit logs your project actually holds."
+          "text": "Map the lab's fields to protoPayload fields, query sink changes, key creation and owner grants, and check which audit logs your project keeps."
         }
       ]
     }
@@ -290,6 +290,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -344,14 +345,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>CloudWatch Logs Insights and Cloud Logging queries, hands-on</h1>
-        <p>Before there is a detection platform, an investigation starts in the cloud's own log store: CloudWatch Logs Insights in AWS, the Logs Explorer in Google Cloud. Learn both query languages from zero on one small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, and learn to recognise a query that returns nothing because it cannot work.</p>
+        <p>Before a company has a separate system for collecting and searching its security logs, an investigation starts in the log service built into the cloud: CloudWatch Logs Insights in AWS, the Logs Explorer in Google Cloud. Learn both query languages from zero on one small lab of <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> events, AWS's record of the calls made in an account, and learn to recognise a query that returns nothing because it cannot work.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a> &middot; Vendor-neutral</p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> for the first half, an AWS account that is not production, with the AWS CLI version 2 and <code>jq</code>; for the second, a Google Cloud project that is not production, with the gcloud CLI. Either half works on its own. The lab is 24 events, about 9 KB, well inside the free allowances AWS and Google list for log data, and the last step of each half deletes what you made, apart from one AWS metric that cannot be deleted and costs nothing once unused.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> every query and command on this page was run as printed on 4 November 2026, the first half against CloudWatch Logs in us-east-1 and the second against Cloud Logging and Cloud Monitoring in a project that is not production, from macOS with AWS CLI 2.39.2, Google Cloud SDK 585.0.0 and jq 1.8.2. Every result described is what came back, including the September load refused without an error, the alarm's <code>OK</code> and <code>ALARM</code>, the log-based alert naming <code>backup-svc</code>, and the Logs Explorer's five-minute default. The two audit-log filters in the second half's step 8 ran in the same project, which had no matching entries, so only their syntax was tested. Limits and timings the lab cannot reach, such as the 200-field limit, retention deletion and the one-day window of <code>gcloud logging read</code>, were checked against AWS's and Google's documentation on 3 November 2026. The shell blocks were also run in bash and in an interactive zsh against a local stand-in for both services' APIs, which shows that each command sends what the page says it sends and nothing more.</p>
@@ -359,14 +360,16 @@
 
 <section id="intro">
     <h2>Two log stores, two query languages</h2>
-    <p>Every cloud keeps its own logs and gives you a box to question them. In AWS (Amazon Web Services) the box is CloudWatch Logs Insights, which reads log groups in Amazon CloudWatch Logs, including the CloudTrail events a trail delivers there. In Google Cloud it is the Logs Explorer, which reads Cloud Logging, where Google's own audit logs arrive with no setup. These are the first queries an incident responder writes, often before any <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system exists, and the same queries turn into simple alerts. Azure's equivalent, Log Analytics, uses Kusto Query Language (<a class="glossary-link" href="../glossary.html#term-detection-query-languages">KQL</a>), which has <a href="kusto-kql.html">its own guide</a>.</p>
-    <p>The two languages differ in kind. <strong>A Logs Insights query is a pipeline:</strong> commands joined by pipes that filter, extract, count and sort, so it can answer "how many, and per what". <strong>The Logging query language is a filter:</strong> one true-or-false expression that decides which log entries to show, and nothing more. It cannot count, group, or relate one entry to another. In Google Cloud, counting lives in log-based metrics and in Observability Analytics, which takes SQL (Structured Query Language), taught on <a href="sql-for-security-data-lakes.html">the SQL guide</a>.</p>
+    <p>Suppose an access key for one of your AWS accounts has leaked. The first thing you need to know is what it was used for: which calls it made, which of them were refused, and whether it created anything new. Every cloud keeps its own logs of calls like these and gives you a box to question them.</p>
+    <p>In AWS (Amazon Web Services) the box is CloudWatch Logs Insights, which reads log groups (named collections of log events) in Amazon CloudWatch Logs, including the CloudTrail events a trail delivers there. A trail is the CloudTrail setting that sends an account's events somewhere to be kept. In Google Cloud the box is the Logs Explorer, which reads Cloud Logging, where Google's own audit logs (records of who did what, and when) arrive with no setup. These are the first queries an incident responder writes, often before the company has any <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system, a platform that gathers logs from many sources and alerts on them. The same queries also turn into simple alerts. Azure's equivalent, Log Analytics, uses Kusto Query Language (<a class="glossary-link" href="../glossary.html#term-detection-query-languages">KQL</a>), which has <a href="kusto-kql.html">its own guide</a>.</p>
+    <p>The two languages differ in kind. A Logs Insights query is a pipeline: commands joined by pipes that filter, extract, count and sort, so it can answer "how many, and per what", such as how many refused calls came from each address. The Logging query language is a filter: one true-or-false expression that decides which log entries to show, and nothing more. It cannot count, group, or relate one entry to another. In Google Cloud, counting lives in log-based metrics and in Observability Analytics, which takes SQL (Structured Query Language), taught on <a href="sql-for-security-data-lakes.html">the SQL guide</a>.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
-        <li><a href="#model">The question before the query</a></li>
+        <li><a href="#how-to-use">How to use this guide</a></li>
+        <li><a href="#model">Where a query looks</a></li>
         <li><a href="#lab">The lab: one leaked key, five detections</a></li>
         <li><a href="#walkthrough">Walk-through 1: CloudWatch Logs Insights</a></li>
         <li><a href="#google">Walk-through 2: the Cloud Logging query language</a></li>
@@ -376,9 +379,20 @@
     </ol>
 </div>
 
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Beginner here means new to both query languages. You should be comfortable typing commands into a terminal, and the command-line tool for the cloud you use should already be set up to reach the account or project you will work in. You do not need to know CloudTrail's format: the lab section tells the story the events record, and the terms that matter are explained as they come up, with links to the glossary.</p>
+    <p>The page has two halves that build the same four of the five detections on the same 24 events, and either half works on its own. Read the <a href="#model">next section</a> and <a href="#lab">the lab</a> first: the first shows one question in both languages and the trap that runs through the page, and the second tells the story the events record and lists the five detections, D1 to D5. In <a href="#walkthrough">the first half</a>, on CloudWatch Logs Insights, steps 1 and 2 make a log group and load the lab, step 3 adds a helper for running queries from the shell and checks what arrived, steps 4 to 8 build four of the detections and sort out which clock each event's time comes from, and step 9 turns one into an alarm, tests it and deletes what you made. <a href="#google">The second half</a>, on Cloud Logging, follows the same order: steps 1 and 2 load and find the lab, steps 3 to 6 take the same four detections (D5 is the first exercise), step 7 makes an alert, tests it and cleans up, and step 8 moves from the lab to Google's own audit logs. If you do only the second half, its step 1 says how to make the lab file first. The <a href="#exercises">exercises</a> follow the two walk-throughs, with each answer hidden under Show the answer until you open it.</p>
+    <p>A code block labelled BASH is something to paste into your terminal. A block labelled LOGS INSIGHTS is a query for CloudWatch Logs Insights: paste it into the query editor in the CloudWatch console, or run it with the <code>lq</code> helper from step 3. A block labelled CLOUD LOGGING is a query for the Logs Explorer's query editor, which step 2 of the second half shows you how to open. Each block has a copy button. The page has no output blocks: the text after a command or query says what should come back, usually in a sentence that starts "Expect". Some blocks write a file first, with a line such as <code>cat &gt; stamp.jq &lt;&lt;'EOF'</code>, which saves every line down to the one that says only <code>EOF</code> into a file called <code>stamp.jq</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+    <p>Every command and query was run as printed on 4 November 2026, the first half against CloudWatch Logs and the second against Cloud Logging and Cloud Monitoring, and the results the page describes are what came back, so yours should match. Two parts were not checked that way. The two audit-log filters in step 8 of the second half ran in a project with nothing for them to find, so only their syntax was tested. And limits and timings the lab cannot reach, such as the 200-field limit and how long retention takes to delete old events, come from AWS's and Google's documentation.</p>
+    <p>Some parts can wait for a second reading. The 24 lines of lab data in step 2 of the first half, and the <code>lq</code> helper in its step 3, are scaffolding, so paste them without studying them. The notes on what Security Hub's controls expect, in steps 5 and 6 of the first half, can wait too, and so can step 8 of the second half until you want to search Google's own audit logs.</p>
+    <p>If a query returns nothing where the page expects results, check where it looked before you change the query. In Logs Insights, the selected log group should be <code>csoh-lab-cloudtrail</code> and the time range should include the moment you loaded the lab, and the <code>lq</code> helper reads the last 24 hours unless you set <code>LQ_HOURS</code>. The Logs Explorer opens on the last five minutes, and <code>gcloud logging read</code> reads only the last day. Check too that the reply to <code>put-log-events</code> in step 2 had no <code>rejectedLogEventsInfo</code>, that the first query in step 3 counted 24 events, and that <code>gcloud config get project</code> printed the project you meant.</p>
+</section>
+
 <section id="model">
-    <h2>The question before the query</h2>
-    <p>Both languages read only what you point them at, and you point outside the query. In Logs Insights you select log groups and a time range above the editor. In the Logs Explorer it is a log scope, which normally starts as the current project, and a time range. A query run against the wrong place returns an empty result with no error, exactly as a query with nothing to find does. Here is one question in each language, first Logs Insights, then Cloud Logging:</p>
+    <h2>Where a query looks</h2>
+    <p>Suppose you search the lab for the call that stopped CloudTrail logging, and nothing comes back. Either nobody stopped it, or the query looked at the wrong logs or the wrong hours, and the screen looks the same both ways. That trap runs through this page.</p>
+    <p>Both languages read only what you point them at, and you point outside the query. In Logs Insights you select log groups and a time range above the editor. In the Logs Explorer it is a log scope, which normally starts as the current project, and a time range. A query run against the wrong place returns an empty result with no error, exactly as a query with nothing to find does; <a href="#step-look-inside">step 3</a> of the first half and <a href="#step-find-arrived">step 2</a> of the second show how to check what a query can see. Here is one question in each language, first Logs Insights, then Cloud Logging:</p>
 <div class="code-block" data-lang="logs insights"><pre>filter eventName = "StopLogging"
 | fields eventTime, userIdentity.userName, sourceIPAddress</pre></div>
 <div class="code-block" data-lang="cloud logging"><pre>jsonPayload.eventName="StopLogging"</pre></div>
@@ -403,7 +417,7 @@
     <h2>Walk-through 1: CloudWatch Logs Insights</h2>
 
     <h3>1. Make a throwaway log group</h3>
-    <p>Work in an account where you may experiment, in the Region your command-line interface (CLI) uses (<code>aws configure get region</code> prints it). No local emulator stands in for Logs Insights: LocalStack needs a LocalStack account, and the open-source moto library's <code>StartQuery</code> (version 5.2.5) reads only <code>fields</code>, <code>sort</code> and <code>limit</code> and silently skips <code>filter</code> and <code>stats</code>, so every filter there returns every event.</p>
+    <p>Work in an account where you may experiment, in the Region, the AWS location, that your command-line interface (CLI) uses (<code>aws configure get region</code> prints it). No local emulator, a program that imitates the service on your own computer, stands in for Logs Insights: LocalStack needs a LocalStack account, and the open-source moto library's <code>StartQuery</code> (version 5.2.5) reads only <code>fields</code>, <code>sort</code> and <code>limit</code> and silently skips <code>filter</code> and <code>stats</code>, so every filter there returns every event.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/log-queries-lab &amp;&amp; cd ~/log-queries-lab
 aws logs create-log-group --log-group-name csoh-lab-cloudtrail
 aws logs put-retention-policy --log-group-name csoh-lab-cloudtrail --retention-in-days 1
@@ -444,12 +458,12 @@ cat &gt; stamp.jq &lt;&lt;'EOF'
 EOF
 jq -R -s -f stamp.jq cloudtrail-lab.jsonl &gt; events.json
 aws logs put-log-events --log-group-name csoh-lab-cloudtrail --log-stream-name lab --log-events file://events.json</pre></div>
-    <p>The first <code>cat</code> writes everything up to <code>EOF</code> into <code>cloudtrail-lab.jsonl</code>, and <code>shasum</code> prints its hash, which should be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>. The <code>jq</code> program in <code>stamp.jq</code> reads the file as text and turns each line into a log event whose message is that line exactly as written and whose timestamp is the current time in milliseconds, one millisecond apart, because a batch must be in time order. The reply to <code>put-log-events</code> is a short JSON document, and the thing to check is that it has no <code>rejectedLogEventsInfo</code>.</p>
+    <p>The first <code>cat</code> writes everything up to <code>EOF</code> into <code>cloudtrail-lab.jsonl</code>, and <code>shasum</code> prints its hash (a fingerprint of the file's contents), which should be <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>. The <code>jq</code> program in <code>stamp.jq</code> reads the file as text and turns each line into a log event whose message is that line exactly as written and whose timestamp is the current time in milliseconds, one millisecond apart, because a batch must be in time order. The reply to <code>put-log-events</code> is a short JSON document, and the thing to check is that it has no <code>rejectedLogEventsInfo</code>.</p>
     <div class="highlight-box">
     <p><strong>A load can be refused without an error.</strong> PutLogEvents rejects events more than 14 days old (or older than the group's retention) and events more than two hours in the future, keeps the rest, and reports the refusals only in <code>rejectedLogEventsInfo</code>, while the AWS CLI exits as if all went well. Sent with their own September dates, all 24 events would be refused, and the reply would say so only in <code>rejectedLogEventsInfo</code>, as events too old or expired. And AWS documents that Logs Insights can't read events timestamped before their log group was created, so even yesterday's logs, young enough to be accepted, never appear in a query once copied into a group made today.</p>
     </div>
 
-    <h3>3. Run a query, and look inside first</h3>
+    <h3 id="step-look-inside">3. Run a query, and look inside first</h3>
     <p>In the CloudWatch console, open <strong>Logs Insights</strong>, select <code>csoh-lab-cloudtrail</code> as the log group, set the time range to include the moment you loaded it (the last hour will do), paste a query and choose <strong>Run</strong>. Or run queries from the shell with this helper, which sends one query to the lab group over the last 24 hours, waits for it, and prints each result row as a line of JSON:</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; lq &lt;&lt;'EOF'
 #!/bin/bash
@@ -558,13 +572,13 @@ aws logs delete-log-group --log-group-name csoh-lab-cloudtrail</pre></div>
     <h2>Walk-through 2: the Cloud Logging query language</h2>
 
     <h3>1. Write the lab to a throwaway log</h3>
-    <p>Use a Google Cloud project that is not production; if you own it, you have every permission this half needs. There is nothing to create, because writing to a log name makes the log. In the folder from the first half (or after running the <code>cat</code> heredoc from its step 2):</p>
+    <p>Use a Google Cloud project that is not production; if you own it, you have every permission this half needs. There is nothing to create, because writing to a log name makes the log. Run the block below in the folder from the first half. If you skipped that half, first run <code>mkdir -p ~/log-queries-lab &amp;&amp; cd ~/log-queries-lab</code>, then the <code>cat</code> heredoc from its step 2, which writes the lab file into that folder.</p>
 <div class="code-block" data-lang="bash"><pre>cd ~/log-queries-lab
 gcloud config get project
 while IFS= read -r event; do gcloud logging write cloudtrail-lab "$event" --payload-type=json; done &lt; cloudtrail-lab.jsonl</pre></div>
-    <p>Check that the second line prints the project you mean before the loop writes anything. The loop writes one entry per line of the file, in order, each with the current time, and <code>--payload-type=json</code> makes the line the entry's <code>jsonPayload</code>, so its fields can be queried. Writing the lab with its own times would fail without a word: the Logging API accepts entries dated further back than a log bucket keeps logs, but no bucket stores them, and a project's <code>_Default</code> bucket keeps 30 days unless someone changed it.</p>
+    <p>Check that the second line prints the project you mean before the loop writes anything. The loop writes one entry per line of the file, in order, each with the current time, and <code>--payload-type=json</code> makes the line the entry's <code>jsonPayload</code>, so its fields can be queried. Writing the lab with its own times would fail without a word: the Logging API accepts entries dated further back than a log bucket (where Cloud Logging stores entries) keeps logs, but no bucket stores them, and a project's <code>_Default</code> bucket keeps 30 days unless someone changed it.</p>
 
-    <h3>2. Find what arrived</h3>
+    <h3 id="step-find-arrived">2. Find what arrived</h3>
     <p>In the Google Cloud console open <strong>Logging</strong>, then <strong>Logs Explorer</strong>, paste this into the query editor, set the time range to <strong>Last 1 hour</strong>, and run it:</p>
 <div class="code-block" data-lang="cloud logging"><pre>log_id("cloudtrail-lab")</pre></div>
     <p>Expect 24 entries. <code>log_id()</code> picks a log by its short name. The long form is <code>logName="projects/PROJECT_ID/logs/cloudtrail-lab"</code>, in which any slash inside the log's own name must be written <code>%2F</code>; a log name copied without that encoding matches nothing. The time range is the first trap: since December 2025 the Logs Explorer opens on the last five minutes, not the last hour, so a lab loaded ten minutes ago is already out of view. A query that names <code>timestamp</code> switches the selector off and uses its own range. From the shell, <code>gcloud logging read</code> takes the same query language:</p>

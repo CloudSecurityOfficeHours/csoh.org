@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-11-04">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="kql">
@@ -63,7 +63,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-11-04",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -333,6 +333,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -387,14 +388,14 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Kusto Query Language (KQL), hands-on</h1>
-        <p><a class="glossary-link" href="../glossary.html#term-detection-query-languages">KQL</a> is how you question data in <a class="glossary-link" href="../glossary.html#term-sentinel">Microsoft Sentinel</a>, Microsoft Defender <a class="glossary-link" href="../glossary.html#term-edr">XDR</a> and Azure Data Explorer. Build a local copy of Sentinel's <code>AWSCloudTrail</code> table, follow a leaked access key through it, and learn to recognise a query that returns nothing because it cannot work.</p>
+        <p><a class="glossary-link" href="../glossary.html#term-detection-query-languages">KQL</a> is how you search logs and other data in <a class="glossary-link" href="../glossary.html#term-sentinel">Microsoft Sentinel</a>, Microsoft Defender <a class="glossary-link" href="../glossary.html#term-edr">XDR</a> and Azure Data Explorer. On your own computer, build a copy of <code>AWSCloudTrail</code>, the table where Sentinel keeps the record of calls made to an AWS account, follow a leaked access key through it, and learn to recognise a query that returns nothing because it cannot work.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-11-04">Last updated <strong>2026-11-04</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
 <div class="info-box--blue">
     <p><strong>Time:</strong> ~2 hours, and about 30 minutes more for Azure Resource Graph &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> Docker with 4 GB of memory to spare and several gigabytes of disk, and Python 3. No Azure account for the walk-through. On an Apple silicon Mac, turn on Docker Desktop's Rosetta setting first (step 1); without Docker, use a free Azure Data Explorer cluster. The Azure Resource Graph part needs the Azure CLI, signed in to a subscription you can read.</p>
     <p class="u-mt-075"><strong>How this page was checked:</strong> every command and query in the walk-through and in Exercises 1 to 4 was run as printed against the Kusto emulator (Azure Data Explorer engine 1.0.9766.21061, the <code>latest</code> image of 27 September 2026) in Docker Desktop on an Apple silicon Mac under Rosetta, and every output is pasted from that run. Not run: the free-cluster route, and the analytics rule inside a Microsoft Sentinel workspace. The rule's query runs here like every other, and the rule file uses only fields that Microsoft's own published <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> rules use. The Azure Resource Graph part and Exercise 5 were run as printed on 4 November 2026 with Azure CLI 2.91.0 and its <code>resource-graph</code> extension 2.1.1, in zsh and in bash on macOS, against a subscription holding one storage account and no network security groups, with read-only queries; outputs are pasted from that run, with request timestamps and IDs replaced. Where that subscription had nothing to find, the page says so and shows the control. What it could not show comes from Microsoft's documentation and the CLI's source, not a run: the global <code>--subscription</code> option (the test identity could read only one subscription), subscriptions added after sign-in, how the CLI writes network rules, what older storage accounts hold, and what <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a> accepts. Azure PowerShell's <code>Search-AzGraph</code> was not run.</p>
@@ -402,14 +403,16 @@
 
 <section id="intro">
     <h2>One query language across Microsoft's security data</h2>
-    <p>Kusto is the query engine behind Azure Data Explorer, and KQL is the language you use to ask it questions. The same language runs in Azure Monitor Logs, in Microsoft Sentinel (which keeps its data in Log Analytics workspaces), in advanced hunting in Microsoft Defender XDR, and in Microsoft Fabric, and a subset of it in Azure Resource Graph, which describes what is deployed rather than what happened (<a href="#resource-graph">its own part, below</a>). Analysts in a security operations centre (SOC) write it to hunt through logs; detection engineers write it so that a <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system can run it on a schedule and raise alerts.</p>
-    <p>The distinction that matters most: <strong>a query only reads.</strong> It names a table, reshapes it and hands back a table, and it cannot change any data. <strong>A management command starts with a dot</strong> (<code>.create</code>, <code>.ingest</code>, <code>.show</code>) and changes or inspects the database itself. Commands belong to Azure Data Explorer and Fabric, which is why this lab can use a few of them to build its table. In Sentinel you never create <code>AWSCloudTrail</code>: Sentinel's Amazon Web Services (AWS) connectors fill it, and you write only queries.</p>
+    <p>When a team that works in Microsoft's security tools needs to know what a leaked access key did, or which address kept being refused, someone writes a KQL query. Analysts in a security operations centre (SOC), the team that watches for attacks and responds to them, write it to hunt through logs. Detection engineers write it so that a <a class="glossary-link" href="../glossary.html#term-siem">security information and event management</a> (SIEM) system, which gathers security logs in one place, can run it on a schedule and raise alerts.</p>
+    <p>Kusto is the query engine behind Azure Data Explorer, and KQL is the language you use to ask it questions. The same language runs in Azure Monitor Logs, in Microsoft Sentinel (Microsoft's SIEM, which keeps its data in Log Analytics workspaces), in advanced hunting in Microsoft Defender XDR, and in Microsoft Fabric, and a subset of it in Azure Resource Graph, which describes what is deployed rather than what happened (<a href="#resource-graph">its own part, below</a>).</p>
+    <p>One distinction matters most. <strong>A query only reads.</strong> It names a table, reshapes it and hands back a table, and it cannot change any data. <strong>A management command starts with a dot</strong> (<code>.create</code>, <code>.ingest</code>, <code>.show</code>) and changes or inspects the database itself. Commands belong to Azure Data Explorer and Fabric, which is why this lab can use a few of them to build its table. In Sentinel you never create <code>AWSCloudTrail</code>, the table that holds the logs of calls made to Amazon Web Services (AWS): Sentinel's AWS connectors, which read those logs from AWS, fill it, and you write only queries.</p>
     <p>So the lab runs on the Kusto emulator, the Azure Data Explorer engine in a free Docker container, and builds a table with Sentinel's name for it, using Sentinel's column names and types. Every query operator and function used here is one Microsoft documents as available in Sentinel, so what you write carries across.</p>
 </section>
 
 <div class="toc">
     <h2>On this page</h2>
     <ol>
+        <li><a href="#how-to-use">How to use this guide</a></li>
         <li><a href="#model">Tables in, tables out</a></li>
         <li><a href="#walkthrough">Walk-through: one leaked key, five detections</a></li>
         <li><a href="#resource-graph">Azure Resource Graph: KQL for what is deployed</a></li>
@@ -419,8 +422,19 @@
     </ol>
 </div>
 
+<section id="how-to-use">
+    <h2>How to use this guide</h2>
+    <p>Beginner here means new to KQL and to query languages. You should be comfortable typing commands into a terminal and have Docker installed. You do not need to know AWS or Azure for the walk-through: the AWS terms the lab depends on are explained as they come up, and terms with a glossary entry link to it.</p>
+    <p>Read it in order, because each part uses the one before. The <a href="#model">next section</a> explains how every query is built. Its example needs the table that step 3 builds, so read it first and run it once step 3 is done. In the <a href="#walkthrough">walk-through</a>, steps 1 to 3 start the Kusto engine in Docker, save <code>kql.py</code>, a small Python program that sends it your queries, load 24 CloudTrail events and give them the shape Sentinel stores them in. Steps 4 to 8 each teach one part of the language, and between them build four of the five detections listed at the top of the walk-through. Steps 5, 6 and 8 start with a query that looks right and returns the wrong answer without an error, then show why and fix it. Steps 9 and 10 turn one detection into a Sentinel analytics rule, Sentinel's name for a detection that runs on a schedule, and test it. The <a href="#exercises">exercises</a> then ask you to write the fifth detection and repair broken queries yourself, with each answer hidden until you click Show the answer.</p>
+    <p>A code block labelled BASH is something to paste into your terminal, and each block has a copy button. A block labelled KQL is a query, or a command if it starts with a dot: run it through <code>kql.py</code>, as step 1 explains, or paste it into the query editor if you use a free cluster instead. The unlabelled block under it, when there is one, shows what you should see. Some BASH blocks start with a line such as <code>cat &gt; kql.py &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>kql.py</code>. Paste the whole block at once, the <code>EOF</code> line included.</p>
+    <p>In the walk-through and Exercises 1 to 4, your output should match the page line for line: every command and query there was run as printed against the Kusto emulator, and the outputs are pasted from that run. The exception is <code>.show version</code> in step 1, which shows a newer build if Microsoft has published one since. The free-cluster route and the analytics rule inside a Sentinel workspace were not run.</p>
+    <p>The <a href="#resource-graph">Azure Resource Graph</a> part after the walk-through can wait for a second reading, and Exercise 5 goes with it. It needs the Azure CLI signed in to a subscription, and it asks about what is deployed in your own Azure account rather than about the lab. Its outputs are pasted from the subscription this page was checked against, so yours will differ wherever your subscription holds different things, and a few of its claims, listed in the info box, come from Microsoft's documentation and the CLI's source rather than a run. Its KQL blocks run through <code>arg.py</code>, a helper that its step 2 saves. Two smaller things can wait too: the paragraph at the end of step 1 on a free Azure Data Explorer cluster, which you need only if Docker will not run the emulator, and the 24 lines of lab data in step 2, which you can paste without reading.</p>
+    <p>If your output differs from the page, check that you are in <code>~/kql-lab</code>, the folder step 1 creates, because <code>kql.py</code> and the lab files are there. If <code>kql.py</code> says it cannot reach the emulator, give the engine a few more seconds, as step 1 says. Then check step 2's count of 24 rows and 0 null events, and that you ran step 3, which builds the <code>AWSCloudTrail</code> table that every later query reads.</p>
+</section>
+
 <section id="model">
     <h2>Tables in, tables out</h2>
+    <p>Suppose you want to know which addresses made calls that failed, and how many each made. You would take every event, keep the ones that failed, count them per address, and put the biggest count first. A KQL query is written in that order, one step to a line.</p>
     <p>A KQL query starts with the name of a table. Each line after that begins with a pipe, <code>|</code>, and one operator. The pipe hands the table so far to the operator; the operator does one job, such as dropping rows, adding a column or counting, and hands a new table on. The table you named is never changed, and whatever leaves the last operator is your result.</p>
 <div class="code-block" data-lang="kql"><pre>AWSCloudTrail                                       // all 24 events
 | where isnotempty(ErrorCode)                       // the 10 that failed
@@ -431,12 +445,12 @@
  203.0.113.50    | 7
  192.0.2.20      | 3
 (2 rows)</pre></div>
-    <p>Read it as four tables in a row (you can run it yourself once step 3 has built the table). Every prefix of a query is itself a complete query, so the quickest way to debug one is to delete operators from the bottom and run it again until the table stops surprising you. Two rules before you start: everything is case-sensitive (table names, column names, operators, functions), and <code>//</code> starts a comment.</p>
+    <p>Read it as four tables in a row (you can run it yourself once <a href="#step-shape">step 3</a> has built the table). Every prefix of a query is itself a complete query, so the quickest way to debug one is to delete operators from the bottom and run it again until the table stops surprising you. Two rules before you start: everything is case-sensitive (table names, column names, operators, functions), and <code>//</code> starts a comment.</p>
 </section>
 
 <section id="walkthrough">
     <h2>Walk-through: one leaked key, five detections</h2>
-    <p>The lab is 24 AWS CloudTrail events from one morning, trimmed to the fields this guide needs but keeping CloudTrail's real field names and nesting. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user, has leaked: from <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) instances and <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> secrets (and is mostly refused), then lists the <a class="glossary-link" href="../glossary.html#term-s3">Simple Storage Service</a> (S3) buckets. Next they create a user, <code>backup-svc</code>, attach <code>AdministratorAccess</code> to it, give it an access key, and use the new identity to stop CloudTrail logging. Around that runs an ordinary morning: sign-ins, one of them without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) and one failed; an administrator creating a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a>; an application refused the same S3 object three times; a CI role describing instances.</p>
+    <p>The lab is 24 AWS CloudTrail events from one morning, trimmed to the fields this guide needs but keeping CloudTrail's real field names and nesting. The access key of <code>build-bot</code>, a <a class="glossary-link" href="../glossary.html#term-ci-cd">continuous integration</a> (CI) user, has leaked; an access key is the credential a program signs its AWS requests with. From <code>203.0.113.50</code> someone checks whose key it is, tries to list Identity and Access Management (<a class="glossary-link" href="../glossary.html#term-iam">IAM</a>) users, <a class="glossary-link" href="../glossary.html#term-ec2">Elastic Compute Cloud</a> (EC2) instances and <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> secrets (and is mostly refused), then lists the <a class="glossary-link" href="../glossary.html#term-s3">Simple Storage Service</a> (S3) buckets. Next they create a user, <code>backup-svc</code>, attach <code>AdministratorAccess</code> (AWS's ready-made policy that allows every action) to it, give it an access key, and use the new identity to stop CloudTrail logging. Around that runs an ordinary morning: sign-ins, one of them without <a class="glossary-link" href="../glossary.html#term-mfa">multi-factor authentication</a> (MFA) and one failed; an administrator creating a <a class="glossary-link" href="../glossary.html#term-service-account">service account</a>; an application refused the same S3 object three times; a CI role describing instances.</p>
     <p>The walk-through builds five detections from these events:</p>
     <ul>
         <li><strong>D1, trail tampering:</strong> CloudTrail logging stopped, deleted or changed.</li>
@@ -447,7 +461,7 @@
     </ul>
 
     <h3>1. Start a Kusto engine</h3>
-    <p>The Kusto emulator is Microsoft's Azure Data Explorer engine packaged as a Linux container, free and needing no Azure account. Microsoft supports it on Windows and Linux computers with an x86-64 processor and at least 2 GB of memory (4 GB recommended), not on Arm processors, and the image is several gigabytes. Setting <code>ACCEPT_EULA=Y</code> accepts <a href="https://aka.ms/adx.emulator.license" target="_blank" rel="noopener noreferrer">Microsoft's licence terms for the emulator</a>, so read them first; without it the container prints <code>EULA Not Accepted</code> and exits.</p>
+    <p>The Kusto emulator is Microsoft's Azure Data Explorer engine packaged as a Linux container, free and needing no Azure account. Microsoft supports it on Windows and Linux computers with an x86-64 processor (the Intel and AMD kind) and at least 2 GB of memory (4 GB recommended), not on Arm processors, and the image is several gigabytes. Setting <code>ACCEPT_EULA=Y</code> accepts <a href="https://aka.ms/adx.emulator.license" target="_blank" rel="noopener noreferrer">Microsoft's licence terms for the emulator</a>, so read them first; without it the container prints <code>EULA Not Accepted</code> and exits.</p>
 <div class="code-block" data-lang="bash"><pre>mkdir -p ~/kql-lab &amp;&amp; cd ~/kql-lab
 docker run -d --name lab-kusto --platform linux/amd64 -e ACCEPT_EULA=Y -m 4G \
   -p 8080:8080 mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest</pre></div>
@@ -512,7 +526,7 @@ EOF</pre></div>
 {"eventTime":"2026-09-15T10:40:18Z","eventSource":"ec2.amazonaws.com","eventName":"DescribeInstances","awsRegion":"us-east-1","sourceIPAddress":"192.0.2.10","userAgent":"aws-cli/2.17.40","userIdentity":{"type":"AssumedRole","arn":"arn:aws:sts::111122223333:assumed-role/ci-deploy/runner-4821"},"readOnly":true}
 {"eventTime":"2026-09-15T11:40:26Z","eventSource":"iam.amazonaws.com","eventName":"CreateAccessKey","awsRegion":"us-east-1","sourceIPAddress":"198.51.100.20","userAgent":"AWS Internal","userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice","userName":"alice"},"requestParameters":{"userName":"svc-reporting"},"responseElements":{"accessKey":{"userName":"svc-reporting","accessKeyId":"AKIAI44QH8DHBEXAMPLE","status":"Active"}},"readOnly":false}
 EOF</pre></div>
-    <p>Kusto stores data in typed columns. The simplest faithful load is a staging table with one column of type <code>dynamic</code>, which holds any JSON (JavaScript Object Notation) value, one whole event per row:</p>
+    <p>Kusto stores data in typed columns. The simplest faithful load is a staging table (a table that holds raw data until it is reshaped) with one column of type <code>dynamic</code>, which holds any JSON (JavaScript Object Notation) value, one whole event per row:</p>
 <div class="code-block" data-lang="kql"><pre>.create table RawCloudTrail (Event: dynamic)</pre></div>
     <p>Now push the file in. <code>format="json"</code> means one JSON object per line, and the mapping says where the column's value comes from: the path <code>$</code> is the whole event. Microsoft meant <code>.ingest inline</code> for experiments like this one, not for production.</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; load.kql &lt;&lt;'EOF'
@@ -531,7 +545,7 @@ python3 kql.py &lt; load.kql</pre></div>
     <p><strong>A load can succeed and still be empty.</strong> Run the same <code>.ingest</code> without <code>ingestionMapping</code> and the engine reports no errors and 24 rows, and all 24 are null: nothing told it which part of each line belongs in <code>Event</code>. A row count proves that rows arrived, not that they hold anything.</p>
     </div>
 
-    <h3>3. Give it Sentinel's shape</h3>
+    <h3 id="step-shape">3. Give it Sentinel's shape</h3>
     <p>Sentinel stores CloudTrail in a table called <code>AWSCloudTrail</code>, with its own column names: <code>eventTime</code> arrives as <code>TimeGenerated</code>, <code>sourceIPAddress</code> as <code>SourceIpAddress</code>, <code>userIdentity.arn</code> as <code>UserIdentityArn</code>. Microsoft's <a href="https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/awscloudtrail" target="_blank" rel="noopener noreferrer">AWSCloudTrail table reference</a> also types three columns as <code>string</code>, not <code>dynamic</code>: <code>RequestParameters</code>, <code>ResponseElements</code> and <code>AdditionalEventData</code> hold JSON as plain text. Build the same thing:</p>
 <div class="code-block" data-lang="kql"><pre>.set-or-replace AWSCloudTrail &lt;|
     RawCloudTrail
@@ -588,7 +602,7 @@ python3 kql.py &lt; load.kql</pre></div>
 ----------------------+----------------------+-----------------+---------+---------
  2026-09-15T09:15:47Z | bob                  | 198.51.100.21   | Success | No
 (1 row)</pre></div>
-    <p>Bob, and only Bob. The alarm <a class="glossary-link" href="../glossary.html#term-security-hub">AWS Security Hub CSPM</a> checks for this (<a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">control CloudWatch.3</a>) also requires a successful sign-in, and Microsoft's own <code>AWS_ConsoleLogonWithoutMFA.yaml</code> leaves failed ones out too. When a column is already <code>dynamic</code>, <code>parse_json()</code> passes the value through unchanged, so writing it costs nothing and the query works whichever type the column has.</p>
+    <p>Bob, and only Bob. The alarm <a class="glossary-link" href="../glossary.html#term-security-hub">AWS Security Hub</a> <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a> checks for this (<a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html" target="_blank" rel="noopener noreferrer">control CloudWatch.3</a>) also requires a successful sign-in, and Microsoft's own <code>AWS_ConsoleLogonWithoutMFA.yaml</code> leaves failed ones out too. When a column is already <code>dynamic</code>, <code>parse_json()</code> passes the value through unchanged, so writing it costs nothing and the query works whichever type the column has.</p>
 
     <h3>6. Count, then threshold: a burst of refusals</h3>
     <p>A first draft of a rule for a leaked key being tried out: count <code>AccessDenied</code> errors per source address, and alert at five.</p>

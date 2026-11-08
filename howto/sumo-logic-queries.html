@@ -26,7 +26,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-09-27">
-    <meta property="article:modified_time" content="2026-10-03">
+    <meta property="article:modified_time" content="2026-11-06">
     <meta property="article:author" content="Shawn Nunley">
     <meta property="article:section" content="How-To">
     <meta property="article:tag" content="sumo logic">
@@ -62,7 +62,7 @@
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-09-27",
-      "dateModified": "2026-10-03",
+      "dateModified": "2026-11-06",
       "author": {
         "@type": "Person",
         "@id": "https://csoh.org/about-shawn-nunley.html#shawn-nunley",
@@ -308,6 +308,7 @@
                           <span class="mega-heading">Live</span>
                           <ul>
                             <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
                             <li><a href="../community.html">Community &amp; Signal</a></li>
                             <li><a href="../conferences.html">Conferences</a></li>
                             <li><a href="../present.html">Present at CSOH</a></li>
@@ -362,29 +363,31 @@
     <section class="hero hero--compact">
         <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
         <h1>Sumo Logic search queries, hands-on</h1>
-        <p>Sumo Logic's search language pulls fields out of raw log text while the query runs, and a field that nothing has extracted does not exist. Learn it from zero on a small <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> lab, then turn the searches into alerts.</p>
+        <p>Sumo Logic keeps each log as plain text and pulls named fields out of it when a search asks for them, so a field that nothing has pulled out does not exist. Learn its search language from zero on 24 events from <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a>, the record Amazon Web Services (AWS) keeps of actions taken in an account, then turn the searches into alerts.</p>
         <div class="cta-buttons">
             <a href="#walkthrough" class="btn btn-primary">Jump to the walk-through</a>
             <a href="../cloud-security-how-to.html" class="btn btn-secondary">All how-to guides</a>
         </div>
     </section>
     <main class="container contribute-article" id="main-content">
-        <p class="page-meta"><time datetime="2026-10-03">Last updated <strong>2026-10-03</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
+        <p class="page-meta"><time datetime="2026-11-06">Last updated <strong>2026-11-06</strong></time> &middot; <a href="../about-shawn-nunley.html" rel="author">By Shawn Nunley</a></p>
         <div class="info-box--blue">
             <p><strong>Time:</strong> ~2 hours &nbsp;&middot;&nbsp; <strong>Difficulty:</strong> Beginner &nbsp;&middot;&nbsp; <strong>You need:</strong> a Sumo Logic organisation that accepts your own data (step 1 explains which trials do), and a terminal with <code>curl</code> and <code>jq</code>.</p>
             <p class="u-mt-075"><strong>How this page was checked:</strong> Sumo Logic runs only as a hosted service and this page was written without an account, so none of the Sumo Logic queries here were run. Every operator, option, limit and menu path was checked against Sumo Logic's documentation, on its live site on 27 September 2026 and in its open-source repository, and the results described are what those documented rules give for the lab file, worked out by a local script rather than captured from Sumo Logic. The shell steps were run as printed, in bash and zsh on macOS (curl 8.7.1, jq 1.8.2), against a local stand-in for the upload address. The monitor in step 9 passed <code>terraform validate</code> with <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a> 1.15.7 and Sumo Logic's provider 3.3.2 from the Terraform registry, and was never applied.</p>
         </div>
 
         <section id="intro">
-            <h2>A search language that parses as it reads</h2>
-            <p>Sumo Logic is a hosted log analytics and security platform. Its search query language is what you type into Log Search, and the same queries drive dashboards, scheduled searches and monitors, Sumo Logic's alerting feature. Cloud <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management), Sumo Logic's security product, adds a separate rule language; step 11 shows how it differs. Analysts write these queries to investigate, and detection engineers turn the ones worth repeating into monitors. A query is plain text, so it can live in git and be reviewed like code, which step 9 does.</p>
-            <p>The one idea to hold on to: Sumo Logic stores each event as raw text plus a few metadata tags added when the data arrived. Named fields such as <code>eventName</code> or <code>sourceIPAddress</code> are pulled out of the text while your query runs, by a parse step you write (or at ingest, by a field extraction rule someone set up in advance). Until something parses a field, it does not exist, and most of the surprises on this page trace back to that one fact.</p>
+            <h2>What Sumo Logic's search language is for</h2>
+            <p>Cloud services record what happens in logs: lines of text that each record one event, such as a sign-in or a changed setting. In an AWS account, CloudTrail records the calls made to AWS as events, each saying who made the call, from which network address, and whether AWS refused it. Security teams send logs like these to a service that can search them and raise alerts, so that they can answer questions such as "did anyone switch off CloudTrail logging this morning?" or "was one address refused five times in ten minutes?".</p>
+            <p>Sumo Logic is one such service: a hosted log analytics and security platform, which you use through its website rather than installing anything. Its search query language is what you type into Log Search, the page where you search your logs, and the same queries drive dashboards, scheduled searches and monitors, Sumo Logic's alerting feature. Analysts write these queries to investigate, and detection engineers, the people who write and maintain an organisation's alerts, turn the ones worth repeating into monitors. A query is plain text, so it can live in git and be reviewed like code, which step 9 does. Cloud <a class="glossary-link" href="../glossary.html#term-siem">SIEM</a> (security information and event management), Sumo Logic's security product, adds a separate rule language; step 11 shows how it differs.</p>
+            <p>The one idea to hold on to: Sumo Logic stores each event as raw text plus a few metadata tags, labels such as the category the data was sent under, added when the data arrived. Named fields such as <code>eventName</code> or <code>sourceIPAddress</code> are pulled out of the text while your query runs, by a parse step you write (or at ingest, as the data arrives, by a field extraction rule someone set up in advance). Until something parses a field, it does not exist, and most of the surprises on this page trace back to that one fact. Several of them give no error at all: the search returns nothing, which looks the same as an account where nothing happened.</p>
         </section>
 
         <div class="toc">
             <h2>On this page</h2>
             <ol>
-                <li><a href="#model">Scope first, then a pipe of operators</a></li>
+                <li><a href="#how-to-use">How to use this guide</a></li>
+                <li><a href="#model">How a query is put together</a></li>
                 <li><a href="#walkthrough">Walk-through</a></li>
                 <li><a href="#exercises">Hands-on exercises</a></li>
                 <li><a href="#mistakes">Common mistakes</a></li>
@@ -392,8 +395,20 @@
             </ol>
         </div>
 
+        <section id="how-to-use">
+            <h2>How to use this guide</h2>
+            <p>Beginner here means new to Sumo Logic and to writing searches. You should be comfortable pasting commands into a terminal and reading short records of names and values, which is what each lab event is. You do not need to know AWS well: the AWS terms the detections depend on are explained as they come up, and terms with a glossary entry link to it.</p>
+            <p>Only part of the page runs on your own computer. The shell commands in steps 3 and 10 write the lab file, check it and prepare it there, and their <code>curl</code> lines send it to Sumo Logic. Every query runs in Sumo Logic, so to run them you need an organisation that accepts your own data, and step 1 says which trials do. Without one you can still follow the page by reading, because each query is followed by what it should return on the lab.</p>
+            <p>Read it in order. The <a href="#model">next section</a> shows how every query is put together. Its three short queries need the lab data in Sumo Logic, so read them first and run them once step 3 has loaded the lab. In the <a href="#walkthrough">walk-through</a>, steps 1 to 3 get an organisation, create the web address you upload to, and load and count the 24 lab events. Steps 4 to 8 build four of the five detections listed at the start of the walk-through (D5 is the first exercise). Each gives a query and the result it should return. Steps 5 and 6 first show a naive version that gives a wrong answer without any error, and steps 6 and 8 add a control: a query that must return something, run to check whether an empty or short result can be trusted. Steps 9 and 10 turn one detection into a monitor, which reruns a query on a schedule and alerts when the result meets a condition, and test it both ways. Step 11 shows how Sumo Logic's separate Cloud SIEM rules differ. The <a href="#exercises">exercises</a> then ask you to write or debug a query yourself, with each answer hidden until you open "Show the answer".</p>
+            <p>Each code block has a label in its header and a copy button. A block labelled SUMO LOGIC is a query: paste it into Log Search and run it. A block labelled BASH goes into your terminal. The HCL block in step 9 is a Terraform file that creates the monitor, for readers who manage Sumo Logic as code; step 9 also gives the same settings in the web interface. This page has no blocks of output: what each query should return is in the sentence after it, which usually starts with "Expect". The block labelled CLOUD SIEM, in step 11, is a Cloud SIEM rule shown for reading, not something to run. Step 3's block includes the line <code>cat &gt; cloudtrail-lab.jsonl &lt;&lt;'EOF'</code>, which writes every line down to the one that says only <code>EOF</code> into a file called <code>cloudtrail-lab.jsonl</code>. Its <code>SUMO_URL</code> line holds a placeholder, which has to become the upload address you copied in step 2 before the block runs. Paste the whole block at once, the <code>EOF</code> line included.</p>
+            <p>Treat each "Expect" as what should happen, not as a pasted result. As the box at the top says, the page was written without a Sumo Logic account, so none of its queries were run: each result is what Sumo Logic's documented behaviour gives on the lab file, worked out by a local script. Menus and wording were checked against that documentation on 27 September 2026 and may have changed since. The shell commands were run as printed in bash and zsh, but against a local stand-in for the upload address rather than Sumo Logic, and the Terraform file passed <code>terraform validate</code> but was never applied.</p>
+            <p>Some parts can wait for a second reading. Step 3's block is long because it holds the whole lab file, so paste it without reading every line; the start of the walk-through tells the story it holds. The ATT&amp;CK tags at the end of step 9 and the Cloud SIEM rule in step 11 are side notes you can come back to.</p>
+            <p>If a query returns nothing, or a different count from the page, check what step 3 checks first. The time range must cover yesterday, the date the lab is moved to: the default, Last 15 Minutes, does not, and if you come back on a later day, widen it. The lab events should add up to 24, not 48. After the replays in step 10, set the time range to the lab's own date only, the day before you uploaded it, so that the replays, which carry today's date, are left out. Then check the spelling and capitals of every field name you typed: <code>sourceIPAddress</code> is not <code>sourceIpAddress</code>, and a misspelt key in a <code>json</code> step drops every event without an error. Step 10's commands reuse the lab file and the <code>SUMO_URL</code> setting from step 3, so run them in <code>~/sumo-lab</code>, in a terminal where <code>SUMO_URL</code> is still set.</p>
+        </section>
+
         <section id="model">
-            <h2>Scope first, then a pipe of operators</h2>
+            <h2>How a query is put together</h2>
+            <p>Suppose someone has switched off CloudTrail logging and you want the event that records it. You know the call is named <code>StopLogging</code>, so you could search for that word. To ask anything more exact, such as which events have an <code>eventName</code> of <code>StopLogging</code>, or how many refusals came from each address, the query first has to pull those fields out of the text. This section shows both kinds of query, on the lab data that step 3 loads.</p>
             <p>A query has two parts. The <strong>scope</strong> comes first: keywords and metadata that choose which raw messages to read. After it come <strong>operators</strong>, each introduced by a pipe character, <code>|</code>, and each working on whatever the previous one handed it: parse, filter, count, sort. Keywords match whole words in the raw text and ignore case. <code>_sourceCategory</code> is metadata attached when the data was sent; step 3 sets it to <code>lab/aws/cloudtrail</code>.</p>
 <div class="code-block" data-lang="sumo logic"><pre>_sourceCategory=lab/aws/cloudtrail StopLogging</pre></div>
             <p>That returns the one raw event containing the word <code>StopLogging</code>, with no fields yet. Now ask for a field with <code>where</code>, which keeps only the messages for which a comparison is true, and see what happens:</p>
@@ -406,6 +421,7 @@
             <div class="highlight-box">
             <p><strong>The parse step filters too.</strong> By default <code>json</code> drops every message that lacks the key you asked for. Keys are case-sensitive, so <code>json "sourceIpAddress"</code> against CloudTrail, which spells it <code>sourceIPAddress</code>, drops all 24 events. Log Search shows a warning that messages lacked the key, but the result is the same empty table a quiet account gives, and a monitor, which counts result rows, sees only the empty table. Add <code>nodrop</code> to keep messages that lack a key, with the field left empty.</p>
             </div>
+            <p><a href="#step-parse-filter">Step 4</a> uses <code>nodrop</code> for a key that some events lack, and <a href="#exercises">exercise 2</a> shows what a mis-cased key does to a query.</p>
         </section>
 
         <section id="walkthrough">
@@ -423,15 +439,15 @@
             <p>Sumo Logic runs only as a hosted service, so there is nothing to install. What matters is whether your organisation can receive your own data:</p>
             <ul>
                 <li>The 14-day <strong>Agentic Free Trial</strong> from the Sumo Logic website runs in a shared environment on preloaded example data and cannot ingest your own. You can practise searching there, but not load this lab.</li>
-                <li>The 30-day trial through <strong>AWS Marketplace</strong> can ingest your data. It is not open to existing Sumo Logic customers, needs a business email address (not a personal one such as Gmail), asks you to accept Sumo Logic's service licence agreement, and at the end of the 30 days converts to a paid subscription, billed monthly through AWS for actual usage. Note the date, and cancel in AWS Marketplace under Manage subscriptions if you do not want that.</li>
-                <li>A non-production organisation at work also works, if your role has the Manage Collectors and Manage Monitors capabilities.</li>
+                <li>The 30-day trial through <strong>AWS Marketplace</strong> can ingest (take in) your data. It is not open to existing Sumo Logic customers, needs a business email address (not a personal one such as Gmail), asks you to accept Sumo Logic's service licence agreement, and at the end of the 30 days converts to a paid subscription, billed monthly through AWS for actual usage. Note the date, and cancel in AWS Marketplace under Manage subscriptions if you do not want that.</li>
+                <li>A non-production organisation at work also works, if your role has the Manage Collectors and Manage Monitors capabilities (Sumo Logic's name for permissions).</li>
             </ul>
             <p>Then set the interface to UTC (Coordinated Universal Time), so the times you see match this page: open your account settings from the person icon in the top menu (in the Classic interface, your username at the bottom of the main menu), and on the <strong>Preferences</strong> tab set <strong>Default Timezone</strong> to UTC.</p>
 
             <h3>2. Create an HTTP source</h3>
-            <p>Data arrives through a source. This lab uses an HTTP (Hypertext Transfer Protocol) source: a unique web address that stores whatever you upload to it. Open <strong>Data Management</strong>, then <strong>Collection</strong> under Data Collection (Classic interface: <strong>Manage Data &gt; Collection &gt; Collection</strong>). Click <strong>Add Collector</strong>, choose <strong>Hosted Collector</strong>, give it a name and save it. Then click <strong>Add Source</strong> next to it, choose <strong>HTTP Logs &amp; Metrics</strong>, set <strong>Name</strong> to <code>cloudtrail-lab</code> and <strong>Source Category</strong> to <code>lab/aws/cloudtrail</code>, and under the advanced options for logs set:</p>
+            <p>Data arrives through a source. This lab uses an HTTP (Hypertext Transfer Protocol) source: a unique web address that stores whatever you upload to it. Open <strong>Data Management</strong>, then <strong>Collection</strong> under Data Collection (Classic interface: <strong>Manage Data &gt; Collection &gt; Collection</strong>). A source belongs to a collector, and a hosted collector is one that Sumo Logic runs for you. Click <strong>Add Collector</strong>, choose <strong>Hosted Collector</strong>, give it a name and save it. Then click <strong>Add Source</strong> next to it, choose <strong>HTTP Logs &amp; Metrics</strong>, set <strong>Name</strong> to <code>cloudtrail-lab</code> and <strong>Source Category</strong> to <code>lab/aws/cloudtrail</code>, and under the advanced options for logs set:</p>
             <ul>
-                <li><strong>Timestamp Format</strong>: <strong>Specify a format</strong>, then <strong>+ Add Timestamp Format</strong> with format <code>yyyy-MM-dd'T'HH:mm:ss'Z'</code> and timestamp locator <code>"eventTime":"(.*?)"</code>.</li>
+                <li><strong>Timestamp Format</strong>: <strong>Specify a format</strong>, then <strong>+ Add Timestamp Format</strong> with format <code>yyyy-MM-dd'T'HH:mm:ss'Z'</code> and timestamp locator <code>"eventTime":"(.*?)"</code>, a regular expression that finds the time in each line.</li>
                 <li><strong>Default Time Zone</strong>: UTC. The format treats the trailing <code>Z</code> as a plain letter, so the zone comes from this setting.</li>
                 <li><strong>Multiline Processing</strong>: off. Each line of the lab file is one complete event.</li>
             </ul>
@@ -473,7 +489,7 @@ jq -c '(now - 86400 | strftime("%Y-%m-%d")) as $d | .eventTime |= ($d + .[10:])'
 SUMO_URL='https://paste-your-presigned-url-here'
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'X-Sumo-Category:lab/aws/cloudtrail' -T upload.jsonl "$SUMO_URL"</pre></div>
-            <p>The <code>cat</code> line writes everything up to <code>EOF</code> into <code>cloudtrail-lab.jsonl</code>, and <code>shasum</code> prints the file's hash so you can check the copy is exact. Expect the hash <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>, then <code>200</code>. The <code>jq</code> line moves the lab to yesterday (the warning below explains why); only the date changes, so every time of day, and every gap between events, stays the same. Use <code>-T</code>, as Sumo Logic's own examples do: <code>-d</code> strips the newlines, and all 24 events arrive as one line. The <code>X-Sumo-Category</code> header sets <code>_sourceCategory</code> for everything in the request, overriding the source's own setting.</p>
+            <p>The <code>cat</code> line writes everything up to <code>EOF</code> into <code>cloudtrail-lab.jsonl</code>, and <code>shasum</code> prints the file's hash, a fingerprint of its contents, so you can check the copy is exact. Expect the hash <code>35b7c80582d0650ec4850acf84f84fa4b8e5d37169ac3f7276c76f29b67c3319</code>, then <code>200</code>. The <code>jq</code> line, which uses a command-line tool for reading and changing JSON, moves the lab to yesterday (the warning below explains why); only the date changes, so every time of day, and every gap between events, stays the same. Use <code>-T</code>, as Sumo Logic's own examples do: <code>-d</code> strips the newlines, and all 24 events arrive as one line. The <code>X-Sumo-Category</code> header sets <code>_sourceCategory</code> for everything in the request, overriding the source's own setting.</p>
             <p>A 200 only means the request was received (if an ingest budget, a cap on how much data your organisation takes in, has stopped collection, the source discards the data and still answers 200), so count what arrived, and how each event's time was set. In Log Search, set the time range to <code>-2d</code> (widen it if you come back later), because the default, Last 15 Minutes, misses yesterday:</p>
 <div class="code-block" data-lang="sumo logic"><pre>_sourceCategory=lab/aws/cloudtrail
 | _format as ts_format
@@ -483,7 +499,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
             <p><strong>Old timestamps are replaced without an error.</strong> Sumo Logic expects log times to be recent. Events more than 30 days old need a timestamp format and locator on the source; events more than a year old get the current time unless Sumo Logic Support changes that for your organisation; and a message more than a day away from the source's recent messages is auto-corrected unless the source has a custom timestamp format. The events still arrive and count correctly, only their times are wrong, and that silently breaks every time window. Hence the move to yesterday, and the explicit format in step 2.</p>
             </div>
 
-            <h3>4. Filter on a parsed field: trail tampering (D1)</h3>
+            <h3 id="step-parse-filter">4. Filter on a parsed field: trail tampering (D1)</h3>
 <div class="code-block" data-lang="sumo logic"><pre>// D1: CloudTrail logging stopped, deleted or changed
 _sourceCategory=lab/aws/cloudtrail
 | json "eventName", "sourceIPAddress", "userIdentity.userName" as eventName, sourceIPAddress, userName nodrop
@@ -529,7 +545,7 @@ _sourceCategory=lab/aws/cloudtrail
 | where _count &gt;= 5</pre></div>
             <p>Expect one row: <code>203.0.113.50</code> with 7. Without the last line, <code>192.0.2.20</code> shows 3 and stays under the threshold, which is the negative case.</p>
             <div class="highlight-box">
-            <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the same query without its threshold, or a count of the values that actually exist. The <code>nodrop</code> in the control matters too: without it, <code>json</code> would have dropped the 14 events that have no <code>errorCode</code>, and you would never have seen them.</p>
+            <p><strong>A query that returns nothing and a query that cannot work return the same thing.</strong> Before you trust an empty result, run a control that must return something: the same query without its threshold, or a count of the values present in the data. The <code>nodrop</code> in the control matters too: without it, <code>json</code> would have dropped the 14 events that have no <code>errorCode</code>, and you would never have seen them.</p>
             </div>
 
             <h3>7. Time buckets</h3>
@@ -603,11 +619,11 @@ _sourceCategory=lab/aws/cloudtrail
   cloudtrail-lab.jsonl &gt; replay.jsonl
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'X-Sumo-Category:lab/aws/cloudtrail' -T replay.jsonl "$SUMO_URL"</pre></div>
-            <p>Give it five minutes and confirm the monitor is still Normal. Then run the same two commands with <code>--arg ip 203.0.113.50</code>, which replays the attacker's seven denials. Within a few minutes the monitor should go Critical, with one alert, for <code>203.0.113.50</code>. For the full picture, run a second monitor with the naive query from step 6 through the same replay: it stays Normal, which is exactly how the bug hides in production. The replays stay in <code>lab/aws/cloudtrail</code> with today's date, so for the exercises below set the time range to the day of the lab upload only: two dates, such as <code>09/26/2026 09/27/2026</code> in your date format, mean midnight to midnight.</p>
+            <p>Give it five minutes and confirm the monitor is still Normal. Then run the same two commands with <code>--arg ip 203.0.113.50</code>, which replays the attacker's seven denials. Within a few minutes the monitor should go Critical, with one alert, for <code>203.0.113.50</code>. For the full picture, run a second monitor with the naive query from step 6 through the same replay: it stays Normal, which is exactly how the bug hides in production. The replays stay in <code>lab/aws/cloudtrail</code> with today's date, so for the exercises below set the time range to the lab's own date only, the day before the upload: two dates, such as <code>09/26/2026 09/27/2026</code> in your date format, mean midnight to midnight.</p>
 
             <h3>11. Cloud SIEM rules are a different language</h3>
             <p>A Cloud SIEM rule is not a search query. Cloud SIEM parses and normalises events into records with one shared set of field names, and its rules are expressions over those records. This is the expression of the built-in rule <em>AWS CloudTrail - Logging Configuration Change Observed</em>, from Sumo Logic's published catalogue of Cloud SIEM content:</p>
-<div class="code-block" data-lang="text"><pre>metadata_vendor = 'Amazon AWS'
+<div class="code-block" data-lang="cloud siem"><pre>metadata_vendor = 'Amazon AWS'
   and metadata_product = 'CloudTrail'
   and metadata_deviceEventId IN ('AwsApiCall-CreateTrail',
                     'AwsApiCall-UpdateTrail',
