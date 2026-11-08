@@ -82,7 +82,7 @@ csoh.org/
 ├── cspm-vs-cwpp.html                # Posture vs workload protection, head to head
 ├── cnapp-vs-xdr.html                # Where CNAPP ends and XDR/CDR begins
 ├── cnapp-to-ai-app.html             # Case study: Wiz from CNAPP to AI-APP (disclosed)
-├── vendor-landscape.html            # 300+ cloud-security vendors across 32 categories
+├── vendor-landscape.html            # 320+ cloud-security vendors across 32 categories
 ├── glossary.html                    # 331 cloud-security terms with live search + cross-links
 ├── topics.html                      # Complete A-Z topic index - every page in one flat list
 ├── faq.html                         # Frequently asked questions

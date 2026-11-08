@@ -23,7 +23,7 @@ The curriculum, written by practitioners. The site nav has five groups - **Learn
 | ⚖️ [Shared Responsibility Model](https://csoh.org/shared-responsibility-model.html) | What the cloud provider secures vs. what you secure (AWS / Azure / GCP) |
 | 🛠️ [CSPM vs CNAPP vs CWPP vs CIEM vs DSPM](https://csoh.org/cspm-vs-cnapp.html) | The acronym soup decoded - when you need each tool |
 | ✅ [Cloud Security Best Practices](https://csoh.org/cloud-security-best-practices.html) | The controls that actually prevent breaches, ranked by real incidents |
-| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->300+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
+| 🗺️ [Vendor Landscape](https://csoh.org/vendor-landscape.html) | <!--count:vendors_floor-->320+<!--/count--> cloud-security vendors across <!--count:vendor_categories-->32<!--/count--> categories. No rankings, just orientation |
 | 📖 [Glossary](https://csoh.org/glossary.html) | <!--count:glossary_terms-->331<!--/count--> cloud-security terms, plain-English, every cross-reference hyperlinked |
 | ❓ [FAQ](https://csoh.org/faq.html) | Format, mailing list, recording policy, contributing, presenter pitches (FAQ schema) |
 
@@ -366,7 +366,7 @@ Same SEO play for Google Cloud. Encryption-by-default story, Security Command Ce
 The definitive comparison. Ten side-by-side `.comparison-table` blocks (identity, detection, data, network, compliance, pricing, customer identity, compute, container, serverless), conceptual differences that bite you (IAM-policy languages, org-boundary models, log pricing, VPC SC), a "which cloud for which job" guidance section, and a 20-row score-card summary.
 
 ### 🗺️ Vendor Landscape ([`vendor-landscape.html`](https://csoh.org/vendor-landscape.html))
-A directory of **<!--count:vendors_floor-->300+<!--/count--> cloud-security vendors** across <!--count:vendor_categories-->32<!--/count--> categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. One-liners, no rankings. Wiz affiliation disclosed.
+A directory of **<!--count:vendors_floor-->320+<!--/count--> cloud-security vendors** across <!--count:vendor_categories-->32<!--/count--> categories - CNAPP, CSPM, KSPM, CIEM, SSPM, DSPM, SIEM, EDR/XDR, MDR, SOAR, ASPM, SAST/SCA, IaC scanning, secrets, PAM, IdP, WAF/DDoS, API security, CASB, SASE, ZTNA, DevSecOps, image hardening, supply chain, AI security, vuln mgmt, forensics, MSSPs, GRC platforms. One-liners, no rankings. Wiz affiliation disclosed.
 
 ### 🔍 Site Search ([`search.html`](https://csoh.org/search.html))
 [MiniSearch](https://lucaong.github.io/minisearch/)-powered full-text search across every page, with **section-anchor results** and **synonym expansion**. `tools/build_search_index.py` builds `search-index.json` at deploy time (one entry per `<section id>` + one per glossary term), `search-init.js` lazy-loads it on first keystroke, and `search-synonyms.json` maps acronyms to expansions so `NHI` finds every "non-human identity" mention site-wide. CSP stays strict - `script-src 'self'`, no `unsafe-eval`, no `wasm-unsafe-eval`.
@@ -675,7 +675,7 @@ csoh.org/
 ├── what-is-cloud-security.html # Pillar: cloud security overview (FAQ schema)
 ├── shared-responsibility-model.html # Provider vs. customer security split
 ├── cloud-security-best-practices.html # Practitioner's controls checklist
-├── vendor-landscape.html       # 300+ cloud-security vendors across 32 categories
+├── vendor-landscape.html       # 320+ cloud-security vendors across 32 categories
 ├── glossary.html               # 331 cloud security terms with live search & cross-links
 ├── topics.html                 # Complete A-Z topic index - every page in one flat list
 ├── faq.html                    # Frequently asked questions (FAQPage schema)
