@@ -108,6 +108,7 @@ PAGE_LEVEL_ONLY: set[str] = {
     "resources-github-projects.html",
     "contribute-resources.html",
     "sessions.html",
+    "calendar.html",
 }
 
 # Coarse "type" tags to power result filtering. Defaults to "guide".
@@ -132,6 +133,7 @@ TYPE_TAGS: dict[str, str] = {
     "ctfs.html": "feed",
     "resources.html": "feed",
     "sessions.html": "feed",
+    "calendar.html": "feed",
 }
 
 # Subdirectory content that lives outside the root glob. Each page is

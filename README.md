@@ -154,6 +154,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 | Resource | What it covers |
 |---|---|
 | 📅 [Friday Zoom Sessions](https://csoh.org/sessions.html) | Every Friday 7am PT - format, speakers, and how to join |
+| 🗓️ [Session Calendar](https://csoh.org/calendar.html) | Upcoming sessions and events, rendered from the CSOH Google Calendar every 6 hours; subscribe links |
 | 💬 [Community & Signal](https://csoh.org/community.html) | The Signal chat and how to join the conversation between Fridays |
 | 🤝 [Mentorship](https://csoh.org/mentorship.html) | How CSOH connects mentors and mentees in the community |
 | 🏟️ [Conferences](https://csoh.org/conferences.html) | 26 security & hacker conferences, with pros & cons |
@@ -473,6 +474,9 @@ Leads with the next session date (stamped from `csoh.ics`), the mailing-list joi
 - **Registration Link:** https://csoh.kit.com/39feb4f397 (the Zoom URL itself is behind the list)
 - `Event` JSON-LD lives on this page only (one URL per event)
 
+### 🗓️ Session Calendar ([`calendar.html`](https://csoh.org/calendar.html))
+The next twelve sessions and any community events, rendered as static cards from the public feed of the CSOH Google Calendar by `tools/sync_calendar.py`, which `update-calendar.yml` runs every 6 hours. Moved, cancelled and edited weeks follow the calendar; Zoom join links and dial-in details in the feed are scrubbed before publication, because the Zoom link stays behind the mailing list. Subscribe links for Google Calendar and any iCal client. See [tools/SYNC_CALENDAR_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_CALENDAR_README.md).
+
 ### 🎤 Speakers & Pitching a Talk ([`speakers.html`](https://csoh.org/speakers.html), [`present.html`](https://csoh.org/present.html))
 `speakers.html` is the archive of guest speakers who have presented at a Friday session. `present.html` is the other side of it: what a CSOH talk looks like, what we're looking for, and how to pitch one (no vendor pitches).
 
@@ -758,6 +762,7 @@ csoh.org/
 │
 │  ── Community ──
 ├── sessions.html               # Weekly Zoom session information
+├── calendar.html               # Upcoming sessions, rendered from the Google Calendar feed (generated cards)
 ├── speakers.html               # Guest speaker archive
 ├── present.html                # How to pitch a talk for a Friday session
 ├── community.html              # Community & Signal chat
@@ -866,7 +871,7 @@ csoh.org/
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
 ├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
-├── .github/workflows/          # 21 CI/CD workflows (see "How Automation Works" below)
+├── .github/workflows/          # 22 CI/CD workflows (see "How Automation Works" below)
 │
 ├── seo-audits/                 # SEO audit reports + SCORECARD.md (excluded from deploy filters)
 ├── preview-mapping.json        # Metadata for resource previews
@@ -942,6 +947,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
 | `sync_recap_videos.py` | Carries each recorded session's link and `VideoObject` from its `presentations.html` card onto its recap in `meetings/` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_RECAP_VIDEOS_README.md) |
 | `sync_next_session.py` | Stamps the next Friday session's date into the visible banner on `index.html` / `sessions.html` and into `sessions.html`'s `Event` JSON-LD, read from `csoh.ics` | docstring |
+| `sync_calendar.py` | Renders the next twelve occurrences from the CSOH Google Calendar's public feed into the cards on `calendar.html`, scrubbing join links | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_CALENDAR_README.md) |
 | `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SITEMAP_README.md) |
 | `normalize_urls.py` | Strips tracking params, upgrades http→https, resolves redirects | docstring |
 | `../update_sri.py` | Recomputes SRI hashes + `?v=` cache-bust keys for every shared asset | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SRI_README.md) |
@@ -984,6 +990,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
 | `pr_security_triage.py` | Deterministic security triage of an untrusted PR diff, behind `security-impact-review.yml` | docstring |
+| `pr_files_to_diff.py` | Rebuilds a unified diff from the paginated pull request files API, with file modes from the git trees API, for PRs too large for GitHub's whole-PR diff. `--self-test` reads its output back through the triage parser | docstring |
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/RUN_SEO_AUDIT_README.md) |
 | `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_PAGESPEED_README.md) |
 | `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_LIGHTHOUSE_README.md) |
@@ -1096,13 +1103,14 @@ The homepage is three doors and the next-session strip - there is no resource-ca
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-The table below covers 16 of the <!--count:workflows-->21<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->21<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
+The table below covers 17 of the <!--count:workflows-->22<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->22<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
 
 **Content automation (writes to the site)**
 
 | Workflow | When | What it does |
 |---|---|---|
 | [`update-news.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-news.yml) | every 3h | Pulls <!--count:feeds-->63<!--/count--> RSS/Atom feeds, rewrites `news.html`, `feed.xml`, sitemap lastmod; opens a PR that auto-merges if the diff is news files only |
+| [`update-calendar.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-calendar.yml) | every 6h | Renders the CSOH Google Calendar's public feed into the cards on `calendar.html`; opens a PR that auto-merges if the diff is that page only |
 | [`update-resources.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-resources.yml) | Mon 14:00 | `claude-code-action` adds 2-3 fresh entries to each of the eight `resources-*.html` category pages; auto-merges only if the diff is those pages |
 | [`update-counts.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/update-counts.yml) | Mon 07:30 | Recomputes every count on the site from the real cards and refreshes the count share-cards |
 | [`normalize-urls.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/normalize-urls.yml) | 1st of month, 08:00 | Deep URL-normalization pass; opens a PR for a human to approve and merge |
@@ -1351,7 +1359,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->323<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->324<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
