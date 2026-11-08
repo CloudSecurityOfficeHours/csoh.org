@@ -1330,7 +1330,7 @@ Both are deliberately `paths:`-filtered so that editing the content they watch d
 
 CSOH is engineered for organic discovery across traditional search (Google, Bing), AI search/answer engines (ChatGPT, Perplexity, Claude, Gemini), and social previews (LinkedIn, Twitter/X, Slack). The site uses no third-party scripts and no cross-site tracking - just clean semantic HTML, structured data, disciplined metadata, and a self-hosted cookieless page-view counter (GoatCounter).
 
-### Schema.org structured data (<!--count:schema_types_floor-->35+<!--/count--> types)
+### Schema.org structured data (<!--count:schema_types_floor-->40+<!--/count--> types)
 
 **Page-level schema** - each page declares what kind of thing it is:
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
