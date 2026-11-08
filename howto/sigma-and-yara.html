@@ -462,7 +462,7 @@ sigma check rule.yml</pre></div>
 <div class="code-block" data-lang="bash"><pre>sigma convert -t splunk aws_cloudtrail_access_denied_burst.yml</pre></div>
             <p>That fails, deliberately, telling you to choose a processing pipeline or pass <code>--without-pipeline</code>. This is the most important thing to understand about Sigma, and the tool refuses to let you skip it.</p>
             <div class="highlight-box">
-            <p><strong>A Sigma rule's field names are Sigma's names, not your SIEM's.</strong> A <em>processing pipeline</em> maps them onto whatever your data actually looks like after ingestion, and different ingestion paths for the same source produce different field names. Convert without a pipeline and you get a syntactically valid query referencing fields that do not exist in your index. It runs. It returns zero results. It looks like a quiet environment.</p>
+            <p><strong>A Sigma rule's field names are Sigma's names, not your SIEM's.</strong> A <em>processing pipeline</em> maps them onto the field names your data has after ingestion, and different ingestion paths for the same source produce different field names. Convert without a pipeline and you get a syntactically valid query referencing fields that do not exist in your index. It runs. It returns zero results. It looks like a quiet environment.</p>
             </div>
             <p>List the mappings that ship with the Splunk backend:</p>
 <div class="code-block" data-lang="bash"><pre>sigma list pipelines splunk</pre></div>
@@ -607,7 +607,7 @@ yr fmt --check demo.yar</pre></div>
                     <ol>
                         <li><strong>No pipeline, so the field names are wrong.</strong> Overwhelmingly the most likely. <code>errorCode</code> may be <code>errorCode</code>, <code>aws.errorCode</code>, or something the ingestion pipeline renamed. Distinguish it by searching for one field alone with no conditions and seeing whether it exists at all.</li>
                         <li><strong>The data is not in the index you are searching.</strong> Distinguish it by searching the index for any CloudTrail event whatsoever, with no filters.</li>
-                        <li><strong>The detection is correct and the activity genuinely did not occur.</strong> The least likely, and the only one you may conclude after eliminating the first two.</li>
+                        <li><strong>The detection is correct and the activity did not occur.</strong> The least likely, and the only one you may conclude after eliminating the first two.</li>
                     </ol>
                     <p>The general habit is the one worth taking away, because it applies far beyond Sigma: <strong>a query that returns nothing and a query that cannot work return the same thing.</strong> Before believing a clean result, run a control you know should match. Search for an event you can personally cause, cause it, and confirm you can find it. If your known-good search comes back empty, the instrument is broken, not the environment quiet.</p>
                 </details>
@@ -652,7 +652,7 @@ yr fmt --check demo.yar</pre></div>
                     <summary>Show the answer</summary>
                     <p><strong>(a) YARA.</strong> A file, scanned for byte patterns.</p>
                     <p><strong>(b) Sigma.</strong> A log event with fields to match on.</p>
-                    <p><strong>(c) Neither.</strong> This is configuration state, not an event and not a file. It is a posture question, and the right tools are <a href="opa-rego.html">OPA</a>, <a href="cel-policy-expressions.html">CEL</a>, or a <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a>. You could write a Sigma rule for the <code>PutBucketPolicy</code> event that <em>created</em> it, and that is a genuinely good idea, but it is a different question: it catches the change, not the state. A bucket made public before you deployed the rule stays invisible forever.</p>
+                    <p><strong>(c) Neither.</strong> This is configuration state, not an event and not a file. It is a posture question, and the right tools are <a href="opa-rego.html">OPA</a>, <a href="cel-policy-expressions.html">CEL</a>, or a <a class="glossary-link" href="../glossary.html#term-cspm">CSPM</a>. You could write a Sigma rule for the <code>PutBucketPolicy</code> event that <em>created</em> it, and that is worth doing, but it answers a different question: it catches the change, not the state. A bucket made public before you deployed the rule stays invisible forever.</p>
                     <p><strong>(d) YARA.</strong> Though if you have a hash of the known-bad build, compare hashes: it is exact, instant, and needs no rule. Reach for YARA when you need to match a <em>family</em> of things rather than one specific artifact.</p>
                     <p>That last distinction is the one people get wrong most often, in both directions. Detecting a state change is not the same as assessing a state, and matching a family is not the same as identifying a file.</p>
                 </details>
@@ -669,7 +669,7 @@ yr fmt --check demo.yar</pre></div>
                 <li><strong>Never running a rule against benign data.</strong> Both formats. Testing only against known-bad proves nothing about specificity.</li>
                 <li><strong>Forgetting <code>ascii wide</code> for Windows targets.</strong> A UTF-16 string in a binary does not match an ASCII pattern, and this silently halves your coverage.</li>
                 <li><strong>Expecting PCRE inside YARA or Sigma regex.</strong> Both are RE2-flavoured. No backreferences, no lookaround. See <a href="regex-for-security.html">the regex page</a>.</li>
-                <li><strong>Using Sigma for posture and YARA for events.</strong> Wrong tool, and the resulting rule usually cannot express the thing you actually care about.</li>
+                <li><strong>Using Sigma for posture and YARA for events.</strong> Wrong tool, and the resulting rule usually cannot express what you care about.</li>
             </ul>
         </section>
 

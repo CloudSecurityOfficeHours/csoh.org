@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
-    <meta name="description" content="Read AWS IAM policies the way evaluation actually works, learn the elements that invert, then write and validate Cedar policies with tests.">
+    <meta name="description" content="Read AWS IAM policies in the order AWS evaluates them, learn the elements that invert, then write and validate Cedar policies with tests.">
     <meta name="author" content="Shawn Nunley">
     <meta name="keywords" content="aws iam policy tutorial, iam policy evaluation logic, notaction, forallvalues null condition, cedar policy language, amazon verified permissions, access analyzer check-no-new-access, permissions boundary scp, resource control policy rcp, data perimeter">
     <title>IAM policy languages and Cedar: a hands-on how-to - CSOH</title>
@@ -21,7 +21,7 @@
     <meta name="apple-mobile-web-app-title" content="CSOH">
 
     <meta property="og:title" content="IAM policy languages and Cedar, hands-on - CSOH">
-    <meta property="og:description" content="Read AWS IAM policies the way evaluation actually works, learn the elements that invert, then write and validate Cedar policies with tests.">
+    <meta property="og:description" content="Read AWS IAM policies in the order AWS evaluates them, learn the elements that invert, then write and validate Cedar policies with tests.">
     <meta property="og:site_name" content="Cloud Security Office Hours">
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
@@ -40,7 +40,7 @@
     <meta property="og:image" content="https://csoh.org/img/og/howto/iam-policy-languages.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="IAM policy languages and Cedar, hands-on">
-    <meta name="twitter:description" content="Read AWS IAM policies the way evaluation actually works, learn the elements that invert, then write and validate Cedar policies with tests.">
+    <meta name="twitter:description" content="Read AWS IAM policies in the order AWS evaluates them, learn the elements that invert, then write and validate Cedar policies with tests.">
     <meta name="twitter:image" content="https://csoh.org/img/og/howto/iam-policy-languages.jpg">
 
     <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
@@ -59,7 +59,7 @@
       "@context": "https://schema.org",
       "@type": "HowTo",
       "name": "IAM policy languages and Cedar, hands-on",
-      "description": "Read AWS IAM policies the way evaluation actually works, learn the elements that invert, then write and validate Cedar policies with tests.",
+      "description": "Read AWS IAM policies in the order AWS evaluates them, learn the elements that invert, then write and validate Cedar policies with tests.",
       "totalTime": "PT2H",
       "image": "https://csoh.org/banner.png",
       "datePublished": "2026-08-24",
@@ -417,7 +417,7 @@
             <ol>
                 <li><strong>An explicit <code>Deny</code> anywhere ends it.</strong> In any policy, of any type, at any level. Nothing overrides it.</li>
                 <li><strong>Every applicable guardrail must allow.</strong> AWS checks resource control policies (RCPs) first, then service control policies (SCPs), and checks permissions boundaries and session policies after the grants. Each acts as a ceiling. They do not grant anything; they cap what can be granted.</li>
-                <li><strong>Something must actually grant it.</strong> Within one account, an allow in either the identity policy or the resource policy is generally enough. Across accounts, both sides must allow independently.</li>
+                <li><strong>Something must grant it.</strong> Within one account, an allow in either the identity policy or the resource policy is generally enough. Across accounts, both sides must allow independently.</li>
                 <li><strong>Otherwise, implicit deny.</strong> Nothing is permitted by default.</li>
             </ol>
             <p>Read that as an <em>intersection</em>, not a union. The effective permission is what survives every layer, and adding a policy can only ever remove access or leave it unchanged, never add access past a ceiling above it.</p>
@@ -717,7 +717,7 @@ echo '{"mfa": false}' &gt; ctx_nomfa.json</pre></div>
 
             <div class="exercise">
                 <span class="exercise__label">Exercise 1</span>
-                <p>A role has this identity policy attached. The account is in an OU whose SCP denies all actions outside <code>eu-west-1</code>. The role also has a permissions boundary allowing only <code>s3:*</code>. What can this role actually do?</p>
+                <p>A role has this identity policy attached. The account is in an OU whose SCP denies all actions outside <code>eu-west-1</code>. The role also has a permissions boundary allowing only <code>s3:*</code>. What can this role do?</p>
 <div class="code-block" data-lang="json"><pre>{ "Effect": "Allow", "Action": "*", "Resource": "*" }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
@@ -741,7 +741,7 @@ echo '{"mfa": false}' &gt; ctx_nomfa.json</pre></div>
 }</pre></div>
                 <details>
                     <summary>Show the answer</summary>
-                    <p>This one is genuinely subtle, and it is a case where the naive fix is wrong.</p>
+                    <p>This one is subtle, and the naive fix is wrong.</p>
                     <p><code>aws:MultiFactorAuthPresent</code> is <strong>not present at all</strong> for requests made with long-term IAM user access keys. It is only populated for temporary credentials. So with a plain <code>Bool</code>, the condition is a no-match for exactly the credential type you were most worried about, and the deny never fires.</p>
                     <p><code>BoolIfExists</code> is therefore correct here, not the bug: it makes the deny apply when the key is absent as well as when it is false. That is the standard AWS-documented pattern for an MFA-enforcement deny.</p>
                     <p>The real problem is <code>"Action": "*"</code>. Denying everything without MFA also denies the calls a user needs to <em>set up and use</em> MFA, locking them out of self-service. The working version carves those out:</p>
