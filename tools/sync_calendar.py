@@ -60,7 +60,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -395,6 +395,7 @@ class Occurrence:
     url: str
     all_day: bool
     kind: str          # "weekly", "recurring", "moved" or "single"
+    named: bool = True  # False when the name is the weekly series' own
 
 
 def event_times(props: Props, default_tz: ZoneInfo) -> tuple[datetime, datetime, bool]:
@@ -477,6 +478,17 @@ def occurrences(events: list[Props], top: dict[str, str], now: datetime,
     for (uid, when), ev in overrides.items():
         start, end, all_day = event_times(ev, default_tz)
         add(ev, start, end, all_day, "moved" if start != when else master_kind.get(uid, "single"))
+
+    # Each card is titled by its date. The weekly series' own name would repeat
+    # on nearly every card, so a card names its event only when it is something
+    # else: a one-off, another series, or a week whose title was edited. With
+    # two weekly series there is no single name to leave out, so every card
+    # keeps its name.
+    weekly_names = {text(ev, "SUMMARY") or "Cloud Security Office Hours"
+                    for ev in masters if master_kind.get(text(ev, "UID")) == "weekly"}
+    if len(weekly_names) == 1:
+        series_name = weekly_names.pop()
+        found = [replace(o, named=o.summary != series_name) for o in found]
 
     found.sort(key=lambda o: (o.start, o.summary))
     return found[:limit]
@@ -566,8 +578,9 @@ def time_range(start: datetime, end: datetime, tz: ZoneInfo, label: str) -> str:
     return f"{clock(s)} {meridiem(s)} to {clock(e)} {meridiem(e)} {label}"
 
 
-def long_date(dt: datetime) -> str:
-    return f"{dt:%A}, {dt:%B} {dt.day}, {dt.year}"
+def day_title(dt: datetime) -> str:
+    # No year: the month heading above the card carries it.
+    return f"{dt:%A}, {dt:%B} {dt.day}"
 
 
 def slug(value: str) -> str:
@@ -587,20 +600,24 @@ def render_card(occ: Occurrence, used_ids: set[str]) -> str:
     used_ids.add(card_id)
 
     if occ.all_day:
-        when = f'<time datetime="{local:%Y-%m-%d}">{long_date(local)}</time><br>All day'
+        stamp_attr, when = f"{local:%Y-%m-%d}", "All day"
     else:
-        when = (f'<time datetime="{local.isoformat()}">{long_date(local)}</time><br>'
-                f"{time_range(occ.start, occ.end, SITE_TZ, 'PT')} "
+        stamp_attr = local.isoformat()
+        when = (f"{time_range(occ.start, occ.end, SITE_TZ, 'PT')} "
                 f"({time_range(occ.start, occ.end, SECOND_TZ, 'ET')})")
 
     parts = [
-        # <h3> because main.js reads every .resource-card's h3 for its icon pass
-        # and throws on a card without one; data-icon names the glyph outright,
-        # the way sessions.html's own cards do.
+        # The date is the title because it is what tells one card from the
+        # next; the time sits directly under it. Still an <h3>, because main.js
+        # reads every .resource-card's h3 for its icon pass and throws on a card
+        # without one; data-icon names the glyph outright, the way
+        # sessions.html's own cards do.
         f'                    <div class="resource-card" id="{card_id}" data-no-preview data-icon="\U0001F4C5">',
-        f"                        <h3>{html.escape(occ.summary)}</h3>",
+        f'                        <h3><time datetime="{stamp_attr}">{day_title(local)}</time></h3>',
         f'                        <p class="article-date">{when}</p>',
     ]
+    if occ.named:
+        parts.append(f"                        <p><strong>{html.escape(occ.summary)}</strong></p>")
     description = scrub_description(occ.description)
     if description:
         parts.append(f"                        <p>{description}</p>")
@@ -808,6 +825,24 @@ def self_test() -> int:
     check(">All day<" in block, "all-day event labelled")
     check(block.count('<h3 id="month-') == 3, "grouped by month (Nov, Dec, Jan)")
     check(block.count('class="resource-card"') == len(occs), "one card per occurrence")
+    check('<h3><time datetime="2026-12-11T07:00:00-08:00">Friday, December 11</time></h3>' in block,
+          "card titled by its date")
+    check('<h3><time datetime="2026-12-10">Thursday, December 10</time></h3>' in block,
+          "all-day card titled by its date")
+    check("Cloud Security Office Hours Friday" not in block, "weekly series name not repeated on its cards")
+    check(all(f"<strong>{n}</strong>" in block for n in
+              ("Saturday special", "Friday with a guest", "Guest talk", "First Tuesday", "Community day")),
+          "one-offs, the other series and renamed weeks keep their names")
+    # Control: a second weekly series leaves no single name to drop, so every
+    # card is named again.
+    two = FIXTURE.replace("END:VCALENDAR", "BEGIN:VEVENT\nUID:weekly2@test\n"
+                          "DTSTART;TZID=America/New_York:20261109T100000\n"
+                          "DTEND;TZID=America/New_York:20261109T110000\n"
+                          "RRULE:FREQ=WEEKLY;BYDAY=MO\nSUMMARY:Monday lab\nEND:VEVENT\nEND:VCALENDAR")
+    assert two != FIXTURE, "plant did nothing"
+    both = render(occurrences(*parse_calendar(two), PROBE))
+    check("<strong>Cloud Security Office Hours Friday</strong>" in both and "<strong>Monday lab</strong>" in both,
+          "control: two weekly series both keep their names")
 
     # Control: a planted join link in a brand-new shape is still caught.
     planted = scrub_description("Backup room: https://csoh.zoom.us/my/room?pwd=x and https://meet.google.com/abc-defg-hij")

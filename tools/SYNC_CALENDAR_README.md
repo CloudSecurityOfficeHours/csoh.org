@@ -8,7 +8,7 @@ The [Calendar page](https://csoh.org/calendar.html) is rendered **automatically 
 2. The script fetches the calendar's **public iCalendar feed**. iCalendar (`.ics`) is the plain-text format every calendar app speaks; Google publishes one for any calendar marked public, and it contains the weekly series as one entry plus a note for any week that was moved, cancelled or edited.
 3. The script **expands the series** into the next twelve occurrences, up to six months out, applying the skipped weeks, the moved weeks and the cancellations the same way a calendar app would. It does this with the Python standard library alone, so the CI job installs nothing.
 4. It **scrubs anything that must not be published**. The Zoom link is deliberately behind the mailing list, so a join URL on any meeting host (Zoom, Meet, Teams, Webex and the rest) becomes "(Zoom link via the CSOH mailing list)", lines that look like dial-in details ("Meeting ID", "Passcode") are dropped, and email addresses outside csoh.org are removed. Other links are kept and made clickable.
-5. It writes the result as ordinary HTML cards between the two marker comments in `calendar.html`, grouped by month, with times in Pacific first and Eastern alongside. Nothing outside the markers is touched: the page's title, description and prose are hand-written.
+5. It writes the result as ordinary HTML cards between the two marker comments in `calendar.html`, grouped by month. Each card is titled by its date, with the time under it in Pacific first and Eastern alongside. The weekly series' own name is left off its cards, since it would repeat on nearly every one; a one-off, another series, or a week whose title was edited in Google keeps its name. Nothing outside the markers is touched: the page's title, description and prose are hand-written.
 6. If the page changed, the workflow **opens a pull request**. If the only file in the diff is `calendar.html`, it is approved and merged automatically; anything else waits for a human.
 7. The merge is a push to `main`, which runs the normal deploy to the three origins.
 
@@ -37,6 +37,7 @@ The self-test is run in CI before every render and refuses a clean verdict unles
 - a monthly "first Tuesday" series bounded by `COUNT`;
 - an all-day event, anchored to the date rather than to midnight Eastern;
 - a one-off event whose description carries a Zoom join URL, a meeting ID, a passcode and an outside email address, none of which reach the page;
+- cards titled by their date, the weekly series' name left off, and every other name kept; with two weekly series planted, both keep their names;
 - stamping that is a no-op on the second run, a planted stale card that `--check` reports, and a page without markers that is refused.
 
 ## Changing what is rendered
