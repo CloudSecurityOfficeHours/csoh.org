@@ -37,6 +37,7 @@ The self-test is run in CI before every render and refuses a clean verdict unles
 - a monthly "first Tuesday" series bounded by `COUNT`;
 - an all-day event, anchored to the date rather than to midnight Eastern;
 - a one-off event whose description carries a Zoom join URL, a meeting ID, a passcode and an outside email address, none of which reach the page;
+- each card's icon tile showing its own day of the month;
 - cards titled by their date, the weekly series' name left off, and every other name kept; with two weekly series planted, both keep their names;
 - stamping that is a no-op on the second run, a planted stale card that `--check` reports, and a page without markers that is refused.
 
@@ -50,4 +51,4 @@ The self-test is run in CI before every render and refuses a clean verdict unles
 | Which hosts count as private join links | `PRIVATE_HOSTS` and `PRIVATE_LINE_RE` |
 | How often it runs | the `cron` line in `update-calendar.yml` |
 
-The card markup reuses the site's existing `resource-grid`, `resource-card`, `article-date` and `tag` classes, so there is no calendar-specific CSS to keep in step with the dark theme.
+The card markup reuses the site's existing `resource-grid`, `resource-card`, `resource-card-icon`, `article-date` and `tag` classes. The one addition is `resource-card-icon--date` in `style.css`, which sets the day of the month in the heading face; the tile's background is the same in both themes, so it has no dark-mode rule. The renderer writes each card's icon tile itself, showing the day of the month, rather than leaving it to `main.js`, which skips any card that already has one.

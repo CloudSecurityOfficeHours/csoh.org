@@ -610,9 +610,14 @@ def render_card(occ: Occurrence, used_ids: set[str]) -> str:
         # The date is the title because it is what tells one card from the
         # next; the time sits directly under it. Still an <h3>, because main.js
         # reads every .resource-card's h3 for its icon pass and throws on a card
-        # without one; data-icon names the glyph outright, the way
-        # sessions.html's own cards do.
-        f'                    <div class="resource-card" id="{card_id}" data-no-preview data-icon="\U0001F4C5">',
+        # without one.
+        #
+        # The icon tile is written here rather than left to main.js, so it can
+        # show the day of the month (main.js skips a card that already has
+        # one). It works with scripts off, and aria-hidden keeps a screen
+        # reader from saying the day twice, since the title already says it.
+        f'                    <div class="resource-card" id="{card_id}" data-no-preview>',
+        f'                        <div class="resource-card-icon resource-card-icon--date" aria-hidden="true">{local.day}</div>',
         f'                        <h3><time datetime="{stamp_attr}">{day_title(local)}</time></h3>',
         f'                        <p class="article-date">{when}</p>',
     ]
@@ -829,6 +834,9 @@ def self_test() -> int:
           "card titled by its date")
     check('<h3><time datetime="2026-12-10">Thursday, December 10</time></h3>' in block,
           "all-day card titled by its date")
+    icons = re.findall(r'<div class="resource-card-icon resource-card-icon--date" aria-hidden="true">(\d+)</div>', block)
+    check(icons == [str(o.start.astimezone(SITE_TZ).day) for o in occs],
+          "every card's icon tile shows its own day of the month")
     check("Cloud Security Office Hours Friday" not in block, "weekly series name not repeated on its cards")
     check(all(f"<strong>{n}</strong>" in block for n in
               ("Saturday special", "Friday with a guest", "Guest talk", "First Tuesday", "Community day")),
