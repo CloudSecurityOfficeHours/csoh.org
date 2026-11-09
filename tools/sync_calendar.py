@@ -60,7 +60,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -108,6 +108,9 @@ PRIVATE_LINK_TEXT = "(Zoom link via the CSOH mailing list)"
 # here, and the calendar's own boilerplate ends every entry with the homepage.
 OWN_HOSTS = ("csoh.org",)
 PRIVATE_LOCATION_TEXT = "Zoom (link via the CSOH mailing list)"
+# Where a reader gets the Zoom link: the mailing-list sign-up, the same
+# address as the page's "Get the Zoom link" button.
+ZOOM_SIGNUP_URL = "https://csoh.kit.com/39feb4f397"
 
 WEEKDAYS = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 MAX_INSTANCES = 5000   # a runaway RRULE stops here rather than never
@@ -395,6 +398,8 @@ class Occurrence:
     url: str
     all_day: bool
     kind: str          # "weekly", "recurring", "moved" or "single"
+    named: bool = True     # False when the name is the weekly series' own
+    series: bool = False   # an instance of the weekly series (the Friday Zoom)
 
 
 def event_times(props: Props, default_tz: ZoneInfo) -> tuple[datetime, datetime, bool]:
@@ -477,6 +482,24 @@ def occurrences(events: list[Props], top: dict[str, str], now: datetime,
     for (uid, when), ev in overrides.items():
         start, end, all_day = event_times(ev, default_tz)
         add(ev, start, end, all_day, "moved" if start != when else master_kind.get(uid, "single"))
+
+    # The weekly series is the Friday Zoom session. Its cards leave its name
+    # off, because it would repeat on nearly every card, and link to the
+    # sign-up that sends the Zoom link. A card names its event only when it is
+    # something else: a one-off, another series, or a week whose title was
+    # edited. The series is matched by name, not UID, because editing "this and
+    # following events" in Google splits it into two masters with new UIDs.
+    # Two weekly series with different names can't be told apart, so then every
+    # card keeps its name and none gets the Zoom link.
+    weekly = {text(ev, "UID"): text(ev, "SUMMARY") or "Cloud Security Office Hours"
+              for ev in masters if master_kind.get(text(ev, "UID")) == "weekly"}
+    names = set(weekly.values())
+    if len(names) == 1:
+        series_name = names.pop()
+        found = [replace(o, named=o.summary != series_name, series=o.uid in weekly) for o in found]
+    elif names:
+        print(f"warning: {len(names)} differently named weekly series in the feed; "
+              "every card keeps its name and none links to the Zoom sign-up", file=sys.stderr)
 
     found.sort(key=lambda o: (o.start, o.summary))
     return found[:limit]
@@ -566,8 +589,9 @@ def time_range(start: datetime, end: datetime, tz: ZoneInfo, label: str) -> str:
     return f"{clock(s)} {meridiem(s)} to {clock(e)} {meridiem(e)} {label}"
 
 
-def long_date(dt: datetime) -> str:
-    return f"{dt:%A}, {dt:%B} {dt.day}, {dt.year}"
+def day_title(dt: datetime) -> str:
+    # No year: the month heading above the card carries it.
+    return f"{dt:%A}, {dt:%B} {dt.day}"
 
 
 def slug(value: str) -> str:
@@ -587,20 +611,29 @@ def render_card(occ: Occurrence, used_ids: set[str]) -> str:
     used_ids.add(card_id)
 
     if occ.all_day:
-        when = f'<time datetime="{local:%Y-%m-%d}">{long_date(local)}</time><br>All day'
+        stamp_attr, when = f"{local:%Y-%m-%d}", "All day"
     else:
-        when = (f'<time datetime="{local.isoformat()}">{long_date(local)}</time><br>'
-                f"{time_range(occ.start, occ.end, SITE_TZ, 'PT')} "
+        stamp_attr = local.isoformat()
+        when = (f"{time_range(occ.start, occ.end, SITE_TZ, 'PT')} "
                 f"({time_range(occ.start, occ.end, SECOND_TZ, 'ET')})")
 
     parts = [
-        # <h3> because main.js reads every .resource-card's h3 for its icon pass
-        # and throws on a card without one; data-icon names the glyph outright,
-        # the way sessions.html's own cards do.
-        f'                    <div class="resource-card" id="{card_id}" data-no-preview data-icon="\U0001F4C5">',
-        f"                        <h3>{html.escape(occ.summary)}</h3>",
+        # The date is the title because it is what tells one card from the
+        # next; the time sits directly under it. Still an <h3>, because main.js
+        # reads every .resource-card's h3 for its icon pass and throws on a card
+        # without one.
+        #
+        # The icon tile is written here rather than left to main.js, so it can
+        # show the day of the month (main.js skips a card that already has
+        # one). It works with scripts off, and aria-hidden keeps a screen
+        # reader from saying the day twice, since the title already says it.
+        f'                    <div class="resource-card" id="{card_id}" data-no-preview>',
+        f'                        <div class="resource-card-icon resource-card-icon--date" aria-hidden="true">{local.day}</div>',
+        f'                        <h3><time datetime="{stamp_attr}">{day_title(local)}</time></h3>',
         f'                        <p class="article-date">{when}</p>',
     ]
+    if occ.named:
+        parts.append(f"                        <p><strong>{html.escape(occ.summary)}</strong></p>")
     description = scrub_description(occ.description)
     if description:
         parts.append(f"                        <p>{description}</p>")
@@ -609,6 +642,8 @@ def render_card(occ: Occurrence, used_ids: set[str]) -> str:
         parts.append(f"                        <p>Where: {location}</p>")
     if occ.url and not is_private_url(occ.url):
         parts.append(f'                        <p><a href="{html.escape(occ.url, quote=True)}" target="_blank" rel="noopener noreferrer">Event details</a></p>')
+    if occ.series:
+        parts.append(f'                        <a href="{ZOOM_SIGNUP_URL}" class="card-action" target="_blank" rel="noopener noreferrer">Get the Zoom link &rarr;</a>')
     tags = [KIND_TAGS[occ.kind]] + (["All day"] if occ.all_day else [])
     parts.append('                        <div class="resource-tags">')
     parts.extend(f'                            <span class="tag">{t}</span>' for t in tags)
@@ -808,6 +843,48 @@ def self_test() -> int:
     check(">All day<" in block, "all-day event labelled")
     check(block.count('<h3 id="month-') == 3, "grouped by month (Nov, Dec, Jan)")
     check(block.count('class="resource-card"') == len(occs), "one card per occurrence")
+    check('<h3><time datetime="2026-12-11T07:00:00-08:00">Friday, December 11</time></h3>' in block,
+          "card titled by its date")
+    check('<h3><time datetime="2026-12-10">Thursday, December 10</time></h3>' in block,
+          "all-day card titled by its date")
+    icons = re.findall(r'<div class="resource-card-icon resource-card-icon--date" aria-hidden="true">(\d+)</div>', block)
+    check(icons == [str(o.start.astimezone(SITE_TZ).day) for o in occs],
+          "every card's icon tile shows its own day of the month")
+    check("Cloud Security Office Hours Friday" not in block, "weekly series name not repeated on its cards")
+    check(all(f"<strong>{n}</strong>" in block for n in
+              ("Saturday special", "Friday with a guest", "Guest talk", "First Tuesday", "Community day")),
+          "one-offs, the other series and renamed weeks keep their names")
+    zoom_link = f'<a href="{ZOOM_SIGNUP_URL}" class="card-action"'
+    cards = re.findall(r'<div class="resource-card".*?\n                    </div>', block, re.S)
+    linked = {re.search(r'datetime="([^"]+)"', c).group(1)[:10] for c in cards if zoom_link in c}
+    check(linked == {"2026-11-14", "2026-11-20", "2026-12-11", "2026-12-18", "2026-12-25",
+                     "2027-01-01", "2027-01-08", "2027-01-15"},
+          "weekly cards (moved and edited weeks too) link to the Zoom sign-up; one-offs and other series don't")
+    # A "this and following" edit splits the series into a second master with
+    # a new UID and the same name: both halves are still the weekly Zoom.
+    split = FIXTURE.replace("END:VCALENDAR", "BEGIN:VEVENT\nUID:weekly-split@test\n"
+                            "DTSTART;TZID=America/New_York:20261112T100000\n"
+                            "DTEND;TZID=America/New_York:20261112T110000\n"
+                            "RRULE:FREQ=WEEKLY;BYDAY=TH\nSUMMARY:Cloud Security Office Hours Friday\n"
+                            "END:VEVENT\nEND:VCALENDAR")
+    assert split != FIXTURE, "plant did nothing"
+    split_occs = occurrences(*parse_calendar(split), PROBE, limit=100)
+    halves = render(split_occs)
+    split_instances = sum(o.uid in ("weekly@test", "weekly-split@test") for o in split_occs)
+    check("Cloud Security Office Hours Friday" not in halves and 'datetime="2026-11-12T07:00:00-08:00"' in halves
+          and halves.count(zoom_link) == split_instances,
+          "a split series is still one series: names left off, every instance linked")
+    # Control: a second weekly series leaves no single name to drop, so every
+    # card is named again and none claims to be the Zoom session.
+    two = FIXTURE.replace("END:VCALENDAR", "BEGIN:VEVENT\nUID:weekly2@test\n"
+                          "DTSTART;TZID=America/New_York:20261109T100000\n"
+                          "DTEND;TZID=America/New_York:20261109T110000\n"
+                          "RRULE:FREQ=WEEKLY;BYDAY=MO\nSUMMARY:Monday lab\nEND:VEVENT\nEND:VCALENDAR")
+    assert two != FIXTURE, "plant did nothing"
+    both = render(occurrences(*parse_calendar(two), PROBE))
+    check("<strong>Cloud Security Office Hours Friday</strong>" in both and "<strong>Monday lab</strong>" in both,
+          "control: two weekly series both keep their names")
+    check(zoom_link not in both, "control: with two weekly series no card links to the Zoom sign-up")
 
     # Control: a planted join link in a brand-new shape is still caught.
     planted = scrub_description("Backup room: https://csoh.zoom.us/my/room?pwd=x and https://meet.google.com/abc-defg-hij")

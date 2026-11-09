@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="Huntress's account of a 2026 Microsoft 365 campaign: sessions captured after MFA, replayed from one rented /24, then rogue Entra devices, swapped MFA and hidden inbox rules.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="M365 Token Spray and Replay 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, Microsoft 365, Entra ID, token replay, token spraying, adversary-in-the-middle, device code phishing, device registration, MFA method takeover, inbox rules, business email compromise, 1337 Services">
+    <title>M365 Token Spray and Replay 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/m365-token-spray-replay.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/m365-token-spray-replay.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/m365-token-spray-replay.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="M365 Token Spray and Replay 2026 Breach Kill Chain">
+    <meta property="og:description" content="Stolen Microsoft 365 sessions, minted after MFA, were replayed from one rented /24. Huntress responded at 79 organizations; the operator registered rogue Entra devices, swapped MFA methods and hid mail.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-08">
+    <meta property="article:modified_time" content="2026-11-08">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="M365 Token Spray and Replay 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="Microsoft 365">
+    <meta property="article:tag" content="Entra ID">
+    <meta property="article:tag" content="token replay">
+    <meta property="article:tag" content="token spraying">
+    <meta property="article:tag" content="adversary-in-the-middle">
+    <meta property="article:tag" content="device code phishing">
+    <meta property="article:tag" content="device registration">
+    <meta property="article:tag" content="MFA method takeover">
+    <meta property="article:tag" content="inbox rules">
+    <meta property="article:tag" content="business email compromise">
+    <meta property="article:tag" content="1337 Services">
+    <meta property="og:url" content="https://csoh.org/breaches/m365-token-spray-replay.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/m365-token-spray-replay.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="M365 Token Spray and Replay 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Stolen Microsoft 365 sessions, minted after MFA, were replayed from one rented /24. Huntress responded at 79 organizations; the operator registered rogue Entra devices, swapped MFA methods and hid mail.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/m365-token-spray-replay.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=28956df2" as="style"
+        integrity="sha384-6HLQGyoZRA36tqLcf+6Vacr4bY3tr6svD1gWHbAynE2aAkAeZqNUfk3xD5XZLAKc">
+    <link rel="stylesheet" href="/style.css?v=28956df2"
+        integrity="sha384-6HLQGyoZRA36tqLcf+6Vacr4bY3tr6svD1gWHbAynE2aAkAeZqNUfk3xD5XZLAKc">
+    <link rel="stylesheet" href="/breach-timeline.css?v=95deadd4" integrity="sha384-a4EXbuH6LtXikTxHKYOI7HZgPOWLNGk9X11dWhrNxgMU6oPutelSJcQNI3xZU4s/">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "M365 Token Spray and Replay - Tokens Captured After MFA → Replayed From One Rented /24 → Rogue Entra Devices → MFA Methods Wiped and Replaced → Hidden Inbox Rules Around Payroll Mail",
+  "description": "Huntress's account of a 2026 Microsoft 365 campaign: sessions captured after MFA, replayed from one rented /24, then rogue Entra devices, swapped MFA and hidden inbox rules.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-08",
+  "dateModified": "2026-11-08",
+  "mainEntityOfPage": "https://csoh.org/breaches/m365-token-spray-replay.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Microsoft 365 token spray and replay campaign",
+    "description": "Between July 14 and September 22, 2026, an operator replayed stolen Microsoft 365 sign-in sessions from rented hosts in 193.26.115.0/24, then registered rogue Entra devices, replaced victims' MFA methods and created hidden inbox rules. Huntress reported responding to related incidents at 79 organizations."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Huntress"
+    },
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Organization",
+      "name": "1337 Services GmbH"
+    },
+    {
+      "@type": "Organization",
+      "name": "The Hacker News"
+    },
+    {
+      "@type": "Organization",
+      "name": "ANY.RUN"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "M365 Token Spray and Replay 2026",
+      "item": "https://csoh.org/breaches/m365-token-spray-replay.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">M365 Token Spray and Replay 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>M365 Token Spray and Replay 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="m365-token-spray-replay-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">July to September 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-azure"><a class="glossary-link" href="../glossary.html#term-entra-id">Entra ID</a> / M365</span>
+    </div>
+    <h2 class="inc-title">M365 Token Spray and Replay - Tokens Captured After MFA &rarr; Replayed From One Rented /24 &rarr; Rogue Entra Devices &rarr; MFA Methods Wiped and Replaced &rarr; Hidden Inbox Rules Around Payroll Mail</h2>
+    <p class="inc-summary">Huntress published this account on October 22, 2026. Between July 14 and September 22 it tracked an operator who replayed stolen Microsoft 365 sign-in sessions from rented hosts in one address block, 193.26.115.0/24 at 1337 Services GmbH, and it responded to related incidents at 79 organizations. Because each session was minted after the victim passed <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>, replaying it needed no second factor. Inside, the operator registered rogue Entra devices, wiped victims' MFA methods and registered its own, and created inbox rules with one-to-three-character or punctuation names that hid mail, in one case mail about payroll. One compromised mailbox sent a payroll-related email to an outside CPA. <strong>Three caveats belong next to the headline.</strong> Huntress's text counts organizations and sign-in events. The 97 compromised accounts in The Hacker News's headline come from a "by the numbers" graphic in Huntress's report, and the text never repeats that figure or says how the accounts were counted. Huntress says the tokens came from several sources, including adversary-in-the-middle relays and device-code <a class="glossary-link" href="../glossary.html#term-phishing">phishing</a>, and gives no breakdown of how many tokens came from each. And it reports no confirmed financial loss or data theft; its figures come from its own customer environments.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>79</strong> organizations where Huntress responded to related incidents</div>
+      <div class="inc-stat"><strong>497+</strong> successful Microsoft 365 sign-in events Huntress detected, against 200,000+ failed login attempts traced to the same /24</div>
+      <div class="inc-stat"><strong>48+</strong> rogue Entra devices registered, and, in 19 organizations, MFA methods wiped and replaced within three hours of the first campaign sign-in, per Huntress</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> unattributed; Huntress names the hosting provider of the replay range, not an actor</div>
+    </div>
+    <a class="pm-link" href="https://www.huntress.com/blog/token-replay-spray" target="_blank" rel="noopener">📄 Huntress - M365 Token Spray and Replay Campaign Compromises Business Email Accounts ↗</a>
+    <a class="pm-link" href="https://learn.microsoft.com/en-us/entra/identity/users/users-revoke-access" target="_blank" rel="noopener">📄 Microsoft Learn - Revoke user access in an emergency in Microsoft Entra ID ↗</a>
+    <a class="pm-link" href="https://thehackernews.com/2026/10/microsoft-365-token-replay-attacks.html" target="_blank" rel="noopener">📄 The Hacker News - Microsoft 365 Token-Replay Attacks coverage ↗</a>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-init">🎣 <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: Fake Sign-in Pages and Device Codes</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Victims reached fake sign-in pages and device-code prompts, and Huntress names more than one source for the stolen tokens</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1566/002/" target="_blank" rel="noopener">T1566.002 - Phishing: Spearphishing Link</a>
+        </div>
+        <p class="step-desc">Huntress says the tokens came from multiple sources: adversary-in-the-middle (AiTM) relays behind fake sign-in pages, device-code phishing, and <a class="glossary-link" href="../glossary.html#term-social-engineering">social engineering</a> during a legitimate login. It lists these for the campaign as a whole. It lists these for the campaign as a whole and gives no breakdown by method. It does tie some replays to a source: the browser sessions replayed from 193.26.115[.]199 and 193.26.115[.]210 came through AiTM relays, and sign-ins from 193.26.115[.]16 used the device-code flow. It does not say where the scripted Build A replays got their tokens, and it does not describe how the lures reached victims.</p>
+        <p class="step-desc">The device-code route shows up in the second phase, when Huntress recorded sign-ins through the Microsoft Office device-code flow from 193.26.115[.]16. In that flow the victim is tricked into entering a code on Microsoft's own sign-in page, and completing it hands the attacker a valid refresh token and access token.</p>
+        <div class="step-code">
+          <span class="hl">Sources Huntress names:</span> AiTM relays, device-code phishing, social engineering during a real login<br>
+          <span class="hl">Breakdown by method:</span> not given; AiTM tied to the Build B replays, device code to 193.26.115[.]16<br>
+          <span class="hl">Lure delivery:</span> not described<br>
+          <span class="hl">Device-code sign-ins:</span> Microsoft Office client, from 193.26.115[.]16 (Phase 2)
+        </div>
+        <div class="step-tags"><span class="stag">Phishing</span><span class="stag">Device Code Flow</span><span class="stag">AiTM</span><span class="stag">T1566.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: A Session Minted After MFA</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">On July 21 an AiTM relay caught a victim at the MFA prompt and kept the session that sign-in produced</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1557/" target="_blank" rel="noopener">T1557 - Adversary-in-the-Middle</a>
+        </div>
+        <p class="step-desc">Huntress gives one case in full. At 17:18:20 UTC on July 21, an AiTM relay at 185.238.2[.]195 caught the victim at the MFA prompt. The relay passed the prompt through to Microsoft and kept the resulting session. The session token is issued after MFA succeeds, so replaying it does not trigger MFA again.</p>
+        <p class="step-desc">Huntress describes the operation as two tiers on different providers: relays that capture sessions, and separate hosts that replay them. A later relay, an IPv6 address at Evoxt Sdn. Bhd., first appeared on September 2. On September 22 a victim reached the MFA prompt through it at 20:46 UTC and completed MFA a minute later.</p>
+        <div class="step-code">
+          <span class="hl">July 21 relay:</span> 185.238.2[.]195, victim caught at the MFA prompt at 17:18:20 UTC<br>
+          <span class="hl">Phase 4 relay:</span> 2400:8d60:2::1:841d:5dd (Evoxt Sdn. Bhd.), first seen September 2<br>
+          <span class="hl">What the relay keeps:</span> a session already past MFA
+        </div>
+        <div class="step-tags"><span class="stag">AiTM</span><span class="stag">Session Theft</span><span class="stag">MFA</span><span class="stag">T1557</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a>: Replayed From One Rented Range</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stolen sessions were replayed from one rented /24 within minutes: 12 minutes after capture on July 21, four on September 22</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1550/001/" target="_blank" rel="noopener">T1550.001 - Use Alternate Authentication Material: Application Access Token</a>
+        </div>
+        <p class="step-desc">On July 21 the session was hijacked from 193.26.115[.]199 at 17:30:21 UTC, and at 17:43:15 the same session was in use from a second 1337 Services address, 124.198.132[.]33. Across the campaign the operator rotated through six addresses in 193.26.115.0/24 (1337 Services GmbH, AS210558) over four phases. Microsoft Entra ID Protection independently raised verified threat actor IP detections against four of the six, but flagged them one at a time, not as a range. Huntress calls the pattern token spraying: password spraying with stolen tokens in place of guessed passwords. It traced more than 200,000 failed login attempts in the campaign window to the same range, against at least 497 successful sign-in events.</p>
+        <p class="step-desc">Huntress saw two builds. Build A was scripted: a <code>node</code> user agent (a bare <code>Mozilla/5.0</code> on one host) making <code>OAuth2:Token</code> requests with the Microsoft Office and Microsoft Authentication Broker client IDs against Microsoft Graph, Exchange Online, SharePoint Online and the Device Registration Service. Build B replayed browser sessions with a current Chrome or Edge user agent through the OfficeHome client. Huntress cannot say for certain why the operator rotated addresses. Huntress notes the effect: a block written for one address did nothing against the next, and blocking any single address would have stopped one phase at most.</p>
+        <p class="step-desc">The busiest burst came from 193.26.115[.]72 on September 11. Within two hours Huntress had sent incident reports to 22 customers. The report gives two different totals for that address: 303 successful sign-ins across 29 organizations over four days in its Phase 3 section, and 232 across 28 in its mitigation section. It does not reconcile them.</p>
+        <div class="step-code">
+          <span class="hl">Replay range:</span> 193.26.115[.]0/24, 1337 Services GmbH, AS210558<br>
+          <span class="hl">Capture to replay:</span> 12 minutes (July 21), 4 minutes (September 22)<br>
+          <span class="hl">Build A:</span> node UA, OAuth2:Token, clients d3590ed6-52b3-4102-aeff-aad2292ab01c (Office) and 29d9ed98-a469-4536-ade2-f981bc1d605e (Auth Broker)<br>
+          <span class="hl">Build B:</span> browser UA, Login:reprocess, client 4765445b-32c6-49b0-83e6-1d93765276ca (OfficeHome)<br>
+          <span class="hl">Phase 3 (.72):</span> 303 sign-ins in 29 orgs, or 232 in 28, depending on the section
+        </div>
+        <div class="step-tags"><span class="stag">Token Replay</span><span class="stag">Token Spraying</span><span class="stag">1337 Services</span><span class="stag">T1550.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>: Rogue Entra Devices</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The scripted build registered at least 48 rogue Entra devices named DESKTOP- plus eight hex characters</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1098/005/" target="_blank" rel="noopener">T1098.005 - Account Manipulation: Device Registration</a>
+        </div>
+        <p class="step-desc">Huntress first detected the campaign on July 14, 2026, as a sign-in from 193.26.115[.]221 by an Entra-joined device with a name of this form. A fake device appeared in 13 of the 14 incidents Huntress responded to that day. By August 3 the operator had signed in to 37 organizations and registered 37 rogue Entra devices, and Huntress counts at least 48 distinct devices across the campaign.</p>
+        <p class="step-desc">Huntress explains why the device matters: a registered device can give the attacker a more durable way to request tokens than the stolen session, and it stays in the directory until someone deletes it. The name format, <code>DESKTOP-</code> plus eight uppercase hex characters, does not match the default Windows gives a new machine. Huntress also says the pattern is rare but not unique to this campaign, so confirm a device before deleting it. The report gives no timing between first sign-in and device registration.</p>
+        <div class="step-code">
+          <span class="hl">Device name:</span> DESKTOP- plus 8 uppercase hex characters, e.g. DESKTOP-54521F46<br>
+          <span class="hl">Count:</span> at least 48 distinct devices<br>
+          <span class="hl">By August 3:</span> 37 organizations signed in to, 37 devices registered<br>
+          <span class="hl">Resource:</span> Device Registration Service, 01cb2876-7ebd-4aa4-9cc9-d28bd4d359a9
+        </div>
+        <div class="step-tags"><span class="stag">Entra ID</span><span class="stag">Device Registration</span><span class="stag">Persistence</span><span class="stag">T1098.005</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🔐 Persistence: The Victim's MFA Replaced</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">In 19 organizations the victim's MFA methods were wiped and a new one registered within three hours of the first campaign sign-in</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1556/006/" target="_blank" rel="noopener">T1556.006 - Modify Authentication Process: Multi-Factor Authentication</a>
+        </div>
+        <p class="step-desc">The existing methods were wiped through Microsoft's security-info registration service, and a new authenticator was registered minutes later. In the July 21 case a new authenticator app labelled <code>iPhone 13</code> was activated at 18:08:50 UTC, about 38 minutes after the hijack and about 50 minutes after the relay caught the victim. The Hacker News reported this as less than 51 minutes after the hijack, which matches Huntress's timestamps only when measured from the relay capture. In one incident the operator used a deviceless authenticator method that was already on the account.</p>
+        <p class="step-desc">Resetting the password does not undo any of this. In Huntress's words, "A password reset alone does not remove attacker-registered devices or MFA methods." Microsoft described a similar swap in <a href="storm-2949-entra-sspr.html">Storm-2949</a>, where existing methods were removed and an attacker-controlled Microsoft Authenticator enrolled. There, Microsoft assessed with high confidence, the way in was abuse of self-service password reset, with the user talked into approving MFA prompts.</p>
+        <div class="step-code">
+          <span class="hl">Removed through:</span> Microsoft's security-info registration service<br>
+          <span class="hl">Replaced with:</span> a new authenticator, minutes later<br>
+          <span class="hl">July 21:</span> iPhone 13 authenticator activated at 18:08:50 UTC<br>
+          <span class="hl">Scope:</span> 19 organizations, within three hours of the first campaign sign-in
+        </div>
+        <div class="step-tags"><span class="stag">MFA</span><span class="stag">Authenticator</span><span class="stag">Security Info</span><span class="stag">T1556.006</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🙈 Stealth: Inbox Rules With Forgettable Names</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Inbox rules with names like a single dot or "sss" hid mail, and one hid any message mentioning payroll, direct deposit, bank or bonus</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1564/008/" target="_blank" rel="noopener">T1564.008 - Hide Artifacts: Email Hiding Rules</a>
+        </div>
+        <p class="step-desc">The rules were named <code>.</code>, <code>sss</code>, <code>ss</code>, <code>iT</code>, <code>,.</code>, <code>........</code>, <code>s</code> and <code>d</code>. Most marked mail as read and deleted it, or moved it to RSS Feeds, RSS Subscriptions or Conversation History. Rule <code>s</code> hid messages containing payroll, direct deposit, bank or bonus. Rule <code>d</code> moved all mail from one external CPA's address to Conversation History and marked it read. In four mailboxes the rules were created through the Outlook REST API rather than Outlook itself. Every rule came from a VPN or rented hosting (ExpressVPN, NordVPN, CrownCloud, DataWagon, GLOBALTELEHOST, LeaseWeb, Dynu, Interserver), and none from the 1337 Services network.</p>
+        <p class="step-desc">In the September 11 burst the operator used a compromised mailbox to send a payroll-related email to an external CPA, and in that mailbox the operator modified rule <code>s</code> and, five minutes later, created rule <code>d</code>, both from the same Interserver address, 167.148.41[.]96. Huntress reports no outcome for that email. In the first phase, a mailbox carrying the <code>sss</code> rule sent spam to hundreds of external recipients before Microsoft Entra ID Protection rated the account high risk. Huntress says access of this kind sets the stage for <a class="glossary-link" href="../glossary.html#term-bec">business email compromise</a>; it does not report a completed fraud, a financial loss or data theft.</p>
+        <div class="step-code">
+          <span class="hl">Rule names:</span> . &nbsp;sss &nbsp;ss &nbsp;iT &nbsp;,. &nbsp;........ &nbsp;s &nbsp;d<br>
+          <span class="hl">Destinations:</span> RSS Feeds, RSS Subscriptions, Conversation History, or deleted<br>
+          <span class="hl">Rule s keywords:</span> payroll, direct deposit, bank, bonus<br>
+          <span class="hl">Created from:</span> VPNs and rented hosting, never 1337 Services; in four mailboxes, via the Outlook REST API<br>
+          <span class="hl">Payroll email to the CPA:</span> sent; outcome not reported
+        </div>
+        <div class="step-tags"><span class="stag">Inbox Rules</span><span class="stag">Exchange Online</span><span class="stag">Payroll</span><span class="stag">T1564.008</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Revoke sessions and reset the password, then remove what the attacker registered.</strong> That is Huntress's containment order. A password reset by itself does not invalidate the access token, which Huntress says stays valid for about 90 minutes, and it leaves rogue devices and attacker MFA methods in place. Microsoft's emergency revocation guidance differs in order and scope: disable the account, revoke sessions, then disable the user's registered devices. Its page gives one hour as the default access token lifetime (Microsoft's token-lifetime documentation says 60 to 90 minutes), and notes that an app holding an access token keeps access until that token expires unless the service supports continuous access evaluation. It does not mention MFA methods, which Huntress's list adds, and in hybrid tenants it also disables the on-premises account and resets the password twice. Replays of sessions that were no longer valid failed with AADSTS50133 (SsoArtifactRevoked), which Microsoft returns after a password expires or is changed: three attempts against one organization in August, and one on September 3.</div>
+        <div class="def-item"><strong>Audit Entra devices and authentication methods on every account that was replayed.</strong> Huntress's audit list covers devices named <code>DESKTOP-</code>, <code>Device-</code> or <code>Work Pc</code> plus eight hex characters, particularly ones registered from hosting IP addresses. Confirm each before deleting, since the pattern is not unique to this campaign. For MFA, look for methods cleared and re-registered within minutes, remove any authenticator the user does not recognize, and check deviceless methods already on the account, which one incident here used. A device left in the directory can still give the attacker a way to request tokens after the stolen session is dead.</div>
+        <div class="def-item"><strong>Require MFA or block for all users, all cloud apps and all client app types in <a class="glossary-link" href="../glossary.html#term-conditional-access">Conditional Access</a>.</strong> That is Huntress's main recommendation. All 1,052 sign-ins blocked from 193.26.115[.]72 came from four organizations, while in the 29 organizations the address got into, nothing stopped it. Huntress does not say which policies those four organizations had.</div>
+        <div class="def-item"><strong>Triage by credential validity, not by spray volume.</strong> A Conditional Access block (AADSTS53003) happens after authentication succeeds, so Huntress treats it as evidence of a valid stolen credential rather than a defense that held. Ranking tenants by failed attempts would have pointed responders at the four where Conditional Access was already working, the most-sprayed and least-compromised ones.</div>
+        <div class="def-item"><strong>Restrict device-code flow and user consent.</strong> Huntress recommends Conditional Access authentication-flow policies to restrict device code, with restricted service accounts and exclusions where the flow is needed, and turning off standard users' ability to consent to new applications. Separately from this campaign, ANY.RUN has described a device-code phishing kit it calls SkyW4lker, in which the victim enters a code on Microsoft's legitimate page and the operator's backend collects the resulting tokens; neither ANY.RUN nor Huntress connects the two, and ANY.RUN gives the same Conditional Access advice.</div>
+        <div class="def-item"><strong>Hunt for the replay and for the cover-up together.</strong> Huntress's hunts: <code>OAuth2:Token</code> and <code>Cmsi:Cmsi</code> sign-ins from hosting providers using the Microsoft Office or Authentication Broker client with a <code>node</code> or bare <code>Mozilla/5.0</code> user agent, especially against mailboxes or the Device Registration Service; new enterprise applications, which can keep access to a <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a>; and inbox rules with one-to-three-character or punctuation-only names, rules that route mail to RSS Feeds, RSS Subscriptions or Conversation History, and rules keyed to payroll or banking terms. Blocking the /24 would have covered all six main replay hosts, but not the relays, a few other 1337 Services addresses, or the VPN and hosting addresses that created the rules.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.huntress.com/blog/token-replay-spray" target="_blank" rel="noopener">Huntress - M365 Token Spray and Replay Campaign</a>
+        <a class="src-link" href="https://learn.microsoft.com/en-us/entra/identity/users/users-revoke-access" target="_blank" rel="noopener">Microsoft Learn - Revoke user access in an emergency</a>
+        <a class="src-link" href="https://any.run/cybersecurity-blog/skyw4lker-phishing-kit-analysis/" target="_blank" rel="noopener">ANY.RUN - SkyW4lker device-code phishing kit (separate)</a>
+        <a class="src-link" href="https://thehackernews.com/2026/10/microsoft-365-token-replay-attacks.html" target="_blank" rel="noopener">The Hacker News - Token-replay coverage</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1557/" target="_blank" rel="noopener">MITRE T1557</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1550/001/" target="_blank" rel="noopener">MITRE T1550.001</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1098/005/" target="_blank" rel="noopener">MITRE T1098.005</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1556/006/" target="_blank" rel="noopener">MITRE T1556.006</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1564/008/" target="_blank" rel="noopener">MITRE T1564.008</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../azure-security.html">Azure security</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="black-october-ai-platforms.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="chaindrop-keyv-npm.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
