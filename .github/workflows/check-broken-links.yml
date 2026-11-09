@@ -172,7 +172,11 @@ jobs:
       # We pass it a `.lychee.toml` config in the repo root for things like
       # ignore-lists, retry rules, and headers.
       - name: Check for broken links
+        id: check_links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8  # v2.9.0
+        # GitHub release downloads can fail transiently. Let the retry below
+        # handle a failed action invocation before marking the job failed.
+        continue-on-error: true
         with:
           # `>-` is YAML's "fold this multi-line string into one line."
           # CLI flags below: --config points lychee at .lychee.toml (its
@@ -225,6 +229,29 @@ jobs:
           # By default this action would "fail" (turn the job red) on a broken
           # link. We force false so a dead link never blocks a merge.
           fail: false                                   # never fail the job - see header
+
+      - name: Retry link check after action failure
+        if: ${{ !cancelled() && steps.check_links.outcome == 'failure' }}
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8  # v2.9.0
+        with:
+          args: >-
+            --config .lychee.toml
+            --cache
+            --max-cache-age 8d
+            --verbose
+            --no-progress
+            --max-concurrency 20
+            --glob-ignore-case
+            './*.html'
+            './breaches/*.html'
+            './meetings/*.html'
+            './portfolio/*.html'
+            './homelab/*.html'
+            './howto/*.html'
+            './infra/terraform/*/*.tf'
+          output: ./lychee-report.md
+          format: markdown
+          fail: false
 
       # -----------------------------------------------------------------------
       # Did the crawl actually happen?
