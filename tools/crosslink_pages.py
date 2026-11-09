@@ -187,6 +187,7 @@ TARGET_PAGES = [
 #   search.html                   a JS search UI, ~40 words of prose
 #   403.html / 404.html           error pages, no prose worth linking
 #   google66d489593949bd4c.html   Search Console verification stub
+#   countdown.html                stand-alone countdown clock, no prose
 DELIBERATELY_UNLINKED = {
     # Navigational index, not a destination prose would name. It exists because
     # the Learn menu stopped listing all 40 subject pages and needed somewhere
@@ -200,6 +201,10 @@ DELIBERATELY_UNLINKED = {
     # the next run, and the hand-written prose is about subscribing, not
     # about a term.
     "calendar.html",
+    # A stand-alone countdown clock with no prose and no links in or out, by
+    # design: it is meant to be opened on its own (a screen in a room, a
+    # browser tab before the session), not reached from the site.
+    "countdown.html",
     "glossary.html",
     "news.html",
     "search.html",

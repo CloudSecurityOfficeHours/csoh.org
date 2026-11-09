@@ -770,6 +770,7 @@ csoh.org/
 │  ── Community ──
 ├── sessions.html               # Weekly Zoom session information
 ├── calendar.html               # Upcoming sessions, rendered from the Google Calendar feed (generated cards)
+├── countdown.html              # Stand-alone countdown to the Friday session (not linked from the site)
 ├── speakers.html               # Guest speaker archive
 ├── present.html                # How to pitch a talk for a Friday session
 ├── community.html              # Community & Signal chat
@@ -836,6 +837,8 @@ csoh.org/
 ├── glossary.js                 # glossary.html-specific search/filter
 ├── breach-timeline.css         # breach-timeline.html-specific styles
 ├── breach-timeline.js          # breach-timeline.html-specific tab/panel logic
+├── countdown.css               # countdown.html styles (dark clock face, self-hosted fonts)
+├── countdown.js                # countdown.html split-flap clock logic
 ├── 404.js                      # 404-page "did you mean" suggestions
 ├── search.css                  # search.html styles (external, for the strict CSP)
 ├── search-init.js              # search.html: index load, MiniSearch wiring, result render
@@ -1160,8 +1163,8 @@ The table below covers 17 of the <!--count:workflows-->22<!--/count-->. The five
   `meetings/`, `portfolio/`, or `homelab/` would never trigger the workflow.
   That failure is silent: nothing errors, the push looks fine, and the change
   waits for the next unrelated commit.
-- `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`
-- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`
+- `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`, `countdown.css`
+- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`, `countdown.js`
 - `vendor/**`, `chat-screenshots/**`, `img/**`
 - `update_sri.py`
 - Manual trigger via the GitHub Actions tab

@@ -160,6 +160,7 @@ csoh.org/
 │  ── Sessions / news / archives ──
 ├── sessions.html                    # Weekly Zoom session info
 ├── calendar.html                    # Upcoming sessions, rendered from the Google Calendar feed
+├── countdown.html                   # Stand-alone countdown to the Friday session (not linked from the site)
 ├── speakers.html                    # Guest speaker archive
 ├── present.html                     # How to pitch a talk
 ├── meetings.html                    # Weekly meeting recaps → `meetings/`
@@ -230,6 +231,7 @@ csoh.org/
 ├── meetings.js                      # Meeting recaps filtering + speaker filter
 ├── glossary.js                      # Glossary page live search
 ├── breach-timeline.css / .js        # Breach timeline page-specific assets
+├── countdown.css / .js              # countdown.html page-specific assets
 ├── vendor/                          # Self-hosted third-party JS (MiniSearch, GoatCounter),
 │                                    #   SRI-pinned; goatcounter-count.js is locally patched
 │                                    #   - read vendor/README.md before re-vendoring
@@ -847,7 +849,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |
 | `sitemap.xml` | XML sitemap for search engines | **Don't edit** -- lastmod refreshed automatically |
-| `update_sri.py` | SRI hash generator. The `ASSETS` list is the source of truth: `style.css`, `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `noscript.css`, `search.css`, `search-init.js`, `vendor/goatcounter-count.js`. Any new shared asset must be added there or it ships uncached-busted and unhashed | Adding a shared CSS/JS asset; otherwise **don't edit** -- runs in CI |
+| `update_sri.py` | SRI hash generator. The `ASSETS` list is the source of truth: `style.css`, `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `noscript.css`, `countdown.css`, `countdown.js`, `search.css`, `search-init.js`, `vendor/goatcounter-count.js`. Any new shared asset must be added there or it ships uncached-busted and unhashed | Adding a shared CSS/JS asset; otherwise **don't edit** -- runs in CI |
 | `tools/check_edge_headers.py` | Edge security-header drift gate. Parses the header name/value pairs out of the `set_security_headers` rule in `infra/terraform/cloudflare/rules.tf` and asserts each one against what the live site actually returns, failing on anything missing or changed. It exists because that ruleset carries `lifecycle { ignore_changes = [rules] }` (a cloudflare v4 provider workaround), which makes the resource inert: you can tighten the CSP in Git, get a clean `terraform apply`, and ship nothing. Those headers are also the only source of CSP/HSTS for the Azure origin, which cannot set response headers itself | Run it (`python3 tools/check_edge_headers.py`, or `--url <origin>` for one origin) after any edge-header change, since `terraform apply` will not tell you. It is a **CI gate in the `purge-cloudflare` job of `deploy.yml`**, so drift fails the deploy. Delete the whole script once the cloudflare v5 provider upgrade lets `ignore_changes` go |
 | `tools/add_meeting.py` | Publishes a meeting recap from a note export: writes `meetings/YYYY-MM-DD.html`, inserts the card on `meetings.html`, rewires the pager links on both chronological neighbors, and updates `sitemap.xml` + `meetings-search-index.json` | Changing recap structure. Note the `scrub_emails()` guard in `clean_text()` (the shared funnel for both the HTML and Markdown parsers): Zoom summaries name people by display name, and some people's display name is their work email address, so any address in recap prose is replaced with "one attendee" (`@csoh.org` is exempt). It **warns and continues** rather than failing, so a publish is never blocked -- read the warning and substitute a first name if one is appropriate |
 | `vendor/` | Self-hosted third-party browser libraries (MiniSearch, GoatCounter), SRI-pinned because the CSP is `script-src 'self'`. `goatcounter-count.js` is deliberately patched, not pristine | **Read [vendor/README.md](vendor/README.md) first.** A re-vendor must re-apply the local modifications and re-run `update_sri.py` |
