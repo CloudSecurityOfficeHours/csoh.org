@@ -652,7 +652,15 @@ See [CONTRIBUTING_KILL_CHAINS.md](CONTRIBUTING_KILL_CHAINS.md) for the full proc
 
    Same idempotent behavior - strips and rebuilds every cross-page link. See [tools/CROSSLINK_PAGES_README.md](tools/CROSSLINK_PAGES_README.md).
 
-5. If the term count crosses a round number (e.g. 200 → 250), update the search-bar placeholder and `<span id="visibleTerms">` count in `glossary.html`.
+5. Refresh the "Used on N pages" list under each glossary entry, which is built from the links step 4 wrote:
+
+   ```bash
+   python3 tools/sync_glossary_usage.py
+   ```
+
+   `validate-html.yml` runs it with `--check`, so a skipped run fails the PR. See the docstring in [tools/sync_glossary_usage.py](tools/sync_glossary_usage.py).
+
+6. If the term count crosses a round number (e.g. 200 → 250), update the search-bar placeholder and `<span id="visibleTerms">` count in `glossary.html`.
 
 See [tools/CROSSLINK_GLOSSARY_README.md](tools/CROSSLINK_GLOSSARY_README.md) for more.
 
@@ -834,6 +842,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/sync_calendar.py` | Renders the next twelve occurrences from the CSOH Google Calendar's public feed into the cards between the markers on `calendar.html`, scrubbing Zoom join links and dial-in details | Changing the calendar, the horizon, or the private-host list; otherwise **don't edit** -- runs every 6 hours in `update-calendar.yml` |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
+| `tools/sync_glossary_usage.py` | Writes the "Used on N pages" list under each glossary entry from the glossary links on every page | **Don't edit** the lists -- run after `crosslink_pages.py`, after adding or renaming an entry, or after changing a linking page's heading; gated by `--check` in `validate-html.yml` |
 | `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->331<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |
 | `meetings.js` | Filters + auto-detected speaker filter for `meetings.html` | Adding new recurring speakers (`SPEAKERS` list) |

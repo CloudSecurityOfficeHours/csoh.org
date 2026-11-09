@@ -100,6 +100,8 @@ on:
       - 'tools/update_presentations_schema.py'
       # The latest-recap gate's verdict changes with its tool.
       - 'tools/sync_latest_recap.py'
+      # So does the glossary usage-list gate's.
+      - 'tools/sync_glossary_usage.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step.
@@ -424,6 +426,20 @@ jobs:
           set -o pipefail
           python3 tools/sync_latest_recap.py --self-test 2>&1 | tee check-latest-recap.log
           python3 tools/sync_latest_recap.py --check 2>&1 | tee -a check-latest-recap.log
+
+      # Each glossary entry's "Used on N pages" list is written by
+      # sync_glossary_usage.py from the glossary links on every page, labelled
+      # with each page's heading. It goes stale when crosslink_pages.py adds or
+      # drops links, an entry is added or renamed, or a linking page's heading
+      # changes, so a failure always has a cause in the diff. Unconditional,
+      # like the recap gates: any page edit can change the verdict. The
+      # self-test runs first as the control.
+      - name: Assert the glossary usage lists match the site
+        id: glossary-usage
+        run: |
+          set -o pipefail
+          python3 tools/sync_glossary_usage.py --self-test 2>&1 | tee check-glossary-usage.log
+          python3 tools/sync_glossary_usage.py --check 2>&1 | tee -a check-glossary-usage.log
 
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which

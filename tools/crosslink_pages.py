@@ -9,6 +9,7 @@ Skip zones (no linking inside any of these):
   - <code>, <pre>, <script>, <style>
   - <h1>-<h6>
   - <header>, <footer>, <nav>
+  - <div>/<span> with class code-block, tag-example or no-glossary
   - HTML comments
   - HTML attribute values
   - JSON-LD blocks
@@ -367,9 +368,12 @@ def mask_skip_zones(content: str) -> tuple[str, list[str]]:
     # 2b. Class-based skip zones. Copy-paste examples and code samples that
     #     are marked up as <div>/<span> (not <code>/<pre>) must never receive
     #     injected <a> markup, or contributors paste anchor tags into PRs.
+    #     no-glossary marks a phrase whose words spell a glossary key in
+    #     another sense ("IRS-CI", "a separate cloud run by ..."). A denylist
+    #     entry would drop every page's link to that key; this drops one.
     for tag in ("div", "span"):
         content = re.sub(
-            rf'<{tag}\b[^>]*\bclass="[^"]*\b(?:code-block|tag-example)\b[^"]*"[^>]*>.*?</{tag}>',
+            rf'<{tag}\b[^>]*\bclass="[^"]*\b(?:code-block|tag-example|no-glossary)\b[^"]*"[^>]*>.*?</{tag}>',
             stash,
             content,
             flags=re.DOTALL | re.IGNORECASE,

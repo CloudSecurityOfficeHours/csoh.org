@@ -41,6 +41,7 @@ Keep both lists complete. A page in neither is silently never visited - no error
   - `<header>`, `<footer>`, `<nav>` (chrome, not content)
   - `<title>`/`<head>` and `<button>` text
   - `.code-block` and `.tag-example` class blocks (example snippets)
+  - `<span class="no-glossary">`, for one phrase whose words spell a key in another sense: `IRS-CI` (the IRS's Criminal Investigation unit, not CI/CD), "a separate cloud run by EU-resident operators" (not Cloud Run). A denylist entry would remove the key from every page; this removes one occurrence. The linker then links the next occurrence on the page, so check the re-run and wrap that too if it is the same false sense.
   - HTML comments, attribute values, JSON-LD schema blocks
 - **DENYLIST** (`PAGE_DENYLIST` from `glossary_terms.py`) filters keys that overlap with ordinary English: single words (`public`, `data`, `cloud`, `agent`, etc.), remnants extracted from compound entries like `Blue / Red Team`, and headword fragments that read as everyday phrases (`in use`, `service provider`). Before denying a fragment, read how its live links use it: `in transit` comes from the same headword as `in use`, but every link to it is about data in transit, so it stays linkable. If a generic word starts auto-linking somewhere unhelpful, add it to `PAGE_EXTRA_DENYLIST` (page prose only) or `BASE_DENYLIST` (both linkers) in `glossary_terms.py`.
 
@@ -49,6 +50,8 @@ Keep both lists complete. A page in neither is silently never visited - no error
 - After adding or editing glossary terms (so new terms get cross-linked from existing pages).
 - After adding a new content page (add the page name to `TARGET_PAGES` first).
 - If you notice false-positive links and update the `DENYLIST`.
+
+Afterwards, run `python3 tools/sync_glossary_usage.py`. The "Used on N pages" list under each glossary entry is built from the links this script writes, and `validate-html.yml` fails while the lists disagree with them.
 
 ## Output
 

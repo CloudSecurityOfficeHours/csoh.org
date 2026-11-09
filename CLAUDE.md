@@ -431,6 +431,7 @@ never hand-edit the output.
 | Next-session date and `Event` markup | `tools/sync_next_session.py` | none, runs as a fixer |
 | Recap recording links + `VideoObject` | `tools/sync_recap_videos.py` | `--check` in `validate-html.yml` |
 | "Latest recap" link on sessions.html (`data-latest-recap`) | `tools/sync_latest_recap.py`, run by `add_meeting.py` | `--check` in `validate-html.yml` |
+| Glossary "Used on N pages" lists (`<dd class="term-usage">`) | `tools/sync_glossary_usage.py`, after `crosslink_pages.py` | `--check` in `validate-html.yml` |
 | Dark-mode mirror block | `tools/sync_dark_branch.py` | `--check` in Lint |
 
 All are idempotent. **Run any generator twice before trusting it.** The second
