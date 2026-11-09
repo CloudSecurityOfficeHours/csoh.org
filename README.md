@@ -947,6 +947,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `sync_counts.py` | Recomputes every count on the site (JSON-LD `numberOfItems`, `<!--count:-->` markers, OG subtitles) from the real cards | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_COUNTS_README.md) |
 | `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) |
 | `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_PAGES_README.md) |
+| `sync_glossary_usage.py` | Lists, under each glossary entry, every page that links to it ("Used on N pages") | docstring |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |

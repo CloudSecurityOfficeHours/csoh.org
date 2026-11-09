@@ -50,6 +50,8 @@ Keep both lists complete. A page in neither is silently never visited - no error
 - After adding a new content page (add the page name to `TARGET_PAGES` first).
 - If you notice false-positive links and update the `DENYLIST`.
 
+Afterwards, run `python3 tools/sync_glossary_usage.py`. The "Used on N pages" list under each glossary entry is built from the links this script writes, and `validate-html.yml` fails while the lists disagree with them.
+
 ## Output
 
 ```

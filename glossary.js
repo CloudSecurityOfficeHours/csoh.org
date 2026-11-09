@@ -25,7 +25,12 @@
                 };
             } else if (node.tagName === 'DD' && current) {
                 current.dds.push(node);
-                current.text += ' ' + node.textContent.toLowerCase();
+                // The "Used on N pages" list names other pages. Matching its
+                // text would show a term for every page title containing the
+                // query, so it hides and shows with its term but is not searched.
+                if (!node.classList.contains('term-usage')) {
+                    current.text += ' ' + node.textContent.toLowerCase();
+                }
             }
         });
         if (current) pairs.push(current);

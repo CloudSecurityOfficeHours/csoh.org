@@ -221,6 +221,10 @@ def link_dds(
             id_m = re.search(r"\bid\s*=\s*[\"']([^\"']+)[\"']", attrs)
             self_slug = id_m.group(1) if id_m else ""
             out.append(m.group(0))
+        elif re.search(r"\bclass\s*=\s*[\"'][^\"']*\bterm-usage\b", attrs):
+            # The "Used on N pages" list is owned by sync_glossary_usage.py,
+            # whose --check fails on any change made here.
+            out.append(m.group(0))
         else:  # dd
             new_inner = link_dd(inner, term_re, key_to_slug, key_to_original, self_slug)
             out.append(f"<dd{attrs}>{new_inner}</dd>")
