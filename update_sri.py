@@ -46,6 +46,9 @@ ASSETS: List[Tuple[str, str, str]] = [
     # <noscript> link rather than an inline block, because CSP drops
     # inline <style>. See the file's own header.
     ('noscript.css', 'link', 'href'),
+    # countdown.html: stand-alone session countdown (its own styles and clock logic).
+    ('countdown.css', 'link', 'href'),
+    ('countdown.js', 'script', 'src'),
     # /search.html's UI + lazy-loaded MiniSearch initializer.
     ('search.css', 'link', 'href'),
     ('search-init.js', 'script', 'src'),

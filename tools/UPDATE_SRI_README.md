@@ -70,6 +70,7 @@ This Python script does all the work. Note that `style.css` includes a large dar
    - `style.css`, `main.js`
    - `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
    - `meetings.js`, `glossary.js`, `404.js`
+   - `countdown.css`, `countdown.js` (the stand-alone `/countdown.html`)
    - `search.css`, `search-init.js` (the `/search.html` UI + MiniSearch initializer)
    - `vendor/goatcounter-count.js` (the vendored analytics counter)
 2. Calculates a **SHA-384 hash** (the fingerprint) for each file
