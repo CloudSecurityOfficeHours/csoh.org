@@ -96,7 +96,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 | 📰 [Cloud Security News](https://csoh.org/news.html) | 120+ articles, refreshed every 3 hours from <!--count:feeds-->63<!--/count--> sources |
 | 🔬 [Threat Research Sources](https://csoh.org/threat-research.html) | Curated directory of vendor research, IOC feeds, advisories - includes a Supply Chain Attacks section |
 | 🔗 [Breach Kill Chains](https://csoh.org/breach-timeline.html) | <!--count:breaches-->60<!--/count--> real cloud breaches mapped to MITRE ATT&CK |
-| 📅 [Year in Review](https://csoh.org/cloud-breach-year-in-review.html) | Annual (and half-year) reviews of the cloud/SaaS/supply-chain breaches that defined each period |
+| 📅 [Year in Review](https://csoh.org/cloud-breach-year-in-review.html) | Annual (and year-to-date) reviews of the cloud/SaaS/supply-chain breaches that defined each period |
 
 ### Careers
 
@@ -607,7 +607,7 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [Polymarket / DebugBear](https://csoh.org/breaches/polymarket-debugbear-rum-drainer.html) | 2026 | Third-Party Script / DNS | T1584.001, T1195.002, T1059.007, T1185 |
 | [Binance / TraderTraitor](https://csoh.org/breaches/binance-tradertraitor-signing-service.html) | 2026 | Crypto Exchange / Containers | T1204, T1566.003, T1554, T1552 |
 
-The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 H1](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)).
+The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 so far](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)).
 
 ### How to contribute a kill chain
 
@@ -732,7 +732,7 @@ csoh.org/
 ├── cloud-breach-year-in-review-2023.html  # 2023 review
 ├── cloud-breach-year-in-review-2024.html  # 2024 review
 ├── cloud-breach-year-in-review-2025.html  # The cloud/SaaS/supply-chain breaches that defined 2025
-├── cloud-breach-year-in-review-2026-h1.html  # 2026 mid-year review (Jan-Jul 2026)
+├── cloud-breach-year-in-review-2026-h1.html  # 2026 review so far (January to early November)
 ├── kevin-mitnick.html          # Special resource page
 │
 │  ── Governance + AI ──
