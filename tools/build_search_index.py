@@ -56,6 +56,7 @@ EXCLUDE_FILES: set[str] = {
     "404.html",
     "google66d489593949bd4c.html",  # search-console verification token
     "rss.html",             # wrapper around feed.xml; not content
+    "countdown.html",       # stand-alone clock, no prose, not linked from the site
 }
 
 # Card-list pages: every entry is an <a class="card-link"> wrapping a
