@@ -69,6 +69,15 @@ resource "google_binary_authorization_policy" "default" {
     name_pattern = "${google_artifact_registry_repository.containers.location}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/**"
   }
 
+  # Pull request preview images (preview.tf). Allowed project wide because a
+  # Cloud Run policy cannot be scoped per service. Only csoh-deployer-preview
+  # can write to this repo, and it can deploy only to csoh-site-preview, so
+  # reaching production with one of these images would take the production
+  # deployer, which never references this repo.
+  admission_whitelist_patterns {
+    name_pattern = "${google_artifact_registry_repository.previews.location}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.previews.repository_id}/**"
+  }
+
   # ---------------------------------------------------------------------------
   # Everything that did NOT match the allowlist above hits this rule.
   # ---------------------------------------------------------------------------
@@ -132,5 +141,6 @@ resource "google_binary_authorization_policy" "default" {
     google_project_service.apis,
     google_cloud_run_v2_service.site,
     google_cloud_run_v2_service.site_qa,
+    google_cloud_run_v2_service.site_preview,
   ]
 }

@@ -95,3 +95,15 @@ output "deployer_qa_sa_email" {
   description = "Service account deploy-qa.yml impersonates"
   value       = google_service_account.deployer_qa.email
 }
+
+# Identity pr-preview.yml impersonates, and the service whose tag URLs it
+# hands out. The service's main URL serves only the placeholder container.
+output "deployer_preview_sa_email" {
+  description = "Service account pr-preview.yml impersonates"
+  value       = google_service_account.deployer_preview.email
+}
+
+output "cloud_run_preview_service_url" {
+  description = "Cloud Run URL of the PR preview service (previews live at pr-<n>--- tag URLs under it)."
+  value       = google_cloud_run_v2_service.site_preview.uri
+}
