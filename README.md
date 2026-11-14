@@ -881,7 +881,7 @@ csoh.org/
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
 ├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
-├── .github/workflows/          # 22 CI/CD workflows (see "How Automation Works" below)
+├── .github/workflows/          # 23 CI/CD workflows (see "How Automation Works" below)
 │
 ├── seo-audits/                 # SEO audit reports + SCORECARD.md (excluded from deploy filters)
 ├── preview-mapping.json        # Metadata for resource previews
@@ -1114,7 +1114,7 @@ The homepage is three doors and the next-session strip - there is no resource-ca
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-The table below covers 17 of the <!--count:workflows-->22<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->22<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
+The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->23<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
 
 **Content automation (writes to the site)**
 
