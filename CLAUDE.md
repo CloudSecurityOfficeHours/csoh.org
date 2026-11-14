@@ -719,15 +719,23 @@ Environment:
 |---------------------------------|----------------|-------------------------------|
 | Production deploy (3 origins)   | `production`   | AWS + Azure + GCP deployer    |
 | QA deploy (Cloud Run only)      | `qa`           | `csoh-deployer-qa`, GCP only  |
+| PR preview (`pr-preview.yml`)   | `pr-preview`   | `csoh-deployer-preview`, preview service only |
 | Anything else                   | *(none)*       | no cloud credential at all    |
 
 AWS (`infra/terraform/aws/oidc.tf`) and Azure (`infra/terraform/azure/identity.tf`)
 accept only `environment:production`. GCP (`infra/terraform/gcp/wif.tf`)
-accepts `production` or `qa`, mapped to separate service accounts;
+accepts `production`, `qa` or `pr-preview`, mapped to separate service accounts;
 `csoh-deployer-qa` holds `run.admin` on the QA service only, plus `run.viewer`
 and Artifact Registry write. `production` is restricted to `main` and `qa` to
 `qa` by each environment's branch policy. `var.github_branch` documents intent
 but is not referenced by the trust.
+
+`pr-preview` has **no** branch policy, because PR heads are arbitrary branches,
+so any branch can enter it. `csoh-deployer-preview` is scoped to match: `run.admin`
+on `csoh-site-preview` only, `run.viewer`, and write to the `csoh-previews` image
+repo only. Never bind the `pr-preview` subject to a broader identity, and never
+give that identity write on `csoh-containers`, whose mutable tags production
+reuses.
 
 Without an `environment:`, `google-github-actions/auth` and
 `aws-actions/configure-aws-credentials` fail with an error that doesn't explain

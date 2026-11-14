@@ -99,8 +99,8 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   # Two claims are required, not one:
   #   * repository - the run came from this exact repo (values from variables.tf,
   #     e.g. "CloudSecurityOfficeHours/csoh.org").
-  #   * sub - the run was executing in the `production` or `qa` GitHub
-  #     Environment.
+  #   * sub - the run was executing in the `production`, `qa` or
+  #     `pr-preview` GitHub Environment.
   #
   # The second half is what makes this equivalent to the other two clouds.
   # Checking only `repository` trusted EVERY workflow in the repo, on every
@@ -120,6 +120,14 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   # pin closes, because a workflow can enter an environment it was
   # not built for far more easily than it can forge a claim.
   #
+  # The `pr-preview` alternative is for pr-preview.yml, and it is the one
+  # environment here WITHOUT a branch restriction: pull request heads are
+  # arbitrary branch names, so any branch in this repo can enter it. That is
+  # acceptable only because of what the subject is bound to. Its service
+  # account (preview.tf) holds run.admin on csoh-site-preview alone and writes
+  # only to the csoh-previews image repo, so the worst a branch can do with it
+  # is publish a preview. Never bind this subject to anything broader.
+  #
   # PASSING THIS CONDITION IS NOT AUTHORIZATION. It only gets a token minted
   # from the pool. WHICH service account that token may then impersonate is
   # decided separately, by the `principal://` bindings in Step 3 below - and the
@@ -127,7 +135,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   # have to name a subject for it to be able to deploy anything; editing this
   # condition alone produces a token that can do nothing, and editing only the
   # binding below produces a token that is never issued.
-  attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' && (assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production' || assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:qa')"
+  attribute_condition = "assertion.repository == '${var.github_owner}/${var.github_repo}' && (assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:production' || assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:qa' || assertion.sub == 'repo:${var.github_owner}/${var.github_repo}:environment:pr-preview')"
 
   # OIDC settings: tell GCP who issues the tokens we trust. The issuer_uri is
   # GitHub Actions' well-known, fixed OIDC issuer URL - GCP fetches GitHub's
