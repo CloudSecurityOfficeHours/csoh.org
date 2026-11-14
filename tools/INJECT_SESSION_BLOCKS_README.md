@@ -72,6 +72,18 @@ Two details worth keeping:
   ("a network security engineer", "data security roles") is not counted, in
   the whole-recap score or in a passage. It says who was on the call, not what
   the call discussed.
+- **Naming a cloud is not discussing its security.** A hit on a name in
+  `PLATFORM_NAMES` ("gcp", "google cloud", "azure") counts only in a sentence
+  that also matches `SECURITY_CONTEXT` (security, governance, IAM, encryption,
+  attack, breach, and so on). "Saubhagya is using GCP" and "the site runs on
+  Azure, GCP, and AWS" name the cloud, not its security, and the provider pages'
+  heading promises the second.
+- **Keywords match whole words.** A keyword never matches inside a longer word,
+  and a short single-word keyword (five characters or fewer, such as "eks",
+  "aks", "gcp", "entra") also needs a word end, allowing a plural. So "eks" does
+  not match "weeks", "aks" does not match "breaks", and "entra" does not match
+  "central". Longer keywords keep their suffixes open, so "red team" still
+  matches "red teaming".
 - Anchors are unwrapped from quoted passages. A recap's links are written for a
   page one directory down (`../glossary.html`) and are auto-inserted, so a
   paragraph pulled onto `incident-response.html` could easily contain a link
@@ -128,7 +140,9 @@ Edit `TOPIC_KEYWORDS`. Two failure modes to watch:
   and "okta" match zero recaps; "azure" and "entra" match plenty. Check real
   frequency before assuming a topic has no coverage.
 - **Keywords too generic: junk matches.** Avoid bare tokens that appear in nearly
-  every session, and watch for substring collisions ("wiz" matches "wizard").
+  every session. A bare cloud name belongs in `PLATFORM_NAMES` so it counts only
+  beside a security subject. A keyword of six characters or more still matches a
+  longer word that starts with it ("stride" matches "strides").
 
 Pages currently skipped for thin coverage are listed in the run output. That is
 working as intended, not a bug to fix by loosening keywords until something

@@ -18,6 +18,7 @@ every run, so re-running after new meetings land just refreshes the list.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 from pathlib import Path
@@ -166,6 +167,19 @@ ROLE_NOUNS = (
 )
 _ROLE_AFTER = re.compile(r"\s+(?:%s)\b" % "|".join(ROLE_NOUNS))
 
+# Cloud names on their own. A recap that says a member "is using GCP", or that
+# the site runs on "Azure, GCP, and AWS", names the cloud without discussing its
+# security, and a provider page's heading promises the community worked that
+# cloud's security through. So a hit on one of these counts only in a sentence
+# that also names a security subject.
+PLATFORM_NAMES = frozenset({"gcp", "google cloud", "azure"})
+SECURITY_CONTEXT = re.compile(
+    r"\b(?:secur|govern|complian|polic|iam\b|identit|access|permission|privilege"
+    r"|encrypt|kms\b|dlp\b|data loss|threat|attack|breach|vulnerab|exploit"
+    r"|misconfigur|audit|logging|detection|forensic|malware|ransomware|phish"
+    r"|credential|secret|zero trust|firewall|sentinel|defender)"
+)
+
 CARD_RE = re.compile(
     r'<article class="section meeting-card" id="meeting-(?P<date>\d{4}-\d{2}-\d{2})">'
     r'.*?<h2><time datetime="[^"]*">(?P<human>[^<]*)</time>\s*-\s*(?P<headline>[^<]*)</h2>'
@@ -269,15 +283,34 @@ def _drop_logistics(text: str) -> str:
     )
 
 
+@functools.lru_cache(maxsize=None)
+def _keyword_re(kw: str) -> re.Pattern:
+    """`kw` as a whole word, so "eks" does not match "weeks" or "entra" "central".
+
+    A short single-word keyword (an acronym or product name) also needs a word
+    end, allowing a plural. Longer keywords keep their suffixes open, so "red
+    team" still matches "red teaming".
+    """
+    tail = r"(?:e?s)?(?![a-z0-9])" if re.fullmatch(r"[a-z0-9]{1,5}", kw) else ""
+    return re.compile(r"(?<![a-z0-9])" + re.escape(kw) + tail)
+
+
 def _hits(text: str, keywords: list[str]) -> int:
-    """Keyword occurrences in `text`, not counting job titles (see ROLE_NOUNS)."""
+    """Keyword occurrences in `text`, not counting job titles (see ROLE_NOUNS),
+    or cloud names outside a sentence about security (see PLATFORM_NAMES)."""
     plain = TAG_RE.sub("", text).lower()
-    return sum(
-        1
-        for kw in keywords
-        for m in re.finditer(re.escape(kw), plain)
-        if not _ROLE_AFTER.match(plain, m.end())
-    )
+    total = 0
+    for sentence in _sentences(plain):
+        about_security = SECURITY_CONTEXT.search(sentence) is not None
+        for kw in keywords:
+            if kw in PLATFORM_NAMES and not about_security:
+                continue
+            total += sum(
+                1
+                for m in _keyword_re(kw).finditer(sentence)
+                if not _ROLE_AFTER.match(sentence, m.end())
+            )
+    return total
 
 
 def _mentions(text: str, keywords: list[str]) -> bool:
