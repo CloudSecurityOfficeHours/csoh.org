@@ -94,14 +94,17 @@ CANON_THEME_TOGGLE = (
 #
 # Learn carries three single-axis columns - Foundations (concept), By Cloud
 # (platform), The subject (the work) - and the pages that do not fit a column
-# live on topics.html, reached by the .mega-all row. The third column used to
-# be "Build It" and led with how this site is deployed (cloud-deployment,
-# GitHub Actions, Terraform, Git). Those pages still exist; they are listed
-# under topics.html#build and are not the front door. The column now leads
+# live on topics.html, reached by the .mega-all row. The third column leads
 # with the learning path and the how-to hub, then identity, workloads,
-# detection, logging, and working a finding. The .mega-all row is the pattern
-# for every mega menu: the dropdown's hub page, promoted out of a column to a
-# full-width footer (Careers uses it for cloud-security-careers.html).
+# detection, logging, and working a finding. The pages on how this site is
+# deployed (cloud-deployment, GitHub Actions, Terraform, Git) are not the
+# front door, so they stay out of Learn and are listed under topics.html#build.
+# Their entry point, cloud-deployment.html, also sits in Community > Connect
+# beside GitHub, because it walks through the repo that link opens. Without
+# that entry it is reachable only through the topic map and about.html.
+# The .mega-all row is the pattern for every mega menu: the dropdown's hub
+# page, promoted out of a column to a full-width footer (Careers uses it for
+# cloud-security-careers.html).
 #
 # Resources has a dropdown built from the filters main.js already deep-links
 # via ?category= (see validCategories there - keep these two in step). CTF
@@ -279,6 +282,7 @@ CANON_NAV = """\
                             <li><a href="mailto:admin@csoh.org">Contact</a></li>
                             <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
                             <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="cloud-deployment.html">How We Deploy</a></li>
                             <li><a href="rss.html">RSS Feed</a></li>
                             <li><a href="contribute.html">Contribute</a></li>
                           </ul>
