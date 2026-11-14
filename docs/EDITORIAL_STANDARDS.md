@@ -60,7 +60,10 @@ line, or guide intro. Readers already get it from the content.
   `vendor-landscape.html` carry no rankings by design.
 - **Disclose affiliation.** Shawn works at Wiz. Any page touching Wiz or its
   competitors says so. This is already done on `vendor-landscape.html`; it is a
-  standard, not a one-off. Two exceptions need no disclosure:
+  standard, not a one-off. The standard wording is "(disclosure: the site's
+  author works at Wiz)". A few pages also say that Google owns Wiz; that longer
+  form is optional, and a page with the short form is fully disclosed, so the
+  difference between the two is not a finding. Two exceptions need no disclosure:
   `chat-resources.html`, a dated record of links members shared in the
   session chat, credited to whoever shared them; and the resource directory
   (`resources.html` and every `resources-<category>.html` page), which lists
