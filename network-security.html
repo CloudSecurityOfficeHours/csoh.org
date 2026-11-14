@@ -534,7 +534,7 @@
             <p>Pick the IP space before you build anything. The mistakes are recoverable but expensive. Practical rules:</p>
             <ul>
                 <li>Use RFC1918 space. <code>10.0.0.0/8</code> is the standard choice for a multi-region multi-account program; reserve <code>172.16.0.0/12</code> and <code>192.168.0.0/16</code> for special cases (lab, on-prem overlap, partner peering).</li>
-                <li>Never overlap. The single largest source of "we can't peer these VPCs" pain is overlapping CIDRs across accounts. Maintain an IP address management (IPAM) source of truth (AWS VPC IPAM, Azure IPAM solutions, Infoblox, BlueCat, NetBox, phpIPAM) and allocate from it.</li>
+                <li>Never overlap. The largest source of "we can't peer these VPCs" pain is overlapping CIDRs across accounts. Maintain an IP address management (IPAM) source of truth (AWS VPC IPAM, Azure IPAM solutions, Infoblox, BlueCat, NetBox, phpIPAM) and allocate from it.</li>
                 <li>Size for growth. A <code>/16</code> per VPC gives you 65k addresses; a <code>/24</code> per subnet gives you 256. <a class="glossary-link" href="glossary.html#term-cloud-native">Cloud-native</a> workloads (<a class="glossary-link" href="glossary.html#term-kubernetes">Kubernetes</a>, especially) burn through IPs quickly because every pod takes one. Plan large.</li>
                 <li>Reserve space for transit. The transit/inspection VPC needs its own range that doesn't overlap with anything it will route between.</li>
             </ul>
@@ -684,7 +684,7 @@
 
         <section id="private-endpoints">
             <h2>Private connectivity &amp; service endpoints</h2>
-            <p>One of the moves with the best return on effort in cloud network security: stop reaching cloud-provider APIs (S3, Cosmos DB, Cloud Storage, KMS, <a class="glossary-link" href="glossary.html#term-secrets-manager">Secrets Manager</a>, etc.) over the public internet. Every major cloud has the primitive; what they cost and what they actually buy you differs.</p>
+            <p>One of the most rewarding moves for the effort in cloud network security is to stop reaching cloud-provider APIs (S3, Cosmos DB, Cloud Storage, KMS, <a class="glossary-link" href="glossary.html#term-secrets-manager">Secrets Manager</a>, etc.) over the public internet. Every major cloud has the primitive; what they cost and what they actually buy you differs.</p>
             <h3>AWS: VPC Endpoints &amp; PrivateLink</h3>
             <ul>
                 <li><strong>Gateway endpoints.</strong> Free; available only for S3 and DynamoDB. Use these unconditionally if you have a VPC that talks to either service.</li>
@@ -717,7 +717,7 @@
             <h3>Level 1 - VPC endpoint policies</h3>
             <p>For traffic to AWS/Azure/GCP services, route it through private endpoints with restrictive endpoint policies. Scope which buckets / keys / accounts the workload can reach. This isn't a general egress control (it doesn't stop traffic to non-cloud destinations), but for the largest single egress class (cloud-API calls), it's substantial.</p>
             <h3>Level 2 - Network Firewall with FQDN allow-list</h3>
-            <p>AWS Network Firewall, Azure Firewall, GCP Cloud NGFW (Palo Alto), or a third-party NGFW (Palo Alto VM-Series, Fortinet FortiGate-VM, Check Point CloudGuard, Cisco Secure Firewall Threat Defense). Place inline on egress, configure FQDN allow-listing: workloads can only egress to a curated list of domains (your own SaaS dependencies, package mirrors, OS update servers). Everything else is dropped. This is the single largest egress posture improvement available and is achievable in a few weeks for most environments.</p>
+            <p>AWS Network Firewall, Azure Firewall, GCP Cloud NGFW (Palo Alto), or a third-party NGFW (Palo Alto VM-Series, Fortinet FortiGate-VM, Check Point CloudGuard, Cisco Secure Firewall Threat Defense). Place inline on egress, configure FQDN allow-listing: workloads can only egress to a curated list of domains (your own SaaS dependencies, package mirrors, OS update servers). Everything else is dropped. This is the largest egress posture improvement available and is achievable in a few weeks for most environments.</p>
             <h3>Level 3 - TLS inspection</h3>
             <p>Network Firewall in TLS-terminating mode (with a per-workload root CA installed). Lets the firewall see inside the encrypted traffic for IDS/IPS, data-loss prevention, and DNS-over-HTTPS detection. Privacy and <span class="no-glossary">certificate-pinning</span> workloads break under it; pick which traffic to inspect carefully.</p>
             <h3>Level 4 - Egress proxy with auth</h3>
@@ -1065,7 +1065,7 @@
         <section id="pitfalls">
             <h2>Common pitfalls</h2>
             <ul>
-                <li><strong>NAT-only egress with no filter.</strong> The default. Workload compromised → attacker has unrestricted outbound. Network Firewall with FQDN allow-list is the single biggest improvement you can ship in a sprint.</li>
+                <li><strong>NAT-only egress with no filter.</strong> The default. Workload compromised → attacker has unrestricted outbound. Network Firewall with FQDN allow-list is the biggest improvement you can ship in a sprint.</li>
                 <li><strong>Default VPC in production.</strong> Permissive defaults, present-in-every-region, often unattributed in IPAM. Disable creation org-wide; if one exists in a prod account, it's almost certainly accidental.</li>
                 <li><strong>Security groups with <code>0.0.0.0/0</code> on anything but a public load balancer.</strong> The bread-and-butter finding of every CSPM. Default-deny, allow only what's needed, prefer SG-ID references over CIDRs.</li>
                 <li><strong>VPC peering everything to everything.</strong> Becomes O(n²) connections, no transit policy, no central inspection. Hub-and-spoke via TGW / vWAN / NCC by the third VPC.</li>
