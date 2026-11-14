@@ -378,7 +378,7 @@ def rebuild_reading_list(html: str) -> str:
 # number without touching surrounding text, e.g.
 #     <!--count:resources_floor-->380+<!--/count--> curated resources
 # The comment is invisible in rendered HTML and on GitHub-rendered Markdown.
-MARKER_RE = re.compile(r"<!--count:([a-z_]+)-->(.*?)<!--/count-->", re.DOTALL)
+MARKER_RE = re.compile(r"<!--count:([a-z0-9_]+)-->(.*?)<!--/count-->", re.DOTALL)
 
 
 def display_values(counts: dict) -> dict:
@@ -388,6 +388,7 @@ def display_values(counts: dict) -> dict:
         "meetings": str(counts["meetings"]),
         "meetings_floor": f"{floor10(counts['meetings'])}+",
         "breaches": str(counts["breaches"]),
+        **{f"review_chains_{key}": str(n) for key, n in counts["review_chains"].items()},
         "howto_guides": str(counts["howto_guides"]),
         "feeds": str(counts["feeds"]),
         "ctfs": str(counts["ctfs"]),
@@ -674,6 +675,37 @@ def cards_per_category() -> dict:
     return out
 
 
+# Breach year reviews, keyed by the suffix of their count marker
+# (<!--count:review_chains_2026-->). The key is a name, not a slug, so the
+# markers survive a review page being renamed; only the path here changes.
+YEAR_REVIEWS = {
+    "2026": "cloud-breach-year-in-review-2026-h1.html",
+    "2025": "cloud-breach-year-in-review-2025.html",
+    "2024": "cloud-breach-year-in-review-2024.html",
+    "2023": "cloud-breach-year-in-review-2023.html",
+    "2021_2022": "cloud-breach-year-in-review-2021-2022.html",
+}
+
+
+def review_chains() -> dict:
+    """Kill chains each year review covers: distinct breaches/ pages its table links.
+
+    Every review lists its chains in one table. Counting that table's distinct
+    breach links, rather than its rows or every breach link on the page, lets
+    two pages that share a row both count, and keeps out an earlier-year
+    incident the prose cites for comparison. A review with no table, or more
+    than one, raises rather than guessing which one holds the chains.
+    """
+    out = {}
+    for key, page in YEAR_REVIEWS.items():
+        text = (REPO / page).read_text(encoding="utf-8")
+        tables = re.findall(r"<table\b.*?</table>", text, re.DOTALL)
+        if len(tables) != 1:
+            raise SystemExit(f"{page}: expected one chain table, found {len(tables)}")
+        out[key] = len(set(re.findall(r'href="(?:\.\./)?breaches/([^"#?]+)', tables[0])))
+    return out
+
+
 def session_digests() -> int:
     """Per-topic session digests: what-practitioners-think-about-*.html.
 
@@ -781,6 +813,7 @@ def canonical_counts() -> dict:
         "resources": len(unique_resources(all_category_html())),
         "meetings": len(list((REPO / "meetings").glob("*.html"))),
         "breaches": len(list((REPO / "breaches").glob("*.html"))),
+        "review_chains": review_chains(),
         "howto_guides": len(list((REPO / "howto").glob("*.html"))),
         "feeds": feeds_count(),
         "glossary_terms": len(re.findall(r'id="term-[a-z0-9-]+"', gloss)),

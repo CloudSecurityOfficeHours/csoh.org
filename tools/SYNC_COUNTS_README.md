@@ -24,6 +24,7 @@ Nothing is configured. Each number is derived from the thing it describes:
 | `resources` | Unique `.resource-card` entries on `resources.html`, deduped by URL |
 | `meetings` | `meetings/*.html` files on disk |
 | `breaches` | `breaches/*.html` files on disk |
+| `review_chains` | Per breach year review (`YEAR_REVIEWS`): distinct `breaches/` pages linked from that review's one chain table |
 | `feeds` | Length of the `FEEDS` list in `update_news.py` |
 | `glossary_terms` | `id="term-…"` anchors in `glossary.html` |
 | `ctfs` / `conferences` | `.resource-card` articles on that directory page |
@@ -66,6 +67,7 @@ The comment is invisible in rendered HTML *and* in GitHub-rendered Markdown, so 
 | `ctfs` / `ctfs_floor` | exact / `N+` floored to ten | `52` / `50+` |
 | `vendors_floor` / `vendor_categories` | `N+` floored to ten / exact | `300+` / `32` |
 | `breaches` | exact | `45` |
+| `review_chains_2026`, `review_chains_2025`, `review_chains_2024`,<br>`review_chains_2023`, `review_chains_2021_2022` | exact, per year review | `24` |
 | `feeds` | exact | `62` |
 | `conferences` | exact | `26` |
 | `long_form_floor` | `N+`, floored to the nearest ten | `80+` |
