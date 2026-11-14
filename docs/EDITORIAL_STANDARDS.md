@@ -191,7 +191,15 @@ claims.
 - **Empty intensifiers.** "Actually", "genuinely", "truly", "single most",
   "highest-leverage". Cut one only when removing it changes nothing. In "the
   breaches that actually happen" it contrasts real incidents with hypothetical
-  ones, so it stays.
+  ones, so it stays. "Genuinely" and "truly" stay on the same grounds when the
+  text names the alternative nearby: "some options are genuinely useful; others
+  are not", or "CIEM tooling that truly covers all three (most CIEM tools do AWS
+  well, ...)". Before a degree word with no such contrast ("genuinely hard",
+  "genuinely muddled") they add nothing, so they go.
+- **House formulas.** One stock phrase carrying the same kind of claim on page
+  after page, such as "the best return on effort". Each use can be accurate and
+  the repetition still reads as generated. Say each one in its own words,
+  keeping the claim.
 - **Bold-lead bullets.** `<li><strong>Label:</strong> ...` is right when the
   label is a term being defined or a step being named. Prose cut into bullets
   with a bold phrase on each is not a list. Write the paragraph.
