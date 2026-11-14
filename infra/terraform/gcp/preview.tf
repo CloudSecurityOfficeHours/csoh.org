@@ -40,10 +40,13 @@ resource "google_artifact_registry_repository" "previews" {
   description   = "Pull request preview images. Never deployed to production or QA."
   format        = "DOCKER"
 
-  docker_config {
-    immutable_tags = false
-  }
-
+  # Tags stay mutable, which is the API default, so there is no docker_config
+  # block. The cleanup rule below depends on that: Artifact Registry will not
+  # delete a tagged image under immutable tags. Writing
+  # `docker_config { immutable_tags = false }` here is not equivalent in
+  # practice: the API omits the block for a repository created mutable, so
+  # every plan would show it being added.
+  #
   # Preview images are disposable. A tagged revision keeps serving after its
   # image is gone only while an instance is warm, so the window is long enough
   # to outlast any pull request that is still being worked on, and the daily
@@ -123,13 +126,20 @@ resource "google_cloud_run_v2_service" "site_preview" {
   }
 
   lifecycle {
-    # The workflow owns both of these. Each PR deploy replaces the template
-    # image, and `gcloud run deploy --no-traffic --tag` rewrites the traffic
-    # block: it pins the main traffic to the revision that was serving and adds
-    # one zero-percent tagged entry per open PR. Without ignoring `traffic`, the
+    # The workflow owns the image, the revision name and the traffic block.
+    # Each PR deploy replaces the template image, and
+    # `gcloud run deploy --no-traffic --tag` rewrites the traffic block: it
+    # pins the main traffic to the revision that was serving and adds one
+    # zero-percent tagged entry per open PR. Without ignoring `traffic`, the
     # next apply would strip every preview tag.
+    #
+    # To tag the new revision, gcloud also names it, so the template carries
+    # that name (csoh-site and csoh-site-qa deploy without a tag and leave it
+    # unset). Without ignoring `template[0].revision`, every plan would clear
+    # the name, and applying that starts a new, untagged revision.
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].revision,
       traffic,
       client,
       client_version,

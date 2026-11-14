@@ -111,8 +111,8 @@ resource "google_binary_authorization_policy" "default" {
   # policy can be written. Nothing in the arguments above references that
   # resource, so Terraform cannot infer the ordering on its own.
   #
-  # The two Cloud Run services in that list are a BOOTSTRAP ordering fix, and
-  # they are the non-obvious half of this file. Both services are declared with
+  # The Cloud Run services in that list are a BOOTSTRAP ordering fix, and
+  # they are the non-obvious half of this file. Each service is declared with
   # Google's placeholder image, us-docker.pkg.dev/cloudrun/container/hello, with
   # the real image excluded from Terraform's diff by `ignore_changes` so CI owns
   # it (cloud_run.tf). `ignore_changes` does not apply on CREATE - a create
@@ -125,18 +125,19 @@ resource "google_binary_authorization_policy" "default" {
   # is what sits in state.
   #
   # The alternative was to allowlist the placeholder path alongside our
-  # repository. That works and is one line shorter, and it is rejected here on
-  # purpose: it would make "our repository, or nothing" no longer literally
-  # true, and a policy you have to add an asterisk to when describing it is a
-  # policy someone will eventually describe without the asterisk.
+  # repositories. That works and is one line shorter, and it is rejected here
+  # on purpose: it would make "our repositories, or nothing" no longer
+  # literally true, and a policy you have to add an asterisk to when describing
+  # it is a policy someone will eventually describe without the asterisk.
   #
-  # THE CAVEAT THIS LEAVES. Ordering only helps the first create. If either
-  # service is ever FORCE-REPLACED while the policy is enforcing (changing its
-  # name or location does that), the replacement create uses the placeholder
-  # again and is denied - an apply that fails naming an image nobody in the diff
-  # asked for. The remedy is to comment out that service's `binary_authorization`
-  # block for the replacing apply and put it back afterwards, or to let the
-  # replacement land and deploy through CI before re-enforcing.
+  # THE CAVEAT THIS LEAVES. Ordering only helps while the policy does not exist
+  # yet. A service ADDED while the policy is enforcing, or one FORCE-REPLACED
+  # (changing its name or location does that), is created with the placeholder
+  # and denied, so the apply fails naming an image nobody in the diff asked
+  # for. The remedy is three steps: apply with that service's
+  # `binary_authorization` block commented out, deploy to it once through CI so
+  # its template names an image from an allowlisted repository, then restore
+  # the block and apply again.
   depends_on = [
     google_project_service.apis,
     google_cloud_run_v2_service.site,
