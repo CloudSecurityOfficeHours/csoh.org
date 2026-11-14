@@ -162,7 +162,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->120<!--/count--> weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->121<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 570+ community-shared URLs from live sessions, security-validated |
 
@@ -492,7 +492,7 @@ Archive of past Zoom session presentations:
 
 ### 📝 Meeting Recaps ([`meetings.html`](https://csoh.org/meetings.html))
 Topic-by-topic recaps of every weekly session:
-- **<!--count:meetings-->120<!--/count--> meeting recaps** with per-topic summaries and speaker notes
+- **<!--count:meetings-->121<!--/count--> meeting recaps** with per-topic summaries and speaker notes
 - Searchable, filterable by tag (AWS, Azure, AI, supply chain, conferences, etc.)
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
@@ -777,7 +777,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (120 entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (121 entries, topic-by-topic)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (570+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
@@ -818,7 +818,7 @@ csoh.org/
 │
 │  ── Subdirectory page sets ──
 ├── breaches/                   # 60 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 120 per-meeting recap pages (split from meetings.html)
+├── meetings/                   # 121 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
 ├── howto/                      # 24 how-to guides: policy, query and SIEM detection languages
@@ -881,7 +881,7 @@ csoh.org/
 ├── update_sri.py               # Updates SRI hashes & cache-bust params across HTML files
 ├── retire_merged_career_pages.py # One-off: repoint links to the merged "breaking in" page
 │
-├── .github/workflows/          # 22 CI/CD workflows (see "How Automation Works" below)
+├── .github/workflows/          # 23 CI/CD workflows (see "How Automation Works" below)
 │
 ├── seo-audits/                 # SEO audit reports + SCORECARD.md (excluded from deploy filters)
 ├── preview-mapping.json        # Metadata for resource previews
@@ -1114,7 +1114,7 @@ The homepage is three doors and the next-session strip - there is no resource-ca
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-The table below covers 17 of the <!--count:workflows-->22<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->22<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
+The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->23<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
 
 **Content automation (writes to the site)**
 
@@ -1370,7 +1370,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->332<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->333<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1381,7 +1381,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->317<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->120<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->317<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->121<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
