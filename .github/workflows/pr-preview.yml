@@ -1,0 +1,445 @@
+# =============================================================================
+# Pull request previews on Cloud Run
+# -----------------------------------------------------------------------------
+# Every pull request from a branch in this repo gets a live copy of the site
+# built from its head commit, at its own URL, posted as a sticky PR comment.
+# The preview is removed when the PR is approved, gets a changes-requested
+# review, or is closed (merged or not). A later push brings it back.
+#
+#   PR opened / pushed ─► build (no credentials) ─► deploy (pr-preview env)
+#   approved / changes requested / closed ─► remove (pr-preview env)
+#   daily ─► remove (sweep previews whose PR is closed, delete dead revisions)
+#
+# HOW A PREVIEW EXISTS. One Cloud Run service, csoh-site-preview, holds every
+# preview as a revision with zero traffic and a revision tag named pr-<n>. The
+# tag gives that revision its own hostname,
+#   https://pr-<n>---csoh-site-preview-<hash>.a.run.app
+# and removing the tag removes the URL. Revisions that nothing points at are
+# then deleted. Why one service and not one per PR is in
+# infra/terraform/gcp/preview.tf: it lets the deploy identity be scoped to that
+# single service, the same way the QA deployer is.
+#
+# WHAT IS TRUSTED. Only branches in this repo (people with write access) get a
+# preview. Fork PRs are skipped: they cannot mint an OIDC token on
+# `pull_request`, and the fix for that, `pull_request_target`, would run
+# untrusted code next to cloud credentials. Do not switch the trigger.
+# Bot-authored PRs (news, calendar, counts) are also skipped; they are
+# approved within seconds of opening, so a preview would never be looked at.
+#
+# The build runs the PR's own code (tools/build_search_index.py,
+# update_sri.py, the Dockerfile's RUN steps), so it happens in a job with no
+# cloud credential and no write token. The deploy job receives only the image
+# tarball and runs nothing from the PR. Anyone with write access can still edit
+# this file on their branch, which is why the `pr-preview` identity can reach
+# nothing but csoh-site-preview and the csoh-previews image repo. See the
+# pr-preview paragraph in infra/terraform/gcp/wif.tf.
+#
+# NOT PROMOTED, NOT IDENTICAL. Preview images go to csoh-previews, never to
+# csoh-containers, and the build rewrites robots.txt to disallow everything
+# so tag URLs posted on public PRs are not indexed. QA's "same bytes as
+# production" rule does not apply here.
+# =============================================================================
+name: 'PR preview: Cloud Run preview per pull request'
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  pull_request_review:
+    types: [submitted]
+  # Safety net for close events this workflow never saw (a PR opened before
+  # this file existed, a failed run). Also deletes unreferenced revisions.
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_ID: csoh-org-495800
+  REGION: us-central1
+  SERVICE: csoh-site-preview
+  REPO: csoh-previews
+  IMAGE_NAME: csoh-site
+  WIF_PROVIDER: projects/23727240440/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  DEPLOYER_SA: csoh-deployer-preview@csoh-org-495800.iam.gserviceaccount.com
+  COMMENT_MARKER: '<!-- csoh-pr-preview -->'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build and scan the PR's image. No id-token, no write scope: this is the job
+  # that executes code from the pull request.
+  # ---------------------------------------------------------------------------
+  build:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: pr-preview-build-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.x'
+
+      # Same staging steps as deploy-qa.yml's publish-qa, so the preview shows
+      # what QA and production would serve.
+      - name: Build search index
+        run: |
+          set -euo pipefail
+          python3 tools/build_search_index.py
+          test -f search-index.json
+          size=$(stat -c%s search-index.json)
+          if [ "$size" -lt 100000 ]; then
+            echo "search-index.json is suspiciously small ($size bytes)" >&2
+            exit 1
+          fi
+
+      - name: Re-stamp SRI hashes
+        run: python3 update_sri.py
+
+      # Tag URLs end up in public PR comments. Keep crawlers off them.
+      - name: Disallow crawlers on the preview
+        run: |
+          printf 'User-agent: *\nDisallow: /\n' > robots.txt
+
+      - name: Build container image
+        run: |
+          docker build \
+            --tag csoh-preview:build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}" \
+            .
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          TRIVY_VERSION="0.70.0"
+          TRIVY_SHA256="8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9"
+          curl -fsSL -o /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          rm /tmp/trivy.tar.gz
+
+      # Same gate as QA and production. A preview of an image that could never
+      # ship is not worth publishing.
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --no-progress \
+            --ignorefile .trivyignore.yaml \
+            csoh-preview:build
+
+      - name: Save image
+        run: docker save csoh-preview:build | gzip -1 > preview-image.tar.gz
+
+      - name: Upload image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: preview-image
+          path: preview-image.tar.gz
+          retention-days: 1
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Push the image and tag a zero-traffic revision pr-<n>. Runs nothing from
+  # the PR: no checkout, only the tarball the build job produced.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Required for the WIF trust (wif.tf pins the subject to this environment).
+    # The environment has no branch policy, because PR branches are arbitrary;
+    # see the header for why that is safe.
+    environment:
+      name: pr-preview
+      url: ${{ steps.url.outputs.url }}
+    # Shared with `remove` for the same PR, and NOT cancel-in-progress: a
+    # cancelled gcloud call can still complete server side, so an approval
+    # that cancelled a deploy could leave a tag behind. Waiting is cheaper.
+    concurrency:
+      group: pr-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # Two attempts, first one continue-on-error, gated on `outcome`. Same
+      # reasoning as deploy-qa.yml.
+      - name: Authenticate to GCP via WIF
+        id: gcpauth
+        continue-on-error: true
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Authenticate to GCP via WIF (retry)
+        if: steps.gcpauth.outcome == 'failure'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db  # v3.0.1
+
+      - name: Download image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: preview-image
+
+      - name: Push image
+        id: image
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          ref="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE_NAME}:pr-${PR}-${HEAD_SHA::12}"
+          gunzip -c preview-image.tar.gz | docker load
+          docker tag csoh-preview:build "$ref"
+          docker push "$ref"
+          digest=$(gcloud artifacts docker images describe "$ref" \
+                     --format='value(image_summary.fully_qualified_digest)')
+          case "$digest" in
+            *@sha256:*) ;;
+            *) echo "::error::No digest resolved for $ref (got '$digest')"; exit 1 ;;
+          esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # --no-traffic keeps the service's main URL on its placeholder; --tag
+      # moves pr-<n> to the new revision. Every open PR deploys to this one
+      # service, so two PRs updating it at once can collide on the service's
+      # version check. Retry rather than serialise across PRs: a global
+      # concurrency group would silently drop all but the newest queued run.
+      - name: Deploy tagged revision
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3 4 5; do
+            if gcloud run deploy "$SERVICE" \
+                 --project "$PROJECT_ID" \
+                 --region "$REGION" \
+                 --image "$DIGEST" \
+                 --no-traffic \
+                 --tag "pr-${PR}" \
+                 --service-account "csoh-run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+                 --quiet; then
+              exit 0
+            fi
+            echo "::warning::Deploy attempt ${attempt} failed; retrying."
+            sleep $((attempt * 10))
+          done
+          echo "::error::Deploy failed after 5 attempts."
+          exit 1
+
+      - name: Resolve preview URL
+        id: url
+        run: |
+          set -euo pipefail
+          url=$(gcloud run services describe "$SERVICE" \
+                  --project "$PROJECT_ID" --region "$REGION" --format=json \
+                | jq -r --arg t "pr-${PR}" '.status.traffic[]? | select(.tag == $t) | .url' \
+                | head -n1)
+          case "$url" in
+            https://*) ;;
+            *) echo "::error::No URL found for tag pr-${PR} (got '$url')"; exit 1 ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # A tag URL that answers is the only proof the revision started; Cloud
+      # Run reports success before the first cold start on a zero-traffic
+      # revision.
+      - name: Smoke test
+        env:
+          URL: ${{ steps.url.outputs.url }}
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/")
+            if [ "$code" = "200" ]; then
+              echo "Preview answered 200."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: HTTP ${code}"
+            sleep 10
+          done
+          echo "::error::Preview did not answer 200 at $URL/"
+          exit 1
+
+      - name: Post or update PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.url.outputs.url }}
+        run: |
+          set -euo pipefail
+          {
+            echo "$COMMENT_MARKER"
+            echo "**Preview:** $URL"
+            echo
+            echo "Built from \`${HEAD_SHA::12}\`. Updates on every push, and is removed when this PR is approved, gets a changes-requested review, or is closed."
+          } > comment.md
+          id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${COMMENT_MARKER}\"))) | .id" \
+               | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment.md >/dev/null
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Remove previews. On a PR event, the one PR's tag. On the schedule, every
+  # pr-<n> tag whose PR is no longer open. Then, either way, delete revisions
+  # that no tag or traffic entry references.
+  # ---------------------------------------------------------------------------
+  remove:
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.user.type != 'Bot' &&
+        (
+          (github.event_name == 'pull_request' && github.event.action == 'closed') ||
+          (github.event_name == 'pull_request_review' &&
+            (github.event.review.state == 'approved' || github.event.review.state == 'changes_requested'))
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: pr-preview
+    concurrency:
+      group: pr-preview-${{ github.event.pull_request.number || 'sweep' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Authenticate to GCP via WIF
+        id: gcpauth
+        continue-on-error: true
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Authenticate to GCP via WIF (retry)
+        if: steps.gcpauth.outcome == 'failure'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db  # v3.0.1
+
+      # The sweep removes only tags whose PR is closed. It deliberately does not
+      # look at review state: a push after a changes-requested review brings the
+      # preview back on purpose, and reviewDecision stays CHANGES_REQUESTED
+      # until someone reviews again.
+      - name: Remove preview tags
+        id: tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing=$(gcloud run services describe "$SERVICE" \
+                       --project "$PROJECT_ID" --region "$REGION" --format=json \
+                     | jq -r '.spec.traffic[]?.tag // empty' | grep -E '^pr-[0-9]+$' || true)
+          remove=()
+          if [ -n "$PR" ]; then
+            if grep -qxF "pr-${PR}" <<<"$existing"; then remove+=("pr-${PR}"); fi
+          else
+            for tag in $existing; do
+              state=$(gh pr view "${tag#pr-}" -R "$GITHUB_REPOSITORY" --json state --jq .state)
+              if [ "$state" != "OPEN" ]; then remove+=("$tag"); fi
+            done
+          fi
+          if [ "${#remove[@]}" -eq 0 ]; then
+            echo "No preview tags to remove."
+            echo "removed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          list=$(IFS=,; echo "${remove[*]}")
+          echo "Removing tags: $list"
+          for attempt in 1 2 3 4 5; do
+            if gcloud run services update-traffic "$SERVICE" \
+                 --project "$PROJECT_ID" --region "$REGION" \
+                 --remove-tags "$list" --quiet; then
+              echo "removed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::warning::Tag removal attempt ${attempt} failed; retrying."
+            sleep $((attempt * 10))
+          done
+          echo "::error::Could not remove tags $list."
+          exit 1
+
+      # List revisions BEFORE describing the service. A revision created by a
+      # concurrent deploy of another PR after the list is not in the list, so it
+      # cannot be deleted; one created before the list is already referenced in
+      # the describe that follows. Reversing the order opens a window where a
+      # brand-new tagged revision looks unreferenced.
+      - name: Delete unreferenced revisions
+        run: |
+          set -uo pipefail
+          revisions=$(gcloud run revisions list --service "$SERVICE" \
+                        --project "$PROJECT_ID" --region "$REGION" \
+                        --format='value(metadata.name)')
+          keep=$(gcloud run services describe "$SERVICE" \
+                   --project "$PROJECT_ID" --region "$REGION" --format=json \
+                 | jq -r '[.spec.traffic[]?.revisionName, .status.traffic[]?.revisionName,
+                           .status.latestCreatedRevisionName, .status.latestReadyRevisionName]
+                          | map(select(. != null)) | unique | .[]')
+          if [ -z "$keep" ]; then
+            echo "::error::Could not read the service's referenced revisions; deleting nothing."
+            exit 1
+          fi
+          for rev in $revisions; do
+            if grep -qxF "$rev" <<<"$keep"; then continue; fi
+            echo "Deleting unreferenced revision $rev"
+            gcloud run revisions delete "$rev" \
+              --project "$PROJECT_ID" --region "$REGION" --quiet \
+              || echo "::warning::Could not delete revision $rev"
+          done
+
+      - name: Update PR comment
+        if: env.PR != '' && steps.tags.outputs.removed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${COMMENT_MARKER}\"))) | .id" \
+               | head -n1)
+          if [ -z "$id" ]; then exit 0; fi
+          {
+            echo "$COMMENT_MARKER"
+            echo "**Preview removed.** Push a new commit to bring it back while the PR is open."
+          } > comment.md
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
