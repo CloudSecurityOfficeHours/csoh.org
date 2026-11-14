@@ -15,7 +15,7 @@ URL safety checks also run as a **blocking gate** inside two other workflows:
 
 ## What It Does
 
-1. **Scans every published HTML file** using `tools/check_all_site_urls.py` - the root pages plus the `breaches/`, `meetings/`, `portfolio/`, and `homelab/` subdirectories
+1. **Scans every published HTML file** using `tools/check_all_site_urls.py`: the root pages plus the `breaches/`, `meetings/`, `portfolio/`, `homelab/`, and `howto/` subdirectories
 2. **Extracts all URLs** from:
    - `<a href="">` links
    - `<img src="">`, `<script src="">`, and other resource URLs
@@ -83,6 +83,10 @@ database or reputation API behind it. `tools/check_url_safety.py` flags:
 - a small hand-maintained `BLOCKLIST` in the same file
 
 It resolves redirects first, so the **final** destination is what gets judged.
+On a pull request it resolves only the URLs the PR adds
+(`--resolve-added-since <base>`); the weekly run and the push-to-main gate in
+`site-update-deploy.yml` resolve every URL, which is how a long-standing link
+that starts redirecting somewhere bad gets caught.
 It will not catch a freshly-compromised legitimate domain - nothing static
 would. It exists to catch the realistic failure mode: a link pasted from Zoom
 chat that turns out to be a shortener or a lookalike domain.

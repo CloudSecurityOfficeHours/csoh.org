@@ -46,6 +46,14 @@ The `check_all_site_urls.py` script scans **all HTML files** in your site (not j
 
 This is automatically run by the `check-url-safety.yml` workflow on every pull request that changes HTML files. It also runs as a blocking gate in `site-update-deploy.yml` (before normalization and deploy) and `normalize-urls.yml` (before URL normalization).
 
+**Redirect resolution** is most of the run time: one HTTP request per external URL. Each URL gets at most four times the socket timeout (20 seconds by default) of wall-clock time, so a server that trickles bytes can't stall the run; one that overruns is reported as unresolved, a warning. To resolve only the URLs your branch adds (what the pull-request check does), name the base:
+
+```bash
+python3 tools/check_all_site_urls.py --resolve-added-since origin/main
+```
+
+Uncommitted and untracked pages count as added. Every URL still gets the static checks; only redirect-following is narrowed.
+
 ## What It Checks
 
 - ✅ **URL Format** - Valid HTTP/HTTPS URLs only

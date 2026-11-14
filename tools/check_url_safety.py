@@ -15,12 +15,14 @@ Usage:
     python3 tools/check_url_safety.py --no-resolve <url>
 """
 
+import queue
 import sys
 import re
+import threading
+import time
 import urllib.request
 import urllib.error
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from typing import Dict, List, Optional, Tuple
 
 # Suspicious patterns that might indicate malicious URLs
@@ -114,11 +116,12 @@ def resolve_url(url: str, timeout: int = 5) -> Tuple[str, Optional[str]]:
         except urllib.error.HTTPError as e:
             if method == "HEAD" and (e.code == 405 or e.code >= 400):
                 continue  # HEAD is unreliable on many hosts; try GET
-            # 308 Permanent Redirect - follow it via the Location header
+            # 308 Permanent Redirect, which urllib follows only from Python
+            # 3.11. Location may be relative, so resolve it against the URL.
             if e.code == 308:
                 location = e.headers.get("Location")
                 if location:
-                    return location, None
+                    return urljoin(url, location), None
             return url, f"HTTP {e.code}"
         except Exception as e:
             return url, str(e)
@@ -130,11 +133,14 @@ def resolve_urls_concurrent(
     max_workers: int = 10,
     timeout: int = 5,
     skip_domains: Optional[List[str]] = None,
+    deadline: Optional[float] = None,
 ) -> Dict[str, Tuple[str, Optional[str]]]:
     """Resolve multiple URLs concurrently, returning {original: (resolved, error)}.
 
     URLs whose domain is in skip_domains are returned unchanged without
-    making HTTP requests.
+    making HTTP requests. `deadline` caps the wall-clock time spent on any
+    one URL (default: four times `timeout`); a URL that overruns it is
+    returned unchanged with an error.
     """
     if skip_domains is None:
         skip_domains = WHITELIST
@@ -157,18 +163,62 @@ def resolve_urls_concurrent(
     if not to_resolve:
         return results
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_url = {
-            executor.submit(resolve_url, url, timeout): url
-            for url in to_resolve
-        }
-        for future in as_completed(future_to_url):
-            original = future_to_url[future]
+    # `timeout` bounds each socket operation, not the request. A server that
+    # sends a byte every few seconds, or streams an endless redirect body
+    # (urllib reads a 3xx body in full before following it), never trips it,
+    # and one such URL would hold the whole scan until the CI job is killed.
+    # So every URL also gets a wall-clock deadline, enforced from outside the
+    # request: past it, the URL is reported unresolved and its worker is
+    # abandoned and replaced. Workers are daemon threads because an abandoned
+    # one may never return, and a ThreadPoolExecutor joins its threads at
+    # interpreter exit.
+    if deadline is None:
+        deadline = timeout * 4
+    # The wait below counts results, so a repeated URL would never complete.
+    to_resolve = list(dict.fromkeys(to_resolve))
+    pending: "queue.Queue[str]" = queue.Queue()
+    for url in to_resolve:
+        pending.put(url)
+    lock = threading.Lock()
+    in_flight: Dict[str, float] = {}
+
+    def worker() -> None:
+        while True:
             try:
-                resolved, error = future.result()
-                results[original] = (resolved, error)
+                url = pending.get_nowait()
+            except queue.Empty:
+                return
+            with lock:
+                in_flight[url] = time.monotonic()
+            try:
+                outcome = resolve_url(url, timeout)
             except Exception as e:
-                results[original] = (original, str(e))
+                outcome = (url, str(e))
+            with lock:
+                # Absent means the deadline already reported this URL.
+                if in_flight.pop(url, None) is not None:
+                    results[url] = outcome
+
+    def start_worker() -> None:
+        threading.Thread(target=worker, daemon=True).start()
+
+    # Counted before any worker starts, or a fast result would be counted twice.
+    expected = len(results) + len(to_resolve)
+    for _ in range(min(max_workers, len(to_resolve))):
+        start_worker()
+
+    while True:
+        with lock:
+            if len(results) >= expected:
+                break
+            now = time.monotonic()
+            overdue = [u for u, t in in_flight.items() if now - t > deadline]
+            for url in overdue:
+                del in_flight[url]
+                results[url] = (url, f"no complete response within {deadline:g}s")
+        for _ in overdue:
+            start_worker()
+        time.sleep(0.1)
 
     return results
 

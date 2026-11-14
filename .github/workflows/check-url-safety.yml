@@ -13,7 +13,8 @@
 #   - brand-impersonation and account-panic phrasing in the path
 #   - URL-shortener / redirector domains (bit.ly, t.co, …), which hide the
 #     real destination from review
-#   - redirect resolution, so the FINAL destination is what gets judged
+#   - redirect resolution, so the FINAL destination is what gets judged (on a
+#     pull request, only for the URLs it adds; see "Run URL safety check")
 #   - a small hand-maintained BLOCKLIST in check_url_safety.py
 #
 # That catches the realistic failure mode here - someone pastes a link from
@@ -203,13 +204,28 @@ jobs:
       # `run: |` runs a multi-line shell script on the runner.
       - name: Run URL safety check
         if: steps.html.outputs.changed == 'true'
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Following redirects is the slow part: one HTTP request per external
+          # URL, thousands of them. A pull request can only introduce the URLs
+          # it adds, so on a PR only those are resolved; every URL still gets
+          # the static checks. The weekly run and the push-to-main gate in
+          # site-update-deploy.yml re-resolve all of them, which is where a
+          # long-standing link that has started redirecting somewhere bad is
+          # caught. If the diff cannot be computed, the scanner warns and
+          # resolves everything.
+          scope=()
+          if [ "$IS_PR" = "true" ]; then
+            scope=(--resolve-added-since "$BASE_SHA")
+          fi
           # Run the scanner, redirecting BOTH stdout and stderr (`2>&1`) into
           # one report file. The step runs under `bash -e`, so a nonzero exit
           # would normally abort here; `|| rc=$?` intercepts it and stashes the
           # real exit code instead, letting us echo the report before deciding.
           rc=0
-          python3 tools/check_all_site_urls.py > site-wide-url-safety-report.txt 2>&1 || rc=$?
+          python3 tools/check_all_site_urls.py "${scope[@]}" > site-wide-url-safety-report.txt 2>&1 || rc=$?
           # Echo the report into the step log so it is visible without
           # downloading the artifact.
           cat site-wide-url-safety-report.txt

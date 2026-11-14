@@ -5,11 +5,13 @@ Check all URLs across every HTML file on the site for safety
 
 Three-phase pipeline:
   1. Extract  - collect all URLs from every HTML file (root + subdirs), deduplicate
-  2. Resolve  - batch-resolve unique URLs concurrently (skip whitelisted domains)
+  2. Resolve  - batch-resolve unique URLs concurrently (skip whitelisted domains);
+                with --resolve-added-since REV, only URLs added since REV
   3. Check    - run safety checks on resolved URLs, per file
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 from check_url_safety import URLSafetyChecker, resolve_urls_concurrent
@@ -36,8 +38,13 @@ STRIP_NON_PROSE_RE = re.compile(r'(?is)<pre\b.*?</pre>|<code\b.*?</code>|<!--.*?
 SKIPPED_IN_CODE = set()
 
 
-def extract_urls_from_html(file_path):
-    """Extract all URLs from an HTML file."""
+def extract_urls_from_html(file_path, content=None):
+    """Extract all URLs from an HTML file.
+
+    Pass `content` to scan text that is not the file on disk (an earlier
+    revision of it). Such a scan leaves SKIPPED_IN_CODE alone, since that
+    count describes the pages being checked.
+    """
     # XML namespace URIs are identifiers, not fetchable URLs - never normalize.
     # The SVG/XLink/XHTML/XML/MathML namespaces are spec-defined as the http://
     # form and rejected by HTML5 validators if rewritten to https://.
@@ -51,40 +58,43 @@ def extract_urls_from_html(file_path):
     }
 
     urls = []
+    note_skipped = content is None
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        if content is None:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-            # Find all href attributes
-            href_pattern = r'<a[^>]+href=["\'](https?://[^"\']+)["\']'
-            urls.extend(re.findall(href_pattern, content))
+        # Find all href attributes
+        href_pattern = r'<a[^>]+href=["\'](https?://[^"\']+)["\']'
+        urls.extend(re.findall(href_pattern, content))
 
-            # Find all src attributes (images, scripts, iframes, etc.)
-            src_pattern = r'<(?:img|script|iframe|source|video|audio)[^>]+src=["\'](https?://[^"\']+)["\']'
-            urls.extend(re.findall(src_pattern, content))
+        # Find all src attributes (images, scripts, iframes, etc.)
+        src_pattern = r'<(?:img|script|iframe|source|video|audio)[^>]+src=["\'](https?://[^"\']+)["\']'
+        urls.extend(re.findall(src_pattern, content))
 
-            # Find any other http/https URLs that might be in content.
-            #
-            # This sweep exists to catch URLs sitting in prose rather than
-            # in an attribute. It must NOT look inside <pre>, <code>, or HTML
-            # comments: those hold sample text, not links the site offers a
-            # reader.
-            #
-            # howto/regex-for-security.html teaches URL-matching patterns, so
-            # it contains strings like `https://[a-z]+\.example\.com$`. That
-            # matches the pattern below, and urlparse then reads the `[` as
-            # the start of an IPv6 literal and raises. The gate fails closed on
-            # a URL it cannot parse - which is the right call for a real URL -
-            # so an unparseable *example* would block the whole housekeeping
-            # run.
-            #
-            # href/src extraction above deliberately still runs over the whole
-            # document, so a real link inside a <pre> is checked either way and
-            # no actual link loses coverage here.
-            url_pattern = r'https?://[^\s<>"\']+[^\s<>"\'.,;:!?)]'
-            prose = STRIP_NON_PROSE_RE.sub(' ', content)
-            prose_urls = re.findall(url_pattern, prose)
-            urls.extend(prose_urls)
+        # Find any other http/https URLs that might be in content.
+        #
+        # This sweep exists to catch URLs sitting in prose rather than
+        # in an attribute. It must NOT look inside <pre>, <code>, or HTML
+        # comments: those hold sample text, not links the site offers a
+        # reader.
+        #
+        # howto/regex-for-security.html teaches URL-matching patterns, so
+        # it contains strings like `https://[a-z]+\.example\.com$`. That
+        # matches the pattern below, and urlparse then reads the `[` as
+        # the start of an IPv6 literal and raises. The gate fails closed on
+        # a URL it cannot parse - which is the right call for a real URL -
+        # so an unparseable *example* would block the whole housekeeping
+        # run.
+        #
+        # href/src extraction above deliberately still runs over the whole
+        # document, so a real link inside a <pre> is checked either way and
+        # no actual link loses coverage here.
+        url_pattern = r'https?://[^\s<>"\']+[^\s<>"\'.,;:!?)]'
+        prose = STRIP_NON_PROSE_RE.sub(' ', content)
+        prose_urls = re.findall(url_pattern, prose)
+        urls.extend(prose_urls)
+        if note_skipped:
             SKIPPED_IN_CODE.update(
                 set(re.findall(url_pattern, content)) - set(prose_urls) - set(urls))
 
@@ -106,8 +116,58 @@ def extract_urls_from_html(file_path):
     return unique_urls
 
 
+def urls_added_since(rev, workspace_root, file_urls):
+    """URLs on the site now that were nowhere on it at git revision `rev`.
+
+    Only files that changed since `rev` can hold a URL the site did not
+    already have, so earlier revisions are read for those files alone.
+    Returns None if git cannot answer, so the caller resolves everything.
+    """
+    def git(*args):
+        return subprocess.run(['git', '-C', str(workspace_root), *args],
+                              capture_output=True, text=True)
+
+    # Compare the merge base with the working tree, not with HEAD, and add
+    # untracked files: the URLs being checked are read from disk, so an
+    # uncommitted page must count as changed.
+    base = git('merge-base', rev, 'HEAD')
+    if base.returncode == 0:
+        rev = base.stdout.strip()
+        diff = git('diff', '--name-only', rev)
+        untracked = git('ls-files', '--others', '--exclude-standard')
+    if base.returncode or diff.returncode or untracked.returncode:
+        failed = base if base.returncode else diff if diff.returncode else untracked
+        print(f"::warning::cannot diff against {rev} ({failed.stderr.strip()}); "
+              "resolving every URL instead")
+        return None
+    changed = set(diff.stdout.splitlines()) | set(untracked.stdout.splitlines())
+
+    before = set()
+    unchanged_now = set()
+    for path, urls in file_urls.items():
+        rel = path.relative_to(workspace_root).as_posix()
+        if rel not in changed:
+            unchanged_now.update(urls)
+            continue
+        old = git('show', f'{rev}:{rel}')
+        if old.returncode == 0:      # absent at rev means the file is new
+            before.update(extract_urls_from_html(path, content=old.stdout))
+
+    changed_now = {u for p, urls in file_urls.items()
+                   if p.relative_to(workspace_root).as_posix() in changed
+                   for u in urls}
+    return changed_now - before - unchanged_now
+
+
 def main():
     no_resolve = '--no-resolve' in sys.argv
+    # --resolve-added-since REV: follow redirects only for URLs added since
+    # REV. A pull request can only introduce the URLs it adds; the rest were
+    # resolved when they arrived, and the weekly run and the push-to-main
+    # gate re-resolve all of them. Every URL still gets the static checks.
+    added_since = None
+    if '--resolve-added-since' in sys.argv:
+        added_since = sys.argv[sys.argv.index('--resolve-added-since') + 1]
 
     # Find all HTML files
     workspace_root = Path(__file__).parent.parent
@@ -151,8 +211,15 @@ def main():
     # --- Phase 2: Resolve unique URLs concurrently ---
     resolution_map = {}
     if not no_resolve:
+        to_resolve = all_unique_urls
+        added = urls_added_since(added_since, workspace_root, file_urls) if added_since else None
+        if added is not None:
+            to_resolve = [u for u in all_unique_urls if u in added]
+            print(f"Resolving the {len(to_resolve)} URL(s) added since {added_since}; "
+                  f"the other {len(all_unique_urls) - len(to_resolve)} get the "
+                  "static checks only")
         print("Resolving URLs (skipping whitelisted domains)...")
-        resolution_map = resolve_urls_concurrent(all_unique_urls)
+        resolution_map = resolve_urls_concurrent(to_resolve)
 
         resolved_count = sum(1 for u, (r, _) in resolution_map.items() if r != u)
         error_count = sum(1 for _, (_, e) in resolution_map.items() if e)
