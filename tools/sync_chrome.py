@@ -99,9 +99,11 @@ CANON_THEME_TOGGLE = (
 # detection, logging, and working a finding. The pages on how this site is
 # deployed (cloud-deployment, GitHub Actions, Terraform, Git) are not the
 # front door, so they stay out of Learn and are listed under topics.html#build.
-# Their entry point, cloud-deployment.html, also sits in Community > Connect
-# beside GitHub, because it walks through the repo that link opens. Without
-# that entry it is reachable only through the topic map and about.html.
+# Their entry point, cloud-deployment.html, and its companion
+# how-csoh-org-is-secured.html sit in Community > Connect beside GitHub,
+# because both walk through the repo that link opens. Without those entries
+# the first is reachable only through the topic map and about.html, and the
+# second only through about.html, the security policy, and in-prose links.
 # The .mega-all row is the pattern for every mega menu: the dropdown's hub
 # page, promoted out of a column to a full-width footer (Careers uses it for
 # cloud-security-careers.html).
@@ -283,6 +285,7 @@ CANON_NAV = """\
                             <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
                             <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
                             <li><a href="cloud-deployment.html">How We Deploy</a></li>
+                            <li><a href="how-csoh-org-is-secured.html">How We Secure It</a></li>
                             <li><a href="rss.html">RSS Feed</a></li>
                             <li><a href="contribute.html">Contribute</a></li>
                           </ul>
