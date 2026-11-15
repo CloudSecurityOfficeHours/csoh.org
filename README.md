@@ -498,7 +498,7 @@ Topic-by-topic recaps of every weekly session:
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
 
 ### 🗣️ What Practitioners Think ([`what-practitioners-think.html`](https://csoh.org/what-practitioners-think.html) + digests)
-A hub for the session-digest series: what the room actually said about a topic across many Fridays, synthesized from the recaps rather than written top-down. Current digests cover [AI security](https://csoh.org/what-practitioners-think-about-ai-security.html), [security regulation](https://csoh.org/what-practitioners-think-about-security-regulation.html), [supply-chain security](https://csoh.org/what-practitioners-think-about-supply-chain-security.html), [vulnerability management](https://csoh.org/what-practitioners-think-about-vulnerability-management.html), [security conferences](https://csoh.org/what-practitioners-think-about-security-conferences.html), and [what breaking into cloud security really takes](https://csoh.org/what-breaking-into-cloud-security-really-takes.html).
+A hub for the session-digest series: what the room actually said about a topic across many Fridays, synthesized from the recaps rather than written top-down. Current digests cover [AI security](https://csoh.org/what-practitioners-think-about-ai-security.html), [security regulation](https://csoh.org/what-practitioners-think-about-security-regulation.html), [supply-chain security](https://csoh.org/what-practitioners-think-about-supply-chain-security.html), [vulnerability management](https://csoh.org/what-practitioners-think-about-vulnerability-management.html), [security conferences](https://csoh.org/what-practitioners-think-about-security-conferences.html), [human risk](https://csoh.org/what-practitioners-think-about-human-risk.html), and [what breaking into cloud security really takes](https://csoh.org/what-breaking-into-cloud-security-really-takes.html).
 
 ### 🚩 Cloud CTFs ([`ctfs.html`](https://csoh.org/ctfs.html))
 Dedicated directory for hands-on cloud CTF challenges:
@@ -785,6 +785,7 @@ csoh.org/
 ├── what-practitioners-think-about-supply-chain-security.html
 ├── what-practitioners-think-about-vulnerability-management.html
 ├── what-practitioners-think-about-security-conferences.html
+├── what-practitioners-think-about-human-risk.html
 │
 │  ── Catalogs & feeds ──
 ├── resources.html              # Resource hub: search + the category pages below
@@ -1347,7 +1348,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->63<!--/count--> pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->64<!--/count--> pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
@@ -1363,14 +1364,14 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->120<!--/count--> pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->121<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->333<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->334<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1381,7 +1382,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->319<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->121<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->320<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->121<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)

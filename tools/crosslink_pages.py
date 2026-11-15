@@ -151,6 +151,7 @@ TARGET_PAGES = [
     "what-practitioners-think-about-security-regulation.html",
     "what-practitioners-think-about-supply-chain-security.html",
     "what-practitioners-think-about-vulnerability-management.html",
+    "what-practitioners-think-about-human-risk.html",
     "about.html",
     "breach-lessons.html",
     "breaking-into-cloud-security.html",

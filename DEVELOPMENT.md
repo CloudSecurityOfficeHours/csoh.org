@@ -177,10 +177,11 @@ csoh.org/
 ├── resources-github-projects.html # Cloud Security GitHub Projects
 ├── news.html                        # Auto-generated news articles
 ├── rss.html                         # RSS subscription landing page (feed.xml + recaps.xml)
-├── what-practitioners-think.html    # Session-digest hub → 5 per-topic digests
-├── what-practitioners-think-about-<topic>.html # The 5 digests (ai-security,
-│                                    #   security-conferences, security-regulation,
-│                                    #   supply-chain-security, vulnerability-management)
+├── what-practitioners-think.html    # Session-digest hub → 6 per-topic digests
+├── what-practitioners-think-about-<topic>.html # The 6 digests (ai-security,
+│                                    #   human-risk, security-conferences,
+│                                    #   security-regulation, supply-chain-security,
+│                                    #   vulnerability-management)
 ├── what-breaking-into-cloud-security-really-takes.html # Digest: the entry-path question
 │
 │  ── Behind the scenes ──

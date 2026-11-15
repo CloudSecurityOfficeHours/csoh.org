@@ -97,13 +97,14 @@ THUMBS = [
     ("home-lab",                   "rack",            "#2dd4bf", "Home lab"),
     ("about",                      "users",           "#f87171", "About"),
 
-    # ── what-practitioners-think.html: the six digests ─────────────────────
+    # ── what-practitioners-think.html: the seven digests ───────────────────
     ("digest-ai-security",         "bubble-chip",     "#c084fc", "AI security"),
     ("digest-breaking-in",         "door-in",         "#38bdf8", "Breaking in"),
     ("digest-vuln-management",     "bug",             "#fb7185", "Vuln mgmt"),
     ("digest-supply-chain",        "links",           "#fb923c", "Supply chain"),
     ("digest-regulation",          "scales",          "#94a3b8", "Regulation"),
     ("digest-conferences",         "mic",             "#f472b6", "Conferences"),
+    ("digest-human-risk",          "user-alert",      "#34d399", "Human risk"),
 
     # topics.html. Eight cards reuse tiles above: what-is-cloud-security,
     # shared-responsibility, cspm-vs-cnapp, aws-security, azure-security,
