@@ -333,8 +333,20 @@ def human_date(iso: str) -> str:
     return d.strftime("%A, %B %-d, %Y")
 
 
+# Zoom's summary often opens on a heading that is only the standing meeting
+# name. That string is identical every week, so it cannot be the page title.
+# Use the first topic that names what was discussed.
+_GENERIC_HEADLINES = {
+    "cloud security office hours meeting",
+    "meeting recap",
+}
+
+
 def default_headline(meeting: dict) -> str:
-    if meeting["topics"]:
+    for title, _body in meeting.get("topics") or []:
+        if title.strip().casefold() not in _GENERIC_HEADLINES:
+            return title
+    if meeting.get("topics"):
         return meeting["topics"][0][0]
     return "Meeting recap"
 
