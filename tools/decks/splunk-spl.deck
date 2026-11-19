@@ -1,0 +1,141 @@
+title: Splunk SPL, hands-on
+guide: howto/splunk-spl.html
+promise: Learn Splunk's search language from zero on 24 CloudTrail events, and learn to spot the search that returns nothing because it cannot work.
+
+== Who it is for and what you need
+section: How to use this guide
+For beginners: new to Splunk and query languages, able to use a terminal. Allow about two hours.
+
+You need Docker with about 3 GB of memory and 3 GB of disk to spare. No Splunk or cloud account is needed.
+
+== How the guide was checked
+section: How to use this guide
+A script ran every command and search in order on Splunk Enterprise 10.4.3 in Docker, checking each result against the guide.
+
+Not run: Splunk Cloud Platform, Splunk Enterprise Security, the Splunk Add-on for AWS and the Splunk Free licence.
+
+== What SPL is and where you meet it
+section: The language of Splunk searches
+Splunk stores logs and lets you search them with its Search Processing Language (SPL), in Splunk Enterprise or Splunk Cloud Platform.
+
+Security analysts type SPL to investigate. Detection engineers save SPL searches that run on a schedule and raise alerts.
+
+== A search is a pipeline
+section: A search is a pipeline
+The base search, before the first |, chooses events. Each | hands the results so far to one command, which reshapes them and passes them on.
+
+Here, the six events that changed something become one row per identity.
+```spl
+index=cloudtrail readOnly=false
+| stats count BY userIdentity.userName
+```
+
+== include: _cloudtrail-lab.deck
+
+== A load can report success and still be wrong
+section: 2. Load the lab data, then check what arrived
+A source type tells Splunk how to split text into events and find each event's time. The load can print Oneshot ... added even when every event was dropped. This check wants 24 events, each with its own time.
+```spl
+index=cloudtrail
+| eval own_time=if(_time == strptime(eventTime, "%Y-%m-%dT%H:%M:%S%Z"), "yes", "no")
+| stats count BY sourcetype own_time
+```
+
+== Trail tampering (D1): filter, then pick columns
+section: 3. Filter and pick columns: trail tampering (D1)
+IN matches any value in the list, and table shows the fields you name. One event comes back: backup-svc stopped the trail from 203.0.113.50. Leave out index=cloudtrail and the search returns nothing. Field names are case-sensitive.
+```spl
+index=cloudtrail eventName IN (StopLogging, DeleteTrail, UpdateTrail, PutEventSelectors)
+| table _time eventName userIdentity.userName sourceIPAddress
+```
+
+== Logins without MFA (D4): a draft that looks right
+section: 4. Nested fields, and where versus the base search: logins without MFA (D4)
+This draft checks only the multi-factor authentication (MFA) flag. It also returns someone failing to sign in as alice, because a failed sign-in carries MFAUsed No too. D4 must require responseElements.ConsoleLogin=Success as well.
+```spl
+index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No
+| table _time userIdentity.userName sourceIPAddress responseElements.ConsoleLogin
+| sort _time
+```
+
+== Before you trust an empty result, run a control
+section: 5. Count, then threshold: the burst that never fires (D2)
+The first D2 draft counted errorCode=AccessDenied per address and printed nothing. This control counts events by error code. Elastic Compute Cloud (EC2) reports a refusal as Client.UnauthorizedOperation, so three of the attacker's seven refusals were invisible to the rule.
+```spl
+index=cloudtrail
+| fillnull value="(none)" errorCode
+| stats count BY errorCode
+```
+
+== Turn D2 into a scheduled alert
+section: 7. Turn D2 into a scheduled alert
+Splunk stores an alert as a stanza in savedsearches.conf: a search, a schedule, a time window and a condition. This one runs every ten minutes over the ten minutes that ended ten minutes ago, and fires on any row.
+```ini
+enableSched = 1
+cron_schedule = */10 * * * *
+dispatch.earliest_time = -20m@m
+dispatch.latest_time = -10m@m
+counttype = number of events
+relation = greater than
+quantity = 0
+alert.track = 1
+```
+
+== Test the alert both ways
+section: 8. Test the alert both ways
+Run the alert by hand over a quiet stretch of the lab morning and over the attack, then count the firings with this search. Two runs, one firing: the attack window fired, the quiet one did not.
+```spl
+| rest /servicesNS/-/-/alerts/fired_alerts splunk_server=local
+| table title triggered_alert_count
+```
+
+== A public rule assumes its field names
+section: 9. Splunk's public rules: the security_content format
+In Splunk's rule for D1, the MITRE ATT&CK ID is the v19 one, but references still names T1562.008, which v19 revoked. Its search needs errorCode=success, yet raw CloudTrail has no errorCode on success, so on the lab it counts 0.
+```yaml
+references:
+    - https://attack.mitre.org/techniques/T1562/008/
+mitre_attack_id:
+    - T1685.002
+```
+credit: From Splunk's splunk/security_content repository (github.com/splunk/security_content), trimmed.
+
+== Exercise: this search returns nothing
+section: Hands-on exercises
+Find both faults, and say how you would prove each one rather than guess.
+```spl
+eventName=StopLogging
+| where userIdentity.userName="backup-svc"
+| table _time eventName userIdentity.userName
+```
+
+== Answer: two faults, found by deleting from the end
+section: Hands-on exercises
+With no index, Splunk searched only the default indexes. And where reads the unquoted dotted name as two empty strings joined. Fixing either alone still returns nothing, so prove each by deleting commands from the end.
+```spl
+index=cloudtrail eventName=StopLogging
+| where 'userIdentity.userName'="backup-svc"
+| table _time eventName userIdentity.userName
+```
+
+== Exercise: write D3 with stats instead of transaction
+section: Hands-on exercises
+The guide's step 6 finds D3 with transaction. Write it with stats so that svc-reporting, which alice created and gave a key hours later, stays out. Then say what each condition protects against. Start from this base search.
+```spl
+index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
+```
+
+== Answer: three conditions in one where
+section: Hands-on exercises
+stats gives each new user its first event's name (first_step), its number of distinct event names (steps) and the seconds from first to last (gap). steps=2 needs both events, first_step requires creation first, and gap<=600 is the ten-minute window.
+```spl
+| where steps=2 AND first_step="CreateUser" AND gap<=600
+```
+
+== Common mistakes
+section: Common mistakes
+- A missing index= searches only the default indexes.
+- Dotted field names in where need single quotes.
+- The base search ignores case in values; where does not.
+- stats drops events lacking the BY field.
+- transaction without maxspan joins events hours apart.
