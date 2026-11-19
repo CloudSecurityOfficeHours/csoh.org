@@ -32,7 +32,7 @@ and cannot include another, so a deck's text always resolves in one pass.
 Usage:
     python3 tools/build_howto_decks.py --self-test
     python3 tools/build_howto_decks.py --check
-    python3 tools/build_howto_decks.py --build
+    python3 tools/build_howto_decks.py --build SLUG [SLUG ...]
     python3 tools/build_howto_decks.py --self-test-render
     python3 tools/build_howto_decks.py --stale | --status | --stamp
     python3 tools/build_howto_decks.py --record SLUG PRES_ID
@@ -53,7 +53,9 @@ from pathlib import Path
 
 MAX_PROSE_WORDS = 40
 MAX_CODE_LINES = 12
-MAX_CODE_COLS = 90
+# Characters per row in the code box at 14 pt. The box holds about 101
+# monospace characters across; 96 leaves room for a substitute font's metrics.
+CODE_WRAP_COLS = 96
 MAX_HEADING_WORDS = 12
 MIN_SLIDES = 12
 MAX_SLIDES = 20
@@ -287,16 +289,12 @@ def style_findings(deck: Deck) -> list[str]:
                 f"the limit is {MAX_HEADING_WORDS}"
             )
         if s.code is not None:
-            if len(s.code) > MAX_CODE_LINES:
+            rows = code_visual_rows(s.code)
+            if rows > MAX_CODE_LINES:
                 findings.append(
-                    f"{s.where}: {len(s.code)} code lines; the limit is {MAX_CODE_LINES}"
+                    f"{s.where}: code takes {rows} rows once long lines wrap; "
+                    f"the limit is {MAX_CODE_LINES}"
                 )
-            for n, line in enumerate(s.code, 1):
-                if len(line) > MAX_CODE_COLS:
-                    findings.append(
-                        f"{s.where}: code line {n} is {len(line)} columns; "
-                        f"the limit is {MAX_CODE_COLS}"
-                    )
 
         texts = [s.heading, *prose]
         if s.credit:
@@ -373,6 +371,32 @@ def load_mapping(path: Path = MAPPING) -> dict:
 
 def save_mapping(mapping: dict, path: Path = MAPPING) -> None:
     path.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def code_rows(line: str, cols: int = CODE_WRAP_COLS) -> int:
+    """Rows one code line occupies when wrapped at spaces. Greedy fill: words
+    separated by single spaces share a row while it stays within cols
+    characters, and leading indentation counts toward the first row. A word
+    longer than cols is split across ceil(len / cols) rows on its own."""
+    rows, cur = 1, 0
+    for i, word in enumerate(line.split(" ")):
+        if len(word) > cols:
+            if i:
+                rows += 1
+            rows += -(-len(word) // cols) - 1
+            cur = cols + 1  # the next word starts a fresh row
+        elif i == 0:
+            cur = len(word)
+        elif cur + 1 + len(word) <= cols:
+            cur += 1 + len(word)
+        else:
+            rows += 1
+            cur = len(word)
+    return rows
+
+
+def code_visual_rows(lines: list[str], cols: int = CODE_WRAP_COLS) -> int:
+    return sum(code_rows(line, cols) for line in lines)
 
 
 def outline_paths() -> list[Path]:
@@ -662,12 +686,40 @@ def _case_too_many_code_lines(tmp: Path) -> None:
     assert style_findings(d) == []
 
 
-def _case_code_too_wide(tmp: Path) -> None:
+SPL_LONG = (
+    "index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException) "
+    "| stats count by userName, eventName, sourceIPAddress | sort -count"
+)
+
+
+def _case_code_rows_basic(tmp: Path) -> None:
+    assert code_rows("a" * 96) == 1
+    assert code_rows("a" * 97) == 2
+    assert code_rows("") == 1
+    # "x " * 60 splits into 60 "x" words plus one empty word. A row of k
+    # words is 2k-1 characters, so 48 words (95) fit and a 49th (97) does
+    # not; row 2 holds the remaining 12 words and the empty one (24).
+    assert code_rows("x " * 60) == 2
+
+
+def _case_code_rows_words(tmp: Path) -> None:
+    assert len(SPL_LONG) == 135, len(SPL_LONG)
+    assert code_rows(SPL_LONG) == 2
+    assert code_rows("    " + "a" * 92) == 1 and code_rows("    " + "a" * 93) == 2
+
+
+def _case_code_visual_limit(tmp: Path) -> None:
     d = _deck_with(10)
-    d.slides[0].code = ["x" * 91]
+    d.slides[0].code = ["x"] * 11 + [SPL_LONG]
     f = style_findings(d)
-    assert len(f) == 1 and "90" in f[0], f
-    d.slides[0].code = ["x" * 90]
+    assert len(f) == 1 and "12" in f[0] and "13" in f[0], f
+    d.slides[0].code = ["x"] * 10 + [SPL_LONG]
+    assert style_findings(d) == []
+
+
+def _case_long_line_allowed(tmp: Path) -> None:
+    d = _deck_with(10)
+    d.slides[0].code = [SPL_LONG]
     assert style_findings(d) == []
 
 
@@ -881,7 +933,10 @@ CASES: list = [
     ("fence_hides_slide_marker", _case_fence_hides_slide_marker),
     ("too_many_words", _case_too_many_words),
     ("too_many_code_lines", _case_too_many_code_lines),
-    ("code_too_wide", _case_code_too_wide),
+    ("code_rows_basic", _case_code_rows_basic),
+    ("code_rows_words", _case_code_rows_words),
+    ("code_visual_limit", _case_code_visual_limit),
+    ("long_line_allowed", _case_long_line_allowed),
     ("heading_too_long", _case_heading_too_long),
     ("slide_count", _case_slide_count),
     ("dashes", _case_dashes),
@@ -1002,6 +1057,21 @@ def _case_render_overflow(tmp: Path) -> None:
     r.render_deck(one(3, 1), tmp / "ok.pptx")
 
 
+def _case_render_wrapped_code(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck()
+    deck.slides[1].code = ["x = 1"] * 10 + [SPL_LONG]
+    out = r.render_deck(deck, tmp / "w.pptx", {})
+    assert r.verify_pptx(out, deck) == [], r.verify_pptx(out, deck)
+    # Slide 0 of the file is the title slide, so deck slide 1 is file slide 2.
+    code = [sh for sh in _reopen(out).slides[2].shapes if sh.name == "code"]
+    assert len(code) == 1
+    tf = code[0].text_frame
+    assert tf.word_wrap is True
+    assert SPL_LONG in [p.text for p in tf.paragraphs]
+
+
 def _case_render_fonts(tmp: Path) -> None:
     import howto_deck_render as r
 
@@ -1061,6 +1131,7 @@ RENDER_CASES: list = [
     ("render_ok", _case_render_ok),
     ("render_notes", _case_render_notes),
     ("render_overflow", _case_render_overflow),
+    ("render_wrapped_code", _case_render_wrapped_code),
     ("render_fonts", _case_render_fonts),
     ("render_verify_plants", _case_render_verify_plants),
 ]
@@ -1090,16 +1161,23 @@ def self_test_render() -> int:
     return _run_cases(RENDER_CASES, "self-test-render")
 
 
-def build_decks() -> int:
-    """Render every outline to DECKS_DIR/build/<slug>.pptx. A deck with any
-    --check finding is refused; a written file is reopened and verified."""
+def build_decks(slugs: list[str]) -> int:
+    """Render the named outlines to DECKS_DIR/build/<slug>.pptx. A deck with
+    any --check finding is refused; a written file is reopened and verified.
+    An unknown slug stops the run before anything is built."""
+    known = {p.stem: p for p in outline_paths()}
+    unknown = [sl for sl in slugs if sl not in known]
+    if unknown:
+        for sl in unknown:
+            print(f"build: no outline tools/decks/{sl}.deck")
+        return 1
     try:
         import howto_deck_render as render
     except ImportError as e:
         print(f"build: cannot import the renderer (pip install python-pptx): {e}")
         return 1
     bad = 0
-    outlines = outline_paths()
+    outlines = [known[sl] for sl in dict.fromkeys(slugs)]
     for path in outlines:
         try:
             deck = parse_outline(path)
@@ -1144,7 +1222,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--self-test", action="store_true", help="run the built-in cases")
     ap.add_argument("--check", action="store_true", help="check outlines and guide-page links")
-    ap.add_argument("--build", action="store_true", help="render each outline to a .pptx")
+    ap.add_argument("--build", nargs="+", metavar="SLUG", help="render the named outlines to .pptx")
     ap.add_argument(
         "--self-test-render", action="store_true", help="run the renderer cases (needs python-pptx)"
     )
@@ -1162,7 +1240,7 @@ def main() -> int:
     if args.check:
         return check_all()
     if args.build:
-        return build_decks()
+        return build_decks(args.build)
     if args.stale:
         return stale_report()
     if args.status:

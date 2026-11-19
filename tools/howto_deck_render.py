@@ -108,7 +108,9 @@ def _body_height(paras: list[str]) -> float:
 
 
 def _code_height(lines: list[str]) -> float:
-    return len(lines) * STYLE["code_pt"] * STYLE["line_code"] / 72 + 2 * STYLE["code_pad"]
+    from build_howto_decks import code_visual_rows
+
+    return code_visual_rows(lines) * STYLE["code_pt"] * STYLE["line_code"] / 72 + 2 * STYLE["code_pad"]
 
 
 def _heading_height(text: str) -> float:

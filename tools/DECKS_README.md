@@ -9,6 +9,7 @@ of links on the guide page.
 ```bash
 python3 tools/build_howto_decks.py --self-test    # run the built-in cases
 python3 tools/build_howto_decks.py --check        # CI gate
+python3 tools/build_howto_decks.py --build SLUG [SLUG ...]   # render outlines to tools/decks/build/
 python3 tools/build_howto_decks.py --stale        # decks changed since publish
 python3 tools/build_howto_decks.py --status       # outline and publish state
 python3 tools/build_howto_decks.py --stamp        # rewrite guide links from the mapping
@@ -44,8 +45,12 @@ credit: <source and licence>
 - A code excerpt must be a contiguous run of whole lines from one `<pre>`
   block on the guide.
 - Limits: 12 to 20 slides counting the generated cover and closing slides, at
-  most 40 words of prose and 12 code lines per slide, no U+2013 or U+2014, and
+  most 40 words of prose and 12 code rows per slide, no U+2013 or U+2014, and
   no spaced hyphen used as a dash.
+- Code rows are visual rows: a line longer than 96 columns wraps at spaces
+  inside the code box and counts as the rows it wraps to (a single word longer
+  than 96 columns is split across rows). Copying a wrapped line from the slide
+  gives the original line, because the wrap is display only.
 
 ## What the flags do
 
