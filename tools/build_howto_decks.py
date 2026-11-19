@@ -36,6 +36,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html as htmllib
 import re
 import sys
 import tempfile
@@ -329,6 +330,60 @@ From the fragment.
 """
 
 
+PRE_RE = re.compile(r"<pre[^>]*>(.*?)</pre>", re.DOTALL)
+HEADING_RE = re.compile(r"<h([23])([^>]*)>(.*?)</h\1>", re.DOTALL)
+ID_RE = re.compile(r"""\bid\s*=\s*["']([^"']*)["']""")
+TAG_RE = re.compile(r"<[^>]+>")
+
+
+def guide_code_blocks(html: str) -> list[list[str]]:
+    """Every <pre> block on the page as unescaped lines with trailing
+    whitespace removed, so an excerpt compares against what a reader sees."""
+    return [
+        [ln.rstrip() for ln in htmllib.unescape(m.group(1)).split("\n")]
+        for m in PRE_RE.finditer(html)
+    ]
+
+
+def guide_headings(html: str) -> dict[str, str | None]:
+    """Visible text of every h2 and h3 mapped to its id, or None without one."""
+    out: dict[str, str | None] = {}
+    for m in HEADING_RE.finditer(html):
+        text = " ".join(htmllib.unescape(TAG_RE.sub("", m.group(3))).split())
+        idm = ID_RE.search(m.group(2))
+        out[text] = idm.group(1) if idm else None
+    return out
+
+
+def is_contiguous_run(excerpt: list[str], block: list[str]) -> bool:
+    """True when the excerpt equals consecutive lines of the block. A gap or
+    a join across two blocks would show readers code the guide never ran."""
+    want = [ln.rstrip() for ln in excerpt]
+    n = len(want)
+    if n == 0:
+        return False
+    return any(block[i : i + n] == want for i in range(len(block) - n + 1))
+
+
+def guide_findings(deck: Deck, html: str) -> list[str]:
+    """Slide excerpts that are not a contiguous run of one guide code block,
+    and `section:` values that name no h2 or h3 on the guide."""
+    blocks = guide_code_blocks(html)
+    headings = guide_headings(html)
+    findings: list[str] = []
+    for s in deck.slides:
+        if s.code and not any(is_contiguous_run(s.code, b) for b in blocks):
+            findings.append(
+                f"{s.where}: code is not a contiguous run of whole lines "
+                f"from one code block on {deck.guide}"
+            )
+        if s.section and s.section not in headings:
+            findings.append(
+                f"{s.where}: section {s.section!r} is not an h2 or h3 on {deck.guide}"
+            )
+    return findings
+
+
 def _hdr(body: str) -> str:
     return (
         "title: T\nguide: howto/t.html\npromise: P.\n\n" + body
@@ -518,6 +573,67 @@ def _case_promise_spaced_hyphen(tmp: Path) -> None:
     assert style_findings(d) == []
 
 
+def _code_deck(code: list[str] | None, section: str = "S") -> Deck:
+    sl = Slide(heading="H", section=section, code=code, where="d.deck:5")
+    return Deck("d", "T", "howto/t.html", "P.", [sl], "")
+
+
+def _page(*blocks: str, heading: str = "<h3>S</h3>") -> str:
+    pres = "".join(f'<div class="code-block"><pre>{b}</pre></div>' for b in blocks)
+    return f"<main>{heading}{pres}</main>"
+
+
+def _case_excerpt_ok(tmp: Path) -> None:
+    html = _page("l1\nl2\nl3\nl4")
+    assert guide_findings(_code_deck(["l2", "l3"]), html) == []
+
+
+def _case_excerpt_gap(tmp: Path) -> None:
+    html = _page("l1\nl2\nl3")
+    f = guide_findings(_code_deck(["l1", "l3"]), html)
+    assert len(f) == 1 and f[0].startswith("d.deck:5"), f
+
+
+def _case_excerpt_across_blocks(tmp: Path) -> None:
+    html = _page("a1\na2", "b1\nb2")
+    f = guide_findings(_code_deck(["a2", "b1"]), html)
+    assert len(f) == 1 and f[0].startswith("d.deck:5"), f
+
+
+def _case_excerpt_entities(tmp: Path) -> None:
+    html = _page("a &gt; b &amp;&amp; c")
+    assert guide_findings(_code_deck(["a > b && c"]), html) == []
+
+
+def _case_excerpt_trailing_space(tmp: Path) -> None:
+    html = _page("x  \ny")
+    assert guide_findings(_code_deck(["x", "y"]), html) == []
+
+
+def _case_excerpt_one_char_changed(tmp: Path) -> None:
+    html = _page("index=cloudtrail readOnly=false")
+    assert guide_findings(_code_deck(["index=cloudtrail readOnly=false"]), html) == []
+    f = guide_findings(_code_deck(["index=cloudtrail readOnly=falsf"]), html)
+    assert len(f) == 1, f
+
+
+def _case_section_ok(tmp: Path) -> None:
+    html = '<h3 id="step-load">2. Load the lab data</h3>'
+    assert guide_headings(html) == {"2. Load the lab data": "step-load"}
+    assert guide_findings(_code_deck(None, "2. Load the lab data"), html) == []
+
+
+def _case_section_with_markup(tmp: Path) -> None:
+    html = "<h3>Use <code>stats</code> &amp; count</h3>"
+    assert guide_headings(html) == {"Use stats & count": None}
+    assert guide_findings(_code_deck(None, "Use stats & count"), html) == []
+
+
+def _case_section_missing(tmp: Path) -> None:
+    f = guide_findings(_code_deck(None, "No such heading"), "<h3>Other</h3>")
+    assert len(f) == 1 and f[0].startswith("d.deck:5"), f
+
+
 CASES: list = [
     ("parse_ok", _case_parse_ok),
     ("include_spliced", _case_include_spliced),
@@ -537,6 +653,15 @@ CASES: list = [
     ("spaced_hyphen", _case_spaced_hyphen),
     ("title_dash", _case_title_dash),
     ("promise_spaced_hyphen", _case_promise_spaced_hyphen),
+    ("excerpt_ok", _case_excerpt_ok),
+    ("excerpt_gap", _case_excerpt_gap),
+    ("excerpt_across_blocks", _case_excerpt_across_blocks),
+    ("excerpt_entities", _case_excerpt_entities),
+    ("excerpt_trailing_space", _case_excerpt_trailing_space),
+    ("excerpt_one_char_changed", _case_excerpt_one_char_changed),
+    ("section_ok", _case_section_ok),
+    ("section_with_markup", _case_section_with_markup),
+    ("section_missing", _case_section_missing),
 ]
 
 
