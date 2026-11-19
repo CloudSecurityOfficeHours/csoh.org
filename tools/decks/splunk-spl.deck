@@ -49,13 +49,12 @@ index=cloudtrail eventName IN (StopLogging, DeleteTrail, UpdateTrail, PutEventSe
 | table _time eventName userIdentity.userName sourceIPAddress
 ```
 
-== Logins without MFA (D4): a draft that looks right
+== Logins without MFA (D4): require success too
 section: 4. Nested fields, and where versus the base search: logins without MFA (D4)
-This draft checks only the multi-factor authentication (MFA) flag. It also returns someone failing to sign in as alice, because a failed sign-in carries MFAUsed No too. D4 must require responseElements.ConsoleLogin=Success as well.
+The first draft checked only the multi-factor authentication (MFA) flag and also returned someone failing to sign in as alice, since a failed sign-in carries MFAUsed No too. With Success required, only bob's sign-in comes back.
 ```spl
-index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No
-| table _time userIdentity.userName sourceIPAddress responseElements.ConsoleLogin
-| sort _time
+index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No responseElements.ConsoleLogin=Success
+| table _time userIdentity.userName sourceIPAddress
 ```
 
 == Before you trust an empty result, run a control
@@ -69,8 +68,11 @@ index=cloudtrail
 
 == Turn D2 into a scheduled alert
 section: 7. Turn D2 into a scheduled alert
-Splunk stores an alert as a stanza in savedsearches.conf: a search, a schedule, a time window and a condition. This one runs every ten minutes over the ten minutes that ended ten minutes ago, and fires on any row.
+Splunk stores an alert as a stanza in savedsearches.conf. This one runs the fixed D2 search, with all four refusal codes, every ten minutes over the ten minutes that ended ten minutes ago, and fires on any row.
 ```ini
+search = index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation) \
+| stats count BY sourceIPAddress \
+| where count >= 5
 enableSched = 1
 cron_schedule = */10 * * * *
 dispatch.earliest_time = -20m@m
@@ -91,8 +93,13 @@ Run the alert by hand over a quiet stretch of the lab morning and over the attac
 
 == A public rule assumes its field names
 section: 9. Splunk's public rules: the security_content format
-In Splunk's rule for D1, the MITRE ATT&CK ID is the v19 one, but references still names T1562.008, which v19 revoked. Its search needs errorCode=success, yet raw CloudTrail has no errorCode on success, so on the lab it counts 0.
+This is Splunk's rule for D1, trimmed. references still names T1562.008, which MITRE ATT&CK v19 revoked. A successful call has no errorCode in raw CloudTrail, so with the cloudtrail macro replaced by the lab's index, this base search counts 0.
 ```yaml
+search: |-
+    `cloudtrail` eventName = StopLogging eventSource = cloudtrail.amazonaws.com userAgent!=console.amazonaws.com errorCode = success
+      | rename user_name as user
+# (trimmed: the search goes on to count by signature, dest, user, src and vendor fields)
+how_to_implement: You must install Splunk AWS Add on and enable Cloudtrail logs in your AWS Environment.
 references:
     - https://attack.mitre.org/techniques/T1562/008/
 mitre_attack_id:
@@ -120,15 +127,19 @@ index=cloudtrail eventName=StopLogging
 
 == Exercise: write D3 with stats instead of transaction
 section: Hands-on exercises
-The guide's step 6 finds D3 with transaction. Write it with stats so that svc-reporting, which alice created and gave a key hours later, stays out. Then say what each condition protects against. Start from this base search.
+The guide's step 6 finds D3 with this transaction search. Write it with stats instead, so that svc-reporting, which alice gave a key hours after creating it, stays out. Then say what each condition protects against.
 ```spl
 index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
+| transaction requestParameters.userName startswith=eval(eventName="CreateUser") endswith=eval(eventName="CreateAccessKey") maxspan=10m
+| table _time requestParameters.userName userIdentity.userName sourceIPAddress duration eventcount
 ```
 
 == Answer: three conditions in one where
 section: Hands-on exercises
-stats gives each new user its first event's name (first_step), its number of distinct event names (steps) and the seconds from first to last (gap). steps=2 needs both events, first_step requires creation first, and gap<=600 is the ten-minute window.
+dc counts distinct values, so steps=2 needs both events. earliest gives the first event's name, so the user must be created before the key. range(_time) is last minus first, in seconds, and gap<=600 is the ten-minute window.
 ```spl
+index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
+| stats earliest(eventName) AS first_step dc(eventName) AS steps range(_time) AS gap BY requestParameters.userName
 | where steps=2 AND first_step="CreateUser" AND gap<=600
 ```
 
