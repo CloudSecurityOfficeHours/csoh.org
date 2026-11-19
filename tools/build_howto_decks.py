@@ -255,6 +255,16 @@ def style_findings(deck: Deck) -> list[str]:
             f"cover and closing; the deck must have {MIN_SLIDES} to {MAX_SLIDES}"
         )
 
+    # The cover slide shows the title and promise, so they follow the same
+    # dash rules as slide text.
+    for label, t in (("title", deck.title), ("promise", deck.promise)):
+        if EM_DASH in t or EN_DASH in t:
+            findings.append(f"{deck.slug}.deck: em or en dash in {label} {t[:40]!r}")
+        if SPACED_HYPHEN_RE.search(t):
+            findings.append(
+                f"{deck.slug}.deck: spaced hyphen used as a dash in {label} {t[:40]!r}"
+            )
+
     for s in deck.slides:
         prose = s.paragraphs + s.bullets
         words = sum(_words(t) for t in prose)
@@ -492,6 +502,22 @@ def _case_spaced_hyphen(tmp: Path) -> None:
     assert style_findings(d) == []
 
 
+def _case_title_dash(tmp: Path) -> None:
+    d = _deck_with(10)
+    d.title = f"one{EM_DASH}two"
+    f = style_findings(d)
+    assert len(f) == 1 and f[0].startswith("d.deck:") and "title" in f[0], f
+
+
+def _case_promise_spaced_hyphen(tmp: Path) -> None:
+    d = _deck_with(10)
+    d.promise = "a - b"
+    f = style_findings(d)
+    assert len(f) == 1 and f[0].startswith("d.deck:") and "promise" in f[0], f
+    d.promise = "a-b"
+    assert style_findings(d) == []
+
+
 CASES: list = [
     ("parse_ok", _case_parse_ok),
     ("include_spliced", _case_include_spliced),
@@ -509,6 +535,8 @@ CASES: list = [
     ("slide_count", _case_slide_count),
     ("dashes", _case_dashes),
     ("spaced_hyphen", _case_spaced_hyphen),
+    ("title_dash", _case_title_dash),
+    ("promise_spaced_hyphen", _case_promise_spaced_hyphen),
 ]
 
 
