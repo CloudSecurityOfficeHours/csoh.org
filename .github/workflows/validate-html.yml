@@ -102,6 +102,10 @@ on:
       - 'tools/sync_latest_recap.py'
       # So does the glossary usage-list gate's.
       - 'tools/sync_glossary_usage.py'
+      # The how-to deck gate reads the outlines and the mapping with this
+      # tool, and the guide pages it checks are covered by `**.html`.
+      - 'tools/build_howto_decks.py'
+      - 'tools/decks/**'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step.
@@ -440,6 +444,20 @@ jobs:
           set -o pipefail
           python3 tools/sync_glossary_usage.py --self-test 2>&1 | tee check-glossary-usage.log
           python3 tools/sync_glossary_usage.py --check 2>&1 | tee -a check-glossary-usage.log
+
+      # Each how-to guide's deck line (data-howto-deck) must agree with
+      # tools/decks/published.json, and every outline in tools/decks/ must obey
+      # the style limits and quote its guide's code and headings exactly. A
+      # deck line with no mapping entry, a mapping entry with no line, or a line
+      # holding a different id points readers at the wrong deck. Unconditional:
+      # a guide edit can break an excerpt with no outline in the diff. The
+      # self-test runs first as the control.
+      - name: Assert how-to deck outlines and links
+        id: howto-decks
+        run: |
+          set -o pipefail
+          python3 tools/build_howto_decks.py --self-test 2>&1 | tee check-howto-decks.log
+          python3 tools/build_howto_decks.py --check 2>&1 | tee -a check-howto-decks.log
 
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which

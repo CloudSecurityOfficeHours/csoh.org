@@ -31,16 +31,22 @@ and cannot include another, so a deck's text always resolves in one pass.
 
 Usage:
     python3 tools/build_howto_decks.py --self-test
+    python3 tools/build_howto_decks.py --check
+    python3 tools/build_howto_decks.py --stale | --status | --stamp
+    python3 tools/build_howto_decks.py --record SLUG PRES_ID
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html as htmllib
+import json
 import re
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 MAX_PROSE_WORDS = 40
@@ -305,6 +311,154 @@ def style_findings(deck: Deck) -> list[str]:
 # Self-test. Later tasks append (name, fn) pairs to CASES; each fn takes a
 # scratch directory and asserts.
 # ---------------------------------------------------------------------------
+
+MAPPING = DECKS_DIR / "published.json"
+HOWTO_DIR = Path("howto")
+INFO_BOX_RE = re.compile(r'(<div class="info-box--blue">.*?\n)([ \t]*</div>)', re.DOTALL)
+DECK_LINE_RE = re.compile(
+    r"^[ \t]*<p[^>]*data-howto-deck[^>]*>.*?</p>\n?", re.DOTALL | re.MULTILINE
+)
+
+
+def outline_sha256(deck: Deck) -> str:
+    return hashlib.sha256(deck.resolved_text.encode("utf-8")).hexdigest()
+
+
+def deck_line_html(pres_id: str) -> str:
+    base = f"https://docs.google.com/presentation/d/{pres_id}"
+    ext = 'target="_blank" rel="noopener noreferrer"'
+    licence = "https://creativecommons.org/licenses/by-nc/4.0/"
+    return (
+        '            <p class="u-mt-075" data-howto-deck><strong>Slides:</strong> '
+        f'<a href="{base}/export/pdf" {ext}>download the PDF</a> or '
+        f'<a href="{base}/copy" {ext}>make your own editable copy</a> '
+        "(copying needs a Google account). The slides are licensed "
+        f'<a href="{licence}" {ext}>CC BY-NC 4.0</a>.</p>'
+    )
+
+
+def stamp_page(html: str, pres_id: str | None) -> str:
+    """Put the deck line last in the page's first info box, replace the one
+    already there, or remove it when pres_id is None."""
+    if pres_id is None:
+        return DECK_LINE_RE.sub("", html)
+    line = deck_line_html(pres_id) + "\n"
+    if DECK_LINE_RE.search(html):
+        return DECK_LINE_RE.sub(lambda _m: line, html, count=1)
+    if not INFO_BOX_RE.search(html):
+        raise ValueError('no <div class="info-box--blue"> to hold the deck line')
+    return INFO_BOX_RE.sub(lambda m: m.group(1) + line + m.group(2), html, count=1)
+
+
+def link_findings(slug: str, html: str, mapping: dict) -> list[str]:
+    """Disagreements between the deck line on a guide page and the mapping."""
+    has_line = DECK_LINE_RE.search(html) is not None
+    entry = mapping.get(slug)
+    if has_line and entry is None:
+        return [f"howto/{slug}.html: has a deck line but {slug!r} is not in the mapping"]
+    if entry is None:
+        return []
+    if not has_line:
+        return [f"howto/{slug}.html: {slug!r} is in the mapping but the page has no deck line"]
+    if stamp_page(html, entry["id"]) != html:
+        return [f"howto/{slug}.html: deck line does not match the mapping id {entry['id']!r}"]
+    return []
+
+
+def load_mapping(path: Path = MAPPING) -> dict:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def save_mapping(mapping: dict, path: Path = MAPPING) -> None:
+    path.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def outline_paths() -> list[Path]:
+    return sorted(p for p in DECKS_DIR.glob("*.deck") if not p.name.startswith("_"))
+
+
+def guide_pages() -> list[Path]:
+    return sorted(HOWTO_DIR.glob("*.html"))
+
+
+def check_all() -> int:
+    mapping = load_mapping()
+    findings: list[str] = []
+    outlines = outline_paths()
+    for path in outlines:
+        try:
+            deck = parse_outline(path)
+        except OutlineError as e:
+            findings.append(str(e))
+            continue
+        findings += style_findings(deck)
+        guide = Path(deck.guide)
+        if guide != HOWTO_DIR / f"{deck.slug}.html":
+            findings.append(f"{path.name}: guide must be howto/{deck.slug}.html, got {deck.guide}")
+        elif not guide.exists():
+            findings.append(f"{path.name}: guide {deck.guide} does not exist")
+        else:
+            findings += guide_findings(deck, guide.read_text(encoding="utf-8"))
+    pages = guide_pages()
+    for page in pages:
+        findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping)
+    for slug in sorted(mapping):
+        if not (HOWTO_DIR / f"{slug}.html").exists():
+            findings.append(f"mapping: {slug!r} names no howto page")
+    for f in findings:
+        print(f)
+    print(
+        f"decks: {len(outlines)} outlines checked, {len(pages)} guide pages checked, "
+        f"{len(findings)} findings"
+    )
+    return 1 if findings else 0
+
+
+def stale_report() -> int:
+    mapping = load_mapping()
+    for path in outline_paths():
+        deck = parse_outline(path)
+        entry = mapping.get(deck.slug)
+        if entry is None:
+            print(f"{deck.slug}: not published")
+        elif entry["outline_sha256"] != outline_sha256(deck):
+            print(f"{deck.slug}: outline changed since publish on {entry['published']}")
+    return 0
+
+
+def status_report() -> int:
+    mapping = load_mapping()
+    outlines = {p.stem for p in outline_paths()}
+    for page in guide_pages():
+        has_outline = "yes" if page.stem in outlines else "no"
+        published = "yes" if page.stem in mapping else "no"
+        print(f"{page.stem}: outline {has_outline}, published {published}")
+    return 0
+
+
+def stamp_all() -> int:
+    mapping = load_mapping()
+    for page in guide_pages():
+        html = page.read_text(encoding="utf-8")
+        entry = mapping.get(page.stem)
+        new = stamp_page(html, entry["id"] if entry else None)
+        if new != html:
+            page.write_text(new, encoding="utf-8")
+            print(f"stamped {page}")
+    return 0
+
+
+def record(slug: str, pres_id: str) -> int:
+    deck = parse_outline(DECKS_DIR / f"{slug}.deck")
+    mapping = load_mapping()
+    mapping[slug] = {
+        "id": pres_id,
+        "published": date.today().isoformat(),
+        "outline_sha256": outline_sha256(deck),
+    }
+    save_mapping(mapping)
+    return stamp_all()
+
 
 SAMPLE = """title: Splunk SPL for cloud security
 guide: howto/splunk-spl.html
@@ -634,6 +788,85 @@ def _case_section_missing(tmp: Path) -> None:
     assert len(f) == 1 and f[0].startswith("d.deck:5"), f
 
 
+INFO_PAGE = (
+    "<main>\n"
+    '        <div class="info-box--blue">\n'
+    "            <p><strong>Time:</strong> 1 hour</p>\n"
+    '            <p class="u-mt-075"><strong>How this page was checked:</strong> run.</p>\n'
+    "        </div>\n"
+    "</main>\n"
+)
+INFO_PAGE_BARE = INFO_PAGE.replace(
+    '            <p class="u-mt-075"><strong>How this page was checked:</strong> run.</p>\n',
+    "",
+)
+
+
+def _deck_lines(html: str) -> list[str]:
+    return [ln for ln in html.split("\n") if "data-howto-deck" in ln]
+
+
+def _case_stamp_insert(tmp: Path) -> None:
+    out = stamp_page(INFO_PAGE, "A")
+    assert _deck_lines(out) == [deck_line_html("A")], out
+    assert out.split("\n")[-4:-3] == [deck_line_html("A")], out
+    assert out.split("\n")[-3] == "        </div>", out
+
+
+def _case_stamp_no_checked_line(tmp: Path) -> None:
+    out = stamp_page(INFO_PAGE_BARE, "A")
+    lines = out.split("\n")
+    assert lines[3] == deck_line_html("A") and lines[4] == "        </div>", out
+
+
+def _case_stamp_idempotent(tmp: Path) -> None:
+    once = stamp_page(INFO_PAGE, "A")
+    assert stamp_page(once, "A") == once
+
+
+def _case_stamp_new_id(tmp: Path) -> None:
+    out = stamp_page(stamp_page(INFO_PAGE, "A"), "B")
+    assert _deck_lines(out) == [deck_line_html("B")], out
+
+
+def _case_stamp_remove(tmp: Path) -> None:
+    assert stamp_page(stamp_page(INFO_PAGE, "A"), None) == INFO_PAGE
+
+
+def _case_stamp_no_info_box(tmp: Path) -> None:
+    try:
+        stamp_page("<main><p>none</p></main>", "A")
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError")
+
+
+def _case_links_unmapped_line(tmp: Path) -> None:
+    f = link_findings("g", stamp_page(INFO_PAGE, "A"), {})
+    assert len(f) == 1 and "g" in f[0], f
+
+
+def _case_links_missing_line(tmp: Path) -> None:
+    f = link_findings("g", INFO_PAGE, {"g": {"id": "A"}})
+    assert len(f) == 1 and "g" in f[0], f
+
+
+def _case_links_wrong_id(tmp: Path) -> None:
+    f = link_findings("g", stamp_page(INFO_PAGE, "A"), {"g": {"id": "B"}})
+    assert len(f) == 1, f
+    assert link_findings("g", stamp_page(INFO_PAGE, "B"), {"g": {"id": "B"}}) == []
+    assert link_findings("g", INFO_PAGE, {}) == []
+
+
+def _case_sha_changes(tmp: Path) -> None:
+    a = _deck_with(12, "One word here.")
+    b = _deck_with(12, "One ward here.")
+    a.resolved_text = "one word"
+    b.resolved_text = "one ward"
+    assert outline_sha256(a) != outline_sha256(b)
+    assert outline_sha256(a) == outline_sha256(a)
+
+
 CASES: list = [
     ("parse_ok", _case_parse_ok),
     ("include_spliced", _case_include_spliced),
@@ -662,6 +895,16 @@ CASES: list = [
     ("section_ok", _case_section_ok),
     ("section_with_markup", _case_section_with_markup),
     ("section_missing", _case_section_missing),
+    ("stamp_insert", _case_stamp_insert),
+    ("stamp_no_checked_line", _case_stamp_no_checked_line),
+    ("stamp_idempotent", _case_stamp_idempotent),
+    ("stamp_new_id", _case_stamp_new_id),
+    ("stamp_remove", _case_stamp_remove),
+    ("stamp_no_info_box", _case_stamp_no_info_box),
+    ("links_unmapped_line", _case_links_unmapped_line),
+    ("links_missing_line", _case_links_missing_line),
+    ("links_wrong_id", _case_links_wrong_id),
+    ("sha_changes", _case_sha_changes),
 ]
 
 
@@ -683,9 +926,26 @@ def self_test() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--self-test", action="store_true", help="run the built-in cases")
+    ap.add_argument("--check", action="store_true", help="check outlines and guide-page links")
+    ap.add_argument("--stale", action="store_true", help="list decks whose outline changed")
+    ap.add_argument("--status", action="store_true", help="list outline and publish state")
+    ap.add_argument("--stamp", action="store_true", help="rewrite guide pages from the mapping")
+    ap.add_argument(
+        "--record", nargs=2, metavar=("SLUG", "PRES_ID"), help="record a published deck"
+    )
     args = ap.parse_args()
     if args.self_test:
         return self_test()
+    if args.check:
+        return check_all()
+    if args.stale:
+        return stale_report()
+    if args.status:
+        return status_report()
+    if args.stamp:
+        return stamp_all()
+    if args.record:
+        return record(*args.record)
     ap.print_help()
     return 2
 
