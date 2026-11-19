@@ -4,9 +4,9 @@ promise: Learn Splunk's search language from zero on 24 CloudTrail events, and l
 
 == Who it is for and what you need
 section: How to use this guide
-For beginners: new to Splunk and query languages, able to use a terminal. Allow about two hours.
+It is for beginners new to Splunk and query languages who can use a terminal. Allow about two hours.
 
-You need Docker with about 3 GB of memory and 3 GB of disk to spare. No Splunk or cloud account is needed.
+You need Docker with about 3 GB of memory and 3 GB of disk free, but no Splunk or cloud account.
 
 == How the guide was checked
 section: How to use this guide
@@ -22,9 +22,9 @@ Security analysts type SPL to investigate. Detection engineers save SPL searches
 
 == A search is a pipeline
 section: A search is a pipeline
-The base search, before the first |, chooses events. Each | hands the results so far to one command, which reshapes them and passes them on.
+The base search, before the first pipe character (|), chooses events. Each | hands the results to the next command.
 
-Here, the six events that changed something become one row per identity.
+Every prefix of a search is a search you can run, so to debug one, delete commands from the end.
 ```spl
 index=cloudtrail readOnly=false
 | stats count BY userIdentity.userName
@@ -34,19 +34,11 @@ index=cloudtrail readOnly=false
 
 == A load can report success and still be wrong
 section: 2. Load the lab data, then check what arrived
-A source type tells Splunk how to split text into events and find each event's time. The load can print Oneshot ... added even when every event was dropped. This check wants 24 events, each with its own time.
+A source type tells Splunk how to split text into events and find each event's time. The oneshot load can print Oneshot ... added even when every event was dropped. This check wants 24 events, each with its own time.
 ```spl
 index=cloudtrail
 | eval own_time=if(_time == strptime(eventTime, "%Y-%m-%dT%H:%M:%S%Z"), "yes", "no")
 | stats count BY sourcetype own_time
-```
-
-== Trail tampering (D1): filter, then pick columns
-section: 3. Filter and pick columns: trail tampering (D1)
-IN matches any value in the list, and table shows the fields you name. One event comes back: backup-svc stopped the trail from 203.0.113.50. Leave out index=cloudtrail and the search returns nothing. Field names are case-sensitive.
-```spl
-index=cloudtrail eventName IN (StopLogging, DeleteTrail, UpdateTrail, PutEventSelectors)
-| table _time eventName userIdentity.userName sourceIPAddress
 ```
 
 == Logins without MFA (D4): require success too
@@ -59,7 +51,7 @@ index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No responseE
 
 == Before you trust an empty result, run a control
 section: 5. Count, then threshold: the burst that never fires (D2)
-The first D2 draft counted errorCode=AccessDenied per address and printed nothing. This control counts events by error code. Elastic Compute Cloud (EC2) reports a refusal as Client.UnauthorizedOperation, so three of the attacker's seven refusals were invisible to the rule.
+Matching only errorCode=AccessDenied, the D2 draft printed nothing. This control shows why: Elastic Compute Cloud (EC2) reported three of the attacker's refusals as Client.UnauthorizedOperation. The fillnull command keeps the 14 events with no errorCode, which stats would silently drop.
 ```spl
 index=cloudtrail
 | fillnull value="(none)" errorCode
@@ -68,7 +60,7 @@ index=cloudtrail
 
 == Turn D2 into a scheduled alert
 section: 7. Turn D2 into a scheduled alert
-Splunk stores an alert as a stanza in savedsearches.conf. This one runs the fixed D2 search, with all four refusal codes, every ten minutes over the ten minutes that ended ten minutes ago, and fires on any row.
+An alert is a search, a schedule, a time window and a condition. The search now lists the four codes starting AccessDenied or ending UnauthorizedOperation. Each run checks ten minutes ending ten minutes ago, leaving time for CloudTrail's delivery delay.
 ```ini
 search = index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation) \
 | stats count BY sourceIPAddress \
@@ -85,15 +77,15 @@ alert.track = 1
 
 == Test the alert both ways
 section: 8. Test the alert both ways
-Run the alert by hand over a quiet stretch of the lab morning and over the attack, then count the firings with this search. Two runs, one firing: the attack window fired, the quiet one did not.
+Run the alert over a quiet window and the attack window, then count firings. The leading | rest reads Splunk's own REST API from inside a search. Two runs, one firing: the attack window fired, the quiet one did not.
 ```spl
 | rest /servicesNS/-/-/alerts/fired_alerts splunk_server=local
 | table title triggered_alert_count
 ```
 
-== A public rule assumes its field names
+== Splunk's rule for D1 assumes its field names
 section: 9. Splunk's public rules: the security_content format
-This is Splunk's rule for D1, trimmed. references still names T1562.008, which MITRE ATT&CK v19 revoked. A successful call has no errorCode in raw CloudTrail, so with the cloudtrail macro replaced by the lab's index, this base search counts 0.
+Its references field still names T1562.008, revoked in MITRE ATT&CK v19. Replace the cloudtrail macro (sourcetype=aws:cloudtrail) with the lab's index and the search counts 0, though the lab holds exactly that event: raw CloudTrail has no errorCode on success.
 ```yaml
 search: |-
     `cloudtrail` eventName = StopLogging eventSource = cloudtrail.amazonaws.com userAgent!=console.amazonaws.com errorCode = success
@@ -118,7 +110,7 @@ eventName=StopLogging
 
 == Answer: two faults, found by deleting from the end
 section: Hands-on exercises
-With no index, Splunk searched only the default indexes. And where reads the unquoted dotted name as two empty strings joined. Fixing either alone still returns nothing, so prove each by deleting commands from the end.
+With no index, Splunk searched only the default indexes. And the where command reads the unquoted dotted name as two empty strings joined. Fixing either alone still returns nothing, so prove each by deleting commands from the end.
 ```spl
 index=cloudtrail eventName=StopLogging
 | where 'userIdentity.userName'="backup-svc"
@@ -127,16 +119,16 @@ index=cloudtrail eventName=StopLogging
 
 == Exercise: write D3 with stats instead of transaction
 section: Hands-on exercises
-The guide's step 6 finds D3 with this transaction search. Write it with stats instead, so that svc-reporting, which alice gave a key hours after creating it, stays out. Then say what each condition protects against.
+In the guide's step 6, the transaction command groups each new user's events from CreateUser to CreateAccessKey within 10 minutes. Write D3 with stats instead, so svc-reporting, keyed hours after creation, stays out. Then say what each condition protects against.
 ```spl
 index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
 | transaction requestParameters.userName startswith=eval(eventName="CreateUser") endswith=eval(eventName="CreateAccessKey") maxspan=10m
 | table _time requestParameters.userName userIdentity.userName sourceIPAddress duration eventcount
 ```
 
-== Answer: three conditions in one where
+== Answer: three conditions in one where command
 section: Hands-on exercises
-dc counts distinct values, so steps=2 needs both events. earliest gives the first event's name, so the user must be created before the key. range(_time) is last minus first, in seconds, and gap<=600 is the ten-minute window.
+The dc function counts distinct values, so steps=2 needs both events. The earliest function gives the first event's name, so the user must be created first. range(_time) is last minus first, in seconds, and gap<=600 is the ten-minute window.
 ```spl
 index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
 | stats earliest(eventName) AS first_step dc(eventName) AS steps range(_time) AS gap BY requestParameters.userName
@@ -145,8 +137,6 @@ index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
 
 == Common mistakes
 section: Common mistakes
-- A missing index= searches only the default indexes.
-- Dotted field names in where need single quotes.
-- The base search ignores case in values; where does not.
+- A missing index=, a mis-cased field name and Splunk Web's default Last 24 hours all return nothing, like a quiet account.
+- The where command is case-sensitive and needs single quotes around dotted names.
 - stats drops events lacking the BY field.
-- transaction without maxspan joins events hours apart.
