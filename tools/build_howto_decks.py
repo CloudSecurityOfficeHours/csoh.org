@@ -32,6 +32,8 @@ and cannot include another, so a deck's text always resolves in one pass.
 Usage:
     python3 tools/build_howto_decks.py --self-test
     python3 tools/build_howto_decks.py --check
+    python3 tools/build_howto_decks.py --build
+    python3 tools/build_howto_decks.py --self-test-render
     python3 tools/build_howto_decks.py --stale | --status | --stamp
     python3 tools/build_howto_decks.py --record SLUG PRES_ID
 """
@@ -908,25 +910,244 @@ CASES: list = [
 ]
 
 
-def self_test() -> int:
+# Render cases need python-pptx, so they stay out of CASES (which CI runs
+# without it) and run only under --self-test-render.
+def _render_deck(n: int = 10, **slide_kw) -> Deck:
+    slides = [
+        Slide(
+            heading=f"Slide {i}",
+            section="Setup" if i % 2 else None,
+            paragraphs=["A short line of prose."],
+            bullets=["One point", "Another point"],
+            code=["index=main | head 5"],
+            credit="Source: example",
+            where=f"d.deck:{i}",
+            **slide_kw,
+        )
+        for i in range(n)
+    ]
+    return Deck("d", "A deck title", "howto/d.html", "One sentence promise.", slides, "")
+
+
+def _reopen(path: Path):
+    from pptx import Presentation
+
+    return Presentation(str(path))
+
+
+def _slide_text(slide) -> str:
+    return "\n".join(sh.text_frame.text for sh in slide.shapes if sh.has_text_frame)
+
+
+def _case_render_ok(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck()
+    out = r.render_deck(deck, tmp / "d.pptx", {"Setup": "setup"})
+    assert r.verify_pptx(out, deck) == [], r.verify_pptx(out, deck)
+    prs = _reopen(out)
+    assert len(prs.slides) == 12, len(prs.slides)
+    assert (prs.slide_width, prs.slide_height) == (12192000, 6858000)
+    for i, sl in enumerate(prs.slides, start=1):
+        assert "csoh.org/howto/d.html" in _slide_text(sl), i
+        assert f"{i} / 12" in _slide_text(sl), i
+        assert sl.notes_slide.notes_text_frame.text.strip(), i
+    first, last = _slide_text(prs.slides[0]), _slide_text(prs.slides[-1])
+    for want in ("A deck title", "One sentence promise.", r.ATTRIBUTION, r.LICENSE_LINE):
+        assert want in first, want
+    assert r.CLOSING_HEADING in last and "https://csoh.org/howto/d.html" in last
+    assert r.CLOSING_LICENSE in last
+
+
+def _case_render_notes(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck(3)
+    deck.slides[0].section = "Setup"
+    deck.slides[1].section = "No id"
+    deck.slides[2].section = None
+    out = r.render_deck(deck, tmp / "d.pptx", {"Setup": "setup", "No id": None})
+    notes = [s.notes_slide.notes_text_frame.text for s in _reopen(out).slides]
+    base = "https://csoh.org/howto/d.html"
+    assert notes[1] == f"Guide section: {base}#setup", notes[1]
+    assert notes[2] == f'Guide section: "No id" at {base}', notes[2]
+    assert notes[3] == f"Full guide: {base}", notes[3]
+    assert notes[0] == notes[4] == f"Full guide: {base}", notes
+    out2 = r.render_deck(deck, tmp / "e.pptx")
+    n2 = _reopen(out2).slides[1].notes_slide.notes_text_frame.text
+    assert n2 == f'Guide section: "Setup" at {base}', n2
+
+
+def _case_render_overflow(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    def one(code_lines: int, paras: int) -> Deck:
+        s = Slide(
+            heading="A heading that wraps onto a second line because it is long enough",
+            section="Setup",
+            paragraphs=["five words in this line"] * paras,
+            code=["x = 1"] * code_lines,
+            where="over.deck:7",
+        )
+        return Deck("d", "T", "howto/d.html", "P.", [s] * 10, "")
+
+    try:
+        r.render_deck(one(12, 8), tmp / "o.pptx")
+    except r.LayoutError as e:
+        assert "over.deck:7" in str(e), e
+    else:
+        raise AssertionError("LayoutError was not raised")
+    assert not (tmp / "o.pptx").exists()
+    # Control: the same slide with little on it must fit.
+    r.render_deck(one(3, 1), tmp / "ok.pptx")
+
+
+def _case_render_fonts(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck()
+    out = r.render_deck(deck, tmp / "d.pptx", {})
+    small = {"footer-left", "footer-right", "guide-line", "credit"}
+    seen_code = seen_body = 0
+    for sl in _reopen(out).slides:
+        for sh in sl.shapes:
+            if not sh.has_text_frame:
+                continue
+            for p in sh.text_frame.paragraphs:
+                for run in p.runs:
+                    if sh.name == "code":
+                        seen_code += 1
+                        assert run.font.size.pt == 14, run.font.size.pt
+                    elif sh.name not in small:
+                        seen_body += 1
+                        assert run.font.size.pt >= 18, (sh.name, run.font.size.pt)
+    assert seen_code and seen_body
+    # Control: a body run shrunk to 12 pt in the saved file must be reported.
+    prs = _reopen(out)
+    for sh in prs.slides[1].shapes:
+        if sh.name == "body":
+            from pptx.util import Pt
+
+            sh.text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+    bad = tmp / "bad.pptx"
+    prs.save(str(bad))
+    found = r.verify_pptx(bad, deck)
+    assert any("below 18" in f for f in found), found
+
+
+def _case_render_verify_plants(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck()
+    out = r.render_deck(deck, tmp / "d.pptx", {})
+    prs = _reopen(out)
+    prs.slides[2].notes_slide.notes_text_frame.text = ""
+    for sh in prs.slides[3].shapes:
+        if sh.name == "footer-left":
+            sh.text_frame.paragraphs[0].runs[0].text = "csoh.org/elsewhere"
+    for sh in prs.slides[4].shapes:
+        if sh.name == "heading":
+            sh.text_frame.paragraphs[0].runs[0].text = "Bad " + chr(0x2014) + " dash"
+    bad = tmp / "bad.pptx"
+    prs.save(str(bad))
+    found = "\n".join(r.verify_pptx(bad, deck))
+    for needle in ("slide 3: no speaker notes", "slide 4: footer lacks", "slide 5: contains an en or em dash"):
+        assert needle in found, (needle, found)
+    short = _render_deck(9)
+    assert any("slides, expected" in f for f in r.verify_pptx(out, short))
+
+
+RENDER_CASES: list = [
+    ("render_ok", _case_render_ok),
+    ("render_notes", _case_render_notes),
+    ("render_overflow", _case_render_overflow),
+    ("render_fonts", _case_render_fonts),
+    ("render_verify_plants", _case_render_verify_plants),
+]
+
+
+def _run_cases(cases: list, label: str) -> int:
     failed = 0
-    for name, fn in CASES:
+    for name, fn in cases:
         with tempfile.TemporaryDirectory() as td:
             try:
                 fn(Path(td))
             except Exception as e:  # a failing case must not hide the others
                 failed += 1
-                print(f"self-test FAILED: {name}: {type(e).__name__}: {e}")
+                print(f"{label} FAILED: {name}: {type(e).__name__}: {e}")
     if failed:
         return 1
-    print(f"self-test: {len(CASES)} cases passed")
+    print(f"{label}: {len(cases)} cases passed")
     return 0
+
+
+def self_test_render() -> int:
+    try:
+        import howto_deck_render  # noqa: F401
+    except ImportError as e:
+        print(f"self-test-render: cannot import the renderer: {e}")
+        return 1
+    return _run_cases(RENDER_CASES, "self-test-render")
+
+
+def build_decks() -> int:
+    """Render every outline to DECKS_DIR/build/<slug>.pptx. A deck with any
+    --check finding is refused; a written file is reopened and verified."""
+    try:
+        import howto_deck_render as render
+    except ImportError as e:
+        print(f"build: cannot import the renderer (pip install python-pptx): {e}")
+        return 1
+    bad = 0
+    outlines = outline_paths()
+    for path in outlines:
+        try:
+            deck = parse_outline(path)
+        except OutlineError as e:
+            print(e)
+            bad += 1
+            continue
+        guide = Path(deck.guide)
+        if guide != HOWTO_DIR / f"{deck.slug}.html" or not guide.exists():
+            print(f"{path.name}: guide must be an existing howto/{deck.slug}.html, got {deck.guide}")
+            bad += 1
+            continue
+        html = guide.read_text(encoding="utf-8")
+        findings = style_findings(deck) + guide_findings(deck, html)
+        if findings:
+            print("\n".join(findings))
+            print(f"{path.name}: refused, fix the findings above")
+            bad += 1
+            continue
+        out = DECKS_DIR / "build" / f"{deck.slug}.pptx"
+        try:
+            render.render_deck(deck, out, guide_headings(html))
+        except render.LayoutError as e:
+            print(e)
+            bad += 1
+            continue
+        problems = render.verify_pptx(out, deck)
+        if problems:
+            print("\n".join(problems))
+            bad += 1
+            continue
+        print(f"built {out}")
+    print(f"build: {len(outlines)} outlines, {bad} failed")
+    return 1 if bad else 0
+
+
+def self_test() -> int:
+    return _run_cases(CASES, "self-test")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--self-test", action="store_true", help="run the built-in cases")
     ap.add_argument("--check", action="store_true", help="check outlines and guide-page links")
+    ap.add_argument("--build", action="store_true", help="render each outline to a .pptx")
+    ap.add_argument(
+        "--self-test-render", action="store_true", help="run the renderer cases (needs python-pptx)"
+    )
     ap.add_argument("--stale", action="store_true", help="list decks whose outline changed")
     ap.add_argument("--status", action="store_true", help="list outline and publish state")
     ap.add_argument("--stamp", action="store_true", help="rewrite guide pages from the mapping")
@@ -936,8 +1157,12 @@ def main() -> int:
     args = ap.parse_args()
     if args.self_test:
         return self_test()
+    if args.self_test_render:
+        return self_test_render()
     if args.check:
         return check_all()
+    if args.build:
+        return build_decks()
     if args.stale:
         return stale_report()
     if args.status:
