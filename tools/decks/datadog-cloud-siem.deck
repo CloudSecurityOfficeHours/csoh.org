@@ -62,14 +62,14 @@ source:cloudtrail @evt.name:(StopLogging OR DeleteTrail OR UpdateTrail OR PutEve
 
 == Before you trust a quiet rule, run a control
 section: 6. Counting lives in the rule: the burst that never fires (D2)
-A Top List of @error.kind:AccessDenied by @network.client.ip shows 203.0.113.50 with 4 and 192.0.2.20 with 3: neither reaches D2's 5. This control must find something. Grouped by @error.kind, it shows EC2 (Elastic Compute Cloud) wrote three of 203.0.113.50's refusals as Client.UnauthorizedOperation.
+A Top List of @error.kind:AccessDenied by @network.client.ip shows 203.0.113.50 with 4 and 192.0.2.20 with 3: a rule needing 5 never fires. This control, grouped by @error.kind, must find something: EC2 (Elastic Compute Cloud) wrote three of 203.0.113.50's refusals as Client.UnauthorizedOperation.
 ```datadog
 source:cloudtrail @error.kind:*
 ```
 
 == D2: the rule groups, counts and times
 section: 6. Counting lives in the rule: the burst that never fires (D2)
-Step 9 saves this rule, partly shown, in main.tf. The group by counts each address apart; the case, a >= 5, is the condition on query a's count; the evaluation window looks back 600 seconds. Expect one signal, for 203.0.113.50.
+Step 9 saves this rule, partly shown, in main.tf. Its query lists four refusal codes; the group by counts each address apart; the case, a >= 5, tests query a's count over a 600-second window. Expect one signal, for 203.0.113.50.
 ```hcl
     query           = "source:cloudtrail @error.kind:(AccessDenied OR AccessDeniedException OR Client.UnauthorizedOperation OR UnauthorizedOperation)"
     group_by_fields = ["@network.client.ip"]
@@ -100,7 +100,7 @@ Step 9 saves this rule, partly shown, in main.tf. A Sequence rule's steps come i
 
 == Test each rule both ways
 section: 10. Test each rule both ways
-D1's rule adds a case of a > 0. In the rule editor's Unit Test, processed StopLogging should match and ListBuckets should not. Run D2 and D3 as Historical Jobs over the past 4 hours: expect only 203.0.113.50 and backup-svc.
+D1's rule, its search with case a > 0, should match processed StopLogging in the rule editor's Unit Test, not ListBuckets. For D2 and D3, Run as Historical Job (past 4 hours): expect 203.0.113.50 and backup-svc, never 192.0.2.20 or svc-reporting.
 
 == Exercise: write the search for D5
 section: Hands-on exercises
@@ -122,7 +122,7 @@ source:cloudtrail @evt.name:ConsoleLogin @additionalEventData.MFAUsed:no
 
 == Answer: values are case sensitive
 section: Hands-on exercises
-CloudTrail writes No, not no. To prove it, drop the term that decides and group the rest by @additionalEventData.MFAUsed: expect No 2 and Yes 1. Real values move the question from "is there data?" to "what exactly is it called?"
+CloudTrail writes No, not no. Prove it by dropping the deciding term and grouping by @additionalEventData.MFAUsed: No 2 (one a failed sign-in) and Yes 1. Real values move the question from "is there data?" to "what exactly is it called?"
 ```datadog
 source:cloudtrail @evt.name:ConsoleLogin
 ```
