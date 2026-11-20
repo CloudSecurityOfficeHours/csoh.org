@@ -1,18 +1,18 @@
 title: Azure Policy definitions, hands-on
 guide: howto/azure-policy.html
-promise: Learn the definition language by building policies that fail quietly in a throwaway resource group, then fixing them.
+promise: Azure Policy checks changes to your Azure resources against rules you write: learn its definition language by building policies that fail quietly in a throwaway resource group, then fixing them.
 
 == Who it is for and what you need
 section: How to use this guide
-Readers who have worked in Azure and can read JSON (JavaScript Object Notation) should allow about two hours.
+Readers who have run Azure CLI (command-line interface) commands and can read JSON (JavaScript Object Notation) should allow about two hours.
 
-You need a subscription you may experiment in, the Azure CLI (command-line interface) and jq, a command-line tool for reading JSON.
+You need a subscription you may experiment in, the Azure CLI and jq, a command-line tool for reading JSON.
 
 == How the guide was checked
 section: How to use this guide
-No az (Azure CLI) command in the walk-through has run against Azure, so expected results are what Microsoft's documentation says, and yours may differ.
+No az (Azure CLI) command in the walk-through ran against Azure: expected results are what Microsoft's documentation says; yours may differ.
 
-Definitions were checked against Microsoft's rule schema, and shell blocks ran with a stand-in for az.
+Each definition's rule was validated against Microsoft's schema; shell blocks ran with a stand-in az, to catch quoting errors.
 
 == How to follow the guide
 section: How to use this guide
@@ -71,12 +71,12 @@ Rules carry ports as destinationPortRange or the list destinationPortRanges, nev
 
 == The mode decides what is evaluated at all
 section: 4. Write the corrected rule, and create it twice
-Step 4 creates a definition from ssh.json with --mode from the file, All, then again like this, without one. That one gets Indexed, which evaluates only resource types that support tags and location: never a network security group's rules.
+Step 4 creates csoh-lab-ssh from ssh.json with --mode from the file, All, then csoh-lab-ssh-indexed like this, without one. That one gets Indexed, which evaluates only resource types that support tags and location: never a network security group's rules.
 ```bash
 az policy definition create --name csoh-lab-ssh-indexed --params "$(jq -c .properties.parameters ssh.json)" --rules "$(jq -c .properties.policyRule ssh.json)"
 ```
 
-== Four assignments of one SSH rule
+== Four assignments carry an SSH rule
 section: 5. Assign everything to the lab, and test
 Step 5 assigns the first attempt as lab-ssh-naive, a deny, and the corrected rule three times: lab-ssh-indexed, a deny in Indexed mode; lab-ssh-audit, an audit; and this trial deny in DoNotEnforce mode, which reports but never applies the effect.
 ```bash
@@ -85,7 +85,7 @@ az policy assignment create --name lab-ssh-trial --policy csoh-lab-ssh --resourc
 
 == Two ports should get past all four
 section: 5. Assign everything to the lab, and test
-Assignments take about five minutes to apply. Given two ports, the CLI sends only destinationPortRanges. Expect this rule to be created. A compliance scan should call it Compliant under lab-ssh-naive, NonCompliant under lab-ssh-audit and lab-ssh-trial, with no row for lab-ssh-indexed.
+Assignments take about five minutes to apply. Expect it created: the CLI sends two ports only as destinationPortRanges. Scan for compliance with az policy state trigger-scan; az policy state list should show lab-ssh-naive Compliant, lab-ssh-audit and lab-ssh-trial NonCompliant, lab-ssh-indexed absent.
 ```bash
 az network nsg rule create --resource-group csoh-policy-lab --nsg-name lab-nsg-before --name allow-ssh-https --priority 110 --direction Inbound --access Allow --protocol Tcp --source-address-prefixes '*' --destination-port-ranges 22 443 --query "{name:name, destinationPortRange:destinationPortRange, destinationPortRanges:destinationPortRanges}"
 ```
@@ -124,7 +124,7 @@ A deny assignment for "no SSH from the internet" has been in place for a month, 
 
 == Answer: four checks before you trust the log
 section: Hands-on exercises
-Check the assignment's enforcementMode: under DoNotEnforce nothing is denied or logged. Then check the compliance results, recorded either way; the definition's mode, since in Indexed mode a rule policy has nothing to deny; and the condition, against each property form.
+Check the assignment's enforcementMode, since under DoNotEnforce nothing is denied or logged; the compliance results, recorded either way; the definition's mode, as Indexed never evaluates network security group rules; and the condition, against a test resource in each property form.
 
 == Common mistakes
 section: Common mistakes
