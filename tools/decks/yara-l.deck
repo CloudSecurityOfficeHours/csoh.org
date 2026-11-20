@@ -1,0 +1,166 @@
+title: YARA-L 2.0, hands-on
+guide: howto/yara-l.html
+promise: Learn YARA-L 2.0 from zero on CloudTrail data: Unified Data Model fields, match windows, two-event joins, and a silent rule with the control that exposes it.
+
+== Who it is for and what you need
+section: How to use this guide
+It assumes you have written detection rules or log searches. Reading the rules needs a text editor; running them, a tenant of Google SecOps, Google's platform for searching security logs.
+
+Disclosure: the site's author works at Wiz, which Google owns.
+
+== How the guide was checked
+section: How to use this guide
+Nothing was executed: not the rules, not the searches, not the commands. Every rule was checked against Google's YARA-L documentation, field-mapping reference and published rules. Expected results were worked out from the lab file, not captured from Google SecOps.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into a terminal. Save each YARA-L block, a rule, as its rule name plus .yaral; step 6's commands test them. Without a tenant, read each rule against the lab file.
+
+== Set up: the lab file, a test tenant and the CLI
+section: 1. Get the lab file, and a tenant to run it in
+Step 1's first block writes the lab file; paste it whole, EOF line included. These install the secops command-line interface (CLI), sign in with the gcloud CLI and load the file into a test tenant, not production. Expect 24 events.
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+python3 -m pip install secops
+gcloud auth application-default login
+secops config set --customer-id "YOUR_INSTANCE_ID" --project-id "YOUR_PROJECT_ID" --region "us"
+secops log ingest --type AWS_CLOUDTRAIL --file cloudtrail-lab.jsonl
+secops search --query 'metadata.product_name = "AWS CloudTrail"' \
+  --start-time 2026-09-15T08:00:00Z --end-time 2026-09-15T12:00:00Z
+```
+
+== What YARA-L is and where you meet it
+section: A detection language that reads a data model, not your logs
+Detection engineers write YARA-L 2.0 rules; Google SecOps checks them against incoming events, recording a detection each time a rule's pattern holds. Analysts also search and build dashboards with it. YARA-L is not YARA, which matches bytes in files.
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Walk-through: five detections on one lab file
+The lab file holds 24 CloudTrail events from one morning. A CloudTrail event is a record of one call made to Amazon Web Services (AWS).
+
+A continuous integration user, build-bot, has leaked its access key.
+
+== What someone does with build-bot's key
+section: Walk-through: five detections on one lab file
+From 203.0.113.50 someone is mostly refused, then creates the user backup-svc, attaches the AWS managed policy AdministratorAccess to it, gives it an access key and, as backup-svc, stops the CloudTrail trail.
+
+Earlier, bob signs in without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== A rule never reads a log as it arrived
+section: Rules read UDM events, not log lines
+A parser rewrites each log into the Unified Data Model (UDM), shared field names. A rule naming a UDM field your parser leaves empty is accepted, runs and never fires. Before trusting a rule, print each lab line's UDM event:
+```bash
+secops parser run --log-type AWS_CLOUDTRAIL --logs-file cloudtrail-lab.jsonl
+```
+
+== The smallest rule that works
+section: Rules read UDM events, not log lines
+$trail is an event variable: any event that passes every line under events. It must be a StopLogging call; the condition $trail means at least one exists. The parser copied CloudTrail's eventName into metadata.product_event_type. Only the lab's 10:09:03 call passes.
+```yara-l
+rule lab_stop_logging_seen {
+  meta:
+    description = "Any StopLogging call"
+  events:
+    $trail.metadata.product_event_type = "StopLogging"
+  condition:
+    $trail
+}
+```
+
+== D4: test the result as well as MFA
+section: 3. A nested value, and a naive rule that fires too often (D4)
+MFA status, additionalEventData.MFAUsed in CloudTrail, lands in extensions.auth.auth_details. Testing only that also catches a failed attempt on alice at 09:20:03, so the fix tests the sign-in result too: only bob remains. Check the last two lines with secops parser run.
+```yara-l
+  events:
+    $login.metadata.product_name = "AWS CloudTrail"
+    $login.metadata.event_type = "USER_LOGIN"
+    $login.metadata.product_event_type = "ConsoleLogin"
+    $login.extensions.auth.auth_details = "MFAUsed: No"
+    $login.security_result.severity_details = "Success"
+```
+
+== D2: a rule that cannot fire
+section: 4. Counting, and a rule that cannot fire (D2)
+CloudTrail's errorCode lands in security_result.summary. The placeholder $ip captures each event's address; the match section groups events by it over 10 minutes; #denied counts each group's events. Expected on the lab: nothing. 203.0.113.50 has four AccessDenied events, 192.0.2.20 three.
+```yara-l
+  events:
+    $denied.metadata.product_name = "AWS CloudTrail"
+    $denied.security_result.summary = "AccessDenied"
+    $denied.principal.ip = $ip
+  match:
+    $ip over 10m
+  condition:
+    #denied >= 5
+```
+
+== Before you trust a quiet rule, run a control
+section: 4. Counting, and a rule that cannot fire (D2)
+A control is a search that must find something. This one drops the threshold: expect AccessDenied 7 and Client.UnauthorizedOperation 3, the attacker's Amazon Elastic Compute Cloud (EC2) refusals. Matching every refusal code, the fix counts 7 for 203.0.113.50 and fires.
+```bash
+secops stats --start-time 2026-09-15T08:00:00Z --end-time 2026-09-15T12:00:00Z \
+  --query 'metadata.product_name = "AWS CloudTrail"
+security_result.summary != ""
+match:
+  security_result.summary
+outcome:
+  $events = count(metadata.id)
+order:
+  $events desc'
+```
+
+== D3: two events, one new user, ten minutes
+section: 5. Two events, one new user, ten minutes (D3)
+Two event variables, $create and $key, share the placeholder $new_user; the timestamp test puts creation first. Expected on the lab: backup-svc, keyed after 39 seconds. svc-reporting, which alice keyed 2 hours 37 minutes after creating it, fits no 10-minute window.
+```yara-l
+    $create.metadata.product_name = "AWS CloudTrail"
+    $create.metadata.product_event_type = "CreateUser"
+    $create.target.user.user_display_name = $new_user
+    $key.metadata.product_name = "AWS CloudTrail"
+    $key.metadata.product_event_type = "CreateAccessKey"
+    $key.target.user.user_display_name = $new_user
+    // the user has to exist before its key does
+    $create.metadata.event_timestamp.seconds < $key.metadata.event_timestamp.seconds
+  match:
+    $new_user over 10m
+```
+
+== Test every rule both ways
+section: 6. From rule to running detection, tested both ways
+This runs secops rule test, which prints what each rule matches, on the six rules from steps 2 to 5. Check each against its "Expected on the lab" line, which names what must fire and what must not.
+```bash
+for r in lab_cloudtrail_logging_tampered lab_mfa_no_naive lab_console_login_without_mfa \
+         lab_denied_burst_naive lab_denied_call_burst lab_new_user_given_access_key; do
+  echo "== $r"
+  secops rule test --file "$r.yaral" \
+    --start-time 2026-09-15T08:00:00Z --end-time 2026-09-15T12:00:00Z
+done
+```
+
+== Exercise: write D5 as a rule
+section: Hands-on exercises
+Write a rule that fires when the AWS managed policy AdministratorAccess is attached to a user. Which lab event must it catch, and how do you give it a negative case? In the guide, "Show the answer" opens each answer.
+
+== Answer: test target.resource.name
+section: Hands-on exercises
+It must catch build-bot attaching the policy to backup-svc at 10:06:30. The lab has no other attachment, so build the negative: copy line 20 of the lab file with ReadOnlyAccess in place of AdministratorAccess, ingest it and confirm silence.
+```yara-l
+  events:
+    $attach.metadata.product_name = "AWS CloudTrail"
+    $attach.metadata.product_event_type = "AttachUserPolicy"
+    $attach.target.resource.name = "arn:aws:iam::aws:policy/AdministratorAccess"
+```
+
+== Exercise: Google's MFA rule finds nothing
+section: Hands-on exercises
+You paste Google's aws_console_login_without_mfa rule unchanged. It sets $account_id from additional.fields["recipientAccountId"] and its match section is $account_id over 1h. Tested over the lab's morning it returns nothing, though bob's sign-in is there. Why, and how would you find out?
+
+== Answer: the match section drops empty values
+section: Hands-on exercises
+The trimmed lab events carry no recipientAccountId, so $account_id is empty, and Google SecOps drops empty values in the match section. Take parts away until bob appears: the match section first, then the older parser's success test, security_result.action = "ALLOW".
+
+== Common mistakes
+section: Common mistakes
+- Run secops parser run on a sample before trusting any field name.
+- Google's CloudTrail rules match error codes in security_result.rule_id; the parser released in October 2025 writes security_result.summary.
+- The secops rule validate command proves only that a rule compiles.
