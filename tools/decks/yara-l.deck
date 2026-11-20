@@ -14,11 +14,11 @@ Nothing was executed: not the rules, not the searches, not the commands. Every r
 
 == How to follow the guide
 section: How to use this guide
-Read it in order. Paste BASH blocks into a terminal. Save each YARA-L block, a rule, as its rule name plus .yaral; step 6's commands test them. Without a tenant, read each rule against the lab file.
+Read it in order. Paste BASH blocks into a terminal, replacing YOUR_ placeholders. Save each whole YARA-L rule from the guide as its rule name plus .yaral; slides show parts. Without a tenant, read each rule against the lab file.
 
 == Set up: the lab file, a test tenant and the CLI
 section: 1. Get the lab file, and a tenant to run it in
-Step 1's first block writes the lab file; paste it whole, EOF line included. These install the secops command-line interface (CLI), sign in with the gcloud CLI and load the file into a test tenant, not production. Expect 24 events.
+Step 1's first block writes the lab file; paste it whole, EOF line included. With the gcloud command-line interface (CLI) installed, these install the secops CLI, sign in and load the file into a non-production test tenant. Expect 24 events.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 python3 -m pip install secops
@@ -31,7 +31,7 @@ secops search --query 'metadata.product_name = "AWS CloudTrail"' \
 
 == What YARA-L is and where you meet it
 section: A detection language that reads a data model, not your logs
-Detection engineers write YARA-L 2.0 rules; Google SecOps checks them against incoming events, recording a detection each time a rule's pattern holds. Analysts also search and build dashboards with it. YARA-L is not YARA, which matches bytes in files.
+YARA-L 2.0 is Google SecOps' query language. Detection engineers write rules in it, which Google SecOps checks against incoming events, recording a detection each time a rule's pattern holds. Analysts search with it. It is not YARA, the file-scanning language.
 
 == The lab: 24 CloudTrail events and a leaked key
 section: Walk-through: five detections on one lab file
@@ -56,7 +56,7 @@ secops parser run --log-type AWS_CLOUDTRAIL --logs-file cloudtrail-lab.jsonl
 
 == The smallest rule that works
 section: Rules read UDM events, not log lines
-$trail is an event variable: any event that passes every line under events. It must be a StopLogging call; the condition $trail means at least one exists. The parser copied CloudTrail's eventName into metadata.product_event_type. Only the lab's 10:09:03 call passes.
+$trail is an event variable: any event passing every line in the events section, here a StopLogging call. In the condition, $trail means at least one exists. The parser copied CloudTrail's eventName into metadata.product_event_type. Only the lab's 10:09:03 call passes.
 ```yara-l
 rule lab_stop_logging_seen {
   meta:
@@ -96,7 +96,7 @@ CloudTrail's errorCode lands in security_result.summary. The placeholder $ip cap
 
 == Before you trust a quiet rule, run a control
 section: 4. Counting, and a rule that cannot fire (D2)
-A control is a search that must find something. This one drops the threshold: expect AccessDenied 7 and Client.UnauthorizedOperation 3, the attacker's Amazon Elastic Compute Cloud (EC2) refusals. Matching every refusal code, the fix counts 7 for 203.0.113.50 and fires.
+A control is a search that must find something. This drops the threshold: expect AccessDenied 7, and Client.UnauthorizedOperation 3 for the attacker's Amazon Elastic Compute Cloud (EC2) refusals. Matching every refusal code, the fix counts 7 for 203.0.113.50 and fires.
 ```bash
 secops stats --start-time 2026-09-15T08:00:00Z --end-time 2026-09-15T12:00:00Z \
   --query 'metadata.product_name = "AWS CloudTrail"
@@ -127,7 +127,7 @@ Two event variables, $create and $key, share the placeholder $new_user; the time
 
 == Test every rule both ways
 section: 6. From rule to running detection, tested both ways
-This runs secops rule test, which prints what each rule matches, on the six rules from steps 2 to 5. Check each against its "Expected on the lab" line, which names what must fire and what must not.
+This runs secops rule test, which prints each rule's matches, on six whole rules from the guide's steps 2 to 5 (D1 to D4). Check each against its "Expected on the lab" line: what must fire and what must not.
 ```bash
 for r in lab_cloudtrail_logging_tampered lab_mfa_no_naive lab_console_login_without_mfa \
          lab_denied_burst_naive lab_denied_call_burst lab_new_user_given_access_key; do
@@ -143,7 +143,7 @@ Write a rule that fires when the AWS managed policy AdministratorAccess is attac
 
 == Answer: test target.resource.name
 section: Hands-on exercises
-It must catch build-bot attaching the policy to backup-svc at 10:06:30. The lab has no other attachment, so build the negative: copy line 20 of the lab file with ReadOnlyAccess in place of AdministratorAccess, ingest it and confirm silence.
+The policy's Amazon Resource Name (ARN) lands in target.resource.name. It must catch build-bot attaching it to backup-svc at 10:06:30. The lab has no other attachment, so copy lab line 20 with ReadOnlyAccess instead, ingest it and confirm silence.
 ```yara-l
   events:
     $attach.metadata.product_name = "AWS CloudTrail"
@@ -162,5 +162,5 @@ The trimmed lab events carry no recipientAccountId, so $account_id is empty, and
 == Common mistakes
 section: Common mistakes
 - Run secops parser run on a sample before trusting any field name.
-- Google's CloudTrail rules match error codes in security_result.rule_id; the parser released in October 2025 writes security_result.summary.
+- Google's CloudTrail rules match error codes in security_result.rule_id, not security_result.summary, so they can run and never fire.
 - The secops rule validate command proves only that a rule compiles.
