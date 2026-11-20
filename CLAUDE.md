@@ -432,13 +432,15 @@ never hand-edit the output.
 | Recap recording links + `VideoObject` | `tools/sync_recap_videos.py` | `--check` in `validate-html.yml` |
 | "Latest recap" link on sessions.html (`data-latest-recap`) | `tools/sync_latest_recap.py`, run by `add_meeting.py` | `--check` in `validate-html.yml` |
 | Glossary "Used on N pages" lists (`<dd class="term-usage">`) | `tools/sync_glossary_usage.py`, after `crosslink_pages.py` | `--check` in `validate-html.yml` |
-| How-to deck links (`data-howto-deck`) on howto/ pages | `tools/build_howto_decks.py --stamp` | `--check` in `validate-html.yml` |
+| How-to deck links (`data-howto-deck`) on howto/ pages | `tools/build_howto_decks.py --stamp` | `--check` in `validate-html.yml`; `--stale --published-only` there warns |
 | Dark-mode mirror block | `tools/sync_dark_branch.py` | `--check` in Lint |
 
 All are idempotent. **Run any generator twice before trusting it.** The second
 run is the only one that parses the first run's output; a regex that consumes
 one character too many is perfect on run one and grows the file on every run
 after.
+
+Editing a published deck's outline makes it stale; tell Shawn it needs re-publishing.
 
 Counts written into prose or docs go inside a marker so `sync_counts.py` owns
 them. The comment is invisible in rendered HTML and in GitHub Markdown:
