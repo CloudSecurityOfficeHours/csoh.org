@@ -66,9 +66,9 @@ Earlier, bob signs in without multi-factor authentication (MFA).
 
 == D1: your first rule, run over every event
 section: 3. Your first rule, run over every event (D1)
-event.get() reads a field by its name, and the in operator asks whether the value is one of the alternatives in TAMPERING.
+Step 3 saves rules/trail_tampering.py, which begins with these lines. event.get() reads a field by its name; the in operator asks whether the event name is in TAMPERING.
 
-fire.py, a helper this step saves, runs the rule over all 24 events: one match, backup-svc's StopLogging.
+fire.py runs the rule over all 24 events: one match, backup-svc's StopLogging.
 ```python
 # Each of these calls stops, removes or narrows what CloudTrail records.
 TAMPERING = {"StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors"}
@@ -79,7 +79,7 @@ def rule(event):
 
 == Give D1 its YAML file and tests
 section: 4. Add the metadata and tests, then run pat test
-The YAML file names the rule, sets its severity, says in LogTypes which data it receives, and carries tests: lab events, each with the answer rule() should give, one to match and one not. The pat test command passes both.
+Step 4 saves rules/trail_tampering.yml, which begins with these lines. LogTypes says which data the rule receives. Its tests are lab events, each with the answer rule() should give, one to match and one not. The pat test command passes both.
 ```yaml
 AnalysisType: rule
 Filename: trail_tampering.py
@@ -107,7 +107,7 @@ python3 fire.py rules/console_login_no_mfa.py
 
 == D2: counting belongs in the YAML
 section: 6. Counting belongs in the YAML, not the Python (D2)
-rule() sees one event, so Panther counts: matches whose dedup() returns the same string, here the source address, form a group. Matching only AccessDenied, this draft finds four from the attacker and three from the reports-app role: no alert.
+Step 6 saves these in rules/denied_burst.yml. Panther groups together matches whose dedup() returns the same string, here the source address. The first version, matching only AccessDenied, finds four from the attacker and three from the reports-app role: no alert.
 ```yaml
 RuleID: Lab.CloudTrail.DeniedCallBurst
 Enabled: true
@@ -131,7 +131,7 @@ PY
 
 == D3: a correlation rule, which pat test skips
 section: 7. Two events, one story: signals and a correlation rule (D3)
-Two signal rules, with CreateAlert: false, record CreateUser and CreateAccessKey matches but alert nobody. This correlation rule, YAML with no Python, pairs them by user name within 10 minutes. Locally, the pat test command skips its tests yet exits 0.
+Two signal rules, with CreateAlert: false, record CreateUser and CreateAccessKey matches without alerting. Step 7's correlation rule, saved as correlation_rules/new_user_key_within_10m.yml, pairs them by user name within 10 minutes. Locally, the pat test command skips its tests yet exits 0.
 ```yaml
     Transitions:
       - ID: key follows user
@@ -140,7 +140,6 @@ Two signal rules, with CreateAlert: false, record CreateUser and CreateAccessKey
         WithinTimeFrameMinutes: 10
         Match:
           - On: p_alert_context.request_username
-    LookbackWindowMinutes: 30   # twice the window, plus 10 minutes for log delivery
 ```
 
 == Exercise: write D5 in Python
@@ -167,7 +166,7 @@ A colleague's burst rule uses step 6's corrected check and Threshold: 5, matches
 
 == Answer: the title splits the count
 section: Hands-on exercises
-Without dedup(), Panther groups by the title, which names the call, so different calls never share a group. The ten matches make eight groups, the largest holding reports-app's three refusals: none reaches five. Make dedup() return the source address.
+Without dedup(), Panther groups by the title, which names the call. The attacker's seven refusals are seven different calls, making seven groups, and reports-app's three GetObject refusals share one: eight, none reaching five. Make dedup() return the source address.
 
 == Common mistakes
 section: Common mistakes
