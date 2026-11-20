@@ -1,0 +1,134 @@
+title: Azure Policy definitions, hands-on
+guide: howto/azure-policy.html
+promise: Learn the definition language by building policies that fail quietly in a throwaway resource group, then fixing them.
+
+== Who it is for and what you need
+section: How to use this guide
+Readers who have worked in Azure and can read JSON (JavaScript Object Notation) should allow about two hours.
+
+You need a subscription you may experiment in, the Azure CLI (command-line interface) and jq, a command-line tool for reading JSON.
+
+== How the guide was checked
+section: How to use this guide
+No az (Azure CLI) command in the walk-through has run against Azure, so expected results are what Microsoft's documentation says, and yours may differ.
+
+Definitions were checked against Microsoft's rule schema, and shell blocks ran with a stand-in for az.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into one terminal, since later steps reuse step 2's SUB variable. Paste each cat > file <<'EOF' block whole, EOF line included. JSON blocks are to read; the walk-through writes its own files.
+
+== Set up: check the subscription
+section: 2. Choose the subscription and make the lab
+In the subscription you must be able to create policy definitions and assign roles on one resource group; Owner covers both. Azure Policy has no charge on Azure resources. Check that this prints the subscription you mean to use.
+```bash
+az account show --query "{name:name, id:id}" -o table
+```
+
+== Set up: make the lab resource group
+section: 2. Choose the subscription and make the lab
+Step 2 keeps the subscription ID in SUB, creates this group and adds lab-nsg-before, a network security group: the firewall rules for an Azure virtual network. The lab creates only network security groups, which run nothing. Step 8 removes everything.
+```bash
+az group create --name csoh-policy-lab --location eastus --tags owner=platform-team
+```
+
+== What Azure Policy is and where you meet it
+section: A rule engine in front of every change
+Every create, update and delete in Azure passes through Azure Resource Manager, and Azure Policy is the rule engine inside that path. Platform and cloud security teams write policy to set guardrails that hold whichever tool a team deploys with.
+
+== A definition does nothing until it is assigned
+section: A rule engine in front of every change
+A policy definition pairs a condition with an effect, such as deny, which fails the request, or audit, which marks the resource non-compliant and lets the request through. An assignment applies it to a scope, such as a resource group.
+
+== A policy acts only on what it can see
+section: Five ways a policy silently does nothing
+A comparison against a property the policy cannot see is false: Azure evaluates only the JSON that Resource Manager holds. A false condition means the effect does not apply, and the resource is reported compliant, with no warning anywhere.
+
+== The first attempt: conditions, then one effect
+section: Anatomy of a definition
+Step 3 saves the first attempt as ssh-naive.json, meant to deny rules letting SSH (Secure Shell) in from anywhere. These are its last allOf (and) conditions. A long field name is an alias for a path, such as properties.destinationPortRange.
+```json
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRange", "equals": "22" },
+          { "field": "Microsoft.Network/networkSecurityGroups/securityRules/sourceAddressPrefix", "in": ["*", "Internet", "0.0.0.0/0"] }
+        ]
+      },
+      "then": { "effect": "deny" }
+```
+
+== The corrected rule counts the list form
+section: Arrays and count
+Rules carry ports as destinationPortRange or the list destinationPortRanges, never both. Step 4's ssh.json checks both; for the list it uses count, which evaluates its where condition once per member and compares how many matched. Its effect is a parameter.
+```json
+  "count": {
+    "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+    "where": {
+      "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+      "in": ["22", "*"]
+    }
+  },
+  "greater": 0
+```
+
+== The mode decides what is evaluated at all
+section: 4. Write the corrected rule, and create it twice
+Step 4 creates a definition from ssh.json with --mode from the file, All, then again like this, without one. That one gets Indexed, which evaluates only resource types that support tags and location: never a network security group's rules.
+```bash
+az policy definition create --name csoh-lab-ssh-indexed --params "$(jq -c .properties.parameters ssh.json)" --rules "$(jq -c .properties.policyRule ssh.json)"
+```
+
+== Four assignments of one SSH rule
+section: 5. Assign everything to the lab, and test
+Step 5 assigns the first attempt as lab-ssh-naive, a deny, and the corrected rule three times: lab-ssh-indexed, a deny in Indexed mode; lab-ssh-audit, an audit; and this trial deny in DoNotEnforce mode, which reports but never applies the effect.
+```bash
+az policy assignment create --name lab-ssh-trial --policy csoh-lab-ssh --resource-group csoh-policy-lab --params '{"effect": {"value": "Deny"}}' --enforcement-mode DoNotEnforce
+```
+
+== Two ports should get past all four
+section: 5. Assign everything to the lab, and test
+Assignments take about five minutes to apply. Given two ports, the CLI sends only destinationPortRanges. Expect this rule to be created. A compliance scan should call it Compliant under lab-ssh-naive, NonCompliant under lab-ssh-audit and lab-ssh-trial, with no row for lab-ssh-indexed.
+```bash
+az network nsg rule create --resource-group csoh-policy-lab --nsg-name lab-nsg-before --name allow-ssh-https --priority 110 --direction Inbound --access Allow --protocol Tcp --source-address-prefixes '*' --destination-port-ranges 22 443 --query "{name:name, destinationPortRange:destinationPortRange, destinationPortRanges:destinationPortRanges}"
+```
+
+== Enforce the trial; existing resources stay
+section: 6. Enforce the corrected rule
+Switched to Default, which applies the effect, lab-ssh-trial should deny a new rule for ports 22 and 3389 after a few minutes. allow-ssh-https is still there: a deny stops new requests and leaves existing resources as they are.
+```bash
+az policy assignment update --name lab-ssh-trial --resource-group csoh-policy-lab --enforcement-mode Default
+```
+
+== Remediate what already existed
+section: 7. Remediate the existing resource
+Step 4's inherit-owner.json, a modify policy, copies the group's owner tag onto resources lacking one. Step 5 assigns it with a managed identity holding Tag Contributor, a role for managing tags. This remediation task should tag lab-nsg-before, which existed first.
+```bash
+az policy remediation create --name lab-fix-owner --policy-assignment lab-inherit-owner --resource-group csoh-policy-lab
+```
+
+== Exercise: a colleague "fixes" the first attempt
+section: Hands-on exercises
+The colleague replaces its port condition with this one. Which would the new policy deny: allow-ssh (port 22), allow-ssh-https (22 and 443), and a rule allowing only port 80 from anywhere? Check it in the lab before step 8.
+```json
+{
+  "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
+  "equals": "22"
+}
+```
+
+== Answer: wrong in both directions
+section: Hands-on exercises
+It denies allow-ssh and the port 80 rule but allows allow-ssh-https. A field condition on a [*] alias holds only when every member satisfies it: 443 is not 22, and one-port rules have no list, so no member breaks it.
+
+== Exercise: an empty activity log
+section: Hands-on exercises
+A deny assignment for "no SSH from the internet" has been in place for a month, and a colleague cites the empty activity log, no denials at all, as evidence that nobody has tried. What do you check?
+
+== Answer: four checks before you trust the log
+section: Hands-on exercises
+Check the assignment's enforcementMode: under DoNotEnforce nothing is denied or logged. Then check the compliance results, recorded either way; the definition's mode, since in Indexed mode a rule policy has nothing to deny; and the condition, against each property form.
+
+== Common mistakes
+section: Common mistakes
+- A definition created without a mode is Indexed.
+- A [*] field condition means every member; use count.
+- Audit stops nothing; neither does a trial left in DoNotEnforce.
+- Without --resource-group or --scope, az policy assignment create assigns at the whole subscription.
