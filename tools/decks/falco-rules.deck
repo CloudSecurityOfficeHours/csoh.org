@@ -20,7 +20,7 @@ Read it in order. Paste BASH blocks into a terminal; save YAML blocks in ~/falco
 
 == Set up: Falco, falcoctl and the plugins
 section: 1. Get Falco, falcoctl and the plugins
-Images are published for Intel/AMD and Arm, so Apple silicon runs them natively. falcoctl, the Falco project's tool for rules and plugins, installs two plugins and stock CloudTrail rules. Expect Falco version: 0.45.2, then Artifact successfully installed once per artifact.
+Images exist for Intel/AMD and Arm. falcoctl, the Falco project's tool for rules and plugins, installs the cloudtrail plugin (reads CloudTrail files), the json plugin and stock CloudTrail rules. Expect Falco version: 0.45.2, then Artifact successfully installed once per artifact.
 ```bash
 mkdir -p ~/falco-lab/plugins ~/falco-lab/rules && cd ~/falco-lab
 docker run --rm --name csoh-lab-falco falcosecurity/falco:0.45.2 falco --version
@@ -33,7 +33,7 @@ docker run --rm --name csoh-lab-falcoctl -u 0 -v "$PWD":/lab \
 
 == Set up: the lab file and the falco function
 section: 3. Point Falco at the file, and look at everything first
-Step 2 saves the 24 lab events, adding the eventType field Falco needs. Step 3 saves falco-lab.yaml, pointing Falco at them, and defines this function. falco -r everything.yaml, which loads a control rule matching every event, reports Events detected: 24.
+Step 2 saves the 24 lab events, adding the eventType field Falco needs. Step 3 saves falco-lab.yaml, pointing Falco at them, defines this function and saves everything.yaml, a control rule matching every event: falco -r everything.yaml reports Events detected: 24.
 ```bash
 falco() {
   docker run --rm --name csoh-lab-falco -v "$PWD":/lab -w /lab \
@@ -110,7 +110,7 @@ falco -r everything.yaml -o json_output=true \
 
 == Stock rules: the first match wins
 section: 7. Stock rules, shadowing, and tuning by override
-Loaded after the Falco project's stock CloudTrail rules, D1's rule is silent, with no warning: by default an event fires only the first rule it matches. falcoctl replaces that file on update, so override it from tuning.yaml, loaded after it.
+Loaded after the stock CloudTrail rules, D1's rule is silent, without warning: by default an event fires only the first rule it matches. falcoctl replaces that file on update, so step 7's tuning.yaml, loaded after it, starts with this override.
 ```yaml
 # tuning.yaml: change stock rules without editing their file
 - rule: CloudTrail Logging Disabled    # d1.yaml covers this and more
@@ -154,7 +154,7 @@ Saved as d5.yaml, it alerts once: build-bot attached the policy to backup-svc at
 
 == Exercise: this rule fires three times
 section: Hands-on exercises
-This rule, saved as ex3.yaml, is meant to catch build-bot creating users or access keys, the two halves of D3. It fires three times. Which alert should not be there, and why?
+This rule, saved as ex3.yaml, is meant to catch build-bot creating users or access keys, D3's two halves. The lab also has an administrator creating a service user. It fires three times. Which alert should not be there, and why?
 ```yaml
 # ex3.yaml: build-bot creating users or keys
 - rule: New users and keys by build-bot
