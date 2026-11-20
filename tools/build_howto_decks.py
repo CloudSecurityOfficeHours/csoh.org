@@ -89,6 +89,9 @@ class Slide:
     # The guide's own label for the block the excerpt comes from; set by the
     # build path, never read from the outline.
     code_label: str | None = None
+    # The file a shell heredoc writes when the excerpt is its contents; the
+    # renderer prints it on the tab in place of the language label.
+    code_file: str | None = None
     credit: str | None = None
     where: str = ""
 
@@ -562,6 +565,36 @@ def excerpt_label(html: str, lines: list[str]) -> str | None:
     return None
 
 
+HEREDOC_RE = re.compile(r"""[>]\s*(\S+)\s*<<-?\s*['"]?(\w+)['"]?\s*$""")
+
+
+def excerpt_file(html: str, lines: list[str]) -> str | None:
+    """The file a heredoc writes when the excerpt lies inside its body, else
+    None. The nearest opener above the run (`> FILE <<'WORD'`) counts only if
+    its terminator line comes at or after the run's end; a nearer terminator
+    closes the heredoc first. The excerpt is file contents, not shell input,
+    so its tab names the file rather than the block's bash label."""
+    want = [ln.rstrip() for ln in lines]
+    n = len(want)
+    if n == 0:
+        return None
+    for block in guide_code_blocks(html):
+        start = next((i for i in range(len(block) - n + 1) if block[i : i + n] == want), None)
+        if start is None:
+            continue
+        end = start + n
+        for i in range(start - 1, -1, -1):
+            m = HEREDOC_RE.search(block[i])
+            if not m:
+                continue
+            close = next((j for j in range(i + 1, len(block)) if block[j].strip() == m.group(2)), None)
+            if close is not None and close >= end:
+                return m.group(1)
+            return None
+        return None
+    return None
+
+
 def guide_headings(html: str) -> dict[str, str | None]:
     """Visible text of every h2 and h3 mapped to its id, or None without one."""
     out: dict[str, str | None] = {}
@@ -879,6 +912,26 @@ def _case_block_labels_basic(tmp: Path) -> None:
     assert excerpt_label(html, ["not on the page"]) is None
 
 
+def _case_excerpt_file_basic(tmp: Path) -> None:
+    html = (
+        '<div class="code-block" data-lang="bash"><pre>'
+        "cat &gt; a/b.py &lt;&lt;'EOF'\nx = 1\ny = 2\nEOF\npython3 a/b.py</pre></div>"
+        '<div class="code-block" data-lang="bash"><pre>mkdir q\ncd q</pre></div>'
+    )
+    assert excerpt_file(html, ["x = 1", "y = 2"]) == "a/b.py"
+    assert excerpt_file(html, ["y = 2"]) == "a/b.py"
+    assert excerpt_file(html, ["python3 a/b.py"]) is None
+    assert excerpt_file(html, ["cat > a/b.py <<'EOF'", "x = 1"]) is None
+    assert excerpt_file(html, ["cd q"]) is None
+    assert excerpt_file(html, ["not on the page"]) is None
+
+
+def _case_excerpt_file_real(tmp: Path) -> None:
+    html = (HOWTO_DIR / "panther-python-detections.html").read_text(encoding="utf-8")
+    first = "# Each of these calls stops, removes or narrows what CloudTrail records."
+    assert excerpt_file(html, [first]) == "rules/trail_tampering.py"
+
+
 def _case_excerpt_label_real(tmp: Path) -> None:
     html = (HOWTO_DIR / "splunk-spl.html").read_text(encoding="utf-8")
     assert excerpt_label(html, ["mkdir -p ~/splunk-lab && cd ~/splunk-lab"]) == "bash"
@@ -1013,6 +1066,8 @@ CASES: list = [
     ("excerpt_one_char_changed", _case_excerpt_one_char_changed),
     ("block_labels_basic", _case_block_labels_basic),
     ("excerpt_label_real", _case_excerpt_label_real),
+    ("excerpt_file_basic", _case_excerpt_file_basic),
+    ("excerpt_file_real", _case_excerpt_file_real),
     ("section_ok", _case_section_ok),
     ("section_with_markup", _case_section_with_markup),
     ("section_missing", _case_section_missing),
@@ -1196,6 +1251,20 @@ def _case_render_code_label(tmp: Path) -> None:
     assert not [sh for sh in prs.slides[3].shapes if sh.name == "code-label"]
 
 
+def _case_render_code_file(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck(10)
+    deck.slides[1].code_label = "bash"
+    deck.slides[1].code_file = "rules/Trail_tampering.py"
+    out = r.render_deck(deck, tmp / "f.pptx", {})
+    assert r.verify_pptx(out, deck) == [], r.verify_pptx(out, deck)
+    prs = _reopen(out)
+    tabs = [sh for sh in prs.slides[2].shapes if sh.name == "code-label"]
+    assert len(tabs) == 1
+    assert tabs[0].text_frame.text == "rules/Trail_tampering.py", tabs[0].text_frame.text
+
+
 def _case_render_verify_plants(tmp: Path) -> None:
     import howto_deck_render as r
 
@@ -1225,6 +1294,7 @@ RENDER_CASES: list = [
     ("render_wrapped_code", _case_render_wrapped_code),
     ("render_fonts", _case_render_fonts),
     ("render_code_label", _case_render_code_label),
+    ("render_code_file", _case_render_code_file),
     ("render_verify_plants", _case_render_verify_plants),
 ]
 
@@ -1292,6 +1362,7 @@ def build_decks(slugs: list[str]) -> int:
         for sl in deck.slides:
             if sl.code:
                 sl.code_label = excerpt_label(html, sl.code)
+                sl.code_file = excerpt_file(html, sl.code)
         out = DECKS_DIR / "build" / f"{deck.slug}.pptx"
         try:
             render.render_deck(deck, out, guide_headings(html))

@@ -196,10 +196,10 @@ class _Page:
         return y + h
 
     def _label(self, x, y, label):
-        """The guide's language label as a tab on the box's top edge. It spans
+        """The tab text, as given, on the box's top edge. It spans
         the block gap above the box and the box's top padding, so it adds no
         height and stays clear of the first code row."""
-        text = label.upper()
+        text = label
         char_w = (0.6 * STYLE["label_pt"] + STYLE["label_spacing_pt"]) / 72
         w = len(text) * char_w + 2 * STYLE["label_pad"]
         top = y - STYLE["label_above"]
@@ -278,7 +278,8 @@ def _content(prs, deck, slide, n: int, total: int, headings) -> None:
         pg.text("body", x, y, w, h, items, STYLE["body_font"], STYLE["body_pt"], STYLE["text"], gap=STYLE["para_gap"] * 72)
         y += h + STYLE["block_gap"]
     if slide.code:
-        y = pg.code(x, y, w, slide.code, slide.code_label)
+        tab = slide.code_file or (slide.code_label.upper() if slide.code_label else None)
+        y = pg.code(x, y, w, slide.code, tab)
         if slide.credit:
             y += 0.05
             pg.text("credit", x, y, w, 0.3, [slide.credit], STYLE["body_font"], STYLE["small_pt"], STYLE["muted"])
