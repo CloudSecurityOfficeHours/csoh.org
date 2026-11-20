@@ -723,7 +723,10 @@ def build_newsarticle_schema(entry: Dict[str, str]) -> dict:
     published_dt = parse_date(entry.get("published", "")) or dt.datetime.now(dt.timezone.utc)
     iso = published_dt.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    title = strip_html(html.unescape(entry["title"])).strip()
+    # The headline restates the card's <h3>, so it goes through the same
+    # clean_title() as render_card(). An item with no summary uses the title
+    # as its description too.
+    title = clean_title(strip_html(entry["title"]))
     headline = title[:110]
     full_summary = strip_html(html.unescape(entry.get("summary", "")))
     description = full_summary[:250] if full_summary else title
