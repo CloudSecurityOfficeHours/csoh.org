@@ -4,15 +4,15 @@ promise: Write five detections against a sample CloudTrail file, test them on yo
 
 == Who it is for and what you need
 section: How to use this guide
-It is for beginners new to Panther, a security platform that collects logs and raises alerts. You need not know Python.
+It is for beginners new to Panther, a security platform that collects logs and raises alerts, who can use a terminal but need not know Python or Amazon Web Services (AWS).
 
-You need a terminal and Python 3.11 or newer, but no Panther or Amazon Web Services (AWS) account.
+You need Python 3.11 or newer but no account.
 
 == How the guide was checked
 section: How to use this guide
-A script ran every code block in order with Panther's command-line tool 1.11.2, on Python 3.12 and 3.13.
+A script ran every code block in order with Panther's command-line tool 1.11.2, Python 3.12 and 3.13, on macOS in bash and zsh.
 
-Not run, since only a running Panther system does them: counting matches against step 6's threshold, and evaluating step 7's correlation rule.
+Only Panther counts against step 6's threshold and evaluates step 7's correlation rule, so neither was run.
 
 == How to follow the guide
 section: How to use this guide
@@ -35,7 +35,7 @@ As each log event arrives, Panther runs every enabled rule written for that kind
 A rule is two files: Python code for the logic, and a plain-text YAML settings file holding its ID, severity, alert settings and tests.
 
 == One event in, True or False out
-section: One event in, True or False out
+section: Warm-up: a rule in a few lines of Python
 A rule is a function that receives one event and returns True (alert) or False (ignore). The Python sees one event at a time, so counting is set in the YAML file and a sequence is a separate correlation rule.
 ```bash
 python3 - <<'PY'
@@ -58,7 +58,7 @@ A continuous integration (CI) user, build-bot, has leaked its access key, the cr
 
 == What someone does with build-bot's key
 section: Walk-through: a leaked CI key, five detections
-From 203.0.113.50 someone is mostly refused, then creates the user backup-svc, gives it AdministratorAccess (AWS's ready-made policy that allows every action) and an access key, and as backup-svc stops CloudTrail logging.
+From the address 203.0.113.50 someone is mostly refused, creates the user backup-svc, gives it AdministratorAccess (AWS's ready-made policy that allows every action) and an access key, and as backup-svc stops CloudTrail logging.
 
 Earlier, bob signs in without multi-factor authentication (MFA).
 
@@ -69,9 +69,7 @@ section: 3. Your first rule, run over every event (D1)
 event.get() reads a field by its name, and the in operator asks whether the value is one of the alternatives in TAMPERING.
 
 fire.py, a helper this step saves, runs the rule over all 24 events: one match, backup-svc's StopLogging.
-```bash
-mkdir -p rules
-cat > rules/trail_tampering.py <<'EOF'
+```python
 # Each of these calls stops, removes or narrows what CloudTrail records.
 TAMPERING = {"StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors"}
 
@@ -81,9 +79,8 @@ def rule(event):
 
 == Give D1 its YAML file and tests
 section: 4. Add the metadata and tests, then run pat test
-The YAML file names the rule, sets its severity and carries its tests: lab events, each with the answer rule() should give. One must match and one must not. Then the pat test command runs them, and both pass.
-```bash
-cat > rules/trail_tampering.yml <<'EOF'
+The YAML file names the rule, sets its severity, says in LogTypes which data it receives, and carries tests: lab events, each with the answer rule() should give, one to match and one not. The pat test command passes both.
+```yaml
 AnalysisType: rule
 Filename: trail_tampering.py
 RuleID: Lab.CloudTrail.TrailTampering
@@ -110,7 +107,7 @@ python3 fire.py rules/console_login_no_mfa.py
 
 == D2: counting belongs in the YAML
 section: 6. Counting belongs in the YAML, not the Python (D2)
-The rule() function sees one event, so Panther counts: matches whose dedup() function returns the same string, here the source address, form a group. Treating only AccessDenied as refused, this draft finds four from the attacker: no alert.
+rule() sees one event, so Panther counts: matches whose dedup() returns the same string, here the source address, form a group. Matching only AccessDenied, this draft finds four from the attacker and three from the reports-app role: no alert.
 ```yaml
 RuleID: Lab.CloudTrail.DeniedCallBurst
 Enabled: true
@@ -123,7 +120,7 @@ DedupPeriodMinutes: 10    # counted over 10 minutes from its first match
 
 == Before you trust a quiet rule, run a control
 section: 6. Counting belongs in the YAML, not the Python (D2)
-This control drops the condition and counts each errorCode value: Elastic Compute Cloud (EC2) reports three of the attacker's refusals as Client.UnauthorizedOperation. The fix matches codes that start AccessDenied or end UnauthorizedOperation: seven from the attacker, one alert.
+This control drops the condition and counts each errorCode value: ten refusals, spelled two ways. Elastic Compute Cloud (EC2) writes three, all the attacker's, as Client.UnauthorizedOperation. The fix matches codes starting AccessDenied or ending UnauthorizedOperation: the attacker's seven, one alert.
 ```bash
 python3 - <<'PY'
 import json
@@ -134,7 +131,7 @@ PY
 
 == D3: a correlation rule, which pat test skips
 section: 7. Two events, one story: signals and a correlation rule (D3)
-Two signal rules, with CreateAlert: false, record CreateUser and CreateAccessKey matches but alert nobody. This correlation rule, YAML with no Python, pairs them by user name within 10 minutes. Locally, pat test skips its tests and still exits 0.
+Two signal rules, with CreateAlert: false, record CreateUser and CreateAccessKey matches but alert nobody. This correlation rule, YAML with no Python, pairs them by user name within 10 minutes. Locally, the pat test command skips its tests yet exits 0.
 ```yaml
     Transitions:
       - ID: key follows user
@@ -170,10 +167,10 @@ A colleague's burst rule uses step 6's corrected check and Threshold: 5, matches
 
 == Answer: the title splits the count
 section: Hands-on exercises
-With no dedup(), Panther groups matches by the title, and this title names the event, so each different call is its own group: ten matches fall into eight groups, none reaching five. A dedup() returning the source address fixes it.
+Without dedup(), Panther groups by the title, which names the call, so different calls never share a group. The ten matches make eight groups, the largest holding reports-app's three refusals: none reaches five. Make dedup() return the source address.
 
 == Common mistakes
 section: Common mistakes
 - Counting belongs in the YAML, grouped by dedup(), never inside rule().
 - EC2 writes Client.UnauthorizedOperation where most services write AccessDenied: list your data's codes first.
-- Locally, pat test skips correlation rule tests and still exits 0.
+- Locally, the pat test command skips correlation rule tests yet exits 0, so green proves nothing.
