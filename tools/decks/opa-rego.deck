@@ -1,0 +1,179 @@
+title: OPA and Rego, hands-on
+guide: howto/opa-rego.html
+promise: Open Policy Agent (OPA) checks a JSON document against rules you write. Learn what its language, Rego, does, write rules that run, use them to check a real Terraform plan before it is applied, then test the rules themselves.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginner to intermediate readers who can use a terminal and read JSON, and teaches Rego from the start.
+
+You need the opa binary. Step 5 also needs Conftest and Terraform, with your own configuration to plan.
+
+== How the guide was checked
+section: How to use this guide
+Every policy, test and command, exercise answers included, ran with OPA 1.22.2, Conftest 0.71.1 and Regal 0.43.0 on an Apple silicon Mac. The guide's step 5 plan touched no AWS account.
+
+Not run: brew install lines, which install software machine-wide.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into your terminal, in the folder that holds your files. Save a REGO block only when its slide names a file. No block shows output: the text says what to expect.
+
+== Set up your environment
+section: 1. Install OPA and confirm you are on 1.x
+On macOS, install OPA with Homebrew. On Linux, or if you get 0.x, take the static binary from github.com/open-policy-agent/opa/releases. The opa version command must report Version: 1.x; on 0.x every example fails to parse.
+```bash
+brew install opa
+
+opa version
+```
+
+== What OPA is and where you meet it
+section: What OPA is
+OPA checks a JSON document, the plain-text format most cloud tools use, against rules in its language, Rego, and returns a decision. Conftest feeds it Terraform plans, Gatekeeper feeds it Kubernetes requests and Envoy, a proxy, feeds it web requests.
+
+== The one idea: undefined is not false
+section: Undefined is not false
+Step 2 saves this as bucket.rego. A rule asks about input, the document being decided about. If its body cannot be satisfied, the rule is undefined, not false: with encryption missing, this one adds nothing, and the bucket passes.
+```rego
+package storage        # the package path becomes data.storage
+
+deny contains msg if {
+    input.encryption.enabled == false
+    msg := sprintf("bucket %v is not encrypted", [input.name])
+}
+```
+
+== Step 2: evaluate it from the command line
+section: 2. Your first policy, evaluated from the command line
+Step 2 saves bucket.json as {"name": "prod-invoices", "encryption": {"enabled": false}, "public": true}. The -d and -i flags load the policy and the input. Expect one message; set enabled to true and it prints [], an empty set: allowed.
+```bash
+opa eval --format pretty -d bucket.rego -i bucket.json 'data.storage.deny'
+```
+
+== Step 3: watch undefined bite you, then fix it
+section: 3. Watch undefined bite you
+Make bucket.json {"name": "prod-invoices", "public": true}: the command prints [], so a bucket without encryption passes. Put this rule into bucket.rego; the not keyword succeeds when its expression is false or undefined, so unencrypted and missing both give a message.
+```rego
+deny contains msg if {
+    not input.encryption.enabled == true        # true for false AND for missing
+    msg := sprintf("bucket %v is not encrypted", [input.name])
+}
+```
+
+== Step 4: iterate over a collection
+section: 4. Iterate over a collection
+Every rule named deny adds to one set. The some keyword binds bucket to each element of input.buckets, so each match adds its own message.
+```rego
+deny contains msg if {
+    some bucket in input.buckets          # iterate; `bucket` is bound per element
+    not bucket.encryption.enabled == true
+    msg := sprintf("bucket %v is not encrypted", [bucket.name])
+}
+
+# A second, independent check over the same collection.
+deny contains msg if {
+    some bucket in input.buckets
+    bucket.public == true
+    msg := sprintf("bucket %v is public", [bucket.name])
+}
+```
+
+== Step 5: a Terraform plan is just input
+section: 5. Gate a real Terraform plan with Conftest
+Terraform builds cloud resources from configuration files and can show its planned changes first. In a configuration of your own, these save the plan as JSON. Without one, save step 5's policy anyway: steps 6 and 7 need no plan.
+```bash
+terraform plan -out=tfplan.binary
+terraform show -json tfplan.binary > tfplan.json
+```
+
+== Step 5: a policy over the plan's changes
+section: 5. Gate a real Terraform plan with Conftest
+Step 5's policy/s3.rego starts like this. In the plan, resource_changes lists each change; change.after is the resource as it will exist. The rule judges aws_s3_bucket_public_access_block, an S3 bucket's settings for blocking public access. A plan with none gives no findings.
+```rego
+package main        # Conftest looks in `main` by default
+
+deny contains msg if {
+    some rc in input.resource_changes
+    rc.type == "aws_s3_bucket_public_access_block"
+```
+
+== Step 5: skip deletions, require the setting
+section: 5. Gate a real Terraform plan with Conftest
+This is the rest of policy/s3.rego. The block_public_acls setting makes S3 refuse requests that would set a public ACL (access control list). As in step 3, not ... == true also counts a missing setting.
+```rego
+    # Only judge resources that will exist afterwards. A destroy has
+    # change.after == null; reading a field off null is undefined, and
+    # `not` turns undefined into a match, so without this line deleting
+    # the resource would be reported as a violation.
+    not "delete" in rc.change.actions
+
+    not rc.change.after.block_public_acls == true
+    msg := sprintf("%v does not block public ACLs", [rc.address])
+}
+```
+
+== Step 5: Conftest turns denials into a gate
+section: 5. Gate a real Terraform plan with Conftest
+Conftest wraps OPA and reads plan JSON. Exit code 0 means no denials and 1 means at least one: your CI gate. A policy that fails to load also exits 1, so read the output. Expect your own resource names.
+```bash
+brew install conftest
+conftest test --policy policy/ tfplan.json
+
+echo $?
+```
+
+== Step 6: test the policy in both directions
+section: 6. Unit-test the policy itself
+Step 6's policy/s3_test.rego, in package main, ends with this test; the first expects one denial. A test_* rule is a test, passing if true; the with input as clause swaps in a fake document. Run opa test policy/ -v.
+```rego
+# The direction people forget. Without this, a policy that denies
+# EVERYTHING passes the test above and looks perfectly healthy.
+test_allows_compliant_bucket if {
+    count(deny) == 0 with input as {
+        "resource_changes": [{
+            "address": "aws_s3_bucket_public_access_block.good",
+            "type": "aws_s3_bucket_public_access_block",
+            "change": {"actions": ["create"], "after": {"block_public_acls": true}},
+        }]
+    }
+}
+```
+
+== Step 7: format, check and lint
+section: 7. Format, check, and lint
+The opa fmt -w command rewrites files in place; opa check --strict rejects what parses but almost always means a bug. Regal, a Rego linter, catches idiom problems that opa check misses: brew install regal, then regal lint policy/.
+```bash
+opa fmt -w policy/
+opa check --strict policy/
+```
+
+== Exercise: require IMDSv2 on every instance
+section: Hands-on exercises
+Write a rule denying any EC2 instance in a plan whose metadata_options block does not set http_tokens to "required", which forces IMDSv2. A missing block matters most. It needs a plan; the guide hides each answer behind Show the answer.
+
+== Answer: not ... == "required", and [0]
+section: Hands-on exercises
+Testing == "optional" catches only the bad value and misses an absent block, the more common case. In plan JSON a nested block such as metadata_options is a list: without [0], the not keyword flags compliant instances too.
+```rego
+deny contains msg if {
+    some rc in input.resource_changes
+    rc.type == "aws_instance"
+    not "delete" in rc.change.actions
+    not rc.change.after.metadata_options[0].http_tokens == "required"
+    msg := sprintf("%v does not require IMDSv2", [rc.address])
+}
+```
+
+== Exercise: break the rule on purpose
+section: Hands-on exercises
+This exercise breaks step 5's rule so it denies everything, deleting its conditions and leaving only the some rc line and the message, then reruns step 6's tests. Which fail, and what does that tell you about those tests?
+
+== Answer: only the compliant test fails
+section: Hands-on exercises
+Only test_allows_compliant_bucket fails: a rule that denies everything still denies the bad input, so the deny-direction test passes. Every policy needs a test that a compliant input produces no findings, the test people skip.
+
+== Common mistakes
+section: Common mistakes
+- Rego with no if keyword is pre-1.0 and fails to parse on 1.x.
+- Conftest skips policies outside package main, and evaluating none exits 0.
+- A misspelled field passes opa check --strict and Regal; only a realistic test catches it.
