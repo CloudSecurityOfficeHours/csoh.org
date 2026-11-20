@@ -175,9 +175,61 @@ def normalize_dashes(text: str) -> str:
     return text.replace("\u2014", "-").replace("\u2013", "-")
 
 
+# A feed sometimes writes each byte of a multibyte character as an ampersand
+# plus a hex byte, then escapes that again. A curly apostrophe (UTF-8
+# e2 80 99) arrives as &#;x26;#;xe2;&#;x26;#;x80;&#;x26;#;x99; or, in the raw
+# feed, as &#x23&#x3b;x26&#x3b;... One unescape of the raw form reaches the
+# byte form. The content:encoded element on the same item is the clean copy;
+# this repairs a description that is all we still have.
+_BROKEN_HEX_BYTE = re.compile(r"&#;x26;#;x([0-9a-fA-F]{2});")
+_BROKEN_DEC_CHAR = re.compile(r"&#;x26;#;(\d+);")
+_URL_IN_TEXT = re.compile(r"https?://\S+")
+
+
+def repair_broken_utf8_entities(text: str) -> str:
+    if not text or ("&#;x26;#" not in text and "&#x23&#x3b;" not in text):
+        return text
+    original = text
+    if "&#x23&#x3b;" in text:
+        text = html.unescape(text)
+    if "&#;x26;#" not in text:
+        return text
+
+    def hex_byte(match: re.Match[str]) -> str:
+        return bytes([int(match.group(1), 16)]).decode("latin1")
+
+    def dec_char(match: re.Match[str]) -> str:
+        value = int(match.group(1))
+        if value >= 0x110000:
+            return match.group(0)
+        return chr(value)
+
+    text = _BROKEN_HEX_BYTE.sub(hex_byte, text)
+    text = _BROKEN_DEC_CHAR.sub(dec_char, text)
+    try:
+        return text.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return original
+
+
+def clean_title(text: str) -> str:
+    """Title text for a card and for the feed.
+
+    Unescape entities (a feed title of ``&#x5b;Guest Diary&#x5d;`` must not be
+    escaped a second time) and drop a URL pasted into the title. The episode
+    link stays on the card; the headline should be the words.
+    """
+    text = normalize_dashes(html.unescape(text or ""))
+    text = _URL_IN_TEXT.sub("", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\s+([,.;:)])", r"\1", text)
+    return text.strip()
+
+
 def strip_html(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = html.unescape(text)
+    text = repair_broken_utf8_entities(text)
     text = normalize_dashes(text)
     text = re.sub(r"\s+", " ", text).strip()
     # Remove HTML5-forbidden code points (C0 except TAB/LF/CR, DEL, C1 except U+0085)
@@ -358,6 +410,11 @@ def parse_rss(xml_text: str, source_name: str) -> List[Dict[str, str]]:
             item.findtext("pubDate") or item.findtext("date") or "", source_name
         )
         summary = item.findtext("description") or item.findtext("summary") or ""
+        # description is the short copy. When that copy is the broken byte
+        # chain above, content:encoded on the same item is the paragraph.
+        encoded = item.findtext("{http://purl.org/rss/1.0/modules/content/}encoded") or ""
+        if encoded and ("&#x23&#x3b;" in summary or "&#;x26;#" in summary):
+            summary = encoded
         items.append({
             "title": title,
             "link": link,
@@ -478,7 +535,7 @@ def build_feed_xml(entries: List[Dict[str, str]], newest_iso: str) -> str:
     ET.SubElement(image, "link").text = "https://csoh.org/news.html"
 
     for entry in entries:
-        title = normalize_dashes(entry.get("title", "")).strip()
+        title = clean_title(entry.get("title", ""))
         link = entry.get("link", "").strip()
         if not title or not link:
             continue
@@ -579,7 +636,7 @@ SOURCE_SLUGS = {
 
 
 def render_card(entry: Dict[str, str], indent: str) -> str:
-    title = html.escape(normalize_dashes(html.unescape(entry["title"])))
+    title = html.escape(clean_title(entry["title"]))
     link = html.escape(html.unescape(entry["link"]))
     full_summary = strip_html(html.unescape(entry.get("summary", "")))
     summary = full_summary

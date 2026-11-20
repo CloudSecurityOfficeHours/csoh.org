@@ -1166,9 +1166,9 @@ The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five
   That failure is silent: nothing errors, the push looks fine, and the change
   waits for the next unrelated commit.
 - `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`, `countdown.css`
-- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `search-init.js`, `countdown.js`
-- `vendor/**`, `chat-screenshots/**`, `img/**`
-- `update_sri.py`
+- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `resources-hub.js`, `search-init.js`, `countdown.js`
+- `resources-index.json`, `vendor/**`, `fonts/**`, `chat-screenshots/**`, `img/**`
+- `update_sri.py`, `csoh.ics`, `tools/sync_next_session.py`
 - Manual trigger via the GitHub Actions tab
 
 Re-derive the published set with `./tools/stage_site.sh /tmp/dist && find /tmp/dist -maxdepth 1`

@@ -67,9 +67,10 @@ You never have to manually update fingerprints or worry about visitors seeing st
 This Python script does all the work. Note that `style.css` includes a large dark mode section (~500 lines of overrides), so any changes to dark mode styling will trigger SRI hash recalculation. When run, the script:
 
 1. Reads each asset in the `ASSETS` list at the top of the script:
-   - `style.css`, `main.js`
+   - `style.css`, `main.js`, `theme.js`
    - `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
-   - `meetings.js`, `glossary.js`, `404.js`
+   - `meetings.js`, `glossary.js`, `404.js`, `resources-hub.js`
+   - `noscript.css` (rules that apply only when JavaScript is off)
    - `countdown.css`, `countdown.js` (the stand-alone `/countdown.html`)
    - `search.css`, `search-init.js` (the `/search.html` UI + MiniSearch initializer)
    - `vendor/goatcounter-count.js` (the vendored analytics counter)
