@@ -101,7 +101,7 @@
           "@type": "HowToStep",
           "position": 4,
           "name": "Run an OVAL-only evaluation",
-          "text": "Evaluate the feed against the running system with oscap oval eval and read the platform-guard results."
+          "text": "Evaluate the feed against the running system with oscap oval eval, then read the criteria to see why every definition comes back true on a system that is not Red Hat Enterprise Linux."
         },
         {
           "@type": "HowToStep",
@@ -430,7 +430,7 @@
             <p>Read it as a sentence and the indirection stops being noise: <em>a definition is true when its criteria are satisfied; a criterion is satisfied when its test passes; a test passes when the items collected for its object match its state.</em></p>
 
             <h3>One definition, shaped like a real vendor advisory</h3>
-            <p>Element names and structure below match what Red Hat publishes; the ids and versions are illustrative.</p>
+            <p>Element names below match what Red Hat publishes. The ids and versions are illustrative, and the criteria tree is simplified: Red Hat's own definitions open with one more branch, which step 4 shows.</p>
 <div class="code-block" data-lang="xml"><pre>&lt;definition class="patch" id="oval:com.redhat.rhsa:def:20231234" version="1"&gt;
   &lt;metadata&gt;
     &lt;title&gt;RHSA-2023:1234: openssl security update (Important)&lt;/title&gt;
@@ -512,13 +512,17 @@ xmllint --xpath \
 xmllint --xpath "//*[@id='oval:com.redhat.rhsa:tst:20231234002']" rhel-9.oval.xml</pre></div>
 
             <h3>4. Run an OVAL-only evaluation</h3>
-            <p>This evaluates the feed against the running system and tells you which definitions are true, meaning which advisories apply to you.</p>
+            <p>This evaluates every definition in the feed against the running system and writes one result line per definition to <code>oval-eval.txt</code>. On a RHEL 9 system, a true definition is an advisory that applies to you. This container is Fedora, and what it reports shows why a vendor feed has to be run on the platform it was written for.</p>
 <div class="code-block" data-lang="bash"><pre>oscap oval eval --results oval-results.xml --report oval-report.html \
-  rhel-9.oval.xml
+  rhel-9.oval.xml &gt; oval-eval.txt
 
-# The container is Fedora, not RHEL 9, so expect nearly everything to come
-# back "false" via the platform test. That is a correct result and a useful
-# control: it proves the platform guard in the criteria tree is doing its job.</pre></div>
+# Count the definitions that came back true, and compare with the number
+# of definitions step 2 counted in the feed.
+grep -c ': true' oval-eval.txt
+
+# Which package owns the file that Red Hat's platform check reads?
+rpm -qf /etc/redhat-release</pre></div>
+            <p>The two counts match: every definition is true, and that tells you nothing about this container's packages. The last command prints <code>fedora-release-common</code> and its version. Open any definition from step 3 and look at the top of its criteria tree. It starts with an OR, and the OR's first criterion, "Red Hat Enterprise Linux must be installed", points at a test with <code>check="none satisfy"</code>. That test collects the package that owns <code>/etc/redhat-release</code> and passes when that package is not named <code>redhat-release</code>. Here it belongs to <code>fedora-release-common</code>, so the first branch of the OR is true, and the definition is true before a single package version is compared. On RHEL 9 the same test fails, and the OR's second branch decides the result: an AND that starts with "Red Hat Enterprise Linux 9 is installed" and then checks the packages. Read a vendor feed's results only on the platform it was written for, and read the criteria before you trust a count.</p>
 
             <h3 id="step-xccdf">5. Run a real compliance scan through XCCDF</h3>
             <p>Now the other half of SCAP. The <code>scap-security-guide</code> package installs data streams under <code>/usr/share/xml/scap/ssg/content/</code>.</p>
@@ -581,7 +585,7 @@ grep -c ': true' image-scan.txt</pre></div>
                 <details>
                     <summary>Show the answer</summary>
                     <p>Your sentence should come out roughly as: <em>"On a system where the RHEL 9 platform test passes, at least one installed RPM named <code>X</code> has an evr less than <code>Y</code>."</em></p>
-                    <p>Two structural things are worth having noticed on the way down. The platform test is nearly always ANDed at the top of the criteria tree, which is why a definition can be present in a feed and simply not apply. And the same object is frequently referenced by several tests with different states, which is how one definition covers a package that was fixed at different versions on different minor releases.</p>
+                    <p>Two structural things are worth having noticed on the way down. Red Hat's platform check sits at the top of the criteria tree in two parts: an OR whose first branch is true on any system where <code>/etc/redhat-release</code> is not owned by <code>redhat-release</code> (step 4), and under it an AND that starts with "Red Hat Enterprise Linux 9 is installed". That AND is why a definition can be present in a feed and simply not apply on a RHEL 8 system. And the same object is frequently referenced by several tests with different states, which is how one definition covers a package that was fixed at different versions on different minor releases.</p>
                 </details>
             </div>
 

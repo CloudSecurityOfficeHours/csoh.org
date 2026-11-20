@@ -89,16 +89,19 @@ xmllint --xpath \
 # almost always means the namespace, not an absent element.
 ```
 
-== Step 4: evaluate the whole feed
+== Step 4: every definition comes back true
 section: 4. Run an OVAL-only evaluation
-This evaluates the feed against the running system; true definitions are advisories that apply to you. A definition's criteria nearly always join a RHEL 9 platform test to the rest with AND, so on Fedora nearly all are false.
+On Fedora every definition is true. Each opens with an OR whose first test, "Red Hat Enterprise Linux must be installed", passes when the package owning /etc/redhat-release is not redhat-release. Read a vendor feed's results only on its platform.
 ```bash
 oscap oval eval --results oval-results.xml --report oval-report.html \
-  rhel-9.oval.xml
+  rhel-9.oval.xml > oval-eval.txt
 
-# The container is Fedora, not RHEL 9, so expect nearly everything to come
-# back "false" via the platform test. That is a correct result and a useful
-# control: it proves the platform guard in the criteria tree is doing its job.
+# Count the definitions that came back true, and compare with the number
+# of definitions step 2 counted in the feed.
+grep -c ': true' oval-eval.txt
+
+# Which package owns the file that Red Hat's platform check reads?
+rpm -qf /etc/redhat-release
 ```
 
 == Step 5: a compliance scan, and its exit codes
