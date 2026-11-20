@@ -4,25 +4,25 @@ promise: Learn Datadog searches and rules from zero on 24 CloudTrail events, wit
 
 == Who it is for and what you need
 section: How to use this guide
-It is for beginners new to Datadog, a hosted monitoring platform, and to writing detection rules for its Cloud SIEM (security information and event management). Allow two hours.
+It is for beginners new to Datadog, a hosted monitoring platform, and to detection rules in its security product, Cloud SIEM (security information and event management).
 
-You need a terminal with curl and jq, and a Datadog organisation.
+You need two hours, a terminal with curl and jq, and a Datadog organisation.
 
 == How the guide was checked
 section: How to use this guide
-No Datadog account was used, so no search or rule ran in Datadog. Every operator and setting was checked against Datadog's documentation as of 27 September 2026, and the results it quotes were worked out by a local script.
+No Datadog account was used, so no search or rule ran in Datadog. Every operator and setting was checked against Datadog's documentation as of 27 September 2026, and each quoted result was worked out by a local script.
 
 == How to follow the guide
 section: How to use this guide
-Read it in order. DATADOG blocks are searches for the search bar of Log Explorer, Datadog's page for searching logs; BASH blocks go into a terminal. HCL blocks are optional Terraform rules; Terraform creates resources from text files.
+Read it in order. Run DATADOG blocks in Log Explorer, Datadog's page for searching logs, and BASH blocks in a terminal. HCL blocks are optional Terraform rules (the rule editor builds them by hand); Terraform creates resources from text files.
 
 == Set up: an organisation you can test in
 section: 1. Get an organisation you can test in
-Use a trial or non-production organisation; Datadog offers a 14-day free trial. Create an API (application programming interface) key, the secret that lets your upload command send logs, in organisation settings. Make sure Cloud SIEM analyses logs with source:cloudtrail.
+Use a trial or non-production organisation, never one whose signals reach an on-call rota; Datadog offers a 14-day free trial. Create an API (application programming interface) key, your upload command's secret, in organisation settings. Cloud SIEM must analyse source:cloudtrail.
 
 == Set up: load the lab data
 section: 2. Load the lab data
-Step 2 writes the 24 lab events and moves them so the last is five minutes old. Set DD_SITE to your site, such as datadoghq.com, and read your API key into DD_API_KEY; this sends them. Expect 202.
+Step 2's first block writes the lab file and upload.json, moved so its last event is five minutes old. The next sets DD_SITE to your site, such as datadoghq.com, and reads your API key. This sends them. Expect 202.
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST "https://http-intake.logs.$DD_SITE/api/v2/logs" \
   -H 'Content-Type: application/json' -H "DD-API-KEY: $DD_API_KEY" --data-binary @upload.json
@@ -55,21 +55,21 @@ source:cloudtrail env:lab
 
 == D1: search the names Datadog gives the fields
 section: 4. Filter on one attribute: trail tampering (D1)
-Datadog's own rules search these names, and @network.client.ip for sourceIPAddress. Attributes, Datadog's word for fields, take an @; source and tags such as env:lab are bare. Parentheses list alternatives, with OR in capitals. Expect one log: StopLogging by backup-svc.
+Datadog's rules search these names, and @network.client.ip for sourceIPAddress. Attributes, Datadog's word for fields, take an @, but reserved source and tags such as env:lab are bare. Parentheses list alternatives, with OR in capitals. Expect one log: StopLogging by backup-svc.
 ```datadog
 source:cloudtrail @evt.name:(StopLogging OR DeleteTrail OR UpdateTrail OR PutEventSelectors)
 ```
 
 == Before you trust a quiet rule, run a control
 section: 6. Counting lives in the rule: the burst that never fires (D2)
-Grouped by @network.client.ip, @error.kind:AccessDenied counts 4 for 203.0.113.50 and 3 for 192.0.2.20, so a rule needing 5 never fires. This control, which must find something, grouped by @error.kind, shows EC2 (Elastic Compute Cloud) wrote three of 203.0.113.50's refusals as Client.UnauthorizedOperation.
+A Top List of @error.kind:AccessDenied by @network.client.ip shows 203.0.113.50 with 4 and 192.0.2.20 with 3: neither reaches D2's 5. This control must find something. Grouped by @error.kind, it shows EC2 (Elastic Compute Cloud) wrote three of 203.0.113.50's refusals as Client.UnauthorizedOperation.
 ```datadog
 source:cloudtrail @error.kind:*
 ```
 
 == D2: the rule groups, counts and times
 section: 6. Counting lives in the rule: the burst that never fires (D2)
-Step 9 saves it in main.tf. The group by counts each address apart; the case, a >= 5, is the condition on query a's count; the evaluation window makes each count look back 600 seconds. Expect one signal, for 203.0.113.50.
+Step 9 saves this rule, partly shown, in main.tf. The group by counts each address apart; the case, a >= 5, is the condition on query a's count; the evaluation window looks back 600 seconds. Expect one signal, for 203.0.113.50.
 ```hcl
     query           = "source:cloudtrail @error.kind:(AccessDenied OR AccessDeniedException OR Client.UnauthorizedOperation OR UnauthorizedOperation)"
     group_by_fields = ["@network.client.ip"]
@@ -84,7 +84,7 @@ Step 9 saves it in main.tf. The group by counts each address apart; the case, a 
 
 == D3: in a sequence, the window is the detection
 section: 8. One user, two events, in order (D3)
-Step 9 saves it in main.tf. A Sequence rule's steps come in order: CreateUser, then CreateAccessKey for that new user within the transition's 600 seconds. Expect backup-svc only; at 10800, svc-reporting, keyed 2 hours 37 minutes after creation, appears too.
+Step 9 saves this rule, partly shown, in main.tf. A Sequence rule's steps come in order: CreateUser, then CreateAccessKey for that user within the transition's 600 seconds. Expect backup-svc; at 10800, svc-reporting, keyed 2 hours 37 minutes later, appears too.
 ```hcl
       steps {
         name              = "key_created"
@@ -100,7 +100,7 @@ Step 9 saves it in main.tf. A Sequence rule's steps come in order: CreateUser, t
 
 == Test each rule both ways
 section: 10. Test each rule both ways
-Paste processed logs into the rule editor's Unit Test for D1: StopLogging should match and ListBuckets should not. For D2 and D3, choose Run as Historical Job over the past 4 hours: expect 203.0.113.50 and backup-svc, not 192.0.2.20 or svc-reporting.
+D1's rule adds a case of a > 0. In the rule editor's Unit Test, processed StopLogging should match and ListBuckets should not. Run D2 and D3 as Historical Jobs over the past 4 hours: expect only 203.0.113.50 and backup-svc.
 
 == Exercise: write the search for D5
 section: Hands-on exercises
@@ -122,7 +122,7 @@ source:cloudtrail @evt.name:ConsoleLogin @additionalEventData.MFAUsed:no
 
 == Answer: values are case sensitive
 section: Hands-on exercises
-CloudTrail writes No, not no. To prove it, drop the term that decides and group what is left by @additionalEventData.MFAUsed: expect No 2 and Yes 1. Seeing the real values answers "what exactly is it called?"
+CloudTrail writes No, not no. To prove it, drop the term that decides and group the rest by @additionalEventData.MFAUsed: expect No 2 and Yes 1. Real values move the question from "is there data?" to "what exactly is it called?"
 ```datadog
 source:cloudtrail @evt.name:ConsoleLogin
 ```
@@ -131,4 +131,4 @@ source:cloudtrail @evt.name:ConsoleLogin
 section: Common mistakes
 - Read a processed log before trusting field names from AWS's documentation.
 - List the error codes that exist before choosing which to count.
-- Datadog rejects logs dated over 18 hours back, and a 202 only means accepted for processing.
+- Datadog rejects logs over 18 hours old, and a 202 only means the request was accepted for processing.
