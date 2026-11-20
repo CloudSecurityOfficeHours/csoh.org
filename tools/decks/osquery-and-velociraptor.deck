@@ -12,15 +12,15 @@ You need Docker and a terminal, but no account and no cloud.
 section: How to use this guide
 A script ran every code block in order on an Apple silicon Mac, with osquery 5.24.1 and Velociraptor 0.77.3 installed in Ubuntu 24.04 containers.
 
-Not run: anything on a real cloud instance. The systemd_units table was seen only failing.
+Not run: anything on a real cloud instance. osquery's systemd_units table was seen only failing.
 
 == How to follow the guide
 section: How to use this guide
-Read it in order. Paste BASH blocks starting with docker into a terminal on your machine, other BASH blocks into a container's shell. Type SQL into osqueryi, osquery's shell, and VQL into step 8's vql helper. Unlabelled blocks show output.
+Read it in order. Paste BASH blocks starting with docker into your machine's terminal, others into a container's shell. There, run osqueryi, osquery's shell, for SQL; .exit leaves it. VQL goes into step 8's vql helper. Unlabelled blocks show output.
 
 == Set up: start the stand-in VM
 section: 1. Start the stand-in VM and install osquery
-In a terminal on your machine, these Docker commands start an Ubuntu 24.04 container standing in for the suspect VM, then open its shell, which runs as root. Afterwards, step 11's last block removes the containers, volume and copied files.
+In your machine's terminal, these create a volume (storage Docker can attach to more than one container), start an Ubuntu 24.04 container standing in for the suspect VM and open its root shell. Step 11's last block removes them all.
 ```bash
 docker volume create csoh-osq-dsock
 docker run -d --name csoh-osq-vm --hostname web-01 -v csoh-osq-dsock:/run/dind ubuntu:24.04 sleep infinity
@@ -29,7 +29,7 @@ docker exec -it csoh-osq-vm bash
 
 == Set up: osquery, then plant the compromise
 section: 1. Start the stand-in VM and install osquery
-Inside the VM, these install osquery from its GitHub release; compare the hash with the digest GitHub lists beside the file. Expect osqueryi version 5.24.1. Then paste step 2's block, the attacker's work, which makes no network connection.
+Inside the VM, these install osquery from its GitHub release; compare the hash with the release page's digest. Expect osqueryi version 5.24.1. Then paste step 2's block, the attacker's work, in the VM too; it makes no network connection.
 ```bash
 apt-get update -qq && apt-get install -y -qq curl ca-certificates > /dev/null
 ARCH=$(dpkg --print-architecture)
@@ -47,7 +47,7 @@ Velociraptor, built for incident response, is one binary: copy it across and col
 
 == A table reports only what it could see
 section: A table reports only what it could see
-A table is a function that runs when you query it. Unable to see something, it returns fewer rows or none, without error. Every query you rely on needs a control: something you know is there, found the same way.
+A table is a function that runs when you query it. Unable to see something, it returns fewer rows or none, without failing. Every query you rely on needs a control: something you know is there, found the same way.
 
 == Step 3: tie each listening port to its process
 section: 3. What is running, and what is listening
@@ -59,7 +59,7 @@ FROM listening_ports l JOIN processes p USING (pid);
 
 == Step 4: a per-user table reads only one account
 section: 4. Who can log in, and who is asking
-Queried alone, osquery's authorized_keys table of SSH (Secure Shell) keys lists only root's, with a warning: given no uid, this per-user table reads only the querying account's home directory. Joined to users, it finds svc-backup's, a new account in sudo.
+Queried alone, osquery's authorized_keys table of SSH (Secure Shell) keys lists only root's, with a warning: given no uid, this per-user table reads only the querying account's home. Joined to the users table, it finds svc-backup's, a new sudo account.
 ```sql
 SELECT u.username, k.key_file, k.comment
 FROM users u JOIN authorized_keys k USING (uid);
@@ -88,7 +88,7 @@ SELECT Pid, Name, Exe, CommandLine FROM pslist() WHERE Exe =~ "deleted"
 
 == Step 9: a wrong accessor or argument is silent
 section: 9. LET, foreach and accessors
-Velociraptor plugins that open files take an accessor argument, saying how to read the path. With ntfs, which this Linux build lacks, or globs misspelt as glob, the query prints nothing and exits with status 0. Only -v says why.
+Velociraptor plugins that open files take an accessor argument, saying how to read paths. With ntfs, an accessor this Linux build lacks, or the globs argument misspelt, the query prints nothing and exits with status 0. Only -v says why.
 ```bash
 velociraptor -v query 'SELECT OSPath FROM glob(globs="/etc/systemd/system/*.service", accessor="ntfs")' 2>&1 | grep 'glob:'
 velociraptor -v query 'SELECT OSPath FROM glob(glob="/etc/systemd/system/*.service")' 2>&1 | grep 'glob:'
@@ -96,7 +96,7 @@ velociraptor -v query 'SELECT OSPath FROM glob(glob="/etc/systemd/system/*.servi
 
 == Step 10: an artifact's defaults leave root out
 section: 10. Artifacts: queries with documentation and defaults
-A Velociraptor artifact packages VQL queries with a description and parameters with defaults. By default, Linux.Ssh.AuthorizedKeys looks only under /home, missing root's key: step 4's blind spot reversed. This run widens its sshKeyFilesGlob to root's home with a brace list.
+A Velociraptor artifact packages VQL queries with a description and parameters with defaults. By default, Linux.Ssh.AuthorizedKeys looks only under /home, missing root's key: step 4's blind spot reversed. This widens its sshKeyFilesGlob parameter to root's home with a brace list.
 ```vql
 SELECT OSPath, count() AS Keys
 FROM Artifact.Linux.Ssh.AuthorizedKeys(sshKeyFilesGlob="{/root,/home/*}/.ssh/authorized_keys*")
@@ -105,7 +105,7 @@ GROUP BY OSPath
 
 == Step 11: read the evidence through its accessor
 section: 11. Collect the evidence and hand it on
-An offline collector is Velociraptor with artifacts built in; run on the VM, it writes one zip. Step 11 records the zip's hash and copies it to a workstation container, where a query without an accessor reads the workstation itself.
+An offline collector, Velociraptor with built-in artifacts, writes one zip on the VM. Step 11 records its hash and copies it to a workstation container. This query reads it through the collector accessor; with no accessor, it reads the workstation.
 ```vql
 SELECT OSPath.Path AS Path, Size
 FROM glob(globs="/uploads/auto/**", root=pathspec(DelegatePath="/root/Collection-web-01.zip"), accessor="collector")
