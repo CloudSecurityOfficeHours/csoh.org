@@ -10,9 +10,9 @@ You need the kyverno command-line interface (CLI), but no cluster.
 
 == How the guide was checked
 section: How to use this guide
-Every command, policy and test ran as printed with Kyverno CLI 1.19.2.
+Every command, policy and test ran as printed with CLI 1.19.2, in zsh on an Apple silicon Mac.
 
-No cluster was used, so cluster behavior comes from Kyverno's documentation, Helm chart and source code. Not run: step 11's workflow on GitHub, and the final 1.20.0 release.
+Cluster behavior, never observed, comes from Kyverno's documentation, Helm chart and source code. Not run: step 11's workflow on GitHub, and 1.20.0.
 
 == How to follow the guide
 section: How to use this guide
@@ -20,7 +20,9 @@ Read it in order. Most steps judge step 2's sample files against a policy with t
 
 == Set up your environment
 section: 1. Install the CLI and make a lab
-On macOS or Linux, these lines install the CLI with Homebrew and make ~/kyverno-lab. Expect Version: 1.19.2 or later in 1.19; 1.20's release candidate agrees on steps 2 to 11 but refuses step 12's legacy policy. Get 1.19.2 from github.com/kyverno/kyverno/releases.
+These lines install the CLI with Homebrew and make ~/kyverno-lab; kyverno version should print 1.19.2 or later in 1.19. If not, get 1.19.2 from github.com/kyverno/kyverno/releases.
+
+1.20's release candidate agrees up to step 11, printed slightly differently, but refuses step 12.
 ```bash
 brew install kyverno
 kyverno version
@@ -33,14 +35,14 @@ Kyverno checks requests to a Kubernetes cluster against policies you kubectl app
 
 == The one idea: the check comes last in a chain
 section: A policy judges only the requests it is sent
-A clean CLI run says nothing about whether the policy will see anything. In a cluster, it runs only if:
-- there is a request at all;
+A clean CLI run says nothing about whether the policy will see anything. In a cluster, the policy runs only if:
+- there is a request;
 - the API server, receiving every request, sends it to Kyverno;
 - Kyverno answers in time.
 
 == The lab: no container may run as root
 section: 2. The lab: five Pods and a Deployment
-Kubernetes enforces the rule when a container's securityContext.runAsNonRoot is true; one that does not set it inherits the Pod's. This is inherits, one of five Pods in step 2's pods.yaml. It and web comply; root, unset and init do not.
+Kubernetes enforces the rule when a container's securityContext.runAsNonRoot is true; one that does not set it inherits the Pod's. This is Pod inherits, one of five in step 2's pods.yaml. It and web comply; root, unset and init do not.
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -54,7 +56,7 @@ spec:
 
 == Step 3: a ValidatingPolicy checks requests
 section: 3. Your first ValidatingPolicy
-This ends policies/run-as-non-root.yaml, step 3's ValidatingPolicy. matchConstraints picks requests; each validations expression must be true. orValue(false) supplies false when the field is missing.
+This ends step 3's ValidatingPolicy, policies/run-as-non-root.yaml. matchConstraints picks requests; each expression in validations must be true. orValue(false) supplies false when the field is missing.
 ```yaml
   matchConstraints:
     resourceRules:
@@ -71,7 +73,7 @@ This ends policies/run-as-non-root.yaml, step 3's ValidatingPolicy. matchConstra
 
 == Step 4: the container's value, else the Pod's
 section: 4. The field that is not there
-Step 3 wrongly failed inherits and passed init, whose init container runs first and may run as root. Step 4 replaces policies/run-as-non-root.yaml to check every kind of container; this part uses each one's value, else the Pod's, else fails.
+Step 3 wrongly failed Pod inherits and passed Pod init, whose init container runs first and may run as root. Step 4's replacement policies/run-as-non-root.yaml checks every kind of container; this part uses each one's value, else the Pod's, else fails.
 ```yaml
     - name: podDefault
       expression: object.spec.?securityContext.?runAsNonRoot.orValue(false)
@@ -154,7 +156,7 @@ Step 12's legacy.yaml is a kyverno.io/v1 ClusterPolicy; 1.19 is the last release
 
 == Exercise: a replica cap that never fails
 section: Hands-on exercises
-Exercise 1's replicas.yaml, ending here, is meant to cap Deployments at 10 replicas. Run it against deploy.yaml and a copy named big with 50 replicas. Why does nothing fail? The guide hides each answer until you open Show the answer.
+Exercise 1's replicas.yaml, ending here, is meant to cap Deployments at 10 replicas. Copy it from the guide; run it against deploy.yaml and a 50-replica copy named big. Why does nothing fail? The guide hides answers under Show the answer.
 ```yaml
   matchConstraints:
     resourceRules:
@@ -169,7 +171,7 @@ Exercise 1's replicas.yaml, ending here, is meant to cap Deployments at 10 repli
 
 == Answer: wrong group, wrong resource name
 section: Hands-on exercises
-Deployments live in the apps API group, not the core group "", and the resource name is deployments. Either mistake alone makes the policy match nothing. This part of replicas-fixed.yaml also reads replicas optionally: a manifest may leave it out.
+Deployments live in the apps API group, not the core group "", and the resource name is deployments. Either mistake alone makes the policy match nothing. This ends the guide's replicas-fixed.yaml; it reads replicas optionally, as manifests may omit it.
 ```yaml
     resourceRules:
       - apiGroups: [apps]
