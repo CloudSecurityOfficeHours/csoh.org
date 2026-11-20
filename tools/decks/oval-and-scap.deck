@@ -10,7 +10,7 @@ You need Docker.
 
 == How to follow the guide
 section: How to use this guide
-Read the sections before the walk-through in order. Paste BASH blocks into step 1's container; the first blocks of steps 1 and 8 run on your own computer. XML blocks are OVAL to read. Comments say what to look for.
+Read the sections before the walk-through in order. BASH blocks with docker commands run in your own terminal; paste the rest into the Fedora container. XML blocks are OVAL to read. Comments say what to look for.
 
 == Set up: start a Fedora container
 section: 1. Get a scanner
@@ -54,7 +54,7 @@ An object says what to look at and a state says what would be true. A test, like
 
 == Backports: the fix is in the release field
 section: One definition, shaped like a real vendor advisory
-Vendors routinely backport, patching an older version instead of shipping the original project's newer one. This state's evr (epoch, version, release) puts the fix in the release field, -6.el9_1; 3.0.7 never moved. A scanner comparing versions alone is wrong.
+Vendors routinely backport, patching an older version instead of shipping the original project's newer one. This state's evr (epoch, version, release) puts the fix in the release field, -6.el9_1; 3.0.7 never moved. Scanners matching against that newer version are wrong.
 ```xml
 <rpminfo_state id="oval:com.redhat.rhsa:ste:20231234002" version="1">
   <evr datatype="evr_string" operation="less than">1:3.0.7-6.el9_1</evr>
@@ -77,7 +77,7 @@ grep -c '<definition ' rhel-9.oval.xml
 
 == Step 3: follow a definition with xmllint
 section: 3. Read one definition end to end
-The xmllint --xpath command prints what an XPath expression, a path through a document's elements, selects. This prints the ids of definitions citing CVE-2023-0286. Step 3's second command then looks up each id you find: test, then object and state.
+The xmllint --xpath command prints what an XPath expression, a path through a document's elements, selects. This prints the ids of definitions citing CVE-2023-0286. Step 3's second command looks up each id you find: definition, test, object, state.
 ```bash
 # Find a definition that references a CVE you care about.
 xmllint --xpath \
@@ -127,7 +127,7 @@ xmllint --xpath \
 
 == Step 8: export an old image on your computer
 section: 8. Scan a container image instead of a host
-In a second terminal on your own computer, this downloads Red Hat's RHEL 9 Universal Base Image (UBI) 9.0.0, built in 2022 and missing years of fixes, writes its filesystem to ubi9-old.tar and removes the container it made.
+In a second terminal on your own computer, this downloads the RHEL 9 Universal Base Image (UBI) 9.0.0, built in 2022 and missing years of fixes, writes its filesystem to ubi9-old.tar, about 240 MB, and removes the container it made.
 ```bash
 cd ~/oval-lab
 docker create --name ubi9-old registry.access.redhat.com/ubi9/ubi:9.0.0
@@ -137,7 +137,7 @@ docker rm ubi9-old
 
 == Step 8: scan the image's files
 section: 8. Scan a container image instead of a host
-In the container, oscap-chroot, from openscap-utils, runs step 4's evaluation on the files under /ubi9-old. The last line counts advisories that apply. The exit code is 0 either way: read the results. As a control, ubi:latest counts 0.
+In the container, oscap-chroot, from openscap-utils, runs step 4's evaluation on the files under /ubi9-old, and grep counts advisories that apply. The scan itself exits 0 either way. As a control, ubi:latest, exported and scanned the same way, counts 0.
 ```bash
 dnf install -y openscap-utils
 mkdir -p /ubi9-old && tar -xf ubi9-old.tar -C /ubi9-old
@@ -147,7 +147,7 @@ grep -c ': true' image-scan.txt
 
 == Exercise: the scanner or the vendor?
 section: Hands-on exercises
-Your RHEL 9 host has openssl-3.0.7-6.el9_1. A scanner flags an openssl CVE, "fixed in 3.0.8"; the vendor's OVAL gives the fixed evr as 1:3.0.7-6.el9_1, and the definition is false. Who is right, and why? Answers are under "Show the answer".
+Your RHEL 9 host has openssl-3.0.7-6.el9_1. A scanner flags an openssl CVE, "fixed in 3.0.8"; the vendor's OVAL definition, with fixed evr 1:3.0.7-6.el9_1, is false. Who is right, and why? The guide hides answers under "Show the answer".
 
 == Answer: the vendor, because of the backport
 section: Hands-on exercises
@@ -169,5 +169,5 @@ xmllint --xpath "//*[local-name()='Rule'][@id='<rule-id>']
 
 == Common mistakes
 section: Common mistakes
-- Review step 7's remediation script like a pull request: its baseline never saw your workload. Never pipe it into a shell.
-- Switch a rule off in a tailoring file, a separate XCCDF file, not by editing the vendor's data stream.
+- Step 7 generates a remediation script. Review it like a pull request, never pipe it into a shell: its baseline never saw your workload.
+- Switch rules off with a tailoring file, a separate XCCDF file, not by editing data streams.
