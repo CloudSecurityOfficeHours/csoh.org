@@ -10,9 +10,9 @@ Allow about two hours; you need no AWS account.
 
 == How the guide was checked
 section: How to use this guide
-A script ran every code block in order, in zsh on macOS, with Cloud Custodian 0.9.53. Outputs shown are from that run.
+A script ran every code block in order, in zsh on macOS, with Cloud Custodian 0.9.53. The guide's outputs come from that run.
 
-Step 8's deployed function never ran, and nothing ran against Azure, Google Cloud or a real AWS account.
+Step 8's deployed function never ran; nothing ran against Azure, Google Cloud or a real AWS account.
 
 == How to follow the guide
 section: How to use this guide
@@ -30,7 +30,7 @@ custodian version
 
 == Set up: start the lab, then point Custodian at it
 section: 3. Point Custodian at the lab
-Step 2's block writes lab.py and starts the lab, a pretend AWS account: paste it whole; leave it running. Expect Lab running at http://localhost:8116. These lines, in a second terminal, point Custodian at it. Rerun them in any new terminal.
+Step 2's block starts the lab, a pretend AWS account, and prints Lab running at http://localhost:8116. Leave it running; Ctrl-C stops it, forgetting everything. In a second terminal, these lines point Custodian at it; rerun them in any new terminal.
 ```bash
 cd ~/c7n-lab && . .venv/bin/activate
 unset AWS_PROFILE AWS_SESSION_TOKEN
@@ -69,8 +69,8 @@ ls -1 out/all-buckets
 
 == Step 4: a key the resource does not have
 section: 4. Silent failure: a key the resource does not have
-In step 4's versioning.yml, this value filter finds only lab-build-artifacts. Two buckets never had versioning, so Versioning.Status is missing, and every comparison with a missing key is false except ne and not-in. The value absent matches a missing key.
-```bash
+The first of step 4's five versioning.yml policies finds only lab-build-artifacts. Two buckets never had versioning, so Versioning.Status is missing, and every comparison with a missing key is false except ne and not-in. The value absent matches a missing key.
+```yaml
   - name: status-is-suspended
     resource: aws.s3
     filters:
@@ -81,8 +81,8 @@ In step 4's versioning.yml, this value filter finds only lab-build-artifacts. Tw
 
 == Step 5: custodian validate accepts a typo
 section: 5. Silent failure: custodian validate accepts a policy that can never match
-Step 5's sg.yml looks twice for security groups, AWS's virtual firewalls, open to the whole internet; this copy misspells IpPermissions. custodian validate, which checks only the schema, accepts it. It finds nothing; the correct copy finds debug-ssh and web-public.
-```bash
+Step 5's sg.yml looks twice for security groups, AWS's virtual firewalls, open to the whole internet; this copy misspells IpPermissions. custodian validate, which checks only the schema, accepts it. It finds nothing; the correct copy, world-open, finds debug-ssh and web-public.
+```yaml
   - name: world-open-typo
     resource: aws.security-group
     filters:
@@ -94,7 +94,7 @@ Step 5's sg.yml looks twice for security groups, AWS's virtual firewalls, open t
 
 == Step 6: one Region unless you ask for more
 section: 6. Silent failure: one Region unless you ask for more
-A run covers one Region: the --region flag, else AWS_DEFAULT_REGION, else your config file's. Here -p picks world-open, and --region all visits the lab's 34 Regions. It also finds legacy-rdp, with RDP (Remote Desktop Protocol) open, in eu-west-1.
+Resources live in Regions, and a run covers one: the --region flag's, else AWS_DEFAULT_REGION, else your config file's. Here -p picks world-open; --region all visits the lab's 34 Regions and finds legacy-rdp, with RDP (Remote Desktop Protocol) open, in eu-west-1.
 ```bash
 custodian run --cache-period 0 -s out-all --region all -p world-open sg.yml 2> all.log
 grep -c policy:world-open all.log
@@ -103,8 +103,8 @@ grep -v count:0 all.log
 
 == Step 7: --dryrun skips the actions and nothing else
 section: 7. Silent failure: --dryrun skips the actions and nothing else
-These lines end step 7's ssh-fix.yml, which removes rules that let the whole internet reach SSH (Secure Shell) on port 22. With --dryrun it finds debug-ssh, skips actions, and still writes output.
-```bash
+These lines end step 7's ssh-fix.yml, which removes rules letting the whole internet reach SSH (Secure Shell) on port 22. A dry run finds debug-ssh, skips actions and still writes output, so it is not read-only.
+```yaml
     filters:
       - type: ingress
         Ports: [22]
@@ -125,8 +125,8 @@ custodian run --cache-period 0 -s out -p world-open sg.yml
 
 == Step 8: deployed into the account
 section: 8. Modes: pull, or deployed into the account
-Step 8's ssh-realtime.yml adds this mode to step 7's policy. Run without --dryrun, it creates an AWS Lambda function, run when CloudTrail records a call adding an inbound rule. The deploy checks no existing group: keep a scheduled pull run.
-```bash
+Step 8's ssh-realtime.yml adds this mode to step 7's policy. Run without --dryrun, it deploys an AWS Lambda function and an EventBridge rule sending it CloudTrail's records of new inbound rules. Existing groups go unchecked: keep a scheduled pull run.
+```yaml
   - name: ssh-open-realtime
     resource: aws.security-group
     mode:
@@ -145,7 +145,7 @@ Find every security group with an inbound rule open to the whole internet, on an
 == Answer: test IPv4 and IPv6, in every Region
 section: Hands-on exercises
 Cidr tests only IPv4, so world-open.yml adds CidrV6 in an or block for ipv6-ssh's ::/0, the whole IPv6 internet. With --region all, expect web-public, ipv6-ssh, legacy-rdp; step 7 fixed debug-ssh.
-```bash
+```yaml
 policies:
   - name: sg-world-open
     resource: aws.security-group
@@ -165,8 +165,8 @@ List every IAM (Identity and Access Management) user with an active access key, 
 
 == Answer: a never-used key needs its own policy
 section: Hands-on exercises
-An age test on last_used_date finds bob, but a never-used key has no date. stale-keys.yml's second policy, ending as shown, catches dave's key; last_rotated is when a key was created or changed. erin, with 0 keys matched, is no finding.
-```bash
+An age test on last_used_date finds bob; a never-used key has no date. stale-keys.yml's second policy, ending as shown, catches dave's key; last_rotated is when a key was created or changed. erin, with 0 keys matched, is not a finding.
+```yaml
       - type: credential
         key: access_keys.last_used_date
         value: absent
