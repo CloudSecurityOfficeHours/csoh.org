@@ -1,0 +1,193 @@
+title: IAM policy languages and Cedar, hands-on
+guide: howto/iam-policy-languages.html
+promise: Read AWS IAM policies in AWS's evaluation order, learn the elements that invert, then write, validate and test Cedar policies.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for intermediate readers who know IAM (Identity and Access Management) users, roles and policies and have run the AWS CLI (command-line interface). Cedar is taught from the start.
+
+You need a Rust toolchain and AWS CLI credentials.
+
+== How the guide was checked
+section: How to use this guide
+A script ran every code block on 4 November 2026 with AWS CLI 2.39.2, against an account outside any organization, and cedar-policy-cli 4.14.1.
+
+Not run: attaching a resource control policy, which needs an organization. AWS's documentation says what one does.
+
+== How to follow the guide
+section: How to use this guide
+JSON blocks are policy text: save one when the text gives a file name. Save CEDAR blocks in ~/cedar-lab, named by their first line. Paste BASH blocks into a terminal in the folder holding their files. Unlabelled blocks are output.
+
+== Set up your environment
+section: 8. Install it and write a policy set
+AWS CLI commands need credentials for any AWS account, no organization needed, and create nothing. The Cedar steps, 8 to 10, need a Rust toolchain and no AWS account. Step 8 installs cedar-policy-cli; compare cedar --version with the guide's 4.14.1.
+```bash
+cargo install cedar-policy-cli
+cedar --version
+
+mkdir -p ~/cedar-lab && cd ~/cedar-lab
+```
+
+== Two policy languages and where you meet them
+section: Reading a policy correctly is its own skill
+An IAM policy is a JSON document saying who may do what to which AWS resources. Almost everyone in cloud security reads them.
+
+Cedar is AWS's open-source language for deciding whether requests inside your own applications are allowed.
+
+== Policies that grant, and guardrails that cap
+section: How AWS decides whether a request is allowed
+Identity policies, on the requesting user or role, and resource policies, on the thing accessed, grant access. Guardrails only cap it; they include a role's permissions boundary and an organization's service control policies (SCPs) and resource control policies (RCPs).
+
+== The one idea: Allow may grant nothing
+section: How AWS decides whether a request is allowed
+AWS combines every policy that applies, in order, and the result is an intersection: a policy saying Allow may grant nothing.
+- An explicit Deny anywhere ends it.
+- Every applicable guardrail must allow.
+- Something must grant it.
+- Otherwise, nothing is permitted.
+
+== NotAction allows everything else
+section: 2. NotAction, and why it is almost always wrong
+This IAM policy statement allows every AWS action except IAM's, on every resource, including services AWS launches after it was written. The NotAction element is defensible only in a Deny statement: deny everything except a narrow set.
+```json
+{
+  "Effect": "Allow",
+  "NotAction": "iam:*",
+  "Resource": "*"
+}
+```
+
+== ForAllValues fails open without a Null check
+section: 3. Conditions, and the two set operators that fail open
+Condition keys are facts AWS attaches to a request. ForAllValues is true when every value matches, and when there are none, so in an Allow it fails open. This IAM statement's Null block requires the key.
+```json
+{
+  "Effect": "Allow",
+  "Action": "ec2:DeleteTags",
+  "Resource": "arn:aws:ec2:us-east-1:111122223333:instance/*",
+  "Condition": {
+    "ForAllValues:StringEquals": {
+      "aws:TagKeys": ["environment", "cost-center"]
+    },
+    "Null": { "aws:TagKeys": "false" }
+  }
+}
+```
+
+== Test it rather than reasoning about it
+section: 4. Test it rather than reasoning about it
+The validate-policy command checks one policy's grammar and security warnings, reading only the text you send. This AWS CLI command asks whether new.json grants anything old.json did not, so a pipeline can fail a change that broadens access.
+```bash
+aws accessanalyzer check-no-new-access \
+  --existing-policy-document file://old.json \
+  --new-policy-document file://new.json \
+  --policy-type IDENTITY_POLICY
+```
+
+== An RCP data perimeter on S3
+section: 6. A data perimeter on S3
+AWS Organizations runs many accounts under one management account. An RCP, written in IAM's grammar, caps what anyone can do to member accounts' resources. Part of step 6's rcp-perimeter.json, this denies S3 (Simple Storage Service) to outsiders, except AWS services.
+```json
+      "Sid": "EnforceOrgIdentities",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEqualsIfExists": { "aws:PrincipalOrgID": "o-exampleorgid" },
+        "BoolIfExists": { "aws:PrincipalIsAWSService": "false" }
+      }
+```
+
+== A Cedar policy set
+section: 8. Install it and write a policy set
+Step 8 saves policies.cedar in ~/cedar-lab, starting with this Cedar permit (MFA is multi-factor authentication). Its second policy forbids every request on a public bucket, and a forbid always beats a permit, like an explicit Deny in IAM.
+```cedar
+// policies.cedar
+// Members of the security group may read any bucket, but only with MFA.
+permit (
+    principal in Group::"security",
+    action == Action::"read",
+    resource
+)
+when { context.mfa == true };
+```
+
+== A schema describes your data
+section: 9. The part IAM cannot do: a schema
+Step 9 saves this Cedar schema. Then cedar validate --schema store.cedarschema --policies policies.cedar passes.
+```cedar
+// store.cedarschema
+entity Group;
+entity User in [Group];
+entity Bucket = {
+    "public": Bool,
+};
+
+action read, write appliesTo {
+    principal: [User],
+    resource: [Bucket],
+    context: { "mfa": Bool }
+};
+```
+
+== A typo fails before the policy runs
+section: 9. The part IAM cannot do: a schema
+Change resource.public to resource.publik in policies.cedar, and validating again prints this. The same typo in an IAM condition key gives a valid policy that never matches, with no error at all: a Deny that silently does nothing.
+```text
+  × policy set validation failed
+  ╰─▶ for policy `policy1`, attribute `publik` on entity type `Bucket` not
+      found
+    ╭─[18:8]
+ 17 │ )
+ 18 │ when { resource.publik == true };
+    ·        ───────────────
+    ╰────
+  help: did you mean `public`?
+```
+
+== Evaluate real requests
+section: 10. Evaluate real requests
+Step 10 writes entities.json, where alice is in the security group and public-site is public, and MFA context files. This prints ALLOW. With ctx_nomfa.json, public-site or bob, it prints DENY. It exits non-zero on DENY, so rules can have tests.
+```bash
+cedar authorize --schema store.cedarschema --policies policies.cedar \
+  --entities entities.json -c ctx_mfa.json \
+  -l 'User::"alice"' -a 'Action::"read"' -r 'Bucket::"private-logs"'
+```
+
+== Exercise: what can this role do?
+section: Hands-on exercises
+A role has this IAM identity policy attached. An SCP over its account denies all actions outside eu-west-1, and the role's permissions boundary allows only s3:*. What can the role do? The guide hides each answer behind "Show the answer".
+```json
+{ "Effect": "Allow", "Action": "*", "Resource": "*" }
+```
+
+== Answer: every S3 action, in eu-west-1 only
+section: Hands-on exercises
+The identity policy grants everything, so it constrains nothing. The boundary caps the role at s3:*, and the SCP caps the account at one region. Anyone reading only the role's policy would get this completely wrong.
+
+== Exercise: a bucket its owner may read
+section: Hands-on exercises
+Add a Cedar policy letting any user read a bucket they own, then extend the schema so it validates. What did the schema force you to decide that IAM would have let you leave vague?
+
+== Answer: the schema makes you decide
+section: Hands-on exercises
+You had to declare that the owner attribute is a User and that every Bucket has one, so each Bucket in entities.json needs an owner. The first part is Bucket's new declaration in store.cedarschema; the second is added to policies.cedar.
+```cedar
+// store.cedarschema - Bucket gains an owner
+entity Bucket = {
+    "public": Bool,
+    "owner": User,
+};
+
+// policies.cedar
+permit (principal, action == Action::"read", resource)
+when { resource.owner == principal };
+```
+
+== Common mistakes
+section: Common mistakes
+- A missing condition key usually means no match, not false.
+- Wildcards are not regular expressions: only * and ? exist.
+- An RCP never covers the management account's resources.
+- A Cedar policy set without a schema gives up its main advantage.
