@@ -1,6 +1,6 @@
 title: Semgrep rules, hands-on
 guide: howto/semgrep-rules.html
-promise: Semgrep finds mistakes in source code from short rules you write. Write rules for Python, Terraform and GitHub Actions, then test each on code it must flag and code it must leave alone.
+promise: Semgrep finds mistakes in source code from short rules you write. Write rules for Python, Terraform and GitHub Actions, then test each on code it must flag and code it must leave alone, because a broken rule fails without an error.
 
 == Who it is for and what you need
 section: How to use this guide
@@ -10,9 +10,9 @@ You need a terminal and Homebrew, or Python 3.10 or later and pip, but no accoun
 
 == How the guide was checked
 section: How to use this guide
-Every command, rule and test file ran as printed with Semgrep 1.184.0, installed with pip, on an Apple silicon Mac, with metrics off; the outputs are what it printed.
+Every command, rule and test file ran as printed with Semgrep 1.184.0 from pip on an Apple silicon Mac, with metrics off and no login. Outputs are what it printed.
 
-Not run: step 1's brew install semgrep. Not tested: Linux.
+Not run for 1.184.0: brew install semgrep. Not tested: Linux.
 
 == How to follow the guide
 section: How to use this guide
@@ -20,7 +20,7 @@ Read in order. Paste BASH blocks into your terminal. A tab naming a file shows l
 
 == Set up your environment
 section: 1. Install Semgrep and keep it local
-Install with brew install semgrep, or python3 -m pip install semgrep in a virtual environment on Python 3.10 or later. These lines turn off Semgrep's usage metrics and version check in this terminal. Output should match the page with 1.184.0.
+Install with brew install semgrep, or python3 -m pip install semgrep in a virtual environment on Python 3.10 or later. Line 1 turns off usage metrics and the version check in this terminal. Outputs should match the guide's on 1.184.0.
 ```bash
 export SEMGREP_SEND_METRICS=off SEMGREP_ENABLE_VERSION_CHECK=0
 semgrep --version
@@ -34,10 +34,8 @@ Semgrep reads source code without running it and reports places that match rules
 
 == The one idea: match structure, not text
 section: How Semgrep matches code
-boto3 is the Amazon Web Services (AWS) library for Python. In this pattern, ... is any arguments and "..." any string: boto3.client(..., aws_secret_access_key="...", ...). It matches the first two calls: Session is another call, and the last is a string.
+boto3 is the AWS (Amazon Web Services) library for Python. Here, ... is any arguments and "..." any string: boto3.client(..., aws_secret_access_key="...", ...). Quotes and line breaks are not structure: the first two calls match, not Session or the string.
 ```python
-import boto3
-
 boto3.client("s3", aws_secret_access_key="csohFAKEsecretKEYforTHEsemgrepLAB0000000")
 boto3.client(
     'sqs',
@@ -81,7 +79,7 @@ s3 = boto3.client("s3", aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"
 
 == Steps 3 and 4: other calls, then the key
 section: 4. Metavariables, metavariable-regex and pattern-not
-Step 3 adds boto3.resource and boto3.Session via pattern-either: any one may match. In step 4's rules/boto3-hardcoded-secret.yaml, all under patterns must hold: the metavariable "$KEY" captures the key, metavariable-regex keeps keys shaped like AWS's example, and pattern-not drops it.
+Step 3 adds boto3.resource and boto3.Session via pattern-either: any may match. In step 4's rules/boto3-hardcoded-secret.yaml, the patterns field needs all: the metavariable "$KEY" captures the key, metavariable-regex keeps keys shaped like AWS's example, and pattern-not drops that.
 ```yaml
     patterns:
       - pattern-either:
@@ -149,7 +147,7 @@ A rule reads only files of its languages: .yml is YAML. Step 7's rules/gha-run-e
 
 == Step 8: a taint source that never matches
 section: 8. Taint mode, and a source that never matches
-A taint rule reports data from a source reaching a sink, here a shell command, without a sanitizer. Step 8's first source never matched the handler's .get(): only the ruleid: test noticed. This fix in rules/lambda-event-to-shell.yaml taints the event parameter.
+A taint rule reports untrusted data from a source reaching a sink, here a shell command, unless a sanitizer makes it safe. Step 8's first source never matched the handler's .get(). This fix in rules/lambda-event-to-shell.yaml taints the event parameter.
 ```yaml
     pattern-sources:
       - patterns:
