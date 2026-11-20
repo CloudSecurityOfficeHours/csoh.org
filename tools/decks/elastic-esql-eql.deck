@@ -4,15 +4,15 @@ promise: Learn ES|QL (the Elasticsearch Query Language) and EQL (Event Query Lan
 
 == Who it is for and what you need
 section: How to use this guide
-It is for readers comfortable in a terminal who need not know Elasticsearch, a search engine for logs, or Kibana, its web interface.
+It is for intermediate readers who have used Docker; Elasticsearch, a search engine for logs, and Kibana, its web interface, can be new.
 
-You need Docker, curl, jq and about 5 GB of free disk, but no cloud account.
+You need Docker, curl, jq, about 5 GB free disk and Python 3.12, but no cloud account.
 
 == How the guide was checked
 section: How to use this guide
 Every command and query ran as printed on Elasticsearch and Kibana 9.5.4, on an Apple silicon Mac.
 
-Not run: loading step 12's rule into Kibana, and what the setup's start.sh script does once Elasticsearch's 30-day trial licence ends.
+Not run: loading step 12's rule into Kibana, and what start.sh, a script from step 1, does once the 30-day trial licence ends.
 
 == How to follow the guide
 section: How to use this guide
@@ -20,7 +20,7 @@ Read it in order. Paste BASH blocks into your terminal. ESQL and EQL blocks are 
 
 == Set up: start Elasticsearch and Kibana
 section: 1. Start Elasticsearch and Kibana
-The first line runs Elastic's start-local script, which starts Elasticsearch and Kibana in Docker for testing only; piping a script into sh runs whatever it contains, so read it first. After the installer's messages, the last line should print 9.5.4.
+Elastic's start-local script starts Elasticsearch and Kibana in Docker, for testing only, on a 30-day trial licence needing no sign-up, which nothing here needs. Read the script before piping it into sh. After its messages, the last line prints 9.5.4.
 ```bash
 curl -fsSL https://elastic.co/start-local | sh -s -- -v 9.5.4
 cd elastic-start-local
@@ -37,9 +37,9 @@ FROM logs-aws.cloudtrail-* | STATS events = COUNT(*)
 
 == What ES|QL and EQL are and where you meet them
 section: Two query languages, two different questions
-Elastic Security, Kibana's security application, runs detection rules: queries that run on a schedule and raise an alert on a match.
+Elastic Security, Kibana's security application, runs detection rules: scheduled queries that raise an alert on a match.
 
-Its rules can use ES|QL, which filters and counts events, or EQL, which finds events that happen in order.
+Its rules can be in several languages, including ES|QL, which filters and counts events, and EQL, which finds events that happen in order.
 
 == The lab: 24 CloudTrail events and a leaked key
 section: Set up the lab
@@ -65,7 +65,7 @@ FROM logs-aws.cloudtrail-*                      // 24 rows, one per event
 
 == D4 in ES|QL: renamed fields, and success too
 section: 6. Nested fields and true/false values: console login without MFA (D4)
-Elastic's AWS integration renames CloudTrail's fields as each event arrives, and Elastic's rules use the new names: eventName becomes event.action, and MFAUsed becomes a true/false field. This ES|QL query requires success too, or a failed sign-in as alice comes back.
+The AWS integration renames CloudTrail's fields as each event arrives, and Elastic's rules use the new names: eventName becomes event.action, and MFAUsed a true/false field. Require success too, or a failed sign-in as alice returns. ES|QL's KEEP command picks columns.
 ```esql
 FROM logs-aws.cloudtrail-*
 | WHERE event.action == "ConsoleLogin"
@@ -85,7 +85,7 @@ FROM logs-aws.cloudtrail-*
 
 == EQL's category trap: no error, nothing found
 section: 9. Event queries, and the category trap (D1)
-An EQL query has the form category where condition; any matches every category. This D1 query uses the configuration category and finds nothing: the integration takes event.category from a table of 91 event names, and StopLogging is not one.
+An EQL query has the form category where condition, and the any category matches every one. This D1 query uses the configuration category and finds nothing: the integration takes event.category from 91 event names, and StopLogging is not one.
 ```eql
 configuration where event.action in ("StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors")
 ```
@@ -101,7 +101,7 @@ sequence by user.target.name with maxspan=10m
 
 == Validate the rule file, then test it on data
 section: 12. Write your own rule as code, validate it, test it both ways
-These commands, which need python3.12 on your path, run Elastic's validator on step 12's D3 rule file. It refuses unknown fields but passes the configuration where mistake, so test on data that should fire and data that should not.
+These commands, which need python3.12, run Elastic's validator on step 12's D3 rule file. It refuses unknown fields but passes the configuration where mistake: test on data that should fire and that should not. Then cd .. returns to elastic-start-local.
 ```bash
 git clone --depth 1 https://github.com/elastic/detection-rules
 cd detection-rules
@@ -116,7 +116,7 @@ An analyst wants every event that was not an AccessDenied, writes WHERE aws.clou
 
 == Answer: null fails every comparison
 section: Hands-on exercises
-In ES|QL, comparing with null gives null, not true, and the WHERE command keeps only true rows. The 14 successful events have no error code, so != drops them with the 7 denials. Say what you mean about missing values:
+Comparing with null gives null, not true, and ES|QL's WHERE command keeps only true rows. So != drops the 14 events with no error code and the 7 AccessDenied ones, the attacker's four and an application's three, leaving EC2's 3.
 ```esql
 FROM logs-aws.cloudtrail-*
 | WHERE aws.cloudtrail.error_code != "AccessDenied" OR aws.cloudtrail.error_code IS NULL
