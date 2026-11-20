@@ -1,6 +1,6 @@
 title: Python and the cloud SDKs, hands-on
 guide: howto/python-cloud-sdks.html
-promise: Learn to read Python security scripts and to tell when one has quietly missed something, in a free lab on your own computer.
+promise: Learn to read and change Python security scripts, and to tell when one has quietly missed something, in a free local lab.
 
 == Who it is for and what you need
 section: How to use this guide
@@ -10,19 +10,19 @@ You need Python 3.10 or newer and no AWS (Amazon Web Services) account.
 
 == How the guide was checked
 section: How to use this guide
-A script ran every code block in order with boto3 1.43.123 and moto 5.2.5, and printed every output shown.
+Every code block ran in order, in zsh on macOS, with boto3 1.43.123 and moto 5.2.5; outputs are from that run.
 
-Not run: the Azure and Google Cloud notes, on a real subscription or project, and the EventBridge results, on EventBridge itself.
+Not run: the Azure and Google Cloud notes, on a real subscription or project, and EventBridge results, on EventBridge.
 
 == How to follow the guide
 section: How to use this guide
-Read it in order. Paste each BASH block whole; cat > roles.py <<'EOF' saves the lines down to EOF as roles.py, and the last line runs it. Unlabelled blocks are output. A tab like roles.py marks part of that file.
+Read it in order. Paste BASH blocks whole into your terminal: cat > roles.py <<'EOF' saves lines down to EOF as roles.py; the last line runs it. Unlabelled blocks are output. A tab like roles.py shows lines of that file.
 
 == Set up: install boto3 and moto
 section: 1. Install boto3 and moto
-boto3 is AWS's SDK; moto is an AWS emulator.
+boto3 is AWS's SDK; moto emulates AWS. Line 2 makes a private Python, a virtual environment.
 
-Both need Python 3.10 or newer, and macOS's python3 is older: if yours is, install a newer one and use its name, such as python3.12, on line 2. Expect 1.43.123 5.2.5.
+If python3 is under 3.10, as on macOS, install a newer one and use its name there, such as python3.12. Expect 1.43.123 5.2.5.
 ```bash
 mkdir -p ~/sdk-lab && cd ~/sdk-lab
 python3 -m venv .venv && . .venv/bin/activate
@@ -32,7 +32,7 @@ python3 -c "import boto3, moto; print(boto3.__version__, moto.__version__)"
 
 == Set up: start the lab, then a second terminal
 section: 3. Find out who you are (identity)
-Step 2's block writes and starts lab.py, which builds what the scripts audit. Expect Lab running at http://localhost:8101; Ctrl-C stops it, forgetting everything. In a second terminal, run this line, or scripts read the AWS account your credentials point at.
+Step 2's block starts lab.py, which builds what the scripts audit. Expect Lab running at http://localhost:8101; Ctrl-C stops it, forgetting everything. In a second terminal, and any new one, run this, or scripts read whatever AWS account your credentials reach.
 ```bash
 cd ~/sdk-lab && . .venv/bin/activate && . ./lab.env
 ```
@@ -66,7 +66,7 @@ print("region:  ", session.region_name)
 
 == Step 3: environment keys beat AWS_PROFILE
 section: 3. Find out who you are (identity)
-Step 3 then loads build-bot.env, the CI (continuous integration) pipeline's access key: the key pair scripts sign requests with. AWS_PROFILE=auditor runs as build-bot, since boto3 reads environment variables before profiles. This clears them and sets the auditor from here on.
+Step 3 then loads build-bot.env, the CI (continuous integration) pipeline's access key: the key pair scripts sign requests with. AWS_PROFILE=auditor runs as build-bot, since boto3 reads environment keys before profiles. This clears them and sets the auditor from here on.
 ```bash
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 export AWS_PROFILE=auditor
@@ -85,7 +85,7 @@ print("paginator:        ", len(roles), "roles")
 
 == Step 5: cover every enabled Region
 section: 5. Cover every enabled Region
-Step 5's regions.py lists security groups, AWS's virtual firewalls, in the client's Region, then in every Region describe_regions says the account has enabled. Three groups sit elsewhere, one in me-central-1, an opt-in Region: disabled until someone turns it on.
+A boto3 client talks to one Region. Step 5's regions.py lists security groups, AWS's virtual firewalls, in that Region, then in every Region describe_regions says is enabled. Three sit elsewhere, one in opt-in me-central-1, disabled until someone turned it on.
 ```text
 us-east-1 only: ['web-public', 'debug-ssh', 'office-ssh']
 18 Regions enabled for this account:
@@ -136,7 +136,7 @@ PATTERNS = {
 
 == Exact numbers, and one letter off
 section: Findings that go nowhere: EventBridge event patterns
-The first, GuardDuty's own example, misses 7.5, a High score, and even 8.0: an exact match compares numbers as written. The second, Findings, is one letter off and matches nothing. The third uses numeric, which compares values as numbers.
+GuardDuty scores High findings 7.0 to 8.9. The first, GuardDuty's own example, misses 7.5 and even 8.0: an exact match compares numbers as written. The second says Findings, one letter off, matching nothing. The third's "numeric" compares values as numbers.
 ```text
                         5    7.5      8    8.0
 AWS's CLI example   match      -  match      -
@@ -166,7 +166,7 @@ In each enabled Region where GuardDuty is on, would a High finding reach anythin
 
 == Answer: four of five Regions drop it
 section: Hands-on exercises
-Each of four Regions would drop a High finding for a different reason: me-central-1 has no rule, eu-west-1's rule is disabled, us-west-2's has no target, and ap-southeast-2's is the [5, 8] example. Only us-east-1's numeric rule passes it on.
+Each of four Regions would drop a High finding for a different reason: me-central-1 has no rule, eu-west-1's rule is disabled, us-west-2's has no target, and ap-southeast-2's is the [5, 8] example. Only us-east-1's "numeric" rule passes it on.
 ```text
 ap-southeast-2: NOT ROUTED
 eu-west-1: NOT ROUTED
@@ -180,6 +180,6 @@ exit code: 1
 == Common mistakes
 section: Common mistakes
 - One list call reads one page; use a paginator.
-- Keys in the environment win over AWS_PROFILE.
-- boto3 ignores AWS_REGION and quietly uses the profile's Region.
+- Environment keys win over AWS_PROFILE.
+- boto3 reads AWS_DEFAULT_REGION and ignores AWS_REGION, quietly using the profile's Region.
 - A scheduled job sees only the exit code: exit non-zero if anything was not checked.
