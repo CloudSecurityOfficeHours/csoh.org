@@ -4,27 +4,27 @@ promise: Learn Sumo Logic's search language from zero on 24 events from CloudTra
 
 == Who it is for and what you need
 section: How to use this guide
-It is for beginners new to writing searches and to Sumo Logic, a hosted log analytics and security platform.
+It is for beginners new to Sumo Logic, a hosted log analytics and security platform, and to writing searches, who can use a terminal.
 
-You need about two hours, a terminal with curl and jq, and a Sumo Logic organisation that accepts your own data.
+You need about two hours, curl and jq, and an organisation that accepts your own data.
 
 == How the guide was checked
 section: How to use this guide
-It was written without a Sumo Logic account, so none of its queries were run: each result is what Sumo Logic's documentation gives for the lab data, worked out by a local script.
+It was written without a Sumo Logic account, so no query was run: each result is Sumo Logic's documented behaviour, checked on 27 September 2026, applied to the lab file by a local script.
 
-Step 9's alerting monitor was never applied.
+Step 9's monitor was never applied.
 
 == How to follow the guide
 section: How to use this guide
-Read it in order; steps 1 to 3 load the data. Run SUMO LOGIC blocks in Log Search, the page where you search your logs; paste BASH blocks into a terminal. After each query, "Expect" says what it should return.
+Read it in order; steps 1 to 3 load the data. Run SUMO LOGIC blocks in Log Search, the page where you search your logs; paste BASH blocks into a terminal. "Expect" sentences say what queries should return.
 
 == Set up: a 30-day trial that takes your data
 section: 1. Get an organisation you can send data to
-The Agentic Free Trial cannot load the lab data. The Amazon Web Services (AWS) Marketplace trial can: it needs a business email, asks you to accept Sumo Logic's service licence agreement, then bills monthly through AWS unless cancelled.
+The Agentic Free Trial cannot load your data. The Amazon Web Services (AWS) Marketplace trial can, with a business email and Sumo Logic's service licence agreement; after 30 days it becomes paid unless cancelled in AWS Marketplace under Manage subscriptions.
 
 == Set up: load the lab data and count it
 section: 3. Load the lab data and check what arrived
-Put step 2's upload address in SUMO_URL. Step 3 writes the lab file; these commands check it, move it to yesterday and upload it. Expect 200. Step 3's query, with Log Search's time range at -2d, should count 24 events.
+Step 2 creates the upload address for SUMO_URL. Step 3's block writes the lab file, then these lines check it, move it to yesterday and upload it. Expect 200. At Log Search's time range -2d, step 3's query counts 24.
 ```bash
 shasum -a 256 cloudtrail-lab.jsonl
 
@@ -69,7 +69,7 @@ _sourceCategory=lab/aws/cloudtrail
 
 == D1: the parse step filters too
 section: 4. Filter on a parsed field: trail tampering (D1)
-By default the json operator drops every message that lacks a key it asks for. Roles have no userIdentity.userName, so nodrop keeps their events, with the field empty. Expect one message: StopLogging by backup-svc.
+By default the json operator drops every message that lacks a key it asks for. Roles have no userIdentity.userName, the userName key inside userIdentity, so nodrop keeps their events, with the field empty. Expect one message: StopLogging by backup-svc.
 ```sumo
 // D1: CloudTrail logging stopped, deleted or changed
 _sourceCategory=lab/aws/cloudtrail
@@ -80,7 +80,7 @@ _sourceCategory=lab/aws/cloudtrail
 
 == Before you trust an empty result, run a control
 section: 6. Count, then threshold: the burst that never fires (D2)
-Counting only AccessDenied, the naive D2 returns nothing. This control, a query that must return something, counts error codes. Elastic Compute Cloud (EC2) reported three of the attacker's seven denials as Client.UnauthorizedOperation. The fix counts four denial codes.
+Counting only AccessDenied, the naive D2 returns nothing. This control, a query that must return something, counts error codes. Elastic Compute Cloud (EC2) reported three of the attacker's seven denials as Client.UnauthorizedOperation. The fix counts AccessDenied, AccessDeniedException, Client.UnauthorizedOperation and UnauthorizedOperation.
 ```sumo
 // Control: which error codes are in the data at all?
 _sourceCategory=lab/aws/cloudtrail
@@ -107,7 +107,7 @@ _sourceCategory=lab/aws/cloudtrail
 
 == Turn D2 into a monitor
 section: 9. Turn the search into a monitor
-This is part of step 9's file for Terraform, a tool that creates resources from text files. The fixed D2 query keeps its threshold, so the trigger alerts on any row, checking the last 10 minutes every minute.
+Step 9 builds it in the web interface or, as here in part, with a file for Terraform, a tool that creates resources from text files. The fixed D2 query keeps its threshold, so the trigger alerts on any row.
 ```hcl
       | where _count >= 5
     EOT
@@ -124,7 +124,7 @@ This is part of step 9's file for Terraform, a tool that creates resources from 
 
 == Test the monitor both ways
 section: 10. Test the monitor both ways
-The monitor looks only at the last 10 minutes, so these commands replay 192.0.2.20's three denials stamped with the current time; it must stay Normal. Rerun them with --arg ip 203.0.113.50: the attacker's seven denials should turn it Critical.
+In ~/sumo-lab, with SUMO_URL still set, these commands replay 192.0.2.20's three denials stamped now, because the monitor checks only the last 10 minutes. Five minutes later it must still be Normal. Rerun with --arg ip 203.0.113.50: it should go Critical.
 ```bash
 jq -c --arg ip 192.0.2.20 '(now | strftime("%Y-%m-%dT%H:%M:%SZ")) as $t
   | select(.sourceIPAddress == $ip and has("errorCode")) | .eventTime = $t' \
@@ -135,7 +135,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
 
 == Exercise: this query returns nothing
 section: Hands-on exercises
-This query returns nothing against the lab. Why, and what is the quickest way to prove it rather than guess? In the guide, "Show the answer" opens each answer.
+First set the time range to the lab's date only, leaving out step 10's replays. This query returns nothing. Why, and what is the quickest way to prove it rather than guess? "Show the answer" opens answers in the guide.
 ```sumo
 _sourceCategory=lab/aws/cloudtrail
 | json "sourceIpAddress" as ip
