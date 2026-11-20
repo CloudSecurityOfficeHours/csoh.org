@@ -1,0 +1,135 @@
+title: CloudWatch Logs Insights and Cloud Logging queries, hands-on
+guide: howto/cloud-native-log-queries.html
+promise: Learn both query languages from zero on 24 CloudTrail events, and recognise a query that returns nothing because it cannot work.
+
+== Who it is for and what you need
+section: How to use this guide
+Each half teaches one cloud's built-in log service: CloudWatch Logs Insights in Amazon Web Services (AWS), the Logs Explorer in Google Cloud. Either half works alone.
+
+It is for beginners who can use a terminal. Allow about two hours.
+
+== How the guide was checked
+section: How to use this guide
+Every command and query ran as printed on 4 November 2026.
+
+Only the syntax of the Google half's step 8 filters was tested: nothing matched them. Limits and timings the lab data cannot reach come from AWS's and Google's documentation.
+
+== How to follow the guide
+section: How to use this guide
+Paste BASH blocks into your terminal. Run LOGS INSIGHTS blocks in the CloudWatch console's query editor or with step 3's lq helper, and CLOUD LOGGING blocks in the Logs Explorer's query editor. The text after each says what comes back.
+
+== Set up AWS: a throwaway log group
+section: 1. Make a throwaway log group
+Use a non-production AWS account, with jq and AWS command-line interface version 2. These make a log group, a named collection of log events; each prints nothing. Step 2 loads the lab data; step 3 saves the lq helper.
+```bash
+mkdir -p ~/log-queries-lab && cd ~/log-queries-lab
+aws logs create-log-group --log-group-name csoh-lab-cloudtrail
+aws logs put-retention-policy --log-group-name csoh-lab-cloudtrail --retention-in-days 1
+aws logs create-log-stream --log-group-name csoh-lab-cloudtrail --log-stream-name lab
+```
+
+== Set up Google Cloud: a throwaway log
+section: 1. Write the lab to a throwaway log
+Use a non-production Google Cloud project, with the gcloud command-line tool. Check that the second line prints the project you mean; the loop writes each line of cloudtrail-lab.jsonl, from step 2 of the AWS half, as a log entry.
+```bash
+cd ~/log-queries-lab
+gcloud config get project
+while IFS= read -r event; do gcloud logging write cloudtrail-lab "$event" --payload-type=json; done < cloudtrail-lab.jsonl
+```
+
+== Two log stores, two query languages
+section: Two log stores, two query languages
+An incident responder's first queries run here; they also turn into simple alerts. A Logs Insights query is a pipeline: commands joined by pipes, |, that filter and count. A Cloud Logging query is a true-or-false filter that cannot count.
+
+== Nothing found, or looked in the wrong place?
+section: Where a query looks
+Both languages read only the logs and hours you select outside the query. Pointed at the wrong place, a query returns nothing and no error. This Cloud Logging query finds StopLogging events; your JSON (JavaScript Object Notation) sits under jsonPayload.
+```cloud logging
+jsonPayload.eventName="StopLogging"
+```
+
+== The lab: 24 CloudTrail events and a leaked key
+section: The lab: one leaked key, five detections
+The lab is 24 CloudTrail events from one morning; CloudTrail is AWS's record of the calls made in an account.
+
+The access key of build-bot, a continuous integration (CI) user, has leaked.
+
+== What someone does with build-bot's key
+section: The lab: one leaked key, five detections
+With the key, from 203.0.113.50, someone is mostly refused, then creates the user backup-svc, attaches AdministratorAccess (the administrator policy), gives it an access key and uses it to stop CloudTrail logging.
+
+Around that, bob signs in without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== Count what arrived before you filter
+section: 3. Run a query, and look inside first
+Each half builds D1 to D4; D5 is the guide's first exercise. A load can be refused without an error, so run this Logs Insights query first. Expect events 24 and parsed 24, the events with an eventName field.
+```logs insights
+stats count(*) as events, count(eventName) as parsed
+```
+
+== Before you trust an empty result, run a control
+section: 6. Count, then threshold: the burst that never fires (D2)
+A Logs Insights D2 draft, alerting at five AccessDenied errors per address, returns nothing. This control drops the threshold and counts each code: Elastic Compute Cloud (EC2) reports refusals as Client.UnauthorizedOperation, so the draft saw four of the attacker's seven.
+```logs insights
+filter ispresent(errorCode)
+| stats count(*) as events by errorCode
+```
+
+== The Logs Explorer opens on five minutes
+section: 2. Find what arrived
+Run this Cloud Logging query with the time range at Last 1 hour; expect 24 entries. Data written ten minutes ago is already out of the default view. The log_id() function picks a log by its short name.
+```cloud logging
+log_id("cloudtrail-lab")
+```
+
+== In Cloud Logging, OR groups before AND
+section: 4. Nested fields, and the precedence trap (D4)
+Meant to find the stopped trail or an administrator policy attachment, this Cloud Logging query returns only the attachment. It is read as (StopLogging or AttachUserPolicy) and a policyArn containing AdministratorAccess. Use parentheses wherever AND and OR meet.
+```cloud logging
+log_id("cloudtrail-lab")
+jsonPayload.eventName="StopLogging" OR jsonPayload.eventName="AttachUserPolicy" AND jsonPayload.requestParameters.policyArn:"AdministratorAccess"
+```
+
+== A log-based alert, tested both ways
+section: 7. Make it a log-based alert, test it both ways, clean up
+The guide's alerting policy for D1 opens an alert when a new entry matches its filter. These commands, run a few minutes apart, write an entry that must not fire it, then one that must: expect an alert naming backup-svc.
+```bash
+gcloud logging write cloudtrail-lab "$(grep -F GetCallerIdentity cloudtrail-lab.jsonl)" --payload-type=json
+gcloud logging write cloudtrail-lab "$(grep -F StopLogging cloudtrail-lab.jsonl)" --payload-type=json
+```
+
+== Exercise: one address, more than one identity
+section: Hands-on exercises
+Which source address used more than one identity? Answer it in Logs Insights, and say why the Cloud Logging query language cannot. The guide hides each answer under Show the answer.
+
+== Answer: count distinct identities per address
+section: Hands-on exercises
+In Logs Insights, expect 203.0.113.50 with two identities: build-bot's leaked key, then backup-svc, the user it created. Count userIdentity.arn, since roles have no user name. A Cloud Logging query decides entry by entry, so it cannot see two at once.
+```logs insights
+stats countDistinct(userIdentity.arn) as identities, values(userIdentity.userName) as users by sourceIPAddress
+| filter identities > 1
+```
+
+== Exercise: 17 entries where three were expected
+section: Hands-on exercises
+A colleague wants the refusals that are not plain AccessDenied, expects EC2's three, and gets 17 entries from this Cloud Logging query. Where do the other 14 come from, and what should they write?
+```cloud logging
+log_id("cloudtrail-lab")
+NOT jsonPayload.errorCode="AccessDenied"
+```
+
+== Answer: in Cloud Logging, NOT and != differ
+section: Hands-on exercises
+A comparison on a missing field fails and NOT makes it true, so the 14 events with no errorCode are kept. The != test is false there, so it returns the three. Here :* tests that the field exists.
+```cloud logging
+log_id("cloudtrail-lab")
+jsonPayload.errorCode:* NOT jsonPayload.errorCode="AccessDenied"
+```
+
+== Common mistakes
+section: Common mistakes
+- An empty result proves nothing until you check where and when the query looked.
+- Logs Insights silently returns nothing for a misspelled first command, such as filtr.
+- Cloud Logging reads a lowercase "or" as a search term, not an operator.
