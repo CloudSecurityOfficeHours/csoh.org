@@ -1,0 +1,205 @@
+title: Semgrep rules, hands-on
+guide: howto/semgrep-rules.html
+promise: Semgrep finds mistakes in source code from short rules you write. Write rules for Python, Terraform and GitHub Actions, then test each on code it must flag and code it must leave alone.
+
+== Who it is for and what you need
+section: How to use this guide
+It suits intermediate readers who can read a short regular expression and, roughly, Python, Terraform and GitHub Actions code. Allow about two hours.
+
+You need a terminal and Homebrew, or Python 3.10 or later and pip, but no account.
+
+== How the guide was checked
+section: How to use this guide
+Every command, rule and test file ran as printed with Semgrep 1.184.0, installed with pip, on an Apple silicon Mac, with metrics off; the outputs are what it printed.
+
+Not run: step 1's brew install semgrep. Not tested: Linux.
+
+== How to follow the guide
+section: How to use this guide
+Read in order. Paste BASH blocks into your terminal. A tab naming a file shows lines a guide block saves with cat > file <<'EOF': paste the guide's whole block, EOF line included. PYTHON and YAML blocks are to read.
+
+== Set up your environment
+section: 1. Install Semgrep and keep it local
+Install with brew install semgrep, or python3 -m pip install semgrep in a virtual environment on Python 3.10 or later. These lines turn off Semgrep's usage metrics and version check in this terminal. Output should match the page with 1.184.0.
+```bash
+export SEMGREP_SEND_METRICS=off SEMGREP_ENABLE_VERSION_CHECK=0
+semgrep --version
+mkdir -p ~/semgrep-lab/rules ~/semgrep-lab/code
+cd ~/semgrep-lab
+```
+
+== What Semgrep is and where you meet it
+section: A grep that reads code the way a compiler does
+Semgrep reads source code without running it and reports places that match rules you write in YAML. Application security and platform teams use it to turn "never write this in our code again" into a check run on every change.
+
+== The one idea: match structure, not text
+section: How Semgrep matches code
+boto3 is the Amazon Web Services (AWS) library for Python. In this pattern, ... is any arguments and "..." any string: boto3.client(..., aws_secret_access_key="...", ...). It matches the first two calls: Session is another call, and the last is a string.
+```python
+import boto3
+
+boto3.client("s3", aws_secret_access_key="csohFAKEsecretKEYforTHEsemgrepLAB0000000")
+boto3.client(
+    'sqs',
+    region_name="eu-west-1",
+    aws_secret_access_key='csohFAKEsecretKEYforTHEsemgrepLAB0000000',
+)
+boto3.Session(aws_secret_access_key="csohFAKEsecretKEYforTHEsemgrepLAB0000000")
+note = 'boto3.client("s3", aws_secret_access_key="...")'
+```
+
+== Step 2: a complete rule
+section: 2. A first rule, and a test file to prove it
+Step 2's rules/boto3-hardcoded-secret.yaml holds this rule. The id field names it; the languages field picks the files it reads. Metadata such as a CWE (Common Weakness Enumeration) number never changes what matches.
+```yaml
+  - id: boto3-hardcoded-secret
+    languages: [python]
+    severity: HIGH
+    message: >-
+      A literal AWS secret access key is passed to boto3. Anyone who can
+      read this file can use the key. Rotate it, then let boto3 find
+      credentials itself (environment, profile or IAM role).
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      category: security
+    pattern: boto3.client("s3", aws_secret_access_key="...")
+```
+
+== Step 2: write the test file first
+section: 2. A first rule, and a test file to prove it
+Step 2's rules/boto3-hardcoded-secret.py holds these test cases. A ruleid: comment means the rule must fire on the next line; ok: means it must not. Running semgrep --test rules/ reports the region_name call missed: without ..., arguments must match exactly.
+```python
+# ruleid: boto3-hardcoded-secret
+s3 = boto3.client("s3", aws_secret_access_key="csohFAKEsecretKEYforTHEsemgrepLAB0000000")
+
+# ruleid: boto3-hardcoded-secret
+s3 = boto3.client("s3", region_name="eu-west-1", aws_secret_access_key="csohFAKEsecretKEYforTHEsemgrepLAB0000000")
+
+# ok: boto3-hardcoded-secret
+s3 = boto3.client("s3", aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"])
+```
+
+== Steps 3 and 4: other calls, then the key
+section: 4. Metavariables, metavariable-regex and pattern-not
+Step 3 adds boto3.resource and boto3.Session via pattern-either: any one may match. In step 4's rules/boto3-hardcoded-secret.yaml, all under patterns must hold: the metavariable "$KEY" captures the key, metavariable-regex keeps keys shaped like AWS's example, and pattern-not drops it.
+```yaml
+    patterns:
+      - pattern-either:
+          - pattern: boto3.client(..., aws_secret_access_key="$KEY", ...)
+          - pattern: boto3.resource(..., aws_secret_access_key="$KEY", ...)
+          - pattern: boto3.Session(..., aws_secret_access_key="$KEY", ...)
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: ^[A-Za-z0-9/+]{40}$
+      - pattern-not: boto3.$CALL(..., aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", ...)
+```
+
+== Step 5: an exclusion that excludes nothing
+section: 5. Terraform: pattern-inside, and the exclusion that excludes nothing
+A Terraform IAM (Identity and Access Management) statement with principal "*" grants its actions to anyone unless a condition narrows it. Step 5's draft rules/iam-wildcard-principal.yaml flags conditioned ones too.
+```yaml
+    patterns:
+      - pattern: |
+          principals {
+            ...
+            identifiers = [..., "*", ...]
+            ...
+          }
+      - pattern-not: |
+          condition {
+            ...
+          }
+```
+
+== Step 5: exclude by where the finding sits
+section: 5. Terraform: pattern-inside, and the exclusion that excludes nothing
+That pattern-not removed nothing: it removes a finding only when matching the finding's own code, the principals block. Step 5 rewrites rules/iam-wildcard-principal.yaml: pattern-inside keeps findings inside its match, and this ending, pattern-not-inside, drops them. All tests pass.
+```yaml
+      - pattern-not-inside: |
+          statement {
+            ...
+            condition {
+              ...
+            }
+            ...
+          }
+```
+
+== Step 7: a Bash rule reads no workflow files
+section: 7. GitHub Actions: metavariable-pattern, and the wrong language
+GitHub pastes ${{ github.event.issue.title }} into a run: step's script before the shell starts, so a title can run commands. Step 7 saves a workflow in code/; this Bash rule reports Ran 1 rule on 0 files: 0 findings.
+```bash
+semgrep scan -l bash -e 'git checkout $REF' code/
+```
+
+== Step 7: search the script inside the YAML
+section: 7. GitHub Actions: metavariable-pattern, and the wrong language
+A rule reads only files of its languages: .yml is YAML. Step 7's rules/gha-run-event-interpolation.yaml captures each run: script; metavariable-pattern searches it in generic mode, for text without a parser. A scan reports Ran 1 rule on 1 file: 2 findings.
+```yaml
+    patterns:
+      - pattern-inside: "steps: [...]"
+      - pattern: "run: $SCRIPT"
+      - metavariable-pattern:
+          metavariable: $SCRIPT
+          language: generic
+          pattern-either:
+            - pattern: "${{ ... github.event ... }}"
+            - pattern: "${{ ... github.head_ref ... }}"
+```
+
+== Step 8: a taint source that never matches
+section: 8. Taint mode, and a source that never matches
+A taint rule reports data from a source reaching a sink, here a shell command, without a sanitizer. Step 8's first source never matched the handler's .get(): only the ruleid: test noticed. This fix in rules/lambda-event-to-shell.yaml taints the event parameter.
+```yaml
+    pattern-sources:
+      - patterns:
+          - pattern-inside: |
+              def $HANDLER(event, context):
+                ...
+          - pattern: event
+```
+
+== Step 9: the directory a scan skips
+section: 9. Scan a project, and see what was skipped
+Step 9 scans code/ with a key in tests/integration. The summary says Files matching .semgrepignore patterns: 1, because with no .semgrepignore file a built-in list skips tests/, build/, vendor/ and more. This one replaces that list; the key is found.
+```bash
+cd ~/semgrep-lab/code
+printf 'node_modules/\n.venv/\n' > .semgrepignore
+semgrep scan --config ../rules/ .
+cd ~/semgrep-lab
+```
+
+== Exercise: a draft that misses event data
+section: Hands-on exercises
+An earlier draft of step 7's rule used these two patterns and passed tests of ordinary issue-title steps. Write a run: step that injects event data and that this draft misses. The guide hides each answer under "Show the answer".
+```yaml
+          pattern-either:
+            - pattern: "${{ github.event. ... }}"
+            - pattern: "${{ github.head_ref }}"
+```
+
+== Answer: another way to write the same lookup
+section: Hands-on exercises
+Either step gets past the draft. The first uses index syntax, so github.event is followed by [; the second puts a function call before github.event. The step 7 rule allows anything on either side and fires on both.
+```yaml
+      - run: echo "${{ github.event['issue']['title'] }}"
+      - run: echo '${{ toJSON(github.event.issue) }}'
+```
+
+== Exercise: six months of passing scans
+section: Hands-on exercises
+A pipeline, the automated build and test steps, has run semgrep scan --error --config rules/ . on every pull request for six months without failing; --error makes any finding exit 1. What would you check before calling the code clean?
+
+== Answer: check what the silence covers
+section: Hands-on exercises
+- Check the file count in Ran N rules on M files.
+- Compare the rules' languages with the repository's.
+- Check that every rule has a test file with a ruleid: case.
+- Plant one known-bad line per rule, and confirm each fires.
+
+== Common mistakes
+section: Common mistakes
+- A bare $KEY captures the quote marks; "$KEY" captures the contents.
+- The metavariable-regex check is anchored at the start, not a search.
+- Set the languages field by what the file is.
+- Rules maintained by Semgrep, Inc. allow internal use only.
