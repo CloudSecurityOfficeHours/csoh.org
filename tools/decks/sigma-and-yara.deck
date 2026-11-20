@@ -1,0 +1,185 @@
+title: Sigma and YARA, hands-on
+guide: howto/sigma-and-yara.html
+promise: Write a Sigma rule for log events and convert it for Splunk, then a YARA rule for file bytes, tested on a harmless file too.
+
+== Who it is for and what you need
+section: How to use this guide
+It is intermediate: you have used a SIEM (security information and event management system) or a log search language, use a terminal and read YAML, the indented name: value format of Sigma rules.
+
+Allow two hours; you need no SIEM.
+
+== How the guide was checked
+section: How to use this guide
+Sigma rules and commands ran as printed with sigma-cli 4.0.0, YARA ones with yara-x-cli 1.23.0, on an Apple silicon Mac; outputs shown are what they printed.
+
+Not re-run: step 6's install command. Step 5's rule was converted for Splunk only.
+
+== How to follow the guide
+section: How to use this guide
+Paste BASH blocks into your terminal. YAML blocks are a Sigma rule or part of one; a demo.yar tab marks part of step 7's YARA rule file. YARA blocks are rules to read and try. Unlabelled blocks are output.
+
+== Set up Sigma: sigma-cli and the Splunk backend
+section: 1. Install the toolchain
+sigma-cli checks and converts Sigma rules. It needs Python 3.11 to 3.14 (swap python3.13 for yours) and installs into .venv, a virtual environment. Then install the Splunk backend: sigma plugin install splunk. Versions other than 4.0.0 may print differently.
+```bash
+mkdir -p ~/detect-lab && cd ~/detect-lab
+python3.13 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install sigma-cli
+sigma version
+```
+
+== Set up YARA: YARA-X, not YARA
+section: 6. Install YARA-X, not YARA
+YARA-X is a rewrite of YARA, whose 4.x line gets bug fixes only. Its command is yr, not yara. You can swap the first line for cargo install yara-x-cli. The guide used yara-x-cli 1.23.0 but did not re-run this install.
+```bash
+brew install yara-x
+yr --version
+```
+
+== Two rule formats for two different jobs
+section: Two rule formats, two completely different jobs
+In a cloud incident, Sigma answers what happened, from log events, and YARA answers what a file the intruder left is, from its bytes. A Sigma rule is converted into your SIEM's query language; YARA runs its rules itself.
+
+== Sigma step 2: a rule's detection
+section: 2. The anatomy of a rule
+Step 2 saves a rule for AccessDenied errors in CloudTrail, the record of calls made in an Amazon Web Services account, as aws_cloudtrail_access_denied_burst.yml. In this part, the condition needs the selection block to match and filter_known_scanner not to.
+```yaml
+detection:
+  # Each named block is a "search identifier". Keys ANDed, list values ORed.
+  selection:
+    errorCode: AccessDenied
+  filter_known_scanner:
+    userIdentity.arn|startswith: 'arn:aws:sts::111122223333:assumed-role/config-recorder/'
+  condition: selection and not filter_known_scanner
+```
+
+== Sigma step 3: validate before you convert
+section: 3. Validate before you convert
+Expect Found 0 errors, 0 condition errors and 0 issues. Under a short name such as rule.yml, the file gets a high-severity FilenameLengthIssue. By default the sigma check command still exits 0, so in CI (continuous integration) add --fail-on-issues.
+```bash
+sigma check aws_cloudtrail_access_denied_burst.yml
+```
+
+== The one idea: the field names are Sigma's
+section: 4. Convert it, and meet the pipeline requirement
+This fails on purpose, asking for a processing pipeline. A Sigma rule's field names are Sigma's, not your SIEM's; a pipeline maps them onto your data's. Without one, the query runs, returns zero results and looks like a quiet environment.
+```bash
+sigma convert -t splunk aws_cloudtrail_access_denied_burst.yml
+```
+
+== Sigma step 4: convert without a pipeline
+section: 4. Convert it, and meet the pipeline requirement
+Add --without-pipeline, knowing the cost, and it prints this Splunk search: |startswith became a trailing *, and the not keyword became NOT. The -t flag picks the SIEM, but not every backend works with sigma-cli 4.0.0 yet.
+```text
+errorCode="AccessDenied" NOT userIdentity.arn="arn:aws:sts::111122223333:assumed-role/config-recorder/*"
+```
+
+== Sigma step 5: correlation counts a burst
+section: 5. Correlation rules
+Step 2's rule fires on every denied event. Step 5 appends a correlation rule, ending as shown, to the same file: it counts matches over a time window. Its rules entry matches step 2's name field.
+```yaml
+correlation:
+  type: event_count
+  rules:
+    - aws_cloudtrail_access_denied          # the `name:` of the base rule
+  group-by:
+    - sourceIPAddress
+  timespan: 10m
+  condition:
+    gte: 10
+level: high
+```
+
+== YARA step 7: one string from each group
+section: 7. Write a rule, and a target to test it on
+Step 7 saves demo.yar, a rule for a script that reads cloud credential files and sends them off. Above this part, $cred1, $cred2 and $imds match two credential paths and an address.
+```yara
+        // fullword = must be delimited, so "curl" does not match "curling"
+        $exfil1 = "curl" fullword ascii nocase
+        $exfil2 = "wget" fullword ascii nocase
+
+        // A regular expression string. RE2-style: no backreferences.
+        $exfil3 = /https?:\/\/[a-z0-9.-]+\/(upload|collect|p)\b/ nocase
+
+    condition:
+        filesize < 512KB
+        and any of ($cred*, $imds)
+        and any of ($exfil*)
+```
+
+== YARA step 8: the harmless file must not match
+section: 8. Compile, scan, and read the evidence
+Step 7's last lines write sample.sh, which must match, and benign.txt, which contains curl but must not. Expect Suspicious_Cloud_Credential_Theft sample.sh, then nothing. That negative case alone tells a working rule from one that matches half your filesystem.
+```bash
+yr scan demo.yar sample.sh
+yr scan demo.yar benign.txt
+```
+
+== YARA step 8: read the evidence
+section: 8. Compile, scan, and read the evidence
+The -s flag, as in yr scan -s demo.yar sample.sh, prints each matched string's offset, length, identifier and bytes. This is how you debug a rule and write up a finding: a colleague can verify a match with offsets.
+```text
+Suspicious_Cloud_Credential_Theft sample.sh
+0xf:17:$cred1: /.aws/credentials
+0x2d:4:$exfil1: curl
+0x3a:25:$exfil3: https://evil.test/collect
+```
+
+== YARA step 10: keep rules in git like code
+section: 10. Keep rules in git like code
+The yr fmt command rewrites a rule file in canonical style, exiting 1 when it does. With --check it changes nothing but exits 1 if it would rewrite: a CI gate. Here neither prints anything; the second exits 0.
+```bash
+yr fmt demo.yar
+yr fmt --check demo.yar
+```
+
+== Exercise: a Sigma query that finds nothing
+section: Hands-on exercises
+Your converted Splunk query runs against a year of CloudTrail and returns zero results. Give three distinct explanations, most likely first, and say how you would tell them apart. The guide hides each answer until you open Show the answer.
+
+== Answer: three explanations, most likely first
+section: Hands-on exercises
+- Most likely, with no pipeline, the field names are wrong. Search for one field alone.
+- The data is not in that index. Search it for any CloudTrail event.
+- Least likely, nothing happened. Conclude that only after ruling out both.
+
+== Exercise: a YARA rule matching every script
+section: Hands-on exercises
+This YARA rule was written to catch a credential stealer. It matches roughly every shell script on the system. Fix it, and explain the class of mistake.
+```yara
+rule Credential_Stealer
+{
+    strings:
+        $a = "aws"
+        $b = "curl"
+        $c = "cat"
+    condition:
+        any of them
+}
+```
+
+== Answer: indicators for behaviour, not tools
+section: Hands-on exercises
+Three failures compound: short common strings, a condition met by any one of them, and no fullword, so $a matches inside laws.
+```yara
+rule Credential_Stealer
+{
+    strings:
+        $path  = "/.aws/credentials" ascii nocase
+        $imds  = "169.254.169.254"   ascii
+        $send1 = "curl" fullword ascii nocase
+        $send2 = "wget" fullword ascii nocase
+    condition:
+        filesize < 512KB
+        and any of ($path, $imds)      // a credential source, AND
+        and any of ($send*)            // a way to send it off the box
+}
+```
+
+== Common mistakes
+section: Common mistakes
+- Without the falsepositives and level fields, analysts cannot triage alerts.
+- Never reuse or omit a Sigma rule's id, which survives renames.
+- Without the ascii wide modifiers, a YARA string misses its Windows-binary form.
+- Test both formats on harmless data too.
