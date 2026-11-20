@@ -44,7 +44,7 @@ credit: <source and licence>
 - `section:` must match an h2 or h3 on the guide.
 - A code excerpt must be a contiguous run of whole lines from one `<pre>`
   block on the guide.
-- Limits: 12 to 20 slides counting the generated cover and closing slides, at
+- Limits: 12 to 22 slides counting the generated cover and closing slides, at
   most 40 words of prose and 12 code rows per slide, no U+2013 or U+2014, and
   no spaced hyphen used as a dash.
 - Code rows are visual rows: a line longer than 84 columns wraps at spaces

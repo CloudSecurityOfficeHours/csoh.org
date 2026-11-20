@@ -60,7 +60,7 @@ MAX_CODE_LINES = 12
 CODE_WRAP_COLS = 84
 MAX_HEADING_WORDS = 12
 MIN_SLIDES = 12
-MAX_SLIDES = 20
+MAX_SLIDES = 22
 # The renderer adds a cover and a closing slide that the outline does not
 # contain; the slide-count limit applies to the total.
 GENERATED_SLIDES = 2
@@ -738,8 +738,10 @@ def _case_slide_count(tmp: Path) -> None:
     f = style_findings(_deck_with(9))
     assert len(f) == 1 and "11" in f[0], f
     assert style_findings(_deck_with(10)) == []
-    assert style_findings(_deck_with(18)) == []
-    assert len(style_findings(_deck_with(19))) == 1
+    top = MAX_SLIDES - GENERATED_SLIDES
+    assert style_findings(_deck_with(top)) == []
+    f = style_findings(_deck_with(top + 1))
+    assert len(f) == 1 and str(MAX_SLIDES + 1) in f[0], f
 
 
 def _case_dashes(tmp: Path) -> None:
