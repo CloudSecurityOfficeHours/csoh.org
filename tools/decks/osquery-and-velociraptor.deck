@@ -10,9 +10,9 @@ You need Docker and a terminal, but no account and no cloud.
 
 == How the guide was checked
 section: How to use this guide
-A script ran every code block in order on an Apple silicon Mac, with osquery 5.24.1 and Velociraptor 0.77.3 installed in Ubuntu 24.04 containers.
+A script ran every block on an Apple silicon Mac: docker commands in zsh, the rest in Ubuntu 24.04 containers with osquery 5.24.1 and Velociraptor 0.77.3.
 
-Not run: anything on a real cloud instance. osquery's systemd_units table was seen only failing.
+Nothing ran on a real cloud instance; osquery's systemd_units table was seen only failing.
 
 == How to follow the guide
 section: How to use this guide
@@ -67,7 +67,7 @@ FROM users u JOIN authorized_keys k USING (uid);
 
 == Step 6: no metadata service, a five-minute wait
 section: 6. Containers and cloud metadata
-osquery's ec2_instance_metadata table reads the metadata service an AWS (Amazon Web Services) VM asks for facts about itself. Nothing answers here: it retries for about five minutes, logs errors, returns a row of empty strings and exits with status 0.
+osquery's ec2_instance_metadata table reads the metadata service an AWS (Amazon Web Services) VM asks for facts about itself. Here nothing answers: after .exit, this retries for about five minutes, logs errors, returns a blank row and exits with status 0.
 ```bash
 time osqueryi "SELECT instance_id, region, iam_arn FROM ec2_instance_metadata;"
 ```
@@ -96,7 +96,7 @@ velociraptor -v query 'SELECT OSPath FROM glob(glob="/etc/systemd/system/*.servi
 
 == Step 10: an artifact's defaults leave root out
 section: 10. Artifacts: queries with documentation and defaults
-A Velociraptor artifact packages VQL queries with a description and parameters with defaults. By default, Linux.Ssh.AuthorizedKeys looks only under /home, missing root's key: step 4's blind spot reversed. This widens its sshKeyFilesGlob parameter to root's home with a brace list.
+A Velociraptor artifact packages VQL queries with a description and parameters with defaults. By default, Linux.Ssh.AuthorizedKeys looks only under /home, missing root's key: step 4's blind spot reversed. Here a brace list widens its sshKeyFilesGlob parameter to /root.
 ```vql
 SELECT OSPath, count() AS Keys
 FROM Artifact.Linux.Ssh.AuthorizedKeys(sshKeyFilesGlob="{/root,/home/*}/.ssh/authorized_keys*")
@@ -119,7 +119,7 @@ The listener's binary has been deleted. Get its SHA-256 hash from the running pr
 
 == Answer: hash the process through /proc
 section: Hands-on exercises
-The kernel keeps a deleted executable readable through /proc/<pid>/exe while the process runs, and osquery's hash table reads that path. The guide's second query compares the hash with every file in /usr/bin and matches /usr/bin/perl: it is Perl, renamed.
+The kernel keeps a deleted executable readable through /proc/<pid>/exe while the process runs, and osquery's table named hash reads that path. A second query compares the hash with every file in /usr/bin and matches /usr/bin/perl: it is Perl, renamed.
 ```sql
 SELECT p.pid, p.name, h.sha256
 FROM processes p JOIN hash h ON h.path = '/proc/' || p.pid || '/exe'
@@ -128,7 +128,7 @@ WHERE p.on_disk = 0;
 
 == Exercise: what changed in the last day?
 section: Hands-on exercises
-Write one VQL query that lists every file under /etc/cron.d and /etc/systemd/system, and any .ssh directory in /root or /home, changed in the last day, newest first. Run it through vql on the VM, before step 11's clean-up.
+Write one VQL query listing every file under /etc/cron.d and /etc/systemd/system, and any .ssh directory in /root or /home, changed in the last day, newest first. Before step 11's clean-up, run it in a VM shell that has vql defined.
 
 == Answer: one glob() over a list of patterns
 section: Hands-on exercises
