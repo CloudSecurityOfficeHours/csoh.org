@@ -1,0 +1,185 @@
+title: Python and the cloud SDKs, hands-on
+guide: howto/python-cloud-sdks.html
+promise: Learn to read Python security scripts and to tell when one has quietly missed something, in a free lab on your own computer.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to Python and the cloud SDKs (software development kits) who can use a terminal and read a little code. Allow two hours.
+
+You need Python 3.10 or newer and no AWS (Amazon Web Services) account.
+
+== How the guide was checked
+section: How to use this guide
+A script ran every code block in order with boto3 1.43.123 and moto 5.2.5, and printed every output shown.
+
+Not run: the Azure and Google Cloud notes, on a real subscription or project, and the EventBridge results, on EventBridge itself.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste each BASH block whole; cat > roles.py <<'EOF' saves the lines down to EOF as roles.py, and the last line runs it. Unlabelled blocks are output. A tab like roles.py marks part of that file.
+
+== Set up: install boto3 and moto
+section: 1. Install boto3 and moto
+boto3 is AWS's SDK; moto is an AWS emulator.
+
+Both need Python 3.10 or newer, and macOS's python3 is older: if yours is, install a newer one and use its name, such as python3.12, on line 2. Expect 1.43.123 5.2.5.
+```bash
+mkdir -p ~/sdk-lab && cd ~/sdk-lab
+python3 -m venv .venv && . .venv/bin/activate
+pip install --quiet 'boto3==1.43.123' 'moto[server]==5.2.5'
+python3 -c "import boto3, moto; print(boto3.__version__, moto.__version__)"
+```
+
+== Set up: start the lab, then a second terminal
+section: 3. Find out who you are (identity)
+Step 2's block writes and starts lab.py, which builds what the scripts audit. Expect Lab running at http://localhost:8101; Ctrl-C stops it, forgetting everything. In a second terminal, run this line, or scripts read the AWS account your credentials point at.
+```bash
+cd ~/sdk-lab && . .venv/bin/activate && . ./lab.env
+```
+
+== What the cloud SDKs are and where you meet them
+section: Python for security automation
+Security scripts answer questions across every account and Region, the separate locations where AWS runs its services. An SDK turns each API (application programming interface) call into a Python function call: boto3 for AWS, plus Azure's and Google Cloud's own.
+
+== Five questions before you trust a result
+section: Five questions to ask before you trust a result
+A script with a mistake rarely crashes; it prints a shorter list. Ask five questions:
+- Whose credentials did it use?
+- Did it read every page?
+- Did it look in every Region?
+- Did every call work?
+- Did it cover every account?
+
+== Step 3: find out who you are first
+section: 3. Find out who you are (identity)
+Step 3 saves this as whoami.py. get_caller_identity asks STS (Security Token Service) which identity signed the request, needs no permissions, and returns a dictionary, mapping names (keys) to values. It runs as alice, the default profile; AWS_PROFILE=auditor gives the auditor.
+```python
+import boto3
+
+session = boto3.Session()
+me = session.client("sts").get_caller_identity()
+print("account: ", me["Account"])
+print("identity:", me["Arn"])
+print("found in:", session.get_credentials().method)
+print("region:  ", session.region_name)
+```
+
+== Step 3: environment keys beat AWS_PROFILE
+section: 3. Find out who you are (identity)
+Step 3 then loads build-bot.env, the CI (continuous integration) pipeline's access key: the key pair scripts sign requests with. AWS_PROFILE=auditor runs as build-bot, since boto3 reads environment variables before profiles. This clears them and sets the auditor from here on.
+```bash
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+export AWS_PROFILE=auditor
+python3 whoami.py
+```
+
+== Step 4: a paginator reads every page
+section: 4. Read every page
+Step 4's roles.py counts IAM (Identity and Access Management) roles, identities people and programs take on for a while. One list_roles call returns 100 of 137; so does a loop checking NextToken, which IAM calls Marker. This paginator gets 137.
+```python
+roles = []
+for page in iam.get_paginator("list_roles").paginate():
+    roles.extend(page["Roles"])
+print("paginator:        ", len(roles), "roles")
+```
+
+== Step 5: cover every enabled Region
+section: 5. Cover every enabled Region
+Step 5's regions.py lists security groups, AWS's virtual firewalls, in the client's Region, then in every Region describe_regions says the account has enabled. Three groups sit elsewhere, one in me-central-1, an opt-in Region: disabled until someone turns it on.
+```text
+us-east-1 only: ['web-public', 'debug-ssh', 'office-ssh']
+18 Regions enabled for this account:
+  ap-southeast-2: ['ipv6-everything']
+  eu-west-1: ['legacy-rdp']
+  me-central-1: ['temp-postgres']
+  us-east-1: ['web-public', 'debug-ssh', 'office-ssh']
+```
+
+== Step 6: let errors say what was not checked
+section: 6. Let errors say what they could not check
+policies_naive.py used except Exception:, so csoh-lab-payroll-exports, an S3 (Simple Storage Service) bucket the auditor may not read, showed as having no bucket policy, its own access rules. policies.py catches only ClientError and lists other codes as NOT CHECKED.
+```python
+        try:
+            s3.get_bucket_policy(Bucket=name)
+            has_policy.append(name)
+        except ClientError as err:
+            code = err.response["Error"]["Code"]
+            if code == "NoSuchBucketPolicy":
+                no_policy.append(name)
+            else:
+                not_checked.append(f"{name} ({code})")
+```
+
+== Step 7: cover every account in the organization
+section: 7. Cover every account in the organization
+An AWS organization is a group of accounts run together from one management account. Step 7's org_roles.py assumes a role in each member account; sandbox's is refused. With except Exception: continue, it would print three accounts and exit 0.
+```text
+management (123456789012): 137 roles
+prod (111111111111): 2 roles
+dev (222222222222): 2 roles
+sandbox (333333333333): NOT CHECKED, AccessDenied
+exit code: 1
+```
+
+== Findings that go nowhere
+section: Findings that go nowhere: EventBridge event patterns
+GuardDuty, AWS's threat detection service, sends findings to EventBridge, where a rule sends events its pattern matches to targets; a miss raises no error. This section's patterns.py tests three patterns:
+```python
+PATTERNS = {
+    "AWS's CLI example": {"source": ["aws.guardduty"], "detail-type": ["GuardDuty Finding"],
+                          "detail": {"severity": [5, 8]}},
+    "one letter off": {"source": ["aws.guardduty"], "detail-type": ["GuardDuty Findings"]},
+    "numeric, 7 and up": {"source": ["aws.guardduty"], "detail-type": ["GuardDuty Finding"],
+                          "detail": {"severity": [{"numeric": [">=", 7]}]}},
+}
+```
+
+== Exact numbers, and one letter off
+section: Findings that go nowhere: EventBridge event patterns
+The first, GuardDuty's own example, misses 7.5, a High score, and even 8.0: an exact match compares numbers as written. The second, Findings, is one letter off and matches nothing. The third uses numeric, which compares values as numbers.
+```text
+                        5    7.5      8    8.0
+AWS's CLI example   match      -  match      -
+one letter off          -      -      -      -
+numeric, 7 and up       -  match  match  match
+```
+
+== Exercise: access keys unused for 90 days
+section: Hands-on exercises
+Write each exercise in ~/sdk-lab with the lab running, as the auditor. List every IAM user with an active access key not used for 90 days, using list_users, list_access_keys and get_access_key_last_used. The guide hides each answer under "Show the answer".
+
+== Answer: a never-used key has no LastUsedDate
+section: Hands-on exercises
+stale_keys.py prints bob, last used 120 days ago, and dave. AWS leaves LastUsedDate out for dave's never-used key, so a test on used.get("LastUsedDate"), which gives None, Python's "nothing", quietly treats the key as not stale. This measures it from CreateDate.
+```python
+                if "LastUsedDate" in used:
+                    idle, how = now - used["LastUsedDate"], "last used"
+                else:
+                    idle, how = now - key["CreateDate"], "never used, created"
+                if idle > LIMIT:
+                    print(f"{name}: {how} {idle.days} days ago")
+```
+
+== Exercise: would a High finding reach anything?
+section: Hands-on exercises
+In each enabled Region where GuardDuty is on, would a High finding reach anything: an enabled rule whose pattern matches it, with a target? Test patterns with test_event_pattern; exit non-zero if a Region has no route or was not checked.
+
+== Answer: four of five Regions drop it
+section: Hands-on exercises
+Each of four Regions would drop a High finding for a different reason: me-central-1 has no rule, eu-west-1's rule is disabled, us-west-2's has no target, and ap-southeast-2's is the [5, 8] example. Only us-east-1's numeric rule passes it on.
+```text
+ap-southeast-2: NOT ROUTED
+eu-west-1: NOT ROUTED
+me-central-1: NOT ROUTED
+us-east-1: guardduty-high -> 1 target(s)
+us-west-2: NOT ROUTED
+NOT CHECKED: []
+exit code: 1
+```
+
+== Common mistakes
+section: Common mistakes
+- One list call reads one page; use a paginator.
+- Keys in the environment win over AWS_PROFILE.
+- boto3 ignores AWS_REGION and quietly uses the profile's Region.
+- A scheduled job sees only the exit code: exit non-zero if anything was not checked.
