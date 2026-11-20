@@ -10,7 +10,7 @@ You need a LogScale account, in LogScale Cloud or self-hosted: the free Communit
 
 == How the guide was checked
 section: How to use this guide
-No CQL query was run: a local script worked out each result from CrowdStrike's documentation. Shell steps ran on macOS against a local stand-in for LogScale's ingest address. Step 10's correlation rule passed terraform validate but was never applied.
+No CQL query was run; results were worked out from CrowdStrike's documentation. Shell steps ran against a local stand-in for LogScale's ingest address. Step 10's correlation rule passed terraform validate (Terraform creates resources from text files) but was never applied.
 
 == How to follow the guide
 section: How to use this guide
@@ -18,7 +18,7 @@ Read it in order. Paste BASH blocks into your terminal, and CQL blocks, except s
 
 == Set up: a repository, a parser and a token
 section: 2. Create a parser and an ingest token
-Use an empty repository, a separate store of events where you may change parsers and tokens, so nothing else gets counted. Create this parser, cloudtrail-lab, which sets event times, and an ingest token for it, a secret for sending events.
+Use an empty repository, a separate store of events, so nothing else gets counted. With your role's permission, create this parser, cloudtrail-lab, which reads each event's fields and time, and an ingest token for it, a secret for sending events.
 ```cql
 parseJson()
 | parseTimestamp(field=eventTime)
@@ -83,7 +83,7 @@ errorCode="AccessDenied"
 
 == Before you trust an empty result, run a control
 section: 7. Count, then threshold: the burst that never fires (D2)
-A control must return something. The default() function gives a missing errorCode the value (none): expect (none) 14, AccessDenied 7 and Client.UnauthorizedOperation 3 (all the attacker's). The fixed D2 starts in(field="errorCode", values=["AccessDenied*", "*UnauthorizedOperation"]), * being a wildcard: 203.0.113.50 has 7.
+A control must return something. The default() function fills a missing errorCode with (none): expect (none) 14, AccessDenied 7, Client.UnauthorizedOperation 3. Those 3 are the attacker's. The fixed D2 starts in(field="errorCode", values=["AccessDenied*", "*UnauthorizedOperation"]), * being a wildcard: 203.0.113.50 has 7.
 ```cql
 // Control: which error codes are in the data at all?
 default(field=errorCode, value="(none)")
