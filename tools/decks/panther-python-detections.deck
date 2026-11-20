@@ -1,0 +1,179 @@
+title: Panther Python detections, hands-on
+guide: howto/panther-python-detections.html
+promise: Write five detections against a sample CloudTrail file, test them on your computer, and see which parts only Panther can check.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to Panther, a security platform that collects logs and raises alerts. You need not know Python.
+
+You need a terminal and Python 3.11 or newer, but no Panther or Amazon Web Services (AWS) account.
+
+== How the guide was checked
+section: How to use this guide
+A script ran every code block in order with Panther's command-line tool 1.11.2, on Python 3.12 and 3.13.
+
+Not run, since only a running Panther system does them: counting matches against step 6's threshold, and evaluating step 7's correlation rule.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into your terminal; a line ending <<'EOF' writes the lines down to EOF into the file it names. Unlabelled blocks show what should print. Most steps run rules through fire.py, step 3's helper.
+
+== Set up your environment
+section: 1. Install the CLI
+pat, Panther's command-line tool, needs Python 3.11 or newer, so check python3 --version first. The second line makes a private Python, a virtual environment, so nothing installs system-wide. pat --version should print 1.11.2. Step 2 saves the 24 lab events.
+```bash
+mkdir -p ~/panther-lab && cd ~/panther-lab
+python3 -m venv .venv && . .venv/bin/activate
+pip install --quiet panther-analysis-tool==1.11.2
+pat --version
+```
+
+== What a Panther rule is and where it runs
+section: Detections as Python functions
+As each log event arrives, Panther runs every enabled rule written for that kind of log.
+
+A rule is two files: Python code for the logic, and a plain-text YAML settings file holding its ID, severity, alert settings and tests.
+
+== One event in, True or False out
+section: One event in, True or False out
+A rule is a function that receives one event and returns True (alert) or False (ignore). The Python sees one event at a time, so counting is set in the YAML file and a sequence is a separate correlation rule.
+```bash
+python3 - <<'PY'
+# One trimmed CloudTrail event. Python calls this a dictionary.
+event = {"eventName": "StopLogging", "userIdentity": {"userName": "backup-svc"}}
+print(event.get("eventName"), event.get("errorCode"))   # errorCode is missing
+
+def rule(event):                  # def names a function; event is its input
+    return event.get("eventName") in {"StopLogging", "DeleteTrail"}
+
+print(rule(event))                # return hands back the function's answer
+PY
+```
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Walk-through: a leaked CI key, five detections
+The lab is 24 events from CloudTrail, the record of calls made to an AWS account.
+
+A continuous integration (CI) user, build-bot, has leaked its access key, the credential a program signs its AWS requests with.
+
+== What someone does with build-bot's key
+section: Walk-through: a leaked CI key, five detections
+From 203.0.113.50 someone is mostly refused, then creates the user backup-svc, gives it AdministratorAccess (AWS's ready-made policy that allows every action) and an access key, and as backup-svc stops CloudTrail logging.
+
+Earlier, bob signs in without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== D1: your first rule, run over every event
+section: 3. Your first rule, run over every event (D1)
+event.get() reads a field by its name, and the in operator asks whether the value is one of the alternatives in TAMPERING.
+
+fire.py, a helper this step saves, runs the rule over all 24 events: one match, backup-svc's StopLogging.
+```bash
+mkdir -p rules
+cat > rules/trail_tampering.py <<'EOF'
+# Each of these calls stops, removes or narrows what CloudTrail records.
+TAMPERING = {"StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors"}
+
+def rule(event):
+    return event.get("eventName") in TAMPERING
+```
+
+== Give D1 its YAML file and tests
+section: 4. Add the metadata and tests, then run pat test
+The YAML file names the rule, sets its severity and carries its tests: lab events, each with the answer rule() should give. One must match and one must not. Then the pat test command runs them, and both pass.
+```bash
+cat > rules/trail_tampering.yml <<'EOF'
+AnalysisType: rule
+Filename: trail_tampering.py
+RuleID: Lab.CloudTrail.TrailTampering
+Enabled: true
+LogTypes:
+  - AWS.CloudTrail
+Severity: High
+```
+
+== Logins without MFA (D4): require success too
+section: 5. Nested fields: console logins without MFA (D4)
+event.deep_get() reads a field inside another field, one name at a time. The first draft had no outcome check, so it also matched someone failing to sign in as alice. Requiring a successful outcome leaves only bob.
+```bash
+cat > rules/console_login_no_mfa.py <<'EOF'
+def rule(event):
+    return (
+        event.get("eventName") == "ConsoleLogin"
+        and event.deep_get("responseElements", "ConsoleLogin") == "Success"
+        and event.deep_get("additionalEventData", "MFAUsed") == "No"
+    )
+EOF
+python3 fire.py rules/console_login_no_mfa.py
+```
+
+== D2: counting belongs in the YAML
+section: 6. Counting belongs in the YAML, not the Python (D2)
+The rule() function sees one event, so Panther counts: matches whose dedup() function returns the same string, here the source address, form a group. Treating only AccessDenied as refused, this draft finds four from the attacker: no alert.
+```yaml
+RuleID: Lab.CloudTrail.DeniedCallBurst
+Enabled: true
+LogTypes:
+  - AWS.CloudTrail
+Severity: Medium
+Threshold: 5              # alert when one group reaches 5 matches
+DedupPeriodMinutes: 10    # counted over 10 minutes from its first match
+```
+
+== Before you trust a quiet rule, run a control
+section: 6. Counting belongs in the YAML, not the Python (D2)
+This control drops the condition and counts each errorCode value: Elastic Compute Cloud (EC2) reports three of the attacker's refusals as Client.UnauthorizedOperation. The fix matches codes that start AccessDenied or end UnauthorizedOperation: seven from the attacker, one alert.
+```bash
+python3 - <<'PY'
+import json
+from collections import Counter
+print(Counter(json.loads(line).get("errorCode") for line in open("cloudtrail-lab.jsonl")))
+PY
+```
+
+== D3: a correlation rule, which pat test skips
+section: 7. Two events, one story: signals and a correlation rule (D3)
+Two signal rules, with CreateAlert: false, record CreateUser and CreateAccessKey matches but alert nobody. This correlation rule, YAML with no Python, pairs them by user name within 10 minutes. Locally, pat test skips its tests and still exits 0.
+```yaml
+    Transitions:
+      - ID: key follows user
+        From: UserCreated
+        To: KeyCreated
+        WithinTimeFrameMinutes: 10
+        Match:
+          - On: p_alert_context.request_username
+    LookbackWindowMinutes: 30   # twice the window, plus 10 minutes for log delivery
+```
+
+== Exercise: write D5 in Python
+section: Hands-on exercises
+Write rules/admin_policy_attached.py for D5: return True when the AdministratorAccess policy is attached to a user. Check it with fire.py, then name lab events for its positive and negative tests. The guide hides each answer until you click Show the answer.
+
+== Answer: one match, build-bot at 10:06:30
+section: Hands-on exercises
+fire.py finds one match, build-bot attaching the policy to backup-svc at 10:06:30: that is the positive test. A good negative is the CreateAccessKey call 21 seconds later, the same actor acting on the same user.
+```bash
+cat > rules/admin_policy_attached.py <<'EOF'
+ADMIN = "arn:aws:iam::aws:policy/AdministratorAccess"
+
+def rule(event):
+    policy = event.deep_get("requestParameters", "policyArn")
+    return event.get("eventName") == "AttachUserPolicy" and policy == ADMIN and not event.get("errorCode")
+EOF
+python3 fire.py rules/admin_policy_attached.py
+```
+
+== Exercise: a burst rule that never alerts
+section: Hands-on exercises
+A colleague's burst rule uses step 6's corrected check and Threshold: 5, matches all ten refusals, and never alerts. It has no dedup(), and its title(), which writes the alert's headline, returns f"Refused {event.get('eventName')} from {event.get('sourceIPAddress')}". Why is it silent?
+
+== Answer: the title splits the count
+section: Hands-on exercises
+With no dedup(), Panther groups matches by the title, and this title names the event, so each different call is its own group: ten matches fall into eight groups, none reaching five. A dedup() returning the source address fixes it.
+
+== Common mistakes
+section: Common mistakes
+- Counting belongs in the YAML, grouped by dedup(), never inside rule().
+- EC2 writes Client.UnauthorizedOperation where most services write AccessDenied: list your data's codes first.
+- Locally, pat test skips correlation rule tests and still exits 0.
