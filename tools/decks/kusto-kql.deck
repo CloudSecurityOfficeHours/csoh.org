@@ -1,0 +1,164 @@
+title: Kusto Query Language (KQL)
+guide: howto/kusto-kql.html
+promise: On your own computer, build a copy of Microsoft Sentinel's AWSCloudTrail table, follow a leaked access key through it, and learn to recognise a query that returns nothing because it cannot work.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to KQL and query languages who can use a terminal. Allow about two hours.
+
+You need Docker with 4 GB of memory to spare and Python 3. The walk-through needs no Azure account.
+
+== How the guide was checked
+section: How to use this guide
+Every walk-through query ran as printed on the Kusto emulator, the Azure Data Explorer engine, in Docker on an Apple silicon Mac.
+
+Not run: a free Azure Data Explorer cluster, and the analytics rule inside a Sentinel workspace.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order: steps 1 to 3 set everything up, 4 to 8 teach KQL, and 9 and 10 build a rule.
+
+Paste BASH blocks into a terminal; an unlabelled block shows what you should see.
+
+== Set up your environment
+section: 1. Start a Kusto engine
+On an Apple silicon Mac, turn on Docker Desktop's Rosetta setting first. This starts the Kusto emulator; ACCEPT_EULA=Y accepts Microsoft's licence terms, so read them first. Then save kql.py, which sends it your queries: .show version prints the engine's build.
+```bash
+mkdir -p ~/kql-lab && cd ~/kql-lab
+docker run -d --name lab-kusto --platform linux/amd64 -e ACCEPT_EULA=Y -m 4G \
+  -p 8080:8080 mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest
+```
+
+== What KQL is and where you meet it
+section: One query language across Microsoft's security data
+KQL is how you search logs and other data in Microsoft Sentinel, Microsoft Defender XDR and Azure Data Explorer.
+
+Analysts write it to hunt through logs. Detection engineers write it for Sentinel to run on a schedule and raise alerts.
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Walk-through: one leaked key, five detections
+The lab is 24 events from CloudTrail, the record of calls made to an Amazon Web Services (AWS) account.
+
+A continuous integration user, build-bot, has leaked its access key, the credential a program signs its AWS requests with.
+
+== What someone does with build-bot's key
+section: Walk-through: one leaked key, five detections
+With the key, someone is mostly refused, then creates the user backup-svc, attaches AdministratorAccess (AWS's ready-made policy that allows every action), gives it a key and uses it to stop CloudTrail logging.
+
+Earlier, bob signs in without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== Tables in, tables out
+section: Tables in, tables out
+A query starts with a table's name, here AWSCloudTrail, the lab's copy of Sentinel's CloudTrail table. Each pipe, |, hands the table so far to one operator. Every prefix is a query, so debug by deleting operators from the bottom.
+```kql
+AWSCloudTrail                                       // all 24 events
+| where isnotempty(ErrorCode)                       // the 10 that failed
+| summarize Failures = count() by SourceIpAddress   // one row per address
+| sort by Failures desc                             // biggest first
+```
+
+== The has operator matches whole terms only
+section: 4. Filter rows: the trail was stopped
+The has operator matches whole terms, runs of letters and digits that Kusto indexes. CreateUser is one term, so the has test for "User" counts 0. The contains operator matches any part of the text, ignoring case, and counts 4.
+```kql
+AWSCloudTrail
+| summarize HasUser = countif(EventName has "User"), ContainsUser = countif(EventName contains "User")
+```
+
+== Sign-ins without MFA (D4): require success too
+section: 5. Reach into JSON text: a sign-in without MFA
+Sentinel stores AdditionalEventData as JSON (JavaScript Object Notation) text, and the dot cannot reach into text, so parse it with the parse_json() function first. Require Success too, or alice's failed sign-in comes back beside bob's.
+```kql
+AWSCloudTrail
+| where EventName == "ConsoleLogin"
+| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed),
+         Outcome = tostring(parse_json(ResponseElements).ConsoleLogin)
+| where Outcome == "Success" and MFAUsed == "No"
+| project TimeGenerated, UserIdentityUserName, SourceIpAddress, Outcome, MFAUsed
+```
+
+== Before you trust an empty result, run a control
+section: 6. Count, then threshold: a burst of refusals
+A first draft that counts AccessDenied errors per address and alerts at five returns nothing. Counting every error code shows why: Elastic Compute Cloud (EC2) reports a refusal as Client.UnauthorizedOperation, so the draft counted four of the attacker's seven refusals.
+```kql
+AWSCloudTrail
+| where isnotempty(ErrorCode)
+| summarize Events = count() by ErrorCode
+```
+
+== D3: join two events, and always write the kind
+section: 8. Two events, one story: a new user given a key at once
+Created and Keyed are named queries for the CreateUser and CreateAccessKey events. The join operator pairs them on NewUser, and the where operator keeps pairs within 10 minutes. Always write the kind: the default keeps one left-hand row per key.
+```kql
+Created
+| join kind=inner Keyed on NewUser
+| where KeyAt between (CreatedAt .. CreatedAt + 10m)
+| project NewUser, CreatedAt, KeyAt, Gap = KeyAt - CreatedAt, CreatedBy, SourceIpAddress
+```
+
+== Make D2 a Sentinel analytics rule
+section: 9. Make it a Sentinel analytics rule
+A Sentinel analytics rule runs a query on a schedule, here every 10 minutes over the last 20, and alerts when it returns any rows. Its query now counts every refusal whose code contains AccessDenied or Unauthorized.
+```yaml
+query: |
+  AWSCloudTrail
+  | where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+  | summarize Denied = count(), Codes = make_set(ErrorCode) by SourceIpAddress
+  | where Denied >= 5
+```
+
+== Test the rule both ways
+section: 10. Test the rule both ways
+The emulator has no scheduler, so count what two runs would see. Only the 10:10 run sees the attacker's seven refusals and alerts. One window must alert and one must not; the second catches a rule that fires on everything.
+```kql
+AWSCloudTrail
+| where ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"
+| summarize
+    RunAt1000 = countif(TimeGenerated between (datetime(2026-09-15 09:40) .. datetime(2026-09-15 10:00))),
+    RunAt1010 = countif(TimeGenerated between (datetime(2026-09-15 09:50) .. datetime(2026-09-15 10:10)))
+    by SourceIpAddress
+```
+
+== Exercise: write D5, AdministratorAccess attached
+section: Hands-on exercises
+Write a query that finds any attachment of a policy named AdministratorAccess, to a user, a group or a role, and shows who did it, to what, and when. The guide hides its answer until you click Show the answer.
+
+== Answer: coalesce() finds the target's name
+section: Hands-on exercises
+Parse the JSON once. The target's name sits in a different field for each call, and the coalesce() function returns the first argument that is not empty. The endswith operator also matches customer policies of the same name.
+```kql
+AWSCloudTrail
+| where EventName in ("AttachUserPolicy", "AttachGroupPolicy", "AttachRolePolicy")
+| extend Params = parse_json(RequestParameters)
+| extend PolicyArn = tostring(Params.policyArn),
+         Target = coalesce(tostring(Params.userName), tostring(Params.groupName),
+                           tostring(Params.roleName))
+| where PolicyArn endswith "/AdministratorAccess"
+| project TimeGenerated, UserIdentityUserName, EventName, Target, PolicyArn
+```
+
+== Exercise: a count of zero over the last day
+section: Hands-on exercises
+A colleague searches the last day for StopLogging, gets a count of zero, and concludes that nobody stopped CloudTrail logging. What went wrong, and what should they have run first?
+```kql
+AWSCloudTrail
+| where TimeGenerated > ago(1d)
+| where EventName == "StopLogging"
+| count
+```
+
+== Answer: ask the data what time it covers
+section: Hands-on exercises
+The ago() function counts back from the engine's clock, and these events happened on 15 September 2026, so the time filter removed every one. Ask the data what time it covers first, and use fixed times on lab data.
+```kql
+AWSCloudTrail
+| summarize Earliest = min(TimeGenerated), Latest = max(TimeGenerated)
+```
+
+== Common mistakes
+section: Common mistakes
+- The has operator matches whole terms; use the contains operator for part of a word.
+- Kusto strings are never null, so test them with isempty(), not isnull().
+- The test ErrorCode != "AccessDenied" also keeps every event with no error code.
