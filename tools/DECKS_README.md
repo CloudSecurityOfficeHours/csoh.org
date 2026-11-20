@@ -51,6 +51,10 @@ credit: <source and licence>
   inside the code box and counts as the rows it wraps to (a single word longer
   than 84 columns is split across rows). Copying a wrapped line from the slide
   gives the original line, because the wrap is display only.
+- The renderer prints the guide's own language label (the code block's
+  `data-lang`, uppercased as the site shows it) as a tab on each code box, so
+  the how-to-follow slide's "paste BASH blocks" applies; a block the guide
+  leaves unlabelled gets no tab.
 
 ## What the flags do
 

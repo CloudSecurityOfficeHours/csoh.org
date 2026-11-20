@@ -37,6 +37,7 @@ STYLE = {
     "code_text": "e2e8f0",
     "accent": "f59e0b",
     "light": "e2e8f0",
+    "muted_light": "94a3b8",
     "white": "ffffff",
     "heading_font": "Space Grotesk",
     "body_font": "Source Sans 3",
@@ -67,6 +68,11 @@ STYLE = {
     "line_heading": 1.2,
     "para_gap": 0.08,
     "block_gap": 0.15,
+    "label_pt": 12,
+    "label_above": 0.17,
+    "label_below": 0.07,
+    "label_pad": 0.12,
+    "label_spacing_pt": 0.84,
 }
 
 # 16:9 at the standard widescreen size; 13.333 in is not an exact EMU count.
@@ -84,8 +90,9 @@ CLOSING_LICENSE = (
 
 # Runs the 18 pt body floor does not apply to, by shape name. Code runs are
 # held to exactly the code size instead.
-SMALL_SHAPES = ("footer-left", "footer-right", "guide-line", "credit")
+SMALL_SHAPES = ("footer-left", "footer-right", "guide-line", "credit", "code-label")
 CODE_SHAPE = "code"
+LABEL_SHAPE = "code-label"
 BAR_SHAPE = "bar"
 FORBIDDEN_DASHES = (chr(0x2014), chr(0x2013))
 
@@ -178,13 +185,31 @@ class _Page:
         self._fill(tf, paras, font, size, color, bold, align, gap)
         return box
 
-    def code(self, x, y, w, lines):
+    def code(self, x, y, w, lines, label=None):
         h = _code_height(lines)
         self.reserve(y + h)
         shape = self._rect(CODE_SHAPE, x, y, w, h, STYLE["dark"])
         tf = self._frame(shape, STYLE["code_pad"])
         self._fill(tf, lines, STYLE["code_font"], STYLE["code_pt"], STYLE["code_text"])
+        if label:
+            self._label(x, y, label)
         return y + h
+
+    def _label(self, x, y, label):
+        """The guide's language label as a tab on the box's top edge. It spans
+        the block gap above the box and the box's top padding, so it adds no
+        height and stays clear of the first code row."""
+        text = label.upper()
+        char_w = (0.6 * STYLE["label_pt"] + STYLE["label_spacing_pt"]) / 72
+        w = len(text) * char_w + 2 * STYLE["label_pad"]
+        top = y - STYLE["label_above"]
+        h = STYLE["label_above"] + STYLE["label_below"]
+        tab = self._rect(LABEL_SHAPE, x, top, w, h, STYLE["dark"])
+        tf = self._frame(tab, 0.0, anchor=MSO_ANCHOR.MIDDLE)
+        tf.word_wrap = False
+        tf.margin_left = tf.margin_right = Inches(STYLE["label_pad"])
+        self._fill(tf, [text], STYLE["code_font"], STYLE["label_pt"], STYLE["muted_light"], bold=True)
+        tab.text_frame.paragraphs[0].runs[0]._r.get_or_add_rPr().set("spc", str(round(STYLE["label_spacing_pt"] * 100)))
 
     def reserve(self, bottom: float) -> None:
         if bottom > STYLE["bottom_limit"] + 1e-9:
@@ -253,7 +278,7 @@ def _content(prs, deck, slide, n: int, total: int, headings) -> None:
         pg.text("body", x, y, w, h, items, STYLE["body_font"], STYLE["body_pt"], STYLE["text"], gap=STYLE["para_gap"] * 72)
         y += h + STYLE["block_gap"]
     if slide.code:
-        y = pg.code(x, y, w, slide.code)
+        y = pg.code(x, y, w, slide.code, slide.code_label)
         if slide.credit:
             y += 0.05
             pg.text("credit", x, y, w, 0.3, [slide.credit], STYLE["body_font"], STYLE["small_pt"], STYLE["muted"])
@@ -335,6 +360,9 @@ def _font_findings(tag: str, shape) -> list[str]:
             if shape.name == CODE_SHAPE:
                 if size != STYLE["code_pt"]:
                     out.append(f"{tag}: code run is {size} pt, expected {STYLE['code_pt']}")
+            elif shape.name == LABEL_SHAPE:
+                if size != STYLE["label_pt"]:
+                    out.append(f"{tag}: code label is {size} pt, expected {STYLE['label_pt']}")
             elif shape.name not in SMALL_SHAPES:
                 if size is None or size < 18:
                     out.append(f"{tag}: {shape.name} run is {size} pt, below 18")

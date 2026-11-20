@@ -86,6 +86,9 @@ class Slide:
     bullets: list[str] = field(default_factory=list)
     code: list[str] | None = None
     code_lang: str | None = None
+    # The guide's own label for the block the excerpt comes from; set by the
+    # build path, never read from the outline.
+    code_label: str | None = None
     credit: str | None = None
     where: str = ""
 
@@ -527,6 +530,35 @@ def guide_code_blocks(html: str) -> list[list[str]]:
     ]
 
 
+# A <pre> with the code-block wrapper that directly holds it, if any. The
+# wrapper's data-lang is what the site draws as the block's header label.
+LABELLED_PRE_RE = re.compile(
+    r'(?:<div class="code-block[^"]*"([^>]*)>\s*)?<pre[^>]*>(.*?)</pre>', re.DOTALL
+)
+DATA_LANG_RE = re.compile(r'\bdata-lang="([^"]*)"')
+
+
+def guide_block_labels(html: str) -> list[str | None]:
+    """One entry per <pre>, aligned with guide_code_blocks: the data-lang of the
+    code-block div that directly wraps it, or None when that div has no
+    data-lang or the <pre> has no such wrapper. Output blocks carry no
+    data-lang, which is how a reader tells them from input."""
+    out: list[str | None] = []
+    for m in LABELLED_PRE_RE.finditer(html):
+        lang = DATA_LANG_RE.search(m.group(1) or "")
+        out.append(lang.group(1) if lang else None)
+    return out
+
+
+def excerpt_label(html: str, lines: list[str]) -> str | None:
+    """The label of the first block holding lines as a contiguous run, or None
+    when no block does or that block is unlabelled."""
+    for block, label in zip(guide_code_blocks(html), guide_block_labels(html)):
+        if is_contiguous_run(lines, block):
+            return label
+    return None
+
+
 def guide_headings(html: str) -> dict[str, str | None]:
     """Visible text of every h2 and h3 mapped to its id, or None without one."""
     out: dict[str, str | None] = {}
@@ -830,6 +862,26 @@ def _case_excerpt_one_char_changed(tmp: Path) -> None:
     assert len(f) == 1, f
 
 
+def _case_block_labels_basic(tmp: Path) -> None:
+    html = (
+        '<div class="code-block" data-lang="bash"><pre>mkdir x\ncd x</pre></div>'
+        '<div class="code-block"><pre>output one\noutput two</pre></div>'
+        "<pre>bare</pre>"
+    )
+    assert guide_block_labels(html) == ["bash", None, None], guide_block_labels(html)
+    assert excerpt_label(html, ["cd x"]) == "bash"
+    assert excerpt_label(html, ["output two"]) is None
+    assert excerpt_label(html, ["not on the page"]) is None
+
+
+def _case_excerpt_label_real(tmp: Path) -> None:
+    html = (HOWTO_DIR / "splunk-spl.html").read_text(encoding="utf-8")
+    assert excerpt_label(html, ["mkdir -p ~/splunk-lab && cd ~/splunk-lab"]) == "bash"
+    assert excerpt_label(html, ["index=cloudtrail readOnly=false"]) == "spl"
+    # Control: the two lists stay aligned, or a label would sit on the wrong block.
+    assert len(guide_block_labels(html)) == len(guide_code_blocks(html))
+
+
 def _case_section_ok(tmp: Path) -> None:
     html = '<h3 id="step-load">2. Load the lab data</h3>'
     assert guide_headings(html) == {"2. Load the lab data": "step-load"}
@@ -954,6 +1006,8 @@ CASES: list = [
     ("excerpt_entities", _case_excerpt_entities),
     ("excerpt_trailing_space", _case_excerpt_trailing_space),
     ("excerpt_one_char_changed", _case_excerpt_one_char_changed),
+    ("block_labels_basic", _case_block_labels_basic),
+    ("excerpt_label_real", _case_excerpt_label_real),
     ("section_ok", _case_section_ok),
     ("section_with_markup", _case_section_with_markup),
     ("section_missing", _case_section_missing),
@@ -1114,6 +1168,29 @@ def _case_render_fonts(tmp: Path) -> None:
     assert any("below 18" in f for f in found), found
 
 
+def _case_render_code_label(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    deck = _render_deck(10)
+    deck.slides[1].code_label = "spl"
+    out = r.render_deck(deck, tmp / "l.pptx", {})
+    assert r.verify_pptx(out, deck) == [], r.verify_pptx(out, deck)
+    prs = _reopen(out)
+    shapes = prs.slides[2].shapes
+    tabs = [sh for sh in shapes if sh.name == "code-label"]
+    assert len(tabs) == 1
+    tab = tabs[0]
+    box = next(sh for sh in shapes if sh.name == "code")
+    assert tab.text_frame.text == "SPL", tab.text_frame.text
+    assert tab.top < box.top < tab.top + tab.height, (tab.top, box.top, tab.height)
+    assert tab.left == box.left
+    # The first code row starts one pad below the box top, clear of the tab.
+    first_row = box.top + int(r.STYLE["code_pad"] * 914400)
+    assert tab.top + tab.height < first_row
+    # Control: a slide whose code has no label gets no tab.
+    assert not [sh for sh in prs.slides[3].shapes if sh.name == "code-label"]
+
+
 def _case_render_verify_plants(tmp: Path) -> None:
     import howto_deck_render as r
 
@@ -1142,6 +1219,7 @@ RENDER_CASES: list = [
     ("render_overflow", _case_render_overflow),
     ("render_wrapped_code", _case_render_wrapped_code),
     ("render_fonts", _case_render_fonts),
+    ("render_code_label", _case_render_code_label),
     ("render_verify_plants", _case_render_verify_plants),
 ]
 
@@ -1206,6 +1284,9 @@ def build_decks(slugs: list[str]) -> int:
             print(f"{path.name}: refused, fix the findings above")
             bad += 1
             continue
+        for sl in deck.slides:
+            if sl.code:
+                sl.code_label = excerpt_label(html, sl.code)
         out = DECKS_DIR / "build" / f"{deck.slug}.pptx"
         try:
             render.render_deck(deck, out, guide_headings(html))
