@@ -6,11 +6,11 @@ promise: Common Expression Language (CEL) for cloud security: macros, the has() 
 section: How to use this guide
 It is for intermediate readers who know Kubernetes basics, such as Pods, one or more containers run together. CEL is taught from the start.
 
-You need Python 3.10 or later. Docker and kind are only for a throwaway cluster.
+You need Python 3.10 or later. A throwaway cluster also needs Docker and the kind command.
 
 == How the guide was checked
 section: How to use this guide
-A script ran the code blocks on 4 November 2026, with cel-python 0.5.0; the outputs shown are from that run.
+A script ran the code blocks on 4 November 2026, with cel-python 0.5.0; the guide's outputs are from that run.
 
 Not run: step 6's condition in Google Cloud IAM, and any gcloud command. What Google does comes from its documentation.
 
@@ -68,7 +68,7 @@ python3 cel.py \
 
 == Macros: where real policies live
 section: 3. Macros, which is where real policies live
-Macros are CEL's only iteration: all, exists, exists_one, filter and map, each over a collection you already have. In pod.json, the container named sidecar has no securityContext and no resources, and pulls :latest, so it fails three of these five.
+Macros are CEL's only iteration: all, exists, exists_one, filter and map, each over a collection you already have. In pod.json, the container named sidecar has no securityContext or resources and pulls :latest, so it fails three of the five below.
 ```bash
 python3 cel.py \
   'object.spec.containers.all(c, has(c.resources) && has(c.resources.limits))' \
@@ -80,7 +80,7 @@ python3 cel.py \
 
 == Step 4: a real ValidatingAdmissionPolicy
 section: 4. Write a real ValidatingAdmissionPolicy
-Admission control checks each request to create, change or delete a Kubernetes object. This policy, saved in step 5 as policy.yaml, matches Deployments; failurePolicy: Fail means an evaluation error denies the request. A second validation refuses :latest tags.
+Admission control checks requests to create, change or delete Kubernetes objects. This is part of the policy that step 5 saves as policy.yaml. It matches Deployments; failurePolicy: Fail means an evaluation error denies the request. Another validation refuses :latest tags.
 ```yaml
   validations:
     - expression: >-
@@ -109,7 +109,7 @@ spec:
 
 == Step 5: try it on a throwaway cluster
 section: 5. Try it on a throwaway cluster
-This needs Docker and kind. Save step 4's policy and both bindings as policy.yaml, with a --- line between the policy and the first binding. The create deployment line should be refused with "every container must set a memory limit".
+It needs Docker and the kind command. Save the policy and both bindings as policy.yaml, with a --- line before the first binding. The create deployment line should be refused with "every container must set a memory limit".
 ```bash
 kind create cluster --name cel-lab
 kubectl apply -f policy.yaml
@@ -124,7 +124,7 @@ kind delete cluster --name cel-lab
 
 == Same CEL, other variables: CRDs and IAM
 section: 6. Two other places the same expressions turn up
-A CustomResourceDefinition (CRD) adds a resource type to a cluster, and CEL on its schema rejects an invalid one on write. Google Cloud IAM conditions use the same language with completely different variables, here for a grant that expires:
+A CustomResourceDefinition (CRD) adds a resource type to a cluster; CEL on its schema rejects an invalid custom resource on write. Google Cloud IAM conditions use the same language with completely different variables, here for a grant that expires:
 ```cel
 // Grant expires on 1 September 2026, for buckets named acme-backups*.
 request.time < timestamp("2026-09-01T00:00:00Z") &&
@@ -134,7 +134,7 @@ resource.name.startsWith("projects/_/buckets/acme-backups")
 
 == A Google Cloud constraint does nothing alone
 section: Two objects, and the first one does nothing
-A custom constraint is a rule with a CEL condition; save this one as bucket-pap.yaml. Like a policy with no binding, it does nothing until an organization policy turns it on. ALLOW passes only requests that make the condition true.
+Save this custom constraint, a rule with a CEL condition, as bucket-pap.yaml; an organization policy turns it on. ALLOW passes only requests making the condition true. Google lists only the all and exists macros; check each service's page for others.
 ```yaml
 name: organizations/ORGANIZATION_ID/customConstraints/custom.bucketRequirePap
 resourceTypes:
@@ -150,7 +150,7 @@ description: Set public access prevention to enforced on this bucket.
 
 == Evaluate the condition before Google does
 section: Evaluate the condition before Google does
-These end a block that saves bucket-ok.json and bucket-open.json, one compliant and one not; DOC tells cel.py which to read. Expect True, then False. Locally a missing key is an error even where Google would read a typed field's default.
+These end a block saving bucket-ok.json and bucket-open.json, one compliant, one not; DOC names the file cel.py reads. Expect True, then False. Locally a missing key is an error, though Google reads missing typed fields as empty, false or zero.
 ```bash
 DOC=bucket-ok.json python3 cel.py "resource.iamConfiguration.publicAccessPrevention == 'enforced'"
 DOC=bucket-open.json python3 cel.py "resource.iamConfiguration.publicAccessPrevention == 'enforced'"
@@ -158,7 +158,7 @@ DOC=bucket-open.json python3 cel.py "resource.iamConfiguration.publicAccessPreve
 
 == Test, then enforce
 section: Test, then enforce
-The guide did not run these: they need a Google Cloud organization and the right to change its policies. The block first writes bucket-pap-dryrun.yaml and bucket-pap-live.yaml. Policy Simulator lists existing violations; a dry-run policy logs violations and denies nothing.
+Not run: these need a Google Cloud organization and the right to change its policies. The block first writes both policy files; replace ORGANIZATION_ID and PROJECT_ID. Policy Simulator lists existing violations; a dry-run policy logs violations and denies nothing.
 ```bash
 gcloud policy-intelligence simulate orgpolicy \
   --organization=ORGANIZATION_ID \
