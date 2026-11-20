@@ -10,9 +10,9 @@ You need a subscription you may experiment in, the Azure CLI and jq, a command-l
 
 == How the guide was checked
 section: How to use this guide
-No az (Azure CLI) command in the walk-through ran against Azure: expected results are what Microsoft's documentation says; yours may differ.
+No az (Azure CLI) walk-through command ran against Azure: expected results are what Microsoft's documentation says; yours may differ.
 
-Each definition's rule was validated against Microsoft's schema; shell blocks ran with a stand-in az, to catch quoting errors.
+Rules were validated against Microsoft's schema; shell blocks ran in bash and zsh with a stand-in az, to catch quoting errors.
 
 == How to follow the guide
 section: How to use this guide
@@ -42,7 +42,7 @@ A policy definition pairs a condition with an effect, such as deny, which fails 
 
 == A policy acts only on what it can see
 section: Five ways a policy silently does nothing
-A comparison against a property the policy cannot see is false: Azure evaluates only the JSON that Resource Manager holds. A false condition means the effect does not apply, and the resource is reported compliant, with no warning anywhere.
+A comparison against an absent property is false, so the effect does not apply and the resource is silently reported compliant. The deliberate exceptions, exists: false and a not (negation) around a positive test, are true for an absent property.
 
 == The first attempt: conditions, then one effect
 section: Anatomy of a definition
@@ -57,7 +57,7 @@ Step 3 saves the first attempt as ssh-naive.json, meant to deny rules letting SS
 
 == The corrected rule counts the list form
 section: Arrays and count
-Rules carry ports as destinationPortRange or the list destinationPortRanges, never both. Step 4's ssh.json checks both; for the list it uses count, which evaluates its where condition once per member and compares how many matched. Its effect is a parameter.
+Rules carry ports as destinationPortRange or the list destinationPortRanges, never both. Step 4's ssh.json checks both; for the list it uses a count, which evaluates its where condition per member and compares how many matched. Its effect is a parameter.
 ```json
   "count": {
     "field": "Microsoft.Network/networkSecurityGroups/securityRules/destinationPortRanges[*]",
@@ -83,7 +83,7 @@ Step 5 assigns the first attempt as lab-ssh-naive, a deny, and the corrected rul
 az policy assignment create --name lab-ssh-trial --policy csoh-lab-ssh --resource-group csoh-policy-lab --params '{"effect": {"value": "Deny"}}' --enforcement-mode DoNotEnforce
 ```
 
-== Two ports should get past all four
+== SSH from anywhere on two ports should get past all four
 section: 5. Assign everything to the lab, and test
 Assignments take about five minutes to apply. Expect it created: the CLI sends two ports only as destinationPortRanges. Scan for compliance with az policy state trigger-scan; az policy state list should show lab-ssh-naive Compliant, lab-ssh-audit and lab-ssh-trial NonCompliant, lab-ssh-indexed absent.
 ```bash
