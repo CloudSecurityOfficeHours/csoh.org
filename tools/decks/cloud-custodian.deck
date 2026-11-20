@@ -1,0 +1,184 @@
+title: Cloud Custodian policies, hands-on
+guide: howto/cloud-custodian.html
+promise: Learn the policy language and the ways it fails quietly, on a pretend Amazon Web Services (AWS) account that runs on your own computer.
+
+== Who it is for and what you need
+section: How to use this guide
+Cloud Custodian finds cloud resources that break your rules. The guide suits intermediate readers who have used AWS or another cloud and can read YAML, a plain-text format for structured data.
+
+Allow about two hours; you need no AWS account.
+
+== How the guide was checked
+section: How to use this guide
+A script ran every code block in order, in zsh on macOS, with Cloud Custodian 0.9.53. Outputs shown are from that run.
+
+Step 8's deployed function never ran, and nothing ran against Azure, Google Cloud or a real AWS account.
+
+== How to follow the guide
+section: How to use this guide
+Read in order. Paste each BASH block into your terminal whole, EOF line included: cat > file <<'EOF' saves the lines down to EOF as that file. Unlabelled blocks show what should print. Policy excerpts are parts of such files.
+
+== Set up: install Cloud Custodian and moto
+section: 1. Install Cloud Custodian and moto
+Cloud Custodian 0.9.53 needs Python 3.10.2 or newer; check python3 --version. If yours is older, install a newer one and use its name, such as python3.12, on line 2. These lines also install moto, an open-source AWS emulator. Expect 0.9.53.
+```bash
+mkdir -p ~/c7n-lab && cd ~/c7n-lab
+python3 -m venv .venv && . .venv/bin/activate
+pip install --quiet 'c7n==0.9.53' 'botocore==1.43.124' 'moto[server]==5.2.5'
+custodian version
+```
+
+== Set up: start the lab, then point Custodian at it
+section: 3. Point Custodian at the lab
+Step 2's block writes lab.py and starts the lab, a pretend AWS account: paste it whole; leave it running. Expect Lab running at http://localhost:8116. These lines, in a second terminal, point Custodian at it. Rerun them in any new terminal.
+```bash
+cd ~/c7n-lab && . .venv/bin/activate
+unset AWS_PROFILE AWS_SESSION_TOKEN
+export AWS_ENDPOINT_URL=http://localhost:8116 AWS_DEFAULT_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=lab AWS_SECRET_ACCESS_KEY=lab
+```
+
+== What Cloud Custodian is and where you meet it
+section: Cloud Custodian for security work
+Much of cloud security work is finding the same few mistakes again and again. Cloud Custodian, an open-source rules engine for cloud accounts, finds them and can fix them, in a single run, on a timer, or on each change.
+
+== A policy has up to four parts
+section: The four parts of a policy
+- The resource part names what to list.
+- A resource must pass every filter, unless an or block says otherwise.
+- Actions run on what is left.
+- With no mode, a policy is pull: it runs once, now, from your machine.
+
+== A broken policy and a clean account look the same
+section: Why a broken policy and a clean account look the same
+A filter on a missing or wrongly typed field usually answers false, with no error. So a broken policy and a clean account print the same count:0, zero matches. Before believing a policy, run it where something should match.
+
+== Step 3: a policy with no filters matches everything
+section: 3. Point Custodian at the lab
+The rest of step 3's block runs buckets.yml, a policy with no filters: count:4, all four S3 (Simple Storage Service) buckets. resources.json, under the -s output directory, shows their fields.
+```bash
+cat > buckets.yml <<'EOF'
+policies:
+  - name: all-buckets
+    resource: aws.s3
+EOF
+custodian run --cache-period 0 -s out buckets.yml
+custodian report -s out buckets.yml --format simple
+ls -1 out/all-buckets
+```
+
+== Step 4: a key the resource does not have
+section: 4. Silent failure: a key the resource does not have
+In step 4's versioning.yml, this value filter finds only lab-build-artifacts. Two buckets never had versioning, so Versioning.Status is missing, and every comparison with a missing key is false except ne and not-in. The value absent matches a missing key.
+```bash
+  - name: status-is-suspended
+    resource: aws.s3
+    filters:
+      - type: value
+        key: Versioning.Status
+        value: Suspended
+```
+
+== Step 5: custodian validate accepts a typo
+section: 5. Silent failure: custodian validate accepts a policy that can never match
+Step 5's sg.yml looks twice for security groups, AWS's virtual firewalls, open to the whole internet; this copy misspells IpPermissions. custodian validate, which checks only the schema, accepts it. It finds nothing; the correct copy finds debug-ssh and web-public.
+```bash
+  - name: world-open-typo
+    resource: aws.security-group
+    filters:
+      - type: value
+        key: "IpPermission[].IpRanges[].CidrIp"
+        op: contains
+        value: 0.0.0.0/0
+```
+
+== Step 6: one Region unless you ask for more
+section: 6. Silent failure: one Region unless you ask for more
+A run covers one Region: the --region flag, else AWS_DEFAULT_REGION, else your config file's. Here -p picks world-open, and --region all visits the lab's 34 Regions. It also finds legacy-rdp, with RDP (Remote Desktop Protocol) open, in eu-west-1.
+```bash
+custodian run --cache-period 0 -s out-all --region all -p world-open sg.yml 2> all.log
+grep -c policy:world-open all.log
+grep -v count:0 all.log
+```
+
+== Step 7: --dryrun skips the actions and nothing else
+section: 7. Silent failure: --dryrun skips the actions and nothing else
+These lines end step 7's ssh-fix.yml, which removes rules that let the whole internet reach SSH (Secure Shell) on port 22. With --dryrun it finds debug-ssh, skips actions, and still writes output.
+```bash
+    filters:
+      - type: ingress
+        Ports: [22]
+        Cidr:
+          value: 0.0.0.0/0
+    actions:
+      - type: remove-permissions
+        ingress: matched
+```
+
+== Step 7: a cached answer is not a fresh one
+section: 7. Silent failure: --dryrun skips the actions and nothing else
+Step 7's second block first runs ssh-fix.yml for real, removing debug-ssh's rule. Then world-open still counts two open groups, in time:0.00, since Custodian reuses what it listed for 15 minutes by default. With --cache-period 0, it counts one.
+```bash
+custodian run -s out -p world-open sg.yml
+custodian run --cache-period 0 -s out -p world-open sg.yml
+```
+
+== Step 8: deployed into the account
+section: 8. Modes: pull, or deployed into the account
+Step 8's ssh-realtime.yml adds this mode to step 7's policy. Run without --dryrun, it creates an AWS Lambda function, run when CloudTrail records a call adding an inbound rule. The deploy checks no existing group: keep a scheduled pull run.
+```bash
+  - name: ssh-open-realtime
+    resource: aws.security-group
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::{account_id}:role/custodian-lambda
+      events:
+        - source: ec2.amazonaws.com
+          event: AuthorizeSecurityGroupIngress
+          ids: requestParameters.groupId
+```
+
+== Exercise: every security group open to the internet
+section: Hands-on exercises
+Find every security group with an inbound rule open to the whole internet, on any port, in every Region. Write it in ~/c7n-lab with the lab running and step 3's environment. The guide hides each answer under "Show the answer".
+
+== Answer: test IPv4 and IPv6, in every Region
+section: Hands-on exercises
+Cidr tests only IPv4, so world-open.yml adds CidrV6 in an or block for ipv6-ssh's ::/0, the whole IPv6 internet. With --region all, expect web-public, ipv6-ssh, legacy-rdp; step 7 fixed debug-ssh.
+```bash
+policies:
+  - name: sg-world-open
+    resource: aws.security-group
+    filters:
+      - or:
+          - type: ingress
+            Cidr:
+              value: 0.0.0.0/0
+          - type: ingress
+            CidrV6:
+              value: "::/0"
+```
+
+== Exercise: access keys unused for 90 days
+section: Hands-on exercises
+List every IAM (Identity and Access Management) user with an active access key, a key pair programs sign requests with, unused for 90 days. Count a never-used key from its creation. Use the credential filter, which reads IAM's credential report.
+
+== Answer: a never-used key needs its own policy
+section: Hands-on exercises
+An age test on last_used_date finds bob, but a never-used key has no date. stale-keys.yml's second policy, ending as shown, catches dave's key; last_rotated is when a key was created or changed. erin, with 0 keys matched, is no finding.
+```bash
+      - type: credential
+        key: access_keys.last_used_date
+        value: absent
+      - type: credential
+        key: access_keys.last_rotated
+        value_type: age
+        op: gt
+        value: 90
+```
+
+== Common mistakes
+section: Common mistakes
+- Equality and ordering comparisons are false against a missing key; an empty {} counts as present.
+- With --region all, S3 policies report each bucket once per Region.
+- Without matched: true, the remove-keys action removes every key a matched user has.
