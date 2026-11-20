@@ -1,0 +1,148 @@
+title: Elastic ES|QL and EQL, hands-on
+guide: howto/elastic-esql-eql.html
+promise: Learn ES|QL (the Elasticsearch Query Language) and EQL (Event Query Language) from zero on CloudTrail events, with the field names that decide whether a rule can see your data.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for readers comfortable in a terminal who need not know Elasticsearch, a search engine for logs, or Kibana, its web interface.
+
+You need Docker, curl, jq and about 5 GB of free disk, but no cloud account.
+
+== How the guide was checked
+section: How to use this guide
+Every command and query ran as printed on Elasticsearch and Kibana 9.5.4, on an Apple silicon Mac.
+
+Not run: loading step 12's rule into Kibana, and what the setup's start.sh script does once Elasticsearch's 30-day trial licence ends.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into your terminal. ESQL and EQL blocks are queries: run ./esql or ./eql, the helpers from step 2, paste the query, then press Return and Ctrl-D. Unlabelled blocks show what each should print.
+
+== Set up: start Elasticsearch and Kibana
+section: 1. Start Elasticsearch and Kibana
+The first line runs Elastic's start-local script, which starts Elasticsearch and Kibana in Docker for testing only; piping a script into sh runs whatever it contains, so read it first. After the installer's messages, the last line should print 9.5.4.
+```bash
+curl -fsSL https://elastic.co/start-local | sh -s -- -v 9.5.4
+cd elastic-start-local
+source .env
+curl -s "$ES_LOCAL_URL" -H "Authorization: ApiKey $ES_LOCAL_API_KEY" | jq -r .version.number
+```
+
+== Set up: helpers, integration and lab data
+section: 4. Load the lab data
+Step 2 saves two helper scripts that send queries. Step 3 installs Elastic's AWS (Amazon Web Services) integration, which renames the lab data's fields, and step 4 loads the 24 lab events. This ES|QL query, run through ./esql, prints 24.
+```esql
+FROM logs-aws.cloudtrail-* | STATS events = COUNT(*)
+```
+
+== What ES|QL and EQL are and where you meet them
+section: Two query languages, two different questions
+Elastic Security, Kibana's security application, runs detection rules: queries that run on a schedule and raise an alert on a match.
+
+Its rules can use ES|QL, which filters and counts events, or EQL, which finds events that happen in order.
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Set up the lab
+The lab is 24 CloudTrail events, AWS's record of calls made in an account.
+
+The access key of build-bot, a continuous integration user, has leaked. The data also holds ordinary activity, such as bob signing in without multi-factor authentication (MFA).
+
+== What someone does with build-bot's key
+section: Set up the lab
+From 203.0.113.50 someone with the key tries to look around and is mostly refused, then creates a user, backup-svc, makes it an administrator with the AdministratorAccess policy, gives it an access key and uses it to stop CloudTrail logging.
+
+== include: _cloudtrail-lab.deck
+
+== ES|QL is a chain of tables
+section: The one idea behind each language
+The FROM command reads indices, Elasticsearch's named collections of events, as a table with one row per event. Each pipe, |, hands the table to the next command, which returns a new table. Text after // is a comment.
+```esql
+FROM logs-aws.cloudtrail-*                      // 24 rows, one per event
+| WHERE source.ip == "203.0.113.50"             // keep the 13 from one address
+| STATS calls = COUNT(*) BY event.outcome       // a new table: one row per outcome
+| SORT calls DESC
+```
+
+== D4 in ES|QL: renamed fields, and success too
+section: 6. Nested fields and true/false values: console login without MFA (D4)
+Elastic's AWS integration renames CloudTrail's fields as each event arrives, and Elastic's rules use the new names: eventName becomes event.action, and MFAUsed becomes a true/false field. This ES|QL query requires success too, or a failed sign-in as alice comes back.
+```esql
+FROM logs-aws.cloudtrail-*
+| WHERE event.action == "ConsoleLogin"
+    AND aws.cloudtrail.console_login.additional_eventdata.mfa_used == false
+    AND event.outcome == "success"
+| KEEP @timestamp, user.name, source.ip
+```
+
+== Before you trust an empty result, run a control
+section: 7. Count and threshold: the denied-call burst (D2)
+A draft alerting at five AccessDenied errors per address returns nothing. This ES|QL control drops the filter and threshold to list every error code. The attacker got four AccessDenied refusals, plus three EC2 (Amazon Elastic Compute Cloud) refusals coded Client.UnauthorizedOperation.
+```esql
+FROM logs-aws.cloudtrail-*
+| STATS events = COUNT(*) BY aws.cloudtrail.error_code
+| SORT events DESC
+```
+
+== EQL's category trap: no error, nothing found
+section: 9. Event queries, and the category trap (D1)
+An EQL query has the form category where condition; any matches every category. This D1 query uses the configuration category and finds nothing: the integration takes event.category from a table of 91 event names, and StopLogging is not one.
+```eql
+configuration where event.action in ("StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors")
+```
+
+== D3 in EQL: a sequence needs a time limit
+section: 10. Sequences: a new user given a key within ten minutes (D3)
+This EQL sequence matches CreateUser, then CreateAccessKey: the by clause makes both share user.target.name, the user acted on, and maxspan=10m keeps them within ten minutes. Without maxspan, it also matches svc-reporting, which alice gave a key hours after creating it.
+```eql
+sequence by user.target.name with maxspan=10m
+  [iam where event.action == "CreateUser"]
+  [iam where event.action == "CreateAccessKey"]
+```
+
+== Validate the rule file, then test it on data
+section: 12. Write your own rule as code, validate it, test it both ways
+These commands, which need python3.12 on your path, run Elastic's validator on step 12's D3 rule file. It refuses unknown fields but passes the configuration where mistake, so test on data that should fire and data that should not.
+```bash
+git clone --depth 1 https://github.com/elastic/detection-rules
+cd detection-rules
+make deps
+source env/detection-rules-build/bin/activate
+python -m detection_rules validate-rule ../persistence_iam_user_created_then_access_key.toml
+```
+
+== Exercise: 3 events instead of 17
+section: Hands-on exercises
+An analyst wants every event that was not an AccessDenied, writes WHERE aws.cloudtrail.error_code != "AccessDenied" in ES|QL, and gets 3 events. There are 17. What happened, and what is the fix? The guide hides each answer under Show the answer.
+
+== Answer: null fails every comparison
+section: Hands-on exercises
+In ES|QL, comparing with null gives null, not true, and the WHERE command keeps only true rows. The 14 successful events have no error code, so != drops them with the 7 denials. Say what you mean about missing values:
+```esql
+FROM logs-aws.cloudtrail-*
+| WHERE aws.cloudtrail.error_code != "AccessDenied" OR aws.cloudtrail.error_code IS NULL
+| STATS events = COUNT(*)
+```
+
+== Exercise: this EQL sequence finds nothing
+section: Hands-on exercises
+A colleague wants to catch an identity that is made an administrator and then stops CloudTrail within ten minutes, D5 followed by D1. This EQL sequence finds nothing. Why, and how do you fix it?
+```eql
+sequence by user.name with maxspan=10m
+  [iam where event.action == "AttachUserPolicy"]
+  [any where event.action == "StopLogging"]
+```
+
+== Answer: give each pattern its own by
+section: Hands-on exercises
+The sequence by user.name clause ties events on the caller. build-bot attached the policy to backup-svc, and backup-svc stopped the trail. In EQL, link the first event's target to the second's caller, with a by clause after each pattern's brackets:
+```eql
+sequence with maxspan=10m
+  [iam where event.action == "AttachUserPolicy"] by user.target.name
+  [any where event.action == "StopLogging"] by user.name
+```
+
+== Common mistakes
+section: Common mistakes
+- Query Elastic's field names, such as event.action, not CloudTrail's eventName.
+- A rule naming a field nothing fills does not fail: it returns nothing, like a quiet day.
+- An EQL configuration where query misses StopLogging, which the integration never categorises.
