@@ -4,7 +4,7 @@ promise: Learn Falco's YAML rule language from zero on a small CloudTrail lab, t
 
 == Who it is for and what you need
 section: How to use this guide
-It is for intermediate readers who can use a terminal, run Docker containers and read YAML and JSON (JavaScript Object Notation). Falco, which judges events as they happen, can be new.
+It is for intermediate readers at ease with terminals, Docker, JSON (JavaScript Object Notation) and YAML, a plain-text format for settings. Falco, which judges events as they happen, can be new.
 
 You need Docker and jq, but no cloud account.
 
@@ -20,7 +20,7 @@ Read it in order. Paste BASH blocks into a terminal; save YAML blocks in ~/falco
 
 == Set up: Falco, falcoctl and the plugins
 section: 1. Get Falco, falcoctl and the plugins
-The images run natively on Intel/AMD and Arm processors, Apple silicon included. falcoctl, the Falco project's tool for rules and plugins, installs two plugins and the stock CloudTrail rules. Expect Falco version: 0.45.2, then Artifact successfully installed once per artifact.
+Images are published for Intel/AMD and Arm, so Apple silicon runs them natively. falcoctl, the Falco project's tool for rules and plugins, installs two plugins and stock CloudTrail rules. Expect Falco version: 0.45.2, then Artifact successfully installed once per artifact.
 ```bash
 mkdir -p ~/falco-lab/plugins ~/falco-lab/rules && cd ~/falco-lab
 docker run --rm --name csoh-lab-falco falcosecurity/falco:0.45.2 falco --version
@@ -33,7 +33,7 @@ docker run --rm --name csoh-lab-falcoctl -u 0 -v "$PWD":/lab \
 
 == Set up: the lab file and the falco function
 section: 3. Point Falco at the file, and look at everything first
-Step 2 saves the 24 lab events and adds the eventType field Falco needs. Step 3 saves falco-lab.yaml, pointing Falco at them, and defines this shell function. A control rule matching every event, run through it, reports Events detected: 24.
+Step 2 saves the 24 lab events, adding the eventType field Falco needs. Step 3 saves falco-lab.yaml, pointing Falco at them, and defines this function. falco -r everything.yaml, which loads a control rule matching every event, reports Events detected: 24.
 ```bash
 falco() {
   docker run --rm --name csoh-lab-falco -v "$PWD":/lab -w /lab \
@@ -43,13 +43,13 @@ falco() {
 
 == What Falco is and where you meet it
 section: Rules that judge each event as it happens
-Falco alerts the moment an event matches a rule. By default events are Linux system calls, requests to the operating system; plugins add cloud audit logs. Platform and security engineers write rules in YAML, a plain-text format for settings.
+Falco alerts the moment an event matches a rule. By default events are Linux system calls, requests to the operating system; plugins add cloud audit logs. Platform and security engineers write rules, often starting from the Falco project's stock rules.
 
 == The lab: 24 CloudTrail events and a leaked key
 section: Walk-through
-The lab is 24 CloudTrail events, the record of calls made in an Amazon Web Services (AWS) account.
+The lab is 24 events from CloudTrail, the record of calls made in an Amazon Web Services (AWS) account.
 
-The access key of build-bot, a continuous integration user, has leaked. Ordinary activity around it includes a sign-in without MFA (multi-factor authentication).
+build-bot, a continuous integration user, has leaked its access key. Ordinary activity around it includes a sign-in without MFA (multi-factor authentication).
 
 == What someone does with build-bot's key
 section: Walk-through
@@ -59,7 +59,7 @@ From 203.0.113.50 someone with the key is mostly refused, then creates the user 
 
 == A rule tests one event, then forgets it
 section: How a rule works: one event at a time
-This rule, only to read, tests each event on its own; Falco then forgets the event, so no condition can count or look back. ct.name is a field, a value from each event; in output, %ct.user prints its value.
+This rule, only to read, tests each event alone, then forgets it, so no condition can count or correlate. ct.name is a field, a value from each event; in output, %ct.user prints its value. The source key names the stream.
 ```yaml
 - rule: Trail stopped
   desc: Someone called StopLogging.
@@ -71,7 +71,7 @@ This rule, only to read, tests each event on its own; Falco then forgets the eve
 
 == D1: a list and a macro
 section: 4. A list and a macro: trail tampering (D1)
-Step 4's d1.yaml starts with these lines. A list is a named set of values. A macro is a named piece of condition; this one is true when the call did not fail. The rule alerts once, for backup-svc.
+Step 4's d1.yaml starts with these lines. A list is a named set of values. A macro is a named piece of condition; this one is true when the call did not fail. falco -r d1.yaml alerts once, for backup-svc.
 ```yaml
 # d1.yaml: D1, CloudTrail logging stopped, deleted or changed
 - list: trail_tampering_calls
@@ -102,7 +102,7 @@ In step 5's d4.yaml, this rule follows a naive one that checked only MFAUsed and
 
 == D2: before you trust silence, run a control
 section: 6. What Falco cannot do: count (D2) and pair (D3)
-Falco cannot count, so d2.yaml alerts per refused call and the shell counts per address. With only AccessDenied listed, no address reaches five. Step 3's control rule lists every error code: EC2 (Elastic Compute Cloud) writes three refusals as Client.UnauthorizedOperation.
+Falco cannot count, so the shell counts d2.yaml's alerts per address: with only AccessDenied listed, 203.0.113.50 has four, under five. This control, which must return something, finds the attacker's three Client.UnauthorizedOperation refusals. Listing AccessDenied, AccessDeniedException, Client.UnauthorizedOperation and UnauthorizedOperation makes seven.
 ```bash
 falco -r everything.yaml -o json_output=true \
   | jq -Rr 'fromjson? | .output_fields["ct.error"]' | sort | uniq -c
@@ -110,7 +110,7 @@ falco -r everything.yaml -o json_output=true \
 
 == Stock rules: the first match wins
 section: 7. Stock rules, shadowing, and tuning by override
-Loaded after the stock CloudTrail rules, your D1 rule is silent, with no warning: by default an event fires only the first rule it matches. falcoctl replaces the stock file on update, so override it from tuning.yaml, loaded later.
+Loaded after the Falco project's stock CloudTrail rules, D1's rule is silent, with no warning: by default an event fires only the first rule it matches. falcoctl replaces that file on update, so override it from tuning.yaml, loaded after it.
 ```yaml
 # tuning.yaml: change stock rules without editing their file
 - rule: CloudTrail Logging Disabled    # d1.yaml covers this and more
@@ -121,7 +121,7 @@ Loaded after the stock CloudTrail rules, your D1 rule is silent, with no warning
 
 == The same language on system calls
 section: 8. The same language on system calls
-Step 8 saves shadow.yaml and starts Falco privileged, so its probe can turn system calls into events. Use a machine you own. It worked on Docker Desktop for Apple silicon; if yours fails, use Linux. Only reading /etc/shadow alerts.
+Step 8 saves shadow.yaml and starts Falco privileged, able to do almost everything the host can, so use a machine you own. It worked on Docker Desktop 4.97.0 for Apple silicon; if yours fails, use Linux. Only reading /etc/shadow alerts.
 ```yaml
 # shadow.yaml: a system-call rule; with no source key, the source is syscall
 - rule: Shadow file read in a container
@@ -135,7 +135,7 @@ Step 8 saves shadow.yaml and starts Falco privileged, so its probe can turn syst
 
 == Exercise: write D5
 section: Hands-on exercises
-Write D5: alert whenever the AdministratorAccess managed policy is attached to a user, showing who attached it, to whom and from where. Check that it fires once and nothing else does. The guide hides each answer under Show the answer.
+Write D5: alert whenever the AdministratorAccess managed policy is attached to a user, showing who attached it, to whom and from where. Check that it fires once and nothing else does. The guide hides each answer under "Show the answer".
 
 == Answer: one alert, and a field that misleads
 section: Hands-on exercises
@@ -167,7 +167,7 @@ This rule, saved as ex3.yaml, is meant to catch build-bot creating users or acce
 
 == Answer: the and operator binds tighter than or
 section: Hands-on exercises
-The extra alert is alice's CreateUser at 09:02:40: every CreateUser matches, whoever made it. With ct.name in (CreateUser, CreateAccessKey) and ct.user = "build-bot", two alerts remain, which a SIEM (security information and event management system) pairs to finish D3.
+alice's CreateUser at 09:02:40 is extra: the build-bot test covers only CreateAccessKey, so every CreateUser matches. With ct.name in (CreateUser, CreateAccessKey) and ct.user = "build-bot", two alerts remain, which a SIEM (security information and event management system) pairs for D3.
 
 == Common mistakes
 section: Common mistakes
