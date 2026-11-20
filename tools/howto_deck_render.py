@@ -81,7 +81,7 @@ SLIDE_H_EMU = 6858000
 
 LICENSE_LINE = "Slides licensed CC BY-NC 4.0"
 ATTRIBUTION = "Cloud Security Office Hours, csoh.org"
-CLOSING_HEADING = "Do the full lab"
+CLOSING_HEADING = "Work through the full guide"
 CLOSING_LICENSE = (
     f"{ATTRIBUTION}. Slides licensed CC BY-NC 4.0 "
     "(creativecommons.org/licenses/by-nc/4.0). "
@@ -296,7 +296,7 @@ def _closing(prs, deck, n: int, total: int) -> None:
     pg.text("heading", x, y, w, h, [CLOSING_HEADING], STYLE["heading_font"], STYLE["heading_pt"], STYLE["heading"], bold=True)
     y += h + STYLE["block_gap"]
     paras = [
-        f"The guide has every step, the lab data and the answers: https://csoh.org/{deck.guide}",
+        f"The guide has every step, all the code and the exercise answers: https://csoh.org/{deck.guide}",
         CLOSING_LICENSE,
     ]
     pg.text("body", x, y, w, _body_height(paras), paras, STYLE["body_font"], STYLE["body_pt"], STYLE["text"], gap=STYLE["para_gap"] * 72)
