@@ -1,0 +1,165 @@
+title: SQL for security data lakes, hands-on
+guide: howto/sql-for-security-data-lakes.html
+promise: Learn SQL from zero, free on your own computer, then see what changes in Snowflake, BigQuery and Amazon Athena.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to Structured Query Language (SQL); you need not know Amazon Web Services (AWS). Allow about two hours.
+
+You need a terminal and DuckDB, a free database that runs on your computer, but no cloud account.
+
+== How the guide was checked
+section: How to use this guide
+A script ran every command and query through step 8 as printed, on DuckDB 1.5.5 and 2.0.0.
+
+Not run: Snowflake, BigQuery and AWS services. Steps 9 to 12 ran on emulators and other engines, or were checked against documentation only.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into your terminal. Type SQL blocks at the D prompt of the DuckDB shell step 2 opens, except in steps 9 to 12, which are for other services. Unlabelled blocks show expected output.
+
+== Set up your environment
+section: 1. Install DuckDB
+On macOS and Linux, these lines install DuckDB, let the shell find it and print its version; on Windows, run winget install DuckDB.cli instead. Piping a script into bash runs whatever it contains, so read it first at install.duckdb.org.
+```bash
+curl https://install.duckdb.org | bash
+export PATH="$HOME/.duckdb/cli/latest:$PATH"
+duckdb --version
+```
+
+== What SQL is and where you meet it
+section: One query language, many places to run it
+Data warehouses such as Snowflake and BigQuery store tables and run SQL over them; Amazon Athena runs it over files in cloud storage, a data lake.
+
+Security teams write scheduled detections in SQL: timed queries returning a row per alert.
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Walk-through: five detections in DuckDB
+The lab is 24 CloudTrail events, the record of calls made to AWS in one account.
+
+The access key of build-bot, a continuous integration user, has leaked. An access key is the credential a program signs its AWS requests with.
+
+== What someone does with build-bot's key
+section: Walk-through: five detections in DuckDB
+From 203.0.113.50 someone uses the key, is mostly refused, then creates a user, backup-svc, gives it administrator rights (the AdministratorAccess policy) and a key, and stops CloudTrail logging with it.
+
+Routine work includes a console login without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== A query describes the table you want back
+section: A query describes the table you want back
+You describe the table you want and the database builds it. In the lab table, cloudtrail, each row is one event. Clauses are written in this order but run FROM first, then WHERE, then SELECT, then ORDER BY and LIMIT.
+```sql
+SELECT eventTime, eventName, errorCode   -- which columns
+FROM cloudtrail                          -- from which table
+WHERE sourceIPAddress = '203.0.113.50'   -- which rows
+ORDER BY eventTime                       -- in what order
+LIMIT 3;                                 -- and how many
+```
+
+== Logins without MFA (D4): require success too
+section: 4. Nested fields: console logins without MFA (D4)
+DuckDB stores nested objects such as userIdentity as STRUCT columns, and a dot reaches their named fields. A first attempt also returned alice's failed sign-in, because CloudTrail records the MFAUsed field on failures too. Requiring success leaves only bob.
+```sql
+-- D4: a successful console sign-in without MFA
+SELECT eventTime, userIdentity.userName AS user_name, sourceIPAddress
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin'
+  AND responseElements.ConsoleLogin = 'Success'
+  AND additionalEventData.MFAUsed = 'No';
+```
+
+== Before you trust an empty result, run a control
+section: 5. Count in groups: the burst that never fires (D2)
+The first D2 attempt, counting only AccessDenied errors, returned nothing. In this control, a GROUP BY clause makes one row per error code: Elastic Compute Cloud (EC2) reports refusals as Client.UnauthorizedOperation, so three of the attacker's seven denials were invisible.
+```sql
+-- Control: which error codes are in the data?
+SELECT errorCode, count(*) AS events
+FROM cloudtrail
+GROUP BY errorCode
+ORDER BY events DESC;
+```
+
+== NULL: the value that is not there
+section: 6. NULL: the value that is not there
+NULL means no value, and any comparison with it is unknown, so a WHERE clause drops the row. StopLogging succeeded, so its errorCode is NULL, and this D1 (<> means not equal) misses it. Use errorCode IS NULL instead.
+```sql
+-- D1, tightened (wrong): skip tampering that was denied
+SELECT eventTime, eventName, sourceIPAddress
+FROM cloudtrail
+WHERE eventName IN ('StopLogging', 'DeleteTrail', 'UpdateTrail', 'PutEventSelectors')
+  AND errorCode <> 'AccessDenied';
+```
+
+== D3: match one event with another
+section: 7. Match one event with another: new user given a key (D3)
+A JOIN pairs rows wherever its ON condition holds; here both tables are cloudtrail, named c and k. Without the BETWEEN line, alice's svc-reporting, given a key 2 hours 37 minutes after creation, matches too: the window is the detection.
+```sql
+-- D3: a user created and handed an access key within 10 minutes
+SELECT c.requestParameters.userName AS new_user, c.userIdentity.userName AS actor,
+       c.eventTime AS created, k.eventTime - c.eventTime AS gap
+FROM cloudtrail AS c
+JOIN cloudtrail AS k
+  ON k.requestParameters.userName = c.requestParameters.userName
+WHERE c.eventName = 'CreateUser'
+  AND k.eventName = 'CreateAccessKey'
+  AND k.eventTime BETWEEN c.eventTime AND c.eventTime + INTERVAL '10 minutes'
+ORDER BY created;
+```
+
+== Build D2 for a scheduler and test it both ways
+section: 8. Make it a scheduled detection, and test it both ways
+DuckDB has no scheduler, but D2 can be saved as a view, a query under a name, over the ten minutes before run_time, a variable for each run's time. At 10:10 it fires for 203.0.113.50; at 09:50 it stays silent.
+```sql
+SET VARIABLE run_time = TIMESTAMP '2026-09-15 10:10:00';
+SELECT * FROM d2_denied_call_burst;
+
+SET VARIABLE run_time = TIMESTAMP '2026-09-15 09:50:00';
+SELECT * FROM d2_denied_call_burst;
+```
+
+== The same D4 in Snowflake's dialect
+section: 9. The same question in three dialects
+Each warehouse speaks its own dialect of SQL, and the differences cluster where the data is nested or timed. In Snowflake, a colon steps into a VARIANT column holding a nested object, and ::STRING turns what it finds into text.
+```sql
+SELECT eventTime, userIdentity:userName::STRING AS user_name, sourceIPAddress
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin'
+  AND responseElements:ConsoleLogin::STRING = 'Success'
+  AND additionalEventData:MFAUsed::STRING = 'No';
+```
+
+== Exercise: this query returns too much
+section: Hands-on exercises
+This query is meant to list the denied calls from 203.0.113.50, but returns 10 rows, three of them from 192.0.2.20. Why, and what is the fix? In the guide, "Show the answer" opens each answer.
+```sql
+SELECT eventTime, eventName, sourceIPAddress, errorCode
+FROM cloudtrail
+WHERE errorCode = 'AccessDenied' OR errorCode = 'Client.UnauthorizedOperation'
+  AND sourceIPAddress = '203.0.113.50';
+```
+
+== Answer: AND binds more tightly than OR
+section: Hands-on exercises
+The AND operator binds more tightly than OR, as multiplication does before addition, so the query reads: AccessDenied from anywhere, or Client.UnauthorizedOperation from 203.0.113.50. Parentheses say what was meant, and an IN list of both codes returns the attacker's 7.
+
+== Exercise: a D4 that only works in DuckDB
+section: Hands-on exercises
+A colleague wrote D4 in DuckDB with lowercase names, such as additionaleventdata.mfaused, tested it and saw bob. Moved to Snowflake as additionalEventData:mfaused::STRING = 'No', it returns nothing, every day. What is wrong, and which control finds it in one query?
+
+== Answer: show the values without filtering
+section: Hands-on exercises
+DuckDB ignores case in struct fields, so the test passed. Snowflake does not inside a VARIANT: the key is MFAUsed, so mfaused finds nothing and no row survives. On a Snowflake emulator, this control showed only NULL under lower_case.
+```sql
+SELECT additionalEventData:mfaused::STRING AS lower_case,
+       additionalEventData:MFAUsed::STRING AS as_logged
+FROM cloudtrail
+WHERE eventName = 'ConsoleLogin';
+```
+
+== Common mistakes
+section: Common mistakes
+- Comparing with NULL using = or <> drops the row; use IS NULL.
+- An empty result can mean a missing error code, a wrong key name or a quiet account.
+- DuckDB ignores case in nested names; the warehouses do not.
