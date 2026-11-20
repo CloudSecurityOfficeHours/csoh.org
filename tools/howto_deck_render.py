@@ -60,7 +60,10 @@ STYLE = {
     "footer_h": 0.3,
     "bottom_limit": 6.9,
     "body_chars_per_line": 72,
-    "heading_chars_per_line": 48,
+    # Space Grotesk at 36 pt fits about 46 characters across the content
+    # width; estimating more lets a heading that wraps overprint the line
+    # below it.
+    "heading_chars_per_line": 46,
     "cover_title_chars_per_line": 30,
     "cover_promise_chars_per_line": 64,
     "line_body": 1.25,
