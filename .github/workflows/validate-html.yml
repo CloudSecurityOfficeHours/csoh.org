@@ -448,16 +448,54 @@ jobs:
       # Each how-to guide's deck line (data-howto-deck) must agree with
       # tools/decks/published.json, and every outline in tools/decks/ must obey
       # the style limits and quote its guide's code and headings exactly. A
-      # deck line with no mapping entry, a mapping entry with no line, or a line
-      # holding a different id points readers at the wrong deck. Unconditional:
-      # a guide edit can break an excerpt with no outline in the diff. The
-      # self-test runs first as the control.
+      # deck line with no mapping entry, a mapping entry with no line, a second
+      # line, or a line holding a different id points readers at the wrong
+      # deck. Unconditional: a guide edit can break an excerpt with no outline
+      # in the diff. The self-test runs first as the control. --check runs
+      # even when the self-test fails, because two self-test cases read real
+      # guide pages: a guide edit that breaks one should still show --check's
+      # finding, which names the outline line to fix.
       - name: Assert how-to deck outlines and links
         id: howto-decks
         run: |
           set -o pipefail
-          python3 tools/build_howto_decks.py --self-test 2>&1 | tee check-howto-decks.log
-          python3 tools/build_howto_decks.py --check 2>&1 | tee -a check-howto-decks.log
+          status=0
+          python3 tools/build_howto_decks.py --self-test 2>&1 | tee check-howto-decks.log || status=1
+          python3 tools/build_howto_decks.py --check 2>&1 | tee -a check-howto-decks.log || status=1
+          exit "$status"
+
+      # A published deck whose outline changed since it was recorded still
+      # shows the old slides, and so does every PDF downloaded from it.
+      # --check cannot see this: the outline is right and the public copy is
+      # behind. Re-publishing needs the owner's go, so this step reports and
+      # never fails: each stale deck is a warning on the run and a line in the
+      # job summary. It runs even when an earlier gate failed, and a tool
+      # error is itself only a warning.
+      - name: Report published how-to decks that need re-publishing
+        if: ${{ !cancelled() }}
+        run: |
+          if ! python3 tools/build_howto_decks.py --stale --published-only > stale-decks.log 2>&1; then
+            cat stale-decks.log
+            echo "::warning title=How-to decks::build_howto_decks.py --stale could not run; see this step's log"
+            printf '### How-to decks that need re-publishing\n\nThe stale check could not run; see the step log.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat stale-decks.log
+          grep -v '^stale check: ' stale-decks.log > stale-decks-list.log || true
+          {
+            echo "### How-to decks that need re-publishing"
+            echo
+            if [ -s stale-decks-list.log ]; then
+              sed 's/^/- /' stale-decks-list.log
+            else
+              echo "None: every published deck matches its outline."
+            fi
+            echo
+            grep '^stale check: ' stale-decks.log || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            echo "::warning title=How-to deck needs re-publishing::$line"
+          done < stale-decks-list.log
 
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which
@@ -567,6 +605,7 @@ jobs:
           OUTCOME_DOCS_CONSISTENCY: ${{ steps.docs-consistency.outcome }}
           OUTCOME_FAQ_PARITY: ${{ steps.faq-parity.outcome }}
           OUTCOME_README_COVERAGE: ${{ steps.readme-coverage.outcome }}
+          OUTCOME_HOWTO_DECKS: ${{ steps.howto-decks.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
@@ -587,6 +626,7 @@ jobs:
               { name: 'Check documentation consistency', outcome: process.env.OUTCOME_DOCS_CONSISTENCY, file: 'check-docs-consistency.log' },
               { name: 'Check FAQ and glossary JSON-LD match the page', outcome: process.env.OUTCOME_FAQ_PARITY, file: 'check-faq-parity.log' },
               { name: 'Check README coverage and Markdown links', outcome: process.env.OUTCOME_README_COVERAGE, file: 'check-readme-coverage.log' },
+              { name: 'Assert how-to deck outlines and links', outcome: process.env.OUTCOME_HOWTO_DECKS, file: 'check-howto-decks.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
             ];
