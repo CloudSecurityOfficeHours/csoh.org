@@ -1,0 +1,175 @@
+title: Sumo Logic search queries, hands-on
+guide: howto/sumo-logic-queries.html
+promise: Learn Sumo Logic's search language from zero on 24 events from CloudTrail, then turn the searches into alerts.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to writing searches and to Sumo Logic, a hosted log analytics and security platform.
+
+You need about two hours, a terminal with curl and jq, and a Sumo Logic organisation that accepts your own data.
+
+== How the guide was checked
+section: How to use this guide
+It was written without a Sumo Logic account, so none of its queries were run: each result is what Sumo Logic's documentation gives for the lab data, worked out by a local script.
+
+Step 9's alerting monitor was never applied.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order; steps 1 to 3 load the data. Run SUMO LOGIC blocks in Log Search, the page where you search your logs; paste BASH blocks into a terminal. After each query, "Expect" says what it should return.
+
+== Set up: an organisation that takes your data
+section: 1. Get an organisation you can send data to
+The Agentic Free Trial cannot load the lab data. The 30-day Amazon Web Services (AWS) Marketplace trial can; it needs a business email, asks you to accept Sumo Logic's service licence agreement, and converts to a paid subscription unless cancelled.
+
+== Set up: load the lab data and count it
+section: 3. Load the lab data and check what arrived
+Step 2 creates the web address you upload to; put it in SUMO_URL. Step 3 writes the lab file, then these commands check the copy, move it to yesterday and upload it. Expect 200, then count what arrived: 24 events.
+```bash
+shasum -a 256 cloudtrail-lab.jsonl
+
+jq -c '(now - 86400 | strftime("%Y-%m-%d")) as $d | .eventTime |= ($d + .[10:])' \
+  cloudtrail-lab.jsonl > upload.jsonl
+
+SUMO_URL='https://paste-your-presigned-url-here'
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  -H 'X-Sumo-Category:lab/aws/cloudtrail' -T upload.jsonl "$SUMO_URL"
+```
+
+== Where you meet Sumo Logic's search language
+section: What Sumo Logic's search language is for
+Logs are lines of text that each record one event. In Sumo Logic you search them with queries in Log Search.
+
+Analysts write queries to investigate; detection engineers turn the ones worth repeating into monitors, Sumo Logic's alerting feature.
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Walk-through
+The lab is 24 events from CloudTrail, the record AWS keeps of actions taken in an account: who made each call, from which address, and whether AWS refused it.
+
+A continuous integration user's access key, build-bot, has leaked.
+
+== What someone does with build-bot's key
+section: Walk-through
+From 203.0.113.50 someone is mostly refused, then creates the user backup-svc, gives it administrator rights (the AdministratorAccess policy) and an access key, and uses it to stop CloudTrail logging.
+
+Ordinary activity includes a console login without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== A field does not exist until a query parses it
+section: How a query is put together
+Sumo Logic stores each event as raw text. Until something parses a field, it does not exist.
+
+In this query, the scope before the first pipe (|) chooses messages; the json operator creates eventName for the where operator to compare.
+```sumo
+_sourceCategory=lab/aws/cloudtrail
+| json "eventName"
+| where eventName = "StopLogging"
+```
+
+== D1: the parse step filters too
+section: 4. Filter on a parsed field: trail tampering (D1)
+By default the json operator drops every message that lacks a key it asks for. Roles have no userIdentity.userName, so nodrop keeps their events, with the field empty. Expect one message: StopLogging by backup-svc.
+```sumo
+// D1: CloudTrail logging stopped, deleted or changed
+_sourceCategory=lab/aws/cloudtrail
+| json "eventName", "sourceIPAddress", "userIdentity.userName" as eventName, sourceIPAddress, userName nodrop
+| where eventName in ("StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors")
+| fields eventName, userName, sourceIPAddress
+```
+
+== Before you trust an empty result, run a control
+section: 6. Count, then threshold: the burst that never fires (D2)
+Counting only AccessDenied, the naive D2 returns nothing. This control, a query that must return something, counts error codes. Elastic Compute Cloud (EC2) reported three of the attacker's seven denials as Client.UnauthorizedOperation. The fix counts four denial codes.
+```sumo
+// Control: which error codes are in the data at all?
+_sourceCategory=lab/aws/cloudtrail
+| json "errorCode" nodrop
+| if(isBlank(errorCode), "(none)", errorCode) as errorCode
+| count by errorCode
+```
+
+== D3: the 10-minute window is the detection
+section: 8. One user, two events, ten minutes (D3)
+The transaction operator groups events by newUser, counts each named state and records the first and last times in milliseconds. Expect backup-svc only. Without the last three lines, svc-reporting, routine work keyed 2 hours 37 minutes after creation, appears too.
+```sumo
+_sourceCategory=lab/aws/cloudtrail
+| json "eventName", "requestParameters.userName" as eventName, newUser nodrop
+| where eventName in ("CreateUser", "CreateAccessKey")
+| transaction on newUser
+    with states CreateUser as created, CreateAccessKey as keyed in eventName
+    results by transactions
+| where created > 0 and keyed > 0
+| _end_time - _start_time as gap_ms
+| where gap_ms <= 10m
+| gap_ms / 1000 as gap_seconds
+```
+
+== Turn D2 into a monitor
+section: 9. Turn the search into a monitor
+This is part of step 9's file for Terraform, a tool that creates resources from text files. The fixed D2 query keeps its threshold, so the trigger alerts on any row, checking the last 10 minutes every minute.
+```hcl
+      | where _count >= 5
+    EOT
+  }
+  trigger_conditions {
+    logs_static_condition {
+      critical {
+        time_range = "10m" # look at the last 10 minutes,
+        frequency  = "1m"  # every minute
+        alert {
+          threshold      = 0
+          threshold_type = "GreaterThan" # any row at all
+```
+
+== Test the monitor both ways
+section: 10. Test the monitor both ways
+The monitor looks only at the last 10 minutes, so these commands replay 192.0.2.20's three denials stamped with the current time; it must stay Normal. Rerun them with --arg ip 203.0.113.50: the attacker's seven denials should turn it Critical.
+```bash
+jq -c --arg ip 192.0.2.20 '(now | strftime("%Y-%m-%dT%H:%M:%SZ")) as $t
+  | select(.sourceIPAddress == $ip and has("errorCode")) | .eventTime = $t' \
+  cloudtrail-lab.jsonl > replay.jsonl
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  -H 'X-Sumo-Category:lab/aws/cloudtrail' -T replay.jsonl "$SUMO_URL"
+```
+
+== Exercise: this query returns nothing
+section: Hands-on exercises
+This query returns nothing against the lab. Why, and what is the quickest way to prove it rather than guess? In the guide, "Show the answer" opens each answer.
+```sumo
+_sourceCategory=lab/aws/cloudtrail
+| json "sourceIpAddress" as ip
+| count by ip
+```
+
+== Answer: nodrop proves the key is wrong
+section: Hands-on exercises
+Keys are case-sensitive and CloudTrail spells it sourceIPAddress, so the json operator drops all 24 events. With nodrop they survive, and this query returns one row, (missing) with 24: the scope found the events, and the key did not.
+```sumo
+_sourceCategory=lab/aws/cloudtrail
+| json "sourceIpAddress" as ip nodrop
+| if(isBlank(ip), "(missing)", ip) as ip
+| count by ip
+```
+
+== Exercise: a faster D2 that returns nothing
+section: Hands-on exercises
+A colleague speeds up this fixed D2 by adding the keyword AccessDenied to its scope, after _sourceCategory=lab/aws/cloudtrail, and leaves the rest alone. It returns nothing again. Explain, and suggest a keyword that is safe.
+```sumo
+// D2: every denial code, per source address, 5 or more
+_sourceCategory=lab/aws/cloudtrail
+| json "errorCode", "sourceIPAddress" nodrop
+| where errorCode in ("AccessDenied", "AccessDeniedException", "Client.UnauthorizedOperation", "UnauthorizedOperation")
+| count by sourceIPAddress
+| where _count >= 5
+```
+
+== Answer: keywords filter before the first pipe
+section: Hands-on exercises
+The three EC2 denials contain Client.UnauthorizedOperation, never the word AccessDenied, so they are gone before the where operator sees them, and 203.0.113.50 is back to 4. A safe keyword is errorCode: only events with an error contain that word.
+
+== Common mistakes
+section: Common mistakes
+- A dropped or mis-cased key, a narrow scope or the default 15-minute range returns nothing, like a quiet account.
+- Keywords ignore case; json keys and the where operator's string comparisons do not.
+- An upload's 200 means received, not stored.
