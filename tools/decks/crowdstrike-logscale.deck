@@ -1,0 +1,141 @@
+title: CrowdStrike Query Language (CQL), hands-on
+guide: howto/crowdstrike-logscale.html
+promise: Learn CQL from zero on CloudTrail events, with the quote and AND/OR rules that quietly change results, then save detections.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to CQL and LogScale, CrowdStrike's log management platform.
+
+CrowdStrike offers no way to run LogScale without an account: the free Community Edition takes no new sign-ups, and self-hosted LogScale needs a licence key CrowdStrike sells.
+
+== How the guide was checked
+section: How to use this guide
+No CQL query was run. A local script worked out each result from CrowdStrike's documentation. Shell steps ran on macOS, sending events to a local stand-in for LogScale. Step 10's correlation rule passed validation but was never applied.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into your terminal, and CQL blocks, except step 2's parser code, into LogScale's search page, its time range set to the last two days. "Expect" sentences give what the documentation says should happen.
+
+== Set up: a repository, a parser and a token
+section: 2. Create a parser and an ingest token
+In a repository, a separate store of events, your role needs permission to change parsers, which set each event's fields and time, and ingest tokens, secrets for sending events. Create this parser, cloudtrail-lab, and an ingest token assigned to it.
+```cql
+parseJson()
+| parseTimestamp(field=eventTime)
+```
+
+== Set up: load the lab data
+section: 3. Load the lab data
+In a terminal with curl and jq, paste step 3's whole block: it saves the 24 lab events, and these last lines move them to yesterday and upload them. Replace both placeholders first. Expect the file's hash, then 200.
+```bash
+jq -c '(now - 86400 | strftime("%Y-%m-%d")) as $d | .eventTime |= ($d + .[10:])' \
+  cloudtrail-lab.jsonl > upload.jsonl
+jq -R . upload.jsonl | jq -s '[{messages: .}]' > upload.json
+
+LOGSCALE_URL='https://paste-your-logscale-address-here'
+INGEST_TOKEN='paste-your-ingest-token-here'
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  -H "Authorization: Bearer $INGEST_TOKEN" -H 'Content-Type: application/json' \
+  --data-binary @upload.json "$LOGSCALE_URL/api/v1/ingest/humio-unstructured"
+```
+
+== What CQL is and where you meet it
+section: One language, two CrowdStrike products
+LogScale and Falcon Next-Gen SIEM (security information and event management) search logs with CQL. Analysts investigate with it. Detection engineers save queries that raise an alert on a match: triggers in LogScale, correlation rules in Next-Gen SIEM.
+
+== The lab: 24 CloudTrail events and a leaked key
+section: Walk-through
+The lab is 24 Amazon Web Services (AWS) CloudTrail events, AWS's record of the calls made in an account.
+
+The access key of build-bot, a continuous integration user, has leaked.
+
+== What someone does with build-bot's key
+section: Walk-through
+From the address 203.0.113.50 someone is mostly refused, then creates a user, backup-svc, gives it administrator rights (the AdministratorAccess policy) and an access key, and uses it to stop CloudTrail logging.
+
+Elsewhere, bob signs in without multi-factor authentication (MFA).
+
+== include: _cloudtrail-lab.deck
+
+== The one idea: filters and expressions
+section: How a CQL query is built
+CQL has two small languages. In a filter like this one, the right side is always a value, and = matches all of it, case-sensitively. In an expression, inside test() or after :=, a bare word is a field name.
+```cql
+eventName="StopLogging"
+```
+
+== OR binds tighter than AND
+section: How a CQL query is built
+Filters side by side must all match, as if joined by AND. This query, meant as console logins without MFA or any StopLogging, returns two logins and no StopLogging, because OR binds tighter than AND. Parenthesise the first two filters.
+```cql
+eventName="ConsoleLogin" additionalEventData.MFAUsed="No" or eventName="StopLogging"
+```
+
+== D2's first draft: the burst that never fires
+section: 7. Count, then threshold: the burst that never fires (D2)
+The pipe, |, passes events on. The groupBy() function makes a row per address with its count in _count, and the last line filters on that count. It returns nothing. Delete that line: 203.0.113.50 has 4, 192.0.2.20 has 3.
+```cql
+// D2, naive: AccessDenied per source address, 5 or more
+errorCode="AccessDenied"
+| groupBy(sourceIPAddress)
+| _count >= 5
+```
+
+== Before you trust an empty result, run a control
+section: 7. Count, then threshold: the burst that never fires (D2)
+The default() function gives events with no errorCode the value (none). Expect (none) 14, AccessDenied 7 and Client.UnauthorizedOperation 3, the attacker's Amazon Elastic Compute Cloud refusals. The fix matches AccessDenied* and *UnauthorizedOperation, * being a wildcard: 203.0.113.50 then has 7.
+```cql
+// Control: which error codes are in the data at all?
+default(field=errorCode, value="(none)")
+| groupBy(errorCode)
+```
+
+== D3: correlate() pairs events within 10 minutes
+section: 9. One user, two events, ten minutes (D3)
+The correlate() function finds one event per named query, with links set by <=>: the same user name. Expect one row, backup-svc. Delete within=10m and the comma before it, and svc-reporting, keyed 2 hours 37 minutes after creation, appears too.
+```cql
+// D3: a new user given an access key within 10 minutes
+correlate(
+  created: { eventName="CreateUser" } include: [userIdentity.userName, sourceIPAddress],
+  keyed: { eventName="CreateAccessKey" | requestParameters.userName <=> created.requestParameters.userName },
+  sequence=true,
+  within=10m
+)
+```
+
+== Save D2 as an alert and test it both ways
+section: 11. Test the alert both ways
+At least 10 minutes after step 3's upload, save the fixed D2 as a trigger, an aggregate alert with a 10-minute window. These lines resend 192.0.2.20's denials, timed now, which must not fire it. With --arg ip 203.0.113.50, it should.
+```bash
+jq -c --arg ip 192.0.2.20 '(now | strftime("%Y-%m-%dT%H:%M:%SZ")) as $t
+  | select(.sourceIPAddress == $ip and has("errorCode")) | .eventTime = $t' \
+  cloudtrail-lab.jsonl | jq -R . | jq -s '[{messages: .}]' > replay.json
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  -H "Authorization: Bearer $INGEST_TOKEN" -H 'Content-Type: application/json' \
+  --data-binary @replay.json "$LOGSCALE_URL/api/v1/ingest/humio-unstructured"
+```
+
+== Exercise: this query returns nothing
+section: Hands-on exercises
+Why does this query return nothing against the lab? In the guide, "Show the answer" opens each exercise's answer.
+```cql
+test(eventName == StopLogging)
+```
+
+== Answer: in test(), a bare word is a field
+section: Hands-on exercises
+Inside test(), an unquoted word is a field name, so this compares eventName with a field called StopLogging, which no event has. A missing field gives null, so no event passes. Quote the value: test(eventName == "StopLogging") returns one event.
+
+== Exercise: a correlate() link that finds nothing
+section: Hands-on exercises
+A colleague writes D3's link as requestParameters.userName = created.requestParameters.userName, a plain comparison instead of <=>. The query runs and finds nothing. Why?
+
+== Answer: a filter's right side is a value
+section: Hands-on exercises
+Inside the keyed query, that line is an ordinary filter, and a filter's right side is a value: it looks for a user literally named created.requestParameters.userName. No event has one, so no pair forms. CrowdStrike says only <=> links events.
+
+== Common mistakes
+section: Common mistakes
+- A misspelt field, a value in the wrong case and a quiet account all return nothing, so run a control.
+- OR binds tighter than AND, so add parentheses.
+- In an expression, an unquoted value is read as a field name.
