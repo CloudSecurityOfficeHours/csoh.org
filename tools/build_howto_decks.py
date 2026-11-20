@@ -53,9 +53,11 @@ from pathlib import Path
 
 MAX_PROSE_WORDS = 40
 MAX_CODE_LINES = 12
-# Characters per row in the code box at 14 pt. The box holds about 101
-# monospace characters across; 96 leaves room for a substitute font's metrics.
-CODE_WRAP_COLS = 96
+# Characters per row in the code box. Source Code Pro advances 0.6 em, so at
+# 16 pt the 11.8 in inner width holds 88 characters; 84 leaves room for a
+# substitute font's metrics. The renderer's code size must agree (the render
+# self-test checks it).
+CODE_WRAP_COLS = 84
 MAX_HEADING_WORDS = 12
 MIN_SLIDES = 12
 MAX_SLIDES = 20
@@ -693,19 +695,20 @@ SPL_LONG = (
 
 
 def _case_code_rows_basic(tmp: Path) -> None:
-    assert code_rows("a" * 96) == 1
-    assert code_rows("a" * 97) == 2
+    assert code_rows("a" * CODE_WRAP_COLS) == 1
+    assert code_rows("a" * (CODE_WRAP_COLS + 1)) == 2
     assert code_rows("") == 1
     # "x " * 60 splits into 60 "x" words plus one empty word. A row of k
-    # words is 2k-1 characters, so 48 words (95) fit and a 49th (97) does
-    # not; row 2 holds the remaining 12 words and the empty one (24).
+    # words is 2k-1 characters, so 42 words (83) fit and a 43rd (85) does
+    # not; row 2 holds the remaining 18 words and the empty one (36).
     assert code_rows("x " * 60) == 2
 
 
 def _case_code_rows_words(tmp: Path) -> None:
     assert len(SPL_LONG) == 135, len(SPL_LONG)
     assert code_rows(SPL_LONG) == 2
-    assert code_rows("    " + "a" * 92) == 1 and code_rows("    " + "a" * 93) == 2
+    room = CODE_WRAP_COLS - 4
+    assert code_rows("    " + "a" * room) == 1 and code_rows("    " + "a" * (room + 1)) == 2
 
 
 def _case_code_visual_limit(tmp: Path) -> None:
@@ -1062,6 +1065,8 @@ def _case_render_wrapped_code(tmp: Path) -> None:
 
     deck = _render_deck()
     deck.slides[1].code = ["x = 1"] * 10 + [SPL_LONG]
+    # Twelve code rows at 16 pt fill the slide, so it carries no other prose.
+    deck.slides[1].paragraphs, deck.slides[1].bullets = [], []
     out = r.render_deck(deck, tmp / "w.pptx", {})
     assert r.verify_pptx(out, deck) == [], r.verify_pptx(out, deck)
     # Slide 0 of the file is the title slide, so deck slide 1 is file slide 2.
@@ -1075,6 +1080,8 @@ def _case_render_wrapped_code(tmp: Path) -> None:
 def _case_render_fonts(tmp: Path) -> None:
     import howto_deck_render as r
 
+    # Raising code_pt without lowering CODE_WRAP_COLS would overflow the box.
+    assert CODE_WRAP_COLS * 0.6 * r.STYLE["code_pt"] / 72 <= r.STYLE["w"] - 2 * r.STYLE["code_pad"]
     deck = _render_deck()
     out = r.render_deck(deck, tmp / "d.pptx", {})
     small = {"footer-left", "footer-right", "guide-line", "credit"}
@@ -1087,7 +1094,7 @@ def _case_render_fonts(tmp: Path) -> None:
                 for run in p.runs:
                     if sh.name == "code":
                         seen_code += 1
-                        assert run.font.size.pt == 14, run.font.size.pt
+                        assert run.font.size.pt == r.STYLE["code_pt"], run.font.size.pt
                     elif sh.name not in small:
                         seen_body += 1
                         assert run.font.size.pt >= 18, (sh.name, run.font.size.pt)

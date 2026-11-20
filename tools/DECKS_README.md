@@ -47,9 +47,9 @@ credit: <source and licence>
 - Limits: 12 to 20 slides counting the generated cover and closing slides, at
   most 40 words of prose and 12 code rows per slide, no U+2013 or U+2014, and
   no spaced hyphen used as a dash.
-- Code rows are visual rows: a line longer than 96 columns wraps at spaces
+- Code rows are visual rows: a line longer than 84 columns wraps at spaces
   inside the code box and counts as the rows it wraps to (a single word longer
-  than 96 columns is split across rows). Copying a wrapped line from the slide
+  than 84 columns is split across rows). Copying a wrapped line from the slide
   gives the original line, because the wrap is display only.
 
 ## What the flags do

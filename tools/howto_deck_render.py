@@ -44,24 +44,26 @@ STYLE = {
     "x": 0.6,
     "y": 0.45,
     "w": 12.1,
-    "heading_pt": 32,
-    "body_pt": 20,
-    "code_pt": 14,
-    "small_pt": 12,
-    "guide_pt": 14,
-    "cover_title_pt": 44,
-    "cover_promise_pt": 24,
-    "cover_line_pt": 18,
+    "heading_pt": 36,
+    "body_pt": 24,
+    "code_pt": 16,
+    "small_pt": 14,
+    "guide_pt": 16,
+    "guide_h": 0.35,
+    "guide_advance": 0.4,
+    "cover_title_pt": 48,
+    "cover_promise_pt": 28,
+    "cover_line_pt": 20,
     "code_pad": 0.15,
     "footer_from_bottom": 0.3,
     "footer_h": 0.3,
     "bottom_limit": 6.9,
-    "body_chars_per_line": 85,
+    "body_chars_per_line": 72,
     "heading_chars_per_line": 48,
-    "cover_title_chars_per_line": 40,
-    "cover_promise_chars_per_line": 70,
+    "cover_title_chars_per_line": 34,
+    "cover_promise_chars_per_line": 64,
     "line_body": 1.25,
-    "line_code": 1.3,
+    "line_code": 1.25,
     "line_heading": 1.2,
     "para_gap": 0.08,
     "block_gap": 0.15,
@@ -242,8 +244,8 @@ def _content(prs, deck, slide, n: int, total: int, headings) -> None:
     pg.text("heading", x, y, w, h, [slide.heading], STYLE["heading_font"], STYLE["heading_pt"], STYLE["heading"], bold=True)
     y += h
     if slide.section:
-        pg.text("guide-line", x, y, w, 0.3, [f"In the guide: {slide.section}"], STYLE["body_font"], STYLE["guide_pt"], STYLE["muted"])
-        y += 0.35
+        pg.text("guide-line", x, y, w, STYLE["guide_h"], [f"In the guide: {slide.section}"], STYLE["body_font"], STYLE["guide_pt"], STYLE["muted"])
+        y += STYLE["guide_advance"]
     y += STYLE["block_gap"]
     items = list(slide.paragraphs) + [f"• {b}" for b in slide.bullets]
     if items:
