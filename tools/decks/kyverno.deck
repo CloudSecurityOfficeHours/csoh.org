@@ -1,0 +1,199 @@
+title: Kyverno policies, hands-on
+guide: howto/kyverno.html
+promise: Learn Kyverno's current policies with its free command-line tool and no cluster, then learn to read the older ClusterPolicy that existing clusters still run.
+
+== Who it is for and what you need
+section: How to use this guide
+It is intermediate and assumes Kubernetes basics: a Pod is one or more containers run together, and a Deployment keeps a set of identical Pods running. Allow about two hours.
+
+You need the kyverno command-line interface (CLI), but no cluster.
+
+== How the guide was checked
+section: How to use this guide
+Every command, policy and test ran as printed with Kyverno CLI 1.19.2.
+
+No cluster was used, so cluster behavior comes from Kyverno's documentation, Helm chart and source code. Not run: step 11's workflow on GitHub, and the final 1.20.0 release.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Most steps judge step 2's sample files against a policy with kyverno apply. Paste BASH blocks into your terminal in ~/kyverno-lab. Save YAML blocks there, as the file their first-line comment names. Unlabelled blocks are output.
+
+== Set up your environment
+section: 1. Install the CLI and make a lab
+On macOS or Linux with Homebrew, these lines install the CLI and make the lab folder. The first line kyverno version prints should read Version: 1.19.2 or later in the 1.19 series. Without Homebrew, use the 1.19.2 release from github.com/kyverno/kyverno/releases.
+```bash
+brew install kyverno
+kyverno version
+mkdir -p ~/kyverno-lab/policies && cd ~/kyverno-lab
+```
+
+== What Kyverno is and where you meet it
+section: Policies that are Kubernetes resources
+Kyverno checks requests to create, change or delete things in a Kubernetes cluster against rules you write. Its policies are Kubernetes resources too, YAML you kubectl apply. Since 1.19 deprecated the older format, their logic is CEL (Common Expression Language).
+
+== The one idea: the check comes last in a chain
+section: A policy judges only the requests it is sent
+In a cluster, your check runs only when the API server, which receives every request, sends Kyverno the request, Kyverno answers in time, and the policy selects it. The CLI skips all that: a clean run proves the check right.
+
+== The lab: no container may run as root
+section: 2. The lab: five Pods and a Deployment
+Kubernetes enforces the rule when a container's securityContext.runAsNonRoot is true; one that does not set it inherits the Pod's. This is inherits, one of five Pods in step 2's pods.yaml. It and web comply; root, unset and init do not.
+```yaml
+apiVersion: v1
+kind: Pod
+metadata: {name: inherits, namespace: shop}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers:
+    - name: app
+      image: ghcr.io/acme/web:2.1.0
+```
+
+== Step 3: a ValidatingPolicy checks requests
+section: 3. Your first ValidatingPolicy
+This ends policies/run-as-non-root.yaml, step 3's ValidatingPolicy. matchConstraints picks requests; each validations expression must be true. orValue(false) is the value of a missing field.
+```yaml
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          c.?securityContext.?runAsNonRoot.orValue(false) == true)
+      message: every container must set securityContext.runAsNonRoot to true
+```
+
+== A missing runAsNonRoot should fail, not pass
+section: 4. The field that is not there
+Step 3 wrongly failed inherits and passed init, whose init container, which runs before the app container, may run as root. Step 4's policies/run-as-non-root.yaml checks every kind of container; this part uses each one's value, else the Pod's, else fails.
+```yaml
+    - name: podDefault
+      expression: object.spec.?securityContext.?runAsNonRoot.orValue(false)
+    - name: offenders
+      expression: >-
+        variables.containers.filter(c,
+          c.?securityContext.?runAsNonRoot.orValue(variables.podDefault) != true)
+  validations:
+    - expression: size(variables.offenders) == 0
+```
+
+== The match that never matches
+section: 5. The match that never matches
+matchConstraints needs the plural, lowercase resource name, pods. This sed line writes a copy that says Pods. The CLI reports no verdicts, and echo $? prints 0, the exit status for success: a pipeline checking only that goes green.
+```bash
+sed 's/resources: \[pods\]/resources: [Pods]/' policies/run-as-non-root.yaml > typo.yaml
+kyverno apply typo.yaml --resource pods.yaml
+echo $?
+```
+
+== Autogen: one Pod policy, every Pod controller
+section: 6. Autogen: one Pod policy, every Pod controller
+Step 4's policy judged deploy.yaml, step 2's Deployment: autogen gives a policy matching Pods variants for Deployments and other Pod controllers. This part of step 6's ephemeral.yaml adds a second rule, which switches autogen off: the Deployment gets no verdict.
+```yaml
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [pods/ephemeralcontainers]
+```
+
+== The CLI cannot tell Deny from Audit
+section: 7. Deny, Audit, Warn, and failing open
+The validationActions field says what a failed check does in a cluster: Deny rejects the request; Audit admits it and records the failure in a report. This Audit copy prints exactly what step 4's Deny version prints.
+```bash
+sed 's/validationActions: \[Deny\]/validationActions: [Audit]/' policies/run-as-non-root.yaml > audit.yaml
+kyverno apply audit.yaml --resource pods.yaml
+echo $?
+```
+
+== Existing resources are only reported
+section: 8. Existing resources, background scans and reports
+A new denying policy judges requests, so nothing already running changes. The background scan re-checks matching resources hourly by default and records results in reports, but never blocks or deletes anything. The CLI prints such a report with --policy-report.
+```bash
+kyverno apply policies/run-as-non-root.yaml --resource pods.yaml --policy-report
+```
+
+== Tests say what each policy must find
+section: 11. Test policies in CI
+In CI (continuous integration), the kyverno test command compares each verdict with what you expected and catches a dead match. This is part of step 11's tests/run-as-non-root/kyverno-test.yaml; make its folder. A test that cannot fail proves nothing.
+```yaml
+  - policy: run-as-non-root
+    isValidatingPolicy: true
+    kind: Pod
+    resources: [web, inherits]
+    result: pass
+  - policy: run-as-non-root
+    isValidatingPolicy: true
+    kind: Pod
+    resources: [root, unset, init]
+    result: fail
+```
+
+== Reading a legacy ClusterPolicy
+section: 12. Reading a legacy ClusterPolicy
+Step 12's legacy.yaml is a kyverno.io/v1 ClusterPolicy; 1.19 is the last release that runs ClusterPolicies. This part's =() means: if the field is present, it must match, so unset passes. With no failure action, it defaults to Audit.
+```yaml
+      validate:
+        message: every container must set securityContext.runAsNonRoot to true
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(runAsNonRoot): true
+```
+
+== Exercise: a replica cap that never fails
+section: Hands-on exercises
+Exercise 1's replicas.yaml, which ends like this, is meant to cap Deployments at 10 replicas. Run it against deploy.yaml and a 50-replica copy. Why does nothing fail? The guide hides each answer until you open Show the answer.
+```yaml
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [Deployments]
+  validations:
+    - expression: object.spec.replicas <= 10
+      message: at most 10 replicas
+```
+
+== Answer: wrong group, wrong resource name
+section: Hands-on exercises
+Deployments live in the apps API group, not the core group "", and the resource name is deployments. Either mistake alone makes the policy match nothing. This part of replicas-fixed.yaml also reads replicas optionally: a manifest may leave it out.
+```yaml
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments]
+  validations:
+    - expression: object.spec.?replicas.orValue(1) <= 10
+      message: at most 10 replicas
+```
+
+== Exercise: reject Pods running a latest image
+section: Hands-on exercises
+Write a policy that rejects Pods running a latest image. Exercise 2's tags.yaml holds four Pods: pinned uses ghcr.io/acme/web:2.1.0, latest uses nginx:latest, untagged uses nginx, and local uses registry.local:5000/tools. Try !c.image.endsWith(':latest') first: which Pods does it let through?
+
+== Answer: parse the image reference
+section: Hands-on exercises
+The string check catches only the Pod named latest. An image with no tag means latest too, so untagged and local get through. Kyverno's CEL image library parses the reference; this is part of policies/no-latest.yaml.
+```yaml
+  validations:
+    - expression: >-
+        object.spec.containers.all(c, image(c.image).tag() != 'latest')
+```
+
+== Common mistakes
+section: Common mistakes
+- A policy that matches nothing exits 0; give each a kyverno test file.
+- Write validationActions in every policy: legacy rules default to Audit.
+- With failurePolicy: Ignore, requests go through unchecked whenever Kyverno is down.
+- Denying policies leave existing resources running.
