@@ -54,7 +54,8 @@ credit: <source and licence>
 - The renderer prints the guide's own language label (the code block's
   `data-lang`, uppercased as the site shows it) as a tab on each code box, so
   the how-to-follow slide's "paste BASH blocks" applies; a block the guide
-  leaves unlabelled gets no tab.
+  leaves unlabelled gets no tab. That includes `data-lang="text"` blocks,
+  which the site also draws without a label.
 
 ## What the flags do
 

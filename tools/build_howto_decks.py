@@ -542,11 +542,14 @@ def guide_block_labels(html: str) -> list[str | None]:
     """One entry per <pre>, aligned with guide_code_blocks: the data-lang of the
     code-block div that directly wraps it, or None when that div has no
     data-lang or the <pre> has no such wrapper. Output blocks carry no
-    data-lang, which is how a reader tells them from input."""
+    data-lang, which is how a reader tells them from input. data-lang="text"
+    (stamped on output and on languages the highlighter does not know) also
+    gives None: style.css draws those blocks with no label, like an unlabelled
+    one, so a slide must not print a tab the guide does not show."""
     out: list[str | None] = []
     for m in LABELLED_PRE_RE.finditer(html):
         lang = DATA_LANG_RE.search(m.group(1) or "")
-        out.append(lang.group(1) if lang else None)
+        out.append(lang.group(1) if lang and lang.group(1) != "text" else None)
     return out
 
 
@@ -867,8 +870,10 @@ def _case_block_labels_basic(tmp: Path) -> None:
         '<div class="code-block" data-lang="bash"><pre>mkdir x\ncd x</pre></div>'
         '<div class="code-block"><pre>output one\noutput two</pre></div>'
         "<pre>bare</pre>"
+        '<div class="code-block" data-lang="text"><pre>tree one\ntree two</pre></div>'
     )
-    assert guide_block_labels(html) == ["bash", None, None], guide_block_labels(html)
+    assert guide_block_labels(html) == ["bash", None, None, None], guide_block_labels(html)
+    assert excerpt_label(html, ["tree two"]) is None
     assert excerpt_label(html, ["cd x"]) == "bash"
     assert excerpt_label(html, ["output two"]) is None
     assert excerpt_label(html, ["not on the page"]) is None
