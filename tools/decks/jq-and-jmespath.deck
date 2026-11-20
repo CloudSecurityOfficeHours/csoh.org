@@ -1,0 +1,167 @@
+title: jq and JMESPath, hands-on
+guide: howto/jq-and-jmespath.html
+promise: Learn jq and JMESPath, two query languages for JSON, including the mistakes that return an empty result instead of an error.
+
+== Who it is for and what you need
+section: How to use this guide
+It is for beginners new to jq and JMESPath who can use a terminal. Allow about 90 minutes.
+
+You need jq. Steps 7 and 8 need an Amazon Web Services (AWS) account; without one, read them without running them.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks into your terminal in ~/jq-lab, the folder step 1 makes. An events.json tab shows part of the file step 1 writes. No block shows output; the text says what to look for.
+
+== Set up your environment
+section: 1. Build the sample data
+You need jq, and Python 3 for step 6. This line makes ~/jq-lab and moves into it; the rest of step 1's block writes five sample events into events.json. Paste the whole block, including the line that says only EOF.
+```bash
+mkdir -p ~/jq-lab && cd ~/jq-lab
+```
+
+== What jq and JMESPath are
+section: The two query languages you will use every single day
+Cloud tools answer in JSON (JavaScript Object Notation), a text format for nested data: objects in curly braces pair names with values; arrays (lists) sit in square brackets. jq and JMESPath query it. They look alike and share nothing.
+
+== Where you meet jq and JMESPath
+section: The two query languages you will use every single day
+- jq runs in a terminal, on a file or a pipe (|), which feeds one command's output into the next.
+- JMESPath is what --query means in the AWS and Azure command-line tools.
+- gcloud, Google Cloud's command-line tool, uses neither.
+
+== The one idea: a jq filter produces a stream
+section: Streams versus single values
+In jq, an expression is a filter. Line 1's .a is the array under the key a: one value. Line 2's .a[] streams each item: three separate values, one after another. Line 3's brackets collect them into one array.
+```bash
+echo '{"a":[1,2,3]}' | jq '.a'
+echo '{"a":[1,2,3]}' | jq '.a[]'
+echo '{"a":[1,2,3]}' | jq '[.a[]]'
+```
+
+== Sample data: five CloudTrail-style events
+section: 1. Build the sample data
+CloudTrail is AWS's log of API (application programming interface) calls. Each record is one call: who made it (userIdentity.arn), what it was (eventName), where it came from (sourceIPAddress) and its error (errorCode: null, JSON's empty value, if none).
+```json
+{"Records":[
+ {"eventTime":"2026-08-20T14:03:11Z","eventName":"AssumeRole","errorCode":null,
+  "sourceIPAddress":"203.0.113.14",
+  "userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/alice"}},
+ {"eventTime":"2026-08-20T14:03:12Z","eventName":"GetObject","errorCode":"AccessDenied",
+  "sourceIPAddress":"198.51.100.7",
+  "userIdentity":{"type":"IAMUser","arn":"arn:aws:iam::111122223333:user/bob"}},
+```
+
+== jq step 2: navigate, then filter
+section: 2. jq: navigate, then filter
+Here .Records[] streams each record; select() passes on those whose condition is true. Expect three ARNs (Amazon Resource Names, AWS's unique names for users, roles and other resources), one per refused request. With -r, for raw output, strings print unquoted.
+```bash
+jq -r '.Records[] | select(.errorCode == "AccessDenied") | .userIdentity.arn' events.json
+```
+
+== jq step 3: build new objects
+section: 3. jq: build new objects
+For each record with an error, the braces build a new object with keys you name; the outer brackets collect the three into one array. A script that reads {who, what, when} keeps working when AWS adds or moves fields.
+```bash
+jq '[.Records[]
+     | select(.errorCode != null)
+     | {when: .eventTime, what: .eventName, who: .userIdentity.arn, from: .sourceIPAddress}]' \
+   events.json
+```
+
+== jq step 4: group and count
+section: 4. jq: group and count
+This counts failed requests per ARN, most first. The shape changes at each stage: stream, array, array of arrays, array of objects, then strings. group_by sorts and hands each group to map() as a list; .[0] gets the shared ARN.
+```bash
+jq -r '
+  [.Records[] | select(.errorCode != null)]      # collect failures into an array
+  | group_by(.userIdentity.arn)                  # array of arrays, one per principal
+  | map({arn: .[0].userIdentity.arn, denials: length})
+  | sort_by(-.denials)                           # negate to sort descending
+  | .[] | "\(.denials)\t\(.arn)"                 # \(...) is string interpolation
+' events.json
+```
+
+== jq step 5: output another tool can read
+section: 5. jq: emit something another tool can read
+@csv quotes an array's items and joins them with commas, so each failed request prints as one line of CSV (comma-separated values). Without -r, it prints a JSON string containing escaped quotes. @tsv and @sh (shell-quoted) exist too.
+```bash
+jq -r '.Records[]
+       | select(.errorCode != null)
+       | [.eventTime, .eventName, .sourceIPAddress, .userIdentity.arn]
+       | @csv' events.json
+```
+
+== JMESPath step 6: the same questions
+section: 6. JMESPath: the same questions, different language
+Step 6 installs the jmespath package with pip3, then runs the lines down to PY as Python. The first query returns step 2's three ARNs as one list: JMESPath always returns one value.
+```bash
+pip3 install jmespath
+
+python3 - <<'PY'
+import json, jmespath
+doc = json.load(open('events.json'))
+print(jmespath.search("Records[?errorCode=='AccessDenied'].userIdentity.arn", doc))
+print(jmespath.search("length(Records[?errorCode!=`null`])", doc))
+print(jmespath.search(
+    "Records[?errorCode!=`null`].{when: eventTime, what: eventName, who: userIdentity.arn}", doc))
+PY
+```
+
+== JMESPath: double quotes mean a field name
+section: 6. JMESPath: the same questions, different language
+[?...] is a filter projection, like select(); {...}, a multiselect hash, builds an object. Backticks enclose JSON literals, like `null`; single quotes enclose strings. Double quotes make a field name: [?eventName == "ListBuckets"] silently returns an empty list.
+
+== JMESPath step 7: --query is client-side
+section: 7. Against a real AWS CLI
+This prints the IDs of running instances, AWS's virtual machines. --filters works on the server: AWS returns only running ones. --query works on the client, after everything arrives: you are still billed, and CloudTrail still records that you read everything.
+```bash
+aws ec2 describe-instances \
+  --filters 'Name=instance-state-name,Values=running' \
+  --query 'Reservations[].Instances[].InstanceId'
+```
+
+== Step 8: take JSON, and parse it with jq
+section: 8. The combination that gets used most
+--output text turns nulls into the string None and flattens nested lists with tabs, so columns misalign when a field is empty. For anything you will parse, pipe --output json into jq; this prints each user's name and creation date.
+```bash
+aws iam list-users --output json \
+  | jq -r '.Users[] | [.UserName, .CreateDate] | @tsv'
+```
+
+== Exercise: events per source address, in jq
+section: Hands-on exercises
+Using events.json, print one line per distinct source IP (Internet Protocol) address, showing the IP and the number of events from it, most active first. The guide hides each answer until you select Show the answer.
+
+== Answer: keep the collecting brackets
+section: Hands-on exercises
+group_by needs an array, so keep the brackets around .Records[]. Without them, jq hands it one record at a time; a record is an object, and jq stops with an error that starts Cannot index string with string.
+```bash
+jq -r '
+  [.Records[]]
+  | group_by(.sourceIPAddress)
+  | map({ip: .[0].sourceIPAddress, n: length})
+  | sort_by(-.n)
+  | .[] | "\(.n)\t\(.ip)"
+' events.json
+```
+
+== Exercise: an empty JMESPath result
+section: Hands-on exercises
+A colleague says this command returns nothing, so they have no running instances. The account they are looking at has forty running instances. What is wrong?
+```bash
+aws ec2 describe-instances --query 'Reservations[].Instances[?State.Name == "running"].InstanceId'
+```
+
+== Answer: JMESPath strings need single quotes
+section: Hands-on exercises
+"running" is a quoted identifier, a field name: State.Name is compared with a field named running, and the comparison is never true. Write 'running', switching the outer quotes. Before believing an empty result, run the query with the filter removed.
+```bash
+aws ec2 describe-instances \
+  --query "Reservations[].Instances[?State.Name == 'running'].InstanceId"
+```
+
+== Common mistakes
+section: Common mistakes
+- JMESPath double quotes mean a field name; the empty result reads as an empty environment.
+- Without -r, the next command treats jq's quotes as part of the value.
+- When a query returns nothing, re-run it with the filter removed.
