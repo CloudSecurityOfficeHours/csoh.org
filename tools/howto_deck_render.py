@@ -61,7 +61,7 @@ STYLE = {
     "bottom_limit": 6.9,
     "body_chars_per_line": 72,
     "heading_chars_per_line": 48,
-    "cover_title_chars_per_line": 34,
+    "cover_title_chars_per_line": 30,
     "cover_promise_chars_per_line": 64,
     "line_body": 1.25,
     "line_code": 1.25,
@@ -246,13 +246,13 @@ def _notes_for(deck, slide, headings: dict[str, str | None] | None) -> str:
 def _cover(prs, deck, total: int) -> None:
     pg = _Page(prs, f"{deck.slug}.deck (cover)", dark=True)
     x, w = 0.9, 11.5
-    y = 1.9
+    y = 1.4
     title_h = _lines(deck.title, STYLE["cover_title_chars_per_line"]) * STYLE["cover_title_pt"] * STYLE["line_heading"] / 72 + 0.1
     pg.text("title", x, y, w, title_h, [deck.title], STYLE["heading_font"], STYLE["cover_title_pt"], STYLE["white"], bold=True)
     y += title_h + 0.3
     promise_h = _lines(deck.promise, STYLE["cover_promise_chars_per_line"]) * STYLE["cover_promise_pt"] * STYLE["line_body"] / 72 + 0.1
     pg.text("promise", x, y, w, promise_h, [deck.promise], STYLE["body_font"], STYLE["cover_promise_pt"], STYLE["light"])
-    y += promise_h + 0.5
+    y += promise_h + 0.4
     line_h = STYLE["cover_line_pt"] * STYLE["line_body"] / 72 + 0.1
     pg.text("attribution", x, y, w, line_h, [ATTRIBUTION], STYLE["body_font"], STYLE["cover_line_pt"], STYLE["accent"])
     y += line_h + 0.05

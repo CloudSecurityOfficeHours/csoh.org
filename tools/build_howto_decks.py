@@ -1287,6 +1287,25 @@ def _case_render_verify_plants(tmp: Path) -> None:
     assert any("slides, expected" in f for f in r.verify_pptx(out, short))
 
 
+def _case_render_cover_title(tmp: Path) -> None:
+    import howto_deck_render as r
+
+    def geometry(title: str) -> tuple[int, int, int]:
+        deck = _render_deck()
+        deck.title = title
+        out = r.render_deck(deck, tmp / "c.pptx", {})
+        shapes = {sh.name: sh for sh in _reopen(out).slides[0].shapes}
+        return shapes["title"].top, shapes["title"].height, shapes["promise"].top
+
+    one_line = r.STYLE["cover_title_pt"] * r.STYLE["line_heading"] / 72
+    for title, rows in (("x" * 30, 1), ("x" * 34, 2)):
+        top, height, promise_top = geometry(title)
+        assert height >= int(rows * one_line * 914400), (len(title), rows, height)
+        assert promise_top >= top + height, (len(title), top, height, promise_top)
+    # Control: a 30-character title keeps one line, so it must be shorter.
+    assert geometry("x" * 30)[1] < geometry("x" * 34)[1]
+
+
 RENDER_CASES: list = [
     ("render_ok", _case_render_ok),
     ("render_notes", _case_render_notes),
@@ -1296,6 +1315,7 @@ RENDER_CASES: list = [
     ("render_code_label", _case_render_code_label),
     ("render_code_file", _case_render_code_file),
     ("render_verify_plants", _case_render_verify_plants),
+    ("render_cover_title", _case_render_cover_title),
 ]
 
 
