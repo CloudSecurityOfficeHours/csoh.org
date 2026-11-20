@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Decks are CC BY-NC 4.0; guides stay CC BY-NC-ND 4.0. The renderer adds attribution and license to the first and last slides.
-- 12 to 20 slides per deck, counting the generated cover and closing slides.
+- 12 to 22 slides per deck, counting the generated cover and closing slides.
 - At most 40 words of prose and 12 visual code rows per slide (a code line longer than 84 columns wraps and counts as the rows it wraps to). The limits do not guarantee fit: `--build` is the layout check, and every deck must build with 0 verify findings.
 - Every code excerpt is a contiguous run of whole lines from one `<pre>` block on its own guide, and is shortened only from its ends.
 - A slide says nothing its guide does not say. A deck claims no more testing than its guide's "How this page was checked" line, keeps that line's "Not run" items, and makes no testing claim at all when the guide has no such line.
@@ -38,7 +38,7 @@
 Each outline task names one guide. Its implementer writes `tools/decks/<slug>.deck`; nothing else changes.
 
 - [ ] **Step 1: Read the guide and the pilot.** Read `howto/<slug>.html`, the pilot outline `tools/decks/splunk-spl.deck`, the outline format in `tools/DECKS_README.md`, and the list of problems the pilot's review caught, `.superpowers/sdd/2026-11-19-howto-slide-decks/task-5-6-findings.md`.
-- [ ] **Step 2: Write the outline** in the deck shape from the spec: who it is for and what you need; how the guide was checked (only if the guide says); what the language is and where you meet it; the one idea that makes it click; one slide per key step, each with a code excerpt and its `section:`; two or three exercises, each with its question and answer on consecutive slides; common mistakes. The promise line restates the guide's own promise. Lab guides include `_cloudtrail-lab.deck` where the guide introduces the lab, as the pilot does, once Task 1 is complete.
+- [ ] **Step 2: Write the outline** in the deck shape from the spec: who it is for and what you need; how the guide was checked (only if the guide says); how to follow the guide (one slide, `section: How to use this guide`, from that section of the guide); set up your environment (one slide, two if setup has two distinct stages, from the guide's setup step with its commands as an excerpt and what you should see when it worked); what the language is and where you meet it; the one idea that makes it click; one slide per key step, each with a code excerpt and its `section:`; two or three exercises, each with its question and answer on consecutive slides; common mistakes. The promise line restates the guide's own promise. Lab guides include `_cloudtrail-lab.deck` where the guide introduces the lab, as the pilot does, once Task 1 is complete.
 - [ ] **Step 3: Run the gate.** `python3 tools/build_howto_decks.py --check` reports 0 findings.
 - [ ] **Step 4: Build.** `python3 tools/build_howto_decks.py --build <slug>` exits 0 with 0 verify findings. Report every slide's content bottom against the 6.9 in limit (a throwaway script outside the repo, as in `task-7b-report.md`).
 - [ ] **Step 5: Control.** Change one character in one code line, confirm `--check` names it, restore from a scratch copy.
@@ -83,6 +83,14 @@ The eleven lab guides: `splunk-spl` (the published pilot), `kusto-kql`, `sql-for
 - [ ] **Step 4: Confirm the published pilot is unchanged.** `--check` reports 0 findings, `--stale` prints nothing (the resolved outline text, which the published hash covers, is identical), and `--build splunk-spl` exits 0 with 0 verify findings.
 - [ ] **Step 5: Commit** both files, message `decks: keep only what every lab guide says in the shared lab slides`.
 
+### Task 1b: Raise the deck limit and give the pilot its intro slides
+
+**Files:**
+- Modify: `tools/build_howto_decks.py` (`MAX_SLIDES = 22`, its self-test boundary cases), `tools/DECKS_README.md`, `tools/decks/splunk-spl.deck`
+
+- [ ] **Step 1:** `MAX_SLIDES = 22`; the self-test's slide-count cases move their boundaries to 22 and 23; the README states 12 to 22. `--self-test` passes. Commit `decks: allow 22 slides for the intro slides`.
+- [ ] **Step 2:** Add the two intro slides to `splunk-spl.deck` per the outline procedure, trimming elsewhere if the deck would pass 22. `--check` 0 findings, `--build splunk-spl` 0 verify findings. `--stale` now lists `splunk-spl`, which is expected: the revised pilot is uploaded with batch A (Task 12) and re-published with it (Task 28), replacing its ID on the guide page. Commit `decks: Splunk SPL intro slides`.
+
 ### Batch A: the lab guides
 
 Each task follows the outline procedure for its guide.
@@ -114,7 +122,7 @@ Two languages (ES|QL and EQL). Each code slide says which one it shows.
 The guide carries the Wiz disclosure in its info box. The deck states it, in the guide's words, on the first slide that names Google or Google SecOps.
 
 ### Task 12: Batch A upload and render check
-The publish procedure's upload and render check for Tasks 2 to 11.
+The publish procedure's upload and render check for Tasks 1b (the revised Splunk SPL deck) and 2 to 11. The old public Splunk deck is listed for Shawn as superseded.
 
 ### Batch B: the other guides with a "How this page was checked" line
 

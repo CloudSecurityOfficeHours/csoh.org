@@ -26,6 +26,8 @@ steps, and sends them to the guide to do the work.
   see its owner's name and address. **For now** they live in Shawn's
   personal Google Drive, the account the Drive connector is signed in to,
   as the existing decks on `presentations.html` do.
+- Every deck opens by explaining how to set up the environment and how to
+  follow the guide (deck shape items 3 and 4).
 - License: the decks are **CC BY-NC 4.0**. The guides stay CC BY-NC-ND 4.0.
   The no-derivatives term would forbid a teacher from editing a deck and
   presenting it, which is the reuse the decks exist for.
@@ -164,15 +166,21 @@ Follows the guide's own sections, so a reader can match slides to the page:
 1. Title: guide title, a one-line promise, attribution, license.
 2. Who it is for and what you need (the guide's info box), plus a short form
    of "How this page was checked" that claims no more than the guide.
-3. What the language is and where you meet it.
-4. The one idea that makes it click.
-5. Walk-through highlights: one slide per key step, each with a code excerpt,
+3. How to follow the guide: the guide's "How to use this guide" section in
+   short (read in order, what the walk-through covers, which code blocks you
+   paste and which show what you should see).
+4. Set up your environment: the guide's setup step, with its commands as a
+   code excerpt and what you should see when it worked (one slide, two if
+   setup has two distinct stages).
+5. What the language is and where you meet it.
+6. The one idea that makes it click.
+7. Walk-through highlights: one slide per key step, each with a code excerpt,
    one sentence on what it shows, and the step's name in the guide.
-6. Two or three exercises: the question on one slide, the answer on the next.
-7. Common mistakes.
-8. Where next: the guide's full URL, attribution and license.
+8. Two or three exercises: the question on one slide, the answer on the next.
+9. Common mistakes.
+10. Where next: the guide's full URL, attribution and license.
 
-Twelve to twenty slides. Every slide's footer shows the guide's csoh.org
+Twelve to twenty-two slides. Every slide's footer shows the guide's csoh.org
 address and the slide number. Speaker notes give the matching guide section's
 URL with its anchor.
 
