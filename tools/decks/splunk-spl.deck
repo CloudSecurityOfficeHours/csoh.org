@@ -16,7 +16,7 @@ Not run: Splunk Cloud Platform, Splunk Enterprise Security, the Splunk Add-on fo
 
 == How to follow the guide
 section: How to use this guide
-Read it in order. Paste BASH blocks into your terminal. Run SPL blocks with ./spl from step 1, or in Splunk Web, the browser interface. Unlabelled blocks show what you should see. "Show the answer" opens each exercise answer.
+Read it in order. Paste BASH blocks into your terminal. Run SPL blocks with ./spl from step 1 (paste, Enter, Ctrl-D) or in Splunk Web: http://localhost:8000, user admin, password in .splunk-password, time range All time. YAML blocks are to read.
 
 == Set up your environment
 section: 1. Start Splunk Enterprise in Docker
@@ -41,9 +41,9 @@ Security analysts type SPL to investigate. Detection engineers save SPL searches
 
 == A search is a pipeline
 section: A search is a pipeline
-The base search, before the first pipe character (|), chooses events. Each | hands the results to the next command.
+The base search, before the first pipe character (|), chooses events; index= says where to look. Each | hands the results to the next command.
 
-Every prefix of a search is a search you can run, so to debug one, delete commands from the end.
+Every prefix is a search you can run; to debug, delete commands from the end.
 ```spl
 index=cloudtrail readOnly=false
 | stats count BY userIdentity.userName
@@ -80,7 +80,7 @@ index=cloudtrail eventName=ConsoleLogin additionalEventData.MFAUsed=No responseE
 
 == Before you trust an empty result, run a control
 section: 5. Count, then threshold: the burst that never fires (D2)
-Matching only errorCode=AccessDenied, the D2 draft printed nothing. This control shows why: Elastic Compute Cloud (EC2) reported three of the attacker's refusals as Client.UnauthorizedOperation. The fillnull command keeps the 14 events with no errorCode, which stats would silently drop.
+The D2 draft, matching errorCode=AccessDenied, printed nothing. A control must return something: this one counts every errorCode. Elastic Compute Cloud (EC2) reported three of the attacker's seven refusals as Client.UnauthorizedOperation. The fillnull command keeps the 14 events with no errorCode.
 ```spl
 index=cloudtrail
 | fillnull value="(none)" errorCode
@@ -89,7 +89,7 @@ index=cloudtrail
 
 == Turn D2 into a scheduled alert
 section: 7. Turn D2 into a scheduled alert
-An alert is a search, schedule, time window and condition. The search lists four codes starting AccessDenied or ending UnauthorizedOperation. The window ends ten minutes ago to allow for CloudTrail's delivery delay.
+This is part of savedsearches.conf, saved in step 7, not a command. The search lists four codes starting AccessDenied or ending UnauthorizedOperation. The window ends ten minutes ago, for CloudTrail's delivery delay.
 ```ini
 search = index=cloudtrail errorCode IN (AccessDenied, AccessDeniedException, Client.UnauthorizedOperation, UnauthorizedOperation) \
 | stats count BY sourceIPAddress \
@@ -105,7 +105,7 @@ quantity = 0
 
 == Test the alert both ways
 section: 8. Test the alert both ways
-Run the alert over a quiet window and the attack window, then count firings. The leading | rest reads Splunk's own REST API from inside a search. Two runs, one firing: the attack window fired, the quiet one did not.
+Run the alert over a quiet window and the attack window, then count firings. The leading | rest reads Splunk's REST API, its HTTP application programming interface, from inside a search. Two runs, one firing: only the attack window fired.
 ```spl
 | rest /servicesNS/-/-/alerts/fired_alerts splunk_server=local
 | table title triggered_alert_count
@@ -163,5 +163,5 @@ index=cloudtrail eventName IN (CreateUser, CreateAccessKey)
 == Common mistakes
 section: Common mistakes
 - A missing index=, a mis-cased field name and Splunk Web's default Last 24 hours all return nothing, like a quiet account.
-- The where command is case-sensitive and needs single quotes around dotted names.
-- stats drops events lacking the BY field.
+- The where command is case-sensitive; dotted names need single quotes.
+- The stats command drops events lacking the BY field.
