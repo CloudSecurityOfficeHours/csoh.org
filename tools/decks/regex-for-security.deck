@@ -1,0 +1,191 @@
+title: Regex for security work, hands-on
+guide: howto/regex-for-security.html
+promise: A regex (regular expression) is a short pattern that matches text. Learn to write patterns you can defend, covering allowlist bypasses, credential scanning, regex engines and catastrophic backtracking.
+
+== Who it is for and what you need
+section: How to use this guide
+It is beginner to intermediate: you can use a terminal but need not have written a regex before. Allow about two hours.
+
+You need grep and python3; ripgrep (rg), used in step 6, is optional. Reading a little Python helps.
+
+== How to follow the guide
+section: How to use this guide
+Read it in order. Paste BASH blocks whole into your terminal; in Python steps, the lines down to PY run as a Python program. REGEX blocks hold patterns to read, not run; the PYTHON block is a line to study.
+
+== Set up: ~/regex-lab and sample.log
+section: Walk-through
+You need a terminal with grep and python3. The walk-through's first block makes ~/regex-lab, a throwaway folder, and writes the files every step uses. This cat line writes the lines down to EOF into sample.log.
+```bash
+mkdir -p ~/regex-lab && cd ~/regex-lab
+
+cat > sample.log <<'EOF'
+2026-08-20T14:03:11Z user=alice ip=203.0.113.14 action=AssumeRole result=success
+2026-08-20T14:03:12Z user=bob ip=198.51.100.7 action=GetObject result=denied
+2026-08-20T14:05:40Z user=svc-deploy ip=10.0.4.19 action=PutBucketPolicy result=success
+2026-08-20T14:06:02Z user=mallory ip=203.0.113.99 action=ListBuckets result=denied
+2026-08-20T14:06:03Z user=mallory ip=203.0.113.99 action=ListBuckets result=denied
+EOF
+```
+
+== Set up: secrets.txt, from the same block
+section: Walk-through
+The same block then writes secrets.txt, four lines, only two holding an AWS (Amazon Web Services) access key ID. Paste it whole, down to EOF. If a later command cannot find a file, run cd ~/regex-lab and try again.
+```bash
+cat > secrets.txt <<'EOF'
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+temp_key = ASIAIOSFODNN7EXAMPLE
+not_a_key = XAKIAIOSFODNN7EXAMPLEX
+doc_reference = "the AKIA prefix identifies long-term keys"
+EOF
+```
+
+== What a regex is and where you meet it
+section: Why regex is a security topic and not a text-editing trick
+A regex is a short pattern that describes which text to match. It becomes a control when it decides what is allowed or raises an alert: an allowlist (the addresses a service may fetch) or a scan for leaked keys.
+
+== Two families of regex engine
+section: Two engines, two sets of rules
+A regex engine is the code inside a tool that runs a pattern. Backtracking engines, like Python's, can take exponential time on a hostile input. Finite-automaton engines, like Go's, always take about twice the time for twice the input.
+
+== The one idea: too broad or too narrow
+section: Too broad or too narrow: the two ways a pattern fails
+Each pattern below should accept only HTTPS addresses on subdomains of example.com; .* is any run of characters, \. a literal dot, and anchors, ^ and $, pin the start and end. Too broad admits attacks; too narrow misses them.
+```regex
+# TOO BROAD - the dot is unescaped, so it matches ANY character
+https://.*.example.com          # matches https://evilXexampleYcom
+
+# TOO BROAD - no anchors, so the match can sit anywhere in the string
+https://.*\.example\.com        # matches https://evil.com/?x=.example.com
+
+# TOO NARROW - anchored and escaped, but assumes lowercase and no port
+^https://[a-z]+\.example\.com$  # misses https://API.example.com:8443
+```
+
+== Step 1: anchors are a security control
+section: 1. Anchors, and why they are a security control
+In a search, an unanchored pattern is a convenience. In a validator, code that accepts or rejects input, it is a bug: "contains" is not "is". This one passes all three URLs: each prints True.
+```bash
+python3 - <<'PY'
+import re
+allow = re.compile(r'https://.*\.example\.com')      # no anchors
+for url in ["https://api.example.com",
+            "https://evil.com/?redirect=.example.com",
+            "https://api.example.com.attacker.net"]:
+    print(bool(allow.search(url)), url)
+PY
+```
+
+== Step 2: Python's $ allows a trailing newline
+section: 2. The Python anchor that is not an anchor
+In Python, $ also matches before a trailing newline, so "prod-web\n" passes. That matters if the value lands in a header, a log line or a config file. For a validator, use \A and \Z, which admit no newline.
+```bash
+python3 - <<'PY'
+import re
+p = re.compile(r'^[a-z0-9-]+$')          # "a simple hostname label"
+print(bool(p.match("prod-web")))          # True  - fine
+print(bool(p.match("prod-web\n")))        # True  - surprising
+print(bool(p.match("prod-web\nrm -rf /")))# False - the dot rule saves you here
+
+q = re.compile(r'\A[a-z0-9-]+\Z')        # \A and \Z admit no newline at all
+print(bool(q.match("prod-web\n")))        # False - what you meant
+PY
+```
+
+== Step 3: greedy, lazy or explicit
+section: 3. Character classes, quantifiers, and greed
+Quantifiers like * are greedy by default: they take as much as they can. Adding ? makes them lazy, taking as little as possible.
+
+Prefer the third: [^ ]+, everything up to the next space, is unambiguous.
+```bash
+python3 - <<'PY'
+import re
+line = 'user=alice action=AssumeRole result=success'
+print(re.search(r'user=(.*) ',  line).group(1))   # greedy: 'alice action=AssumeRole'
+print(re.search(r'user=(.*?) ', line).group(1))   # lazy:   'alice'
+print(re.search(r'user=([^ ]+)', line).group(1))  # explicit: 'alice'  <-- prefer this
+PY
+```
+
+== Step 5: scan for AWS access key IDs
+section: 5. Write a credential scanner
+An AWS access key ID is AKIA (long-term) or ASIA (temporary) plus 16 uppercase alphanumerics. With -E, grep uses extended regular expressions; -o prints only the match. The first also matches inside XAKIAIOSFODNN7EXAMPLEX; \b, a word boundary, rejects that.
+```bash
+grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' secrets.txt
+grep -oE '\b(AKIA|ASIA)[A-Z0-9]{16}\b' secrets.txt
+```
+
+== Step 5: where regex stops
+section: 5. Write a credential scanner
+The other half of an AWS credential pair, the secret access key, is 40 characters from the bracketed class. The pattern prints nothing here but matches most git hashes. Real scanners add checks. Regex finds candidates. It does not decide.
+```bash
+grep -oE '\b[A-Za-z0-9/+=]{40}\b' secrets.txt
+```
+
+== Step 6: lookaround, and engines without it
+section: 6. Lookaround, and living without it
+Lookaround checks text just before or after a match without including it; here, no uppercase letter or digit may precede AKIA. ripgrep's default engine has none, so the first command fails to parse. -P switches to PCRE2, where it works.
+```bash
+rg '(?<![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt
+rg -P '(?<![A-Z0-9])AKIA[A-Z0-9]{16}' secrets.txt
+```
+
+== Step 7: time a nested quantifier
+section: 7. Catastrophic backtracking
+Nested quantifiers over overlapping alternatives, then something that fails, make a backtracking engine explore exponentially many paths. Each extra character roughly doubles the time. Your numbers depend on your computer; what matters is how fast they grow.
+```bash
+python3 - <<'PY'
+import re, time
+evil = re.compile(r'^(a+)+$')          # nested quantifier, both greedy
+for n in (18, 20, 22, 24):
+    s = "a" * n + "!"                  # the "!" guarantees the match fails
+    t = time.perf_counter()
+    evil.search(s)
+    print(n, f"{time.perf_counter() - t:.3f}s")
+PY
+```
+
+== Step 7: why it matters, and three defences
+section: 7. Catastrophic backtracking
+An attacker who controls a validator's input can hang every worker running it. Defend in this order of preference:
+- Use a finite-automaton engine for untrusted input.
+- Avoid nested quantifiers over overlapping alternatives.
+- Otherwise, cap input length before the regex.
+
+== Exercise: get past this URL allowlist
+section: Hands-on exercises
+An internal service fetches a URL the user supplies and validates it with this allowlist. Give three distinct URLs that pass validation but reach a host you do not control. The guide hides each answer under Show the answer.
+```python
+re.search(r'https://.*\.internal\.example\.com', url)
+```
+
+== Answer: no anchors, three ways past
+section: Hands-on exercises
+Each passes because the pattern has no anchors:
+- https://evil.test/?x=.internal.example.com puts the text in a query string.
+- https://api.internal.example.com.evil.test/ makes it only the start of the real host.
+- https://evil.test/#https://api.internal.example.com puts it in the fragment.
+Parse URLs first, then compare the parsed host.
+
+== Exercise: which of these can hang?
+section: Hands-on exercises
+Which is a catastrophic-backtracking risk on PCRE (Perl Compatible Regular Expressions), a backtracking engine, and which is safe? Say why for each. Here \w is a word character, \s whitespace, ? optional and {1,64} 1 to 64 times.
+```regex
+A:  ^(\w+\s?)*$
+B:  ^\w+(\s\w+)*$
+C:  ^(a|ab)+c$
+D:  ^[a-z]{1,64}$
+```
+
+== Answer: A and C are dangerous
+section: Hands-on exercises
+- In A, the optional \s? lets a run of word characters split between quantifiers in exponentially many ways.
+- In C, a and ab overlap.
+- B is safe: each repetition starts with whitespace.
+- D is safe: a bound caps the work.
+
+== Common mistakes
+section: Common mistakes
+- Anchor validators at both ends; Python needs \A and \Z.
+- A bare . in a hostname matches any character.
+- Test strings that should not match: a pattern matching everything passes every positive test.
+- A lowercase-only detection misses the obvious evasion.
