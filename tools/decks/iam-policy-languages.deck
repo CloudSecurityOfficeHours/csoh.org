@@ -10,7 +10,7 @@ You need a Rust toolchain and AWS CLI credentials.
 
 == How the guide was checked
 section: How to use this guide
-A script ran every code block on 4 November 2026 with AWS CLI 2.39.2, against an account outside any organization, and cedar-policy-cli 4.14.1.
+A script ran every code block on 4 November 2026 with cedar-policy-cli 4.14.1 and AWS CLI 2.39.2, in an account outside any organization.
 
 Not run: attaching a resource control policy, which needs an organization. AWS's documentation says what one does.
 
@@ -36,7 +36,7 @@ Cedar is AWS's open-source language for deciding whether requests inside your ow
 
 == Policies that grant, and guardrails that cap
 section: How AWS decides whether a request is allowed
-Identity policies, on the requesting user or role, and resource policies, on the thing accessed, grant access. Guardrails only cap it; they include a role's permissions boundary and an organization's service control policies (SCPs) and resource control policies (RCPs).
+Usually an identity policy, on the requesting user or role, or a resource policy, on the thing accessed, grants access. Guardrails, including permissions boundaries and an organization's service control policies (SCPs) and resource control policies (RCPs), only cap it.
 
 == The one idea: Allow may grant nothing
 section: How AWS decides whether a request is allowed
@@ -76,7 +76,7 @@ Condition keys are facts AWS attaches to a request. ForAllValues is true when ev
 
 == Test it rather than reasoning about it
 section: 4. Test it rather than reasoning about it
-The validate-policy command checks one policy's grammar and security warnings, reading only the text you send. This AWS CLI command asks whether new.json grants anything old.json did not, so a pipeline can fail a change that broadens access.
+The validate-policy command checks one policy's grammar and security warnings. This AWS CLI command asks whether new.json grants anything old.json did not, so a pipeline can fail a change that broadens access. You make both policy files yourself.
 ```bash
 aws accessanalyzer check-no-new-access \
   --existing-policy-document file://old.json \
@@ -97,11 +97,11 @@ AWS Organizations runs many accounts under one management account. An RCP, writt
         "BoolIfExists": { "aws:PrincipalIsAWSService": "false" }
       }
 ```
-credit: From AWS's data-perimeter examples (github.com/aws-samples/data-perimeter-policy-examples), cut down to S3.
+credit: From AWS's data-perimeter examples (github.com/aws-samples/data-perimeter-policy-examples), cut down to S3 without its exception lists.
 
 == A Cedar policy set
 section: 8. Install it and write a policy set
-Step 8 saves policies.cedar in ~/cedar-lab, starting with this Cedar permit (MFA is multi-factor authentication). Its second policy forbids every request on a public bucket, and a forbid always beats a permit, like an explicit Deny in IAM.
+This Cedar permit is the first policy in step 8's policies.cedar (MFA is multi-factor authentication). Its second policy, in the guide, forbids every request on a public bucket; a forbid always beats a permit, like an explicit Deny in IAM.
 ```cedar
 // policies.cedar
 // Members of the security group may read any bucket, but only with MFA.
@@ -133,7 +133,7 @@ action read, write appliesTo {
 
 == A typo fails before the policy runs
 section: 9. The part IAM cannot do: a schema
-Change resource.public to resource.publik in policies.cedar, and validating again prints this. The same typo in an IAM condition key gives a valid policy that never matches, with no error at all: a Deny that silently does nothing.
+With resource.public misspelled as resource.publik, cedar validate prints this. The same typo in an IAM condition key gives a valid policy that never matches, with no error at all: a Deny that silently does nothing.
 ```text
   × policy set validation failed
   ╰─▶ for policy `policy1`, attribute `publik` on entity type `Bucket` not
@@ -148,7 +148,7 @@ Change resource.public to resource.publik in policies.cedar, and validating agai
 
 == Evaluate real requests
 section: 10. Evaluate real requests
-Step 10 writes entities.json, where alice is in the security group and public-site is public, and MFA context files. This prints ALLOW. With ctx_nomfa.json, public-site or bob, it prints DENY. It exits non-zero on DENY, so rules can have tests.
+Step 10 writes entities.json (alice is in the security group; public-site is public) and MFA context files. This cedar authorize command prints ALLOW. With ctx_nomfa.json, public-site or bob, it prints DENY. A non-zero exit on DENY lets rules have tests.
 ```bash
 cedar authorize --schema store.cedarschema --policies policies.cedar \
   --entities entities.json -c ctx_mfa.json \
