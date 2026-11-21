@@ -159,6 +159,34 @@ LOOK = {
 BOLD_WIDTH = 0.92
 CAPS_EM = 0.68
 
+# Advance widths of the body face (Source Sans 3 Regular), in thousandths of
+# an em, as a browser canvas measures fonts/source-sans-3-400.woff2. Layouts
+# that measure text with these, rather than counting characters, wrap a line
+# where the slide does, so a long line that fits is not given two rows. A
+# character missing here counts as wide as "m".
+BODY_ADVANCE: dict[str, int] = {
+    ch: width
+    for chars, width in (
+        (" ", 200), ("|", 241), ("i", 246), ("j", 247),
+        ("',.:;’‘·", 249), ("l", 255), ("I", 263), ("!", 289),
+        ("f", 292), ("()[]{}", 303), ("•", 304), ("-", 311), ("t", 338),
+        ("r", 347), ("/\\", 350), ("*", 418), ("s", 419), ("?z", 425),
+        ('"“”', 426), ("x", 446), ("c", 456), ("vy", 467),
+        ("Y", 476), ("J", 479), ("L", 486), ("F", 494), ("k", 495),
+        ("eé", 496), ("0123456789#$+<=>^~", 497), ("_", 500), ("ag", 504),
+        ("X", 513), ("V", 515), ("E", 527), ("S", 534), ("T", 536), ("Z", 539),
+        ("`o", 542), ("A", 543), ("hu", 544), ("n", 547), ("b", 553),
+        ("dpq", 555), ("P", 566), ("R", 569), ("C", 571), ("K", 579),
+        ("B", 588), ("&", 609), ("D", 615), ("G", 617), ("U", 645), ("N", 647),
+        ("H", 652), ("OQ", 664), ("w", 719), ("M", 727), ("W", 786),
+        ("%", 824), ("m", 829), ("@", 847), ("…", 948),
+    )
+    for ch in chars
+}
+# A measured line keeps this share of its width free, for the small
+# differences in how Google Slides and PowerPoint set the same text.
+MEASURE_SLACK = 0.03
+
 # ---------------------------------------------------------------------------
 # Phase colours. The site's phase hues (breach-timeline.css), keyed by ATT&CK
 # v19 tactic. A tactic with its own .ph-* rule takes it; the rest take the
@@ -316,6 +344,35 @@ def _rows(text: str, per_line: int) -> int:
         while cur > per_line:
             rows += 1
             cur -= per_line
+    return rows
+
+
+def _text_width(text: str, pt: float) -> float:
+    """Inches one line of text takes in the body face, regular weight, at pt."""
+    em = sum(BODY_ADVANCE.get(ch, BODY_ADVANCE["m"]) for ch in text)
+    return em / 1000 * pt / 72
+
+
+def _measured_rows(text: str, width: float, pt: float) -> int:
+    """Lines text wraps to in the body face, regular weight, at pt across
+    width inches: whole words fill each line, measured glyph by glyph, with
+    MEASURE_SLACK of the line held back; a word longer than a line breaks
+    across lines."""
+    room = width * (1 - MEASURE_SLACK)
+    space = _text_width(" ", pt)
+    rows, cur = 1, 0.0
+    for word in text.split():
+        w = _text_width(word, pt)
+        if cur == 0:
+            cur = w
+        elif cur + space + w <= room:
+            cur += space + w
+        else:
+            rows += 1
+            cur = w
+        while cur > room:
+            rows += 1
+            cur -= room
     return rows
 
 
@@ -691,13 +748,16 @@ def _render_answer(page, s) -> None:
 
 
 def _render_checklist(page, s) -> None:
+    """A box and its text per check. Each item's height comes from
+    measuring its text, so items that fit on one line are evenly spaced and
+    an item that wraps gets the room for its extra lines."""
     y = _heading(page, s.heading, Y) + STYLE["block_gap"]
     y = _body(page, s.paragraphs, s.bullets, y)
     pt, box, indent = LOOK["list_pt"], LOOK["check_box"], LOOK["check_indent"]
     line = _line_h(pt)
     y += STYLE["block_gap"]
     for (text,) in s.items.get("check", []):
-        h = _rows(text, _per_line(W - indent, pt)) * line + 0.05
+        h = _measured_rows(text, W - indent, pt) * line + 0.05
         page.box("check-box", X, y + (line - box) / 2, box, box, fill=STYLE["white"],
                  line=(STYLE["bar"], 2), kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.15)
         page.box("check-text", X + indent, y, W - indent, h, [_p(text, pt, STYLE["text"])])

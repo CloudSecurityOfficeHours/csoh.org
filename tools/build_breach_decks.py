@@ -3138,6 +3138,35 @@ def _case_build_refuses_and_cleans(tmp: Path) -> None:
             r.render_deck, r.verify_pptx = real
 
 
+def _case_checklist_even(tmp: Path) -> None:
+    """Checklist items that fit on one line sit at one even pitch, including
+    a long one that a character count would wrap; an item that does wrap
+    gets the room for its lines, so the next item starts below it."""
+    import breach_deck_render as r
+
+    pt, width = r.LOOK["list_pt"], r.W - r.LOOK["check_indent"]
+    long_one = "Can you list every long-lived signing and export key, and when each was rotated?"
+    two = f"{long_one} {long_one}"
+    # Control: counting characters gives the long line two rows, so an even
+    # pitch below shows the measurement is in use.
+    assert r._rows(long_one, r._per_line(width, pt)) == 2
+    assert r._measured_rows(long_one, width, pt) == 1
+    assert r._measured_rows(two, width, pt) == 2
+    checks = [["Short?"], [long_one], ["Also short?"], [two], ["Last?"]]
+    (sl,) = _rendered(tmp, _one_slide("Check", "checklist", "c.deck:3", check=checks))
+    texts = _shapes(sl, "check-text")
+    tops, heights = [sh.top for sh in texts], [sh.height for sh in texts]
+    pitch = [b - a for a, b in zip(tops, tops[1:])]
+    assert max(pitch[:3]) - min(pitch[:3]) <= 100, pitch
+    assert pitch[3] > pitch[2] + 100 and heights[3] > heights[0] + 100, (pitch, heights)
+    for top, height, below in zip(tops, heights, tops[1:]):
+        assert top + height <= below, (tops, heights)
+    # Each box lines up with its item's first line.
+    boxes = _shapes(sl, "check-box")
+    offsets = [_cy(b) - t for b, t in zip(boxes, tops)]
+    assert len(offsets) == 5 and max(offsets) - min(offsets) <= 100, offsets
+
+
 RENDER_CASES: list = [
     ("render_sample", _case_render_sample),
     ("phase_contrast", _case_phase_contrast),
@@ -3149,6 +3178,7 @@ RENDER_CASES: list = [
     ("bars_to_scale", _case_bars_to_scale),
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
+    ("checklist_even", _case_checklist_even),
     ("matrix_marks", _case_matrix_marks),
     ("diagram_overflow_refused", _case_diagram_overflow_refused),
     ("build_refuses_and_cleans", _case_build_refuses_and_cleans),
