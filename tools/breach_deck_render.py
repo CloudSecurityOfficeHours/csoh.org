@@ -192,24 +192,25 @@ MEASURE_SLACK = 0.03
 
 # ---------------------------------------------------------------------------
 # Phase colours. The site's phase hues (breach-timeline.css), keyed by ATT&CK
-# v19 tactic. A tactic with its own .ph-* rule takes it; the rest take the
+# v19 tactic; PHASE_COLORS darkens each for white text, keeping its hue. A
+# tactic with its own .ph-* rule takes that rule's hue; the rest take the
 # .mt-* rule the pages use for that tactic's technique chips. The pages label
 # Resource Development with .ph-recon and Command and Control with
 # .ph-exfil, so those two follow the pages. Stealth and Defense Impairment,
-# v19's two halves of Defense Evasion, have no .ph-* rule, and their .mt-de
-# chips share Persistence's indigo; a chain often puts them side by side, so
-# they take style.css's pink accent, a hue no phase uses.
+# v19's two halves of Defense Evasion, take the pink of .ph-de (the pages'
+# Stealth label): their .mt-de chips share Persistence's indigo, and
+# a chain often puts them side by side.
 # ---------------------------------------------------------------------------
 
 SITE_PHASE_HUES = {
     "Reconnaissance": "b45309",  # .ph-recon
     "Resource Development": "b45309",  # .ph-recon
     "Initial Access": "dc2626",  # .ph-init
-    "Execution": "ea580c",  # .ph-exec
+    "Execution": "ea580c",  # .ph-exec hue; its light rule is a darker shade
     "Persistence": "4338ca",  # .ph-persist
     "Privilege Escalation": "7e22ce",  # .ph-priv
-    "Stealth": "db2777",  # style.css pink accent
-    "Defense Impairment": "db2777",  # style.css pink accent
+    "Stealth": "db2777",  # .ph-de pink
+    "Defense Impairment": "db2777",  # .ph-de pink
     "Credential Access": "a16207",  # .ph-cred
     "Discovery": "64748b",  # .ph-disco
     "Lateral Movement": "2563eb",  # .mt-lm
