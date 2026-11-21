@@ -2745,8 +2745,8 @@ def _case_render_sample(tmp: Path) -> None:
     assert [sh.text_frame.paragraphs[0].text for sh in links] == [
         row[0] for row in deck.slides[9].items["link"]
     ]
-    addresses = {r.hyperlink.address for sh in links for p in sh.text_frame.paragraphs
-                 for r in p.runs}
+    addresses = {r.hyperlink.address for sh in links
+                 for r in sh.text_frame.paragraphs[1].runs}
     assert "https://csoh.org/breaches/storm-0940-connectwise.html" in addresses, addresses
     assert all(a.startswith("https://") for a in addresses), addresses
     shown = [sh.text_frame.paragraphs[1].text for sh in links]
@@ -3405,6 +3405,56 @@ def _case_checklist_even(tmp: Path) -> None:
     assert len(offsets) == 5 and max(offsets) - min(offsets) <= 100, offsets
 
 
+def _case_type_labels_cannot_wrap(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    deck = _render_sample()
+    out = r.render_deck(deck, tmp / "t.pptx")
+    labels = [sh for sl in _reopen(out).slides for sh in _shapes(sl, "type-label")]
+    assert {sh.text_frame.text for sh in labels} == set(r.TYPE_LABELS.values()), \
+        [sh.text_frame.text for sh in labels]
+    # Advance widths of the label text in Arial Bold, the face Google Slides
+    # falls back to when it lacks Space Grotesk, in thousandths of an em. It is
+    # the widest face a label can land in, so a pill this wide holds the label
+    # in the heading face too.
+    arial_bold_em = {"BACKGROUND": 7332, "DISCUSSION": 6223, "DISCUSSION: ANSWER": 11278}
+    pt, sp = r.LOOK["type_pt"], r.LOOK["type_spacing_pt"]
+    pad = r.LOOK["type_pad_x"]
+    ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}bodyPr"
+    for sh in labels:
+        text = sh.text_frame.text
+        body = sh.text_frame._txBody.find(ns)
+        assert sh.text_frame.word_wrap is False and body.get("wrap") == "none", \
+            (text, body.attrib)
+        text_in = arial_bold_em[text] / 1000 * pt / 72 + len(text) * sp / 72
+        need = text_in * 1.10 + 2 * pad
+        have = sh.width / 914400
+        assert have >= need, (text, round(have, 3), round(need, 3))
+    # Control: the pill is sized from the label, not one width for all.
+    assert len({sh.width for sh in labels}) == 3, [sh.width for sh in labels]
+
+
+def _case_links_name_plain_url_linked(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    deck = _render_sample()
+    out = r.render_deck(deck, tmp / "l.pptx")
+    slides = list(_reopen(out).slides)
+    links = _shapes(slides[9 + 2], "link")
+    assert len(links) == 8, len(links)
+    for sh in links:
+        name, url = sh.text_frame.paragraphs
+        assert name.runs and all(run.hyperlink.address is None for run in name.runs), name.text
+        assert str(name.runs[0].font.color.rgb).lower() == r.STYLE["heading"], name.text
+        assert name.runs[0].font.bold, name.text
+        assert url.runs and all(
+            run.hyperlink.address and run.hyperlink.address.startswith("https://")
+            for run in url.runs), url.text
+    # Control: the closing slide's address stays a link.
+    closing = _one(slides[-1], "body")
+    assert [run.hyperlink.address for run in closing.text_frame.paragraphs[0].runs][1] == RENDER_URL
+
+
 RENDER_CASES: list = [
     ("render_sample", _case_render_sample),
     ("phase_contrast", _case_phase_contrast),
@@ -3418,6 +3468,8 @@ RENDER_CASES: list = [
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
     ("checklist_even", _case_checklist_even),
+    ("type_labels_cannot_wrap", _case_type_labels_cannot_wrap),
+    ("links_name_plain_url_linked", _case_links_name_plain_url_linked),
     ("matrix_marks", _case_matrix_marks),
     ("diagram_overflow_refused", _case_diagram_overflow_refused),
     ("build_refuses_and_cleans", _case_build_refuses_and_cleans),

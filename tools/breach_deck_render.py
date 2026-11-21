@@ -162,6 +162,25 @@ LOOK = {
 BOLD_WIDTH = 0.92
 CAPS_EM = 0.68
 
+# Advance widths, in thousandths of an em, of the capitals, colon and space a
+# type label uses: for each glyph the wider of Space Grotesk Bold
+# (fonts/space-grotesk-700.woff2, as a browser canvas measures it) and Arial
+# Bold, the face Google Slides substitutes when it lacks the heading face. A
+# label sized from the wider face holds in either. A character missing here
+# counts as wide as "W".
+LABEL_ADVANCE: dict[str, int] = {
+    ch: width
+    for chars, width in (
+        (" ", 278), ("I", 278), (":", 333), ("EPSVXY", 667), ("FLT", 611),
+        ("Z", 611), ("J", 610), ("ABCDHKNRU", 722), ("GOQ", 778), ("M", 882),
+        ("W", 944),
+    )
+    for ch in chars
+}
+# A label's pill is this much wider than its measured text, so a renderer
+# that sets it a little wider still does not wrap it.
+LABEL_SAFETY = 0.10
+
 # Advance widths of the body face (Source Sans 3 Regular), in thousandths of
 # an em, as a browser canvas measures fonts/source-sans-3-400.woff2. Layouts
 # that measure text with these, rather than counting characters, wrap a line
@@ -324,8 +343,12 @@ def _caps_per_line(width: float, pt: float, spacing: float) -> int:
     return max(1, int(width * 72 / (CAPS_EM * pt + spacing)))
 
 
-def _caps_width(text: str, pt: float, spacing: float) -> float:
-    return len(text) * (CAPS_EM * pt + spacing) / 72
+def _label_width(text: str, pt: float, spacing: float) -> float:
+    """Inches one line of letter-spaced bold capitals takes, with
+    LABEL_SAFETY added. Measured per glyph from LABEL_ADVANCE; the letter
+    spacing follows every character."""
+    em = sum(LABEL_ADVANCE.get(ch, LABEL_ADVANCE["W"]) for ch in text)
+    return (em / 1000 * pt + len(text) * spacing) / 72 * (1 + LABEL_SAFETY)
 
 
 def _char_width(pt: float) -> float:
@@ -574,7 +597,8 @@ def _type_label(page, layout: str, y: float) -> float:
         fill, color = STYLE["accent"], STYLE["dark"]
     pt, sp = LOOK["type_pt"], LOOK["type_spacing_pt"]
     px, py = LOOK["type_pad_x"], LOOK["type_pad_y"]
-    w = _caps_width(text, pt, sp) + 2 * px
+    # Rounded up to a whole EMU, which a shape's width otherwise truncates.
+    w = math.ceil((_label_width(text, pt, sp) + 2 * px) * 914400) / 914400
     h = _line_h(pt) + 2 * py
     page.box("type-label", X, y, w, h,
              [_p(text, pt, color, font="heading_font", bold=True, spacing=sp)],
@@ -796,6 +820,9 @@ def _render_links(page, s) -> None:
     gap = LOOK["link_col_gap"]
     cw = (W - gap * (cols - 1)) / cols
     npt, upt = LOOK["link_name_pt"], LOOK["link_url_pt"]
+    # Only the address is a hyperlink: Google Slides draws every linked run in
+    # its own link colour with an underline, whatever colour the run sets, so a
+    # linked name would not stay the slide's dark text.
     # Each link is one box, its name and then its address, so the address
     # follows the name's last line however the name actually wraps. Boxes in
     # one row share the row's tallest height, so the columns line up.
@@ -810,7 +837,7 @@ def _render_links(page, s) -> None:
         col, row = divmod(i, per_col)
         top = y + sum(row_hs[:row]) + LOOK["link_gap"] * row
         page.box("link", X + col * (cw + gap), top, cw, row_hs[row], [
-            [_Run(name, npt, STYLE["heading"], bold=True, link=href)],
+            [_Run(name, npt, STYLE["heading"], bold=True)],
             [_Run(shown, upt, STYLE["bar"], link=href)],
         ])
 
