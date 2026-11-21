@@ -517,10 +517,12 @@ COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 MAIN_RE = re.compile(r"<main\b[^>]*>(.*)</main>", re.DOTALL | re.IGNORECASE)
 
 # Digits not inside a word (IMDSv2, T1606, artx5v) and not a fragment of a
-# larger token. The lookahead also rejects a match that backtracked short of
-# a trailing letter, digit or decimal part ("1.4x" yields nothing, not "1").
+# larger token. A unit suffix is allowed ("500GB", "5x", "$1.4B" give 500, 5
+# and 1.4) so a unit never hides a figure from the gate. The lookahead stops a
+# match that backtracked short of a digit or decimal part ("1.4" never yields
+# "1" and ".4").
 NUMBER_RE = re.compile(
-    r"(?<![A-Za-z0-9.])(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?![A-Za-z0-9]|\.\d)"
+    r"(?<![A-Za-z0-9.])(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?!\d|\.\d)"
 )
 TECHNIQUE_RE = re.compile(r"T\d{4}(?:\.\d{3})?")
 STAGE_NUM_RE = re.compile(r"\d\d")
@@ -660,6 +662,23 @@ def _slide_text_fields(s: BSlide) -> list[str]:
     return out
 
 
+def _text_findings(where: str, texts: list[str], page: BreachPage) -> list[str]:
+    """Numbers and technique IDs in `texts` that the page does not carry."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for text in texts:
+        for m in NUMBER_RE.finditer(text):
+            raw = m.group(0)
+            if _normalize_number(raw) not in page.numbers and raw not in seen:
+                seen.add(raw)
+                out.append(f"{where}: number {raw} is not on the page")
+        for tid in TECHNIQUE_RE.findall(text):
+            if tid not in page.techniques and tid not in seen:
+                seen.add(tid)
+                out.append(f"{where}: technique {tid} is not on the page")
+    return out
+
+
 def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
     out: list[str] = []
     stage_ok = s.stage is None or s.stage in page.stages
@@ -684,17 +703,7 @@ def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
                 if STAGE_NUM_RE.fullmatch(label) and label not in page.stages:
                     out.append(f"{s.where}: matrix column {label} is not a stage on {page.path}")
 
-        seen: set[str] = set()
-        for text in _slide_text_fields(s):
-            for m in NUMBER_RE.finditer(text):
-                raw = m.group(0)
-                if _normalize_number(raw) not in page.numbers and raw not in seen:
-                    seen.add(raw)
-                    out.append(f"{s.where}: number {raw} is not on the page")
-            for tid in TECHNIQUE_RE.findall(text):
-                if tid not in page.techniques and tid not in seen:
-                    seen.add(tid)
-                    out.append(f"{s.where}: technique {tid} is not on the page")
+        out += _text_findings(s.where, _slide_text_fields(s), page)
 
         urls = [row[1] for row in s.items.get("link", [])]
         if s.source:
@@ -716,6 +725,10 @@ def page_findings(deck: BDeck, page: BreachPage, today: date | None = None) -> l
         out.append(f"{deck.slug}.deck: page {deck.page} is not the parsed page {page.path}")
     if date.fromisoformat(deck.as_of) > (today or date.today()):
         out.append(f"{deck.slug}.deck: as-of {deck.as_of} is in the future")
+    # The generated cover shows the title and promise, so they meet the same
+    # number and technique gate as a slide.
+    out += _text_findings(f"{deck.slug}.deck: title", [deck.title], page)
+    out += _text_findings(f"{deck.slug}.deck: promise", [deck.promise], page)
     for s in deck.slides:
         out += _slide_page_findings(s, page)
     return out
@@ -1109,6 +1122,9 @@ def _breach_page(stages=None, body="", links=(), nav="Nav 999"):
 def _gate_page() -> BreachPage:
     return parse_breach_page(
         _breach_page(
+            # The sample header's promise carries 200 and 11, which the cover
+            # gate reads.
+            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
             links=("storm-0940-connectwise.html", "https://example.com/report", "../glossary.html")
         ),
         PAGE_PATH,
@@ -1155,9 +1171,11 @@ def _case_page_parse_synthetic(tmp: Path) -> None:
 def _case_numbers_normalized(tmp: Path) -> None:
     got = number_tokens("1,500+ an hour, 1.4 billion, 70%, IMDSv2, T1606, artx5v, 04")
     assert got == {"1500", "1.4", "70", "4"}, got
-    # Control: a number wrapped in a letter suffix is not a token, and a
-    # sentence-final period does not make a decimal.
-    assert number_tokens("4x or 3GB") == set()
+    # A unit suffix does not hide the figure; a digit inside a word still does.
+    assert number_tokens("4x or 3GB") == {"4", "3"}
+    assert number_tokens("$1.4B, 30min, 1st, 500GB") == {"1.4", "30", "1", "500"}
+    assert number_tokens("IMDSv2 T1606 artx5v") == set()
+    # A sentence-final period does not make a decimal.
     assert number_tokens("It took 11. Then 0.5") == {"11", "0.5"}
     assert technique_ids("T1552.005, T1651 and T12") == {"T1552.005", "T1651"}
 
@@ -1224,6 +1242,35 @@ def _case_number_not_on_page(tmp: Path) -> None:
     # Control: a heading is read too.
     deck = _parse(_body("== The 141 hosts", "Text."))
     assert any("141" in x for x in page_findings(deck, _gate_page()))
+
+
+def _case_unit_suffixed_number(tmp: Path) -> None:
+    # The page has 140 but not 500.
+    _only(_gate("- 500GB was copied."), "500")
+    assert _gate("- 140GB was copied.") == []
+    _only(_gate("- About $1.4B."), "1.4")
+
+
+def _case_source_on_non_background(tmp: Path) -> None:
+    on = ("source: Report | https://example.com/report/", "Text.")
+    assert _gate(*on) == []
+    f = _gate("source: Report | https://example.com/other", "Text.")
+    _only(f, "https://example.com/other")
+
+
+def _case_cover_checked(tmp: Path) -> None:
+    deck = _parse(_body("== S", "Text."))
+    page = _gate_page()
+    deck.promise = "Agents reached 140 hosts."
+    assert page_findings(deck, page) == []
+    deck.promise = "Agents reached 141 hosts."
+    f = page_findings(deck, page)
+    _only(f, "141")
+    assert f[0].startswith("d.deck: promise"), f
+    deck.promise = "Fine."
+    deck.title = "T1059 and 4096"
+    f = page_findings(deck, page)
+    assert len(f) == 2 and all(x.startswith("d.deck: title") for x in f), f
 
 
 def _case_technique_not_on_page(tmp: Path) -> None:
@@ -1311,6 +1358,9 @@ CASES: list = [
     ("flow_step_checked", _case_flow_step_checked),
     ("matrix_columns_checked", _case_matrix_columns_checked),
     ("number_not_on_page", _case_number_not_on_page),
+    ("unit_suffixed_number", _case_unit_suffixed_number),
+    ("source_on_non_background", _case_source_on_non_background),
+    ("cover_checked", _case_cover_checked),
     ("technique_not_on_page", _case_technique_not_on_page),
     ("notes_checked", _case_notes_checked),
     ("links_resolve", _case_links_resolve),
