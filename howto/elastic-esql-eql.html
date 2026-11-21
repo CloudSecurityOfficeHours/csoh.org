@@ -585,7 +585,7 @@ EOF</pre></div>
 14             |null
 7              |AccessDenied
 3              |Client.UnauthorizedOperation</pre></div>
-    <p><code>null</code> means "this event has no value here": the 14 calls that succeeded have no error code, and <code>STATS</code> gives them a group of their own. The third line is the one that matters. EC2 does not say <code>AccessDenied</code> when it refuses a call; it says <code>Client.UnauthorizedOperation</code>. Other services use <code>AccessDeniedException</code> or a bare <code>UnauthorizedOperation</code>, which is why <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">AWS's own Security Hub CSPM control for unauthorized API calls</a> matches any code that starts <code>AccessDenied</code> or ends <code>UnauthorizedOperation</code>. The attacker's seven refusals were four of one code and three of the other, so the rule counted four. Count every denial code:</p>
+    <p><code>null</code> means "this event has no value here": 14 events have no error code (the 13 calls that succeeded, and the failed sign-in as alice, which has an error message instead), and <code>STATS</code> gives them a group of their own. The third line is the one that matters. EC2 does not say <code>AccessDenied</code> when it refuses a call; it says <code>Client.UnauthorizedOperation</code>. Other services use <code>AccessDeniedException</code> or a bare <code>UnauthorizedOperation</code>, which is why <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/cloudwatch-controls.html#cloudwatch-2" target="_blank" rel="noopener noreferrer">AWS's own Security Hub CSPM control for unauthorized API calls</a> matches any code that starts <code>AccessDenied</code> or ends <code>UnauthorizedOperation</code>. The attacker's seven refusals were four of one code and three of the other, so the rule counted four. Count every denial code:</p>
 <div class="code-block" data-lang="esql"><pre>FROM logs-aws.cloudtrail-*
 | WHERE aws.cloudtrail.error_code IN ("AccessDenied", "AccessDeniedException",
                                       "Client.UnauthorizedOperation", "UnauthorizedOperation")
@@ -765,7 +765,7 @@ python -m detection_rules validate-rule ../persistence_iam_user_created_then_acc
         <p>An analyst wants every event that was not an <code>AccessDenied</code>, writes <code>WHERE aws.cloudtrail.error_code != "AccessDenied"</code>, and gets 3 events. There are 17. What happened, and what is the fix?</p>
         <details>
             <summary>Show the answer</summary>
-            <p>Comparing anything with null gives null, not true, and <code>WHERE</code> keeps only rows where the condition is true. The 14 successful events have no error code, so <code>!=</code> drops them along with the 7 denials, leaving the 3 EC2 errors. Say what you mean about missing values:</p>
+            <p>Comparing anything with null gives null, not true, and <code>WHERE</code> keeps only rows where the condition is true. Fourteen events have no error code (the 13 that succeeded and the failed sign-in), so <code>!=</code> drops them along with the 7 denials, leaving the 3 EC2 errors. Say what you mean about missing values:</p>
 <div class="code-block" data-lang="esql"><pre>FROM logs-aws.cloudtrail-*
 | WHERE aws.cloudtrail.error_code != "AccessDenied" OR aws.cloudtrail.error_code IS NULL
 | STATS events = COUNT(*)</pre></div>
