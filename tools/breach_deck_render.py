@@ -52,6 +52,9 @@ CLOSING_HEADING = "Read the full kill chain"
 # The slides render_deck adds around the outline's own: the cover, "how to
 # use this deck" and the closing.
 GENERATED = 3
+# A flow step's technique field for a stage with none (build_breach_decks.py
+# reads the same mark).
+NO_TECHNIQUE = "-"
 
 # Sizes and spacing for the breach layouts, in inches and points. Colours and
 # fonts are STYLE's.
@@ -709,7 +712,10 @@ def _render_stage(page, s) -> None:
     hx = X + tile + LOOK["section_gap"]
     y = _heading(page, s.heading, y, x=hx, w=X + W - hx, pt=LOOK["stage_heading_pt"], min_h=tile)
 
-    y = _chips(page, s.items.get("technique", []), y + 0.25)
+    # A stage the page maps to no technique has no chip row.
+    techniques = s.items.get("technique", [])
+    if techniques:
+        y = _chips(page, techniques, y + 0.25)
     _why(page, s, color)
 
     # Facts: a label column and a value column, a hairline above each row.
@@ -829,11 +835,11 @@ def _caption(page, s, y: float) -> None:
 
 def _render_flow(page, s) -> None:
     """One box per step in its phase colour, holding the number, tactic,
-    short title and technique ID, with a right arrow between neighbours.
-    Up to four steps take one row; five to eight take two, the first row
-    holding any odd one, both on the same columns and read left to right.
-    Nothing joins the end of one row to the start of the next: the numbers
-    give the order."""
+    short title and technique ID, with a right arrow between neighbours. A
+    step whose technique is NO_TECHNIQUE shows no ID line. Up to four steps
+    take one row; five to eight take two, the first row holding any odd one,
+    both on the same columns and read left to right. Nothing joins the end
+    of one row to the start of the next: the numbers give the order."""
     steps = s.items.get("step", [])
     per_row = len(steps) if len(steps) <= 4 else math.ceil(len(steps) / 2)
     slot, pad, gap = LOOK["flow_slot"], LOOK["flow_pad"], LOOK["flow_para_gap"]
@@ -844,13 +850,15 @@ def _render_flow(page, s) -> None:
     white = STYLE["white"]
 
     def height(num: str, tactic: str, title: str, tid: str) -> float:
-        return (
-            2 * pad + 3 * gap + 0.1
+        h = (
+            2 * pad + 2 * gap + 0.1
             + _rows(num, _per_line(inner, npt, heading=True)) * _line_h(npt, heading=True)
             + _rows(tactic, _per_line(inner, mpt)) * _line_h(mpt)
             + _rows(title, _per_line(inner, tpt, bold=True)) * _line_h(tpt)
-            + _rows(tid, _per_line(inner, mpt)) * _line_h(mpt)
         )
+        if tid != NO_TECHNIQUE:
+            h += gap + _rows(tid, _per_line(inner, mpt)) * _line_h(mpt)
+        return h
 
     y = _diagram_top(page, s)
     for start in range(0, len(steps), per_row):
@@ -866,8 +874,9 @@ def _render_flow(page, s) -> None:
                 _p(num, npt, white, font="heading_font", bold=True),
                 _p(tactic, mpt, white),
                 _p(title, tpt, white, bold=True),
-                _p(tid, mpt, white),
             ]
+            if tid != NO_TECHNIQUE:
+                paras.append(_p(tid, mpt, white))
             page.box("flow-step", x, y, bw, h, paras, fill=phase_color(tactic),
                      kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06, margins=pad, gap=gap)
         y += h + LOOK["flow_row_gap"]

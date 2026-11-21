@@ -73,6 +73,7 @@ import io
 import json
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -119,6 +120,8 @@ KNOWN_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z-]*):\s*(.*)$")
 FIELD_SPLIT_RE = re.compile(r"\s+\|(?=\s|$)")
 
 CONTROL_KEYS = ("layout", "stage", "phase", "source", "credit")
+# A flow step's technique field for a stage the page maps to no technique.
+NO_TECHNIQUE = "-"
 
 
 @dataclass(frozen=True)
@@ -134,8 +137,10 @@ class LayoutSpec:
 LAYOUTS: dict[str, LayoutSpec] = {
     "text": LayoutSpec({}, "required"),
     "stats": LayoutSpec({"stat": (2, 4, 3, 3)}, "optional"),
+    # A stage the page maps to no ATT&CK technique (a detection or response
+    # stage) still gets a slide, so a stage slide takes none to three.
     "stage": LayoutSpec(
-        {"technique": (1, 3, 2, 2), "fact": (1, 5, 2, 2)},
+        {"technique": (0, 3, 2, 2), "fact": (1, 5, 2, 2)},
         "optional",
         ("stage", "phase"),
     ),
@@ -144,6 +149,8 @@ LAYOUTS: dict[str, LayoutSpec] = {
     "answer": LayoutSpec({}, "required"),
     "checklist": LayoutSpec({"check": (2, 7, 1, 1)}, "optional"),
     "links": LayoutSpec({"link": (1, 8, 2, 2)}, "optional"),
+    # A step's technique field is NO_TECHNIQUE for a stage with none. A chain
+    # of more than eight stages takes more than one flow slide.
     "flow": LayoutSpec({"step": (3, 8, 4, 4)}, "optional"),
     "layers": LayoutSpec({"layer": (2, 5, 2, 4)}, "optional"),
     "timeline": LayoutSpec({"event": (2, 6, 2, 2)}, "optional"),
@@ -545,9 +552,13 @@ MAIN_RE = re.compile(r"<main\b[^>]*>(.*)</main>", re.DOTALL | re.IGNORECASE)
 # larger token. A unit suffix is allowed ("500GB", "5x", "$1.4B" give 500, 5
 # and 1.4) so a unit never hides a figure from the gate. The lookahead stops a
 # match that backtracked short of a digit or decimal part ("1.4" never yields
-# "1" and ".4").
+# "1" and ".4"). Three or more dot-separated runs (a version such as 8.4.28,
+# an IPv4 address, or a CIDR such as 10.0.0.0/8 with its prefix) are one
+# token, matched first and compared whole.
 NUMBER_RE = re.compile(
-    r"(?<![A-Za-z0-9.])(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?!\d|\.\d)"
+    r"(?<![A-Za-z0-9.])"
+    r"(?:\d+(?:\.\d+){2,}(?:/\d+)?|\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
+    r"(?!\d|\.\d)"
 )
 TECHNIQUE_RE = re.compile(r"T\d{4}(?:\.\d{3})?")
 STAGE_NUM_RE = re.compile(r"\d\d")
@@ -557,8 +568,11 @@ STAGE_NUM_RE = re.compile(r"\d\d")
 class PageStage:
     num: str
     title: str
-    # The stage's ATT&CK link ID plus every tag chip shaped like a technique ID.
+    # Every ATT&CK link ID in the stage plus every tag chip shaped like a
+    # technique ID.
     techniques: set[str] = field(default_factory=set)
+    # The name of the phase label above the stage (see phase_name).
+    phase: str = ""
 
 
 @dataclass
@@ -595,6 +609,11 @@ def page_sha256(html: str) -> str:
 
 
 def _normalize_number(raw: str) -> str:
+    """The form two numbers are compared in: commas and leading zeros dropped
+    ("1,500" and "1500" match), except that a dotted token (a version, an
+    address or a CIDR) is kept exactly as written."""
+    if raw.count(".") >= 2:
+        return raw
     whole, dot, frac = raw.replace(",", "").partition(".")
     return (whole.lstrip("0") or "0") + dot + frac
 
@@ -621,6 +640,23 @@ STEP_MT_RE = re.compile(r'<a\b[^>]*\bclass="mt[ "][^>]*>(.*?)</a>', re.DOTALL)
 STEP_TAGS_RE = re.compile(r'<div\b[^>]*\bclass="step-tags"[^>]*>(.*?)</div>', re.DOTALL)
 STAG_RE = re.compile(r'<span\b[^>]*\bclass="stag"[^>]*>(.*?)</span>', re.DOTALL)
 HREF_RE = re.compile(r'<a\b[^>]*\bhref="([^"]*)"', re.IGNORECASE)
+PHASE_LBL_RE = re.compile(r'<div\b[^>]*\bclass="phase-lbl\b[^"]*"[^>]*>(.*?)</div>', re.DOTALL)
+# Emoji and the joiners and variation selectors that build them.
+EMOJI_CATEGORIES = frozenset({"So", "Sk", "Cf"})
+VARIATION_SELECTORS = frozenset({"︎", "️"})
+
+
+def phase_name(text: str) -> str:
+    """The name in a phase label or a phase: line: the text before its first
+    colon, with emoji removed and spaces collapsed. The page's label
+    "🔀 Execution and Privilege Escalation: Containers" and the outline's
+    "Execution and Privilege Escalation" both give the same name."""
+    head = text.split(":", 1)[0]
+    kept = "".join(
+        ch for ch in head
+        if unicodedata.category(ch) not in EMOJI_CATEGORIES and ch not in VARIATION_SELECTORS
+    )
+    return " ".join(kept.split())
 
 
 def parse_breach_page(html: str, path: str) -> BreachPage:
@@ -628,6 +664,7 @@ def parse_breach_page(html: str, path: str) -> BreachPage:
     main = _main_html(html)
     text = _strip_tags(main)
     stages: dict[str, PageStage] = {}
+    labels = [(m.start(), phase_name(_strip_tags(m.group(1)))) for m in PHASE_LBL_RE.finditer(main)]
     starts = [m.start() for m in STEP_OPEN_RE.finditer(main)]
     for start in starts:
         nxt = STEP_END_RE.search(main, start + 1)
@@ -637,8 +674,8 @@ def parse_breach_page(html: str, path: str) -> BreachPage:
             continue
         title = STEP_TITLE_RE.search(chunk)
         techniques: set[str] = set()
-        mt = STEP_MT_RE.search(chunk)
-        if mt:
+        # A stage header can carry several ATT&CK links; each one counts.
+        for mt in STEP_MT_RE.finditer(chunk):
             techniques |= technique_ids(_strip_tags(mt.group(1)))
         tags = STEP_TAGS_RE.search(chunk)
         if tags:
@@ -646,8 +683,9 @@ def parse_breach_page(html: str, path: str) -> BreachPage:
                 chip = _strip_tags(chip)
                 if TECHNIQUE_RE.fullmatch(chip):
                     techniques.add(chip)
+        phase = next((name for pos, name in reversed(labels) if pos < start), "")
         stages[num.group(1)] = PageStage(
-            num.group(1), _strip_tags(title.group(1)) if title else "", techniques
+            num.group(1), _strip_tags(title.group(1)) if title else "", techniques, phase
         )
     base = SITE + path
     links = {
@@ -704,12 +742,26 @@ def _text_findings(where: str, texts: list[str], page: BreachPage) -> list[str]:
     return out
 
 
+def _phase_finding(where: str, what: str, given: str, stage: PageStage) -> str | None:
+    """A finding when `given` does not name stage's phase label on the page."""
+    got, want = phase_name(given), stage.phase
+    if got == want:
+        return None
+    if not want:
+        return f"{where}: {what} {got!r}, but stage {stage.num} has no phase label on the page"
+    return f"{where}: {what} {got!r} is not stage {stage.num}'s phase on the page, {want!r}"
+
+
 def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
     out: list[str] = []
     stage_ok = s.stage is None or s.stage in page.stages
     if s.layout != "background":
         if s.stage is not None and not stage_ok:
             out.append(f"{s.where}: stage {s.stage} is not a stage on {page.path}")
+        if stage_ok and s.stage is not None and s.phase is not None:
+            f = _phase_finding(s.where, "phase", s.phase, page.stages[s.stage])
+            if f:
+                out.append(f)
         if s.layout == "stage" and stage_ok and s.stage is not None:
             for row in s.items.get("technique", []):
                 if row[0] not in page.stages[s.stage].techniques:
@@ -718,10 +770,14 @@ def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
                     )
         if s.layout == "flow":
             for row in s.items.get("step", []):
-                num, tech = row[0], row[3]
+                num, tactic, tech = row[0], row[1], row[3]
                 if num not in page.stages:
                     out.append(f"{s.where}: flow step {num} is not a stage on {page.path}")
-                elif tech not in page.stages[num].techniques:
+                    continue
+                f = _phase_finding(s.where, f"flow step {num} tactic", tactic, page.stages[num])
+                if f:
+                    out.append(f)
+                if tech != NO_TECHNIQUE and tech not in page.stages[num].techniques:
                     out.append(f"{s.where}: flow step {num} does not carry technique {tech}")
         if s.layout == "matrix":
             for label in s.items.get("columns", [[]])[0] if s.items.get("columns") else []:
@@ -1207,6 +1263,12 @@ def record(slug: str, pres_id: str) -> int:
     if errors:
         print("\n".join(errors))
         return 1
+    # A recorded outline must pass --check, or the publish commit fails CI.
+    findings = outline_findings(DECKS_DIR / f"{slug}.deck")
+    if findings:
+        print("\n".join(findings))
+        print("record: refused, nothing written; fix the findings above")
+        return 1
     try:
         deck = parse_outline(DECKS_DIR / f"{slug}.deck")
         page_hash = page_sha256((PAGES_DIR / f"{slug}.html").read_text(encoding="utf-8"))
@@ -1622,18 +1684,29 @@ def _case_sha_changes(tmp: Path) -> None:
 PAGE_PATH = "breaches/vapor-panda-artex.html"
 
 
+PHASE_01 = "🧰 Resource Development: Agents With a Human at the Decision Points"
+PHASE_04 = (
+    '🔑 <a class="glossary-link" href="../glossary.html#term-credential-access">'
+    "Credential Access</a>: The Metadata Service"
+)
+
+
 def _breach_page(stages=None, body="", links=(), nav="Nav 999"):
     """A synthetic breach page in the real markup. `stages` is a list of
-    (num, title, [technique ids]); the first technique is the stage's ATT&CK
-    link and the rest are tag chips."""
+    (num, title, [technique ids], phase label HTML or None); the first
+    technique is the stage's ATT&CK link and the rest are tag chips. A stage
+    with a label gets a phase-lbl line above it; one without sits under the
+    label before it."""
     if stages is None:
         stages = [
-            ("01", "Agents planned the run", ["T1588.007", "T1606"]),
-            ("04", "The metadata service yielded a role", ["T1552.005", "T1651"]),
+            ("01", "Agents planned the run", ["T1588.007", "T1606"], PHASE_01),
+            ("04", "The metadata service yielded a role", ["T1552.005", "T1651"], PHASE_04),
         ]
     steps = []
-    for num, title, techs in stages:
+    for num, title, techs, label in stages:
         chips = "".join(f'<span class="stag">{t}</span>' for t in techs[1:])
+        if label:
+            steps.append(f'    <div class="phase-lbl ph-cred">{label}</div>\n')
         steps.append(
             '    <div class="kc-step step-p">\n'
             f'      <div class="step-num">{num}</div>\n'
@@ -1653,23 +1726,23 @@ def _breach_page(stages=None, body="", links=(), nav="Nav 999"):
         '<main class="kc-main kc-page" id="main-content">\n'
         '  <div class="inc-header">\n' + pm + "  </div>\n"
         '  <div class="kill-chain">\n'
-        '    <div class="phase-lbl ph-cred">Credential Access</div>\n'
         + "".join(steps)
         + body
         + "  </div>\n</main>\n<footer>Footer 888</footer></body></html>\n"
     )
 
 
-def _gate_page() -> BreachPage:
-    return parse_breach_page(
-        _breach_page(
-            # The sample header's promise carries 200 and 11, which the cover
-            # gate reads.
-            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
-            links=("storm-0940-connectwise.html", "https://example.com/report", "../glossary.html")
-        ),
-        PAGE_PATH,
+def _gate_html(body: str = "") -> str:
+    return _breach_page(
+        # The sample header's promise carries 200 and 11, which the cover
+        # gate reads.
+        body='    <p class="inc-summary">200 organizations in 11 days.</p>\n' + body,
+        links=("storm-0940-connectwise.html", "https://example.com/report", "../glossary.html")
     )
+
+
+def _gate_page(body: str = "") -> BreachPage:
+    return parse_breach_page(_gate_html(body), PAGE_PATH)
 
 
 def _gate(*lines: str, notes: str = "Notes.", page: BreachPage | None = None) -> list[str]:
@@ -1684,13 +1757,14 @@ STAGE_LINES = (
 
 
 def _case_page_parse_real(tmp: Path) -> None:
+    """The page's structure only, so a rewrite of its prose or glossary links
+    does not fail the deck self-test; --check ties the outline's figures to
+    the page."""
     path = Path(__file__).resolve().parent.parent / PAGE_PATH
     page = parse_breach_page(path.read_text(encoding="utf-8"), PAGE_PATH)
     assert list(page.stages) == [f"0{i}" for i in range(1, 8)], list(page.stages)
     assert page.stages["04"].techniques == {"T1552.005", "T1651"}, page.stages["04"].techniques
-    assert "1465" in page.numbers and "1.4" in page.numbers
     assert "https://csoh.org/breaches/storm-0940-connectwise.html" in page.links
-    assert "https://csoh.org/glossary.html#term-guardrails" in page.links
     # Control: the nav sits outside <main> and is not read.
     assert "Support" not in page.text
 
@@ -1700,13 +1774,41 @@ def _case_page_parse_synthetic(tmp: Path) -> None:
     assert list(page.stages) == ["01", "04"]
     assert page.stages["01"].techniques == {"T1588.007", "T1606"}
     assert page.stages["04"].title == "The metadata service yielded a role"
+    # The label's emoji, glossary link and subtitle are not part of the name.
+    assert page.stages["01"].phase == "Resource Development", page.stages["01"].phase
+    assert page.stages["04"].phase == "Credential Access", page.stages["04"].phase
     assert "999" not in page.numbers and "888" not in page.numbers
     assert page.links == {
         "https://csoh.org/breaches/storm-0940-connectwise.html",
         "https://example.com/report",
         "https://csoh.org/glossary.html",
+        "https://csoh.org/glossary.html#term-credential-access",
         "https://attack.mitre.org/techniques/x",
     }, page.links
+
+
+def _case_stage_every_mt_link(tmp: Path) -> None:
+    second = '<a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1059/001/">T1059.001 - PowerShell</a>\n'
+    first = 'T1552.005 - Name</a>\n'
+    page = parse_breach_page(_plant(_gate_html(), first, first + second), PAGE_PATH)
+    assert page.stages["04"].techniques == {"T1552.005", "T1651", "T1059.001"}, page.stages["04"]
+    assert "T1059.001" not in page.stages["01"].techniques
+    # A stage slide and a flow step may name the second link's technique.
+    lines = list(STAGE_LINES)
+    lines[3] = "technique: T1059.001 | PowerShell"
+    assert _gate(*lines, page=page) == []
+    flow = ("layout: flow", "step: 01 | Resource Development | Plan | T1588.007",
+            "step: 04 | Credential Access | Meta | T1059.001",
+            "step: 04 | Credential Access | More | T1651")
+    assert _gate(*flow, page=page) == []
+    # Control: without the second link it is neither the stage's nor the page's.
+    f = _gate(*lines)
+    assert len(f) == 2 and "not on stage 04" in f[0] and "not on the page" in f[1], f
+    # A real page whose stage header carries two ATT&CK links.
+    real = "breaches/3cx-x-trader.html"
+    html = (Path(__file__).resolve().parent.parent / real).read_text(encoding="utf-8")
+    techniques = parse_breach_page(html, real).stages["01"].techniques
+    assert {"T1195.002", "T1204.002"} <= techniques, techniques
 
 
 def _case_numbers_normalized(tmp: Path) -> None:
@@ -1719,6 +1821,26 @@ def _case_numbers_normalized(tmp: Path) -> None:
     # A sentence-final period does not make a decimal.
     assert number_tokens("It took 11. Then 0.5") == {"11", "0.5"}
     assert technique_ids("T1552.005, T1651 and T12") == {"T1552.005", "T1651"}
+
+
+def _case_numbers_dotted(tmp: Path) -> None:
+    # A version, an address and a CIDR are each one token, kept whole.
+    assert number_tokens("PAN-OS 8.4.28 and 10.2.9-h1") == {"8.4.28", "10.2.9"}
+    assert number_tokens("from 192.168.1.1 to 10.0.0.0/8.") == {"192.168.1.1", "10.0.0.0/8"}
+    assert number_tokens("Python 3.11.4, then 8.4.27/8.4.28") == {"3.11.4", "8.4.27", "8.4.28"}
+    assert number_tokens("host 010.0.0.1") == {"010.0.0.1"}
+    # Controls: decimals, grouped figures and dates read as before, and a
+    # dotted run inside a word is still not a number.
+    assert number_tokens("1.4 billion, 1,500+, 2026-11-20, 11/20/2026") == {
+        "1.4", "1500", "2026", "11", "20"
+    }
+    assert number_tokens("X_TRADER_r7.17.90p608.exe") == set()
+    page = _gate_page('    <p class="step-desc">Fixed in 8.4.28; 10.0.0.0/8 was open.</p>\n')
+    assert _gate("- Patch to 8.4.28, close 10.0.0.0/8.", page=page) == []
+    _only(_gate("- Patch to 8.4.29.", page=page), "number 8.4.29 is not on the page")
+    _only(_gate("- Close 10.0.0.0/16.", page=page), "10.0.0.0/16")
+    # Part of a version is not the version.
+    _only(_gate("- Patch to 8.4.", page=page), "number 8.4 is not on the page")
 
 
 def _case_page_hash_stable(tmp: Path) -> None:
@@ -1755,16 +1877,71 @@ def _case_stage_technique_not_on_stage(tmp: Path) -> None:
     assert "stage 04" in f[0]
 
 
+RD, CA = "Resource Development", "Credential Access"
+
+
 def _case_flow_step_checked(tmp: Path) -> None:
-    ok = ("layout: flow", "step: 01 | Resource | Plan | T1588.007",
-          "step: 04 | Cred | Meta | T1552.005", "step: 04 | Cred | More | T1651")
+    ok = ("layout: flow", f"step: 01 | {RD} | Plan | T1588.007",
+          f"step: 04 | {CA} | Meta | T1552.005", f"step: 04 | {CA} | More | T1651")
     assert _gate(*ok) == []
-    bad = ("layout: flow", "step: 01 | Resource | Plan | T1588.007",
-           "step: 04 | Cred | Meta | T1606", "step: 04 | Cred | More | T1651")
+    bad = ("layout: flow", f"step: 01 | {RD} | Plan | T1588.007",
+           f"step: 04 | {CA} | Meta | T1606", f"step: 04 | {CA} | More | T1651")
     _only(_gate(*bad), "does not carry technique T1606")
-    unknown = ("layout: flow", "step: 01 | Resource | Plan | T1588.007",
-               "step: 09 | Cred | Meta | T1552.005", "step: 04 | Cred | More | T1651")
+    unknown = ("layout: flow", f"step: 01 | {RD} | Plan | T1588.007",
+               f"step: 09 | {CA} | Meta | T1552.005", f"step: 04 | {CA} | More | T1651")
     assert any("flow step 09" in f for f in _gate(*unknown)), _gate(*unknown)
+
+
+def _case_stage_without_techniques(tmp: Path) -> None:
+    # A stage slide with no technique line parses and meets the limits.
+    no_tech = ("layout: stage", "stage: 04", f"phase: {CA}", "fact: Queried | the service")
+    deck = _parse(_slide_text(*no_tech))
+    assert "technique" not in deck.slides[0].items
+    assert [f for s in deck.slides for f in slide_findings(s)] == []
+    assert _gate(*no_tech) == []
+    # Control: four technique lines are still too many.
+    four = [f"technique: T155{i} | n" for i in range(4)]
+    _only(_findings_of(*no_tech, *four), "4 technique lines")
+    # A flow step for a stage with no technique writes "-" and is not checked.
+    flow = ("layout: flow", f"step: 01 | {RD} | Plan | -",
+            f"step: 04 | {CA} | Meta | T1552.005", f"step: 04 | {CA} | More | {NO_TECHNIQUE}")
+    assert _gate(*flow) == []
+    # Control: a technique the stage does not carry is still a finding.
+    f = _gate(*flow[:1], f"step: 01 | {RD} | Plan | T9999", *flow[2:])
+    assert any("flow step 01 does not carry technique T9999" in x for x in f), f
+
+
+def _case_phase_checked(tmp: Path) -> None:
+    assert phase_name("🔀 Execution and Privilege Escalation: Containers") == (
+        "Execution and Privilege Escalation"
+    )
+    assert phase_name("🛠️  Response") == "Response"
+    assert phase_name("Credential Access: The Metadata Service") == CA
+    # The real pilot passes --check; here a slide's phase must name its stage's
+    # label, with or without a subtitle.
+    assert _gate(*STAGE_LINES) == []
+    with_subtitle = list(STAGE_LINES)
+    with_subtitle[2] = "phase: Credential Access: The Metadata Service"
+    assert _gate(*with_subtitle) == []
+    planted = list(STAGE_LINES)
+    planted[2] = "phase: Stealth"
+    f = _gate(*planted)
+    _only(f, "phase 'Stealth' is not stage 04's phase on the page, 'Credential Access'")
+    # A non-stage slide naming a stage and a phase is held to the same rule.
+    _only(_gate("stage: 01", "phase: Discovery", "Text."), "'Resource Development'")
+    flow = ("layout: flow", f"step: 01 | {RD} | Plan | T1588.007",
+            "step: 04 | Stealth | Meta | T1552.005", f"step: 04 | {CA} | More | T1651")
+    _only(_gate(*flow), "flow step 04 tactic 'Stealth' is not stage 04's phase")
+    # A stage under no phase label: any phase is a finding that says so.
+    bare = parse_breach_page(
+        _breach_page(
+            stages=[("04", "Untitled", ["T1552.005"], None)],
+            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
+        ),
+        PAGE_PATH,
+    )
+    assert bare.stages["04"].phase == ""
+    _only(_gate(*STAGE_LINES, page=bare), "has no phase label on the page")
 
 
 def _case_matrix_columns_checked(tmp: Path) -> None:
@@ -2193,7 +2370,7 @@ def _case_stamp_all_or_nothing(tmp: Path) -> None:
 
 def _case_record_writes_both_hashes(tmp: Path) -> None:
     pages = {"aa": "<main><p>no header</p></main>\n", "bb": PM_PAGE}
-    _tree(tmp, {s: _tree_outline(s) for s in pages}, pages, {})
+    _tree(tmp, {s: _build_outline(s) for s in pages}, pages, {})
     before = _snapshot(tmp)
     with _rooted(tmp):
         for args, needle in (
@@ -2215,6 +2392,23 @@ def _case_record_writes_both_hashes(tmp: Path) -> None:
     assert deck_line_html(ID_A) in (tmp / "breaches/bb.html").read_text(encoding="utf-8")
     # The stamped page hashes as it did before stamping.
     assert page_sha256((tmp / "breaches/bb.html").read_text(encoding="utf-8")) == page_sha256(PM_PAGE)
+
+
+def _case_record_refuses_findings(tmp: Path) -> None:
+    """--record refuses an outline --check would fail, so a publish commit
+    never records a deck CI then rejects."""
+    _tree(tmp, {"bb": _tree_outline("bb")}, {"bb": PM_PAGE}, {})
+    before = _snapshot(tmp)
+    with _rooted(tmp):
+        assert outline_findings(DECKS_DIR / "bb.deck"), "the plant has no finding"
+        rc, out = _capture(record, "bb", ID_A)
+    assert rc == 1 and "slides" in out and "record: refused, nothing written" in out, out
+    assert _snapshot(tmp) == before, "a refused --record wrote files"
+    # Control: the same slug with a clean outline records.
+    (tmp / "tools/decks/breaches/bb.deck").write_text(_build_outline("bb"), encoding="utf-8")
+    with _rooted(tmp):
+        rc, out = _capture(record, "bb", ID_A)
+    assert rc == 0, out
 
 
 CASES: list = [
@@ -2251,11 +2445,15 @@ CASES: list = [
     ("sha_changes", _case_sha_changes),
     ("page_parse_real", _case_page_parse_real),
     ("page_parse_synthetic", _case_page_parse_synthetic),
+    ("stage_every_mt_link", _case_stage_every_mt_link),
     ("numbers_normalized", _case_numbers_normalized),
+    ("numbers_dotted", _case_numbers_dotted),
     ("page_hash_stable", _case_page_hash_stable),
     ("stage_unknown", _case_stage_unknown),
     ("stage_technique_not_on_stage", _case_stage_technique_not_on_stage),
     ("flow_step_checked", _case_flow_step_checked),
+    ("stage_without_techniques", _case_stage_without_techniques),
+    ("phase_checked", _case_phase_checked),
     ("matrix_columns_checked", _case_matrix_columns_checked),
     ("number_not_on_page", _case_number_not_on_page),
     ("unit_suffixed_number", _case_unit_suffixed_number),
@@ -2286,6 +2484,7 @@ CASES: list = [
     ("check_reports_findings", _case_check_reports_findings),
     ("stamp_all_or_nothing", _case_stamp_all_or_nothing),
     ("record_writes_both_hashes", _case_record_writes_both_hashes),
+    ("record_refuses_findings", _case_record_refuses_findings),
 ]
 
 
@@ -2976,6 +3175,45 @@ def _case_render_diagrams(tmp: Path) -> None:
     assert _matrix_marks(matrix) == want
 
 
+def _case_render_without_techniques(tmp: Path) -> None:
+    """A stage slide with no technique draws no chip row, and its facts take
+    the room; a flow step whose technique is "-" shows no ID line."""
+
+    def stage(techniques: list[list[str]], where: str) -> BSlide:
+        items = {"fact": [["Detected", "the burst of commands"], ["By", "the endpoint sensor"]]}
+        if techniques:
+            items["technique"] = techniques
+        return _rslide("A sensor caught the burst", "stage", stage="06", phase="Detection",
+                       items=items, paragraphs=["Coverage decided what was seen."], where=where)
+
+    deck = BDeck("n", "T", RENDER_PAGE, "2026-11-20", "P.", [
+        stage([], "n.deck:3"),
+        stage([["T1518.001", "Security Software Discovery"]], "n.deck:12"),
+    ], "")
+    import breach_deck_render as r
+
+    bare, chipped = _rendered(tmp, deck)
+    assert not _shapes(bare, "chip") and len(_shapes(chipped, "chip")) == 1
+    # With no chips, the facts start one section gap below the heading, with
+    # no space kept for a chip row.
+    heading = _one(bare, "heading")
+    want = heading.top + heading.height + r.Inches(r.LOOK["section_gap"])
+    got = _shapes(bare, "fact-label")[0].top
+    assert abs(got - want) <= 2, (got, want)
+    first_fact = [_shapes(sl, "fact-label")[0].top for sl in (bare, chipped)]
+    assert first_fact[0] < first_fact[1], first_fact
+    steps = [["01", "Initial Access", "Phished", "T1566"],
+             ["02", "Detection", "Sensor alert", NO_TECHNIQUE],
+             ["03", "Response", "Contained", NO_TECHNIQUE]]
+    (flow,) = _rendered(tmp, _one_slide("The chain", "flow", "f.deck:3", step=steps))
+    boxes = _shapes(flow, "flow-step")
+    assert [_paras(b) for b in boxes] == [steps[0], steps[1][:3], steps[2][:3]], [
+        _paras(b) for b in boxes
+    ]
+    # Boxes in a row still share one height.
+    assert len({b.height for b in boxes}) == 1
+
+
 def _case_bars_to_scale(tmp: Path) -> None:
     import breach_deck_render as r
 
@@ -3175,6 +3413,7 @@ RENDER_CASES: list = [
     ("verify_catches_small_font", _case_verify_catches_small_font),
     ("verify_plants", _case_verify_plants),
     ("render_diagrams", _case_render_diagrams),
+    ("render_without_techniques", _case_render_without_techniques),
     ("bars_to_scale", _case_bars_to_scale),
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
