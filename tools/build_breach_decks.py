@@ -2578,6 +2578,17 @@ def _case_phase_contrast(tmp: Path) -> None:
         hues = [colorsys.rgb_to_hls(*(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)))[0]
                 for c in (color, r.SITE_PHASE_HUES[tactic])]
         assert abs(hues[0] - hues[1]) < 0.02, (tactic, color, hues)
+    # Stealth and Defense Impairment, often beside Persistence, Privilege
+    # Escalation or Credential Access in a chain, take a hue clear of all three.
+    def hue(color: str) -> float:
+        return colorsys.rgb_to_hls(*(int(color[i:i + 2], 16) / 255 for i in (0, 2, 4)))[0]
+
+    for tactic in ("Stealth", "Defense Impairment"):
+        own = r.PHASE_COLORS[tactic]
+        assert own != r.PHASE_COLORS["Persistence"], tactic
+        for near in ("Persistence", "Privilege Escalation", "Credential Access"):
+            apart = abs(hue(own) - hue(r.PHASE_COLORS[near]))
+            assert min(apart, 1 - apart) > 0.1, (tactic, near, apart)
     # Control: the site's own Execution hue fails the bar, so darkening did work.
     assert r.contrast("ffffff", r.SITE_PHASE_HUES["Execution"]) < 4.5
     assert r.PHASE_COLORS["Execution"] != r.SITE_PHASE_HUES["Execution"]
@@ -2711,16 +2722,372 @@ def _case_verify_plants(tmp: Path) -> None:
     assert any("slides, expected" in f for f in r.verify_pptx(out, deck))
 
 
-def _case_diagram_layouts_stubbed(tmp: Path) -> None:
+DIAGRAMS = ("flow", "layers", "timeline", "compare", "table", "bars", "matrix")
+
+
+def _diagram_sample() -> BDeck:
+    """A deck using every diagram layout at its maximum counts (lines and
+    fields), each with a line of prose under it."""
+    slides = [
+        _rslide(
+            "Eight stages on one slide", "flow",
+            paragraphs=["Each box is one stage, coloured by its phase."],
+            items={"step": [
+                ["01", "Resource Development", "Agents planned", "T1588.007"],
+                ["02", "Initial Access", "Public apps", "T1190"],
+                ["03", "Credential Access", "Keys in code", "T1552.001"],
+                ["04", "Credential Access", "Metadata service", "T1552.005"],
+                ["05", "Privilege Escalation", "Containers and AD", "T1611"],
+                ["06", "Stealth", "Unwatched hosts", "T1518.001"],
+                ["07", "Persistence", "BLOODALCHEMY", "T1574.001"],
+                ["08", "Collection", "Mailboxes read", "T1114"],
+            ]},
+        ),
+        _rslide(
+            "How ARTEX is put together", "layers",
+            paragraphs=["Every agent reads and writes the same graph."],
+            items={"layer": [
+                ["Operator", "One person approves targets and next steps"],
+                ["Main agent", "Holds the goal and hands out work"],
+                ["Sub-agents", "Planner agents", "Worker agents", "Reporting agents"],
+                ["Tools", "Scanners and exploit kits", "Cloud and directory clients"],
+                ["Shared graph", "Facts, findings and goals that every agent uses"],
+            ]},
+        ),
+        _rslide(
+            "Eleven days, then the counts", "timeline",
+            paragraphs=["Only the dates the page gives; the spacing is not to scale."],
+            items={"event": [
+                ["October 17", "First activity at the first target"],
+                ["October 18", "Keys found in code and config files"],
+                ["October 27", "The eleventh day of activity"],
+                ["October 30", "Reported active, per CyberScoop"],
+                ["Early November", "Censys counts exposed consoles"],
+                ["November 6", "Microsoft reports wider abuse"],
+            ]},
+        ),
+        _rslide(
+            "Three figures that measure different things", "compare",
+            paragraphs=["Quote each figure with what it counts."],
+            items={"col": [
+                ["9 confirmed", "Named in the CrowdStrike report", "High confidence only",
+                 "Counts what it could prove", "The figure to quote"],
+                ["About 140 compromised", "From an interview",
+                 "Moderate-confidence cases included", "Not broken down by victim",
+                 "Quote it with its caveat"],
+                ["200+ targeted", "Organizations on the target list", "In at least 14 countries",
+                 "Targeted, not compromised", "The widest of the three"],
+            ]},
+        ),
+        _rslide(
+            "Exposed consoles by method", "table",
+            paragraphs=["Each count answers a different question."],
+            items={"row": [
+                ["Source", "Method", "Count", "Caveat"],
+                ["Censys", "Hosts serving the console", "1,465", "Includes authorized testers"],
+                ["Censys", "Distinct-looking deployments", "About 815", "Grouped by content"],
+                ["Check Point", "Live consoles", "1,608", "At the time of the scan"],
+                ["Check Point", "Ever seen", "2,557", "Across the whole window"],
+                ["Check Point", "Summary figure", "1,800+", "As written in the summary"],
+                ["Microsoft", "Abuse reports", "Not given", "Counts no consoles"],
+            ]},
+        ),
+        _rslide(
+            "Commands an hour, drawn to scale", "bars",
+            paragraphs=["One scale from zero for every bar."],
+            items={"bar": [
+                ["1,500+", "Agents at peak, per Check Point"],
+                ["600", "Agents on an average hour"],
+                ["40", "A fast human operator"],
+                ["10", "A careful human operator"],
+            ]},
+        ),
+        _rslide(
+            "Eight defenses against eight stages", "matrix",
+            paragraphs=["A mark means the page ties that defense to that stage."],
+            items={
+                "columns": [["01", "02", "03", "04", "05", "06", "07", "08"]],
+                "row": [
+                    ["Rotate and vault long-lived keys", "03"],
+                    ["Require IMDSv2 on every instance", "04"],
+                    ["Reject unsigned SAML assertions", "02"],
+                    ["Close endpoint sensor gaps", "06"],
+                    ["Watch for orchestration tooling", "05", "06"],
+                    ["Segment every network", "01", "02", "03", "04", "05", "06", "07", "08"],
+                    ["Hunt for ARTEX markers", "-"],
+                    ["Plant decoy credentials", "-"],
+                ],
+            },
+        ),
+    ]
+    for i, s in enumerate(slides):
+        s.where = f"g.deck:{10 * (i + 1)}"
+    return BDeck("g", "Diagram sample", RENDER_PAGE, "2026-11-20", "Every diagram layout.",
+                 slides, "")
+
+
+def _one_slide(heading: str, layout: str, where: str, **items) -> BDeck:
+    s = _rslide(heading, layout, where=where, items={k: list(v) for k, v in items.items()})
+    return BDeck("d", "T", RENDER_PAGE, "2026-11-20", "P.", [s], "")
+
+
+def _rendered(tmp: Path, deck: BDeck) -> list:
+    """Render deck, assert it verifies clean, and return its outline slides
+    as saved (the cover, "how to use" and closing left out)."""
+    import breach_deck_render as r
+
+    out = r.render_deck(deck, tmp / f"{deck.slug}.pptx")
+    found = r.verify_pptx(out, deck)
+    assert found == [], "\n".join(found)
+    return list(_reopen(out).slides)[2:-1]
+
+
+def _texts(slide, name: str) -> list[str]:
+    return [sh.text_frame.text for sh in _shapes(slide, name)]
+
+
+def _fill(shape) -> str:
+    return str(shape.fill.fore_color.rgb).lower()
+
+
+def _cx(shape) -> float:
+    return shape.left + shape.width / 2
+
+
+def _cy(shape) -> float:
+    return shape.top + shape.height / 2
+
+
+def _rows_by_top(shapes: list) -> list[list]:
+    """Shapes grouped into rows by their top, top row first, each row left
+    to right."""
+    tops = sorted({sh.top for sh in shapes})
+    return [sorted((sh for sh in shapes if sh.top == t), key=lambda sh: sh.left) for t in tops]
+
+
+def _matrix_marks(slide) -> set[tuple[str, str]]:
+    """(row label, column label) for every marker, read from where it sits."""
+    cols = [(_cx(c), c.text_frame.text) for c in _shapes(slide, "matrix-col")]
+    rows = [(sh.top, sh.top + sh.height, sh.text_frame.text)
+            for sh in _shapes(slide, "matrix-label")]
+    out = set()
+    for m in _shapes(slide, "matrix-mark"):
+        col = [t for x, t in cols if abs(x - _cx(m)) <= 2]
+        row = [t for top, bottom, t in rows if top <= _cy(m) <= bottom]
+        assert len(col) == 1 and len(row) == 1, (col, row)
+        out.add((row[0], col[0]))
+    return out
+
+
+def _case_render_diagrams(tmp: Path) -> None:
     import breach_deck_render as r
 
     assert set(r.RENDERERS) == set(LAYOUTS), set(r.RENDERERS) ^ set(LAYOUTS)
-    for layout in ("flow", "layers", "timeline", "compare", "table", "bars", "matrix"):
-        s = _rslide("A diagram", layout, where="d.deck:3")
-        d = BDeck("d", "T", RENDER_PAGE, "2026-11-20", "P.", [s], "")
-        _layout_error(lambda d=d: r.render_deck(d, tmp / "d.pptx"),
-                      f"d.deck:3: layout {layout} is not implemented yet")
-        assert not (tmp / "d.pptx").exists()
+    deck = _diagram_sample()
+    assert tuple(s.layout for s in deck.slides) == DIAGRAMS
+    # The sample is at every maximum: line counts and fields per line.
+    for s in deck.slides:
+        assert slide_findings(s) == [], slide_findings(s)
+        for key, (_lo, hi, _flo, fhi) in LAYOUTS[s.layout].typed.items():
+            rows = s.items[key]
+            assert len(rows) == hi and max(len(row) for row in rows) == fhi, (s.layout, key)
+    flow, layers, timeline, compare, table, bars, matrix = _rendered(tmp, deck)
+    sl = dict(zip(DIAGRAMS, deck.slides))
+
+    steps = sl["flow"].items["step"]
+    boxes = _shapes(flow, "flow-step")
+    assert [_paras(b) for b in boxes] == steps, [_paras(b) for b in boxes]
+    assert [_fill(b) for b in boxes] == [r.phase_color(step[1]) for step in steps]
+    # Stealth (06) and Persistence (07) sit side by side in different colours.
+    assert _fill(boxes[5]) != _fill(boxes[6])
+    arrows = _shapes(flow, "flow-arrow")
+    assert len(arrows) == 6, len(arrows)
+    assert all(a.auto_shape_type == r.MSO_SHAPE.RIGHT_ARROW for a in arrows)
+
+    rows = sl["layers"].items["layer"]
+    assert _texts(layers, "layer-tier") == [row[0] for row in rows]
+    boxes = _shapes(layers, "layer-box")
+    assert [b.text_frame.text for b in boxes] == [f for row in rows for f in row[1:]]
+    grid = _rows_by_top(boxes)
+    assert [len(g) for g in grid] == [len(row) - 1 for row in rows], [len(g) for g in grid]
+    # One down arrow in each gap between consecutive rows, and nothing else.
+    arrows = _shapes(layers, "layer-arrow")
+    assert len(arrows) == len(rows) - 1, len(arrows)
+    for a, above, below in zip(arrows, grid, grid[1:]):
+        assert a.auto_shape_type == r.MSO_SHAPE.DOWN_ARROW
+        assert max(b.top + b.height for b in above) <= a.top
+        assert a.top + a.height <= min(b.top for b in below)
+    assert {sh.auto_shape_type for sh in _shapes(layers, "layer-box")} == {
+        r.MSO_SHAPE.ROUNDED_RECTANGLE
+    }
+
+    events = sl["timeline"].items["event"]
+    assert _texts(timeline, "timeline-when") == [e[0] for e in events]
+    assert _texts(timeline, "timeline-what") == [e[1] for e in events]
+    rule = _one(timeline, "timeline-rule")
+    markers = _shapes(timeline, "timeline-marker")
+    assert len(markers) == len(events)
+    assert all(m.auto_shape_type == r.MSO_SHAPE.OVAL for m in markers)
+    for m, when, what in zip(markers, _shapes(timeline, "timeline-when"),
+                             _shapes(timeline, "timeline-what")):
+        assert when.top + when.height <= m.top and what.top >= m.top + m.height
+        assert abs(_cx(when) - _cx(m)) <= 2 and abs(_cx(what) - _cx(m)) <= 2
+        assert rule.top <= _cy(m) <= rule.top + rule.height
+
+    cols = sl["compare"].items["col"]
+    heads, bodies = _shapes(compare, "compare-head"), _shapes(compare, "compare-body")
+    assert [h.text_frame.text for h in heads] == [c[0] for c in cols]
+    assert [_paras(b) for b in bodies] == [[f"• {ln}" for ln in c[1:]] for c in cols]
+    assert len({sh.width for sh in heads + bodies}) == 1
+    assert len({h.top for h in heads}) == 1 and len({b.top for b in bodies}) == 1
+    assert len({b.height for b in bodies}) == 1
+    # Each panel starts where its band ends (positions round to whole EMUs).
+    assert all(abs(h.top + h.height - b.top) <= 1 for h, b in zip(heads, bodies))
+
+    rows = sl["table"].items["row"]
+    cells = _shapes(table, "table-cell")
+    assert [c.text_frame.text for c in cells] == [f for row in rows for f in row]
+    grid = _rows_by_top(cells)
+    assert [len(g) for g in grid] == [4] * len(rows)
+    assert {_fill(c) for c in grid[0]} == {r.STYLE["dark"]}
+    assert all(run.font.bold for c in grid[0] for p in c.text_frame.paragraphs for run in p.runs)
+    shades = [{_fill(c) for c in g} for g in grid[1:]]
+    assert all(len(s) == 1 for s in shades), shades
+    odd, even = shades[0::2], shades[1::2]
+    assert all(s == odd[0] for s in odd) and all(s == even[0] for s in even), shades
+    assert odd[0] != even[0] and r.STYLE["dark"] not in odd[0] | even[0], shades
+    # Columns line up from row to row.
+    assert all([c.left for c in g] == [c.left for c in grid[0]] for g in grid)
+
+    rows = sl["bars"].items["bar"]
+    assert _texts(bars, "bars-value") == ["1,500+", "600", "40", "10"]
+    assert _texts(bars, "bars-label") == [row[1] for row in rows]
+    rects = _shapes(bars, "bars-bar")
+    assert len(rects) == 4 and len({b.left for b in rects}) == 1
+    assert abs(rects[1].width / rects[0].width - 600 / 1500) < 0.01 * 600 / 1500
+
+    columns = sl["matrix"].items["columns"][0]
+    assert _texts(matrix, "matrix-col") == columns
+    rows = sl["matrix"].items["row"]
+    assert _texts(matrix, "matrix-label") == [
+        row[0] if row[1:] != ["-"] else f"{row[0]} (no stage named)" for row in rows
+    ]
+    want = {(row[0], m) for row in rows for m in row[1:] if m != "-"}
+    assert _matrix_marks(matrix) == want
+
+
+def _case_bars_to_scale(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    def drawn(*bars):
+        (sl,) = _rendered(tmp, _one_slide("Commands an hour", "bars", "b.deck:4", bar=bars))
+        return _shapes(sl, "bars-bar"), _shapes(sl, "bars-value")
+
+    # 40 is 2.67% of 1,500, above the 2% floor: drawn to scale within 1%.
+    (small, big), values = drawn(["40", "a fast human operator"], ["1,500", "agents at peak"])
+    assert abs((small.width / big.width) / (40 / 1500) - 1) < 0.01, small.width / big.width
+    assert [v.text_frame.text for v in values] == ["40", "1,500"]
+    assert small.left == big.left
+    # Each written value sits just past the end of its own bar.
+    for bar, value in zip((small, big), values):
+        gap = value.left - (bar.left + bar.width)
+        assert 0 <= gap <= r.Inches(0.3), gap
+        assert abs(_cy(value) - _cy(bar)) <= 2
+    # 10 is 0.67% of 1,500: drawn at the minimum visible width, not to scale,
+    # and its written value is still printed.
+    (tiny, big), values = drawn(["10", "a careful operator"], ["1,500", "agents at peak"])
+    floor = r.LOOK["bar_min_frac"]
+    assert abs(tiny.width / big.width - floor) < 0.001, tiny.width / big.width
+    assert tiny.width > big.width * 10 / 1500
+    assert [v.text_frame.text for v in values] == ["10", "1,500"]
+    # Zero draws no bar at all, and its value sits at the zero line.
+    (big,), values = drawn(["0", "a careful operator"], ["1,500", "agents at peak"])
+    assert [v.text_frame.text for v in values] == ["0", "1,500"]
+    assert abs(values[0].left - big.left) <= r.Inches(0.3)
+    deck = _one_slide("Nothing", "bars", "z.deck:4", bar=[["0", "a"], ["0", "b"]])
+    _layout_error(lambda: r.render_deck(deck, tmp / "z.pptx"), "z.deck:4")
+
+
+def _case_flow_two_rows(tmp: Path) -> None:
+    def rows(n: int) -> list[list]:
+        steps = [[f"{i:02d}", "Execution", f"Step {i}", "T1059"] for i in range(1, n + 1)]
+        (sl,) = _rendered(tmp, _one_slide("The chain", "flow", "f.deck:3", step=steps))
+        grid = _rows_by_top(_shapes(sl, "flow-step"))
+        # Reading order: left to right along each row, top row first.
+        order = [b.text_frame.paragraphs[0].text for row in grid for b in row]
+        assert order == [s[0] for s in steps], order
+        # One right arrow between neighbours in a row; none between rows.
+        arrows = _shapes(sl, "flow-arrow")
+        assert len(arrows) == n - len(grid), (n, len(arrows))
+        pairs = [(a, b) for row in grid for a, b in zip(row, row[1:])]
+        for arrow, (a, b) in zip(arrows, pairs):
+            assert a.left + a.width <= arrow.left and arrow.left + arrow.width <= b.left
+            assert a.top <= _cy(arrow) <= a.top + a.height
+        return grid
+
+    grid = rows(7)
+    assert [len(g) for g in grid] == [4, 3], [len(g) for g in grid]
+    # The second row sits on the first row's columns.
+    assert [b.left for b in grid[1]] == [b.left for b in grid[0][:3]]
+    assert grid[0][0].top + grid[0][0].height < grid[1][0].top
+    # Controls: one row up to four steps, two balanced rows from five.
+    for n, want in ((3, [3]), (4, [4]), (5, [3, 2]), (8, [4, 4])):
+        assert [len(g) for g in rows(n)] == want, n
+
+
+def _case_timeline_even(tmp: Path) -> None:
+    def centres(*events) -> list[float]:
+        (sl,) = _rendered(tmp, _one_slide("When", "timeline", "t.deck:3", event=events))
+        return [_cx(m) for m in _shapes(sl, "timeline-marker")]
+
+    # One day apart, then twelve, then about a week: the spacing is still even.
+    uneven = centres(["October 17", "Started"], ["October 18", "Keys found"],
+                     ["October 30", "Reported active"], ["Early November", "Consoles counted"])
+    steps = [b - a for a, b in zip(uneven, uneven[1:])]
+    assert max(steps) - min(steps) <= 2, steps
+    # Control: other dates and texts give the very same positions.
+    even = centres(["Day 1", "A"], ["Day 2", "B"], ["Day 3", "C"], ["Day 4", "D"])
+    assert all(abs(a - b) <= 2 for a, b in zip(uneven, even)), (uneven, even)
+    for n in (2, 6):
+        xs = centres(*[[f"Day {i}", "Something happened"] for i in range(n)])
+        steps = [b - a for a, b in zip(xs, xs[1:])]
+        assert len(xs) == n and max(steps) - min(steps) <= 2, steps
+
+
+def _case_matrix_marks(tmp: Path) -> None:
+    deck = _one_slide(
+        "Defenses against stages", "matrix", "m.deck:3",
+        columns=[["01", "02", "03", "04"]],
+        row=[["Rotate keys", "03", "01"], ["Plant decoys", "-"], ["Require IMDSv2", "04"]],
+    )
+    (sl,) = _rendered(tmp, deck)
+    # A marker only where the outline marks, an empty cell everywhere else.
+    assert _matrix_marks(sl) == {("Rotate keys", "01"), ("Rotate keys", "03"),
+                                 ("Require IMDSv2", "04")}
+    labels = _shapes(sl, "matrix-label")
+    assert [sh.text_frame.text for sh in labels] == [
+        "Rotate keys", "Plant decoys (no stage named)", "Require IMDSv2"
+    ]
+    italic = [all(run.font.italic for p in sh.text_frame.paragraphs for run in p.runs)
+              for sh in labels]
+    assert italic == [False, True, False], italic
+
+
+def _case_diagram_overflow_refused(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    long = "the agent asked the metadata service for credentials and received a very powerful role"
+    assert _words(long) == MAX_FIELD_WORDS
+    out = tmp / "d.pptx"
+    for layout, key, rows in (
+        ("table", "row", [[long] * 4] * 7),
+        ("flow", "step", [[f"0{i}", "Execution", long, "T1059"] for i in range(1, 9)]),
+        ("layers", "layer", [["Tier", long, long, long]] * 5),
+    ):
+        deck = _one_slide("Too much", layout, f"{layout}.deck:7", **{key: rows})
+        _layout_error(lambda deck=deck: r.render_deck(deck, out),
+                      f"{layout}.deck:7: content would end at")
+        assert not out.exists(), f"a refused {layout} wrote a file"
 
 
 def _build_outline(slug: str, as_of: str = "2026-11-01") -> str:
@@ -2778,7 +3145,12 @@ RENDER_CASES: list = [
     ("verify_catches_dash", _case_verify_catches_dash),
     ("verify_catches_small_font", _case_verify_catches_small_font),
     ("verify_plants", _case_verify_plants),
-    ("diagram_layouts_stubbed", _case_diagram_layouts_stubbed),
+    ("render_diagrams", _case_render_diagrams),
+    ("bars_to_scale", _case_bars_to_scale),
+    ("flow_two_rows", _case_flow_two_rows),
+    ("timeline_even", _case_timeline_even),
+    ("matrix_marks", _case_matrix_marks),
+    ("diagram_overflow_refused", _case_diagram_overflow_refused),
     ("build_refuses_and_cleans", _case_build_refuses_and_cleans),
 ]
 

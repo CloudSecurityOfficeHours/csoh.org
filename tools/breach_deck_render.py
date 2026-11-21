@@ -104,6 +104,53 @@ LOOK = {
     "link_url_pt": 18,
     "link_col_gap": 0.4,
     "link_gap": 0.22,
+    # Diagrams. Text in boxes is 20 pt; table and matrix cells, the densest,
+    # are 18 pt; prose under a diagram is a 20 pt caption.
+    "diagram_pt": 20,
+    "cell_pt": 18,
+    "caption_pt": 20,
+    "box_pad": 0.14,
+    "cell_pad": 0.1,
+    "arrow_w": 0.26,
+    "arrow_h": 0.32,
+    # Flow boxes run four to a row, so their padding and the arrow slot are
+    # tight enough for a 20-character tactic name to stay on one line.
+    "flow_slot": 0.4,
+    "flow_pad": 0.1,
+    "flow_para_gap": 0.03,
+    "flow_row_gap": 0.3,
+    "flow_num_pt": 24,
+    "flow_meta_pt": 18,
+    "layer_label_w": 2.4,
+    "layer_pad": 0.12,
+    "layer_gap": 0.36,
+    "layer_box_gap": 0.25,
+    "layer_min_h": 0.6,
+    "compare_gap": 0.3,
+    "compare_head_pt": 22,
+    # A table column's width follows its longest entry, counted as at least
+    # the first and at most the second number of characters.
+    "table_chars": (8, 40),
+    "timeline_marker": 0.32,
+    "timeline_rule_h": 0.05,
+    "timeline_label_gap": 0.1,
+    "timeline_col_gap": 0.15,
+    "bar_h": 0.5,
+    "bar_label_w": 3.6,
+    "bar_row_gap": 0.25,
+    "bar_value_pt": 24,
+    "bar_value_gap": 0.12,
+    "bar_axis_w": 0.03,
+    # A bar under this share of the largest is drawn at this share, so it
+    # stays visible; its written value still says what it is.
+    "bar_min_frac": 0.02,
+    # A matrix column holds only a marker, so it can be narrow; the label
+    # column takes the rest, up to matrix_label_max. Rows are short, so up to
+    # nine (the header and eight) fit with a caption.
+    "matrix_label_max": 5.7,
+    "matrix_col_min": 0.8,
+    "matrix_pad_y": 0.07,
+    "matrix_mark": 0.3,
 }
 
 # Width estimates. STYLE's chars-per-line values are calibrated for mixed
@@ -118,7 +165,9 @@ CAPS_EM = 0.68
 # .mt-* rule the pages use for that tactic's technique chips. The pages label
 # Resource Development with .ph-recon and Command and Control with
 # .ph-exfil, so those two follow the pages. Stealth and Defense Impairment,
-# v19's two halves of Defense Evasion, both take .mt-de.
+# v19's two halves of Defense Evasion, have no .ph-* rule, and their .mt-de
+# chips share Persistence's indigo; a chain often puts them side by side, so
+# they take style.css's pink accent, a hue no phase uses.
 # ---------------------------------------------------------------------------
 
 SITE_PHASE_HUES = {
@@ -128,8 +177,8 @@ SITE_PHASE_HUES = {
     "Execution": "ea580c",  # .ph-exec
     "Persistence": "4338ca",  # .ph-persist
     "Privilege Escalation": "7e22ce",  # .ph-priv
-    "Stealth": "4338ca",  # .mt-de
-    "Defense Impairment": "4338ca",  # .mt-de
+    "Stealth": "db2777",  # style.css pink accent
+    "Defense Impairment": "db2777",  # style.css pink accent
     "Credential Access": "a16207",  # .ph-cred
     "Discovery": "64748b",  # .ph-disco
     "Lateral Movement": "2563eb",  # .mt-lm
@@ -295,6 +344,7 @@ class _Run:
     color: str
     font: str = "body_font"
     bold: bool = False
+    italic: bool = False
     spacing: float = 0.0
     link: str | None = None
 
@@ -399,6 +449,8 @@ class _Page:
                 font.name = STYLE[r.font]
                 font.size = Pt(r.pt)
                 font.bold = r.bold
+                if r.italic:
+                    font.italic = True
                 font.color.rgb = _rgb(r.color)
                 if r.spacing:
                     run._r.get_or_add_rPr().set("spc", str(round(r.spacing * 100)))
@@ -696,8 +748,263 @@ def _render_links(page, s) -> None:
         ])
 
 
-def _not_implemented(page, s) -> None:
-    raise LayoutError(f"{s.where}: layout {s.layout} is not implemented yet")
+# ---------------------------------------------------------------------------
+# Diagram layouts. Each draws only what its typed lines state, so a diagram
+# implies no precision or connection the page lacks: flow arrows join
+# neighbours in a row, layers arrows join consecutive rows, timeline markers
+# are evenly spaced whatever the dates, bars share one scale from zero, and a
+# matrix marks only the cells the outline marks.
+# ---------------------------------------------------------------------------
+
+
+def _diagram_top(page, s) -> float:
+    """Draws the heading; returns where the diagram starts."""
+    return _heading(page, s.heading, Y) + LOOK["section_gap"]
+
+
+def _caption(page, s, y: float) -> None:
+    """The slide's prose, if any, under the diagram that ends at y."""
+    _body(page, s.paragraphs, s.bullets, y + LOOK["section_gap"], pt=LOOK["caption_pt"])
+
+
+def _render_flow(page, s) -> None:
+    """One box per step in its phase colour, holding the number, tactic,
+    short title and technique ID, with a right arrow between neighbours.
+    Up to four steps take one row; five to eight take two, the first row
+    holding any odd one, both on the same columns and read left to right.
+    Nothing joins the end of one row to the start of the next: the numbers
+    give the order."""
+    steps = s.items.get("step", [])
+    per_row = len(steps) if len(steps) <= 4 else math.ceil(len(steps) / 2)
+    slot, pad, gap = LOOK["flow_slot"], LOOK["flow_pad"], LOOK["flow_para_gap"]
+    bw = (W - slot * (per_row - 1)) / per_row
+    inner = bw - 2 * pad
+    npt, mpt, tpt = LOOK["flow_num_pt"], LOOK["flow_meta_pt"], LOOK["diagram_pt"]
+    aw, ah = LOOK["arrow_w"], LOOK["arrow_h"]
+    white = STYLE["white"]
+
+    def height(num: str, tactic: str, title: str, tid: str) -> float:
+        return (
+            2 * pad + 3 * gap + 0.1
+            + _rows(num, _per_line(inner, npt, heading=True)) * _line_h(npt, heading=True)
+            + _rows(tactic, _per_line(inner, mpt)) * _line_h(mpt)
+            + _rows(title, _per_line(inner, tpt, bold=True)) * _line_h(tpt)
+            + _rows(tid, _per_line(inner, mpt)) * _line_h(mpt)
+        )
+
+    y = _diagram_top(page, s)
+    for start in range(0, len(steps), per_row):
+        row = steps[start : start + per_row]
+        # Boxes in a row share the row's tallest height.
+        h = max(height(*step) for step in row)
+        for i, (num, tactic, title, tid) in enumerate(row):
+            x = X + i * (bw + slot)
+            if i:
+                page.box("flow-arrow", x - (slot + aw) / 2, y + (h - ah) / 2, aw, ah,
+                         fill=STYLE["muted"], kind=MSO_SHAPE.RIGHT_ARROW)
+            paras = [
+                _p(num, npt, white, font="heading_font", bold=True),
+                _p(tactic, mpt, white),
+                _p(title, tpt, white, bold=True),
+                _p(tid, mpt, white),
+            ]
+            page.box("flow-step", x, y, bw, h, paras, fill=phase_color(tactic),
+                     kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06, margins=pad, gap=gap)
+        y += h + LOOK["flow_row_gap"]
+    _caption(page, s, y - LOOK["flow_row_gap"])
+
+
+def _render_layers(page, s) -> None:
+    """One row per layer, top to bottom: the tier label at left and the
+    row's one to three boxes sharing its width, with a down arrow in the
+    gap between consecutive rows. Nothing else joins the boxes."""
+    layers = s.items.get("layer", [])
+    lw, gap, bgap = LOOK["layer_label_w"], LOOK["layer_gap"], LOOK["layer_box_gap"]
+    pad, pt = LOOK["layer_pad"], LOOK["diagram_pt"]
+    bx = X + lw + LOOK["section_gap"]
+    area = X + W - bx
+    # A down arrow is the flow's right arrow turned a quarter.
+    aw, ah = LOOK["arrow_h"], LOOK["arrow_w"]
+    y = _diagram_top(page, s)
+    for i, (tier, *boxes) in enumerate(layers):
+        bw = (area - bgap * (len(boxes) - 1)) / len(boxes)
+        # Text is centred in the row, so the row needs its lines and padding
+        # but no room below them.
+        lines = max(_rows(b, _per_line(bw - 2 * pad, pt, bold=True)) for b in boxes)
+        h = max(
+            LOOK["layer_min_h"],
+            _rows(tier, _per_line(lw, pt, bold=True)) * _line_h(pt),
+            lines * _line_h(pt) + 2 * pad,
+        )
+        if i:
+            page.box("layer-arrow", bx + (area - aw) / 2, y - (gap + ah) / 2, aw, ah,
+                     fill=STYLE["muted"], kind=MSO_SHAPE.DOWN_ARROW)
+        page.box("layer-tier", X, y, lw, h, [_p(tier, pt, STYLE["heading"], bold=True)],
+                 anchor=MSO_ANCHOR.MIDDLE)
+        for j, text in enumerate(boxes):
+            page.box("layer-box", bx + j * (bw + bgap), y, bw, h,
+                     [_p(text, pt, STYLE["white"], bold=True)], fill=STYLE["dark"],
+                     kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.1, margins=pad,
+                     align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+        y += h + gap
+    _caption(page, s, y - gap)
+
+
+def _render_timeline(page, s) -> None:
+    """A rule with one marker per event, each event's when above its marker
+    and its what below. Every event gets an equal share of the width,
+    however far apart the dates are, so no time scale is implied."""
+    events = s.items.get("event", [])
+    cw = W / len(events)
+    tw = cw - LOOK["timeline_col_gap"]
+    pt = LOOK["diagram_pt"]
+    m, lg, rh = LOOK["timeline_marker"], LOOK["timeline_label_gap"], LOOK["timeline_rule_h"]
+    when_h = max(_rows(w, _per_line(tw, pt, bold=True)) for w, _ in events) * _line_h(pt) + 0.1
+    what_h = max(_rows(t, _per_line(tw, pt)) for _, t in events) * _line_h(pt) + 0.1
+    y = _diagram_top(page, s)
+    mid = y + when_h + lg + m / 2
+    page.box("timeline-rule", X, mid - rh / 2, W, rh, fill=STYLE["muted"])
+    for i, (when, what) in enumerate(events):
+        cx = X + cw * (i + 0.5)
+        page.box("timeline-when", cx - tw / 2, y, tw, when_h,
+                 [_p(when, pt, STYLE["bar"], bold=True)],
+                 align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.BOTTOM)
+        page.box("timeline-marker", cx - m / 2, mid - m / 2, m, m, fill=STYLE["bar"],
+                 line=(STYLE["bg"], 2.5), kind=MSO_SHAPE.OVAL)
+        page.box("timeline-what", cx - tw / 2, mid + m / 2 + lg, tw, what_h,
+                 [_p(what, pt, STYLE["text"])], align=PP_ALIGN.CENTER)
+    _caption(page, s, mid + m / 2 + lg + what_h)
+
+
+def _render_compare(page, s) -> None:
+    """Two or three equal columns, each a heading band over a panel of its
+    lines. Bands share one height and panels another, so the columns line
+    up. Headings are bold body text, as stat labels are: the heading face
+    runs too wide in a column for its width estimate to hold."""
+    cols = s.items.get("col", [])
+    gap, pad = LOOK["compare_gap"], LOOK["box_pad"]
+    cw = (W - gap * (len(cols) - 1)) / len(cols)
+    inner = cw - 2 * pad
+    hpt, pt = LOOK["compare_head_pt"], LOOK["diagram_pt"]
+    head_h = (max(_rows(c[0], _per_line(inner, hpt, bold=True)) for c in cols)
+              * _line_h(hpt) + 2 * pad)
+    body_h = max(_block_h([f"• {ln}" for ln in c[1:]], inner, pt) for c in cols) + 2 * pad
+    y = _diagram_top(page, s)
+    for i, (head, *lines) in enumerate(cols):
+        x = X + i * (cw + gap)
+        page.box("compare-head", x, y, cw, head_h,
+                 [_p(head, hpt, STYLE["white"], bold=True)],
+                 fill=STYLE["dark"], margins=pad, anchor=MSO_ANCHOR.MIDDLE)
+        page.box("compare-body", x, y + head_h, cw, body_h,
+                 [_p(f"• {ln}", pt, STYLE["text"]) for ln in lines],
+                 fill=STYLE["white"], line=(STYLE["light"], 1), margins=pad,
+                 gap=LOOK["para_gap"])
+    _caption(page, s, y + head_h + body_h)
+
+
+def _render_table(page, s) -> None:
+    """The first row is the header, on the dark fill; body rows alternate
+    white and light. Each column's width follows its longest entry, held
+    between table_chars, so a column of figures stays narrow and a column
+    of prose gets room."""
+    rows = s.items.get("row", [])
+    pt, pad = LOOK["cell_pt"], LOOK["cell_pad"]
+    lo, hi = LOOK["table_chars"]
+    weights = [min(max(max(len(row[c]) for row in rows), lo), hi) for c in range(len(rows[0]))]
+    widths = [W * n / sum(weights) for n in weights]
+    y = _diagram_top(page, s)
+    for i, row in enumerate(rows):
+        head = i == 0
+        fill = STYLE["dark"] if head else STYLE["white"] if i % 2 else STYLE["light"]
+        color = STYLE["white"] if head else STYLE["text"]
+        lines = max(_rows(cell, _per_line(w - 2 * pad, pt, bold=head))
+                    for cell, w in zip(row, widths))
+        h = lines * _line_h(pt) + 2 * pad + 0.05
+        x = X
+        for cell, w in zip(row, widths):
+            page.box("table-cell", x, y, w, h, [_p(cell, pt, color, bold=head)], fill=fill,
+                     margins=pad, anchor=MSO_ANCHOR.MIDDLE)
+            x += w
+        y += h
+    _caption(page, s, y)
+
+
+def _bar_number(value: str) -> float:
+    """The number a bar's written value stands for: commas and a trailing +
+    removed."""
+    return float(value.replace(",", "").rstrip("+"))
+
+
+def _render_bars(page, s) -> None:
+    """Horizontal bars on one scale from zero, the largest filling the
+    track. A bar's length is its number's share of the largest, but never
+    under bar_min_frac, so a small bar stays visible; zero draws no bar. The
+    value as written sits just past the bar's end."""
+    bars = s.items.get("bar", [])
+    nums = [_bar_number(v) for v, _ in bars]
+    top = max(nums, default=0.0)
+    if top <= 0:
+        raise LayoutError(f"{page.where}: a bars slide needs a value above zero")
+    lw, pt, vpt = LOOK["bar_label_w"], LOOK["diagram_pt"], LOOK["bar_value_pt"]
+    bh, vgap, rgap = LOOK["bar_h"], LOOK["bar_value_gap"], LOOK["bar_row_gap"]
+    axis = LOOK["bar_axis_w"]
+    # The widest value, in Space Grotesk: the heading calibration at vpt.
+    char = STYLE["w"] / STYLE["heading_chars_per_line"] * vpt / STYLE["heading_pt"]
+    vw = max(len(v) for v, _ in bars) * char + 0.1
+    tx = X + lw + LOOK["section_gap"]
+    track = X + W - tx - vgap - vw
+    heights = [max(bh, _rows(label, _per_line(lw, pt)) * _line_h(pt) + 0.1) for _, label in bars]
+    y = _diagram_top(page, s)
+    # The zero line every bar starts from.
+    page.box("bars-axis", tx - axis, y, axis, sum(heights) + rgap * (len(bars) - 1),
+             fill=STYLE["muted"])
+    for (value, label), num, h in zip(bars, nums, heights):
+        w = track * max(num / top, LOOK["bar_min_frac"]) if num > 0 else 0.0
+        page.box("bars-label", X, y, lw, h, [_p(label, pt, STYLE["text"])],
+                 anchor=MSO_ANCHOR.MIDDLE)
+        if w:
+            page.box("bars-bar", tx, y + (h - bh) / 2, w, bh, fill=STYLE["bar"])
+        page.box("bars-value", tx + w + vgap, y, vw, h,
+                 [_p(value, vpt, STYLE["heading"], font="heading_font", bold=True)],
+                 anchor=MSO_ANCHOR.MIDDLE, wrap=False)
+        y += h + rgap
+    _caption(page, s, y - rgap)
+
+
+def _render_matrix(page, s) -> None:
+    """Column headers across a dark band, row labels down, a marker in each
+    cell the outline marks and nothing in any other. A row with no mark but
+    "-" names no column: its label is italic and says so."""
+    columns = s.items["columns"][0]
+    rows = s.items.get("row", [])
+    pt, m = LOOK["cell_pt"], LOOK["matrix_mark"]
+    pad, pad_y = LOOK["cell_pad"], LOOK["matrix_pad_y"]
+    margins = (pad, pad_y, pad, pad_y)
+    lw = min(LOOK["matrix_label_max"], W - len(columns) * LOOK["matrix_col_min"])
+    cw = (W - lw) / len(columns)
+    head_h = (max(_rows(c, _per_line(cw - 2 * pad, pt, bold=True)) for c in columns)
+              * _line_h(pt) + 2 * pad_y)
+    y = _diagram_top(page, s)
+    page.box("matrix-head", X, y, W, head_h, fill=STYLE["dark"])
+    for j, c in enumerate(columns):
+        page.box("matrix-col", X + lw + j * cw, y, cw, head_h,
+                 [_p(c, pt, STYLE["white"], bold=True)], margins=margins,
+                 align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+    y += head_h
+    for i, (label, *marks) in enumerate(rows):
+        marked = {mk for mk in marks if mk != "-"}
+        text = label if marked else f"{label} (no stage named)"
+        h = max(_rows(text, _per_line(lw - 2 * pad, pt)) * _line_h(pt), m) + 2 * pad_y
+        page.box("matrix-row", X, y, W, h, fill=STYLE["light"] if i % 2 else STYLE["white"])
+        page.box("matrix-label", X, y, lw, h,
+                 [[_Run(text, pt, STYLE["text"], italic=not marked)]],
+                 margins=margins, anchor=MSO_ANCHOR.MIDDLE)
+        for j, c in enumerate(columns):
+            if c in marked:
+                page.box("matrix-mark", X + lw + j * cw + (cw - m) / 2, y + (h - m) / 2, m, m,
+                         fill=STYLE["bar"], kind=MSO_SHAPE.OVAL)
+        y += h
+    _caption(page, s, y)
 
 
 RENDERERS = {
@@ -709,13 +1016,13 @@ RENDERERS = {
     "answer": _render_answer,
     "checklist": _render_checklist,
     "links": _render_links,
-    "flow": _not_implemented,
-    "layers": _not_implemented,
-    "timeline": _not_implemented,
-    "compare": _not_implemented,
-    "table": _not_implemented,
-    "bars": _not_implemented,
-    "matrix": _not_implemented,
+    "flow": _render_flow,
+    "layers": _render_layers,
+    "timeline": _render_timeline,
+    "compare": _render_compare,
+    "table": _render_table,
+    "bars": _render_bars,
+    "matrix": _render_matrix,
 }
 
 
