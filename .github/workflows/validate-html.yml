@@ -105,6 +105,9 @@ on:
       # The how-to deck gate reads the outlines and the mapping with this
       # tool, and the guide pages it checks are covered by `**.html`.
       - 'tools/build_howto_decks.py'
+      # The breach deck gate reads its outlines (under tools/decks/**) and the
+      # breach pages (covered by `**.html`) with this tool.
+      - 'tools/build_breach_decks.py'
       - 'tools/decks/**'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
@@ -497,6 +500,59 @@ jobs:
             echo "::warning title=How-to deck needs re-publishing::$line"
           done < stale-decks-list.log
 
+      # Each breach page's deck line (data-breach-deck) must agree with
+      # tools/decks/breaches/published.json, and every outline in
+      # tools/decks/breaches/ must obey the style limits and say nothing its
+      # breach page does not. A deck line with no mapping entry, a mapping
+      # entry with no line, a second line, or a line holding a different id
+      # points readers at the wrong deck. Unconditional: a page edit can break
+      # a figure with no outline in the diff. The self-test runs first as the
+      # control. --check runs even when the self-test fails, because the
+      # self-test reads real breach pages: a page edit that breaks a case
+      # should still show --check's finding, which names the outline line to
+      # fix.
+      - name: Assert breach deck outlines and links
+        id: breach-decks
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/build_breach_decks.py --self-test 2>&1 | tee check-breach-decks.log || status=1
+          python3 tools/build_breach_decks.py --check 2>&1 | tee -a check-breach-decks.log || status=1
+          exit "$status"
+
+      # A published breach deck whose outline or page changed since it was
+      # recorded still shows the old slides, and so does every PDF downloaded
+      # from it. --check cannot see this: the outline and the page are each
+      # right and the public copy is behind. Re-publishing needs the owner's
+      # go, so this step reports and never fails: each stale deck is a
+      # warning on the run and a line in the job summary. It runs even when an
+      # earlier gate failed, and a tool error is itself only a warning.
+      - name: Report published breach decks that need review
+        if: ${{ !cancelled() }}
+        run: |
+          if ! python3 tools/build_breach_decks.py --stale --published-only > stale-breach-decks.log 2>&1; then
+            cat stale-breach-decks.log
+            echo "::warning title=Breach decks::build_breach_decks.py --stale could not run; see this step's log"
+            printf '### Breach decks that need review\n\nThe stale check could not run; see the step log.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat stale-breach-decks.log
+          grep -v '^stale check: ' stale-breach-decks.log > stale-breach-decks-list.log || true
+          {
+            echo "### Breach decks that need review"
+            echo
+            if [ -s stale-breach-decks-list.log ]; then
+              sed 's/^/- /' stale-breach-decks-list.log
+            else
+              echo "None: every published breach deck matches its outline and its page."
+            fi
+            echo
+            grep '^stale check: ' stale-breach-decks.log || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            echo "::warning title=Breach deck needs review::$line"
+          done < stale-breach-decks-list.log
+
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which
       # community.html says is never posted publicly) can arrive as an
@@ -606,6 +662,7 @@ jobs:
           OUTCOME_FAQ_PARITY: ${{ steps.faq-parity.outcome }}
           OUTCOME_README_COVERAGE: ${{ steps.readme-coverage.outcome }}
           OUTCOME_HOWTO_DECKS: ${{ steps.howto-decks.outcome }}
+          OUTCOME_BREACH_DECKS: ${{ steps.breach-decks.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
@@ -627,6 +684,7 @@ jobs:
               { name: 'Check FAQ and glossary JSON-LD match the page', outcome: process.env.OUTCOME_FAQ_PARITY, file: 'check-faq-parity.log' },
               { name: 'Check README coverage and Markdown links', outcome: process.env.OUTCOME_README_COVERAGE, file: 'check-readme-coverage.log' },
               { name: 'Assert how-to deck outlines and links', outcome: process.env.OUTCOME_HOWTO_DECKS, file: 'check-howto-decks.log' },
+              { name: 'Assert breach deck outlines and links', outcome: process.env.OUTCOME_BREACH_DECKS, file: 'check-breach-decks.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
             ];

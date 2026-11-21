@@ -150,3 +150,109 @@ passed around cannot be recalled.
 Decks are CC BY-NC 4.0; the guides stay CC BY-NC-ND 4.0. The first and last
 slides carry the attribution "Cloud Security Office Hours, csoh.org" and the
 licence.
+
+# Breach kill chain decks
+
+Each breach kill chain page in `breaches/` can have a slide deck, written as a
+plain-text outline in `tools/decks/breaches/`, built into a .pptx, published to
+Google Slides and linked from the page's header. Outlines, the mapping file and
+build output live under `tools/`, which never ships. The only published change
+is one line of links on the breach page. `tools/build_breach_decks.py` has the
+same modes as the how-to tool:
+
+```bash
+python3 tools/build_breach_decks.py --self-test
+python3 tools/build_breach_decks.py --check
+python3 tools/build_breach_decks.py --stale [--published-only]
+python3 tools/build_breach_decks.py --status
+python3 tools/build_breach_decks.py --stamp
+python3 tools/build_breach_decks.py --record SLUG PRES_ID
+```
+
+Every mode uses the standard library only. Outlines live in a subdirectory so
+`build_howto_decks.py`, which does not recurse into `tools/decks/`, never reads
+them.
+
+## Breach outline format
+
+An outline is `tools/decks/breaches/<slug>.deck`, where `<slug>` is the breach
+page's file name without `.html`.
+
+```text
+title: VAPOR PANDA / ARTEX
+page: breaches/<slug>.html
+as-of: YYYY-MM-DD
+promise: <one sentence>
+
+== <slide heading>
+layout: stage
+stage: 04
+phase: Credential Access
+technique: T1552.005 | Cloud Instance Metadata API
+fact: Queried | the cloud Instance Metadata Service
+Prose lines join into one paragraph; a blank line ends it.
+notes:
+Speaker notes run to the next "== " line. Every slide has them.
+```
+
+- The header holds exactly `title`, `page`, `as-of` and `promise`, each once.
+- A slide's first line is `layout: <name>`; `text` when absent. `stage:`,
+  `phase:`, `source: name | url` and `credit:` are control lines, each at most
+  once per slide. Typed lines are `key: field | field`, and every field is
+  non-empty.
+- Notes are required on every slide. There are no includes and no code fences.
+- A non-background slide says nothing its page does not: every number,
+  technique ID, stage and link must appear on the page. A `background` slide
+  names its source on the slide, and its URL is on an allowed host.
+- Limits: 18 to 36 slides counting the generated cover, how-to-use and
+  closing slides, at most 40 words of prose per slide, 14 words per typed
+  field, 12 in a heading and 220 in the notes, no U+2013 or U+2014, and no
+  spaced hyphen used as a dash.
+
+| Layout | Typed lines |
+|---|---|
+| `text`, `background`, `question`, `answer` | none; prose and bullets (`question` takes prose only, `background` needs `source:`) |
+| `stats` | `stat` 2 to 4: `value \| label \| detail` |
+| `stage` | `technique` 1 to 3: `id \| name`; `fact` 1 to 5: `label \| value`; needs `stage:` and `phase:` |
+| `checklist` | `check` 2 to 7 |
+| `links` | `link` 1 to 8: `name \| url` |
+| `flow` | `step` 3 to 8: `NN \| tactic \| short title \| technique id` |
+| `layers` | `layer` 2 to 5: `tier label \| box ...` (1 to 3 boxes) |
+| `timeline` | `event` 2 to 6: `when \| what` |
+| `compare` | `col` 2 or 3: `heading \| line ...` (1 to 4 lines) |
+| `table` | `row` 2 to 7, 2 to 4 fields each, the first row the header |
+| `bars` | `bar` 2 to 4: `number \| label` |
+| `matrix` | `columns` once, 2 to 8 fields; `row` 2 to 8: `label \| mark ...` |
+
+## Breach deck gate and publishing
+
+- `--check` parses every outline, applies the style limits and compares each
+  slide with its breach page. It validates `tools/decks/breaches/published.json`:
+  every key names an outline and a breach page, and every entry has exactly
+  `id` (a Google Drive file id), `outline_sha256`, `page_sha256` and
+  `published` (a `YYYY-MM-DD` date). It compares every `breaches/*.html` page
+  with the mapping: a mapped page must hold exactly one deck line
+  (`data-breach-deck`), the one `--stamp` writes, right after the last
+  `pm-link` line in `inc-header`; an unmapped page must hold no deck markup;
+  and no page may link a Google Slides deck anywhere else. It exits 1 on any
+  finding, and when it finds no outlines it says nothing was checked and exits 1.
+- A deck is stale when its outline or its page changed since `--record`. The
+  page hash covers the text of the page's `<main>` with deck lines removed,
+  so stamping a deck line, glossary cross-linking and nav or footer edits do
+  not flag a deck; a changed sentence does. `--stale` prints one line per
+  reason: the outline changed (the public deck needs re-publishing) or the
+  page changed (review the deck against the page). It exits 0 whether or not
+  decks are stale, and CI reports each as a warning.
+- `--stamp` removes every deck line and writes one after the last `pm-link`
+  line of each mapped page, planning every page before writing any.
+  `--record` writes the id, both hashes and today's date, then stamps.
+
+Publishing follows the how-to steps: build, upload privately, export and
+inspect the PDF, fact-review against the page, get the owner's approval, then
+on the owner's go share it publicly, run `--record SLUG PRES_ID`, run
+`--check` and commit. Uploading, sharing publicly and deleting superseded
+copies each need the owner's explicit go. A changed deck is uploaded as a new
+file with a new ID, and the breach page's link is rewritten from the mapping.
+
+Breach decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0. The first
+and last slides carry "Cloud Security Office Hours, csoh.org" and the licence.

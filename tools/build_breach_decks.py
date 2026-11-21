@@ -40,15 +40,30 @@ notes block. Limit breaches are findings, so one --check run reports them all:
 line counts, word limits, dashes, a missing required control line, prose rules
 per layout, matrix marks, ragged tables, bar numbers and the slide count.
 
+Publishing machinery mirrors tools/build_howto_decks.py. The mapping
+tools/decks/breaches/published.json holds, per slug, the Google Slides id,
+the outline hash, the hash of the page's <main> text and the publish date. A
+deck is stale when its outline or its page changed since it was recorded.
+--stamp writes each mapped page's one deck line (data-breach-deck) right
+after the last pm-link line in inc-header.
+
 Usage:
     python3 tools/build_breach_decks.py --self-test
+    python3 tools/build_breach_decks.py --check
+    python3 tools/build_breach_decks.py --stale [--published-only]
+    python3 tools/build_breach_decks.py --status
+    python3 tools/build_breach_decks.py --stamp
+    python3 tools/build_breach_decks.py --record SLUG PRES_ID
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import html as htmllib
+import io
+import json
 import re
 import sys
 from dataclasses import dataclass, field
@@ -62,6 +77,9 @@ from build_howto_decks import (  # noqa: E402
     EM_DASH,
     EN_DASH,
     SPACED_HYPHEN_RE,
+    PRES_ID_RE,
+    SHA256_RE,
+    SLUG_RE,
     OutlineError,
     _is_iso_date,
     _run_cases,
@@ -735,6 +753,473 @@ def page_findings(deck: BDeck, page: BreachPage, today: date | None = None) -> l
 
 
 # ---------------------------------------------------------------------------
+# Paths, deck lines on breach pages, and the mapping file.
+# ---------------------------------------------------------------------------
+
+# Paths come from this file's location, not the working directory: a check run
+# from elsewhere would find no outlines and no pages, and a check that reads
+# nothing reports clean. _set_root() moves all four together for the
+# self-test. Breach outlines live in their own subdirectory so the how-to
+# tool, which globs tools/decks/*.deck without recursing, never reads them.
+ROOT = Path(__file__).resolve().parents[1]
+DECKS_DIR = ROOT / "tools" / "decks" / "breaches"
+PAGES_DIR = ROOT / "breaches"
+MAPPING = DECKS_DIR / "published.json"
+BUILD_DIR = DECKS_DIR / "build"
+
+
+def _set_root(root: Path) -> Path:
+    """Point every path at root; returns the previous root."""
+    global ROOT, DECKS_DIR, PAGES_DIR, MAPPING, BUILD_DIR
+    old = ROOT
+    ROOT = root
+    DECKS_DIR = root / "tools" / "decks" / "breaches"
+    PAGES_DIR = root / "breaches"
+    MAPPING = DECKS_DIR / "published.json"
+    BUILD_DIR = DECKS_DIR / "build"
+    return old
+
+
+def _rel(path: Path) -> str:
+    """path relative to the repository root, for messages."""
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+PRESENTATION_RE = re.compile(r"docs\.google\.com/presentation\b")
+ENTRY_KEYS = ("id", "outline_sha256", "page_sha256", "published")
+# The indentation of the pm-link lines on every breach page.
+PM_INDENT = "    "
+HEADER_OPEN_RE = re.compile(r'^([ \t]*)<div\b[^>\n]*\bclass="inc-header"[^>\n]*>[ \t]*$', re.MULTILINE)
+PM_LINK_RE = re.compile(r'^([ \t]*)<a class="pm-link"[^\n]*</a>[ \t]*$')
+
+
+def deck_line_html(pres_id: str, indent: str = PM_INDENT) -> str:
+    base = f"https://docs.google.com/presentation/d/{pres_id}"
+    ext = 'target="_blank" rel="noopener noreferrer"'
+    licence = "https://creativecommons.org/licenses/by-nc/4.0/"
+    return (
+        f'{indent}<p class="u-mt-075" {DECK_ATTR}><strong>Slides:</strong> '
+        f'<a href="{base}/export/pdf" {ext}>download the PDF</a> or '
+        f'<a href="{base}/copy" {ext}>make your own editable copy</a> '
+        "(copying needs a Google account). The slides are licensed "
+        f'<a href="{licence}" {ext}>CC BY-NC 4.0</a>.</p>'
+    )
+
+
+def loose_deck_markup(html: str) -> int:
+    """data-breach-deck mentions that are not part of a whole deck line: a
+    line missing its </p>, one written inline after other markup, or two on
+    one line. --stamp cannot remove these without guessing."""
+    return DECK_LINE_RE.sub("", html).count(DECK_ATTR)
+
+
+def _last_pm_link_end(html: str) -> tuple[int, str] | None:
+    """Where the deck line goes: the offset just past the last whole-line
+    pm-link inside inc-header (the div opens on its own line and closes on a
+    line starting with its own indentation and </div>), and that line's
+    indentation. None when there is no such line."""
+    m = HEADER_OPEN_RE.search(html)
+    if m is None:
+        return None
+    close = re.compile(r"^" + re.escape(m.group(1)) + r"</div>", re.MULTILINE).search(html, m.end())
+    if close is None:
+        return None
+    end = indent = None
+    pos = m.end()
+    for line in html[m.end() : close.start()].splitlines(keepends=True):
+        pos += len(line)
+        link = PM_LINK_RE.match(line.rstrip("\r\n"))
+        if link:
+            end, indent = pos, link.group(1)
+    if end is None:
+        return None
+    if not html[:end].endswith("\n"):
+        return None
+    return end, indent
+
+
+def _insert_deck_line(html: str, pres_id: str) -> str:
+    spot = _last_pm_link_end(html)
+    if spot is None:
+        raise ValueError(
+            'no <a class="pm-link"> line inside <div class="inc-header"> to put the deck line after'
+        )
+    end, indent = spot
+    return html[:end] + deck_line_html(pres_id, indent) + "\n" + html[end:]
+
+
+def stamp_page(html: str, pres_id: str | None) -> str:
+    """The page as --stamp writes it: every deck line removed, then, when
+    pres_id is given, one deck line right after the last pm-link line in
+    inc-header. Raises ValueError when the page holds deck markup that is
+    not a whole deck line, the id is not a Drive file id, or there is no
+    pm-link line to put the deck line after."""
+    loose = loose_deck_markup(html)
+    if loose:
+        raise ValueError(
+            f"{loose} {DECK_ATTR} mention(s) outside a whole deck line (one <p> "
+            "alone on its line, closed on that line); fix the markup by hand"
+        )
+    if pres_id is not None and not PRES_ID_RE.fullmatch(pres_id):
+        raise ValueError(f"{pres_id!r} is not a Google Slides presentation id")
+    bare = DECK_LINE_RE.sub("", html)
+    return bare if pres_id is None else _insert_deck_line(bare, pres_id)
+
+
+def _entry_id(entry) -> str | None:
+    """The entry's presentation id when it is well formed, else None."""
+    pres_id = entry.get("id") if isinstance(entry, dict) else None
+    return pres_id if isinstance(pres_id, str) and PRES_ID_RE.fullmatch(pres_id) else None
+
+
+def link_findings(slug: str, html: str, mapping: dict) -> list[str]:
+    """Disagreements between a breach page's deck markup and the mapping. A
+    page in the mapping must hold exactly the one deck line --stamp writes,
+    right after its last pm-link; a page outside it must hold no deck markup.
+    Any Google Slides link outside the deck line is a finding either way."""
+    page = f"breaches/{slug}.html"
+    findings: list[str] = []
+    lines = DECK_LINE_RE.findall(html)
+    rest = DECK_LINE_RE.sub("", html)
+    loose = rest.count(DECK_ATTR)
+    if loose:
+        findings.append(
+            f"{page}: {loose} {DECK_ATTR} mention(s) outside a whole deck line "
+            "(one <p> alone on its line, closed on that line)"
+        )
+    if PRESENTATION_RE.search(rest) and not loose:
+        findings.append(f"{page}: links a Google Slides deck outside its deck line")
+    entry = mapping.get(slug)
+    if entry is None:
+        if lines:
+            findings.append(f"{page}: has a deck line but {slug!r} is not in the mapping")
+        return findings
+    pres_id = _entry_id(entry)
+    if pres_id is None:
+        return findings  # mapping_findings reports the entry itself
+    want = deck_line_html(pres_id).strip()
+    if not lines and not loose:
+        findings.append(f"{page}: {slug!r} is in the mapping but the page has no deck line")
+    elif len(lines) > 1:
+        findings.append(f"{page}: has {len(lines)} deck lines; it must have exactly one")
+    elif lines and lines[0].strip() != want:
+        findings.append(
+            f"{page}: deck line is not the one --stamp writes for mapping id {pres_id!r}"
+        )
+    elif lines and not loose:
+        try:
+            if _insert_deck_line(rest, pres_id) != html:
+                findings.append(
+                    f"{page}: deck line is not where --stamp puts it (right after the "
+                    "last pm-link line in inc-header); run --stamp"
+                )
+        except ValueError as e:
+            findings.append(f"{page}: {e}")
+    return findings
+
+
+def read_mapping() -> tuple[dict, str | None]:
+    """The mapping and None, or {} and why it cannot be read. A missing file
+    is an empty mapping."""
+    if not MAPPING.exists():
+        return {}, None
+    try:
+        mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return {}, f"{_rel(MAPPING)}: cannot be read as JSON: {e}"
+    if not isinstance(mapping, dict):
+        return {}, f"{_rel(MAPPING)}: must be a JSON object keyed by slug"
+    return mapping, None
+
+
+def save_mapping(mapping: dict) -> None:
+    MAPPING.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def mapping_findings(mapping: dict, outlines: set[str], pages: set[str]) -> list[str]:
+    """Every mapping entry that is malformed or names a deck the repo cannot
+    account for: a slug with no outline or no breach page, an id that is not
+    a Drive file id, a date that is not ISO, or a hash that is not sha256."""
+    findings: list[str] = []
+    name = _rel(MAPPING)
+    for slug in sorted(mapping):
+        entry = mapping[slug]
+        where = f"{name}: {slug!r}"
+        if not SLUG_RE.fullmatch(slug):
+            findings.append(f"{where}: not a breach slug (lowercase letters, digits, hyphens)")
+            continue
+        if slug not in outlines:
+            findings.append(f"{where}: has no outline {_rel(DECKS_DIR)}/{slug}.deck")
+        if slug not in pages:
+            findings.append(f"{where}: names no breach page")
+        if not isinstance(entry, dict):
+            findings.append(f"{where}: entry must be an object with keys {', '.join(ENTRY_KEYS)}")
+            continue
+        if sorted(entry) != sorted(ENTRY_KEYS):
+            findings.append(
+                f"{where}: entry keys must be exactly {', '.join(ENTRY_KEYS)}; "
+                f"got {', '.join(sorted(entry)) or 'none'}"
+            )
+        if "id" in entry and _entry_id(entry) is None:
+            findings.append(f"{where}: id {entry['id']!r} is not a Google Slides presentation id")
+        published = entry.get("published")
+        if "published" in entry and not _is_iso_date(published):
+            findings.append(f"{where}: published {published!r} is not a YYYY-MM-DD date")
+        for key in ("outline_sha256", "page_sha256"):
+            sha = entry.get(key)
+            if key in entry and not (isinstance(sha, str) and SHA256_RE.fullmatch(sha)):
+                findings.append(f"{where}: {key} {sha!r} is not a sha256 hex digest")
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# Modes: check, stale, status, stamp, record.
+# ---------------------------------------------------------------------------
+
+
+def outline_paths() -> list[Path]:
+    return sorted(DECKS_DIR.glob("*.deck"))
+
+
+def breach_pages() -> list[Path]:
+    return sorted(PAGES_DIR.glob("*.html"))
+
+
+def tree_problem() -> str | None:
+    """Why the outlines or breach pages cannot be found, or None. Every mode
+    that reads the tree stops on this rather than report on nothing."""
+    if not outline_paths():
+        return f"no outlines found in {DECKS_DIR}"
+    if not breach_pages():
+        return f"no breach pages found in {PAGES_DIR}"
+    return None
+
+
+def outline_findings(path: Path) -> list[str]:
+    """Every finding for one outline: a parse error, the style limits, and
+    what the deck says that its breach page does not. --check reports these
+    and --build refuses an outline that has any."""
+    try:
+        deck = parse_outline(path)
+    except OutlineError as e:
+        return [str(e)]
+    findings = style_findings(deck)
+    want = f"breaches/{deck.slug}.html"
+    if deck.page != want:
+        findings.append(f"{path.name}: page must be {want}, got {deck.page}")
+        return findings
+    page_path = ROOT / deck.page
+    if not page_path.exists():
+        findings.append(f"{path.name}: page {deck.page} does not exist")
+        return findings
+    try:
+        page = parse_breach_page(page_path.read_text(encoding="utf-8"), deck.page)
+    except OutlineError as e:
+        findings.append(f"{deck.page}: {e}")
+        return findings
+    return findings + page_findings(deck, page)
+
+
+def check_all() -> int:
+    problem = tree_problem()
+    if problem:
+        print(f"breach decks: {problem}; nothing was checked")
+        return 1
+    findings: list[str] = []
+    mapping, map_problem = read_mapping()
+    if map_problem:
+        findings.append(map_problem)
+    outlines = outline_paths()
+    for path in outlines:
+        findings += outline_findings(path)
+    pages = breach_pages()
+    findings += mapping_findings(mapping, {p.stem for p in outlines}, {p.stem for p in pages})
+    # An unreadable mapping would make every deck line read as unmapped.
+    if not map_problem:
+        for page in pages:
+            findings += link_findings(page.stem, page.read_text(encoding="utf-8"), mapping)
+    for f in findings:
+        print(f)
+    print(
+        f"breach decks: {len(outlines)} outlines checked, {len(pages)} breach pages checked, "
+        f"{len(findings)} findings"
+    )
+    return 1 if findings else 0
+
+
+def _stale_reasons(slug: str, entry, path: Path | None) -> list[str]:
+    """Why a published deck no longer matches its outline or its page, or []."""
+    if path is None:
+        return [f"published, but {_rel(DECKS_DIR)}/{slug}.deck is missing"]
+    try:
+        deck = parse_outline(path)
+    except OutlineError as e:
+        return [f"outline does not parse, so whether it changed is unknown: {e}"]
+    entry = entry if isinstance(entry, dict) else {}
+    when = entry.get("published")
+    reasons: list[str] = []
+    if entry.get("outline_sha256") != outline_sha256(deck):
+        reasons.append(
+            f"outline changed since it was published on {when}; the public deck needs re-publishing"
+        )
+    page_path = PAGES_DIR / f"{slug}.html"
+    try:
+        page_hash = page_sha256(page_path.read_text(encoding="utf-8"))
+    except (OSError, OutlineError) as e:
+        reasons.append(f"page cannot be read, so whether it changed is unknown: {e}")
+    else:
+        if entry.get("page_sha256") != page_hash:
+            reasons.append(
+                f"page changed since it was published on {when}; review the deck against the page"
+            )
+    return reasons
+
+
+def stale_report(published_only: bool = False) -> int:
+    """Print one line per reason a published deck is behind (its outline or
+    its page changed since --record) and, unless published_only, one per
+    outline never published, then a summary line starting "stale check:".
+    Staleness never fails: it exits 0 whether or not decks are stale, and 1
+    only when the outlines, the breach pages or the mapping cannot be read."""
+    problem = tree_problem()
+    if problem:
+        print(f"stale check: {problem}")
+        return 1
+    mapping, problem = read_mapping()
+    if problem:
+        print(f"stale check: {problem}")
+        return 1
+    outlines = {p.stem: p for p in outline_paths()}
+    stale = unpublished = 0
+    for slug in sorted(set(outlines) | set(mapping)):
+        if slug not in mapping:
+            unpublished += 1
+            if not published_only:
+                print(f"{slug}: not published")
+            continue
+        reasons = _stale_reasons(slug, mapping[slug], outlines.get(slug))
+        if reasons:
+            stale += 1
+            for reason in reasons:
+                print(f"{slug}: {reason}")
+    summary = f"stale check: {stale} of {len(mapping)} published decks changed since publishing"
+    if not published_only:
+        summary += f"; outlines never published: {unpublished}"
+    print(summary)
+    return 0
+
+
+def status_report() -> int:
+    problem = tree_problem()
+    if problem:
+        print(f"status: {problem}")
+        return 1
+    mapping, problem = read_mapping()
+    if problem:
+        print(f"status: {problem}")
+        return 1
+    outlines = {p.stem for p in outline_paths()}
+    for page in breach_pages():
+        has_outline = "yes" if page.stem in outlines else "no"
+        published = "yes" if page.stem in mapping else "no"
+        print(f"{page.stem}: outline {has_outline}, published {published}")
+    return 0
+
+
+def plan_stamps(mapping: dict) -> tuple[dict[Path, str], list[str]]:
+    """The new text of every breach page --stamp would change, and every page
+    it cannot stamp. Nothing is written."""
+    changes: dict[Path, str] = {}
+    errors: list[str] = []
+    for page in breach_pages():
+        html = page.read_text(encoding="utf-8")
+        entry = mapping.get(page.stem)
+        pres_id = None
+        if entry is not None:
+            pres_id = _entry_id(entry)
+            if pres_id is None:
+                errors.append(f"{_rel(page)}: its mapping entry has no valid id, so it cannot be stamped")
+                continue
+        try:
+            new = stamp_page(html, pres_id)
+        except ValueError as e:
+            errors.append(f"{_rel(page)}: {e}")
+            continue
+        if new != html:
+            changes[page] = new
+    return changes, errors
+
+
+def _write_stamps(mapping: dict, label: str, save: bool) -> int:
+    """Check the mapping and plan every page first. On any error, print them
+    all and write nothing, so no run leaves some pages stamped and others
+    not, or a mapping its pages disagree with. Otherwise save the mapping
+    when asked, then write the changed pages."""
+    pages = {p.stem for p in breach_pages()}
+    errors = mapping_findings(mapping, {p.stem for p in outline_paths()}, pages)
+    changes, stamp_errors = plan_stamps(mapping)
+    errors += stamp_errors
+    if errors:
+        for e in errors:
+            print(e)
+        print(f"{label}: refused, nothing written; fix the problems above")
+        return 1
+    if save:
+        save_mapping(mapping)
+    for page, new in changes.items():
+        page.write_text(new, encoding="utf-8")
+        print(f"stamped {_rel(page)}")
+    return 0
+
+
+def stamp_all() -> int:
+    problem = tree_problem()
+    if problem:
+        print(f"stamp: {problem}")
+        return 1
+    mapping, problem = read_mapping()
+    if problem:
+        print(f"stamp: {problem}")
+        return 1
+    return _write_stamps(mapping, "stamp", save=False)
+
+
+def record(slug: str, pres_id: str) -> int:
+    problem = tree_problem()
+    if problem:
+        print(f"record: {problem}")
+        return 1
+    errors = []
+    if not SLUG_RE.fullmatch(slug) or not (DECKS_DIR / f"{slug}.deck").is_file():
+        errors.append(f"record: no outline {_rel(DECKS_DIR)}/{slug}.deck")
+    if not PRES_ID_RE.fullmatch(pres_id):
+        errors.append(f"record: {pres_id!r} is not a Google Slides presentation id")
+    if errors:
+        print("\n".join(errors))
+        return 1
+    try:
+        deck = parse_outline(DECKS_DIR / f"{slug}.deck")
+        page_hash = page_sha256((PAGES_DIR / f"{slug}.html").read_text(encoding="utf-8"))
+    except (OSError, OutlineError) as e:
+        print(f"record: {e}")
+        return 1
+    mapping, problem = read_mapping()
+    if problem:
+        print(f"record: {problem}")
+        return 1
+    mapping[slug] = {
+        "id": pres_id,
+        "outline_sha256": outline_sha256(deck),
+        "page_sha256": page_hash,
+        "published": date.today().isoformat(),
+    }
+    return _write_stamps(mapping, "record", save=True)
+
+
+# ---------------------------------------------------------------------------
 # Self-test. CASES holds (name, fn) pairs; each fn takes a scratch directory
 # and asserts.
 # ---------------------------------------------------------------------------
@@ -1317,6 +1802,365 @@ def _case_as_of_not_future(tmp: Path) -> None:
     assert any("not the parsed page" in x for x in page_findings(deck, page))
 
 
+ID_A = "1" + "A" * 43
+ID_B = "1" + "B" * 43
+PM_PAGE = _breach_page(links=("https://example.com/a", "https://example.com/b"))
+LAST_PM = '    <a class="pm-link" href="https://example.com/b">Link</a>\n'
+
+
+def _deck_lines(html: str) -> list[str]:
+    return [ln for ln in html.split("\n") if DECK_ATTR in ln]
+
+
+def _plant(s: str, old: str, new: str) -> str:
+    """s with old replaced once; fails when the plant would change nothing."""
+    out = s.replace(old, new, 1)
+    assert out != s, f"plant did nothing: {old!r}"
+    return out
+
+
+def _stamp_refused(html: str, pres_id: str | None, needle: str) -> None:
+    try:
+        stamp_page(html, pres_id)
+    except ValueError as e:
+        assert needle in str(e), (needle, str(e))
+        return
+    raise AssertionError(f"stamp_page accepted a page it should refuse ({needle})")
+
+
+def _case_stamp_insert(tmp: Path) -> None:
+    out = stamp_page(PM_PAGE, ID_A)
+    line = deck_line_html(ID_A)
+    assert _deck_lines(out) == [line], out
+    assert line.startswith("    <p class=\"u-mt-075\" data-breach-deck>"), line
+    assert out == _plant(PM_PAGE, LAST_PM, LAST_PM + line + "\n"), out
+    # Control: the line is after the last pm-link, not after the first.
+    first = '    <a class="pm-link" href="https://example.com/a">Link</a>\n'
+    assert first + line not in out
+
+
+def _case_stamp_idempotent(tmp: Path) -> None:
+    once = stamp_page(PM_PAGE, ID_A)
+    assert stamp_page(once, ID_A) == once
+
+
+def _case_stamp_new_id(tmp: Path) -> None:
+    out = stamp_page(stamp_page(PM_PAGE, ID_A), ID_B)
+    assert _deck_lines(out) == [deck_line_html(ID_B)], out
+
+
+def _case_stamp_remove(tmp: Path) -> None:
+    assert stamp_page(stamp_page(PM_PAGE, ID_A), None) == PM_PAGE
+    # A page with no pm-link can still be unstamped.
+    assert stamp_page("<main><p>none</p></main>", None) == "<main><p>none</p></main>"
+
+
+def _case_stamp_no_pm_link(tmp: Path) -> None:
+    _stamp_refused(_breach_page(links=()), ID_A, "pm-link")
+    _stamp_refused("<main><p>none</p></main>", ID_A, "pm-link")
+    # A pm-link outside inc-header does not count.
+    outside = _plant(_breach_page(links=()), "</main>", '<a class="pm-link" href="x">x</a>\n</main>')
+    _stamp_refused(outside, ID_A, "pm-link")
+    _stamp_refused(PM_PAGE, 'X" onmouseover="alert(1)', "not a Google Slides presentation id")
+
+
+def _case_stamp_normal_form(tmp: Path) -> None:
+    """--stamp writes one line, right after the last pm-link, whatever was there."""
+    good = stamp_page(PM_PAGE, ID_A)
+    line = deck_line_html(ID_A) + "\n"
+    extra = _plant(good, "</main>\n", line + "</main>\n")
+    second = _plant(good, "</main>\n", deck_line_html(ID_B) + "\n</main>\n")
+    moved = _plant(_plant(good, line, ""), '  <div class="kill-chain">\n', line + '  <div class="kill-chain">\n')
+    for planted in (extra, second, moved):
+        assert stamp_page(planted, ID_A) == good, planted
+        assert stamp_page(planted, None) == PM_PAGE, planted
+
+
+def _case_stamp_refuses_loose_markup(tmp: Path) -> None:
+    good = stamp_page(PM_PAGE, ID_A)
+    broken = _plant(good, "CC BY-NC 4.0</a>.</p>\n", "CC BY-NC 4.0</a>.\n")
+    _stamp_refused(broken, ID_A, "outside a whole deck line")
+    _stamp_refused(broken, None, "outside a whole deck line")
+    inline = _plant(PM_PAGE, '<div class="inc-header">\n', '<div class="inc-header">' + deck_line_html(ID_A).strip() + "\n")
+    _stamp_refused(inline, None, "outside a whole deck line")
+    two = _plant(good, ".</p>\n", ".</p>" + deck_line_html(ID_B).strip() + "\n")
+    _stamp_refused(two, ID_A, "outside a whole deck line")
+
+
+def _case_links_unmapped_line(tmp: Path) -> None:
+    f = link_findings("g", stamp_page(PM_PAGE, ID_A), {})
+    assert len(f) == 1 and "breaches/g.html" in f[0] and "not in the mapping" in f[0], f
+
+
+def _case_links_missing_line(tmp: Path) -> None:
+    f = link_findings("g", PM_PAGE, {"g": {"id": ID_A}})
+    assert len(f) == 1 and "no deck line" in f[0], f
+    assert link_findings("g", PM_PAGE, {}) == []
+
+
+def _case_links_wrong_id(tmp: Path) -> None:
+    f = link_findings("g", stamp_page(PM_PAGE, ID_A), {"g": {"id": ID_B}})
+    assert len(f) == 1 and "not the one --stamp writes" in f[0], f
+    assert link_findings("g", stamp_page(PM_PAGE, ID_B), {"g": {"id": ID_B}}) == []
+    # A malformed entry is mapping_findings' to report.
+    good = stamp_page(PM_PAGE, ID_A)
+    assert link_findings("g", good, {"g": {}}) == []
+    assert link_findings("g", good, {"g": "not an object"}) == []
+
+
+def _case_links_every_line(tmp: Path) -> None:
+    good = stamp_page(PM_PAGE, ID_A)
+    m = {"g": {"id": ID_A}}
+    assert link_findings("g", good, m) == []
+    line = deck_line_html(ID_A) + "\n"
+    planted = {
+        "duplicate": (_plant(good, "</main>\n", line + "</main>\n"), "2 deck lines"),
+        "moved": (
+            _plant(_plant(good, line, ""), '  <div class="kill-chain">\n', line + '  <div class="kill-chain">\n'),
+            "not where --stamp puts it",
+        ),
+        "unclosed": (_plant(good, "CC BY-NC 4.0</a>.</p>\n", "CC BY-NC 4.0</a>.\n"), "outside a whole deck line"),
+    }
+    for label, (html, needle) in planted.items():
+        f = link_findings("g", html, m)
+        assert any(needle in x for x in f), (label, f)
+
+
+def _case_links_slides_link_elsewhere(tmp: Path) -> None:
+    other = f"https://docs.google.com/presentation/d/{ID_B}/edit"
+    html = _plant(stamp_page(PM_PAGE, ID_A), "</main>", f'<a href="{other}">deck</a></main>')
+    f = link_findings("g", html, {"g": {"id": ID_A}})
+    assert len(f) == 1 and "outside its deck line" in f[0], f
+    f = link_findings("g", _plant(PM_PAGE, "</main>", f'<a href="{other}">deck</a></main>'), {})
+    assert len(f) == 1 and "outside its deck line" in f[0], f
+
+
+def _entry(pres_id: str = ID_A, sha: str = "0" * 64, page_sha: str = "1" * 64,
+           published: str = "2026-01-02") -> dict:
+    return {"id": pres_id, "outline_sha256": sha, "page_sha256": page_sha, "published": published}
+
+
+def _case_mapping_findings(tmp: Path) -> None:
+    with _rooted(tmp):
+        ok = {"g": _entry()}
+        assert mapping_findings(ok, {"g"}, {"g"}) == []
+        planted = {
+            "markup id": ({"g": _entry(pres_id='X" onmouseover="alert(1)')}, "not a Google Slides"),
+            "missing key": ({"g": {k: v for k, v in _entry().items() if k != "page_sha256"}}, "keys must be exactly"),
+            "extra key": ({"g": {**_entry(), "note": "x"}}, "keys must be exactly"),
+            "bad date": ({"g": _entry(published="20 Nov 2026")}, "not a YYYY-MM-DD date"),
+            "impossible date": ({"g": _entry(published="2026-02-30")}, "not a YYYY-MM-DD date"),
+            "bad outline sha": ({"g": _entry(sha="abc")}, "outline_sha256"),
+            "bad page sha": ({"g": _entry(page_sha="abc")}, "page_sha256"),
+            "not an object": ({"g": ["x"]}, "must be an object"),
+            "bad slug": ({"../g": _entry()}, "not a breach slug"),
+        }
+        for label, (m, needle) in planted.items():
+            f = mapping_findings(m, {"g"}, {"g"})
+            assert any(needle in x for x in f), (label, f)
+        f = mapping_findings(ok, set(), {"g"})
+        assert len(f) == 1 and "has no outline" in f[0], f
+        f = mapping_findings(ok, {"g"}, set())
+        assert len(f) == 1 and "names no breach page" in f[0], f
+
+
+@contextlib.contextmanager
+def _rooted(root: Path):
+    """Point every path at root for the body of the with block."""
+    old = _set_root(root)
+    try:
+        yield root
+    finally:
+        _set_root(old)
+
+
+def _capture(fn, *args) -> tuple[int, str]:
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = fn(*args)
+    return rc, buf.getvalue()
+
+
+def _tree_outline(slug: str, extra: str = "") -> str:
+    return (
+        f"title: T\npage: breaches/{slug}.html\nas-of: 2026-11-20\npromise: P.\n\n"
+        f"== S{extra}\nText.\nnotes:\nN.\n"
+    )
+
+
+def _tree(root: Path, outlines: dict[str, str], pages: dict[str, str], mapping: dict | None) -> Path:
+    """A scratch repository: outlines in tools/decks/breaches/, pages in
+    breaches/, and published.json when mapping is given."""
+    decks = root / "tools" / "decks" / "breaches"
+    decks.mkdir(parents=True)
+    (root / "breaches").mkdir()
+    for slug, text in outlines.items():
+        (decks / f"{slug}.deck").write_text(text, encoding="utf-8")
+    for slug, html in pages.items():
+        (root / "breaches" / f"{slug}.html").write_text(html, encoding="utf-8")
+    if mapping is not None:
+        (decks / "published.json").write_text(
+            json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    return root
+
+
+def _snapshot(root: Path) -> dict[str, str]:
+    return {
+        p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+        for p in sorted(root.rglob("*")) if p.is_file()
+    }
+
+
+def _hashes(slug: str, root: Path) -> tuple[str, str]:
+    return (
+        outline_sha256(parse_outline(DECKS_DIR / f"{slug}.deck")),
+        page_sha256((PAGES_DIR / f"{slug}.html").read_text(encoding="utf-8")),
+    )
+
+
+def _case_stale_outline_changed(tmp: Path) -> None:
+    slugs = ("aa", "bb", "cc")
+    _tree(tmp, {s: _tree_outline(s) for s in slugs}, {s: PM_PAGE for s in slugs}, None)
+    with _rooted(tmp):
+        sha = {s: _hashes(s, tmp) for s in slugs}
+        mapping = {
+            "aa": _entry(sha=sha["aa"][0], page_sha=sha["aa"][1]),
+            "bb": _entry(sha="f" * 64, page_sha=sha["bb"][1]),
+            "dd": _entry(),
+        }
+        save_mapping(mapping)
+        rc, out = _capture(stale_report, True)
+        assert rc == 0, out
+        assert out.splitlines() == [
+            "bb: outline changed since it was published on 2026-01-02; "
+            "the public deck needs re-publishing",
+            "dd: published, but tools/decks/breaches/dd.deck is missing",
+            "stale check: 2 of 3 published decks changed since publishing",
+        ], out
+        rc, out = _capture(stale_report, False)
+        assert rc == 0 and "cc: not published" in out and "outlines never published: 1" in out, out
+        # Control: with every published deck matching, nothing is listed, and
+        # stamping the deck line into the page changes no hash.
+        save_mapping({"aa": _entry(sha=sha["aa"][0], page_sha=sha["aa"][1])})
+        (PAGES_DIR / "aa.html").write_text(stamp_page(PM_PAGE, ID_A), encoding="utf-8")
+        rc, out = _capture(stale_report, True)
+        assert rc == 0 and out.splitlines() == [
+            "stale check: 0 of 1 published decks changed since publishing"
+        ], out
+        MAPPING.write_text("{not json", encoding="utf-8")
+        rc, out = _capture(stale_report, True)
+        assert rc == 1 and "cannot be read as JSON" in out, out
+
+
+def _case_stale_page_changed(tmp: Path) -> None:
+    _tree(tmp, {"aa": _tree_outline("aa")}, {"aa": PM_PAGE}, None)
+    with _rooted(tmp):
+        osha, psha = _hashes("aa", tmp)
+        save_mapping({"aa": _entry(sha=osha, page_sha=psha)})
+        # A changed sentence in <main> flags the deck; the nav does not.
+        navbump = _plant(PM_PAGE, "Nav 999", "Other nav 123")
+        (PAGES_DIR / "aa.html").write_text(navbump, encoding="utf-8")
+        rc, out = _capture(stale_report, True)
+        assert rc == 0 and "0 of 1" in out, out
+        changed = _plant(PM_PAGE, "credentials", "secrets")
+        (PAGES_DIR / "aa.html").write_text(changed, encoding="utf-8")
+        rc, out = _capture(stale_report, True)
+        assert rc == 0, out
+        assert out.splitlines() == [
+            "aa: page changed since it was published on 2026-01-02; "
+            "review the deck against the page",
+            "stale check: 1 of 1 published decks changed since publishing",
+        ], out
+        # Both changed: two lines, one stale deck.
+        (DECKS_DIR / "aa.deck").write_text(_tree_outline("aa", "x"), encoding="utf-8")
+        rc, out = _capture(stale_report, True)
+        assert out.count("aa: ") == 2 and "1 of 1" in out, out
+
+
+def _case_stale_exit_zero(tmp: Path) -> None:
+    _tree(tmp, {"aa": _tree_outline("aa")}, {"aa": PM_PAGE}, {"aa": _entry(sha="f" * 64)})
+    with _rooted(tmp):
+        for published_only in (True, False):
+            rc, out = _capture(stale_report, published_only)
+            assert rc == 0 and "stale check: 1 of 1" in out, out
+        # A page that cannot be read as a page is reported, not fatal.
+        (PAGES_DIR / "aa.html").write_text("<p>no main</p>", encoding="utf-8")
+        rc, out = _capture(stale_report, True)
+        assert rc == 0 and "aa:" in out, out
+
+
+def _case_check_empty_tree(tmp: Path) -> None:
+    (tmp / "tools" / "decks" / "breaches").mkdir(parents=True)
+    (tmp / "breaches").mkdir()
+    with _rooted(tmp):
+        for fn in (check_all, stale_report, status_report, stamp_all):
+            rc, out = _capture(fn)
+            assert rc == 1 and "no outlines found" in out, (fn.__name__, out)
+        rc, out = _capture(check_all)
+        assert "nothing was checked" in out, out
+        rc, out = _capture(record, "aa", ID_A)
+        assert rc == 1, out
+
+
+def _case_check_reports_findings(tmp: Path) -> None:
+    pages = {"aa": stamp_page(PM_PAGE, ID_A), "bb": PM_PAGE}
+    _tree(tmp, {"aa": _tree_outline("aa")}, pages, {})
+    with _rooted(tmp):
+        rc, out = _capture(check_all)
+        assert rc == 1, out
+        # The outline is far under the slide minimum, and aa has a deck line
+        # with no mapping entry.
+        assert "slides" in out and "not in the mapping" in out, out
+        assert "1 outlines checked, 2 breach pages checked" in out, out
+        assert outline_findings(DECKS_DIR / "aa.deck"), "helper reports the outline's findings"
+
+
+def _case_stamp_all_or_nothing(tmp: Path) -> None:
+    pages = {"aa": "<main><p>no header</p></main>\n", "bb": PM_PAGE, "cc": "<main></main>\n"}
+    _tree(tmp, {s: _tree_outline(s) for s in pages}, pages, {s: _entry() for s in pages})
+    before = _snapshot(tmp)
+    with _rooted(tmp):
+        rc, out = _capture(stamp_all)
+    assert rc == 1 and "nothing written" in out, out
+    assert "breaches/aa.html" in out and "breaches/cc.html" in out, out
+    assert _snapshot(tmp) == before, "a refused --stamp wrote files"
+    for s in ("aa", "cc"):
+        (tmp / "breaches" / f"{s}.html").write_text(PM_PAGE, encoding="utf-8")
+    with _rooted(tmp):
+        rc, out = _capture(stamp_all)
+        assert rc == 0 and out.count("stamped") == 3, out
+        once = _snapshot(tmp)
+        rc, out = _capture(stamp_all)
+        assert rc == 0 and out == "" and _snapshot(tmp) == once, out
+
+
+def _case_record_writes_both_hashes(tmp: Path) -> None:
+    pages = {"aa": "<main><p>no header</p></main>\n", "bb": PM_PAGE}
+    _tree(tmp, {s: _tree_outline(s) for s in pages}, pages, {})
+    before = _snapshot(tmp)
+    with _rooted(tmp):
+        for args, needle in (
+            (("aa", ID_A), "breaches/aa.html"),
+            (("bb", 'X" onmouseover="alert(1)'), "not a Google Slides presentation id"),
+            (("../bb", ID_A), "no outline"),
+            (("zz", ID_A), "no outline"),
+        ):
+            rc, out = _capture(record, *args)
+            assert rc == 1 and needle in out, (args, out)
+            assert _snapshot(tmp) == before, f"a refused --record {args} wrote files"
+        rc, out = _capture(record, "bb", ID_A)
+        assert rc == 0, out
+        want = _hashes("bb", tmp)
+    m = json.loads((tmp / "tools/decks/breaches/published.json").read_text(encoding="utf-8"))
+    assert sorted(m["bb"]) == sorted(ENTRY_KEYS), m
+    assert m["bb"]["id"] == ID_A and _is_iso_date(m["bb"]["published"]), m
+    assert (m["bb"]["outline_sha256"], m["bb"]["page_sha256"]) == want, (m, want)
+    assert deck_line_html(ID_A) in (tmp / "breaches/bb.html").read_text(encoding="utf-8")
+    # The stamped page hashes as it did before stamping.
+    assert page_sha256((tmp / "breaches/bb.html").read_text(encoding="utf-8")) == page_sha256(PM_PAGE)
+
+
 CASES: list = [
     ("parse_ok", _case_parse_ok),
     ("missing_header", _case_missing_header),
@@ -1366,6 +2210,26 @@ CASES: list = [
     ("links_resolve", _case_links_resolve),
     ("background_exempt", _case_background_exempt),
     ("as_of_not_future", _case_as_of_not_future),
+    ("stamp_insert", _case_stamp_insert),
+    ("stamp_idempotent", _case_stamp_idempotent),
+    ("stamp_new_id", _case_stamp_new_id),
+    ("stamp_remove", _case_stamp_remove),
+    ("stamp_no_pm_link", _case_stamp_no_pm_link),
+    ("stamp_normal_form", _case_stamp_normal_form),
+    ("stamp_refuses_loose_markup", _case_stamp_refuses_loose_markup),
+    ("links_unmapped_line", _case_links_unmapped_line),
+    ("links_missing_line", _case_links_missing_line),
+    ("links_wrong_id", _case_links_wrong_id),
+    ("links_every_line", _case_links_every_line),
+    ("links_slides_link_elsewhere", _case_links_slides_link_elsewhere),
+    ("mapping_findings", _case_mapping_findings),
+    ("stale_outline_changed", _case_stale_outline_changed),
+    ("stale_page_changed", _case_stale_page_changed),
+    ("stale_exit_zero", _case_stale_exit_zero),
+    ("check_empty_tree", _case_check_empty_tree),
+    ("check_reports_findings", _case_check_reports_findings),
+    ("stamp_all_or_nothing", _case_stamp_all_or_nothing),
+    ("record_writes_both_hashes", _case_record_writes_both_hashes),
 ]
 
 
@@ -1376,9 +2240,32 @@ def self_test() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--self-test", action="store_true", help="run the built-in cases")
+    ap.add_argument("--check", action="store_true", help="check outlines and breach-page links")
+    ap.add_argument("--stale", action="store_true", help="list decks whose outline or page changed")
+    ap.add_argument(
+        "--published-only", action="store_true",
+        help="with --stale, leave out outlines that were never published",
+    )
+    ap.add_argument("--status", action="store_true", help="list outline and publish state")
+    ap.add_argument("--stamp", action="store_true", help="rewrite breach pages from the mapping")
+    ap.add_argument(
+        "--record", nargs=2, metavar=("SLUG", "PRES_ID"), help="record a published deck"
+    )
     args = ap.parse_args()
+    if args.published_only and not args.stale:
+        ap.error("--published-only goes with --stale")
     if args.self_test:
         return self_test()
+    if args.check:
+        return check_all()
+    if args.stale:
+        return stale_report(args.published_only)
+    if args.status:
+        return status_report()
+    if args.stamp:
+        return stamp_all()
+    if args.record:
+        return record(*args.record)
     ap.print_help()
     return 2
 
