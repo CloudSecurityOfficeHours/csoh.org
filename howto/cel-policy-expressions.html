@@ -476,7 +476,7 @@ python3 cel.py 'object.spec.replicas &lt;= 5'</pre></div>
   'object.spec.containers.map(c, c.name)' \
   'size(object.spec.containers.filter(c, !has(c.securityContext)))' \
   'object.spec.containers.all(c, c.image.startsWith("ghcr.io/acme/"))'</pre></div>
-            <p>Run these against the sample and read the results carefully. The <code>sidecar</code> container has no <code>securityContext</code> and no <code>resources</code>, and pulls <code>:latest</code> from Docker Hub, so it fails three of the five. That is a deliberately realistic shape: the workload people wrote carefully, plus the container somebody added in a hurry.</p>
+            <p>Run these against the sample and read the results carefully. The <code>sidecar</code> container has no <code>securityContext</code> and no <code>resources</code>, and pulls <code>:latest</code> from Docker Hub, so both <code>all()</code> checks print False, the <code>exists()</code> check for <code>:latest</code> prints True, and the count of containers with no <code>securityContext</code> is 1. That is a deliberately realistic shape: the workload people wrote carefully, plus the container somebody added in a hurry.</p>
 
             <h3 id="step-vap">4. Write a real ValidatingAdmissionPolicy</h3>
             <p>This is native Kubernetes admission control (the API server's checks on a request to create, change or delete an object, made after it has confirmed who is asking and that they may), generally available since Kubernetes 1.30. No webhook, no controller, no certificate rotation.</p>
@@ -653,7 +653,7 @@ resource.iamConfiguration.publicAccessPrevention == 'enforced'
 
             <h3>Test, then enforce</h3>
             <p>Two Google tools answer different questions. <a href="https://docs.cloud.google.com/policy-intelligence/docs/test-organization-policies" target="_blank" rel="noopener noreferrer">Policy Simulator for Organization Policy</a>, generally available since July 2025, answers "what already breaks this?": it takes a constraint and a policy that are not yet set and lists the existing resources that would violate them. A <a href="https://docs.cloud.google.com/organization-policy/test-policies" target="_blank" rel="noopener noreferrer">dry-run policy</a>, generally available since December 2023, answers "what would this have blocked?": its rules sit under <code>dryRunSpec</code> instead of <code>spec</code>, violations go to the audit logs, and nothing is denied. Google suggests the simulator first, then a dry run.</p>
-            <p>The <code>gcloud</code> commands below were not run for this page: three of them change an organization's policies, and the simulator needs an organization to run against. The files they read were written and parsed, and the command syntax was checked against Google Cloud SDK 585.0.0. Replace <code>ORGANIZATION_ID</code> and <code>PROJECT_ID</code> first; <code>gcloud projects get-ancestors PROJECT_ID</code> prints the organization a project sits in.</p>
+            <p>The <code>gcloud</code> commands below were not run for this page: every one except the simulator changes an organization's policies, and the simulator needs an organization to run against. The files they read were written and parsed, and the command syntax was checked against Google Cloud SDK 585.0.0. Replace <code>ORGANIZATION_ID</code> and <code>PROJECT_ID</code> first; <code>gcloud projects get-ancestors PROJECT_ID</code> prints the organization a project sits in. This first block writes the dry-run and live policy files and runs the simulator, which sets no policy:</p>
 <div class="code-block" data-lang="bash"><pre>cat &gt; bucket-pap-dryrun.yaml &lt;&lt;'EOF'
 name: projects/PROJECT_ID/policies/custom.bucketRequirePap
 dryRunSpec:
@@ -671,11 +671,16 @@ EOF
 gcloud policy-intelligence simulate orgpolicy \
   --organization=ORGANIZATION_ID \
   --custom-constraints=bucket-pap.yaml \
-  --policies=bucket-pap-live.yaml
-gcloud org-policies set-custom-constraint bucket-pap.yaml
-gcloud org-policies set-policy bucket-pap-dryrun.yaml
-gcloud org-policies set-policy bucket-pap-live.yaml --update-mask=spec</pre></div>
-            <p>Keep the dry-run and live rules in separate files. Google's examples put <code>spec</code> and <code>dryRunSpec</code> in one file and set it with <code>--update-mask=dryRunSpec</code>, but the source of <code>gcloud org-policies set-policy</code> shows that when no policy exists yet it ignores the mask, prints a warning, and creates the policy from the whole file, so the live <code>spec</code> enforces on the first run. The last command uses <code>--update-mask=spec</code> so the dry run stays in place beside the live rules. Google says a policy can take up to 15 minutes to take effect.</p>
+  --policies=bucket-pap-live.yaml</pre></div>
+            <p>When the simulator's list holds no surprises, create the constraint and the dry-run policy. Neither refuses a request: the constraint enforces nothing on its own, and the dry run only logs.</p>
+<div class="code-block" data-lang="bash"><pre>gcloud org-policies set-custom-constraint bucket-pap.yaml
+gcloud org-policies set-policy bucket-pap-dryrun.yaml</pre></div>
+            <p>The next command enforces the constraint: from then on, a request to create or update a bucket in <code>PROJECT_ID</code> is refused unless public access prevention is enforced on the bucket. Run it once the dry run's audit logs show it would block only what you mean it to.</p>
+<div class="code-block" data-lang="bash"><pre>gcloud org-policies set-policy bucket-pap-live.yaml --update-mask=spec</pre></div>
+            <p>Keep the dry-run and live rules in separate files. Google's examples put <code>spec</code> and <code>dryRunSpec</code> in one file and set it with <code>--update-mask=dryRunSpec</code>, but the source of <code>gcloud org-policies set-policy</code> shows that when no policy exists yet it ignores the mask, prints a warning, and creates the policy from the whole file, so the live <code>spec</code> enforces on the first run. The enforcing command uses <code>--update-mask=spec</code> so the dry run stays in place beside the live rules. Google says a policy can take up to 15 minutes to take effect.</p>
+            <p>To undo this section, delete the policy, which removes its live and dry-run rules together, and then the constraint. Google's <a href="https://docs.cloud.google.com/organization-policy/test-policies" target="_blank" rel="noopener noreferrer">dry-run page</a> gives the first command, and its <a href="https://docs.cloud.google.com/organization-policy/create-custom-constraints" target="_blank" rel="noopener noreferrer">guide to custom constraints</a> gives the second and says that deleting a constraint also deletes every policy created with it. Their syntax was checked against the Google Cloud SDK 585.0.0 source on 20 November 2026.</p>
+<div class="code-block" data-lang="bash"><pre>gcloud org-policies delete custom.bucketRequirePap --project=PROJECT_ID
+gcloud org-policies delete-custom-constraint custom.bucketRequirePap --organization=ORGANIZATION_ID</pre></div>
         </section>
 
         <section id="exercises">
