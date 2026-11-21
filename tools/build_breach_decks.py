@@ -47,9 +47,16 @@ deck is stale when its outline or its page changed since it was recorded.
 --stamp writes each mapped page's one deck line (data-breach-deck) right
 after the last pm-link line in inc-header.
 
+--build renders an outline to tools/decks/breaches/build/<slug>.pptx with
+tools/breach_deck_render.py, the one breach deck module that imports
+python-pptx. This tool imports the renderer only on the --build and
+--self-test-render paths, so --check and --self-test run without python-pptx.
+
 Usage:
     python3 tools/build_breach_decks.py --self-test
     python3 tools/build_breach_decks.py --check
+    python3 tools/build_breach_decks.py --build SLUG [SLUG ...]
+    python3 tools/build_breach_decks.py --self-test-render
     python3 tools/build_breach_decks.py --stale [--published-only]
     python3 tools/build_breach_decks.py --status
     python3 tools/build_breach_decks.py --stamp
@@ -1219,6 +1226,55 @@ def record(slug: str, pres_id: str) -> int:
     return _write_stamps(mapping, "record", save=True)
 
 
+def build_decks(slugs: list[str]) -> int:
+    """Render the named outlines to BUILD_DIR/<slug>.pptx. An unknown slug
+    stops the run before anything is built. A deck's old build is removed
+    first, so a refused or failed build never leaves a file that looks
+    current. An outline with any finding --check reports is refused; a
+    written file is reopened and verified, and removed when verification
+    finds anything. Every .pptx in the build directory therefore passed
+    verification when it was written."""
+    known = {p.stem: p for p in outline_paths()}
+    unknown = [sl for sl in slugs if sl not in known]
+    if unknown:
+        for sl in unknown:
+            print(f"build: no outline {_rel(DECKS_DIR)}/{sl}.deck")
+        return 1
+    try:
+        import breach_deck_render as render
+    except ImportError as e:
+        print(f"build: cannot import the renderer (pip install python-pptx): {e}")
+        return 1
+    bad = 0
+    outlines = [known[sl] for sl in dict.fromkeys(slugs)]
+    for path in outlines:
+        out = BUILD_DIR / f"{path.stem}.pptx"
+        out.unlink(missing_ok=True)
+        findings = outline_findings(path)
+        if findings:
+            print("\n".join(findings))
+            print(f"{path.name}: refused, fix the findings above")
+            bad += 1
+            continue
+        deck = parse_outline(path)
+        try:
+            render.render_deck(deck, out)
+        except render.LayoutError as e:
+            print(e)
+            bad += 1
+            continue
+        problems = render.verify_pptx(out, deck)
+        if problems:
+            print("\n".join(problems))
+            out.unlink(missing_ok=True)
+            print(f"{path.name}: removed {_rel(out)}, which failed verification")
+            bad += 1
+            continue
+        print(f"built {_rel(out)}")
+    print(f"build: {len(outlines)} outlines, {bad} failed")
+    return 1 if bad else 0
+
+
 # ---------------------------------------------------------------------------
 # Self-test. CASES holds (name, fn) pairs; each fn takes a scratch directory
 # and asserts.
@@ -2233,14 +2289,521 @@ CASES: list = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Render cases. They need python-pptx, so they stay out of CASES (which CI
+# runs without it) and run only under --self-test-render.
+# ---------------------------------------------------------------------------
+
+RENDER_PAGE = "breaches/vapor-panda-artex.html"
+RENDER_URL = f"https://csoh.org/{RENDER_PAGE}"
+AWS_IMDS = (
+    "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+)
+
+
+def _rslide(heading: str, layout: str = "text", **kw) -> BSlide:
+    kw.setdefault("notes", [f"Say why {heading.lower()} matters.", "Then move on."])
+    return BSlide(heading=heading, layout=layout, **kw)
+
+
+def _render_sample() -> BDeck:
+    """A deck using every layout Task 4 renders, each near its fullest."""
+    slides = [
+        _rslide("At a glance", "stats", items={"stat": [
+            ["200+", "organizations targeted", "in at least 14 countries over 11 days"],
+            ["9", "confirmed compromises", "per CrowdStrike, with high confidence"],
+            ["1,500+", "commands an hour", "at peak, per Check Point"],
+            ["40", "commands an hour", "a fast human operator, for comparison"],
+        ]}),
+        _rslide(
+            "Two figures that measure different things", "stats",
+            paragraphs=["Nine is the confirmed figure. About 140 comes from an interview "
+                        "and includes moderate-confidence cases."],
+            items={"stat": [
+                ["9", "confirmed", "named in the CrowdStrike report"],
+                ["About 140", "compromised", "from an interview, moderate confidence included"],
+            ]},
+        ),
+        _rslide(
+            "The metadata service handed over a fleet", "stage", stage="04",
+            phase="Credential Access: The Metadata Service",
+            items={
+                "technique": [["T1552.005", "Cloud Instance Metadata API"],
+                              ["T1651", "Cloud Administration Command"]],
+                "fact": [["Queried", "the cloud Instance Metadata Service"],
+                         ["Obtained", "a role able to command thousands of instances"],
+                         ["Where", "a US pharmaceutical organization"]],
+            },
+            paragraphs=["A role that can command a fleet turns one compromised host into "
+                        "all of them, and the request looked like routine traffic."],
+        ),
+        _rslide(
+            "A backdoor and the mail it read", "stage", stage="07",
+            phase="Persistence and Collection: BLOODALCHEMY and Mail",
+            items={
+                "technique": [["T1574.001", "Hijack Execution Flow: DLL"],
+                              ["T1114", "Email Collection"],
+                              ["T1005", "Data from Local System"]],
+                "fact": [["Implant", "BLOODALCHEMY, loaded beside a signed binary"],
+                         ["Collected", "mailboxes"]],
+            },
+            paragraphs=["The implant outlived the agents that placed it."],
+        ),
+        _rslide(
+            "What IMDSv2 changes", "background",
+            source=("AWS documentation", AWS_IMDS),
+            paragraphs=["IMDSv2 requires a session token, fetched with a PUT request, "
+                        "before the metadata service returns credentials."],
+            bullets=["A plain GET relayed by a vulnerable app no longer works",
+                     "The token's hop limit keeps it inside the instance"],
+        ),
+        _rslide(
+            "Nothing new in technique", "text",
+            paragraphs=["Every step used a technique defenders already know. The rate changed."],
+            bullets=["Requests every 10 seconds", "Several paths tried in parallel",
+                     "No pause for a person to read results"],
+            credit="Tempo figures per Check Point",
+        ),
+        _rslide(
+            "What would you add for stages 01 and 07?", "question",
+            paragraphs=["The page's defenses leave the first and the last stage open. "
+                        "What control would you put there, and what would it cost?"],
+        ),
+        _rslide(
+            "The page offers none for those stages", "answer",
+            paragraphs=["Any control you name here is your own suggestion, not the page's."],
+            bullets=["Ask what it would have caught", "Ask who reads the alert, and how fast"],
+        ),
+        _rslide(
+            "Check your own environment", "checklist",
+            paragraphs=["Answer each for your own estate."],
+            items={"check": [
+                ["Do any long-lived access keys sit in code or config files?"],
+                ["Do instances still answer IMDSv1 requests?"],
+                ["Are SAML assertions rejected when unsigned?"],
+                ["Which hosts run no endpoint sensor at all?"],
+                ["Would a burst of commands every 10 seconds raise an alert?"],
+                ["Who can create delegation rights in Active Directory?"],
+                ["Is the LAPS password readable by more than its admins?"],
+            ]},
+        ),
+        _rslide(
+            "Sources", "links",
+            items={"link": [
+                ["CrowdStrike: VAPOR PANDA uses ARTEX",
+                 "https://www.crowdstrike.com/en-us/blog/vapor-panda-uses-artex-to-scale-global-campaign/"],
+                ["Check Point Research: hacking on autopilot",
+                 "https://research.checkpoint.com/2026/hacking-on-autopilot-inside-artex-cybercrime-campaigns/"],
+                ["Censys: ARTEX consoles", "https://censys.com/blog/artex-agentic-asbestos/"],
+                ["CyberScoop", "https://cyberscoop.com/china-vapor-panda-agentic-ai-artex-campaign-crowdstrike/"],
+                ["Microsoft: ARTEX abuse expands",
+                 "https://www.microsoft.com/en-us/security/blog/2026/11/06/artex-abuse-expands-as-cybercriminals-target-financial-sector/"],
+                ["Microsoft: agentic tooling and exposed secrets",
+                 "https://www.microsoft.com/en-us/security/blog/2026/11/05/threat-actors-use-agentic-ai-tooling-to-find-and-abuse-exposed-secrets/"],
+                ["Related: Storm-0940 and ConnectWise", "breaches/storm-0940-connectwise.html"],
+                ["Glossary: guardrails", "https://csoh.org/glossary.html#term-guardrails"],
+            ]},
+        ),
+    ]
+    for i, s in enumerate(slides):
+        s.where = f"r.deck:{10 * (i + 1)}"
+    return BDeck(
+        "r", "VAPOR PANDA / ARTEX", RENDER_PAGE, "2026-11-20",
+        "One operator, a graph of AI agents, and 200+ organizations in 11 days.", slides, "",
+    )
+
+
+def _reopen(path: Path):
+    import breach_deck_render as r
+
+    return r.reopen(path)
+
+
+def _shapes(slide, name: str) -> list:
+    return [sh for sh in slide.shapes if sh.name == name]
+
+
+def _one(slide, name: str):
+    found = _shapes(slide, name)
+    assert len(found) == 1, (name, [sh.name for sh in slide.shapes])
+    return found[0]
+
+
+def _paras(shape) -> list[str]:
+    return [p.text for p in shape.text_frame.paragraphs]
+
+
+def _all_text(slide) -> str:
+    return "\n".join(sh.text_frame.text for sh in slide.shapes if sh.has_text_frame)
+
+
+def _notes(slide) -> str:
+    return slide.notes_slide.notes_text_frame.text
+
+
+def _layout_error(fn, needle: str):
+    import breach_deck_render as r
+
+    try:
+        fn()
+    except r.LayoutError as e:
+        assert needle in str(e), (needle, str(e))
+        return e
+    raise AssertionError("LayoutError was not raised")
+
+
+def _case_render_sample(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    deck = _render_sample()
+    out = r.render_deck(deck, tmp / "r.pptx")
+    found = r.verify_pptx(out, deck)
+    assert found == [], "\n".join(found)
+    prs = _reopen(out)
+    total = len(deck.slides) + GENERATED_SLIDES
+    assert len(prs.slides) == total, len(prs.slides)
+    slides = list(prs.slides)
+    for n, sl in enumerate(slides, start=1):
+        assert _one(sl, "footer-left").text_frame.text == f"csoh.org/{RENDER_PAGE}", n
+        assert _one(sl, "footer-right").text_frame.text == f"{n} / {total}", n
+        assert _notes(sl).endswith(f"Full kill chain: {RENDER_URL}"), (n, _notes(sl))
+
+    cover = _all_text(slides[0])
+    for want in (deck.title, deck.promise, "Reflects the csoh.org kill chain as of 2026-11-20",
+                 r.ATTRIBUTION, r.LICENSE_LINE):
+        assert want in cover, want
+    howto = slides[1]
+    assert _one(howto, "heading").text_frame.text == "How to use this deck"
+    assert _paras(_one(howto, "body")) == [
+        "Read it on your own or present it. Every fact about the incident comes from "
+        "the csoh.org kill chain and the sources it cites.",
+        "Slides marked Background explain a general idea and name their own source. "
+        "The speaker notes are a presenter's script.",
+        f"Full kill chain: csoh.org/{RENDER_PAGE}. These slides reflect it as of 2026-11-20.",
+    ], _paras(_one(howto, "body"))
+    closing = slides[-1]
+    assert _one(closing, "heading").text_frame.text == "Read the full kill chain"
+    assert _paras(_one(closing, "body")) == [
+        f"Every step, source and defense in detail: {RENDER_URL}", r.CLOSING_LICENSE,
+    ], _paras(_one(closing, "body"))
+
+    # Outline slide i is file slide i + 3 (1-based), after cover and how-to.
+    def file_slide(i: int):
+        return slides[i + 2]
+
+    for i, s in enumerate(deck.slides):
+        assert _notes(file_slide(i)).startswith(s.notes[0]), i
+
+    stats = file_slide(0)
+    tiles = _shapes(stats, "stat-tile")
+    assert len(tiles) == 4, len(tiles)
+    first = tiles[0].text_frame.paragraphs
+    assert [p.text for p in first] == ["200+", "organizations targeted",
+                                       "in at least 14 countries over 11 days"]
+    assert str(first[0].runs[0].font.color.rgb).lower() == r.STYLE["accent"]
+    assert len({t.top for t in tiles}) == 1 and len({t.height for t in tiles}) == 1
+
+    stage = file_slide(2)
+    band = _one(stage, "phase-band")
+    want = "CREDENTIAL ACCESS: THE METADATA SERVICE · STAGE 04"
+    assert band.text_frame.text == want, band.text_frame.text
+    assert str(band.fill.fore_color.rgb).lower() == r.phase_color("Credential Access")
+    assert _one(stage, "stage-number").text_frame.text == "04"
+    assert _one(stage, "heading").text_frame.text == deck.slides[2].heading
+    chips = [sh.text_frame.text for sh in _shapes(stage, "chip")]
+    assert chips == ["T1552.005  Cloud Instance Metadata API",
+                     "T1651  Cloud Administration Command"], chips
+    labels = [sh.text_frame.text for sh in _shapes(stage, "fact-label")]
+    values = [sh.text_frame.text for sh in _shapes(stage, "fact-value")]
+    assert labels == ["Queried", "Obtained", "Where"], labels
+    assert values[1] == "a role able to command thousands of instances", values
+    assert _one(stage, "why-label").text_frame.text == "WHY IT MATTERS"
+    assert _one(stage, "why-text").text_frame.text == deck.slides[2].paragraphs[0]
+    why = _one(stage, "why")
+    assert why.top > max(sh.top + sh.height for sh in _shapes(stage, "fact-value"))
+    later = file_slide(3)
+    band = _one(later, "phase-band")
+    assert band.text_frame.text.startswith("PERSISTENCE AND COLLECTION")
+    assert str(band.fill.fore_color.rgb).lower() == r.PHASE_COLORS["Persistence"]
+    assert len(_shapes(later, "chip")) == 3
+
+    bg = file_slide(4)
+    assert _one(bg, "type-label").text_frame.text == "BACKGROUND"
+    assert _one(bg, "credit").text_frame.text == "Source: AWS documentation (docs.aws.amazon.com)"
+    assert _one(file_slide(5), "credit").text_frame.text == "Tempo figures per Check Point"
+    assert _one(file_slide(6), "type-label").text_frame.text == "DISCUSSION"
+    assert _one(file_slide(7), "type-label").text_frame.text == "DISCUSSION: ANSWER"
+    # Control: a slide of incident facts carries no type label.
+    assert not _shapes(stage, "type-label") and not _shapes(file_slide(5), "type-label")
+
+    checks = file_slide(8)
+    assert len(_shapes(checks, "check-box")) == 7
+    assert [sh.text_frame.text for sh in _shapes(checks, "check-text")][1] == \
+        "Do instances still answer IMDSv1 requests?"
+
+    links = _shapes(file_slide(9), "link")
+    assert len(links) == 8
+    assert [sh.text_frame.paragraphs[0].text for sh in links] == [
+        row[0] for row in deck.slides[9].items["link"]
+    ]
+    addresses = {r.hyperlink.address for sh in links for p in sh.text_frame.paragraphs
+                 for r in p.runs}
+    assert "https://csoh.org/breaches/storm-0940-connectwise.html" in addresses, addresses
+    assert all(a.startswith("https://") for a in addresses), addresses
+    shown = [sh.text_frame.paragraphs[1].text for sh in links]
+    # A short address is shown whole; one too long for its line shows its host.
+    assert "censys.com/blog/artex-agentic-asbestos" in shown, shown
+    assert "microsoft.com" in shown, shown
+    # More than four links take two columns, filled left column first.
+    assert links[0].left == links[3].left < links[4].left, [sh.left for sh in links]
+    assert links[0].top < links[1].top and links[0].top == links[4].top
+
+
+def _case_phase_contrast(tmp: Path) -> None:
+    import colorsys
+
+    import breach_deck_render as r
+
+    tactics = {
+        "Reconnaissance", "Resource Development", "Initial Access", "Execution",
+        "Persistence", "Privilege Escalation", "Stealth", "Defense Impairment",
+        "Credential Access", "Discovery", "Lateral Movement", "Collection",
+        "Command and Control", "Exfiltration", "Impact",
+    }
+    assert set(r.PHASE_COLORS) == tactics, set(r.PHASE_COLORS) ^ tactics
+    for tactic, color in [*r.PHASE_COLORS.items(), ("fallback", r.FALLBACK_PHASE)]:
+        assert r.contrast("ffffff", color) >= 4.5, (tactic, color, r.contrast("ffffff", color))
+    # Darkening keeps the site's hue.
+    for tactic, color in r.PHASE_COLORS.items():
+        hues = [colorsys.rgb_to_hls(*(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)))[0]
+                for c in (color, r.SITE_PHASE_HUES[tactic])]
+        assert abs(hues[0] - hues[1]) < 0.02, (tactic, color, hues)
+    # Control: the site's own Execution hue fails the bar, so darkening did work.
+    assert r.contrast("ffffff", r.SITE_PHASE_HUES["Execution"]) < 4.5
+    assert r.PHASE_COLORS["Execution"] != r.SITE_PHASE_HUES["Execution"]
+    assert round(r.contrast("ffffff", "000000"), 2) == 21.0
+    assert r.contrast("777777", "777777") == 1.0
+    cred = r.PHASE_COLORS["Credential Access"]
+    assert r.phase_color("Credential Access") == cred
+    assert r.phase_color("Credential Access: Keys Nobody Rotated") == cred
+    assert r.phase_color("credential access") == cred
+    assert r.phase_color("Persistence and Collection: Mail") == r.PHASE_COLORS["Persistence"]
+    for unknown in ("Recon & Upstream Compromise", "Impactful: a word, not a tactic", "Background"):
+        assert r.phase_color(unknown) == r.FALLBACK_PHASE, unknown
+
+
+def _case_overflow_refused(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    long = "the agent asked the metadata service for credentials and received a very powerful role"
+    assert _words(long) == MAX_FIELD_WORDS
+    why = " ".join(["word"] * MAX_PROSE_WORDS)
+
+    def deck(facts: list[list[str]], para: str) -> BDeck:
+        s = _rslide(
+            "The metadata service handed over a fleet", "stage", stage="04",
+            phase="Credential Access", where="over.deck:9", paragraphs=[para],
+            items={"technique": [["T1552.005", "Cloud Instance Metadata API"]], "fact": facts},
+        )
+        return BDeck("o", "T", RENDER_PAGE, "2026-11-20", "P.", [s], "")
+
+    out = tmp / "o.pptx"
+    _layout_error(lambda: r.render_deck(deck([["Step", long]] * 5, why), out), "over.deck:9")
+    assert not out.exists(), "a refused render wrote a file"
+    # The why box is pinned to the bottom before the facts are placed; when
+    # the chips above already reach where it must start, that is refused too.
+    chips = deck([["Queried", "the service"]], " ".join(["credentials"] * MAX_PROSE_WORDS))
+    chips.slides[0].items["technique"] = [
+        [f"T1552.00{i}", " ".join(["Instance"] * MAX_FIELD_WORDS)] for i in range(3)
+    ]
+    e = _layout_error(lambda: r.render_deck(chips, out), "over.deck:9")
+    assert "pinned to the bottom" in str(e), e
+    assert not out.exists(), "a refused render wrote a file"
+    # Control: the same slide with less on it fits and verifies.
+    ok = deck([["Queried", "the service"], ["Obtained", "a role"]], "One host became all of them.")
+    r.render_deck(ok, out)
+    assert r.verify_pptx(out, ok) == [], r.verify_pptx(out, ok)
+
+
+def _planted(tmp: Path, plant) -> list[str]:
+    """Render the sample, apply plant(prs) to the reopened file, save it and
+    return what verify_pptx finds in it."""
+    import breach_deck_render as r
+
+    deck = _render_sample()
+    out = r.render_deck(deck, tmp / "r.pptx")
+    prs = _reopen(out)
+    plant(prs)
+    bad = tmp / "bad.pptx"
+    prs.save(str(bad))
+    return r.verify_pptx(bad, deck)
+
+
+def _case_verify_catches_dash(tmp: Path) -> None:
+    def plant(prs):
+        run = _one(prs.slides[2], "heading").text_frame.paragraphs[0].runs[0]
+        run.text = "At a " + chr(0x2013) + " glance"
+        prs.slides[3].notes_slide.notes_text_frame.text = "Say it " + chr(0x2014) + " now."
+
+    found = "\n".join(_planted(tmp, plant))
+    assert "slide 3: en or em dash in heading" in found, found
+    assert "slide 4: en or em dash in the speaker notes" in found, found
+    assert _planted(tmp, lambda prs: None) == []
+
+
+def _case_verify_catches_small_font(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    Pt = r.Pt
+
+    def plant(prs):
+        _one(prs.slides[2], "heading").text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+        _one(prs.slides[4], "footer-left").text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+        _shapes(prs.slides[5], "chip")[0].text_frame.paragraphs[0].runs[0].font.size = Pt(16)
+
+    found = "\n".join(_planted(tmp, plant))
+    assert "slide 3: heading run is 12.0 pt, below 18" in found, found
+    assert "slide 5: footer-left run is 12.0 pt, below 14" in found, found
+    # Control: a small label at 16 pt is within its floor.
+    assert "slide 6" not in found, found
+
+
+def _case_verify_plants(tmp: Path) -> None:
+    """Every other verify_pptx detector, each against a planted defect."""
+    import breach_deck_render as r
+
+    Inches = r.Inches
+
+    def plant(prs):
+        s = prs.slides
+        s[1].notes_slide.notes_text_frame.text = ""
+        _one(s[2], "footer-left").text_frame.paragraphs[0].runs[0].text = "csoh.org/elsewhere"
+        _one(s[3], "footer-right").text_frame.paragraphs[0].runs[0].text = "9 / 9"
+        s[4].shapes.add_group_shape()
+        s[5].shapes.add_shape(r.MSO_SHAPE.HEXAGON, Inches(1), Inches(1), Inches(1), Inches(1))
+        # Slide 7 is the background slide.
+        _one(s[6], "heading").top = Inches(6.8)
+        _one(s[6], "type-label").text_frame.paragraphs[0].runs[0].text = "NOTES"
+        _one(s[6], "credit").text_frame.paragraphs[0].runs[0].text = "Source: somewhere"
+        run = _one(s[7], "heading").text_frame.paragraphs[0].runs[0]
+        run.font.color.rgb = r._rgb(r.STYLE["light"])
+        _one(s[8], "body").text_frame.auto_size = r.MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        _one(s[9], "heading").left = Inches(2)
+
+    found = "\n".join(_planted(tmp, plant))
+    for needle in (
+        "slide 2: no speaker notes",
+        "slide 3: footer-left is",
+        "slide 4: footer-right is",
+        "slide 5: shape",
+        "slide 6: shape",
+        "slide 7: heading ends below",
+        "slide 7: type label is",
+        "slide 7: credit does not name its source",
+        "slide 8: heading run contrast",
+        "slide 9: body uses autofit",
+        "slide 10: heading runs off the side",
+    ):
+        assert needle in found, (needle, found)
+    deck = _render_sample()
+    out = r.render_deck(deck, tmp / "r.pptx")
+    deck.slides.pop()
+    assert any("slides, expected" in f for f in r.verify_pptx(out, deck))
+
+
+def _case_diagram_layouts_stubbed(tmp: Path) -> None:
+    import breach_deck_render as r
+
+    assert set(r.RENDERERS) == set(LAYOUTS), set(r.RENDERERS) ^ set(LAYOUTS)
+    for layout in ("flow", "layers", "timeline", "compare", "table", "bars", "matrix"):
+        s = _rslide("A diagram", layout, where="d.deck:3")
+        d = BDeck("d", "T", RENDER_PAGE, "2026-11-20", "P.", [s], "")
+        _layout_error(lambda d=d: r.render_deck(d, tmp / "d.pptx"),
+                      f"d.deck:3: layout {layout} is not implemented yet")
+        assert not (tmp / "d.pptx").exists()
+
+
+def _build_outline(slug: str, as_of: str = "2026-11-01") -> str:
+    slides = "".join(f"== Slide {chr(97 + i)}\nText.\nnotes:\nSay it.\n\n" for i in range(15))
+    return f"title: T\npage: breaches/{slug}.html\nas-of: {as_of}\npromise: P.\n\n" + slides
+
+
+def _case_build_refuses_and_cleans(tmp: Path) -> None:
+    """--build refuses an outline with findings and removes a deck's old
+    .pptx first; a render that raises or a file that fails verification
+    leaves no file; a clean outline builds and verifies."""
+    import breach_deck_render as r
+
+    outlines = {"aa": _build_outline("aa"), "bb": _tree_outline("bb")}
+    _tree(tmp, outlines, {"aa": PM_PAGE, "bb": PM_PAGE}, None)
+    build = tmp / "tools" / "decks" / "breaches" / "build"
+
+    def raises(deck, out):
+        raise r.LayoutError("aa.deck:5: planted overflow")
+
+    def problems(path, deck):
+        return [f"{path.name} slide 2: planted problem"]
+
+    real = (r.render_deck, r.verify_pptx)
+    with _rooted(tmp):
+        try:
+            build.mkdir(parents=True)
+            (build / "bb.pptx").write_bytes(b"an older build")
+            rc, out = _capture(build_decks, ["bb"])
+            assert rc == 1 and "bb.deck: refused" in out and "slides" in out, out
+            assert not (build / "bb.pptx").exists(), "a refused build left the old file"
+            for name, patch in (("render_deck", raises), ("verify_pptx", problems)):
+                (build / "aa.pptx").write_bytes(b"an older build")
+                setattr(r, name, patch)
+                try:
+                    rc, out = _capture(build_decks, ["aa"])
+                finally:
+                    r.render_deck, r.verify_pptx = real
+                assert rc == 1 and "planted" in out, (name, out)
+                assert not (build / "aa.pptx").exists(), f"{name}: a failed build left a file"
+            rc, out = _capture(build_decks, ["zz"])
+            assert rc == 1 and "no outline tools/decks/breaches/zz.deck" in out, out
+            # Control: the clean outline builds.
+            rc, out = _capture(build_decks, ["aa"])
+            assert rc == 0 and "built tools/decks/breaches/build/aa.pptx" in out, out
+            assert r.verify_pptx(build / "aa.pptx", parse_outline(DECKS_DIR / "aa.deck")) == []
+        finally:
+            r.render_deck, r.verify_pptx = real
+
+
+RENDER_CASES: list = [
+    ("render_sample", _case_render_sample),
+    ("phase_contrast", _case_phase_contrast),
+    ("overflow_refused", _case_overflow_refused),
+    ("verify_catches_dash", _case_verify_catches_dash),
+    ("verify_catches_small_font", _case_verify_catches_small_font),
+    ("verify_plants", _case_verify_plants),
+    ("diagram_layouts_stubbed", _case_diagram_layouts_stubbed),
+    ("build_refuses_and_cleans", _case_build_refuses_and_cleans),
+]
+
+
 def self_test() -> int:
     return _run_cases(CASES, "self-test")
+
+
+def self_test_render() -> int:
+    try:
+        import breach_deck_render  # noqa: F401
+    except ImportError as e:
+        print(f"self-test-render: cannot import the renderer: {e}")
+        return 1
+    return _run_cases(RENDER_CASES, "self-test-render")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--self-test", action="store_true", help="run the built-in cases")
     ap.add_argument("--check", action="store_true", help="check outlines and breach-page links")
+    ap.add_argument("--build", nargs="+", metavar="SLUG", help="render the named outlines to .pptx")
+    ap.add_argument(
+        "--self-test-render", action="store_true", help="run the renderer cases (needs python-pptx)"
+    )
     ap.add_argument("--stale", action="store_true", help="list decks whose outline or page changed")
     ap.add_argument(
         "--published-only", action="store_true",
@@ -2256,8 +2819,12 @@ def main() -> int:
         ap.error("--published-only goes with --stale")
     if args.self_test:
         return self_test()
+    if args.self_test_render:
+        return self_test_render()
     if args.check:
         return check_all()
+    if args.build:
+        return build_decks(args.build)
     if args.stale:
         return stale_report(args.published_only)
     if args.status:
