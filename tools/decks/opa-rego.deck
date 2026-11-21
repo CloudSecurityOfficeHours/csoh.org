@@ -62,25 +62,20 @@ deny contains msg if {
 
 == Step 4: iterate over a collection
 section: 4. Iterate over a collection
-Every rule named deny adds to one set. The some keyword binds bucket to each element of input.buckets, so each match adds its own message.
+Step 4's buckets.rego starts like this; a second deny rule, for public buckets, adds to the same set. The some keyword binds bucket to each element of input.buckets. Against buckets.json's three buckets, opa eval prints three messages, one per match.
 ```rego
+package storage
+
 deny contains msg if {
     some bucket in input.buckets          # iterate; `bucket` is bound per element
     not bucket.encryption.enabled == true
     msg := sprintf("bucket %v is not encrypted", [bucket.name])
 }
-
-# A second, independent check over the same collection.
-deny contains msg if {
-    some bucket in input.buckets
-    bucket.public == true
-    msg := sprintf("bucket %v is public", [bucket.name])
-}
 ```
 
 == Step 5: a Terraform plan is just input
 section: 5. Gate a real Terraform plan with Conftest
-Terraform builds cloud resources from configuration files and can show its planned changes first. In a configuration of your own, these save the plan as JSON. Without one, save step 5's policy anyway: steps 6 and 7 need no plan.
+Terraform builds cloud resources from configuration files. In your configuration's folder, these save the plan as JSON; copy tfplan.json beside your other files. Without a configuration, save step 5's policy anyway: steps 6 and 7 need no plan.
 ```bash
 terraform plan -out=tfplan.binary
 terraform show -json tfplan.binary > tfplan.json
@@ -166,7 +161,10 @@ deny contains msg if {
 
 == Exercise: break the rule on purpose
 section: Hands-on exercises
-This exercise breaks step 5's rule so it denies everything, deleting its conditions and leaving only the some rc line and the message, then reruns step 6's tests. Which fail, and what does that tell you about those tests?
+This copies policy/ to broken/, so the other exercises' files stay unchanged. Make broken/s3.rego's rule deny everything: keep only the some rc line and the message. Run opa test broken/ -v. Which tests fail, and what does that tell you?
+```bash
+cp -r policy broken
+```
 
 == Answer: only the compliant test fails
 section: Hands-on exercises
