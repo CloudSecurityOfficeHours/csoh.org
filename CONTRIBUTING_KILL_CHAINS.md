@@ -100,6 +100,8 @@ The reliable way is to **copy the newest existing page in `breaches/`** and edit
 - The `<h1>` (e.g. `Capital One 2019`).
 - The `<main class="kc-main kc-page">` body (below).
 
+A breach page with a slide deck outline (`tools/decks/breaches/<slug>.deck`) is also gated by `tools/build_breach_decks.py --check`: an edit that removes a figure, technique, stage, phase label or link the deck quotes fails it, and each finding names the outline line to fix.
+
 ### Page body: header + kill chain
 
 Everything below goes inside `<main class="kc-main kc-page" id="main-content">`. Note glossary links use `../glossary.html#term-...` (the `../` is required - the page is one level down).

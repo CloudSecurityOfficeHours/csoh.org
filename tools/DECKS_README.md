@@ -157,19 +157,22 @@ Each breach kill chain page in `breaches/` can have a slide deck, written as a
 plain-text outline in `tools/decks/breaches/`, built into a .pptx, published to
 Google Slides and linked from the page's header. Outlines, the mapping file and
 build output live under `tools/`, which never ships. The only published change
-is one line of links on the breach page. `tools/build_breach_decks.py` has the
-same modes as the how-to tool:
+is one line of links on the breach page.
 
 ```bash
-python3 tools/build_breach_decks.py --self-test
-python3 tools/build_breach_decks.py --check
-python3 tools/build_breach_decks.py --stale [--published-only]
-python3 tools/build_breach_decks.py --status
-python3 tools/build_breach_decks.py --stamp
+python3 tools/build_breach_decks.py --self-test    # run the built-in cases
+python3 tools/build_breach_decks.py --check        # CI gate
+python3 tools/build_breach_decks.py --build SLUG [SLUG ...]   # render outlines to tools/decks/breaches/build/
+python3 tools/build_breach_decks.py --self-test-render        # run the renderer cases
+python3 tools/build_breach_decks.py --stale [--published-only]  # decks changed since publish
+python3 tools/build_breach_decks.py --status       # outline and publish state
+python3 tools/build_breach_decks.py --stamp        # rewrite breach page links from the mapping
 python3 tools/build_breach_decks.py --record SLUG PRES_ID
 ```
 
-Every mode uses the standard library only. Outlines live in a subdirectory so
+`--build` and `--self-test-render` need python-pptx (`pip install
+python-pptx`); every other mode uses the standard library only, so CI runs
+`--self-test` and `--check` without it. Outlines live in a subdirectory so
 `build_howto_decks.py`, which does not recurse into `tools/decks/`, never reads
 them.
 
@@ -202,8 +205,27 @@ Speaker notes run to the next "== " line. Every slide has them.
   non-empty.
 - Notes are required on every slide. There are no includes and no code fences.
 - A non-background slide says nothing its page does not: every number,
-  technique ID, stage and link must appear on the page. A `background` slide
-  names its source on the slide, and its URL is on an allowed host.
+  technique ID, stage and link must appear on the page. A version, IPv4
+  address or CIDR (`8.4.28`, `10.0.0.0/8`) is one number, compared whole.
+- A `stage` slide's techniques must be on that stage of the page, which
+  counts every ATT&CK link in the stage header and every technique tag. Its
+  `phase:` (the part before any colon) must name the stage's phase label: the
+  `phase-lbl` text before its colon, emoji and markup removed, such as
+  `Execution and Privilege Escalation`. A `flow` step's tactic follows the same
+  rule.
+- A stage the page maps to no technique (a detection or response stage)
+  still gets a `stage` slide, with no `technique:` line and no chip row; in a
+  `flow` step its technique is `-`, and the box shows no ID.
+- A `flow` slide holds 3 to 8 steps, so a chain of more than eight stages
+  takes two or more flow slides, each a run of consecutive stages.
+- A `background` slide names its source on the slide, and its `source:` URL
+  is on an allowed host or a subdomain of one: `csoh.org`,
+  `attack.mitre.org`, `owasp.org`, `cheatsheetseries.owasp.org`,
+  `learn.microsoft.com`, `docs.aws.amazon.com`, `cloud.google.com`,
+  `kubernetes.io`, `www.rfc-editor.org`, `datatracker.ietf.org` and
+  `docs.oasis-open.org` (`BACKGROUND_HOSTS` in the tool). Its slide text and
+  notes are not held to the page, so its notes can give the URL of any second
+  source its `credit:` line names.
 - Limits: 18 to 36 slides counting the generated cover, how-to-use and
   closing slides, at most 40 words of prose per slide, 14 words per typed
   field, 12 in a heading and 220 in the notes, no U+2013 or U+2014, and no
@@ -213,10 +235,10 @@ Speaker notes run to the next "== " line. Every slide has them.
 |---|---|
 | `text`, `background`, `question`, `answer` | none; prose and bullets (`question` takes prose only, `background` needs `source:`) |
 | `stats` | `stat` 2 to 4: `value \| label \| detail` |
-| `stage` | `technique` 1 to 3: `id \| name`; `fact` 1 to 5: `label \| value`; needs `stage:` and `phase:` |
+| `stage` | `technique` 0 to 3: `id \| name`; `fact` 1 to 5: `label \| value`; needs `stage:` and `phase:` |
 | `checklist` | `check` 2 to 7 |
 | `links` | `link` 1 to 8: `name \| url` |
-| `flow` | `step` 3 to 8: `NN \| tactic \| short title \| technique id` |
+| `flow` | `step` 3 to 8: `NN \| tactic \| short title \| technique id or -` |
 | `layers` | `layer` 2 to 5: `tier label \| box ...` (1 to 3 boxes) |
 | `timeline` | `event` 2 to 6: `when \| what` |
 | `compare` | `col` 2 or 3: `heading \| line ...` (1 to 4 lines) |
@@ -243,9 +265,20 @@ Speaker notes run to the next "== " line. Every slide has them.
   reason: the outline changed (the public deck needs re-publishing) or the
   page changed (review the deck against the page). It exits 0 whether or not
   decks are stale, and CI reports each as a warning.
+- `--build SLUG` writes `tools/decks/breaches/build/<slug>.pptx`. It first
+  removes that deck's old build, refuses an outline with any finding
+  `--check` reports for it, then reopens the saved file and verifies it: the
+  slide count and size, shape kinds, font sizes, the contrast of every run,
+  footers, speaker notes, type labels and background credits, no autofit, no
+  en or em dash, and no shape below the bottom limit or off the side of the
+  slide. A deck that fails any step leaves no
+  .pptx. A `LayoutError` names the slide (`<slug>.deck:<line>`) whose content
+  would end below the room it has; trim that slide's text.
 - `--stamp` removes every deck line and writes one after the last `pm-link`
   line of each mapped page, planning every page before writing any.
-  `--record` writes the id, both hashes and today's date, then stamps.
+  `--record` refuses an outline with any finding `--check` reports, and
+  otherwise writes the id, both hashes and today's date, then stamps. A
+  refused record writes neither the mapping nor any page.
 
 Publishing follows the how-to steps: build, upload privately, export and
 inspect the PDF, fact-review against the page, get the owner's approval, then
