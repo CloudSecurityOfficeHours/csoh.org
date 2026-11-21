@@ -82,6 +82,9 @@ PAGE_RE = re.compile(r"breaches/[a-z0-9][a-z0-9-]*\.html")
 # capital, so a line of this shape is a key: one the format knows, or a typo
 # that must fail rather than be read as prose.
 KEY_LINE_RE = re.compile(r"^([a-z][a-z-]*):(?:\s+(.*))?$")
+# A known key at the start of a body line, in any case and with or without
+# whitespace after the colon. Such a line is that key or an error, never prose.
+KNOWN_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z-]*):\s*(.*)$")
 # A field separator is a pipe set off by whitespace. Splitting on the pipe and
 # its leading space (not both spaces) keeps "a | | b" as three fields, the
 # middle one empty, so the empty field is reported rather than swallowed.
@@ -125,6 +128,7 @@ LAYOUTS: dict[str, LayoutSpec] = {
 }
 
 TYPED_KEYS = frozenset(k for spec in LAYOUTS.values() for k in spec.typed)
+KNOWN_KEYS = frozenset(CONTROL_KEYS) | TYPED_KEYS
 
 
 @dataclass
@@ -286,14 +290,22 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
             cur.bullets.append(stripped[2:].strip())
             continue
 
-        m = KEY_LINE_RE.match(stripped)
-        if m is None:
-            if cur.bullets and cur.prose_after_bullet is None:
-                cur.prose_after_bullet = f"{name}:{lineno}"
-            para.append(stripped)
-            continue
-
-        key, rest = m.group(1), (m.group(2) or "").strip()
+        km = KNOWN_KEY_RE.match(stripped)
+        if km is not None and km.group(1).lower() in KNOWN_KEYS:
+            key, rest = km.group(1).lower(), km.group(2).strip()
+        else:
+            m = KEY_LINE_RE.match(stripped)
+            if m is None:
+                if " | " in stripped:
+                    raise _err(
+                        name, lineno,
+                        "prose line contains ' | '; a typed line is missing its key",
+                    )
+                if cur.bullets and cur.prose_after_bullet is None:
+                    cur.prose_after_bullet = f"{name}:{lineno}"
+                para.append(stripped)
+                continue
+            key, rest = m.group(1), (m.group(2) or "").strip()
         flush_para()
         if key in CONTROL_KEYS:
             if key in seen:
@@ -363,15 +375,11 @@ def _dash_findings(where: str, texts: list[str]) -> list[str]:
     return out
 
 
+BAR_NUMBER_RE = re.compile(r"\d[\d,]*(\.\d+)?\+?")
+
+
 def _bar_number_ok(value: str) -> bool:
-    cleaned = value.replace(",", "")
-    if cleaned.endswith("+"):
-        cleaned = cleaned[:-1]
-    try:
-        float(cleaned)
-    except ValueError:
-        return False
-    return cleaned.strip() == cleaned and cleaned != ""
+    return BAR_NUMBER_RE.fullmatch(value) is not None
 
 
 def slide_findings(s: BSlide) -> list[str]:
@@ -619,6 +627,23 @@ def _case_unknown_line_key(tmp: Path) -> None:
     ]
 
 
+def _case_key_never_becomes_prose(tmp: Path) -> None:
+    for bad in ("fact:Queried | x", "Fact: Queried | x"):
+        body = _body("== S", "layout: stage", "stage: 01", "phase: P", "technique: T1 | n", bad)
+        assert len(_parse(body).slides[0].items["fact"]) == 1
+    _raises(lambda: _parse(_slide_text("layout: stats", "stat:200+ | a")), "2 fields")
+    assert _parse(_slide_text("Stage: 04", "Text.")).slides[0].stage == "04"
+    e = _raises(lambda: _parse(_slide_text("Queried | x")), "' | '")
+    assert str(e).startswith("d.deck:7:"), e
+
+
+def _case_notes_stay_notes(tmp: Path) -> None:
+    notes = "note: a thing.\nartx-prefixed roles: were used.\nstage: x\nstage: y\nfact: a | b\nA | b"
+    d = _parse(_body("== S", "Text.", notes=notes))
+    assert d.slides[0].stage is None and d.slides[0].items == {}
+    assert "stage: y" in d.slides[0].notes[0] and "fact: a | b" in d.slides[0].notes[0]
+
+
 def _case_typed_line_empty_field(tmp: Path) -> None:
     body = _body("== S", "layout: stats", "stat: 200+ | | x", "stat: 1 | a | b")
     e = _raises(lambda: _parse(body), "empty field")
@@ -694,6 +719,8 @@ def _case_table_ragged(tmp: Path) -> None:
 def _case_bars_non_number(tmp: Path) -> None:
     _only(_findings_of("layout: bars", "bar: many | x", "bar: 5 | y"), "'many'")
     assert _findings_of("layout: bars", "bar: 1,500+ | x", "bar: 2.5 | y") == []
+    for bad in ("inf", "nan", "1e5", "-3"):
+        _only(_findings_of("layout: bars", f"bar: {bad} | x", "bar: 5 | y"), repr(bad))
 
 
 def _case_missing_notes(tmp: Path) -> None:
@@ -772,7 +799,7 @@ def _case_notes_dash(tmp: Path) -> None:
 def _case_prose_after_bullet(tmp: Path) -> None:
     f = _findings_of("Intro.", "- first", "Late prose.")
     _only(f, "prose after a bullet")
-    # Line 8 of the outline: five header lines, the heading, then three lines.
+    # Line 9 of the outline: five header lines, the heading, then Intro, a bullet and the late prose.
     assert f[0].startswith("d.deck:9:"), f
     assert _findings_of("Intro.", "", "More intro.", "- first", "- second") == []
 
@@ -798,6 +825,8 @@ CASES: list = [
     ("unknown_layout", _case_unknown_layout),
     ("control_line_twice", _case_control_line_twice),
     ("unknown_line_key", _case_unknown_line_key),
+    ("key_never_becomes_prose", _case_key_never_becomes_prose),
+    ("notes_stay_notes", _case_notes_stay_notes),
     ("typed_line_empty_field", _case_typed_line_empty_field),
     ("typed_line_wrong_layout", _case_typed_line_wrong_layout),
     ("wrong_field_count", _case_wrong_field_count),
