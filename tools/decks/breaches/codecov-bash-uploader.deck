@@ -23,19 +23,19 @@ The page says the downstream list is the point, and it names four organizations:
 == What happened, and when
 layout: timeline
 event: January 31, 2021 | An attacker extracts a storage key and uses it to modify the Bash Uploader
-event: The next two months | The change, applied periodically, exports the CI environment to a server the attacker controls
+event: The next two months | Builds running the altered script export the CI environment; Codecov counts 108 such windows
 event: April 1, 2021 | A customer's SHA-256 check fails against the value published on GitHub
 event: April 15, 2021 | Codecov discloses publicly
-event: April 29, 2021 | Affected organizations are told which environment variables were exposed
+event: April 29, 2021 | Affected organizations start being told which environment variables may have leaked
 The page gives no dates for the downstream organizations' disclosures. Spacing is not to scale.
 notes:
 The page gives these dates, and the timeline shows only those.
 
 On January 31, 2021, the page says, an attacker exploited an error in Codecov's Docker image creation process to extract a Google Cloud Storage key, and used it to modify the Bash Uploader.
 
-Over the next two months the modification was applied periodically, and the added line exported the CI environment to a server the attacker controlled.
+Over the next two months the modification was applied periodically, and every build that ran the altered script exported its CI environment to a server the attacker controlled. Codecov counts 108 such windows between January 31 and April 1.
 
-On April 1, 2021, a customer verifying the uploader's integrity found that the SHA-256 of the downloaded script did not match the value published on GitHub. Codecov investigated and disclosed publicly on April 15. By April 29 it was telling affected organizations which specific environment variables had been exposed.
+On April 1, 2021, a customer verifying the uploader's integrity found that the SHA-256 of the downloaded script did not match the value published on GitHub. Codecov investigated and disclosed publicly on April 15. From April 29 it was telling affected organizations which environment variables may have leaked.
 
 The page does not date the downstream disclosures from HashiCorp, Twilio, Rapid7 and Confluent, so do not supply dates for them. The markers are evenly spaced, and the slide says the gaps between them are not to scale.
 
@@ -48,7 +48,7 @@ step: 04 | Detection | A customer compared two hashes | -
 step: 05 | Impact | Everyone else's pipelines | T1199
 Arrows follow the page's stage order.
 notes:
-Here is the whole chain on one slide: the page's five stages, each with its phase and primary ATT&CK technique.
+Here is the whole chain on one slide: the page's five stages, each with its phase and, where the page gives one, its primary ATT&CK technique.
 
 Stage 01, Initial Access, is the credential left in a container image: a Google Cloud Storage key extracted through an error in Codecov's Docker image creation process. Stage 02, under the page's Supply Chain phase, is the attacker altering the hosted Bash Uploader, periodically, to add one line. Stage 03, Credential Access, is what that line took: the CI job's environment variables. Stage 04, Detection, carries no ATT&CK technique: it is the customer whose hash check caught the change. Stage 05, Impact, is the blast radius, spread across customers' build environments and the systems their credentials reached.
 
@@ -113,19 +113,19 @@ The modification was applied periodically rather than once. The page says that s
 
 The page calls this the fundamental hazard of the curl pipe bash pattern, written curl | bash, in which a script is downloaded and handed straight to the shell. The artifact you execute is fetched fresh every time, so its integrity is a property of the hosting infrastructure on the day you run it rather than something you have ever verified.
 
-== One key to every pipeline, as the page draws it
+== One key, many pipelines, as the page draws it
 layout: layers
 layer: Leaked | A Cloud Storage key, from Codecov's Docker image process
 layer: Write access | The bucket serving the Bash Uploader script
 layer: Fetched and run | CI pipelines download and execute the script on every build
-layer: Sent out | The CI environment, to a server the attacker controlled
+layer: Sent out | When altered: the CI environment, to an attacker's server
 The script is fetched fresh every time, so its integrity depends on the host on the day it runs.
 notes:
 This slide draws the path the page describes, one layer at a time.
 
 The key came out of Codecov's Docker image creation process. It had write access to the storage bucket serving the Bash Uploader script. Tens of thousands of CI pipelines download and execute that script on every build to report coverage. The one added line exported the pipeline's CI environment to a server the attacker controlled.
 
-The page says the modification was applied periodically, so read the bottom layer as what the altered script did when it ran.
+The page says the modification was applied periodically, so the bottom layer is what the script did when it was altered. Every build that ran the altered script exported its environment, and Codecov counts 108 such windows between January 31 and April 1.
 
 The caption carries the page's point. Because the artifact is fetched fresh every time, its integrity is a property of the hosting infrastructure on the day you run it, not something the pipeline ever verified.
 
@@ -136,14 +136,14 @@ phase: Credential Access
 technique: T1552.007 | Unsecured Credentials: Container API
 technique: T1041 | Exfiltration Over C2 Channel
 fact: Captured | cloud keys, registry tokens, signing keys, database credentials
-fact: Timing | the uploader runs late, when the job holds everything
+fact: Frequency | builds in 108 windows over two months, per Codecov
 fact: HashiCorp | rotated the GPG private key used to sign and verify releases
 fact: Also affected | Twilio, Rapid7 (source code exposure) and Confluent
-A supply-chain compromise of a CI tool reached the signing key underpinning another vendor's supply-chain integrity.
+The recursion: a CI-tool compromise reached another vendor's release-signing key.
 notes:
 Stage 03 is what the one line took. The page maps it to T1552.007, Container API, and T1041, Exfiltration Over C2 Channel. C2 is short for command and control.
 
-The uploader runs late in a build, by which point the job holds everything it needed to compile, test, sign and deploy. Exporting the environment therefore captures the pipeline's entire secret inventory in one action: cloud keys, registry and repository tokens, signing keys and database credentials.
+The uploader runs late in a build, by which point the job holds everything it needed to compile, test, sign and deploy. Exporting the environment therefore captures the pipeline's entire secret inventory in one action: cloud keys, registry and repository tokens, signing keys and database credentials. It did so on every build that ran the altered script, and Codecov counts 108 such windows between January 31 and April 1.
 
 The page singles out HashiCorp's disclosure. The exposed material included the GPG private key used to sign and verify HashiCorp product releases, and HashiCorp rotated it. The page calls this a recursion: a supply-chain compromise of a CI tool reached the signing key underpinning another vendor's supply-chain integrity.
 
@@ -172,18 +172,18 @@ stage: 04
 phase: Detection
 fact: April 1, 2021 | a customer's SHA-256 check fails against the published value
 fact: April 15, 2021 | Codecov discloses publicly
-fact: April 29, 2021 | affected organizations told which variables were exposed
+fact: April 29, 2021 | affected organizations told which variables may have leaked
 fact: Detection source | one customer performing an optional integrity check
 fact: Principle | a documented but unenforced integrity check is not a control
 The control existed, worked perfectly and was optional, so it caught the attack sixty days late.
 notes:
 Stage 04 is the detection, and the page maps it to no ATT&CK technique.
 
-On April 1, 2021, a customer verifying the uploader's integrity found that the SHA-256 of the downloaded script did not match the value published on GitHub. The exfiltration ended because one customer did the integrity check that the documentation offered and almost nobody performed.
+On April 1, 2021, a customer verifying the uploader's integrity found that the SHA-256 of the downloaded script did not match the value published on GitHub. Two months of periodic exfiltration ended because one customer did the integrity check that the documentation offered and almost nobody performed.
 
 The page says this is worth stating plainly rather than framing as a happy ending. The control existed, it worked perfectly, and it was optional, so it caught the attack sixty days late.
 
-Codecov investigated, disclosed publicly on April 15, and by April 29 was telling affected organizations which specific environment variables had been exposed.
+Codecov investigated, disclosed publicly on April 15, and from April 29 was telling affected organizations which environment variables may have leaked.
 
 The page draws a general principle from this stage, one it says recurs across the site's kill chains: an integrity check that is documented but not enforced is a control you do not have. A later slide comes back to it.
 
@@ -193,7 +193,7 @@ The next slide explains what a hash check and a pin do, in general terms.
 layout: background
 source: csoh.org glossary, Pinning | https://csoh.org/glossary.html#term-pinning
 credit: Also from RFC 6234, US Secure Hash Algorithms (www.rfc-editor.org)
-SHA-256 condenses a file into a digest; RFC 6234 says any change in transit will, with very high probability, change it. Pinning refers to a dependency by its hash: if the artifact is tampered with, the build fails closed.
+SHA-256 condenses a file into a digest; RFC 6234 says any change in transit will, with very high probability, change it. Pinning names a dependency by its hash: if the artifact is tampered with, the build fails closed.
 notes:
 Background, from the csoh.org glossary and RFC 6234, in general terms.
 
@@ -209,7 +209,7 @@ stage: 05
 phase: Impact
 technique: T1199 | Trusted Relationship
 fact: Customer base | roughly 29,000 at the time, Codecov reported
-fact: Reporting | 23,000+ potentially affected in the window
+fact: GitGuardian | 23,000 customers and users; no affected count from Codecov
 fact: Real blast radius | whatever those pipelines' credentials could reach
 fact: Required response | rotate every secret that passed through CI during the window
 Without an inventory, the real blast radius is unknowable.
@@ -218,7 +218,7 @@ Stage 05 is the impact. The page maps it to T1199, Trusted Relationship.
 
 Codecov's own systems were barely the point, the page says. The damage was distributed across thousands of customers' build environments and the systems those credentials reached.
 
-Codecov reported roughly 29,000 customers at the time, and reporting placed over 23,000 as potentially affected during the window. Keep both qualifiers when you say these aloud, roughly and potentially affected, and say who gave each figure.
+Codecov reported roughly 29,000 customers at the time. GitGuardian put its customers and users at 23,000, and Codecov did not say how many were affected. Say who gave each figure, keep the word roughly, and do not present either number as a count of victims.
 
 The page says the meaningful number counts systems rather than customers: the systems reachable with the credentials those pipelines happened to hold. That count is unknowable from the outside, and for many organizations it was unknowable from the inside too.
 
@@ -253,7 +253,7 @@ The page states the principle plainly: an integrity check that is documented but
 
 It also places Codecov in the site's history. This is the earliest chain on the site in which the software supply chain is a build-time script rather than a package, and the page calls it the direct ancestor of the LiteLLM / Trivy compromise five years later.
 
-== Six defenses against five stages
+== Six defenses and the five stages
 layout: matrix
 columns: 01 | 02 | 03 | 04 | 05
 row: Pin and verify fetched scripts | 02 | 04
@@ -264,7 +264,7 @@ row: A CI secret inventory | 05
 row: Published artifacts watched from outside | 02
 The page calls pinning and verifying the control that ends the chain. Every stage has at least one defense the page ties to it.
 notes:
-This matrix sets the page's six defenses against the five stages. A cell is marked only where a defense's own words name something that stage has.
+This matrix sets the page's six defenses against the five stages. A cell is marked only where a defense's own words name something only that stage has.
 
 Pinning and verifying fetched scripts answers stage 02, where curl piped into bash left integrity to the host on the day of each run, and it draws on stage 04: the customer who found this proved the check works. Keeping long-lived secrets out of CI answers stage 03, where everything sat in environment variables waiting to be read. Keeping secrets out of images answers stage 01, the build-time credential recoverable from image layers. Constraining runner egress names stage 02's one-line payload and the exfiltration step the page maps in stage 03. A CI secret inventory answers stage 05, where the expensive part was working out what to rotate. Watching published artifacts from outside names stage 02: Codecov did not detect that its own hosted script had been altered for two months.
 
@@ -316,7 +316,7 @@ BuildKit is Docker's image build engine, and COPY is the Dockerfile instruction 
 == Know your CI secrets, and watch what you publish
 layout: compare
 col: A CI secret inventory (stage 05) | Every secret each pipeline holds, its owner and blast radius | The command that rotates it | A rehearsed full rotation
-col: Published artifacts watched from outside (stage 02) | Codecov did not detect the alteration for two months | Verify from outside that what is served is what you intended
+col: Published artifacts watched from outside (stage 02) | Codecov did not detect the alteration for two months | Keep verifying from outside that what is served is what you intended
 An organization that can rotate everything in an afternoon treats this class of incident very differently, the page says.
 notes:
 Two more defenses, one for stage 05 and one for stage 02.
@@ -333,7 +333,7 @@ check: Does any step hold both third-party tooling and credentials it could stea
 check: Do image builds keep secrets out of layers, and is every published image scanned?
 check: Do your build runners default-deny outbound traffic to hosts you have not allowed?
 check: Can you list each pipeline's secrets, their owners and how to rotate them?
-check: If customers run something you publish, do you verify from outside what is served?
+check: If customers run your artifacts, do you keep verifying from outside what is served?
 notes:
 Turn the page's six defenses into questions about your own estate. Each question comes from one of them.
 
@@ -351,13 +351,13 @@ Finally, if customers download and execute something you publish, ask whether an
 
 == Which scripts do your pipelines fetch and run unchecked?
 layout: question
-Tens of thousands of pipelines ran the Bash Uploader on every build. One customer checked its hash, and that ended two months of exfiltration.
+Tens of thousands of pipelines ran the Bash Uploader on every build. One customer checked its hash, and that ended two months of periodic exfiltration.
 
 Name one script or installer your builds fetch and run without verifying it.
 notes:
 Give the room a minute with this one before moving on.
 
-The Bash Uploader was a script tens of thousands of CI pipelines downloaded and executed on every build. The documentation offered an integrity check, and almost nobody performed it. One customer did, on April 1, 2021, and that ended two months of exfiltration.
+The Bash Uploader was a script tens of thousands of CI pipelines downloaded and executed on every build. The documentation offered an integrity check, and almost nobody performed it. One customer did, on April 1, 2021, and that ended two months of periodic exfiltration.
 
 Ask each person to name one specific script, installer or uploader their own builds fetch at run time without verifying it, before you show the answer slide. The answer slide gives what the page says to do about it.
 
