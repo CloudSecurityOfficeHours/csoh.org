@@ -520,7 +520,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/snowflake-unc5537.html",
      "Snowflake / UNC5537 2024 Breach Kill Chain",
-     "Info-stealer credentials + no-MFA SaaS accounts → 165+ Snowflake customers breached. Full chain and SaaS defenses.",
+     "Info-stealer credentials + no-MFA SaaS accounts → about 165 organizations notified as potentially exposed. Full chain and SaaS defenses.",
      "Breach Kill Chain"),
     ("breaches/microsoft-sas-leak.html",
      "Microsoft SAS Leak 2023 Breach Kill Chain",
