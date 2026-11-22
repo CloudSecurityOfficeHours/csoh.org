@@ -516,7 +516,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/storm-0558.html",
      "Storm-0558 2023 Breach Kill Chain",
-     "Stolen Microsoft MSA signing key → forged Azure AD tokens → 25 government and Outlook tenant compromises.",
+     "Stolen Microsoft MSA signing key → forged Azure AD tokens → email access at about 25 organisations, including government agencies.",
      "Breach Kill Chain"),
     ("breaches/snowflake-unc5537.html",
      "Snowflake / UNC5537 2024 Breach Kill Chain",
