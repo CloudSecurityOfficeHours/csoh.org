@@ -1,0 +1,399 @@
+title: ChaosDB / Azure Cosmos DB
+page: breaches/chaosdb-cosmos.html
+as-of: 2026-11-22
+promise: In August 2021, Wiz researchers (disclosure: the site's author works at Wiz) found that Azure Cosmos DB's notebook feature could be used to retrieve other customers' primary keys; it was research rather than a breach.
+
+== At a glance
+layout: stats
+stat: None | customer controls that would have helped | several thousand Azure customers exposed, many in the Fortune 500
+stat: ~48 hrs | from report to Microsoft disabling the feature | Microsoft also advised every Cosmos DB customer to regenerate primary keys
+The keys were long-lived, so exposure predated discovery by months. This was research rather than a breach: it broke tenant isolation, which customers cannot verify or compensate for.
+notes:
+Start with the points the page leads with.
+
+In August 2021 Wiz researchers found that the Jupyter Notebook feature in Azure Cosmos DB could be used to escalate out of a customer's own notebook container, reach the Cosmos DB backend, and retrieve the primary keys of other customers' databases. The result was complete unrestricted read, write and delete access to the accounts and databases of several thousand Azure customers, including many in the Fortune 500. The page says no customer-side configuration would have prevented it.
+
+Microsoft disabled the feature within roughly 48 hours of the report, and advised every Cosmos DB customer to regenerate their primary keys.
+
+The line under the tiles is about time. The keys were long-lived, so exposure predated discovery by months. Stage 03 explains why that matters.
+
+The page is explicit that this was research rather than a breach. ChaosDB broke tenant isolation, the property every multi-tenant cloud service is built on, and the one customers have no ability to verify or compensate for.
+
+Say the disclosure aloud as the page gives it: this reconstruction is sourced to research published by Wiz, and the site's author works at Wiz.
+
+== What happened, and when
+layout: timeline
+event: 2019 | Cosmos DB gains an embedded Jupyter Notebook feature
+event: August 2021 | Wiz researchers find it can be used to retrieve other customers' primary keys
+event: Within roughly 48 hours of the report | Microsoft disables the feature
+Microsoft advised every Cosmos DB customer to regenerate their primary keys, and notified affected customers. The page gives no date for the report itself. Spacing is not to scale.
+notes:
+The page gives only a few dates, and the timeline shows only those. The markers are evenly spaced, and the gaps between them are not to scale.
+
+Cosmos DB gained its embedded Jupyter Notebook feature in 2019. The page lists the feature as enabled by default for Cosmos DB accounts, and gives no date for that.
+
+In August 2021 Wiz researchers found that the feature could be used to escalate out of a notebook container, reach the Cosmos DB backend, and retrieve the primary keys of other customers' databases.
+
+Microsoft disabled the feature within roughly 48 hours of the report. The page does not give the date of the report itself, so do not count forward from August to name a day.
+
+Microsoft also advised every Cosmos DB customer to regenerate their primary keys, and notified affected customers. Notice the two groups: the advice went to every Cosmos DB customer, and the notification to affected customers.
+
+== Research rather than a breach: who found it, who fixed it
+layout: compare
+col: Wiz researchers | Found the flaw in August 2021 | Escalated out of a notebook container and reached the backend | Retrieved and decrypted other customers' primary keys
+col: Microsoft | Disabled the feature within roughly 48 hours of the report | Advised every Cosmos DB customer to regenerate primary keys | Notified affected customers
+Disclosure: this reconstruction is sourced to research published by Wiz, and the site's author works at Wiz. Caveat the trust you grant accordingly.
+notes:
+The page says plainly that this was research rather than a breach.
+
+Wiz researchers found the flaw in August 2021. The chain ran from inside a notebook: a local privilege escalation, then rewritten firewall rules, and the Cosmos DB backend was reachable directly. From the backend the researchers retrieved and decrypted credentials belonging to other customers, obtaining full read, write and delete access to their databases.
+
+Microsoft disabled the feature within roughly 48 hours of the report, which the page calls a fast response. It advised every Cosmos DB customer to regenerate their primary keys, and notified affected customers.
+
+The page carries a disclosure, and so does this deck. This reconstruction is sourced to research published by Wiz, and the site's author works at Wiz. The primary sources are linked at the end of the deck so you can read them directly. Caveat the trust you grant accordingly.
+
+== Actor tokens broke authentication; ChaosDB broke tenant isolation
+layout: compare
+col: Entra ID Actor token flaw | Research rather than a breach | Broke authentication
+col: ChaosDB | Research rather than a breach | Broke tenant isolation, which every multi-tenant cloud service is built on | Customers have no ability to verify or compensate for it
+The page calls ChaosDB the more fundamental of the two.
+notes:
+The page sets ChaosDB beside one other entry on csoh.org.
+
+Like the Entra ID Actor token flaw, ChaosDB was research rather than a breach, and the page calls it the more fundamental of the two. Actor tokens broke authentication. ChaosDB broke tenant isolation, the property every multi-tenant cloud service is built on, and the one customers have no ability to verify or compensate for.
+
+The page draws no other connection between the two findings. The Actor token flaw has its own kill chain, linked at the end of this deck.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | The Setup | A feature with its own runtime | T1580
+step: 02 | Privilege Escalation | Out of the notebook container | T1611
+step: 03 | Credential Access | Other tenants' primary keys | T1552
+step: 04 | Impact | Thousands of tenants | -
+The chain as the page reconstructs it from Wiz's research. It was research rather than a breach.
+notes:
+Here is the whole chain on one slide: the page's four stages, each with its phase and primary ATT&CK technique.
+
+Stage 01, The Setup, is the notebook feature that gave every customer a code-execution environment inside the managed service. Stage 02, Privilege Escalation, is the local escalation inside the notebook environment and the rewritten firewall rules that opened the backend. Stage 03, Credential Access, is the retrieval of other customers' primary keys. Stage 04, Impact, is several thousand Azure customers exposed. The page maps stage 04 to no ATT&CK technique, so its box shows no ID.
+
+Read the arrows as the page's stage order. The page reconstructs the chain from research published by Wiz, and it was research rather than a breach. The next slides take each stage in turn.
+
+== In 2019, Cosmos DB gave every customer a code-execution environment
+layout: stage
+stage: 01
+phase: The Setup
+technique: T1580 | Cloud Infrastructure Discovery
+fact: Feature | embedded Jupyter Notebooks, added to Cosmos DB in 2019
+fact: Enabled | by default for Cosmos DB accounts
+fact: What it changes | the provider must contain a general-purpose runtime per tenant
+fact: Customer visibility | none into how that containment is implemented
+Arbitrary customer code in the service changes the isolation problem completely.
+notes:
+Stage 01 sits under the page's phase The Setup. The page maps it to T1580, Cloud Infrastructure Discovery.
+
+The page calls the feature useful: query your data, visualize it, run Python next to it, without moving anything. It is also, structurally, the provider offering to run arbitrary customer code inside its own managed service, which changes the isolation problem completely.
+
+A managed database normally exposes a query interface. Adding notebooks means the provider now has to contain a general-purpose runtime, per tenant, correctly. The page lists the feature as enabled by default for Cosmos DB accounts, and says customers have no visibility into how that containment is implemented.
+
+The page says Wiz's later PEACH framework grew out of exactly this class of finding: the more capability a managed service offers inside the tenant boundary, the more surface there is for that boundary to fail on.
+
+The next slide explains what a tenant is, in general terms.
+
+== What a tenant is
+layout: background
+source: csoh.org glossary, Tenant / Multi-Tenant | https://csoh.org/glossary.html#term-tenant
+The csoh.org glossary defines a tenant as a logical boundary for one customer's data, identities and configuration in a shared platform.
+
+It calls the cross-tenant boundary the provider's most security-critical control.
+notes:
+This is a background slide. It explains a general idea from the csoh.org glossary and says nothing about the incident.
+
+A tenant is a logical boundary for one customer's data, identities and configuration in a shared platform. The glossary describes multi-tenant software as a service as keeping many tenants isolated on the same infrastructure, and it calls the cross-tenant boundary the provider's most security-critical control.
+
+The page uses the same idea when it calls tenant isolation the property every multi-tenant cloud service is built on.
+
+== A local escalation, then rewritten firewall rules, opened the backend
+layout: stage
+stage: 02
+phase: Privilege Escalation
+technique: T1611 | Escape to Host
+technique: T1686.001 | Disable or Modify System Firewall: Cloud Firewall
+fact: Step 1 | local privilege escalation within the notebook environment
+fact: Step 2 | modify firewall rules to remove network restrictions
+fact: Step 3 | reach and authenticate to the Cosmos DB backend directly
+fact: Control that failed | network boundary changeable from inside the thing it contained
+Why it differs from a normal escape: the blast radius is every other tenant.
+notes:
+Stage 02 sits under the page's Privilege Escalation phase. The page maps it to T1611, Escape to Host, and tags T1686.001, Disable or Modify System Firewall: Cloud Firewall.
+
+The chain ran from inside the customer's own notebook. Escalate locally within that environment, then modify the firewall rules constraining it, and the network restrictions that were supposed to keep a tenant's notebook talking only to that tenant's data no longer applied. From there the backend was reachable directly.
+
+The page calls each step a familiar container-security problem: a local escalation, and a network control that could be changed from inside the thing it was containing. The consequence is not familiar, because the blast radius of a container escape in a multi-tenant managed service is every other tenant on it. Blast radius is the scope of damage if a credential, identity or system is compromised.
+
+The page does not say how the local escalation worked. The next slide explains both ATT&CK entries in general.
+
+== What escape to host and cloud firewall changes mean
+layout: background
+source: MITRE ATT&CK T1611, Escape to Host | https://attack.mitre.org/techniques/T1611/
+credit: Also from MITRE ATT&CK T1686.001, Cloud Firewall (attack.mitre.org)
+ATT&CK says adversaries may break out of a container or virtualized environment to the underlying host, which can open access to other containers.
+
+Its Cloud Firewall entry covers changing cloud firewall rules to bypass controls on access to cloud resources.
+notes:
+This is a background slide. It explains two ATT&CK entries in general, from MITRE, and says nothing about the incident.
+
+ATT&CK's Escape to Host says adversaries may break out of a container or virtualized environment to gain access to the underlying host, which can allow access to other containerized or virtualized resources from the host level. In principle, it says, those resources should be isolated from the host environment. Its examples include a container that mounts the host's filesystem, a privileged container that runs commands or loads a kernel module on the host, abused system calls, and a mounted container management socket. Gaining the host may let an adversary persist, move laterally, or access other containers or virtual machines on it.
+
+ATT&CK's Cloud Firewall sub-technique covers disabling or modifying a firewall in a cloud environment to bypass controls that limit access to cloud resources. Cloud environments typically allow traffic only from trusted addresses on expected ports and protocols, and an adversary with appropriate permissions may add rules that allow access.
+
+The page does not say which of these methods, if any, the ChaosDB chain used.
+
+Also from MITRE ATT&CK T1686.001: https://attack.mitre.org/techniques/T1686/001/
+
+== From the backend, the researchers retrieved other tenants' primary keys
+layout: stage
+stage: 03
+phase: Credential Access
+technique: T1552 | Unsecured Credentials
+fact: Obtained | other customers' primary keys, retrieved and decrypted
+fact: Access granted | full read, write and delete, from anywhere
+fact: Key property | long-lived and rarely rotated
+fact: Microsoft's advice | regenerate primary keys, not merely wait for the fix
+The keys give complete administrative control, independent of the vulnerability.
+notes:
+Stage 03 sits under the page's Credential Access phase. The page maps it to T1552, Unsecured Credentials.
+
+From the backend the researchers retrieved and decrypted credentials belonging to other customers, obtaining full read, write and delete access to their databases.
+
+The prize was the primary keys, which the page calls Cosmos DB's long-lived, full-privilege credentials. With them, an attacker has complete administrative control of a victim's database from anywhere on the internet, independent of the vulnerability that produced them.
+
+The slide's last row is Microsoft's advice: regenerate primary keys, not merely wait for the fix. The next slide follows the two consequences the page draws from the keys, and where that advice comes from.
+
+== A key obtained in August 2021 keeps working until it is rotated
+layout: compare
+col: First consequence | The access is not bounded by the flaw's lifetime | Which is why Microsoft advised regenerating keys, not simply applying a fix
+col: Second consequence | The keys are long-lived by design and rarely rotated in practice | The honest position: assume exposure over an extended window, not a moment
+The page's headline tile adds: the keys were long-lived, so exposure predated discovery by months.
+notes:
+The page draws two consequences from the keys.
+
+First, the access is not bounded by the flaw's lifetime. A key obtained in August 2021 keeps working until it is rotated, which is why Microsoft's advice was to regenerate keys rather than simply to apply a fix.
+
+Second, these keys are long-lived by design and rarely rotated in practice. So, the page says, the honest position for any customer was to assume exposure over an extended window rather than a moment.
+
+The page's headline tile adds a related point: the keys were long-lived, so exposure predated discovery by months.
+
+Key rotation comes back as the first of the page's defenses.
+
+== Several thousand customers exposed; no customer-side configuration would have prevented it
+layout: stage
+stage: 04
+phase: Impact
+fact: Exposed | several thousand Azure customers, many Fortune 500
+fact: Customer controls | none that would have helped
+fact: Responsibility | tenant isolation is unambiguously the provider's
+fact: Microsoft response | feature disabled within ~48 hours; affected customers notified
+The uncomfortable part: you cannot audit, test or compensate for this boundary.
+notes:
+Stage 04 is the impact. The page maps it to no ATT&CK technique, so the slide shows no chip.
+
+Several thousand Azure customers were exposed, including many Fortune 500 companies, with no customer-side configuration that would have prevented it. The page says this is the point of including a research finding on a page of breaches.
+
+Microsoft disabled the feature within about 48 hours, which the page calls a fast response, and notified affected customers.
+
+The page's last line on this stage is the uncomfortable part: you cannot audit, test or compensate for this boundary. The slide after next takes the controls the page says were irrelevant here.
+
+The next slide explains the shared responsibility model in general terms.
+
+== What the shared responsibility model divides
+layout: background
+source: csoh.org glossary, Shared Responsibility Model | https://csoh.org/glossary.html#term-shared-responsibility-model
+credit: Also from the csoh.org Shared Responsibility Model guide
+The provider secures the cloud: hardware, hypervisor, physical sites. The customer secures what's in the cloud: data, identities, configuration. The line shifts with the service tier.
+
+The site's guide lists tenant-to-tenant isolation as always the provider's.
+notes:
+This is a background slide, from the csoh.org glossary and the site's Shared Responsibility Model guide, in general terms.
+
+The glossary puts the model in one line. The provider secures the cloud: hardware, hypervisor and physical sites. The customer secures what is in the cloud: data, identities and configuration. The line shifts depending on the service tier.
+
+The guide explains that the customer's share shrinks moving from infrastructure as a service toward platform and software as a service, while data, identity and configuration always stay with the customer. Its list of what is always the provider's includes physical security, hardware, the backbone network, managed service internals and hypervisor isolation, which it describes as tenant-to-tenant isolation: cross-tenant escapes are the provider's problem.
+
+The page puts ChaosDB on the provider's side of that line.
+
+Also from the csoh.org Shared Responsibility Model guide: https://csoh.org/shared-responsibility-model.html#always-theirs
+
+== Every customer-side control the industry recommends was irrelevant here
+layout: compare
+col: Controls the page names | Network restrictions and least privilege | MFA and encryption at rest | Private endpoints
+col: Why none of them helped | None sit between one tenant's notebook and another tenant's keys | That boundary is the provider's to enforce | The customer has no visibility into it
+The page calls ChaosDB the clearest available demonstration that the provider's side of the shared responsibility line is not a formality.
+notes:
+This is the pattern the page draws from the chain.
+
+Every customer-side control the industry recommends was irrelevant here, and the page names them: network restrictions, least privilege, MFA, encryption at rest and private endpoints. MFA is multi-factor authentication. None of them sit between one tenant's notebook and another tenant's keys, because that boundary is the provider's to enforce and the customer has no visibility into it.
+
+The page maps this directly onto the shared responsibility model, where isolation is unambiguously the provider's side of the line. It calls ChaosDB the clearest available demonstration that the provider's side is not a formality.
+
+Hold on to that when you reach the defenses. The first one says it plainly: you could not have prevented ChaosDB, but you control how long a stolen key stays useful.
+
+== Six defenses against four stages
+layout: matrix
+columns: 01 | 02 | 03 | 04
+row: Rotate long-lived keys | 03
+row: Identity-based access over keys | 03
+row: Disable unused service features | 01
+row: Read provider isolation posture | -
+row: Keep your own data-plane logs | -
+row: Plan for a cross-tenant flaw | -
+No defense is tied to stage 02 or 04. Three name no stage.
+notes:
+This matrix sets the page's six defenses against the four stages. A cell is marked only where the page ties that defense to that stage.
+
+Rotating long-lived service keys answers stage 03: it names Cosmos DB primary keys and says you control how long a stolen key stays useful. Preferring identity-based access answers stage 03 too: it calls a long-lived key a bearer token with no context and no expiry, and says this incident is what that costs. Disabling unused features answers stage 01, because the vulnerable surface was a notebook feature many customers had never touched.
+
+Three defenses name no stage: reading your provider's isolation posture, keeping your own data-plane logs, and planning for a provider's cross-tenant flaw. Two near misses are not ties. The logging defense speaks of anomalous reads made with a technically valid credential, but does not name the primary keys. The isolation defense mentions Wiz's PEACH, which stage 01 also mentions, only as an example framework.
+
+Now look at the empty columns. No defense is tied to stage 02, the escalation and rewritten firewall rules, or to stage 04, the exposure itself. Stage 04 itself says no customer-side configuration would have prevented it. That gap is the second discussion question.
+
+== Shorten a stolen key's life, and prefer identities to keys
+layout: compare
+col: Rotate long-lived keys (stage 03) | The one lever you hold: how long a stolen key stays useful | Rotate primary keys and storage account keys routinely and automatically | Test it: most organizations discover breakage during an incident
+col: Identity-based access (stage 03) | Cosmos DB and storage accounts support Entra ID and role-based access | Revocable centrally, subject to conditional access, better logs
+A long-lived key is a bearer token with no context and no expiry.
+notes:
+Two defenses come straight from stage 03.
+
+First, rotate long-lived service keys on a schedule, because that is the one lever you hold. You could not have prevented ChaosDB, but you control how long a stolen key stays useful. Cosmos DB primary keys, storage account keys and their equivalents elsewhere should be rotated routinely and automatically, and the rotation should be tested. The page warns that most organizations discover during an incident that something breaks when a key changes.
+
+Second, prefer identity-based access over long-lived keys wherever the service allows it. Cosmos DB supports Entra ID authentication and role-based access control, and storage accounts support the same. Identity-based access can be revoked centrally, is subject to conditional access, and produces better logs.
+
+The page's reason fits in one line: a long-lived key is a bearer token with no context and no expiry, and this incident is what that costs. A bearer token is one that works for whoever holds it.
+
+== Turn off features you do not use; ask how isolation works
+layout: compare
+col: Disable unused features (stage 01) | The vulnerable surface was a notebook feature many customers had never touched | Every optional capability is attack surface you inherit by default | The smallest version of the service is the safest version
+col: Read your provider's isolation posture | Ask how tenant isolation is implemented for the services you rely on | Ask whether the provider publishes research or attestations about it | Ask how it has handled past isolation findings
+notes:
+Two more defenses.
+
+Disable managed-service features you do not use. The vulnerable surface was a notebook feature many customers had never touched. Every optional capability a managed service offers is attack surface you inherit by default, so the page says to review what is enabled on your data services and turn off what you are not using. In its words, the smallest version of the service is the safest version.
+
+Read your provider's isolation posture as part of vendor assessment, not as a given. Ask how tenant isolation is implemented for the specific services you rely on, whether the provider publishes research or attestations about it, and how it has handled past isolation findings. The page adds that frameworks like Wiz's PEACH exist to make that a structured conversation rather than a vague one.
+
+This second defense names no stage.
+
+== Keep your own logs; plan for the provider's flaw
+layout: compare
+col: Keep your own data-plane logs | Make "were we accessed" answerable by you | Stream diagnostic logs to your own SIEM, with independent retention | Baseline normal access so anomalous reads stand out
+col: Plan for a cross-tenant flaw | Rare, not zero: add it to your risk register and IR plan | Decide in advance which keys to rotate, in what order, how fast | And what you tell customers
+The organizations that handled ChaosDB well could rotate quickly.
+notes:
+The last two defenses name no stage.
+
+Keep your own data-plane logs, so the question "were we accessed" is answerable by you. If the provider's control plane is what failed, provider-side assurances are exactly what you cannot rely on. Stream Cosmos DB and equivalent diagnostic logs into your own SIEM with independent retention, and baseline normal access so anomalous reads stand out even when the credential used was technically valid. A SIEM is a security information and event management system.
+
+Include "the provider had a cross-tenant flaw" in your risk register and your IR plan. IR is incident response. The page says it is rare and it is not zero. Decide in advance what you would do on such an advisory: which keys you rotate, in what order, how fast, and what you tell customers.
+
+The page closes its defenses on the point this slide ends with. The organizations that handled ChaosDB well were the ones that could rotate quickly, and that is a capability built in advance.
+
+== Check your own environment
+layout: checklist
+check: Are long-lived service keys rotated routinely and automatically, and has rotation been tested?
+check: Where Entra ID authentication is supported, do you use it instead of keys?
+check: Have you turned off unused optional features on your data services?
+check: Do you know how your providers implement tenant isolation for services you rely on?
+check: Do your data-plane logs reach your own SIEM, with independent retention?
+check: Is a provider's cross-tenant flaw in your risk register and IR plan?
+check: Could you say which keys you would rotate first, in what order, how fast?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether long-lived service keys, such as Cosmos DB primary keys and storage account keys, are rotated routinely and automatically, and whether anyone has tested what breaks when a key changes. Ask where a service supports Entra ID authentication and role-based access control, and whether you use it instead of keys.
+
+Ask whether you have reviewed what is enabled on your data services and turned off what you are not using. Ask whether you know how your providers implement tenant isolation for the services you rely on, and how they have handled past isolation findings.
+
+Ask whether Cosmos DB and equivalent diagnostic logs reach your own SIEM with independent retention, with normal access baselined. Finally, ask whether a provider's cross-tenant flaw is in your risk register and incident response plan, and whether you could say today which keys you would rotate first, in what order and how fast.
+
+== If your provider announced a cross-tenant flaw tomorrow, what would you do?
+layout: question
+Microsoft advised every Cosmos DB customer to regenerate their primary keys.
+
+Which keys would you rotate first, in what order, and how fast? What would you tell your customers?
+notes:
+Give the room a minute with this one before moving on.
+
+Microsoft disabled the notebook feature and advised every Cosmos DB customer to regenerate their primary keys. A key obtained in August 2021 kept working until it was rotated. The page says rotation is how you control how long a stolen key stays useful.
+
+Ask each person to name the first key they would rotate in their own environment, what depends on it, and how long the rotation would take. The answer slide gives what the page says about preparing for such an advisory.
+
+== Decide before the advisory: rotation is built in advance
+layout: answer
+The page says to decide in advance which keys you rotate, in what order, how fast, and what you tell customers.
+- Rotate long-lived keys routinely and automatically, and test the rotation.
+- The organizations that handled ChaosDB well could rotate quickly.
+notes:
+The page's answer is to make the decision before the advisory arrives.
+
+Include "the provider had a cross-tenant flaw" in your risk register and your incident response plan. Decide in advance what you would do on such an advisory: which keys you rotate, in what order, how fast, and what you tell customers.
+
+Rotation itself should be routine and automatic, and tested, because the page says most organizations discover during an incident that something breaks when a key changes.
+
+The page's closing point on defenses: the organizations that handled ChaosDB well were the ones that could rotate quickly, and that is a capability built in advance. Bring the group's answers back to this.
+
+== What could a customer have added for stages 02 and 04?
+layout: question
+The page ties no defense to the escalation and rewritten firewall rules, or to the exposure of several thousand customers.
+
+What would you add, and would it have mattered here?
+notes:
+This question comes from the empty columns in the defense matrix.
+
+The page ties defenses to stages 01 and 03, and three more name no stage. It ties none to stage 02, the local escalation and the firewall rules changed from inside the notebook, or to stage 04, the exposure of several thousand Azure customers.
+
+Let the group propose ideas before you show the answer slide. For each proposal, ask whether it sits between one tenant's notebook and another tenant's keys, the boundary the page says the customer has no visibility into.
+
+== The page says this boundary was the provider's to enforce
+layout: answer
+No customer-side configuration would have prevented it, the page says, and isolation is unambiguously the provider's side of the line.
+
+You could not have prevented ChaosDB, but you control how long a stolen key stays useful.
+notes:
+Be clear that the page answers this directly, and that this deck adds no control of its own.
+
+The page says every customer-side control the industry recommends was irrelevant here: network restrictions, least privilege, MFA, encryption at rest and private endpoints. None of them sit between one tenant's notebook and another tenant's keys, because that boundary is the provider's to enforce and the customer has no visibility into it.
+
+The page's first defense says you could not have prevented ChaosDB, but you control how long a stolen key stays useful. Its other defenses are on the defense slides, and none is tied to stage 02 or stage 04.
+
+If the group proposes a control for stage 02 or stage 04, treat it as the group's own. The page ties none to those stages.
+
+== Sources
+layout: links
+link: Wiz, ChaosDB disclosure | https://chaosdb.wiz.io/
+link: Wiz, ChaosDB explained: a technical walkthrough | https://www.wiz.io/blog/chaosdb-explained-azures-cosmos-db-vulnerability-walkthrough
+link: Wiz, PEACH tenant isolation framework | https://www.wiz.io/blog/introducing-peach-a-tenant-isolation-framework-for-cloud-applications
+link: MITRE ATT&CK T1611 | https://attack.mitre.org/techniques/T1611/
+Disclosure: this reconstruction is sourced to research published by Wiz, and the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Wiz's ChaosDB disclosure and its technical walkthrough are the research the page reconstructs. The third link is Wiz's PEACH tenant isolation framework, which the page names in stage 01 and in its vendor assessment defense. The MITRE page defines T1611, Escape to Host, the technique the page maps to stage 02.
+
+Say the disclosure aloud once more: this reconstruction is sourced to research published by Wiz, and the site's author works at Wiz. Caveat the trust you grant accordingly.
+
+The background slides name their own sources: the csoh.org glossary, the site's Shared Responsibility Model guide, and MITRE ATT&CK.
+
+== Related kill chain and defense topics
+layout: links
+link: Entra ID Actor token | breaches/entra-id-actor-token.html
+link: Azure security | azure-security.html
+link: Shared responsibility | shared-responsibility-model.html
+link: Data security and KMS | data-security.html
+link: Non-human identity | non-human-identity.html
+Like the Entra ID Actor token flaw, ChaosDB was research rather than a breach, the page says.
+notes:
+One related kill chain on csoh.org, and the page's related defense topics.
+
+The page sets ChaosDB beside the Entra ID Actor token flaw, which has its own kill chain. Both were research rather than a breach. The page says Actor tokens broke authentication and ChaosDB broke tenant isolation, and calls ChaosDB the more fundamental of the two. It draws no other connection between them.
+
+The defense topics cover Azure security, the shared responsibility model, data security and key management, and non-human identity.
