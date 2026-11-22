@@ -1,0 +1,433 @@
+title: CircleCI 2023
+page: breaches/circleci-session-theft.html
+as-of: 2026-11-22
+promise: Malware CircleCI's antivirus missed stole an engineer's 2FA-backed SSO session cookie, letting the actor into a subset of production systems holding customer secrets, so CircleCI told every customer to rotate every secret on the platform.
+
+== At a glance
+layout: stats
+stat: 2FA | satisfied and irrelevant | a session cookie was stolen, not a password
+stat: None | detections by the antivirus in place | on an engineer's laptop
+stat: All | customer secrets on the platform | declared compromised
+stat: 13 | days from the malware to anyone noticing | a customer, from odd GitHub OAuth activity
+CircleCI is a CI/CD platform, so the production systems the actor reached held customers' secrets.
+notes:
+Start with the four points the page leads with, and keep each in the page's words.
+
+First, what was stolen was not a password but a live single sign-on session cookie, already authenticated and already backed by two-factor authentication. The page's words: 2FA was satisfied and irrelevant.
+
+Second, the malware went undetected by the endpoint antivirus in place on the engineer's laptop. The page's word for detection at this step is none.
+
+Third, every customer secret on the platform was declared compromised. CircleCI's advisory told every customer to rotate every secret they had stored there.
+
+Fourth, the intrusion was found by a customer, who noticed odd GitHub OAuth activity. The page counts thirteen days between the malware landing and anyone noticing.
+
+CI/CD stands for continuous integration and continuous delivery: pipelines that build, test and deploy code automatically. SSO is single sign-on, and 2FA is two-factor authentication. An API key is a credential one program presents to another.
+
+The page rates the incident Critical, and puts the reason it matters plainly. CircleCI is a CI/CD platform, so the production systems the actor reached held customers' environment variables, API keys and tokens.
+
+== What happened, and when
+layout: timeline
+event: December 16, 2022 | Information-stealing malware deployed on a CircleCI engineer's laptop
+event: December 29 | A customer alerts CircleCI to suspicious GitHub OAuth activity
+event: December 31 | CircleCI begins rotating all customer GitHub OAuth tokens itself
+event: January 4, 2023 | Advisory: every customer should rotate every secret stored on the platform
+The page gives no date for the cookie theft or the move into production. Spacing is not to scale.
+notes:
+The page gives four dates, and the timeline shows only those.
+
+On December 16, 2022 information-stealing malware was deployed on the laptop of a CircleCI engineer, and the company's antivirus did not detect it. The malware stole a live SSO session cookie, and the actor used it to impersonate the engineer remotely and escalate into a subset of production systems. The page gives no date for either of those steps, so they are not on the timeline.
+
+On December 29 a customer flagged suspicious GitHub OAuth activity to CircleCI. On December 31 CircleCI began rotating all GitHub OAuth tokens on customers' behalf. On January 4, 2023 it published an advisory telling every customer to rotate every secret they had stored on the platform.
+
+The markers are evenly spaced, so read them as order only. The page counts thirteen days between the malware landing and anyone noticing.
+
+The page says the instruction is what makes this chain worth reading: not "we were breached" but "assume everything you gave us is compromised, and act today."
+
+== Confirmed abuse, and assumed exposure
+layout: compare
+col: Confirmed downstream abuse | Fewer than five customers, CircleCI reported | Confirmed unauthorized access to third-party systems
+col: Assumed exposure | The entire customer base | Because the compromised systems held all of it | Every customer told to rotate every secret
+The page says the gap between the two is where the real cost of this incident landed.
+notes:
+Two measures of harm sit side by side on this page, and they answer different questions.
+
+The first is confirmed abuse. CircleCI reported that fewer than five customers experienced confirmed unauthorized access to third-party systems. Keep the words fewer than five, and keep CircleCI as the source, when you say this aloud.
+
+The second is assumed exposure. The page says the exposure was necessarily assumed across the whole customer base, because the compromised systems held all of it. That is why CircleCI told every customer to rotate every secret stored on the platform.
+
+The page puts the lesson in that gap: between confirmed abused and must be assumed compromised is where, it says, the real cost of this incident landed.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | An infostealer the antivirus missed | T1204.002
+step: 02 | Credential Access | A 2FA-backed SSO session cookie | T1539
+step: 03 | Privilege Escalation | Production, and customers' secrets | T1552.007
+step: 04 | Detection | A customer noticed first | -
+step: 05 | Response | Rotate every secret | -
+The page maps no ATT&CK technique to stages 04 and 05. Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's five stages, each with its phase and, where the page gives one, an ATT&CK technique it maps to that stage.
+
+Stage 01 is initial access: information-stealing malware on an engineer's laptop, which the antivirus did not catch. Stage 02 is credential access: the malware stole a 2FA-backed SSO session cookie. Stage 03, under Privilege Escalation, is the impersonated engineer's access to a subset of production systems, where customers' environment variables, API keys and tokens were held.
+
+Stages 04 and 05 are the detection and the response. A customer noticed suspicious GitHub OAuth activity first, and CircleCI told every customer to rotate every secret. The page maps no ATT&CK technique to either.
+
+ATT&CK is MITRE's public catalogue of attacker tactics and techniques. The next slides take each stage in turn.
+
+== December 16, 2022: an infostealer the antivirus did not catch
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1204.002 | User Execution: Malicious File
+technique: T1027 | Obfuscated Files or Information
+fact: Target | the laptop of a CircleCI engineer
+fact: Detection | none; the deployed antivirus did not flag it
+fact: Malware class | information stealer, the family behind several other csoh.org chains
+That engineer's access reached customers' deployment credentials.
+notes:
+On December 16, 2022 information-stealing malware was deployed to a CircleCI engineer's laptop. The page maps this stage to T1204.002, User Execution: Malicious File, and T1027, Obfuscated Files or Information. It does not describe how the malware was delivered.
+
+An infostealer, or information stealer, is malware that collects credentials, session cookies and similar data from the machine it infects.
+
+CircleCI's report is direct about the detection failure: the antivirus deployed on the machine did not catch the malware. The page says that is worth stating plainly, because signature-based endpoint protection routinely misses current infostealers. The family, it says, is cheap, widely available and repacked constantly to defeat exactly that.
+
+The page calls this the same class of tooling that opened Snowflake, Vercel / Context.ai and Megalodon, each of which has its own kill chain on csoh.org. Here the machine belonged to an engineer at a company whose product holds other companies' deployment credentials.
+
+The next slide explains obfuscation and software packing in general terms.
+
+== What ATT&CK calls obfuscation and software packing
+layout: background
+source: MITRE ATT&CK T1027 | https://attack.mitre.org/techniques/T1027/
+credit: Also from MITRE ATT&CK T1027.002, Software Packing (attack.mitre.org)
+ATT&CK's Obfuscated Files or Information covers making a file hard to discover or analyze by encrypting, encoding or otherwise obfuscating it. Software packing compresses or encrypts an executable, changing its file signature to try to avoid signature-based detection.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes adversaries attempting to make an executable or file difficult to discover or analyze by encrypting, encoding, or otherwise obfuscating its contents on the system or in transit. Payloads may be compressed, archived or encrypted in order to avoid detection.
+
+One sub-technique is Software Packing. ATT&CK calls software packing a method of compressing or encrypting an executable, and says packing an executable changes the file signature in an attempt to avoid signature-based detection. Most decompression techniques decompress the executable code in memory. The tools that do this are called packers; ATT&CK names MPRESS and UPX as examples, and adds that adversaries may create their own packing techniques that do not leave the same artifacts as well-known packers.
+
+The page maps its stage 01 to T1027 and says the infostealer family is repacked constantly. It does not say how the malware on this laptop was obfuscated.
+
+Also from MITRE ATT&CK T1027.002, Software Packing: https://attack.mitre.org/techniques/T1027/002/
+
+== The malware stole a 2FA-backed SSO session, not a password
+layout: stage
+stage: 02
+phase: Credential Access
+technique: T1539 | Steal Web Session Cookie
+technique: T1550.004 | Web Session Cookie
+fact: Stolen | a live SSO session cookie, already backed by 2FA
+fact: What it proves | authentication already succeeded, second factor included
+fact: Bypassed | password entry, MFA challenge, and any sign-in-based detection
+fact: Result | remote impersonation of the engineer
+"We enforce MFA" and "our sessions cannot be stolen" are unrelated claims.
+notes:
+The page calls this the mechanism that makes the chain instructive. It maps the stage to T1539, Steal Web Session Cookie, and T1550.004, Web Session Cookie.
+
+A session cookie is the artifact issued after authentication succeeds. It is the system's own record that the user proved who they were, including the second factor. Steal it and replay it, the page says, and you inherit that proof without repeating any of it. There is no password prompt, no MFA challenge, and no failed login for anyone to alert on. Here the cookie let the actor impersonate the engineer remotely.
+
+MFA is multi-factor authentication; two-factor authentication is one form of it.
+
+The page calls this the same property that made the Okta HAR file tokens dangerous ten months later, arriving here from an endpoint rather than a support ticket. A HAR file is a browser's recording of its network traffic. Okta's incident has its own kill chain on csoh.org.
+
+That property is why, the page says, "we enforce MFA" and "our sessions cannot be stolen" are unrelated claims. The next slide explains single sign-on in general terms.
+
+== What single sign-on is
+layout: background
+source: csoh.org glossary, SSO | https://csoh.org/glossary.html#term-sso
+credit: Also from Microsoft Learn, What is single sign-on in Microsoft Entra ID? (learn.microsoft.com)
+Single sign-on lets a user sign in once and get into many applications without entering credentials again. In Microsoft's account of its own service, the identity provider verifies the user and confirms their identity to each app.
+notes:
+Background, from the csoh.org glossary and Microsoft Learn, in general terms.
+
+The csoh.org glossary defines single sign-on, SSO, as signing in once and getting into many applications without re-entering credentials.
+
+Microsoft says that with SSO, users sign in with one set of credentials, and can then open every assigned application without signing in again.
+
+Microsoft describes its own platform. When Microsoft Entra ID is the identity provider, users sign in once with their work credentials. Entra ID verifies each user and confirms their identity to the app, and apps no longer manage separate usernames and passwords. Microsoft sets the sign-in out in four steps: a user opens an app, the app sends the user to Entra ID, Entra ID verifies the user's work credentials, and it confirms the user's identity so the app grants access.
+
+The page does not name CircleCI's identity provider. It says only that the stolen cookie was a live SSO session cookie, already backed by two-factor authentication.
+
+Also from Microsoft Learn: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/what-is-single-sign-on
+
+== Into a subset of production systems, where customers' secrets were held
+layout: stage
+stage: 03
+phase: Privilege Escalation
+technique: T1552.007 | Unsecured Credentials: Container API
+fact: Reached | a subset of CircleCI production systems
+fact: Held there | customer environment variables, API keys, and access tokens
+fact: Downstream abuse | fewer than five customers confirmed, CircleCI reported
+fact: Assumed exposure | the entire customer base
+A CI platform must hold customers' deployment credentials to function.
+notes:
+The impersonated engineer had access to a subset of CircleCI's production systems, where customers' environment variables, API keys and tokens were held. The page maps this stage to T1552.007, Unsecured Credentials: Container API.
+
+An environment variable is a named setting a platform hands to a program when it runs, often a key or a token.
+
+The page explains why this matters. A CI/CD platform is a custodian of other organizations' most sensitive credentials by function: to build and deploy on a customer's behalf, it must hold that customer's cloud keys, registry tokens and repository credentials. So an engineer with production access at such a company is, transitively, an engineer with access to thousands of other companies' production environments.
+
+CircleCI reported that fewer than five customers experienced confirmed unauthorized access to third-party systems. The exposure was still necessarily assumed across the whole customer base, because the compromised systems held all of it.
+
+The next slide explains the ATT&CK technique in general terms.
+
+== What ATT&CK calls Unsecured Credentials: Container API
+layout: background
+source: MITRE ATT&CK T1552.007 | https://attack.mitre.org/techniques/T1552/007/
+ATT&CK describes gathering credentials through APIs in a container environment, such as the Docker and Kubernetes APIs, which let users manage container resources and cluster components remotely. The page maps stage 03 here without describing the method.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes adversaries gathering credentials via APIs within a containers environment. APIs in these environments, such as the Docker API and Kubernetes APIs, allow a user to remotely manage their container resources and cluster components. API stands for application programming interface.
+
+It gives two general examples. An adversary may access the Docker API to collect logs that contain credentials to cloud, container and various other resources in the environment. An adversary with sufficient permissions, such as via a pod's service account, may also use the Kubernetes API to retrieve credentials from the Kubernetes API server. A pod is a group of containers that Kubernetes runs together.
+
+These are ATT&CK's examples, not this incident's. The page maps its stage 03 to this technique, and says the production systems the impersonated engineer could reach held customers' environment variables, API keys and tokens. It does not describe how those were accessed, and it does not name Docker or Kubernetes.
+
+== December 29: a customer flagged suspicious GitHub OAuth activity
+layout: stage
+stage: 04
+phase: Detection
+fact: Gap | 13 days from the malware landing to anyone noticing
+fact: Who noticed | a customer, from outside CircleCI
+fact: What they saw | suspicious GitHub OAuth activity
+fact: December 31 | CircleCI begins rotating all GitHub OAuth tokens itself
+fact: Pattern | customer-side detection beating vendor-side, again
+Your monitoring of a vendor's behaviour in your environment is sometimes better than its monitoring of itself, the page says.
+notes:
+On December 29 a customer alerted CircleCI to suspicious GitHub OAuth activity. Thirteen days had elapsed between the malware landing and anyone noticing, and the notice came from outside. The page maps no ATT&CK technique to this stage.
+
+OAuth lets an application act on a user's account with a token instead of the user's password. The next slide explains OAuth access tokens in general terms.
+
+The page calls this the same pattern as Okta, where three customers found the intrusion before the vendor. It says the shape is consistent enough across its library to be worth naming as an expectation rather than an anomaly: your monitoring of a vendor's behaviour in your environment is sometimes better than their monitoring of themselves, because you are watching a smaller surface with more context. Keep the word sometimes.
+
+On December 31 CircleCI began rotating all customer GitHub OAuth tokens itself. The page calls the response from December 31 onwards fast and unusually decisive: it rotated tokens on customers' behalf rather than waiting for them to act.
+
+== What OAuth access tokens are
+layout: background
+source: IETF RFC 6749, The OAuth 2.0 Authorization Framework | https://www.rfc-editor.org/rfc/rfc6749
+OAuth 2.0 lets a third-party application obtain limited access to a service on a user's behalf, with their approval. Instead of the user's password, the application gets an access token: a string denoting a specific scope, lifetime and other attributes.
+notes:
+Background, from the OAuth 2.0 specification, RFC 6749, in general terms.
+
+RFC 6749 describes a framework that lets a third-party application obtain limited access to an HTTP service, either on behalf of a resource owner, through an approval interaction between that owner and the service, or on its own behalf.
+
+In the traditional model, the specification says, a resource owner gave a third-party application its credentials, typically a password. That gave the application overly broad access, and the owner could not revoke one application's access without revoking all of them. In OAuth, the application, which the specification calls the client, instead obtains an access token: a string denoting a specific scope, lifetime and other access attributes. An authorization server issues it with the resource owner's approval.
+
+The specification's own example: a user can grant a printing service access to her photos stored at a photo-sharing service, without sharing her username and password with the printing service.
+
+The page says a customer noticed suspicious GitHub OAuth activity and that CircleCI rotated all customer GitHub OAuth tokens. It does not describe how those tokens were scoped or what the activity was.
+
+== January 4, 2023: rotate every secret, and whether you could
+layout: stage
+stage: 05
+phase: Response
+fact: Instruction | rotate every secret stored on the platform
+fact: What most lacked | an inventory of those secrets and what they authorized
+fact: Readiness | hours for some; weeks for others, or quietly did not finish
+fact: Remediation | CircleCI narrowed production access, added authentication requirements, deployed MDM and endpoint detection
+The advisory was the right call, the page says, and it landed on organizations in wildly different states of readiness.
+notes:
+On January 4, 2023 CircleCI told every customer to rotate every secret stored on the platform. The page says that for many organizations the instruction was the hard part. It maps no ATT&CK technique to this stage.
+
+Rotating every secret in a CI platform means knowing what they all are, what each one authorizes, what breaks when it changes, and having a path to replace it. Most teams, the page says, discovered they had none of that. Some rotated in hours. Others spent weeks, or quietly did not finish.
+
+The page calls CircleCI's own remediation substantial: restricting production access to a smaller group, adding authentication requirements, and deploying MDM and endpoint tooling targeting the specific behaviours used. MDM is mobile device management, software that lets an organization enrol and manage its devices.
+
+The transferable question, the page says, is the one pointed at the customer, and it is worth answering before it is asked: if a platform you depend on told you today to rotate every secret you have given it, how long would that take? It comes back in the discussion.
+
+== Three stages the page ties to other kill chains
+layout: text
+- 01: the class of tooling that opened Snowflake, Vercel / Context.ai and Megalodon
+- 02: the property that made the Okta HAR file tokens dangerous
+- 04: a customer noticed first, as three customers did at Okta
+notes:
+The page ties three of its stages to other kill chains on csoh.org, and draws a pattern from each.
+
+At stage 01, it calls the infostealer the same class of tooling that opened Snowflake, Vercel / Context.ai and Megalodon.
+
+At stage 02, it calls the stolen session the same property that made the Okta HAR file tokens dangerous ten months later. There the session tokens came from a support ticket; here the cookie came from an endpoint.
+
+At stage 04, it calls the customer's alert the same pattern as Okta, where three customers found the intrusion before the vendor, and says this shape is consistent enough across its library to be worth naming as an expectation rather than an anomaly.
+
+The page draws no other connection between CircleCI and those chains. Each has its own kill chain on csoh.org, linked on the related kill chains slide.
+
+== Six defenses against five stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05
+row: Sessions bound to a device | 02
+row: Endpoints layered beyond antivirus | 01 | 03
+row: A secret inventory, rehearsed | 05
+row: Short-lived, federated CI credentials | 03 | 05
+row: Vendor activity monitored | 04
+row: CI access scoped per project | 03
+A mark means the defense names something from that stage.
+notes:
+This matrix is the deck's reading of the page's six defenses against its five stages. The defenses name no stage numbers, so a cell is marked only where a defense names something from that stage.
+
+Binding sessions answers stage 02: it makes a stolen cookie useless elsewhere, and the page says MFA at login does nothing about a session stolen after login.
+
+Layering endpoint defenses answers stage 01, where, in the page's words, antivirus missed the stealer. Its instruction to restrict which machines can reach production at all names the production systems stage 03 reached.
+
+The secret inventory answers stage 05: build it before someone tells you to rotate, then rehearse.
+
+Short-lived, federated credentials mean no durable cloud credential sits on the platform, where stage 03 says the platform must hold customers' cloud keys, and the page says they turn rotate everything, stage 05, into a non-event.
+
+Monitoring vendors answers stage 04: a customer caught this through unusual GitHub OAuth activity.
+
+Scoping CI access answers stage 03, so that a single custodian never holds the whole set.
+
+The scoping defense also names OAuth grants, a word stage 04 shares; the deck does not read that as a tie, so that cell stays empty.
+
+== Bind sessions to a device; assume antivirus will miss the stealer
+layout: compare
+col: Bind sessions (02) | Bind tokens to device or network context, where your identity provider supports it | Shorten session lifetimes sharply for privileged roles | Require re-authentication for sensitive actions
+col: Layer endpoints (01, 03) | EDR with behavioural detection, not signatures alone | Restrict which machines can reach production at all | Harden engineer endpoints with production access like servers
+MFA at login does nothing about a session stolen after login, the page says.
+notes:
+Two defenses for the first two stages and the step into production.
+
+First, bind sessions to a device, so a stolen cookie is useless elsewhere. The page says the whole intrusion rests on a portable session. Where your identity provider supports it, bind tokens to device or network context, shorten session lifetimes sharply for privileged roles, and require re-authentication for sensitive actions. MFA at login does nothing about a session stolen after login, which the page calls the specific gap this chain demonstrates. An identity provider is the system that authenticates users for other applications.
+
+Second, assume endpoint antivirus will miss the stealer, and layer accordingly. It did here. Use EDR with behavioural detection rather than signatures alone, restrict which machines can reach production at all, and treat any engineer endpoint with production access as a system requiring the same hardening as a server, because, the page says, functionally it is one. EDR is endpoint detection and response: software that records and analyses activity on a machine.
+
+== Build the secret inventory; use short-lived, federated CI credentials
+layout: compare
+col: Secret inventory (05) | Know every secret each third-party platform holds | What it authorizes, who owns it, the command that rotates it | Then rehearse a full rotation
+col: Federated credentials (03, 05) | OIDC federation between your CI provider and your cloud accounts | No durable cloud credential sits on the platform | The job mints one per run, scoped and expiring in minutes
+The page calls the inventory the single control that separated an afternoon's work from weeks.
+notes:
+Two defenses for what the platform held and the rotation that followed.
+
+First, build the secret inventory before someone tells you to rotate. Know every secret held by every third-party platform, what it authorizes, who owns it, and the command that rotates it. Then rehearse a full rotation. The page calls this the single control that separated the organizations that handled this in an afternoon from the ones that took weeks, and says it is entirely within your gift.
+
+Second, use short-lived, federated credentials in CI instead of stored static secrets. The page says the stolen material was valuable because it was long-lived and stored. OIDC federation between your CI provider and your cloud accounts means no durable cloud credential sits on the platform at all: the job mints one per run, scoped and expiring in minutes. The page says that converts rotate everything into a non-event.
+
+OIDC is OpenID Connect, an identity layer built on OAuth. In OIDC federation, the cloud trusts a short-lived token from the CI job and issues it temporary credentials.
+
+== Watch what vendors do; scope the CI platform per project
+layout: compare
+col: Monitor vendors (04) | Alert on third-party integration behaviour in your own logs | Unusual repository access, token use from new locations | Activity outside normal build windows
+col: Scope CI access (03) | Grant repository access per project | Restrict which secrets each pipeline can read | Separate production deployment credentials from build credentials
+Broad organization-wide OAuth grants to a CI provider mean one compromise reaches everything, the page says.
+notes:
+Two defenses for what you can watch and what you can limit.
+
+First, monitor what your vendors do inside your environment. A customer caught this by noticing unusual GitHub OAuth activity attributable to CircleCI. Alert on third-party integration behaviour in your own logs, such as unusual repository access, token use from new locations, and activity outside normal build windows, because, the page says, you may well see it before the vendor does.
+
+Second, scope the CI platform's access to the minimum, per project. Broad organization-wide OAuth grants to a CI provider mean one compromise reaches everything. Grant repository access per project, restrict which secrets each pipeline can read, and separate production deployment credentials from build credentials, so that a single custodian never holds the whole set.
+
+A pipeline is the automated sequence of build, test and deploy steps a CI platform runs for a project.
+
+== Check your own environment
+layout: checklist
+check: Are sessions bound to a device, and privileged sessions kept short?
+check: Does endpoint detection on engineer machines go beyond signatures?
+check: Can you say which machines can reach production?
+check: Can you list every secret your third-party platforms hold, with owner and rotation command?
+check: Do your CI jobs get short-lived cloud credentials through OIDC federation?
+check: Would your logs show a vendor's integration acting outside normal build windows?
+check: Is each CI project granted only the repositories and secrets it needs?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether your identity provider binds sessions to a device or network context, whether sessions for privileged roles are short, and whether sensitive actions require re-authentication. Ask whether endpoint detection on engineer machines is behavioural rather than signatures alone, and whether you can say which machines can reach production at all.
+
+Ask whether you could list every secret held by every third-party platform, with what it authorizes, who owns it and the command that rotates it, and whether you have ever rehearsed a full rotation. Ask whether your CI jobs get short-lived cloud credentials through OIDC federation instead of stored static secrets.
+
+Finally, ask whether your own logs would show a vendor's integration accessing unusual repositories, using tokens from new locations or acting outside normal build windows, and whether each CI project is granted only the repositories and secrets it needs.
+
+== How long would rotating every secret you gave a platform take?
+layout: question
+CircleCI told every customer to rotate every secret stored on its platform. Some rotated in hours; others spent weeks, or quietly did not finish.
+
+If a platform you depend on told you that today, how long would it take?
+notes:
+Give the room a minute with this one before moving on.
+
+This is the page's own question, and it says the question is worth answering before it is asked. Rotating every secret in a CI platform means knowing what they all are, what each one authorizes, what breaks when it changes, and having a path to replace it. The page says most teams discovered they had none of that.
+
+Ask each person to name one platform in their own environment that holds their secrets, and to estimate how long a full rotation there would take. Ask what they would need to know first.
+
+The answer slide gives what the page says to do.
+
+== The page: build the inventory, then rehearse a full rotation
+layout: answer
+Answer it before anyone asks, the page says.
+- Know every secret each platform holds, what it authorizes, who owns it
+- Know each rotation command; rehearse a full rotation
+- Use OIDC federation, so no durable cloud credential sits on the platform
+notes:
+The page's answer is to build the secret inventory before someone tells you to rotate.
+
+Know every secret held by every third-party platform, what it authorizes, who owns it, and the command that rotates it. Then rehearse a full rotation. The page calls this the single control that separated the organizations that handled this in an afternoon from the ones that took weeks.
+
+It adds a second answer that shrinks the problem. With OIDC federation between your CI provider and your cloud accounts, no durable cloud credential sits on the platform at all; the job mints one per run, scoped and expiring in minutes. The page says that converts rotate everything into a non-event.
+
+Bring the group's estimates back to this. If an estimate starts with finding out what the secrets are, the page's point is to build that inventory before anyone asks.
+
+== What would notice a valid session used from another machine?
+layout: question
+The stolen cookie was already backed by 2FA. There was no password prompt, no MFA challenge and no failed login to alert on.
+
+What in your environment would stop or notice that session being used elsewhere?
+notes:
+Give the room a minute with this one too.
+
+The setting is stage 02. The malware stole a live SSO session cookie, already backed by two-factor authentication, and the actor used it to impersonate the engineer remotely. The page says there was no password prompt, no MFA challenge, and no failed login for anyone to alert on.
+
+Ask each person to name a specific control in their own environment that would stop a valid session being replayed from another machine, or notice it. Watch for answers that rely on MFA at sign-in, since this session had already passed it.
+
+The answer slide gives what the page says to do.
+
+== The page: bind the session to a device, and keep it short
+layout: answer
+MFA at login does nothing about a session stolen after login, the page says.
+- Bind tokens to device or network context, where your identity provider supports it
+- Shorten session lifetimes sharply for privileged roles
+- Require re-authentication for sensitive actions
+notes:
+The page's answer is to bind sessions to a device, so a stolen cookie is useless elsewhere.
+
+It says the whole intrusion rests on a portable session. Where your identity provider supports it, bind tokens to device or network context, shorten session lifetimes sharply for privileged roles, and require re-authentication for sensitive actions.
+
+It says why MFA alone does not answer this: MFA at login does nothing about a session stolen after login, which it calls the specific gap this chain demonstrates.
+
+Bring the group's answers back to this. If an answer depends on a check at sign-in, the page's point is that a stolen session inherits that check without repeating it.
+
+== Sources
+layout: links
+link: CircleCI, incident report for January 4, 2023 | https://circleci.com/blog/jan-4-2023-incident-report/
+link: CircleCI, security alert and customer guidance | https://circleci.com/blog/january-4-2023-security-alert/
+link: Help Net Security, post-mortem analysis | https://www.helpnetsecurity.com/2023/01/16/circleci-breach/
+link: The Hacker News, malware on the engineer's laptop | https://thehackernews.com/2023/01/malware-attack-on-circleci-engineers.html
+link: MITRE ATT&CK T1539 | https://attack.mitre.org/techniques/T1539/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+CircleCI's incident report is its own account of what happened, and its security alert carries its customer guidance. Help Net Security published a post-mortem analysis, and The Hacker News reported on the malware on the engineer's laptop. The MITRE page defines T1539, Steal Web Session Cookie, which the page maps to stage 02.
+
+The background slides name their own sources: MITRE ATT&CK, the csoh.org glossary, Microsoft Learn and the OAuth specification.
+
+== Related kill chains and defense topics
+layout: links
+link: Snowflake | breaches/snowflake-unc5537.html
+link: Vercel / Context.ai | breaches/vercel-context-ai-oauth.html
+link: Megalodon | breaches/megalodon-github-actions.html
+link: Okta support HAR files | breaches/okta-support-har.html
+link: CI/CD security | ci-cd.html
+link: Non-human identity | non-human-identity.html
+link: Zero trust | zero-trust.html
+link: Incident response | incident-response.html
+The page ties stages 01, 02 and 04 to these four chains, and links the four defense topics.
+notes:
+Four related kill chains on csoh.org, and the page's related defense topics.
+
+At stage 01, the page calls the malware the same class of tooling that opened Snowflake, Vercel / Context.ai and Megalodon.
+
+At stage 02, it calls the stolen session the same property that made the Okta HAR file tokens dangerous ten months later. At stage 04, it calls the customer's alert the same pattern as Okta, where three customers found the intrusion before the vendor.
+
+The page draws no other connection between this chain and those four.
+
+The defense topics it links are CI/CD security, non-human identity, zero trust and incident response. Non-human identity covers the credentials that software, rather than people, uses to authenticate.
