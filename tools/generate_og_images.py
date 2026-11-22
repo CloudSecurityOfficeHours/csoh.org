@@ -508,7 +508,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/uber.html",
      "Uber 2022 Breach Kill Chain",
-     "MFA fatigue → Slack-discovered PAM secrets → AWS, GCP, Duo, OneLogin and HackerOne access. Full chain and defenses.",
+     "MFA fatigue → hardcoded PAM secret → AWS, GCP, Duo, OneLogin and HackerOne access. Full chain and defenses.",
      "Breach Kill Chain"),
     ("breaches/scattered-spider-mgm.html",
      "Scattered Spider / MGM 2023 Breach Kill Chain",
