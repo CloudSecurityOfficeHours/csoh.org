@@ -60,9 +60,10 @@ Run by the controller: it uses the Drive and Slides connectors.
 - [ ] Rebase onto `origin/main` (nothing is pushed), regenerating any generated file that conflicts, and confirm `--check` still reports 0 findings. A page that changed on main since its outline was reviewed sends that outline back through the outline procedure and its review.
 - [ ] Share each deck `anyoneWithLink` as reader. Signed out, its `/export/pdf` returns `200 application/pdf` starting `%PDF-` with one page per slide, and its `/copy` redirects to `accounts.google.com`.
 - [ ] `python3 tools/build_breach_decks.py --record <slug> <id>` for each deck, then `--stamp` twice and confirm the second run changes nothing.
-- [ ] Gates, each exit 0: `--self-test`, `--check`, `--stale --published-only` (no deck listed), `python3 tools/check_readme_coverage.py --check`, `python3 tools/check_no_inline_scripts.py`, `python3 tools/sync_glossary_usage.py --check`. `lychee --config .lychee.toml` on the batch's pages reports no errors.
-- [ ] Preview two of the batch's pages under production's CSP, light and dark: the deck line sits after the source links and its links are underlined.
-- [ ] Commit `tools/decks/breaches/published.json` and the batch's `breaches/<slug>.html` pages with the message `decks: publish <batch name> breach decks and link them from their pages`. Do not push.
+- [ ] `python3 tools/sync_breach_deck_index.py` twice (the second run reports the list up to date), so `breach-kill-chain-decks.html` lists every published deck. Shawn's rule: every batch publish runs it, in the same commit as the batch.
+- [ ] Gates, each exit 0: `--self-test`, `--check`, `--stale --published-only` (no deck listed), `python3 tools/sync_breach_deck_index.py --self-test` and `--check`, `python3 tools/check_readme_coverage.py --check`, `python3 tools/check_no_inline_scripts.py`, `python3 tools/sync_glossary_usage.py --check`. `lychee --config .lychee.toml` on the batch's pages and `breach-kill-chain-decks.html` reports no errors.
+- [ ] Preview two of the batch's pages and `breach-kill-chain-decks.html` under production's CSP, light and dark: the deck line sits after the source links and its links are underlined; the index shows one card per published deck.
+- [ ] Commit `tools/decks/breaches/published.json`, the batch's `breaches/<slug>.html` pages and `breach-kill-chain-decks.html` with the message `decks: publish <batch name> breach decks and link them from their pages`. Do not push.
 
 ---
 
