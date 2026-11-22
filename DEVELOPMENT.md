@@ -119,6 +119,7 @@ csoh.org/
 ├── threat-research.html             # Curated cloud threat research directory (incl. supply chain)
 ├── breach-timeline.html             # Cloud breach kill chain index → `breaches/`
 ├── breach-lessons.html              # Cross-incident synthesis of recurring root causes
+├── breach-kill-chain-decks.html     # Slide decks made from the kill chains; the card list is generated
 ├── cloud-breach-year-in-review.html # Every-year hub for the reviews below
 ├── cloud-breach-year-in-review-<period>.html # 5 per-period reviews
 │                                    #   (2021-2022, 2023, 2024, 2025, 2026-h1)
@@ -846,6 +847,7 @@ Always trust the live-site signals (PSI + GSC) over the codebase scorecard. The 
 | `tools/sync_calendar.py` | Renders the next twelve occurrences from the CSOH Google Calendar's public feed into the cards between the markers on `calendar.html`, scrubbing Zoom join links and dial-in details | Changing the calendar, the horizon, or the private-host list; otherwise **don't edit** -- runs every 6 hours in `update-calendar.yml` |
 | `tools/crosslink_glossary.py` | Adds `id="term-..."` to glossary `<dt>`s and hyperlinks every term mention in `<dd>`s | Run after adding/editing glossary entries |
 | `tools/crosslink_pages.py` | Hyperlinks first occurrence of each glossary term across all content pages | Run after adding/editing glossary entries (or after adding a new content page) |
+| `tools/sync_breach_deck_index.py` | Renders one card per published breach deck between the markers on `breach-kill-chain-decks.html`, from `tools/decks/breaches/published.json`, each deck's outline and the order of `breach-timeline.html` | **Don't edit** the list -- run after `build_breach_decks.py --record`; gated by `--check` in `validate-html.yml` |
 | `tools/sync_glossary_usage.py` | Writes the "Used on N pages" list under each glossary entry from the glossary links on every page | **Don't edit** the lists -- run after `crosslink_pages.py`, after adding or renaming an entry, or after changing a linking page's heading; gated by `--check` in `validate-html.yml` |
 | `glossary.html` | Cloud-security glossary (<!--count:glossary_terms-->331<!--/count--> terms) with live search and cross-linked definitions | Adding/editing terms; run `crosslink_glossary.py` *and* `crosslink_pages.py` after |
 | `glossary.js` | Live search/filter for `glossary.html` | Changing search behavior |

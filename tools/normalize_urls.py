@@ -227,6 +227,49 @@ def is_auth_wall(url):
     return bool(params & AUTH_RETURN_PARAMS)
 
 
+# Signed download URLs are the other destination that belongs to one fetch.
+# A stable link such as docs.google.com/presentation/d/<id>/export/pdf answers
+# each request with a redirect to a freshly signed URL on googleusercontent.com
+# that carries an expiry; S3, GCS, Azure and CloudFront presigned URLs carry
+# the signature and expiry in the query string. Written back into a page, any
+# of them stops working once it expires, while the stable link keeps working.
+SIGNED_DOWNLOAD_HOSTS = {'googleusercontent.com'}
+
+# Query parameters that mark a URL as signed for a limited time.
+SIGNED_URL_PARAMS = {
+    'x-amz-signature', 'x-amz-credential',   # S3 SigV4 presigned
+    'x-goog-signature', 'x-goog-credential',  # GCS V4 signed
+    'key-pair-id',                            # CloudFront signed URL
+}
+# Azure SAS needs both its signature and its expiry, since `sig` alone is a
+# common parameter name.
+AZURE_SAS_PARAMS = {'sig', 'se'}
+
+
+def is_signed_download(url):
+    """Return True if `url` is a signed, expiring download link.
+
+    Errs toward True for the same reason as is_auth_wall: a false positive
+    leaves a working redirect in place, a false negative writes a link that
+    dies when its signature expires.
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    host = (parsed.hostname or '').lower()
+    if any(host == h or host.endswith('.' + h) for h in SIGNED_DOWNLOAD_HOSTS):
+        return True
+
+    try:
+        params = {k.lower() for k in parse_qs(parsed.query,
+                                              keep_blank_values=True)}
+    except Exception:
+        return False
+    return bool(params & SIGNED_URL_PARAMS) or AZURE_SAS_PARAMS <= params
+
+
 def is_meaningful_redirect(original, resolved):
     """Return True if the redirect is worth normalizing (not just noise)."""
     if original == resolved:
@@ -236,6 +279,11 @@ def is_meaningful_redirect(original, resolved):
     # shortener rule below: a shortener expanding onto an auth wall is exactly
     # the case where "always expand" would write the broken URL.
     if is_auth_wall(resolved):
+        return False
+
+    # Nor onto a signed download URL, for the same reason: it is valid for
+    # one fetch, and the link that produced it is the one to keep.
+    if is_signed_download(resolved):
         return False
 
     # Always expand shortener domains
@@ -418,6 +466,7 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
         'redirect_resolved': [],
         'skipped_bot_blocked': [],
         'skipped_auth_wall': [],
+        'skipped_signed_download': [],
         'skipped_error': [],
         'skipped_trivial': [],
         'skipped_unsafe_destination': [],
@@ -540,6 +589,9 @@ def build_replacement_map(all_unique, skip_resolve=False, timeout=10,
                 if resolved != cleaned_url and is_auth_wall(resolved):
                     categories['skipped_auth_wall'].append(
                         (original_url, cleaned_url, resolved))
+                elif resolved != cleaned_url and is_signed_download(resolved):
+                    categories['skipped_signed_download'].append(
+                        (original_url, cleaned_url, resolved))
                 elif resolved != cleaned_url:
                     categories['skipped_trivial'].append(
                         (original_url, cleaned_url, resolved))
@@ -623,6 +675,18 @@ def print_report(replacements, categories, file_changes, dry_run):
         for orig, cleaned, resolved in categories['skipped_auth_wall']:
             print(f"  {cleaned}")
             print(f"    -> (wall) {resolved[:110]}"
+                  f"{'...' if len(resolved) > 110 else ''}")
+        print()
+
+    if categories['skipped_signed_download']:
+        print(f"Skipped (redirects to a signed download URL): "
+              f"{len(categories['skipped_signed_download'])}")
+        print("  These links were LEFT AS-IS on purpose. The destination "
+              "expires; the\n  link that produced it does not - see "
+              "is_signed_download().")
+        for orig, cleaned, resolved in categories['skipped_signed_download']:
+            print(f"  {cleaned}")
+            print(f"    -> (signed) {resolved[:110]}"
                   f"{'...' if len(resolved) > 110 else ''}")
         print()
 

@@ -123,8 +123,8 @@ CANON_THEME_TOGGLE = (
 # Deliberate de-duplication, so this does not drift back: mentorship.html is
 # in Careers only (higher intent match than Community > Live), and
 # chat-resources / contribute-resources are in Resources only. Threat Intel
-# is current events only: news, threat research, breach kill chains, and the
-# year in review. Cloud SOC, detection engineering, incident response,
+# is current events only: news, threat research, breach kill chains with their
+# slide decks, and the year in review. Cloud SOC, detection engineering, incident response,
 # pentesting, and human risk are practice pages; they stay on topics.html
 # (detection and response is also a Learn link). CTFs stay under Resources,
 # so Threat Intel does not carry a second copy. learning-path.html is featured
@@ -199,6 +199,7 @@ CANON_NAV = """\
                         <li><a href="news.html">News</a></li>
                         <li><a href="threat-research.html">Threat Research</a></li>
                         <li><a href="breach-timeline.html">Breach Kill Chains</a></li>
+                        <li><a href="breach-kill-chain-decks.html">Kill Chain Slide Decks</a></li>
                         <li><a href="cloud-breach-year-in-review.html">Year in Review</a></li>
                       </ul>
                     </li>

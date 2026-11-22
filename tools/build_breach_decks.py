@@ -17,8 +17,8 @@ Outline format:
 
     == <slide heading>
     layout: <name>              (text when absent)
-    stage: 04                   (control lines: layout, stage, phase, source,
-    phase: Credential Access     credit; each at most once per slide)
+    stage: 04                   (control lines: layout, stage, stages, phase,
+    phase: Credential Access     source, credit; each at most once per slide)
     source: <name> | <url>
     technique: T1552.005 | Cloud Instance Metadata API   (typed line)
     fact: Queried | the cloud Instance Metadata Service
@@ -119,7 +119,9 @@ KNOWN_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z-]*):\s*(.*)$")
 # middle one empty, so the empty field is reported rather than swallowed.
 FIELD_SPLIT_RE = re.compile(r"\s+\|(?=\s|$)")
 
-CONTROL_KEYS = ("layout", "stage", "phase", "source", "credit")
+CONTROL_KEYS = ("layout", "stage", "stages", "phase", "source", "credit")
+# How many stages one stage-group slide may list.
+MIN_GROUP, MAX_GROUP = 2, 6
 # A flow step's technique field for a stage the page maps to no technique.
 NO_TECHNIQUE = "-"
 
@@ -143,6 +145,14 @@ LAYOUTS: dict[str, LayoutSpec] = {
         {"technique": (0, 3, 2, 2), "fact": (1, 5, 2, 2)},
         "optional",
         ("stage", "phase"),
+    ),
+    # One phase the page splits into several stages, on one slide, for a
+    # chain too long for a slide per stage. stages: lists the stages and
+    # each row is one of them ("NN | what happened"), in the listed order.
+    "stage-group": LayoutSpec(
+        {"technique": (0, 3, 2, 2), "row": (MIN_GROUP, MAX_GROUP, 2, 2)},
+        "optional",
+        ("stages", "phase"),
     ),
     "background": LayoutSpec({}, "required", ("source",)),
     "question": LayoutSpec({}, "prose-only"),
@@ -175,6 +185,8 @@ class BSlide:
     items: dict[str, list[list[str]]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     stage: str | None = None
+    # A stage-group slide's stage numbers, as its stages: line lists them.
+    stages: list[str] | None = None
     phase: str | None = None
     source: tuple[str, str] | None = None
     credit: str | None = None
@@ -244,7 +256,8 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
     # Typed lines are checked against the layout when the slide ends, because
     # the layout line may come after them. Each entry keeps its line number.
     typed: list[tuple[int, str, list[str]]] = []
-    seen: set[str] = set()
+    # Control lines given on this slide, each with its line number.
+    seen: dict[str, int] = {}
 
     def flush_para() -> None:
         if para and cur is not None:
@@ -275,6 +288,13 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
                     f"{key}: line has {len(parts)} fields; a {cur.layout} slide takes {want}",
                 )
             cur.items.setdefault(key, []).append(parts)
+        if "stages" in seen and cur.layout != "stage-group":
+            raise _err(
+                name, seen["stages"],
+                f"a {cur.layout} slide does not take a stages: line; a stage-group slide does",
+            )
+        if "stage" in seen and cur.layout == "stage-group":
+            raise _err(name, seen["stage"], "a stage-group slide takes stages:, not stage:")
         if not cur.notes:
             raise _err(name, at, "slide has no notes: block")
         slides.append(cur)
@@ -345,7 +365,7 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
         if key in CONTROL_KEYS:
             if key in seen:
                 raise _err(name, lineno, f"slide has two {key}: lines")
-            seen.add(key)
+            seen[key] = lineno
             if not rest:
                 raise _err(name, lineno, f"empty {key}: line")
             if key == "layout":
@@ -360,6 +380,8 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
                 if len(parts) != 2:
                     raise _err(name, lineno, "source: takes 'name | url'")
                 cur.source = (parts[0], parts[1])
+            elif key == "stages":
+                cur.stages = rest.split()
             else:
                 setattr(cur, key, rest)
         elif key in TYPED_KEYS:
@@ -415,6 +437,33 @@ BAR_NUMBER_RE = re.compile(r"\d[\d,]*(\.\d+)?\+?")
 
 def _bar_number_ok(value: str) -> bool:
     return BAR_NUMBER_RE.fullmatch(value) is not None
+
+
+def _stage_group_findings(s: BSlide) -> list[str]:
+    """A stage-group slide's stages: line and rows, checked against each
+    other: MIN_GROUP to MAX_GROUP two-digit stage numbers in ascending
+    order, and one row per listed stage, in the listed order."""
+    out: list[str] = []
+    nums = s.stages or []
+    well_formed = all(STAGE_NUM_RE.fullmatch(n) for n in nums)
+    ascending = all(a < b for a, b in zip(nums, nums[1:]))
+    if not (MIN_GROUP <= len(nums) <= MAX_GROUP and well_formed and ascending):
+        out.append(
+            f"{s.where}: stages: must list {MIN_GROUP} to {MAX_GROUP} two-digit stage "
+            f"numbers in ascending order, got {' '.join(nums)!r}"
+        )
+    got = [row[0] for row in s.items.get("row", [])]
+    for n in dict.fromkeys(got):
+        if n not in nums:
+            out.append(f"{s.where}: row {n} is for a stage the stages: line does not list")
+        elif got.count(n) > nums.count(n):
+            out.append(f"{s.where}: stage {n} has {got.count(n)} rows; it takes one")
+    for n in dict.fromkeys(nums):
+        if n not in got:
+            out.append(f"{s.where}: stage {n} has no row")
+    if got != nums and sorted(got) == sorted(nums):
+        out.append(f"{s.where}: rows are not in the order the stages: line lists them")
+    return out
 
 
 def slide_findings(s: BSlide) -> list[str]:
@@ -481,6 +530,8 @@ def slide_findings(s: BSlide) -> list[str]:
         for row in s.items.get("bar", []):
             if not _bar_number_ok(row[0]):
                 out.append(f"{s.where}: bar number {row[0]!r} is not a number")
+    if s.layout == "stage-group" and s.stages:
+        out += _stage_group_findings(s)
 
     texts = [s.heading, *prose, *fields, *s.notes]
     for extra in (s.credit, s.phase, s.stage, s.source[0] if s.source else None):
@@ -644,19 +695,28 @@ PHASE_LBL_RE = re.compile(r'<div\b[^>]*\bclass="phase-lbl\b[^"]*"[^>]*>(.*?)</di
 # Emoji and the joiners and variation selectors that build them.
 EMOJI_CATEGORIES = frozenset({"So", "Sk", "Cf"})
 VARIATION_SELECTORS = frozenset({"︎", "️"})
+# Where a phase label's name ends and its subtitle starts: a colon, or a
+# hyphen with whitespace on both sides. A hyphen inside a word does not end it.
+PHASE_END_RE = re.compile(r":|\s-\s")
 
 
 def phase_name(text: str) -> str:
     """The name in a phase label or a phase: line: the text before its first
-    colon, with emoji removed and spaces collapsed. The page's label
-    "🔀 Execution and Privilege Escalation: Containers" and the outline's
-    "Execution and Privilege Escalation" both give the same name."""
-    head = text.split(":", 1)[0]
+    colon or spaced hyphen, whichever comes first, with emoji removed, every
+    leading character that is not a letter or digit dropped, and spaces
+    collapsed. So the page's label "🔀 Execution and Privilege Escalation:
+    Containers" and the outline's "Execution and Privilege Escalation" give
+    the same name, "₿ Impact: Coins taken" gives "Impact", and
+    "Reconnaissance - Open Source Intelligence" gives "Reconnaissance".
+    Reading the spaced hyphen lets a page that writes its labels as a name,
+    a spaced hyphen and a subtitle stay as written."""
+    head = PHASE_END_RE.split(text, 1)[0]
     kept = "".join(
         ch for ch in head
         if unicodedata.category(ch) not in EMOJI_CATEGORIES and ch not in VARIATION_SELECTORS
     )
-    return " ".join(kept.split())
+    start = next((i for i, ch in enumerate(kept) if ch.isalnum()), len(kept))
+    return " ".join(kept[start:].split())
 
 
 def parse_breach_page(html: str, path: str) -> BreachPage:
@@ -752,6 +812,34 @@ def _phase_finding(where: str, what: str, given: str, stage: PageStage) -> str |
     return f"{where}: {what} {got!r} is not stage {stage.num}'s phase on the page, {want!r}"
 
 
+def _either(nums: list[str]) -> str:
+    """"03 or 04", "03, 04 or 05"."""
+    return nums[0] if len(nums) < 2 else ", ".join(nums[:-1]) + " or " + nums[-1]
+
+
+def _stage_group_page_findings(s: BSlide, page: BreachPage) -> list[str]:
+    """A stage-group slide against its page: every listed stage is on the
+    page under the slide's phase, and every technique is on a listed stage."""
+    out: list[str] = []
+    nums = s.stages or []
+    known = [n for n in nums if n in page.stages]
+    for n in nums:
+        if n not in page.stages:
+            out.append(f"{s.where}: stage {n} is not a stage on {page.path}")
+    if s.phase is not None:
+        for n in known:
+            f = _phase_finding(s.where, "phase", s.phase, page.stages[n])
+            if f:
+                out.append(f)
+    carried = set().union(*(page.stages[n].techniques for n in known))
+    for row in s.items.get("technique", []):
+        if row[0] not in carried:
+            out.append(
+                f"{s.where}: technique {row[0]} is not on stage {_either(nums)} of the page"
+            )
+    return out
+
+
 def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
     out: list[str] = []
     stage_ok = s.stage is None or s.stage in page.stages
@@ -768,6 +856,8 @@ def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
                     out.append(
                         f"{s.where}: technique {row[0]} is not on stage {s.stage} of the page"
                     )
+        if s.layout == "stage-group" and s.stages:
+            out += _stage_group_page_findings(s, page)
         if s.layout == "flow":
             for row in s.items.get("step", []):
                 num, tactic, tech = row[0], row[1], row[3]
@@ -1944,6 +2034,201 @@ def _case_phase_checked(tmp: Path) -> None:
     _only(_gate(*STAGE_LINES, page=bare), "has no phase label on the page")
 
 
+def _case_phase_name_symbols(tmp: Path) -> None:
+    assert phase_name("₿ Impact: Coins taken") == "Impact"
+    assert phase_name("Reconnaissance - Open Source Intelligence") == "Reconnaissance"
+    # An unspaced hyphen is part of the name.
+    assert phase_name("Cross-Site Scripting: x") == "Cross-Site Scripting"
+    assert phase_name("🍯 The Counter-Offensive - A Honeypot") == "The Counter-Offensive"
+    assert phase_name("☎️ First Contact at Scale - War Dialing") == "First Contact at Scale"
+    # The name ends at whichever separator comes first.
+    assert phase_name("Collection - Mail: Inboxes") == "Collection"
+    assert phase_name("Collection: Mail - Inboxes") == "Collection"
+    # Controls: a bare name, and a digit leading a name, are kept.
+    assert phase_name("Credential Access") == CA
+    assert phase_name("2FA Bypass: Codes") == "2FA Bypass"
+    # A stage under a label with a symbol before its name takes the bare
+    # name; the symbol itself is not a phase.
+    page = parse_breach_page(
+        _breach_page(
+            stages=[("04", "Coins taken", ["T1552.005"], "₿ Impact: Two Million Downloads")],
+            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
+        ),
+        PAGE_PATH,
+    )
+    assert page.stages["04"].phase == "Impact", page.stages["04"].phase
+    lines = list(STAGE_LINES)
+    lines[2] = "phase: Impact"
+    assert _gate(*lines, page=page) == []
+    lines[2] = "phase: ₿ Impact"
+    assert _gate(*lines, page=page) == []
+    lines[2] = "phase: Collection"
+    _only(_gate(*lines, page=page), "'Collection' is not stage 04's phase on the page, 'Impact'")
+
+
+def _case_phase_gate_real_labels(tmp: Path) -> None:
+    """Two real pages whose labels carry a symbol before the name or a
+    spaced hyphen after it. Only their structure is read, so a prose edit
+    does not fail the deck self-test."""
+    root = Path(__file__).resolve().parent.parent
+    raw: list[str] = []
+    for rel in ("breaches/mitnick-novell.html", "breaches/event-stream-npm.html"):
+        html = (root / rel).read_text(encoding="utf-8")
+        raw += [_strip_tags(m.group(1)) for m in PHASE_LBL_RE.finditer(_main_html(html))]
+        page = parse_breach_page(html, rel)
+        assert len(page.stages) >= 6, (rel, list(page.stages))
+        for num, st in page.stages.items():
+            name = st.phase
+            ok = bool(name) and name[0].isalpha() and ":" not in name and " - " not in name
+            assert ok, (rel, num, name)
+    # Control: the labels as written do carry what the rule removes, so the
+    # loop above saw it handled rather than absent.
+    assert any(" - " in label for label in raw), raw
+    assert any(not label[0].isalnum() for label in raw), raw
+
+
+# A synthetic page whose stages 03, 04 and 05 share one phase label.
+PHASE_06 = "⬆️ Privilege Escalation: Containers"
+GROUP_STAGES = [
+    ("01", "Agents planned the run", ["T1588.007", "T1606"], PHASE_01),
+    ("03", "Keys sat in code", ["T1552.001"], PHASE_04),
+    ("04", "The metadata service yielded a role", ["T1552.005", "T1651"], None),
+    ("05", "A token was replayed", ["T1550.001"], None),
+    ("06", "A pod escaped to the node", ["T1611"], PHASE_06),
+]
+GROUP_LINES = (
+    "layout: stage-group", "stages: 03 04", f"phase: {CA}",
+    "technique: T1552.001 | Credentials In Files",
+    "technique: T1552.005 | Cloud Instance Metadata API",
+    "row: 03 | Keys sat in code and config files",
+    "row: 04 | The metadata service handed over a role",
+    "Credentials opened every door.",
+)
+
+
+def _group_page() -> BreachPage:
+    return parse_breach_page(
+        _breach_page(
+            stages=GROUP_STAGES,
+            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
+        ),
+        PAGE_PATH,
+    )
+
+
+def _group(stages: str, *rows: str, extra: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Lines for a stage-group slide in the Credential Access phase."""
+    return ("layout: stage-group", f"stages: {stages}", f"phase: {CA}", *extra,
+            *(f"row: {r} | Something happened" for r in rows), "Prose.")
+
+
+def _group_findings(*lines: str, page: BreachPage | None = None) -> list[str]:
+    """Every finding --check reports for one slide: its limits and its page."""
+    deck = _parse(_body("== S", *lines))
+    return [f for s in deck.slides for f in slide_findings(s)] + page_findings(
+        deck, page or _group_page()
+    )
+
+
+def _case_stage_group_parse(tmp: Path) -> None:
+    s = _parse(_body("== S", *GROUP_LINES)).slides[0]
+    assert s.layout == "stage-group" and s.stages == ["03", "04"] and s.phase == CA
+    assert s.stage is None
+    assert s.items["row"] == [["03", "Keys sat in code and config files"],
+                              ["04", "The metadata service handed over a role"]], s.items
+    assert len(s.items["technique"]) == 2 and s.paragraphs == ["Credentials opened every door."]
+    assert slide_findings(s) == [], slide_findings(s)
+    # A stages: line belongs on a stage-group slide only, and a stage-group
+    # slide names its stages with stages:, never stage:.
+    e = _raises(lambda: _parse(_slide_text(*STAGE_LINES, "stages: 03 04")),
+                "does not take a stages: line")
+    assert str(e).startswith("d.deck:12:"), e
+    _raises(lambda: _parse(_slide_text("stages: 03 04", "Text.")), "does not take a stages: line")
+    e = _raises(lambda: _parse(_slide_text(*GROUP_LINES[:1], "stage: 03", *GROUP_LINES[1:])),
+                "takes stages:, not stage:")
+    assert str(e).startswith("d.deck:8:"), e
+    _raises(lambda: _parse(_slide_text(*_group("03 04", "03", "04"), "row: 05 | a | b")),
+            "3 fields")
+    # The stages: line: two to six two-digit numbers, ascending.
+    _only(_group_findings(*GROUP_LINES[:1], *GROUP_LINES[2:]), "needs a stages: line")
+    _only(_group_findings(*GROUP_LINES[:2], *GROUP_LINES[3:]), "needs a phase: line")
+    for stages, alone in (("04 03", True), ("03 03", True), ("3 4", True),
+                          ("03", False), ("03 04 05 06 07 08 09", False)):
+        f = [x for s in _parse(_slide_text(*_group(stages, *stages.split()))).slides
+             for x in slide_findings(s)]
+        assert any("stages: must list 2 to 6 two-digit stage numbers" in x for x in f), (stages, f)
+        assert not alone or len(f) == 1, (stages, f)
+    # Control: six in order is clean.
+    six = "03 04 05 06 07 08"
+    assert [x for s in _parse(_slide_text(*_group(six, *six.split()))).slides
+            for x in slide_findings(s)] == []
+
+
+def _case_stage_group_gate(tmp: Path) -> None:
+    assert [_group_page().stages[n].phase for n in ("03", "04", "05")] == [CA] * 3
+    assert _group_findings(*GROUP_LINES) == []
+    assert _group_findings(*_group("03 04 05", "03", "04", "05")) == []
+    # A stage from another phase.
+    _only(_group_findings(*_group("03 06", "03", "06")),
+          "phase 'Credential Access' is not stage 06's phase on the page, 'Privilege Escalation'")
+    # A row for a stage the stages: line does not list.
+    _only(_group_findings(*_group("03 04", "03", "04", "05")),
+          "row 05 is for a stage the stages: line does not list")
+    # A listed stage with no row.
+    _only(_group_findings(*_group("03 04 05", "03", "04")), "stage 05 has no row")
+    # A listed stage with two rows, and rows out of the listed order.
+    _only(_group_findings(*_group("03 04", "03", "03", "04")), "stage 03 has 2 rows")
+    _only(_group_findings(*_group("03 04", "04", "03")), "rows are not in the order")
+    # A technique from a stage the group does not list. T1611 is on the page
+    # (stage 06), so only the group check can catch it.
+    tech = ("technique: T1611 | Escape to Host",)
+    _only(_group_findings(*_group("03 04", "03", "04", extra=tech)),
+          "technique T1611 is not on stage 03 or 04 of the page")
+    # A listed stage the page does not have.
+    f = _group_findings(*_group("03 09", "03", "09"))
+    assert any("stage 09 is not a stage on breaches/vapor-panda-artex.html" in x for x in f), f
+    # Control: a technique from any listed stage is accepted.
+    for t in ("T1552.001", "T1651", "T1550.001"):
+        line = (f"technique: {t} | Name",)
+        assert _group_findings(*_group("03 04 05", "03", "04", "05", extra=line)) == [], t
+
+
+def _case_crosslink_skips_deck_line(tmp: Path) -> None:
+    """The glossary cross-linker leaves a deck line exactly as --stamp wrote
+    it, and still links the same term in the page's prose."""
+    import crosslink_pages as cp
+    from build_howto_decks import deck_line_html as howto_deck_line_html
+
+    key = "Google account"
+    patterns, slugs = cp.build_term_regexes([key]), {key.lower(): "term-google-account"}
+    link = f'<a class="glossary-link" href="../glossary.html#term-google-account">{key}</a>'
+    prose = "<p>Copying a deck needs a Google account of your own.</p>\n"
+    (tmp / "breaches").mkdir()
+    page = tmp / "breaches" / "x.html"
+    old = cp.REPO_ROOT
+    cp.REPO_ROOT = tmp
+    try:
+        for attr, line in (("data-breach-deck", deck_line_html(ID_A)),
+                           ("data-howto-deck", howto_deck_line_html(ID_A))):
+            assert key in line and attr in line, line
+            html = f"<html><body><main>\n{line}\n{prose}</main></body></html>\n"
+            page.write_text(html, encoding="utf-8")
+            cp.crosslink_page(page, patterns, slugs)
+            once = page.read_text(encoding="utf-8")
+            assert line + "\n" in once, (attr, once)
+            assert once.count(link) == 1 and link in once.split(line)[1], (attr, once)
+            cp.crosslink_page(page, patterns, slugs)
+            assert page.read_text(encoding="utf-8") == once, attr
+            # Control: without its deck attribute the same line takes the
+            # page's one link, so the term does match inside it.
+            page.write_text(_plant(html, f" {attr}>", ">"), encoding="utf-8")
+            cp.crosslink_page(page, patterns, slugs)
+            bare = page.read_text(encoding="utf-8")
+            assert bare.count(link) == 1 and link in bare.split("</p>")[0], (attr, bare)
+    finally:
+        cp.REPO_ROOT = old
+
+
 def _case_matrix_columns_checked(tmp: Path) -> None:
     assert _gate("layout: matrix", "columns: 01 | 04", "row: A | 01", "row: B | -") == []
     f = _gate("layout: matrix", "columns: 01 | 09", "row: A | 01", "row: B | -")
@@ -2454,6 +2739,11 @@ CASES: list = [
     ("flow_step_checked", _case_flow_step_checked),
     ("stage_without_techniques", _case_stage_without_techniques),
     ("phase_checked", _case_phase_checked),
+    ("phase_name_symbols", _case_phase_name_symbols),
+    ("phase_gate_real_labels", _case_phase_gate_real_labels),
+    ("stage_group_parse", _case_stage_group_parse),
+    ("stage_group_gate", _case_stage_group_gate),
+    ("crosslink_skips_deck_line", _case_crosslink_skips_deck_line),
     ("matrix_columns_checked", _case_matrix_columns_checked),
     ("number_not_on_page", _case_number_not_on_page),
     ("unit_suffixed_number", _case_unit_suffixed_number),
@@ -2511,7 +2801,7 @@ def _render_sample() -> BDeck:
         _rslide("At a glance", "stats", items={"stat": [
             ["200+", "organizations targeted", "in at least 14 countries over 11 days"],
             ["9", "confirmed compromises", "per CrowdStrike, with high confidence"],
-            ["1,500+", "commands an hour", "at peak, per Check Point"],
+            ["600+", "commands an hour", "at peak, per Check Point"],
             ["40", "commands an hour", "a fast human operator, for comparison"],
         ]}),
         _rslide(
@@ -2520,7 +2810,7 @@ def _render_sample() -> BDeck:
                         "and includes moderate-confidence cases."],
             items={"stat": [
                 ["9", "confirmed", "named in the CrowdStrike report"],
-                ["About 140", "compromised", "from an interview, moderate confidence included"],
+                ["~140", "compromised", "from an interview, moderate confidence included"],
             ]},
         ),
         _rslide(
@@ -3214,6 +3504,67 @@ def _case_render_without_techniques(tmp: Path) -> None:
     assert len({b.height for b in boxes}) == 1
 
 
+def _case_stage_group_render(tmp: Path) -> None:
+    """A stage-group slide: the band names every stage, each row shows its
+    stage number and text, chips and the why box are a stage slide's. Six
+    short rows fit; seven long ones are refused, naming the slide."""
+    import breach_deck_render as r
+
+    def group(nums: list[str], text: str, where: str, phase: str, techniques=(),
+              why: str = "Credentials opened every door.") -> BSlide:
+        items = {"row": [[n, text] for n in nums]}
+        if techniques:
+            items["technique"] = [list(t) for t in techniques]
+        return _rslide("Keys, then a role", "stage-group", stages=list(nums), phase=phase,
+                       items=items, paragraphs=[why], where=where)
+
+    chips = [["T1552.001", "Unsecured Credentials: Credentials In Files"],
+             ["T1552.005", "Cloud Instance Metadata API"],
+             ["T1651", "Cloud Administration Command"]]
+    pair = group(["03", "04"], "Keys sat in code and config files", "g.deck:5",
+                 "Credential Access: Keys and Roles", chips)
+    pair.items["row"][1][1] = "The metadata service handed over a role"
+    six_nums = [f"{n:02d}" for n in range(19, 25)]
+    six = group(six_nums, "The agents already knew the answer before they broke in",
+                "g.deck:30", "Root Cause")
+    deck = BDeck("g", "T", RENDER_PAGE, "2026-11-20", "P.", [pair, six], "")
+    a, b = _rendered(tmp, deck)
+
+    band = _one(a, "phase-band")
+    assert band.text_frame.text == "CREDENTIAL ACCESS: KEYS AND ROLES · STAGES 03 AND 04", \
+        band.text_frame.text
+    color = r.phase_color("Credential Access")
+    assert _fill(band) == color
+    assert _one(b, "phase-band").text_frame.text == \
+        "ROOT CAUSE · STAGES 19, 20, 21, 22, 23 AND 24"
+    assert _fill(_one(b, "phase-band")) == r.FALLBACK_PHASE
+    # No single stage tile: the heading takes the full content width.
+    assert not _shapes(a, "stage-number")
+    assert _one(a, "heading").left == r.Inches(r.X)
+    nums, texts = _shapes(a, "row-number"), _shapes(a, "row-text")
+    assert [n.text_frame.text for n in nums] == ["03", "04"]
+    assert [t.text_frame.text for t in texts] == [row[1] for row in pair.items["row"]]
+    assert all(_fill(n) == color for n in nums)
+    assert all(n.top == t.top and n.left + n.width < t.left for n, t in zip(nums, texts))
+    assert [sh.text_frame.text for sh in _shapes(a, "chip")] == [
+        f"{tid}  {name}" for tid, name in chips
+    ]
+    # Rows sit below the chips and above the pinned why box, top to bottom.
+    lowest_chip = max(sh.top + sh.height for sh in _shapes(a, "chip"))
+    assert lowest_chip < nums[0].top < nums[1].top
+    assert texts[-1].top + texts[-1].height <= _one(a, "why").top
+    assert _one(a, "why-text").text_frame.text == "Credentials opened every door."
+    assert _texts(b, "row-number") == six_nums and not _shapes(b, "chip")
+
+    long = "the agent asked the metadata service for credentials and received a very powerful role"
+    assert _words(long) == MAX_FIELD_WORDS
+    seven = group([f"{n:02d}" for n in range(1, 8)], long, "seven.deck:9", "Root Cause")
+    out = tmp / "seven.pptx"
+    _layout_error(lambda: r.render_deck(BDeck("s", "T", RENDER_PAGE, "2026-11-20", "P.",
+                                              [seven], ""), out), "seven.deck:9")
+    assert not out.exists(), "a refused render wrote a file"
+
+
 def _case_bars_to_scale(tmp: Path) -> None:
     import breach_deck_render as r
 
@@ -3434,6 +3785,254 @@ def _case_type_labels_cannot_wrap(tmp: Path) -> None:
     assert len({sh.width for sh in labels}) == 3, [sh.width for sh in labels]
 
 
+def _case_stat_values_fit_one_line(tmp: Path) -> None:
+    """A stat value has to fit its tile's text width on one line, or the
+    render is refused naming the slide: Google Slides wraps text that does
+    not fit its box, and breaks a word wider than the line."""
+    import breach_deck_render as r
+
+    # Advance widths of whole values, in thousandths of an em, as a browser
+    # canvas measures them in Space Grotesk Bold (fonts/space-grotesk-700.woff2)
+    # and in Arial Bold, the face Google Slides substitutes when it lacks it.
+    em = {
+        "497+": (2408, 2252), "48+": (1856, 1696), "19": (1070, 1112), "79": (1172, 1112),
+        "1,500+": (3262, 3086), "200+": (2510, 2252), "9": (618, 556),
+        "3,218,965": (4676, 4449), "Unstated": (4453, 4278), "~1h 44m": (4068, 4030),
+    }
+
+    def deck(*values: str) -> BDeck:
+        return _one_slide("At a glance", "stats", "st.deck:8",
+                          stat=[[v, "organizations", "per the vendor"] for v in values])
+
+    def room(tile) -> float:
+        """Inches of text width in a tile."""
+        tf = tile.text_frame
+        return (tile.width - tf.margin_left - tf.margin_right) / 914400
+
+    def need(value: str, pt: float) -> float:
+        """Inches value takes in the wider face."""
+        return max(em[value]) / 1000 * pt / 72
+
+    # Values that fit render and verify in rows of four (the narrowest
+    # tiles), three and two, one line each, and each fits its tile by the
+    # browser's own measure in either face.
+    inner = {}
+    for values in (("497+", "48+", "19", "79"), ("1,500+", "200+", "9"), ("3,218,965", "9")):
+        (sl,) = _rendered(tmp, deck(*values))
+        tiles = _shapes(sl, "stat-tile")
+        assert len(tiles) == len(values), len(tiles)
+        for value, tile in zip(values, tiles):
+            first = tile.text_frame.paragraphs[0]
+            pt = first.runs[0].font.size.pt
+            assert first.text == value, first.text
+            assert need(value, pt) <= room(tile), (value, need(value, pt), room(tile))
+            inner[len(values)] = (pt, room(tile))
+    # "Unstated" is wider than a tile in a row of four or three holds; the
+    # render is refused naming the slide and the value, and writes no file.
+    out = tmp / "st.pptx"
+    for values in (("Unstated", "48+", "19", "79"), ("Unstated", "200+", "9")):
+        pt, have = inner[len(values)]
+        assert need("Unstated", pt) > have, (len(values), need("Unstated", pt), have)
+        e = _layout_error(lambda values=values: r.render_deck(deck(*values), out), "st.deck:8")
+        assert "Unstated" in str(e), e
+        assert not out.exists(), "a refused render wrote a file"
+    # A character count calls "~1h 44m" one line in a row of three, but it
+    # measures wider than the tile, so it is refused too.
+    pt, have = inner[3]
+    assert r._rows("~1h 44m", r._per_line(have, pt, heading=True)) == 1
+    assert need("~1h 44m", pt) > have, (need("~1h 44m", pt), have)
+    _layout_error(lambda: r.render_deck(deck("~1h 44m", "200+", "9"), out), "st.deck:8")
+    assert not out.exists(), "a refused render wrote a file"
+
+
+def _case_timeline_labels_hold_text(tmp: Path) -> None:
+    """Each timeline label keeps its text inside its box on the edge that
+    faces the marker. Source Sans 3's ascent and descent (1.024 and 0.400 em,
+    as a browser canvas reads fonts/source-sans-3-700.woff2) are taller than
+    a line set 1.2 em apart, so a line flush with a box edge reaches past it
+    by half the difference, about 3 px at 20 pt. The when label sits on its
+    box's bottom edge and the what label hangs from its top edge."""
+    import breach_deck_render as r
+
+    over = (1.024 + 0.400 - 1.2) / 2
+    # Control: the overhang is real, so a label flush with its edge fails.
+    assert over * r.LOOK["diagram_pt"] / 72 > 0.025
+    events = [
+        ["August 2026", "Microsoft starts observing GitHub queries for secrets"],
+        ["September 20 to October 14", "Malware sent through that server to customer VMs"],
+        ["October 21", "Every plan shut down"],
+    ]
+    (sl,) = _rendered(tmp, _one_slide("When", "timeline", "t.deck:3", event=events))
+    whens, whats = _shapes(sl, "timeline-when"), _shapes(sl, "timeline-what")
+    markers = _shapes(sl, "timeline-marker")
+    assert len(whens) == len(whats) == len(markers) == len(events), (len(whens), len(whats))
+    for when, what, marker in zip(whens, whats, markers):
+        pt = when.text_frame.paragraphs[0].runs[0].font.size.pt
+        reach = over * pt / 72 * 914400
+        line = r._line_h(pt) * 914400
+        # The when's last line ends reach below the top of its bottom inset;
+        # that has to be inside the box, and the box above the marker.
+        tf = when.text_frame
+        assert tf.vertical_anchor == r.MSO_ANCHOR.BOTTOM, tf.vertical_anchor
+        bottom = when.top + when.height
+        assert bottom - tf.margin_bottom + reach <= bottom + 1, (tf.text, tf.margin_bottom)
+        assert bottom <= marker.top, (bottom, marker.top)
+        # The inset leaves room for the lines the box was sized for, and
+        # for the first line's reach above them.
+        rows = r._safe_rows(tf.text, when.width / 914400, pt, bold=True)
+        assert when.height >= tf.margin_bottom + rows * line + reach, (tf.text, rows)
+        # The what's first line starts reach above the bottom of its top
+        # inset; that has to be inside the box, and the box below the marker.
+        tf = what.text_frame
+        assert tf.vertical_anchor == r.MSO_ANCHOR.TOP, tf.vertical_anchor
+        assert what.top + tf.margin_top - reach >= what.top - 1, (tf.text, tf.margin_top)
+        assert what.top >= marker.top + marker.height, (what.top, marker.top + marker.height)
+        rows = r._safe_rows(tf.text, what.width / 914400, pt)
+        assert what.height >= tf.margin_top + rows * line + reach, (tf.text, rows)
+
+
+def _case_timeline_lines_measured(tmp: Path) -> None:
+    """A timeline label's lines are counted from measured glyph widths in
+    the wider of Source Sans 3 and Arial, plus the margin, and its box
+    holds that many lines; a label needing more lines than the layout
+    allows is refused naming the slide."""
+    import breach_deck_render as r
+
+    # Advance widths of whole labels, in thousandths of an em, as a browser
+    # canvas measures them in Source Sans 3 Bold (fonts/source-sans-3-700.woff2)
+    # and Arial Bold. Google Slides wrapped "September 2026" at six to a row.
+    em = {"September 2026": (7162, 7671), "October 13": (4807, 5224)}
+    pt = r.LOOK["diagram_pt"]
+    line = r._line_h(pt)
+
+    def whens(*labels: str):
+        events = [[w, "Something happened"] for w in labels]
+        (sl,) = _rendered(tmp, _one_slide("When", "timeline", "t.deck:3", event=events))
+        return _shapes(sl, "timeline-when")
+
+    six = ("September 2026", "October 13", "June 2026", "May 27", "July 1", "August 2")
+    boxes = whens(*six)
+    room = boxes[0].width / 914400
+    # "September 2026" needs two lines in either face, so the boxes hold two.
+    for face in em["September 2026"]:
+        assert face / 1000 * pt / 72 > room, (face, room)
+    assert em["October 13"][1] / 1000 * pt / 72 <= room
+    rows = {b.text_frame.text: r._safe_rows(b.text_frame.text, room, pt, bold=True) for b in boxes}
+    assert rows["September 2026"] == 2 and rows["October 13"] == 1, rows
+    held = (boxes[0].height / 914400 - 0.1) / line
+    assert abs(held - 2) < 0.01, held
+    # Control: a label a character count calls one line but the measure
+    # calls two gets two, so the measure is what sizes the box.
+    assert r._rows("December 31", r._per_line(room, pt, bold=True)) == 1
+    assert r._safe_rows("December 31", room, pt, bold=True) == 2
+    boxes = whens("December 31", "June 2026", "May 27", "July 1", "August 2", "June 3")
+    assert abs((boxes[0].height / 914400 - 0.1) / line - 2) < 0.01, boxes[0].height
+    # Control: with every label on one line, the boxes hold one.
+    boxes = whens("June 2026", "May 27", "July 1", "August 2", "June 3", "May 9")
+    assert abs((boxes[0].height / 914400 - 0.1) / line - 1) < 0.01, boxes[0].height
+
+    # Too many lines is refused, naming the slide and the label.
+    out = tmp / "tl.pptx"
+    long_when = "September 20 to October 14, then again from November 2"
+    assert r._safe_rows(long_when, room, pt, bold=True) > r.LOOK["timeline_when_lines"]
+    events = [[long_when, "A"]] + [["May 1", "B"]] * 5
+    e = _layout_error(lambda: r.render_deck(_one_slide("When", "timeline", "t.deck:3",
+                                                        event=events), out), "t.deck:3")
+    assert "timeline when" in str(e) and long_when in str(e), e
+    long_what = " ".join(["Malware sent through that server to customer VMs"] * 3)
+    assert r._safe_rows(long_what, room, pt) > r.LOOK["timeline_what_lines"]
+    events = [["May 1", long_what]] + [["May 2", "B"]] * 5
+    e = _layout_error(lambda: r.render_deck(_one_slide("When", "timeline", "t.deck:3",
+                                                        event=events), out), "t.deck:3")
+    assert "timeline what" in str(e), e
+    assert not out.exists(), "a refused render wrote a file"
+    # Control: a three-line when, the most allowed, renders.
+    three = "September 20 to October 14"
+    assert r._safe_rows(three, room, pt, bold=True) == r.LOOK["timeline_when_lines"]
+    whens(three, "June 2026", "May 27", "July 1", "August 2", "June 3")
+
+
+def _case_unbroken_words_refused(tmp: Path) -> None:
+    """A word with no space in it that is wider than the text box it sits
+    in is refused, naming the slide and the word: Google Slides breaks it
+    mid-word. Checked for captions, facts, table cells, timeline labels and
+    flow boxes; a table column is widened to hold its widest word first."""
+    import breach_deck_render as r
+
+    # Advance widths, in thousandths of an em, as a browser canvas measures
+    # them in Source Sans 3 and in Arial, at the weight each is set in here
+    # (the flow title bold, the others regular). Google Slides broke
+    # "color-picker-universal" in a six-to-a-row timeline label.
+    em = {"color-picker-universal": (9089, 9503), "Chainalysis": (4722, 5113),
+          "BLOODALCHEMY": (7226, 8555)}
+    sha = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    out = tmp / "w.pptx"
+
+    def refused(deck: BDeck, where: str, word: str) -> None:
+        e = _layout_error(lambda: r.render_deck(deck, out), f"{where}: {word!r} needs")
+        assert not out.exists(), "a refused render wrote a file"
+        return e
+
+    # Timeline label: the package name is wider than a sixth of the row in
+    # either face. Control: the same words with spaces wrap and render.
+    room = r.W / 6 - r.LOOK["timeline_col_gap"]
+    assert min(em["color-picker-universal"]) / 1000 * r.LOOK["diagram_pt"] / 72 > room
+    what = "The developer installs color-picker-universal on a personal MacBook"
+    events = [["October 20, 2025", what]] + [["May 1", "A"]] * 5
+    e = refused(_one_slide("When", "timeline", "tw.deck:3", event=events), "tw.deck:3",
+                "color-picker-universal")
+    assert "timeline-what" in str(e), e
+    events[0][1] = what.replace("-", " ")
+    _rendered(tmp, _one_slide("When", "timeline", "tw.deck:3", event=events))
+
+    # Fact value and caption: a SHA-256 fits neither column; split in two
+    # it fits both.
+    stage = _rslide("A hash", "stage", stage="04", phase="Execution", where="f.deck:9",
+                    paragraphs=["Why."], items={"fact": [["Hash", sha]]})
+    refused(BDeck("f", "T", RENDER_PAGE, "2026-11-20", "P.", [stage], ""), "f.deck:9", sha)
+    stage.items["fact"] = [["Hash", f"{sha[:32]} {sha[32:]}"]]
+    _rendered(tmp, BDeck("f", "T", RENDER_PAGE, "2026-11-20", "P.", [stage], ""))
+    caption = _one_slide("Steps", "timeline", "c.deck:5", event=[["May 1", "A"], ["May 2", "B"]])
+    caption.slides[0].paragraphs = [sha * 2]
+    refused(caption, "c.deck:5", sha * 2)
+
+    # Flow box: the pilot's "BLOODALCHEMY" fits a step four to a row;
+    # twice as long does not.
+    def steps(title: str) -> BDeck:
+        return _one_slide("Chain", "flow", "fl.deck:7",
+                          step=[[f"0{i}", "Execution", title, "T1059"] for i in range(1, 5)])
+
+    (sl,) = _rendered(tmp, steps("BLOODALCHEMY"))
+    box = _shapes(sl, "flow-step")[0]
+    tf = box.text_frame
+    assert max(em["BLOODALCHEMY"]) / 1000 * 20 / 72 <= (box.width - tf.margin_left
+                                                         - tf.margin_right) / 914400
+    refused(steps("BLOODALCHEMY" * 2), "fl.deck:7", "BLOODALCHEMY" * 2)
+
+    # Table: a long word in a column its character count keeps narrow
+    # widens that column, and every cell then holds its widest word. A
+    # word wider than the whole table is still refused.
+    rows = [["Source", "Total, as each measures it", "Frozen, intercepted or seized"],
+            ["Binance", "~$6.34 billion in digital assets impacted",
+             "~$2.85 billion frozen or intercepted, November 3"],
+            ["Chainalysis", "Not given on the page", "About $2.8 billion by November 3"]]
+    lo, hi = r.LOOK["table_chars"]
+    weights = [min(max(max(len(row[c]) for row in rows), lo), hi) for c in range(3)]
+    pad, pt = r.LOOK["cell_pad"], r.LOOK["cell_pt"]
+    plain = r.W * weights[0] / sum(weights) - 2 * pad
+    # In Arial the word is wider than its column's share by character count.
+    assert em["Chainalysis"][1] / 1000 * pt / 72 > plain, plain
+    (sl,) = _rendered(tmp, _one_slide("Counts", "table", "tb.deck:4", row=rows))
+    cells = [c for c in _shapes(sl, "table-cell") if c.text_frame.text == "Chainalysis"]
+    tf = cells[0].text_frame
+    inner = (cells[0].width - tf.margin_left - tf.margin_right) / 914400
+    assert max(em["Chainalysis"]) / 1000 * pt / 72 <= inner, inner
+    widths = [c.width for c in _shapes(sl, "table-cell")[:3]]
+    assert abs(sum(widths) / 914400 - r.W) < 0.001, widths
+    rows[0][2] = sha * 2
+    refused(_one_slide("Counts", "table", "tb.deck:4", row=rows), "tb.deck:4", sha * 2)
+
+
 def _case_links_name_plain_url_linked(tmp: Path) -> None:
     import breach_deck_render as r
 
@@ -3464,11 +4063,16 @@ RENDER_CASES: list = [
     ("verify_plants", _case_verify_plants),
     ("render_diagrams", _case_render_diagrams),
     ("render_without_techniques", _case_render_without_techniques),
+    ("stage_group_render", _case_stage_group_render),
     ("bars_to_scale", _case_bars_to_scale),
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
+    ("timeline_labels_hold_text", _case_timeline_labels_hold_text),
+    ("timeline_lines_measured", _case_timeline_lines_measured),
+    ("unbroken_words_refused", _case_unbroken_words_refused),
     ("checklist_even", _case_checklist_even),
     ("type_labels_cannot_wrap", _case_type_labels_cannot_wrap),
+    ("stat_values_fit_one_line", _case_stat_values_fit_one_line),
     ("links_name_plain_url_linked", _case_links_name_plain_url_linked),
     ("matrix_marks", _case_matrix_marks),
     ("diagram_overflow_refused", _case_diagram_overflow_refused),
