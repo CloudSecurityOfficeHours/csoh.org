@@ -178,6 +178,7 @@ TARGET_PAGES = [
     "how-csoh-org-is-secured.html",
     "mentorship.html",
     "present.html",
+    "breach-kill-chain-decks.html",
     "speakers.html",
 ]
 

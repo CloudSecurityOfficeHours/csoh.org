@@ -109,6 +109,9 @@ on:
       # breach pages (covered by `**.html`) with this tool.
       - 'tools/build_breach_decks.py'
       - 'tools/decks/**'
+      # The deck list gate renders from the same outlines and mapping, and
+      # imports the outline parser from build_breach_decks.py.
+      - 'tools/sync_breach_deck_index.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step.
@@ -553,6 +556,22 @@ jobs:
             echo "::warning title=Breach deck needs review::$line"
           done < stale-breach-decks-list.log
 
+      # breach-kill-chain-decks.html lists every published breach deck. The
+      # list is rendered from tools/decks/breaches/published.json, each deck's
+      # outline and the order of breach-timeline.html, so a deck recorded
+      # without re-running the tool is public but missing from the list, and
+      # an outline or timeline edit changes the list with no page in the diff.
+      # Unconditional for that reason. The self-test runs first as the control;
+      # it also asserts the glossary cross-linker never edits the list.
+      - name: Assert the breach deck list is current
+        id: breach-deck-index
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/sync_breach_deck_index.py --self-test 2>&1 | tee check-breach-deck-index.log || status=1
+          python3 tools/sync_breach_deck_index.py --check 2>&1 | tee -a check-breach-deck-index.log || status=1
+          exit "$status"
+
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which
       # community.html says is never posted publicly) can arrive as an
@@ -663,6 +682,7 @@ jobs:
           OUTCOME_README_COVERAGE: ${{ steps.readme-coverage.outcome }}
           OUTCOME_HOWTO_DECKS: ${{ steps.howto-decks.outcome }}
           OUTCOME_BREACH_DECKS: ${{ steps.breach-decks.outcome }}
+          OUTCOME_BREACH_DECK_INDEX: ${{ steps.breach-deck-index.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
@@ -685,6 +705,7 @@ jobs:
               { name: 'Check README coverage and Markdown links', outcome: process.env.OUTCOME_README_COVERAGE, file: 'check-readme-coverage.log' },
               { name: 'Assert how-to deck outlines and links', outcome: process.env.OUTCOME_HOWTO_DECKS, file: 'check-howto-decks.log' },
               { name: 'Assert breach deck outlines and links', outcome: process.env.OUTCOME_BREACH_DECKS, file: 'check-breach-decks.log' },
+              { name: 'Assert the breach deck list is current', outcome: process.env.OUTCOME_BREACH_DECK_INDEX, file: 'check-breach-deck-index.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
             ];

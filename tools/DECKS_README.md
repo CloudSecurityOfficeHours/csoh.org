@@ -321,3 +321,24 @@ file with a new ID, and the breach page's link is rewritten from the mapping.
 
 Breach decks are CC BY-NC 4.0 and the pages stay CC BY-NC-ND 4.0. The first
 and last slides carry "Cloud Security Office Hours, csoh.org" and the licence.
+
+## The deck list page
+
+`breach-kill-chain-decks.html` lists every published breach deck, one card
+each, between its `<!--breach-decks:start-->` and `<!--breach-decks:end-->`
+markers. `tools/sync_breach_deck_index.py` renders the cards from
+`published.json`, each deck's outline (title, promise, as-of date, and the
+slide count with the three generated slides added) and the order and incident
+year of the deck's card on `breach-timeline.html`. Run it after every
+`--record`, in the same commit:
+
+```bash
+python3 tools/sync_breach_deck_index.py              # rewrite the list
+python3 tools/sync_breach_deck_index.py --check      # CI gate
+python3 tools/sync_breach_deck_index.py --self-test  # planted controls
+```
+
+`--check` fails when the list is out of step, and when a mapped deck has no
+outline, no breach page or no card on the timeline. The generated text sits in
+headings, links and `no-glossary` spans, so `crosslink_pages.py` never edits
+it; the self-test asserts that against the real glossary.
