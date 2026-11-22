@@ -38,8 +38,9 @@ ASSETS: List[Tuple[str, str, str]] = [
     ('breach-timeline.js', 'script', 'src'),
     ('meetings.js', 'script', 'src'),
     ('glossary.js', 'script', 'src'),
-    # breach-kill-chain-decks.html: the search box over the deck index and cards.
-    ('breach-kill-chain-decks.js', 'script', 'src'),
+    # The card finder (search field + index above a page's cards) on
+    # breach-kill-chain-decks.html and breach-timeline.html.
+    ('card-finder.js', 'script', 'src'),
     ('404.js', 'script', 'src'),
     # resources.html hub: cross-category search + forwarding for the old
     # /resources.html#card-<slug> deep links the category split left behind.

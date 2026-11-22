@@ -112,6 +112,10 @@ on:
       # The deck list gate renders from the same outlines and mapping, and
       # imports the outline parser from build_breach_decks.py.
       - 'tools/sync_breach_deck_index.py'
+      # The kill chain index gate, and the card-finder markup both index gates
+      # render through.
+      - 'tools/sync_breach_timeline_index.py'
+      - 'tools/card_finder.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step.
@@ -570,6 +574,20 @@ jobs:
           status=0
           python3 tools/sync_breach_deck_index.py --self-test 2>&1 | tee check-breach-deck-index.log || status=1
           python3 tools/sync_breach_deck_index.py --check 2>&1 | tee -a check-breach-deck-index.log || status=1
+          exit "$status"
+
+      # breach-timeline.html's search field and kill chain index are rendered
+      # from its hand-written cards, so a card added or renamed without
+      # re-running the tool is one the index and search cannot find. The
+      # self-test runs first as the control; it also asserts the glossary
+      # cross-linker never edits the index.
+      - name: Assert the kill chain index is current
+        id: breach-timeline-index
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/sync_breach_timeline_index.py --self-test 2>&1 | tee check-breach-timeline-index.log || status=1
+          python3 tools/sync_breach_timeline_index.py --check 2>&1 | tee -a check-breach-timeline-index.log || status=1
           exit "$status"
 
       # The resource-card pipeline harvests links out of the community chat,

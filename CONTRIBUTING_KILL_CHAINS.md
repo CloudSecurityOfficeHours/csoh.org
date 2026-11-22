@@ -176,7 +176,7 @@ Leave the `<nav class="incident-pager">` block that the copied page already has 
 
 ### 2. Register the page
 
-- **Timeline card.** In `breach-timeline.html`, add a `<li class="breach-card" id="<slug>">` in date order, matching the existing cards exactly (meta row with `inc-year` / `sev-badge` / `prov-tag`, then `breach-card-title`, `breach-card-summary`, and the `breach-card-cta`), linking to `breaches/<slug>.html`.
+- **Timeline card.** In `breach-timeline.html`, add a `<li class="breach-card" id="<slug>">` in date order, matching the existing cards exactly (meta row with `inc-year` / `sev-badge` / `prov-tag`, then `breach-card-title`, `breach-card-summary`, and the `breach-card-cta`), linking to `breaches/<slug>.html`. Then run `python3 tools/sync_breach_timeline_index.py` so the search field and index above the cards list it; CI fails until you do.
 - **ItemList schema.** In the same file's `ItemList` JSON-LD, add a `ListItem` for the new page and **increment `numberOfItems`** (e.g. `10` to `11`). The count must equal the number of cards.
 - **Pager.** Fix the `incident-pager` prev/next links on the new page and on the two pages it now sits between, so the chain stays in order.
 - **Sitemap.** Add `https://csoh.org/breaches/<slug>.html` to `sitemap.xml`.

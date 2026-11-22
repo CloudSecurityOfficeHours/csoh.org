@@ -17,10 +17,11 @@ its slide count from the outline plus the slides the renderer generates (the
 cover, "how to use this deck" and the closing), its presentation id from the
 mapping, and its incident year and platform from the deck's card on
 breach-timeline.html. Cards follow the timeline's order, newest incident
-first, so the list reads like the hub it comes from. Above the cards, one
-box holds a search field and the index; each index entry links its card's
-id, and breach-kill-chain-decks.js reveals the search field and filters the
-index and the cards from it.
+first, so the list reads like the hub it comes from. Above the cards sits a
+card finder (tools/card_finder.py, card-finder.js): a search field and an
+index of the decks by incident year, each entry linking its card. The slide
+count and as-of tags carry data-finder-skip, because every card has them and
+a search for this year's number would otherwise match every deck.
 
 A deck that is published but has no card here is a deck readers cannot find,
 so `--check` (in validate-html.yml) fails when the list is out of step, and
@@ -58,6 +59,8 @@ from build_breach_decks import (  # noqa: E402
     PRES_ID_RE,
     parse_outline_text,
 )
+from card_finder import Entry, render_finder  # noqa: E402
+from card_finder import splice as splice_region  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 PAGE = "breach-kill-chain-decks.html"
@@ -175,13 +178,17 @@ def _attr(s: str) -> str:
 
 def render_card(d: Deck) -> list[str]:
     base = f"https://docs.google.com/presentation/d/{d.pres_id}"
-    tags = [t for t in (d.year, d.provider, f"{d.slides} slides", f"As of {d.as_of}") if t]
+    # (text, searched): every card has a slide count and an as-of date, so the
+    # finder leaves them out of the search.
+    tags = [(t, searched) for t, searched in ((d.year, True), (d.provider, True),
+                                              (f"{d.slides} slides", False), (f"As of {d.as_of}", False)) if t]
     return [
         f'<div class="resource-card resource-card--deck" id="deck-{d.slug}" data-icon="📑">',
         f"    <h3>{_text(d.title)}</h3>",
         f'    <p><span class="no-glossary">{_text(d.promise)}</span></p>',
         '    <div class="resource-tags">',
-        *[f'        <span class="tag no-glossary">{_text(t)}</span>' for t in tags],
+        *[f'        <span class="tag no-glossary"{"" if searched else " data-finder-skip"}>{_text(t)}</span>'
+          for t, searched in tags],
         "    </div>",
         '    <div class="deck-actions">',
         f'        <a class="card-action" href="{base}/export/pdf" {EXT}>Download the PDF</a>',
@@ -197,47 +204,19 @@ def render_card(d: Deck) -> list[str]:
     ]
 
 
-# The search field. It ships hidden: breach-kill-chain-decks.js reveals it and
-# finds it by these ids, so a reader without scripts never sees a box that
-# cannot work.
-SEARCH_FIELD = [
-    '<div class="deck-filter is-hidden" id="deckFilter" role="search">',
-    '    <label for="deckSearch" class="visually-hidden">Search the decks</label>',
-    '    <div class="search-wrapper">',
-    '        <input type="text" id="deckSearch" placeholder="Search by company, actor or platform"'
-    ' autocomplete="off" spellcheck="false">',
-    "    </div>",
-    '    <p class="deck-filter-status"><span id="deckFilterStatus" role="status"></span>'
-    ' <button class="clear-search-btn is-hidden" id="clearDeckSearch" type="button">Clear the search</button></p>',
-    "</div>",
-]
-
-
 def render_index(decks: list[Deck]) -> list[str]:
-    """A list of links to the cards, one group per incident year. Years
-    keep the order they first appear in, so a timeline that is not strictly
-    by year still yields one group per year.
-
-    A <div> with the navigation role rather than a <nav>: style.css styles
-    bare `nav ul` and `nav a` for the site header, and those rules would lay
-    the index out as a header menu. Being a <div>, it is not a cross-linker
-    skip zone either, so the year label carries `no-glossary`."""
-    groups: dict[str, list[Deck]] = {}
-    for d in decks:
-        groups.setdefault(d.year or "Undated", []).append(d)
-    lines = ['<div class="deck-index" role="navigation" aria-label="Deck index">']
-    for label, members in groups.items():
-        gid = f"deck-index-{label.lower()}"
-        lines += [
-            '    <div class="deck-index-group">',
-            f'        <p class="deck-index-year" id="{gid}"><span class="no-glossary">{_text(label)}</span></p>',
-            f'        <ul class="deck-index-list" aria-labelledby="{gid}">',
-            *[f'            <li><a href="#deck-{d.slug}">{_text(d.title)}</a></li>' for d in members],
-            "        </ul>",
-            "    </div>",
-        ]
-    lines.append("</div>")
-    return lines
+    """The card finder: a search field and the decks by incident year."""
+    return render_finder(
+        [Entry(f"deck-{d.slug}", d.title, d.year) for d in decks],
+        input_id="deckSearch",
+        id_prefix="deck-index",
+        label="Search the decks",
+        placeholder="Search by company, actor or platform",
+        index_label="Deck index",
+        noun="deck",
+        nouns="decks",
+        text_selector="h3, p, .tag",
+    )
 
 
 def render_region(decks: list[Deck]) -> list[str]:
@@ -248,9 +227,7 @@ def render_region(decks: list[Deck]) -> list[str]:
     count = f"{n} deck so far" if n == 1 else f"{n} decks so far"
     lines = [
         f'<p><span class="no-glossary">{count}, newest incident first.</span></p>',
-        '<div class="deck-finder">',
-        *["    " + ln for ln in SEARCH_FIELD + render_index(decks)],
-        "</div>",
+        *render_index(decks),
         '<div class="resource-grid">',
     ]
     for d in decks:
@@ -262,16 +239,7 @@ def render_region(decks: list[Deck]) -> list[str]:
 def splice(page_html: str, region: list[str]) -> str:
     """page_html with everything between the markers replaced by region,
     indented to match the start marker. Raises ValueError on bad markers."""
-    starts = page_html.count(START)
-    ends = page_html.count(END)
-    if starts != 1 or ends != 1:
-        raise ValueError(f"{PAGE} needs exactly one {START} and one {END} (found {starts} and {ends})")
-    m = re.search(r"^([ \t]*)" + re.escape(START) + r"[ \t]*\n(.*?)^[ \t]*" + re.escape(END), page_html, re.S | re.M)
-    if not m:
-        raise ValueError(f"{PAGE}: {START} and {END} must each sit on a line of their own, start first")
-    indent = m.group(1)
-    body = "".join(f"{indent}{ln}\n" if ln else "\n" for ln in region)
-    return page_html[: m.start(2)] + body + page_html[m.start(2) + len(m.group(2)):]
+    return splice_region(page_html, START, END, region, PAGE)
 
 
 def sync(root: Path, check: bool) -> int:
@@ -374,18 +342,21 @@ def self_test() -> int:
         expect('<span class="tag no-glossary">2024</span>' in first, "the incident year comes from the timeline")
         expect('<span class="tag no-glossary">AWS &amp; aaa · Cloud</span>' in first,
                "the platform comes from the timeline, unescaped once and escaped once")
-        nav = first[first.index('<div class="deck-index"'):first.index('<div class="resource-grid">')]
+        nav = first[first.index('<div class="card-finder-index"'):first.index('<div class="resource-grid">')]
         expect(nav.index('href="#deck-bbb"') < nav.index('href="#deck-aaa"'),
                "the index follows the timeline order")
         expect('<a href="#deck-aaa">A &amp; &lt;B&gt;</a>' in nav, "index titles are escaped")
-        expect(nav.count('class="deck-index-group"') == 2 and 'id="deck-index-2026"' in nav
-               and 'aria-labelledby="deck-index-2024"' in nav, "the index has one labelled group per year")
-        expect(first.index('class="deck-index"') < first.index('<div class="resource-grid">'),
-               "the index sits above the cards")
-        expect('<div class="deck-filter is-hidden" id="deckFilter"' in first
-               and all(f'id="{i}"' in first for i in ("deckSearch", "deckFilterStatus", "clearDeckSearch"))
-               and first.index('id="deckFilter"') < first.index('class="deck-index"'),
-               "the search field the page script needs ships hidden, above the index")
+        expect('id="deck-index-2026-and-earlier"' in nav and 'aria-labelledby="deck-index-2026-and-earlier"' in nav,
+               "index groups are labelled and carry the deck prefix")
+        expect(first.index('class="card-finder"') < first.index('<div class="resource-grid">'),
+               "the finder sits above the cards")
+        expect('<div class="card-finder-filter is-hidden"' in first and 'id="deckSearch"' in first
+               and 'data-finder-text="h3, p, .tag"' in first and 'data-finder-nouns="decks"' in first,
+               "the finder ships its field hidden and tells the script what to search")
+        expect('<span class="tag no-glossary" data-finder-skip>As of 2026-11-20</span>' in first
+               and f'<span class="tag no-glossary" data-finder-skip>{1 + GENERATED_SLIDES} slides</span>' in first
+               and '<span class="tag no-glossary">2024</span>' in first,
+               "the slide count and as-of tags are left out of the search, the year is not")
         expect("2 decks so far" in first, "the count is plural for two")
         expect("<p>Before.</p>" in first and "<p>After.</p>" in first and "stale" not in first,
                "only the region between the markers is replaced")
@@ -421,18 +392,6 @@ def self_test() -> int:
                                '<span class="inc-year">2023</span>'
                                '<span data-y="2" class="prov-tag prov-gcp">GCP</span></a></li>')
         expect(order == {"q": (0, "2023", "GCP")}, "timeline cards with other attributes are still read")
-
-        # Years out of order on the timeline still give one group per year.
-        lines = render_index([
-            Deck("a", "A", "", "", 4, ID_A, "2026", ""),
-            Deck("b", "B", "", "", 4, ID_A, "2025", ""),
-            Deck("c", "C", "", "", 4, ID_A, "2026", ""),
-            Deck("d", "D", "", "", 4, ID_A, "", ""),
-        ])
-        joined = "\n".join(lines)
-        expect(joined.count('class="deck-index-group"') == 3 and joined.index('"#deck-c"') < joined.index('"deck-index-2025"')
-               and 'id="deck-index-undated"><span class="no-glossary">Undated<' in joined,
-               "an out-of-order year joins its group, and a missing year is Undated")
 
         # No decks: the region says so rather than rendering an empty grid.
         root = _fixture(tmp / "9", {}, [("aaa", "2026")])
