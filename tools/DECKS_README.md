@@ -333,11 +333,15 @@ and last slides carry "Cloud Security Office Hours, csoh.org" and the licence.
 
 `breach-kill-chain-decks.html` lists every published breach deck, one card
 each, between its `<!--breach-decks:start-->` and `<!--breach-decks:end-->`
-markers. `tools/sync_breach_deck_index.py` renders the cards from
+markers. Above the cards, one box holds a search field and an index of the
+decks grouped by incident year; each entry links its card. The field ships
+hidden and `breach-kill-chain-decks.js` reveals it and filters the index and
+the cards together, so without scripts the index still works and no dead
+search box shows. `tools/sync_breach_deck_index.py` renders all of it from
 `published.json`, each deck's outline (title, promise, as-of date, and the
-slide count with the three generated slides added) and the order and incident
-year of the deck's card on `breach-timeline.html`. Run it after every
-`--record`, in the same commit:
+slide count with the three generated slides added) and the order, incident
+year and platform tag of the deck's card on `breach-timeline.html`. Run it
+after every `--record`, in the same commit:
 
 ```bash
 python3 tools/sync_breach_deck_index.py              # rewrite the list

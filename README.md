@@ -838,6 +838,7 @@ csoh.org/
 ├── chat-resources.js           # chat-resources.html-specific filtering/search
 ├── meetings.js                 # meetings.html-specific index + filters + speaker filter
 ├── glossary.js                 # glossary.html-specific search/filter
+├── breach-kill-chain-decks.js  # breach-kill-chain-decks.html search over the deck index + cards
 ├── breach-timeline.css         # breach-timeline.html-specific styles
 ├── breach-timeline.js          # breach-timeline.html-specific tab/panel logic
 ├── countdown.css               # countdown.html styles (dark clock face, self-hosted fonts)
@@ -954,7 +955,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) |
 | `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_PAGES_README.md) |
 | `sync_glossary_usage.py` | Lists, under each glossary entry, every page that links to it ("Used on N pages") | docstring |
-| `sync_breach_deck_index.py` | Renders the deck cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
+| `sync_breach_deck_index.py` | Renders the deck index, search field and cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |
@@ -1168,7 +1169,7 @@ The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five
   That failure is silent: nothing errors, the push looks fine, and the change
   waits for the next unrelated commit.
 - `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`, `countdown.css`
-- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `404.js`, `resources-hub.js`, `search-init.js`, `countdown.js`
+- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `breach-kill-chain-decks.js`, `404.js`, `resources-hub.js`, `search-init.js`, `countdown.js`
 - `resources-index.json`, `vendor/**`, `fonts/**`, `chat-screenshots/**`, `img/**`
 - `update_sri.py`, `csoh.ics`, `tools/sync_next_session.py`
 - Manual trigger via the GitHub Actions tab
