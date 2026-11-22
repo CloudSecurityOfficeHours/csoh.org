@@ -1,0 +1,391 @@
+title: tj-actions/changed-files
+page: breaches/tj-actions-changed-files.html
+as-of: 2026-11-22
+promise: In March 2025, a stolen bot token let attackers repoint many tj-actions/changed-files version tags to one commit that printed CI secrets into public build logs.
+
+== At a glance
+layout: stats
+stat: 23,000 | or more repositories referenced it | Most callers pinned a mutable tag, not a commit SHA
+stat: Dozens | of cases of confirmed live secret leakage | Per Wiz Threat Research (disclosure: the site's author works at Wiz)
+stat: 218 | public repositories leaked secrets, per Endor Labs | Of 614 that ran it in the window
+CVE-2025-30066. Root cause, per the maintainers: a compromised bot PAT, traced to reviewdog (CVE-2025-30154).
+notes:
+Start with the three figures the page leads with, and with who stands behind each one.
+
+More than 23,000 repositories referenced tj-actions/changed-files, one of the most widely used GitHub Actions. Most callers pinned it to a mutable version tag such as v45, not to a commit SHA, so a single poisoned release would fan out into thousands of CI/CD runs.
+
+Referencing the action is different from leaking a secret. Wiz Threat Research confirmed live secret leakage in only dozens of cases. Endor Labs found that 614 of 5,416 public repositories referencing the action ran it during the window, and that 218 of those leaked secrets. A later slide sets the two counts side by side.
+
+Say the disclosure aloud as the page gives it: research published by Wiz is one of the sources cited on the page, and the site's author works at Wiz. Every source is linked so you can read it directly.
+
+The compromise is tracked as CVE-2025-30066. A CVE is a public identifier for one known vulnerability. The tj-actions maintainers disclosed that the root cause was a compromised bot Personal Access Token, or PAT, which the page traces to the reviewdog/action-setup chain, CVE-2025-30154. A PAT stands in for a password when a program acts as a GitHub account.
+
+== What happened, and when
+layout: timeline
+event: Earlier | reviewdog/action-setup@v1, poisoned to dump secrets, exposes the tj-actions-bot PAT
+event: March 14 to 15, 2025 | The exposure window: secrets readable in public build logs
+event: Around March 15 | The malicious gist and commit are taken down
+Endor Labs measured the window as 15:00 to 15:00 UTC. The maintainers shipped a clean release, v46.0.1; the page does not date it. Spacing is not to scale.
+notes:
+The page gives only a few dates, and the timeline shows only those.
+
+In March 2025, attackers used a stolen bot Personal Access Token to retroactively update many version tags of tj-actions/changed-files so that they pointed at a single malicious commit. That commit scraped the CI runner's memory and printed captured secrets into GitHub Actions build logs, which on public repositories anyone can read.
+
+The token had been exposed earlier, through reviewdog/action-setup@v1, which had itself been poisoned to dump secrets. The page does not date that step, so the timeline says only earlier.
+
+For public repositories, the secrets were exposed during the March 14 to 15, 2025 window. Endor Labs measured it as 15:00 to 15:00 UTC. The malicious gist and commit were taken down around March 15, and the maintainers shipped a clean release, v46.0.1.
+
+The markers are evenly spaced, and the gaps between them are not to scale.
+
+== How many leaked: two sources, two counts
+layout: compare
+col: Wiz Threat Research | Confirmed live secret leakage in only dozens of cases | Gives no breakdown of the rest | Notes SHA-pinned workflows were not affected | Notes private repositories did not leak secrets publicly
+col: Endor Labs | 5,416 public repositories referenced the action | Only 614 of them ran it during the window | 218 of those leaked secrets
+The page reports both counts side by side and does not reconcile them.
+notes:
+The page gives two counts of leakage, from two sources, and does not choose between them.
+
+Wiz Threat Research confirmed live secret leakage in only dozens of cases. Wiz gives no breakdown of the rest. It notes that workflows pinned to a commit SHA were not affected, and that private repositories did not leak their secrets publicly.
+
+Endor Labs looked at public repositories. It found that only 614 of the 5,416 public repositories referencing the action ran it during the window, and that 218 of those leaked secrets.
+
+The page's headline figure, more than 23,000 repositories referencing the action, counts references rather than leaks, and the page does not say how it relates to Endor Labs' 5,416.
+
+Keep each count with its source when you repeat it. As the page discloses, the site's author works at Wiz.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Reconnaissance | A ubiquitous action | T1593
+step: 02 | Initial Access | Stolen bot PAT | T1078
+step: 03 | Execution | Tags repointed | T1195.001
+step: 04 | Collection | Runner memory dumped | T1552.001
+step: 05 | Impact | Secrets in public logs | T1213
+Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's five stages, each with its phase and primary ATT&CK technique.
+
+Stage 01, Reconnaissance, is the target: an action so widely referenced that one poisoned release would fan out into thousands of CI/CD runs. Stage 02, Initial Access, is the compromised tj-actions-bot PAT, traced upstream to reviewdog/action-setup. Stage 03, which the page files under Execution, is the malicious commit and the version tags repointed to it. Stage 04, Collection, is the Python payload that scraped the runner's memory for credentials. Stage 05, Impact, is those secrets printed into build logs that anyone could read on public repositories.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== One poisoned release would fan out into thousands of CI/CD runs
+layout: stage
+stage: 01
+phase: Reconnaissance
+technique: T1593 | Search Open Websites/Domains
+fact: Target | tj-actions/changed-files, which detects files changed in a pull request or commit
+fact: Reach | referenced by more than 23,000 repositories
+fact: Pinning | most callers pinned to mutable tags like v45, not commit SHAs
+Attackers who could push to the action would inherit the trust and the secrets of every downstream workflow that ran it.
+notes:
+The page files this stage under Reconnaissance, targeting a ubiquitous action, and maps it to T1593, Search Open Websites/Domains.
+
+tj-actions/changed-files detects which files changed in a pull request or commit. The page calls it one of the most popular GitHub Actions, referenced by more than 23,000 repositories.
+
+Because so many public repositories invoked it, often pinned only to a mutable version tag like v45 rather than a commit SHA, a single poisoned release would fan out into thousands of CI/CD runs. A tag is a label that can be moved to another commit; a commit SHA is the hash that names one exact commit. CI/CD is continuous integration and continuous delivery, the automation that builds, tests and ships code.
+
+The page's lesson for this stage: attackers who could push to the action would inherit the trust and the secrets of every downstream workflow that ran it.
+
+The next slide explains GitHub Actions in general.
+
+== What GitHub Actions, workflows and runners are
+layout: background
+source: How We Use GitHub Actions | https://csoh.org/github-actions.html#what-is-it
+A workflow is a YAML file under .github/workflows/. On an event it lists, GitHub spins up a fresh virtual machine, the runner, runs the steps and tears it down. A step can run a script or use a published Action.
+notes:
+Background, from the csoh.org GitHub Actions page, in general terms.
+
+GitHub Actions is GitHub's built-in automation runner. You drop a YAML file under .github/workflows/, and GitHub watches your repository for the events you list: a push to main, a new pull request, a cron schedule, a manual button click. When a matching event fires, GitHub spins up a fresh virtual machine, called the runner, runs the steps you wrote, and tears it down.
+
+Every workflow file names what triggers it and one or more jobs, each a bundle of steps. A step can run a script, use a published Action, or set an output. tj-actions/changed-files is one such published Action.
+
+== A compromised bot token, traced to reviewdog, gave write access
+layout: stage
+stage: 02
+phase: Initial Access
+technique: T1078 | Valid Accounts
+fact: Root cause | a compromised tj-actions-bot PAT, per the maintainers
+fact: Exposed through | reviewdog/action-setup@v1, itself poisoned to dump secrets
+fact: Dependency | tj-actions/eslint-changed-files relied on reviewdog
+fact: Further upstream | SpotBugs' workflow, per analysts including Unit 42
+Credentials leaked in the reviewdog attack were reused to gain write access.
+notes:
+The page maps this stage to T1078, Valid Accounts.
+
+The tj-actions maintainers disclosed that the root cause was a compromised GitHub Personal Access Token belonging to the tj-actions-bot account. It had write access to the action's repository.
+
+That token was exposed earlier through reviewdog/action-setup@v1, tracked as CVE-2025-30154, which had itself been poisoned to dump secrets. tj-actions depended on reviewdog transitively, through tj-actions/eslint-changed-files. A transitive dependency is one you take on through something else you use. So, the page says, credentials leaked during the reviewdog attack were reused to gain write access to changed-files.
+
+Analysts including Unit 42 traced the initial foothold further upstream, through SpotBugs' GitHub Actions workflow. The page calls the result a multi-hop chained supply-chain compromise.
+
+The next slide draws the chain as the page gives it.
+
+== The upstream chain, as the page draws it
+layout: layers
+layer: Further upstream | SpotBugs' GitHub Actions workflow
+layer: Poisoned | reviewdog/action-setup (CVE-2025-30154)
+layer: Exposed | the tj-actions-bot PAT
+layer: Result | write access to tj-actions/changed-files
+Analysts including Unit 42 traced the SpotBugs hop. tj-actions depended on reviewdog through tj-actions/eslint-changed-files. The page does not say how SpotBugs' workflow led to reviewdog.
+notes:
+The page draws this chain itself: the SpotBugs workflow, then reviewdog/action-setup, then the tj-actions-bot PAT. The last row is the stage's outcome, write access to changed-files. Read the arrows as that order and nothing more.
+
+Analysts including Unit 42 traced the foothold to SpotBugs' GitHub Actions workflow. The page does not explain how that workflow led to reviewdog, so this deck does not either.
+
+reviewdog/action-setup@v1 had been poisoned to dump secrets. tj-actions depended on it through tj-actions/eslint-changed-files, so, the page says, credentials leaked during the reviewdog attack were reused to gain write access to changed-files. Stage 03 picks up from there.
+
+The page's summary calls this a supply-chain attack on a supply-chain tool. The next slide gives ATT&CK's general description of Actions that depend on other Actions.
+
+== What ATT&CK says about Actions that depend on other Actions
+layout: background
+source: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+ATT&CK says CI/CD components such as GitHub Actions may be targeted to reach an application's build, test and deployment cycles. Because Actions often depend on other Actions, compromising a single one may infect a large number of repositories.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Supply Chain Compromise: Compromise Software Dependencies and Development Tools. Adversaries may manipulate software dependencies and development tools before a final consumer receives them, to compromise data or systems. Applications often depend on external software, and popular open source projects used as dependencies in many applications may be targeted to add malicious code to users of the dependency.
+
+ATT&CK adds that CI/CD pipeline components, such as GitHub Actions, may be targeted to gain access to the building, testing and deployment cycles of an application. As GitHub Actions are often dependent on other GitHub Actions, threat actors may be able to infect a large number of repositories by compromising a single Action.
+
+The page maps its stage 03 to this technique, T1195.001.
+
+== Many version tags were repointed to one malicious commit
+layout: stage
+stage: 03
+phase: Execution
+technique: T1195.001 | Compromise Software Dependencies and Development Tools
+fact: Commit | a malicious payload, committed with the write access
+fact: Tags | many existing version tags rewritten to resolve to that commit
+fact: Dropper | Node.js function, base64-encoded instructions, Python script from a GitHub gist
+Consumers who trusted a tag such as v45, assuming it was an immutable, reviewed release, silently began running attacker code on their next CI run.
+notes:
+The page files this stage under Execution and maps it to T1195.001, Compromise Software Dependencies and Development Tools.
+
+With write access, the attackers committed a malicious payload, then rewrote many of the action's existing version tags so that they all resolved to that single commit.
+
+Consumers who trusted a tag such as v45, on the assumption that it was an immutable, reviewed release, silently began running attacker code on their next CI run. Because the tags were mutable, no consumer had to change a line of their workflow to be affected.
+
+The injected code was a Node.js function containing base64-encoded instructions, which downloaded a Python script from a GitHub gist. Base64 is a way of writing any data as plain letters, digits and a few symbols, and anyone can decode it. A gist is a small file or snippet hosted on GitHub.
+
+The next slide explains tags, commit SHAs and pinning in general.
+
+== Version tags, commit SHAs and pinning
+layout: background
+source: csoh.org glossary, Pinning | https://csoh.org/glossary.html#term-pinning
+A reference like actions/checkout@v4 resolves to whatever the publisher has pointed that version tag at right now. Pinning names an immutable identifier instead, such as a 40-character commit SHA, which the publisher cannot quietly redefine.
+notes:
+Background, from the csoh.org glossary, in general terms.
+
+Pinning means referring to a dependency by an immutable identifier, a content hash or a commit SHA, instead of a moveable label like a version tag or a branch.
+
+A line like actions/checkout@v4 resolves to whatever the publisher has pointed that label at right now. Pinning replaces it with a 40-character commit SHA, which the publisher can't quietly redefine.
+
+The glossary names the trade-off as friction: pins must be updated by hand to take new versions.
+
+== The payload scraped runner memory and printed secrets into the log
+layout: stage
+stage: 04
+phase: Collection
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Method | a Python script scanning runner memory, where secrets sit in cleartext during jobs
+fact: Harvested | included AWS access keys, GitHub PATs, npm tokens, private RSA keys
+fact: Output | a double base64-encoded blob in the job's standard output
+It needed no outbound C2 channel, and it blended into normal log volume.
+notes:
+The page maps this stage to T1552.001, Credentials In Files, and cites T1552.004, Private Keys, for the RSA keys.
+
+The Python script downloaded in stage 03 scanned the memory of the GitHub Actions runner process, where workflow secrets are held in cleartext during a job, and harvested any credentials it found. Captured material included valid AWS access keys, GitHub Personal Access Tokens, npm tokens and private RSA keys. npm is the default package registry for JavaScript.
+
+Rather than send the secrets to an external server, the payload printed them into the job's standard output as a double-encoded base64 blob: encoded once, then encoded again. The page calls it a low-noise technique that needed no outbound command-and-control, or C2, channel and blended into normal log volume. A C2 channel is how malware talks to the people running it.
+
+Where those logs could be read is stage 05.
+
+== Anyone could read the secrets in public logs
+layout: stage
+stage: 05
+phase: Impact
+technique: T1213 | Data from Information Repositories
+fact: Exposure | world-readable public Actions logs, March 14 to 15, 2025
+fact: Confirmed | live secret leakage in only dozens of cases, per Wiz
+fact: Endor Labs | of 614 public repos that ran it in the window, 218 leaked
+fact: Remediation | gist and commit down around March 15; clean release v46.0.1
+Any public workflow that ran in the window should treat all its CI secrets as compromised and rotate them.
+notes:
+The page maps this stage to T1213, Data from Information Repositories.
+
+For public repositories, GitHub Actions logs are world-readable. Any secret the payload wrote to the log was exposed to the entire internet during the March 14 to 15, 2025 window.
+
+More than 23,000 repositories referenced the action, but Wiz Threat Research confirmed live secret leakage in only dozens of cases, and gives no breakdown of the rest. Wiz notes that workflows pinned to a commit SHA were not affected, and that private repositories did not leak their secrets publicly. Endor Labs found that only 614 of 5,416 public repositories referencing the action ran it during the window, and that 218 of those leaked secrets.
+
+The malicious gist and commit were taken down around March 15, and the maintainers shipped a clean release, v46.0.1.
+
+The page's instruction: any public workflow that ran between March 14 and March 15, 2025, a window Endor Labs measured as 15:00 to 15:00 UTC, should treat all its CI secrets as compromised and rotate them.
+
+== A supply-chain attack on a supply-chain tool
+layout: text
+The page's summary puts it this way.
+- A poisoned reviewdog action exposed the PAT with write access to tj-actions.
+- Mutable tags carried one malicious commit into unchanged workflows.
+- Secrets went into the build log, with no outbound C2 channel.
+notes:
+The page draws one pattern from this incident, in its summary: a supply-chain attack on a supply-chain tool.
+
+At the upstream end, reviewdog/action-setup, an action tj-actions depended on, was poisoned to dump secrets. That exposed the tj-actions-bot PAT, and the PAT gave write access to tj-actions/changed-files.
+
+At the downstream end, consumers trusted mutable tags. When many of those tags were repointed to one malicious commit, no consumer had to change a line of their workflow to be affected.
+
+And the payload needed no outbound channel of its own. It printed what it found into the build log, which on a public repository anyone could read.
+
+== Five defenses against five stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05
+row: Pin Actions to a full commit SHA | 01 | 03
+row: Fewer, scoped secrets in CI | 04
+row: Allowlist which Actions may run | -
+row: Monitor build logs and egress | 03 | 04
+row: Fast, rehearsed secret rotation | 04 | 05
+No defense on the page cites a fact from stage 02. The allowlist defense cites no stage's facts.
+notes:
+This matrix sets the page's five defenses against its five stages. The defenses name no stage numbers, so a cell is marked only where a defense's own words cite that stage's facts.
+
+Pinning to a full commit SHA cites callers pinned to mutable tags like v45, stage 01, and the tag repointing the page calls exactly what happened here, stage 03. Scoping CI secrets cites the memory-scraping payload and what the runner holds, stage 04. Monitoring cites the code pulled from an external gist, stage 03, and the base64 secret blobs printed to the log, stage 04. The rotation plan names the AWS keys, PATs and npm tokens harvested in stage 04, and the exposure window of stage 05.
+
+Restricting which Actions may run speaks of any unvetted or newly poisoned action and cites no stage's facts, so its row is empty.
+
+Stage 05 carries Wiz's note that SHA-pinned workflows were not affected. That is a scope note on Wiz's count, so the pinning row leaves stage 05 unmarked.
+
+No defense cites a fact from stage 02, the bot token exposed through reviewdog. That gap is a discussion question at the end.
+
+== Pin to a commit SHA; allowlist the Actions that may run
+layout: compare
+col: Pin (stages 01, 03) | A tag like v45 can be silently repointed | A 40-character commit SHA makes a release immutable | Dependabot can propose reviewed SHA bumps
+col: Allowlist (no stage cited) | Allow only specific verified or SHA-pinned Actions | Set it at the org or repo level; block everything else | Turns a supply-chain incident into a policy denial, not a breach
+The page says a repointed tag is exactly what happened here.
+notes:
+Two defenses decide what code your workflows run.
+
+First, pin third-party Actions to a full commit SHA, not a mutable tag. A tag like v45 can be silently repointed by anyone who compromises the action repository, which the page says is exactly what happened here. Pinning to a 40-character commit SHA makes a release immutable, so attacker retagging cannot change what your workflow runs. The page pairs it with Dependabot, GitHub's dependency update tool, proposing reviewed SHA bumps.
+
+Second, restrict which Actions are allowed to run. GitHub lets you allowlist specific verified or SHA-pinned Actions at the organization or repository level and block everything else. The page says this stops an unvetted or newly poisoned action from executing in your CI/CD pipeline in the first place, and turns a supply-chain incident into a policy denial rather than a breach.
+
+== Hold fewer secrets in CI; watch the logs and the egress
+layout: compare
+col: Fewer secrets (stage 04) | A memory scraper can only steal what the runner holds | Least privilege; short-lived OIDC federation instead of long-lived AWS keys | Avoid injecting broad PATs
+col: Monitor (stages 03, 04) | Alert on unexpected outbound calls from runners | Alert on large or high-entropy base64 output in logs | Scan Actions logs with secret-scanning tooling
+The payload printed base64 secret blobs and pulled code from an external gist.
+notes:
+Two defenses for when a malicious step runs anyway.
+
+First, minimize and scope the secrets exposed to CI jobs. A memory-scraping payload can only steal what the runner holds. Grant workflows the least privilege possible, use short-lived OIDC federation to cloud providers instead of long-lived AWS keys, and avoid injecting broad PATs. OIDC federation lets a workflow exchange a short-lived identity token for temporary cloud credentials, in place of a stored key. Fewer standing secrets in the runner means a smaller blast radius when a step is malicious.
+
+Second, monitor build logs and egress, meaning outbound traffic. The payload printed base64 secret blobs and pulled code from an external gist. Alert on unexpected outbound network calls from runners and on large or high-entropy base64 output in logs. High-entropy text looks random. Scan Actions logs with secret-scanning tooling, so exfiltrated credentials are caught even when they never leave in a classic exfiltration channel.
+
+== Rotate within hours; treat secrets an affected runner touched as burned
+layout: text
+When a dependency is compromised, rotation speed decides the impact.
+- Inventory every credential reachable from CI.
+- Know which workflows ran in the exposure window.
+- Be able to revoke and reissue AWS keys, PATs, npm tokens and signing keys within hours.
+notes:
+The fifth defense is a fast, rehearsed secret-rotation plan. It names the kinds of credential harvested in stage 04 and the exposure window of stage 05.
+
+When a dependency is compromised, the page says, speed of rotation decides the impact. Inventory every credential reachable from CI, and know which workflows ran in the exposure window. Be able to revoke and reissue AWS keys, PATs, npm tokens and signing keys within hours.
+
+The page ends the defense with a rule: treat any secret that touched an affected runner as burned.
+
+For this incident, the page's instruction is specific: any public workflow that ran between March 14 and March 15, 2025 should treat all its CI secrets as compromised and rotate them.
+
+== Check your own environment
+layout: checklist
+check: Are your third-party Actions pinned to a full commit SHA?
+check: Does something like Dependabot propose reviewed SHA bumps?
+check: Does your org or repo allowlist which Actions may run?
+check: Do your CI jobs hold long-lived AWS keys or broad PATs?
+check: Would an unexpected outbound call from a runner raise an alert?
+check: Do you scan Actions logs for secrets and high-entropy base64?
+check: Could you list which workflows ran in a window, and rotate within hours?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether your third-party Actions are pinned to a full 40-character commit SHA, and whether something like Dependabot proposes reviewed SHA bumps. Ask whether your organization or repositories allowlist which Actions may run and block everything else.
+
+Ask which long-lived AWS keys or broad PATs your CI jobs hold, and whether short-lived OIDC federation could stand in for them. Ask whether an unexpected outbound call from a runner would raise an alert, and whether you scan Actions logs for secrets and for large or high-entropy base64 output.
+
+Finally, ask whether you could say which workflows ran in an exposure window, and revoke and reissue every credential they could reach within hours.
+
+== No secrets left over the network. Would you have noticed?
+layout: question
+The payload printed what it stole into the job's own log as a double base64-encoded blob, with no outbound C2 channel.
+
+Which of your controls would have seen it, and where?
+notes:
+Give the room a minute with this one before moving on.
+
+The page's facts: the Python payload scraped the runner's memory and printed the secrets into the job's standard output as a double-encoded base64 blob. It needed no outbound command-and-control channel, and it blended into normal log volume. Before that, the dropper had pulled a Python script from a GitHub gist.
+
+Ask each person to name one control in their own environment that would have seen this, before you show the answer slide.
+
+== The page watches the logs as well as the network
+layout: answer
+Its monitoring defense names both: the base64 blobs in the log and the pull from a gist.
+- Alert on large or high-entropy base64 output in logs.
+- Scan Actions logs with secret-scanning tooling.
+- Alert on unexpected outbound calls from runners.
+notes:
+The page's answer is to watch the logs as well as the network.
+
+The payload printed base64 secret blobs and pulled code from an external gist. So the page says to alert on unexpected outbound network calls from runners, to alert on large or high-entropy base64 output in logs, and to scan Actions logs with secret-scanning tooling.
+
+Bring the group's examples back to the page's point: with log scanning, exfiltrated credentials are caught even when they never leave in a classic exfiltration channel.
+
+== What would you add for stage 02?
+layout: question
+No defense on the page cites stage 02: the tj-actions-bot PAT, exposed through a poisoned reviewdog action.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the gap in the defense matrix.
+
+Four of the page's five defenses cite facts from stages 01, 03, 04 and 05, and the fifth cites none. None cites stage 02, where the tj-actions-bot PAT, with write access to the action's repository, was exposed through reviewdog/action-setup and reused. The page traces that chain further upstream to SpotBugs' GitHub Actions workflow, through analysts including Unit 42.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stage 02
+layout: answer
+Any control you propose is your own suggestion. Test it against these reported details.
+- The tj-actions-bot PAT and its write access
+- The dependency on reviewdog via tj-actions/eslint-changed-files
+- The SpotBugs workflow upstream, per analysts including Unit 42
+notes:
+Be clear where the page stops. No defense on the page cites a fact from stage 02, and this deck adds none of its own.
+
+The allowlist defense speaks of any unvetted or newly poisoned action without citing a stage, and the scoping defense says to avoid injecting broad PATs while citing the memory scraper in stage 04. The group may argue that either reaches stage 02; that argument is the group's own.
+
+Test each proposal against the facts the page reports for stage 02: a compromised tj-actions-bot PAT with write access to the action's repository; its exposure through reviewdog/action-setup@v1, which had been poisoned to dump secrets; the transitive dependency through tj-actions/eslint-changed-files; and the SpotBugs workflow further upstream.
+
+== Primary sources
+layout: links
+link: Wiz Threat Research, tj-actions/changed-files attack | https://www.wiz.io/blog/github-action-tj-actions-changed-files-supply-chain-attack-cve-2025-30066
+link: Endor Labs, blast radius of the attack | https://www.endorlabs.com/learn/blast-radius-of-the-tj-actions-changed-files-supply-chain-attack
+link: CISA advisory | https://www.cisa.gov/news-events/alerts/2025/03/18/supply-chain-compromise-third-party-tj-actionschanged-files-cve-2025-30066-and-reviewdogaction
+link: Unit 42, attack chain | https://unit42.paloaltonetworks.com/github-actions-supply-chain-attack/
+link: NVD, CVE-2025-30066 | https://nvd.nist.gov/vuln/detail/cve-2025-30066
+Disclosure: research published by Wiz is one of these sources, and the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Wiz Threat Research confirmed live secret leakage in dozens of cases; as the page discloses, the site's author works at Wiz. Endor Labs counted the public repositories that ran the action during the window and leaked secrets. Unit 42 is among the analysts who traced the foothold upstream through SpotBugs. CISA's advisory and the record for CVE-2025-30066 in NVD, the US National Vulnerability Database, complete the list.
+
+The background slides name their own sources: the csoh.org GitHub Actions page and glossary, and MITRE ATT&CK.
+
+== Related defense topics
+layout: links
+link: GitHub Actions security | github-actions.html
+link: CI/CD security | ci-cd.html
+link: Git and version control | version-control.html
+link: Cloud threat research | threat-research.html
+The page links no other kill chain; these are its related defense topics.
+notes:
+The page links no other kill chain on csoh.org, so this slide carries its related defense topics instead.
+
+They are GitHub Actions security, CI/CD security, Git and version control, and cloud threat research. The GitHub Actions page is also the source of one background slide in this deck.
