@@ -555,7 +555,7 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [Kaseya VSA / REvil](https://csoh.org/breaches/kaseya-vsa-revil.html) | 2021 | MSP / RMM | T1190, T1072, T1685, T1486 |
 | [Log4Shell](https://csoh.org/breaches/log4shell.html) | 2021 | Cross-cloud (OSS) | T1190, T1059, T1195.001, T1595.002 |
 | [Uber](https://csoh.org/breaches/uber.html) | 2022 | AWS / GCP | T1078, T1621, T1552.001, T1078.004 |
-| [LastPass](https://csoh.org/breaches/lastpass.html) | 2022-2023 | LastPass / AWS S3 | T1195.002, T1203, T1555, T1530 |
+| [LastPass](https://csoh.org/breaches/lastpass.html) | 2022-2023 | LastPass / AWS S3 | T1203, T1555, T1530 |
 | [0ktapus / Twilio](https://csoh.org/breaches/0ktapus-twilio.html) | 2022 | Okta / SaaS | T1566.003, T1684.001, T1111, T1199 |
 | [Okta / LAPSUS$](https://csoh.org/breaches/okta-lapsus-sitel.html) | 2022 | Okta | T1199, T1078, T1213 |
 | [Storm-0558](https://csoh.org/breaches/storm-0558.html) | 2023 | Azure | T1078, T1552, T1606.001, T1114.002 |
