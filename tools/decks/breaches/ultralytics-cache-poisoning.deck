@@ -1,0 +1,415 @@
+title: Ultralytics Cache Poisoning
+page: breaches/ultralytics-cache-poisoning.html
+as-of: 2026-11-22
+promise: In December 2024 a fork's branch name poisoned a GitHub Actions cache, and two malicious Ultralytics releases shipped with correct provenance; two more used a forgotten token.
+
+== At a glance
+layout: stats
+stat: 4 | malicious releases on PyPI | 8.3.41 and 8.3.42, then 8.3.45 and 8.3.46 via a stale token
+stat: 12 | approximate hours of exposure for 8.3.41 | about 1 hour for 8.3.42
+stat: 2 | releases with correct provenance | via Trusted Publishing, which did not prevent it
+A branch name was the entire injection vector.
+
+Disclosure: research published by Wiz is one of the page's sources, and the site's author works at Wiz.
+notes:
+Start with the figures the page leads with.
+
+Between December 4 and 7, 2024, the Ultralytics YOLO package, which the page calls one of the most widely used computer-vision libraries on PyPI, shipped four malicious releases carrying an XMRig Monero miner. PyPI is the Python Package Index, the public repository for Python packages.
+
+The first two, 8.3.41 and 8.3.42, were published through the project's legitimate workflow using PyPI Trusted Publishing, so they carried correct provenance. The first was exposed for about twelve hours, the second for about one. On December 7 the attacker published 8.3.45 and 8.3.46 directly, using an unrevoked API token left over from before the project adopted Trusted Publishing.
+
+The page's first stat says a branch name was the entire injection vector.
+
+Say the disclosure aloud as the page gives it: research published by Wiz is one of the sources cited on the page, and the site's author works at Wiz. Every source is linked so you can read it directly.
+
+== What happened, and when
+layout: timeline
+event: December 4, 2024, 20:51 UTC | 8.3.41 published through the project's Trusted Publishing workflow
+event: December 5, 09:15 UTC | 8.3.41 removed, about 12 hours later
+event: December 5, 12:47 UTC | 8.3.42 published, then removed within about an hour
+event: December 7 | 8.3.45 and 8.3.46 published directly with an unrevoked API token
+The page gives no date for the fork's pull request or the cache poisoning. Spacing is not to scale.
+notes:
+The page gives these dates and times, and the timeline shows only those.
+
+Version 8.3.41 was published on December 4, 2024 at 20:51 UTC, through the project's own Trusted Publishing workflow. It was removed on December 5 at 09:15 UTC, about twelve hours later. Version 8.3.42 went out the same way at 12:47 UTC on December 5 and was removed within about an hour.
+
+On December 7 the attacker published 8.3.45 and 8.3.46 directly to PyPI, using an unrevoked API token from before the project adopted Trusted Publishing.
+
+The page gives no date for the fork's pull request or for the cache poisoning, so do not supply one. The markers are evenly spaced, and the slide says the gaps between them are not to scale.
+
+== Two routes to PyPI
+layout: compare
+col: Through the workflow: 8.3.41, 8.3.42 | The release build restored a poisoned Actions cache | Published by the project's Trusted Publishing workflow | Attestations correct: the build did come from that workflow
+col: Around it: 8.3.45, 8.3.46 | Published directly on December 7 | With an unrevoked API token from before the migration | GitHub Actions bypassed; no cache poisoning needed
+Attestations did not prevent the attack, PyPI notes, but they made it possible to prove the first two came through the workflow rather than a token.
+notes:
+The page describes two routes by which the malicious releases reached PyPI.
+
+The first two went through the workflow. The injected code had poisoned a GitHub Actions cache entry, the release build restored it, and the project's own Trusted Publishing workflow published 8.3.41 and 8.3.42. Their attestations were correct, because the build really did come from that workflow.
+
+The second two went around it. On December 7 the attacker published 8.3.45 and 8.3.46 directly, using an unrevoked API token that predated the Trusted Publishing migration. The page says this skipped the cache-poisoning route entirely and bypassed GitHub Actions altogether.
+
+PyPI notes the compensating value: attestations did not prevent the attack, but they made the forensics tractable, because it was possible to prove the first two versions came through the workflow rather than a token.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | Branch name injection | T1059.004
+step: 02 | Persistence | Poisoned Actions cache | T1195.001
+step: 03 | Supply Chain | Valid provenance | T1195.002
+step: 04 | Credential Access | Token nobody revoked | T1552.007
+step: 05 | Impact | XMRig on GPU hosts | T1496
+Arrows follow the page's stage order. Stage 04 bypassed GitHub Actions; all four releases carried the miner.
+notes:
+Here is the whole chain on one slide: the page's five stages, each with its phase and the first ATT&CK technique in its header.
+
+Stage 01, Initial Access, is the fork's branch name interpolated into a shell step of a pull_request_target workflow. Stage 02, which the page files under Persistence, is the poisoned Actions cache that a later release build restored. Stage 03, under the page's Supply Chain phase, is 8.3.41 and 8.3.42 going to PyPI through Trusted Publishing with correct provenance.
+
+Stage 04, Credential Access, is the second wave: on December 7, 8.3.45 and 8.3.46 were published directly with an API token nobody had revoked, bypassing GitHub Actions and needing no cache poisoning. The page does not say how the attacker obtained that token. Stage 05, Impact, is XMRig mining Monero on machines that installed the package, and the page says all four releases carried the miner.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== The fork's branch name was the payload
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1059.004 | Command and Scripting Interpreter: Unix Shell
+technique: T1190 | Exploit Public-Facing Application
+fact: Trigger | pull_request_target, with base-repo secrets against fork input
+fact: Injection point | the fork's branch name, in a shell step
+fact: Approval needed | none; the trigger does not gate on it
+fact: Critical extra | cache-write permission was in scope for that job
+Every field a pull request carries (title, branch, body, author) is attacker-controlled free text.
+notes:
+The workflow used the pull_request_target trigger, which runs with the base repository's secrets and permissions against fork-controlled input. The page calls that its entire purpose and its entire danger. A fork is a copy of someone else's repository, and a pull request from it proposes changes back.
+
+Here the attacker-controlled value was the branch name. Create a fork, name a branch something containing shell syntax, open a pull request, and the workflow interpolates the name into a run: step. No approval was needed, because pull_request_target does not require one, and nobody reviews a branch name. The page's summary adds that the workflow checked out and ran code from the fork's pull request, with cache-write permission in scope, which the page calls the critical extra.
+
+The page calls this the same trigger and the same class of mistake as Nx / s1ngularity eight months later, through a different field: there, the pull request title. It adds that every field a pull request carries has now been used in a real attack.
+
+The page maps this stage to T1059.004, Unix Shell, and T1190, Exploit Public-Facing Application. The next slide explains, in general terms, why a branch name can run as a command.
+
+== Why a branch name can run as a shell command
+layout: background
+source: csoh.org Semgrep rules guide, step 7 | https://csoh.org/howto/semgrep-rules.html#step-7
+credit: Also from How We Use GitHub Actions, security baseline (csoh.org)
+In a run: step, GitHub pastes an expression's value into the script before the shell starts. Whoever wrote that value, such as a branch name, can run commands in the job. The guide's fix: pass the value through env: instead.
+notes:
+Background, from csoh.org's Semgrep rules guide, in general terms.
+
+A run: step that contains an expression such as the issue title does not pass the title to the shell as data. GitHub pastes the title into the script before the shell starts. The guide's example is an issue titled with a semicolon, the command id, another semicolon and echo: the step then runs id, and whatever else an attacker types there runs the same way, with the job's permissions.
+
+The guide's rule message names an issue title and a branch name as examples of data whose author can run commands in the job. Its fix is to pass the value in through env: and use the variable instead.
+
+The csoh.org GitHub Actions page says the same in its security baseline: treat event data as untrusted input when interpolating into shell. Pull request titles, branch names and commit messages can contain attacker-controlled strings.
+
+Also from How We Use GitHub Actions: https://csoh.org/github-actions.html#security
+
+== A later release build restored a poisoned cache entry
+layout: stage
+stage: 02
+phase: Persistence
+technique: T1195.001 | Supply Chain Compromise: Compromise Software Dependencies and Development Tools
+fact: Mechanism | a poisoned cache entry, written from an untrusted PR job
+fact: Effect | a later legitimate release build restores and executes it
+fact: Why it looks clean | clean checkout, unmodified workflow, normal output
+fact: Structural problem | the cache is shared mutable state spanning trust boundaries
+A cache shared across trust levels is, in the page's words, a channel.
+notes:
+The GitHub Actions cache exists to make builds faster by carrying artifacts between runs. The page spells out what that means: it is shared mutable state that crosses the boundary between untrusted pull request jobs and trusted release jobs.
+
+The injected code wrote a poisoned entry into that cache from the low-trust side. A later legitimate release build restored it and executed it. The page says that converts a fork pull request into code execution inside the maintainers' own release pipeline.
+
+Nothing in the release run looks wrong. It checks out clean source from the repository, runs the workflow the maintainers wrote, and produces a package, having silently restored an attacker's artifact on the way.
+
+The page calls this precisely the technique Mini Shai-Hulud would industrialize in 2026, with the same lesson both times. It files this stage under Persistence and maps it to T1195.001, Compromise Software Dependencies and Development Tools.
+
+== 8.3.41 and 8.3.42 went to PyPI through Trusted Publishing, with genuine attestations
+layout: stage
+stage: 03
+phase: Supply Chain
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: Published via | the project's genuine Trusted Publishing workflow, over OIDC
+fact: Attestation | correct; the build really did come from that workflow
+fact: 8.3.41 | live Dec 4 20:51 to Dec 5 09:15 UTC, about 12 hours
+fact: 8.3.42 | published Dec 5 12:47 UTC, removed within about an hour
+Provenance proves origin, not integrity of the build environment.
+notes:
+The page calls this the uncomfortable part, and says PyPI's own analysis is direct about it.
+
+Trusted Publishing binds a release to a specific workflow in a specific repository via OIDC, removing the long-lived token an attacker would otherwise steal. OIDC, OpenID Connect, is an identity standard.
+
+It worked exactly as designed. The malicious releases really were built by the real workflow in the real repository, so the attestation said so truthfully. Provenance answers whether a build came from the pipeline it claims, and not whether the pipeline was uncompromised when it ran.
+
+PyPI notes the compensating value: attestations did not prevent the attack, but they made the forensics tractable, because it was possible to prove the first two versions came through the workflow rather than a token.
+
+Version 8.3.41 was live about twelve hours, from 20:51 UTC on December 4 to 09:15 UTC on December 5. Version 8.3.42 was published at 12:47 UTC on December 5 and removed within about an hour.
+
+The page maps this stage to T1195.002, Compromise Software Supply Chain. The next slide explains OIDC federation and provenance in general terms.
+
+== What OIDC federation and provenance are
+layout: background
+source: csoh.org glossary, OIDC Federation | https://csoh.org/glossary.html#term-oidc-federation
+credit: Also from the glossary's OIDC and Provenance entries (csoh.org)
+OIDC federation: a workload presents a short-lived OIDC token from its host (such as GitHub Actions), which the cloud trusts to issue temporary credentials. Provenance: a verifiable record of how a build artifact was produced.
+notes:
+Background, from the csoh.org glossary, in general terms.
+
+The glossary defines OIDC, OpenID Connect, as an identity layer on top of OAuth 2.0 that issues ID tokens.
+
+In OIDC federation, a workload presents a short-lived OIDC token from its host, for example GitHub Actions, and the cloud trusts that token to issue temporary credentials. The glossary notes that this removes long-lived secrets from CI.
+
+Provenance is a verifiable record of how a build artifact was produced: the source commit, the builder and the dependencies.
+
+The glossary describes federation to a cloud. On the page, Trusted Publishing binds a release to a specific workflow in a specific repository via OIDC, removing the long-lived token an attacker would otherwise steal.
+
+Also from the glossary's OIDC entry: https://csoh.org/glossary.html#term-oidc
+
+And from its Provenance entry: https://csoh.org/glossary.html#term-provenance
+
+== December 7: 8.3.45 and 8.3.46 published with an unrevoked API token
+layout: stage
+stage: 04
+phase: Credential Access
+technique: T1552.007 | Unsecured Credentials: Container API
+fact: December 7 | 8.3.45 and 8.3.46 published directly to PyPI
+fact: Credential | an unrevoked API token predating Trusted Publishing
+fact: Bypassed | GitHub Actions entirely; no cache poisoning needed
+fact: Root cause | adopting a better mechanism without revoking the old one
+A migration is finished when the old path is dead, not when the new one works.
+notes:
+The page calls this second phase the more ordinary failure, and the more common one.
+
+Ultralytics had migrated to Trusted Publishing, which the page calls the right move. But the old PyPI API token was still present in the workflow and still valid. On December 7 the attacker published 8.3.45 and 8.3.46 directly with it. The page says the attacker skipped the elaborate cache-poisoning route entirely and just published, bypassing GitHub Actions altogether. It does not say how the attacker obtained the token.
+
+Migrating to a better credential mechanism does not revoke the worse one. Somebody has to do that explicitly, and the page says it is exactly the kind of cleanup that gets deferred because everything already works.
+
+The page maps this stage to T1552.007, which ATT&CK names Unsecured Credentials: Container API.
+
+== XMRig mined Monero on machines that installed the package
+layout: stage
+stage: 05
+phase: Impact
+technique: T1496 | Resource Hijacking
+fact: Payload | XMRig, mining Monero
+fact: Where YOLO installs | GPU workstations, training clusters and inference servers
+fact: Concealment | sustained heavy compute: one more busy process is unremarkable
+fact: Did not take | model weights, training data, cloud credentials, all reachable
+The page reads it as a demonstration of access, not the limit of what it allowed.
+notes:
+The payload ran XMRig to mine Monero on machines that installed the package. Monero is a cryptocurrency, and XMRig is the mining program.
+
+The page calls cryptomining the least imaginative payload available, and says the target selection makes it rational. Ultralytics YOLO is installed on exactly the machines an attacker mining cryptocurrency wants: GPU workstations, training clusters and inference servers, running heavy sustained compute where an extra process consuming resources is easy to miss.
+
+The page also points to the restraint. The same access could have exfiltrated model weights, training data or cloud credentials from those hosts, and did not. So the page reads the miner as a demonstration of access, not the limit of what the access allowed, and warns that the next actor may not be so unambitious.
+
+It also notes this happened in an AI library at a point when AI infrastructure was becoming an obvious target, a trajectory it says continues through LiteLLM and the Hugging Face chain.
+
+The page maps this stage to T1496, Resource Hijacking. The next slide explains resource hijacking in general terms.
+
+== What resource hijacking is
+layout: background
+source: MITRE ATT&CK T1496 | https://attack.mitre.org/techniques/T1496/
+credit: Also from T1496.001, Compute Hijacking (attack.mitre.org)
+ATT&CK says adversaries may use the resources of co-opted systems for resource-intensive tasks. Using compute to mine cryptocurrency is one form. Servers and cloud-based systems are common targets, because of the high potential for available resources.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK says adversaries may use the resources of co-opted systems to complete resource-intensive tasks, which may impact system or hosted service availability. Its examples include using compute resources to mine cryptocurrency, selling network bandwidth to proxy networks, generating SMS traffic for profit, and abusing cloud messaging services to send spam.
+
+Its Compute Hijacking sub-technique, T1496.001, says one common purpose is to validate transactions of cryptocurrency networks and earn virtual currency. It says servers and cloud-based systems are common targets because of the high potential for available resources, though user endpoint systems may also be compromised and used for mining.
+
+Also from T1496.001, Compute Hijacking: https://attack.mitre.org/techniques/T1496/001/
+
+== Where the page sees this incident again
+layout: table
+row: Later kill chain | What the page says it shares
+row: Nx / s1ngularity, eight months later | The same trigger and class of mistake, through the PR title
+row: Mini Shai-Hulud / TanStack, 2026 | The cache poisoning, which it would industrialize
+row: LiteLLM and the Hugging Face chain | AI infrastructure as a target, a continuing trajectory
+The page calls Ultralytics the direct ancestor of Mini Shai-Hulud, fourteen months later.
+notes:
+The page draws its own lineage for this incident.
+
+Eight months later, Nx / s1ngularity used the same pull_request_target trigger and the same class of mistake through a different field: the pull request title instead of the branch name. In the page's words, the field changes and the mistake does not.
+
+Fourteen months later came Mini Shai-Hulud. The page calls Ultralytics its direct ancestor, and says Mini Shai-Hulud would industrialize the cache-poisoning technique in 2026. The lesson is the same both times: a cache shared across trust levels is a channel.
+
+The page also places this incident on a trajectory of AI infrastructure becoming an obvious target, which it says continues through LiteLLM and the Hugging Face chain.
+
+Each of these has its own kill chain on csoh.org, linked at the end of the deck.
+
+== Five defenses against five stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05
+row: No PR values in shell steps | 01
+row: No Actions cache across trust boundaries | 01 | 02
+row: Revoke the old credential | 04
+row: Consume provenance for what it proves | 03
+row: Constrain egress, baseline GPU compute | 05
+A mark means the defense's instruction names something that stage alone has.
+notes:
+This matrix sets the page's five defenses against its five stages. A cell is marked only where a defense's instruction names something that stage alone has.
+
+The first defense names the branch name, the shell step and pull_request_target, all from stage 01. The cache defense denies cache-write permission in fork-triggered workflows, which stage 01 calls its critical extra, and scopes cache keys so pull request jobs cannot write entries that release jobs restore, which is stage 02.
+
+Revoking the old credential names the stale API token behind stage 04's second wave. Consuming provenance names the correct attestations on the first two releases and a version live for twelve hours, both from stage 03. Constraining egress and watching resource use names the miner, GPU hosts and training infrastructure from stage 05.
+
+Every column has a mark. That reflects what the defenses name, not a judgment of how well each one would have worked.
+
+== Keep pull-request values out of shell, and split the cache
+layout: compare
+col: PR-supplied values (01) | Pass PR-derived values through the env: block, not inlined into run: | Reserve pull_request_target for jobs that need base-repo secrets | Never let those jobs touch fork-controlled code
+col: The Actions cache (01, 02) | Scope cache keys so PR jobs cannot write entries release jobs restore | Deny cache-write permission in fork-triggered workflows | Treat any cache restored during a publish as untrusted input
+Branch name here, PR title in Nx: the field changes and the mistake does not. The page says the cache control also breaks the 2026 Mini Shai-Hulud chain.
+notes:
+Two defenses keep the fork's input out of your builds. PR is short for pull request.
+
+First, never interpolate pull request values into shell steps, and keep pull_request_target away from fork content. The page puts it plainly: branch name here, PR title in Nx, the field changes and the mistake does not. Pass any PR-derived value through the env: block rather than inlining an expression into run:, and reserve pull_request_target for jobs that need base-repo secrets and never touch fork-controlled code.
+
+Second, do not share an Actions cache across trust boundaries. Here the cache carried the payload from an untrusted pull request job into a trusted release build. Scope cache keys so pull request jobs cannot write entries that release jobs restore, deny cache-write permission in fork-triggered workflows, and treat any cache restored during a publish as untrusted input. The page says this single control also breaks the 2026 Mini Shai-Hulud chain.
+
+== Finish a credential migration by revoking the old credential
+layout: text
+With Trusted Publishing in place, the stale API token still worked: that is how the second wave shipped.
+- Delete old tokens the same day you move to OIDC-based publishing.
+- Verify from the registry side that no other credential can publish.
+notes:
+This defense answers stage 04.
+
+Trusted Publishing was in place, and the stale API token still worked. The page says that is how the second wave shipped.
+
+When you move to OIDC-based publishing, delete the old tokens the same day. Then verify from the registry side that no other credential can publish the project. The registry here is the package index, PyPI for this project.
+
+The page's rule from stage 04 applies: a migration is finished when the old path is dead, not when the new one works.
+
+== What provenance proves, and what to add when consuming it
+layout: compare
+col: What it proves (03) | Origin of the build, not integrity of the build environment | Still worth having: PyPI's point is that it made this incident forensically tractable
+col: What to add | Pin by hash, so a valid-but-malicious release cannot enter your builds silently | A publication delay, so a version live for twelve hours never reaches you
+The first two malicious releases had correct attestations, because they did come from the right workflow.
+notes:
+The page asks you to understand what provenance does and does not prove, and to consume it accordingly.
+
+The first two malicious releases had correct attestations, because they did come from the right workflow. Provenance establishes origin, not integrity of the build environment. The page says it is still worth having, and that PyPI's point stands: it made this incident forensically tractable.
+
+On the consuming side, pin by hash, so a valid-but-malicious release cannot enter your builds silently. Pinning by hash means referring to a dependency by its content hash rather than by a version label. And add a publication delay, so a version live for twelve hours never reaches you. A publication delay means waiting a set time after a version is published before your builds take it. Version 8.3.41 was live about twelve hours.
+
+== Constrain egress, and baseline compute on GPU hosts
+layout: text
+A miner needs to reach a pool; a poisoned build often needs to fetch a stage.
+- Default-deny egress from runners and training infrastructure, with a narrow allow-list.
+- Baseline sustained compute on GPU hosts, where a busy machine is normal.
+notes:
+This defense answers stage 05.
+
+A miner needs to reach a pool, and the page adds that a poisoned build often needs to fetch a stage. A mining pool is a service miners connect to in order to share the work, and a stage here is a further piece of the payload downloaded at run time.
+
+Default-deny egress from runners and from training infrastructure, with a narrow allow-list. Egress is traffic leaving your network, and a runner is the machine that executes a CI job.
+
+Then baseline what sustained compute looks like on GPU hosts. The page's reason is that "the machine is busy" is the normal state there, and the reason a miner survives.
+
+== Check your own environment
+layout: checklist
+check: Does any workflow interpolate a pull-request value into a run: step?
+check: Does any pull_request_target job touch fork-controlled code?
+check: Can a pull request's job write a cache entry a release job restores?
+check: After moving to OIDC publishing, can any old token still publish?
+check: Do you pin dependencies by hash, with a delay before new versions?
+check: Do runners and training hosts default-deny egress?
+check: Do you know what normal sustained compute looks like on your GPU hosts?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether any workflow interpolates a pull request value into a run: step, and whether any pull_request_target job touches fork-controlled code. Ask whether a job a pull request triggers can write a cache entry that a release job restores, and whether fork-triggered workflows are denied cache-write permission.
+
+Ask whether, after a move to OIDC-based publishing, any old token can still publish, and whether you have checked from the registry side. Ask whether you pin dependencies by hash and hold new versions back for a publication delay.
+
+Finally, ask whether runners and training infrastructure default-deny egress, and whether you know what normal sustained compute looks like on your GPU hosts.
+
+== The attestation was correct. What would have kept 8.3.41 out?
+layout: question
+8.3.41 came from the project's real workflow, and its attestation said so truthfully. It was live about twelve hours.
+
+Name one control on the consuming side that would have kept it out of your builds.
+notes:
+Give the room a minute with this one before moving on.
+
+Version 8.3.41 was built by the real workflow in the real repository, so its attestation was correct. It was live from 20:51 UTC on December 4 to 09:15 UTC on December 5, about twelve hours.
+
+Ask each person to name one control in their own builds or installs that does not rely on the attestation being false. Then show the answer slide, which gives the page's own answer.
+
+== What the page adds on the consuming side
+layout: answer
+Provenance establishes origin, not integrity of the build environment.
+- Pin by hash, so a valid-but-malicious release cannot enter your builds silently.
+- Add a publication delay, so a version live for twelve hours never reaches you.
+notes:
+The page's answer is to understand what provenance proves, and to consume it accordingly.
+
+Provenance establishes origin, not integrity of the build environment, and the page says it is still worth having. On the consuming side, pin by hash so a valid-but-malicious release cannot enter your builds silently, and add a publication delay so a version live for twelve hours never reaches you.
+
+Keep the word silently. The page does not say pinning blocks a malicious release outright; it says one cannot enter your builds without you noticing.
+
+Bring the group's examples back to these two controls.
+
+== You moved to Trusted Publishing. Is the old path dead?
+layout: question
+Ultralytics had migrated to Trusted Publishing, and the old API token was still present in the workflow and still valid.
+
+How would you show that no other credential can publish your project?
+notes:
+This question is about finishing a migration.
+
+Ultralytics had adopted Trusted Publishing, which the page calls the right move. The old PyPI API token was still present in the workflow and still valid, and on December 7 the attacker used it to publish 8.3.45 and 8.3.46 directly, bypassing GitHub Actions.
+
+Ask the group how they would prove, for their own packages or deployments, that the old path is closed. Let them answer before you show the answer slide.
+
+== Delete the old tokens the same day, then check the registry
+layout: answer
+A migration is finished when the old path is dead, not when the new one works.
+- Delete the old tokens the same day you move to OIDC-based publishing.
+- Verify from the registry side that no other credential can publish.
+notes:
+The page's answer has two steps.
+
+First, when you move to OIDC-based publishing, delete the old tokens the same day. The page says this cleanup is exactly the kind that gets deferred because everything already works.
+
+Second, verify from the registry side that no other credential can publish the project.
+
+The page's rule: a migration is finished when the old path is dead, not when the new one works.
+
+== Sources
+layout: links
+link: PyPI Blog, official attack analysis | https://blog.pypi.org/posts/2024-12-11-ultralytics-attack-analysis/
+link: Socket, cache poisoning analysis | https://socket.dev/blog/ultralytics-pypi-package-compromised-through-github-actions-cache-poisoning
+link: Snyk, pwn request supply chain attack | https://snyk.io/blog/ultralytics-ai-pwn-request-supply-chain-attack/
+link: Wiz, hacked via GitHub for cryptomining | https://www.wiz.io/blog/ultralytics-ai-library-hacked-via-github-for-cryptomining
+link: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+Disclosure: research published by Wiz is one of these sources, and the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+PyPI's blog carries the official attack analysis, and the page credits it with the point that attestations made the forensics tractable. Socket and PyPI are the two sources linked in the page's header. Socket's post analyzes the cache poisoning, Snyk's covers the attack as a pwn request, and Wiz's covers the library being hacked via GitHub for cryptomining. The MITRE page defines T1195.001, the technique behind stage 02.
+
+The page discloses that research published by Wiz is one of its sources and that the site's author works at Wiz.
+
+The background slides name their own sources: csoh.org's Semgrep rules guide and GitHub Actions page, the csoh.org glossary, and MITRE ATT&CK.
+
+== Related kill chains and defense topics
+layout: links
+link: Nx / s1ngularity | breaches/nx-s1ngularity.html
+link: Mini Shai-Hulud / TanStack | breaches/mini-shai-hulud-tanstack.html
+link: LiteLLM / PyPI | breaches/litellm-pypi-teampcp.html
+link: Hugging Face / OpenAI Agent | breaches/huggingface-openai-agent.html
+link: GitHub Actions | github-actions.html
+link: CI/CD security | ci-cd.html
+link: AI/ML security | ai-ml-security.html
+link: Detection engineering | detection-engineering.html
+The page links four other kill chains, and these four related defense topics on csoh.org.
+notes:
+The page links four other kill chains on csoh.org.
+
+Nx / s1ngularity made the same mistake through the pull request title, eight months later. The page calls Ultralytics the direct ancestor of Mini Shai-Hulud, fourteen months later. LiteLLM and the Hugging Face chain are where the page says the trajectory of AI infrastructure as a target continues.
+
+Its related defense topics are GitHub Actions, CI/CD security, AI/ML security and detection engineering. CI/CD stands for continuous integration and continuous delivery.
