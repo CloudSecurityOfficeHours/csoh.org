@@ -22,16 +22,17 @@ The page names TeamPCP as the threat actor and marks that as claimed, not proven
 
 == What happened, and when
 layout: timeline
-event: May 10 | The account voicproducoes forks TanStack/router
-event: May 11, 19:20 to 19:26 UTC | 84 malicious versions of 42 @tanstack packages published
-event: May 14 | OpenAI discloses that two employee devices were affected
+event: May 10 | Attacker accounts zblgg and voicproducoes fork the repository
+event: May 11 | The attacker opens a pull request from zblgg's fork
+event: May 11, 19:20 to 19:26 UTC | 84 malicious @tanstack versions published
+event: May 14 | OpenAI discloses two affected employee devices
 event: May 18 | Two actions-cool Actions compromised, tied to Mini Shai-Hulud
-event: September 16 | Both actions accessible again, malicious code still behind the same release tags
-All dates are 2026; spacing is not to scale. The page does not date the pull request run that poisoned the cache.
+event: September 16 | Both actions accessible again, malicious code still behind the same tags
+All dates are 2026; spacing is not to scale.
 notes:
 The page's dates, in order. All are 2026, and the markers are evenly spaced, not to scale.
 
-The account voicproducoes was created on March 19. On May 10 it forked TanStack/router, then renamed the fork so it would not appear in GitHub's fork listing for the upstream repository. The attacker then opened a pull request, and its run poisoned the Actions cache. The page gives no date for that pull request. The poisoned cache sat dormant for roughly eight hours before the release workflow restored it.
+On May 10 the account zblgg forked TanStack/router as zblgg/configuration. A second account, voicproducoes, created on March 19, also forked the repository that day; it authored the payload commit that stage 04 comes back to. On May 11 the attacker opened a pull request from the zblgg/configuration fork, and its run poisoned the Actions cache. The poisoned cache sat dormant for roughly eight hours before the release workflow restored it.
 
 Between 19:20 and 19:26 UTC on May 11, 84 malicious versions of 42 @tanstack packages were published. On May 14, OpenAI disclosed that two employee devices were affected, which the page reports as downstream fallout.
 
@@ -68,35 +69,37 @@ Arrows follow the page's stage order.
 notes:
 Here is the whole chain on one slide: the page's eight stages, each with its phase and the ATT&CK technique in its header.
 
-Stages 01 to 03 are what the page calls a three-stage GitHub Actions abuse chain. A fork-triggered pull_request_target run poisoned the shared build cache, a later legitimate release run restored that cache inside the privileged pipeline, and a Python payload read secrets and OIDC material out of runner memory. In stage 04 the payload exchanged the stolen token for npm publishing credentials, and the packages it published carried valid provenance.
+Stages 01 to 03 cover what the page calls a three-stage GitHub Actions abuse chain. A fork-triggered pull_request_target run poisoned the shared build cache, a later legitimate release run restored that cache inside the privileged pipeline, and a Python payload read secrets and OIDC material out of runner memory. In stage 04 the payload exchanged the stolen token for npm publishing credentials, and the packages it published carried valid provenance.
 
 Stages 05 to 08 cover the worm and its payload: spreading through each maintainer's packages, sweeping credentials on install, persisting on developer machines and in repositories, and sending data out over two channels while a token description discouraged revocation.
 
 Propagation is the page's own phase label for stage 05, and Exfiltration & Impact is its label for stage 08. The next slides take each stage in turn.
 
-== A throwaway account's pull request ran fork code with trusted context
+== A renamed fork's pull request ran in the base repository's context
 layout: stage
 stage: 01
 phase: Initial Access
 technique: T1677 | Poisoned Pipeline Execution
-fact: Account | voicproducoes, created March 19, 2026
-fact: Fork | of TanStack/router, May 10, then renamed to hide it
-fact: Renamed fork | zblgg/configuration, as Snyk records it
-fact: Trigger | pull_request_target: base-repository permissions and secrets
-No review, no approval and no maintainer mistake was required.
+fact: PR account | zblgg, which forked TanStack/router on May 10
+fact: Fork name | zblgg/configuration, to avoid fork-list searches, Snyk says
+fact: Pull request | May 11, against a pull_request_target workflow
+fact: Payload account | voicproducoes, created March 19, authored the payload commit
+Read-only permissions did not block writes to the base repository's cache.
 notes:
-On May 10, 2026 the account voicproducoes, created on March 19, forked TanStack/router. It then renamed the fork so it would not appear in GitHub's fork listing for the upstream repository. Snyk records the fork as zblgg/configuration. A fork is a copy of someone else's repository, and a pull request from it proposes changes back.
+On May 10, 2026 the account zblgg forked TanStack/router and named the fork zblgg/configuration, which Snyk says was done to avoid appearing in fork-list searches. A fork is a copy of someone else's repository, and a pull request from it proposes changes back. On May 11 the attacker opened a pull request from that fork against a workflow using the pull_request_target trigger.
 
-The attacker then opened a pull request against a workflow using the pull_request_target trigger. The page calls that trigger the whole exploit primitive. Unlike pull_request, it runs with the base repository's permissions and secrets while checking out the fork's merge ref, so untrusted, attacker-authored code executed with trusted context on the first pull request from a brand-new account. No review, no approval, no maintainer mistake was required.
+A second account, voicproducoes, created on March 19, which GitHub's advisory also lists as an attacker account, forked the repository on May 10 and authored the orphan payload commit that stage 04's optionalDependencies entry points to.
 
-The page labels this stage CI/CD Pipeline Abuse and maps it to T1677, which MITRE ATT&CK names Poisoned Pipeline Execution. The page calls the pattern a pwn request.
+The page calls the trigger the whole exploit primitive. Unlike pull_request, it runs in the base repository's context, including its Actions cache scope, while checking out the fork's merge ref. The job that built the pull request was limited to read-only permissions, contents: read, but Snyk notes that actions/cache saves through a runner-internal token those permissions do not govern. So untrusted, attacker-authored code could write cache entries the release workflow would later restore. No review, no approval, no maintainer mistake was required.
+
+The page maps this stage to T1677, Poisoned Pipeline Execution, and calls the pattern a pwn request.
 
 The next slide explains the trigger in general terms.
 
 == What the pull_request_target trigger does
 layout: background
 source: How We Use GitHub Actions | https://csoh.org/github-actions.html#workflows-tour
-A pull_request_target run uses the base repository's context and the base branch's copy of the workflow, and gets repository secrets. It is exempt from the approval hold GitHub can place on outside contributors' pull requests, so it starts at once.
+A pull_request_target run uses the base repository's context and the base branch's copy of the workflow. It is exempt from the approval hold GitHub can place on outside contributors' pull requests, so it starts at once.
 notes:
 Background, from the csoh.org GitHub Actions page, in general terms.
 
@@ -104,43 +107,28 @@ The pull_request_target trigger runs in the base repository's context, from the 
 
 A repository can hold every workflow on an external contributor's pull request until a maintainer clicks Approve and run, through the setting Require approval for all external contributors. Because pull_request_target runs in the base context, it is exempt from that gate and starts immediately.
 
-The same page says that exemption is why pull_request_target is the most-abused trigger in Actions. It hands repository secrets to a run whose subject is attacker-controlled. If the workflow checks out the pull request's head and then executes anything from it, such as a build, a test, a dependency install or a linter that loads a repository-local plugin, the fork is running code with the repository's credentials.
+The same page says that exemption is why pull_request_target is the most-abused trigger in Actions. Its warning is about a workflow that checks out the pull request's head and then executes anything from it, such as a build, a test, a dependency install or a linter that loads a repository-local plugin.
 
 == The untrusted run poisoned the Actions cache; the release workflow restored it
 layout: stage
 stage: 02
 phase: Execution
 technique: T1036.005 | Masquerading: Match Legitimate Resource Name or Location
-fact: Written | a poisoned pnpm store, from the low-privilege run
-fact: Inside | a counterfeit @tanstack/setup package with a prepare hook
-fact: The hook | ran the payload, then exited non-zero to keep the output short
+fact: Written | a poisoned pnpm store, by the PR's vite_setup.mjs
+fact: Cache key | the release workflow's, derived from the public pnpm-lock.yaml
 fact: Restored | by the release workflow, roughly eight hours later
+fact: Then ran | attacker-controlled binaries, in release build and test steps
 The page calls the Actions cache a privilege boundary GitHub does not enforce.
 notes:
 The page says this step is what makes the incident new.
 
-From inside the low-privilege pull request run, the attacker wrote a poisoned pnpm store to the repository's shared Actions cache, at a pre-computed cache key. pnpm is a JavaScript package manager, and its store holds the packages it has downloaded. The store contained a counterfeit @tanstack/setup package whose package.json carried a prepare lifecycle hook. The hook ran the payload, then exited non-zero to keep the output short.
+From inside the low-privilege pull request run, the pull request's vite_setup.mjs wrote a poisoned pnpm store to the repository's shared Actions cache, at a pre-computed cache key: the one the release workflow derives from the public pnpm-lock.yaml. pnpm is a JavaScript package manager, and its store holds the packages it has downloaded. The store held attacker-controlled binaries.
 
-The poisoned cache sat dormant for roughly eight hours. When maintainers merged legitimate pull requests to main, the release workflow restored that same cache and ran the attacker's prepare hook inside the privileged pipeline.
+The poisoned cache sat dormant for roughly eight hours. When maintainers merged legitimate pull requests to main, the release workflow restored that same cache, and the attacker-controlled binaries in it ran during the workflow's build and test steps, inside the privileged pipeline.
 
 The page names the gap: Actions caches are not scoped by trust level, so a fork-triggered job can write what a release job reads.
 
-The page maps this stage to T1036.005, which it labels Match Legitimate Name or Location. MITRE ATT&CK names it Masquerading: Match Legitimate Resource Name or Location.
-
-The next slide explains lifecycle scripts in general.
-
-== What npm lifecycle scripts are
-layout: background
-source: OWASP NPM Security Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/NPM_Security_Cheat_Sheet.html
-npm lets packages define scripts that run at set points during installation. OWASP names preinstall, install, postinstall and prepare as scripts a plain npm install runs, and warns that bad actors may use such scripts to run any arbitrary command.
-notes:
-Background, from OWASP's NPM Security Cheat Sheet, in general terms.
-
-The npm CLI lets packages define scripts to run at specific entry points during a package's installation in a project. OWASP's example is a postinstall script that does housekeeping chores. In its advice on inspecting a project you did not write, it names the preinstall, install, postinstall and prepare scripts as ones a plain npm install runs.
-
-OWASP warns that, with this capability, bad actors may create or alter packages to perform malicious acts by running any arbitrary command when their package is installed. It cites the eslint-scope incident, which harvested npm tokens, and the crossenv incident.
-
-Its advice includes the --ignore-scripts flag, which disables the execution of scripts by third-party packages. The page recommends the same flag in CI, in its pinning defense.
+The page maps this stage to T1036.005, Masquerading: Match Legitimate Resource Name or Location.
 
 == A Python payload read every secret out of the runner's memory
 layout: stage
@@ -169,20 +157,20 @@ stage: 04
 phase: Impact
 technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
 fact: Published | outside the workflow's intended publish step
-fact: Injected | router_init.js (2.3 MB) and an optionalDependencies entry
-fact: Size tell | 905 KB against 190 KB for clean ones, 23 extra files
+fact: Injected | router_init.js (2.3 MB) at the package root
+fact: Dependency | github: entry to a fake @tanstack/setup with a prepare hook
 fact: Attestation | correct SLSA Build Level 3; npm's verified provenance badge
 Nothing was forged: provenance shows which pipeline built it, not that it behaved.
 notes:
 The payload posted the stolen OIDC token to npm's exchange endpoint, registry.npmjs.org/-/npm/v1/oidc/token/exchange, to mint per-package publishing credentials, then published outside the workflow's intended publish step.
 
-Between 19:20 and 19:26 UTC on May 11, 2026 it pushed 84 versions across 42 @tanstack packages. Each tarball, the archive npm installs, carried an injected 2.3 MB router_init.js at the package root, plus an optionalDependencies entry pointing at the attacker's fork commit. Compromised tarballs were about 3.7 times larger than clean ones, 905 KB against 190 KB, with 23 extra files.
+Between 19:20 and 19:26 UTC on May 11, 2026 it pushed 84 versions across 42 @tanstack packages. Each tarball, the archive npm installs, carried an injected 2.3 MB router_init.js at the package root, plus an optionalDependencies entry pointing at the attacker's fork commit. That commit holds a counterfeit @tanstack/setup package whose prepare lifecycle hook runs the payload when an installer resolves the github: dependency, then exits non-zero so the optional dependency fails quietly, leaving little trace in install logs. Compromised tarballs were 905 KB against 190 KB for clean ones, with 23 extra files; unpacked, 3,209,621 against 867,818 bytes, 3.7 times larger.
 
-Because the publish really did originate from the genuine TanStack/router release workflow, npm's Sigstore integration issued a correct SLSA Build Level 3 attestation, and the packages wore npm's verified provenance badge. The attestation was accurate; the trusted pipeline itself was executing attacker code.
+Because the publish did originate from the genuine TanStack/router release workflow, npm's Sigstore integration issued a correct SLSA Build Level 3 attestation, and the packages wore npm's verified provenance badge. The attestation was accurate; the trusted pipeline itself was executing attacker code.
 
 Socket assesses this as the first documented npm supply-chain attack to produce valid SLSA Build Level 3 provenance for malicious artifacts. Keep Socket's name on that claim.
 
-The page maps this stage to T1195.002, and GitHub tracks the TanStack packages as CVE-2026-45321. The next slide explains SLSA, provenance and Sigstore in general.
+The page maps this stage to T1195.002, and GitHub tracks the TanStack packages as CVE-2026-45321. The next slide explains SLSA, provenance and Sigstore.
 
 == What SLSA, provenance and Sigstore are
 layout: background
@@ -353,37 +341,37 @@ Socket advises removing both actions or pinning to a clean commit SHA from befor
 layout: matrix
 columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
 row: Separate caches from pull_request_target | 01 | 02
-row: Smallest job holds id-token: write | 03
+row: Smallest job holds id-token: write | 03 | 04
 row: Verify provenance, then check the artifact | 04
 row: Gated trusted publishing; no bypass_2fa | 04 | 05
-row: Pin by SHA; install scripts off in CI | 02
+row: Pin by SHA; install scripts off in CI | 04
 row: Run-on-open files; remove persistence first | 07 | 08
 row: Rotate what the runner touched, then hunt | 03 | 06 | 07 | 08
 A mark means the defense's instruction names something that stage alone has.
 notes:
 This matrix sets the page's seven defenses against its eight stages. A cell is marked only where a defense's instruction names something that stage alone has.
 
-The cache defense names pull_request_target from stage 01, and a release job restoring a cache key a pull request job can write, stage 02. Scoping id-token: write names stage 03's job-scoped permission and Runner.Worker memory. Checking the artifact names stage 04's attestation, tarball size and optionalDependencies entry. Gated trusted publishing names the publish job and a human approving the release, stage 04's malicious publish, and bypass_2fa tokens, which stage 05 hunted. Pinning reaches stage 02 through the prepare hook that --ignore-scripts keeps from running.
+The cache defense names pull_request_target from stage 01, and a release job restoring a cache key a pull request job can write, stage 02. Scoping id-token: write names stage 03's job-scoped permission and Runner.Worker memory, and moves publishing into its own workflow; stage 04 alone names the workflow's publish step, which its malicious publish went outside. Checking the artifact names stage 04's attestation, tarball size and optionalDependencies entry. Gated trusted publishing names the publish job, which again only stage 04 has, and bypass_2fa tokens, which stage 05 hunted. Pinning reaches stage 04 through the prepare hook in a dependency that --ignore-scripts keeps from running.
 
 Auditing run-on-open files names stage 07's files and gh-token-monitor, and its order, persistence before rotation, is the one stage 08 gives for the token threat. The last defense rotates Vault and Kubernetes service account tokens, from stage 06, and hunts indicators from stages 03, 07 and 08.
 
 Every column has a mark. That reflects what the defenses name, not a judgment of how well each one would have worked.
 
-== Keep untrusted code out of the release pipeline
+== Keep untrusted code out of your builds
 layout: compare
 col: Cache and trigger (01, 02) | Never check out fork code under pull_request_target | Use pull_request, with required approval for first-time contributors | Or scope caches by trust level | Never let a release job restore a key a pull request job can write
-col: Pinning (02) | Pin every action to a full 40-character commit SHA | Run npm ci against a reviewed lockfile | Use --ignore-scripts in CI, so a dependency's prepare hook cannot run
+col: Pinning (04) | Pin every action to a full 40-character commit SHA | Run npm ci against a reviewed lockfile | Use --ignore-scripts in CI, so a dependency's prepare hook cannot run
 The page calls the core failure architectural.
 notes:
-Two defenses keep untrusted code out of the release pipeline.
+Two defenses keep untrusted code out of your builds.
 
 The page calls the core failure architectural. The Actions cache is written by untrusted context and read by trusted context, so poisoning it converts a fork pull request into code execution in the release pipeline. Do not check out fork-controlled code under pull_request_target; use pull_request with required approval for first-time contributors instead. If you must keep both, scope caches by trust level, so untrusted runs write to a namespace no privileged workflow ever restores, and never let a release job restore a cache key a pull request job can write.
 
-Second, pin every action to a full 40-character commit SHA, and pin your own dependencies with a lockfile. The page says pinning by SHA removes the mutable-tag class of compromise entirely and makes what your pipeline runs auditable. Combine it with npm ci against a reviewed lockfile, and disable install scripts with --ignore-scripts in CI, so a prepare hook in a dependency cannot execute during a build. A lockfile records the exact version of every dependency.
+Second, pin every action to a full 40-character commit SHA, and pin your own dependencies with a lockfile. The page says pinning by SHA removes the mutable-tag class of compromise entirely and makes what your pipeline runs auditable. Combine it with npm ci against a reviewed lockfile, and disable install scripts with --ignore-scripts in CI, so a prepare hook in a dependency cannot execute during a build. Stage 04's prepare hook sat in such a dependency, the counterfeit @tanstack/setup package. A lockfile records the exact version of every dependency.
 
 == Scope the OIDC permission, and gate the publish
 layout: compare
-col: Scope id-token: write (03) | Give it to the smallest possible job | A separate publish workflow: no third-party code, no dependency installs | Assume masked secrets are readable; shrink what the job holds
+col: Scope id-token: write (03, 04) | Give it to the smallest possible job | A separate publish workflow: no third-party code, no dependency installs | Assume masked secrets are readable; shrink what the job holds
 col: Gate trusted publishing (04, 05) | Bind the OIDC subject to a specific workflow file and ref | Put the publish job behind an Environment with required reviewers | Add a deployment branch policy; eliminate any bypass_2fa: true token
 On its own, trusted publishing does not stop this chain, the page says.
 notes:
@@ -528,9 +516,9 @@ Research published by Wiz is one of these sources, and the site's author works a
 notes:
 These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
 
-StepSecurity published the full technical teardown, and Socket the SLSA provenance analysis. Snyk is the page's source for the renamed fork's name, the count above 170 and the seven-day cooldown. Wiz counted the packages the worm reached; research published by Wiz is one of these sources, and the site's author works at Wiz. GitHub's advisory tracks the TanStack packages as CVE-2026-45321. TechCrunch reported OpenAI's downstream disclosure. The Hacker News and BleepingComputer covered the two GitHub Actions that came back in September.
+StepSecurity published the full technical teardown, and Socket the SLSA provenance analysis. Snyk is the page's source for why the fork was named zblgg/configuration, for the runner-internal token behind the cache writes, for the count above 170 and for the seven-day cooldown. Wiz counted the packages the worm reached; research published by Wiz is one of these sources, and the site's author works at Wiz. GitHub's advisory tracks the TanStack packages as CVE-2026-45321 and lists voicproducoes as an attacker account. TechCrunch reported OpenAI's downstream disclosure. The Hacker News and BleepingComputer covered the two GitHub Actions that came back in September.
 
-The background slides name their own sources, from csoh.org, OWASP, AWS and MITRE ATT&CK.
+The background slides name their own sources, from csoh.org, AWS and MITRE ATT&CK.
 
 == Related defense topics
 layout: links
