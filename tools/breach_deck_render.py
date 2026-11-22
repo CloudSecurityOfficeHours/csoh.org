@@ -11,7 +11,8 @@ reports anything else it finds in the saved file.
 
 Every height is estimated before a shape is placed, the way the how-to
 renderer does it, and an element that would end below the content limit
-raises LayoutError naming the outline slide, before anything is saved.
+raises LayoutError naming the outline slide, before anything is saved. So
+does a stat value too wide for its tile on one line.
 
 The palette, fonts, slide size, attribution and licence lines come from
 howto_deck_render, so the two deck families share one look. Of the breach
@@ -168,24 +169,31 @@ LOOK = {
 BOLD_WIDTH = 0.92
 CAPS_EM = 0.68
 
-# Advance widths, in thousandths of an em, of the capitals, colon and space a
-# type label uses: for each glyph the wider of Space Grotesk Bold
-# (fonts/space-grotesk-700.woff2, as a browser canvas measures it) and Arial
-# Bold, the face Google Slides substitutes when it lacks the heading face. A
-# label sized from the wider face holds in either. A character missing here
-# counts as wide as "W".
-LABEL_ADVANCE: dict[str, int] = {
+# Advance widths of the heading face in bold, in thousandths of an em, for
+# the text measured in it: type labels and stat values. For each glyph, the
+# wider of Space Grotesk Bold (fonts/space-grotesk-700.woff2, as a browser
+# canvas measures it) and Arial Bold, the face Google Slides substitutes when
+# it lacks the heading face, so text measured with these holds in either. A
+# character missing here counts as wide as the widest glyph here.
+HEADING_ADVANCE: dict[str, int] = {
     ch: width
     for chars, width in (
-        (" ", 278), ("I", 278), (":", 333), ("EPSVXY", 667), ("FLT", 611),
-        ("Z", 611), ("J", 610), ("ABCDHKNRU", 722), ("GOQ", 778), ("M", 882),
-        ("W", 944),
+        (" Iijl", 278), ("|", 280), ("',’‘", 294), (".", 298), ("!:;`·", 333),
+        ("[]", 358), ("/\\", 388), (")", 390), ("r", 396), ("(", 398), ("•", 400),
+        ("-", 432), ("f", 436), ("t", 456), ("{}", 466), ('"“”', 514), ("z", 518),
+        ("*", 540), ("17sv", 556), ("k", 564), ("eé", 577), ("a", 578), ("c", 586),
+        ("x", 592), ("2", 594), ("58", 600), ("$", 606), ("3", 608), ("J", 610),
+        ("?FLTZ", 611), ("o", 612), ("hnuy", 616), ("69", 618), ("+<=>^_~×¥", 620),
+        ("#4", 636), ("bdgpq£", 638), ("0", 648), ("EPSVXY", 667), ("€", 678),
+        ("&ABCDHKNRU", 722), ("GOQ", 778), ("w", 784), ("M", 882), ("%m", 889),
+        ("W", 944), ("…", 1000), ("@", 1014),
     )
     for ch in chars
 }
-# A label's pill is this much wider than its measured text, so a renderer
-# that sets it a little wider still does not wrap it.
-LABEL_SAFETY = 0.10
+# A label's pill, and a stat value's line, is this much wider than its
+# measured text, so a renderer that sets the text a little wider still does
+# not wrap it.
+HEADING_SAFETY = 0.10
 
 # Advance widths of the body face (Source Sans 3 Regular), in thousandths of
 # an em, as a browser canvas measures fonts/source-sans-3-400.woff2. Layouts
@@ -214,6 +222,16 @@ BODY_ADVANCE: dict[str, int] = {
 # A measured line keeps this share of its width free, for the small
 # differences in how Google Slides and PowerPoint set the same text.
 MEASURE_SLACK = 0.03
+
+# The body face's ascent and descent, in ems, as a browser canvas reads
+# fonts/source-sans-3-700.woff2 (the regular weight's are the same). Together
+# they are taller than a line set TIGHT_LINE em apart, the tightest spacing
+# allowed for (a browser's; the estimates here use STYLE's line_body), so the
+# first line's glyphs reach above its line by half the difference and the
+# last line's below it. A box whose text has to stay inside an edge is inset
+# by that much on that edge.
+BODY_ASCENT, BODY_DESCENT = 1.024, 0.400
+TIGHT_LINE = 1.2
 
 # ---------------------------------------------------------------------------
 # Phase colours. The site's phase hues (breach-timeline.css), keyed by ATT&CK
@@ -349,12 +367,19 @@ def _caps_per_line(width: float, pt: float, spacing: float) -> int:
     return max(1, int(width * 72 / (CAPS_EM * pt + spacing)))
 
 
-def _label_width(text: str, pt: float, spacing: float) -> float:
-    """Inches one line of letter-spaced bold capitals takes, with
-    LABEL_SAFETY added. Measured per glyph from LABEL_ADVANCE; the letter
-    spacing follows every character."""
-    em = sum(LABEL_ADVANCE.get(ch, LABEL_ADVANCE["W"]) for ch in text)
-    return (em / 1000 * pt + len(text) * spacing) / 72 * (1 + LABEL_SAFETY)
+def _heading_width(text: str, pt: float, spacing: float = 0.0) -> float:
+    """Inches one line of bold heading-face text takes at pt, with
+    HEADING_SAFETY added. Measured per glyph from HEADING_ADVANCE; any
+    letter spacing follows every character."""
+    widest = max(HEADING_ADVANCE.values())
+    em = sum(HEADING_ADVANCE.get(ch, widest) for ch in text)
+    return (em / 1000 * pt + len(text) * spacing) / 72 * (1 + HEADING_SAFETY)
+
+
+def _overhang(pt: float) -> float:
+    """Inches the glyphs of a line of body text at pt reach past the line
+    itself, above the first line or below the last, at TIGHT_LINE."""
+    return max(0.0, (BODY_ASCENT + BODY_DESCENT - TIGHT_LINE) / 2) * pt / 72
 
 
 def _char_width(pt: float) -> float:
@@ -604,7 +629,7 @@ def _type_label(page, layout: str, y: float) -> float:
     pt, sp = LOOK["type_pt"], LOOK["type_spacing_pt"]
     px, py = LOOK["type_pad_x"], LOOK["type_pad_y"]
     # Rounded up to a whole EMU, which a shape's width otherwise truncates.
-    w = math.ceil((_label_width(text, pt, sp) + 2 * px) * 914400) / 914400
+    w = math.ceil((_heading_width(text, pt, sp) + 2 * px) * 914400) / 914400
     h = _line_h(pt) + 2 * py
     page.box("type-label", X, y, w, h,
              [_p(text, pt, color, font="heading_font", bold=True, spacing=sp)],
@@ -655,16 +680,29 @@ def _render_stats(page, s) -> None:
     vpt = LOOK["stat_value_pt"][min(max(n, 2), 4)]
     lpt, dpt, pgap = LOOK["stat_label_pt"], LOOK["stat_detail_pt"], LOOK["stat_para_gap"]
 
-    def height(value: str, label: str, detail: str) -> float:
+    # A value is one line. Google Slides wraps text that does not fit its
+    # box whatever the box's wrap setting, and breaks a word wider than the
+    # line, so a value whose measured width exceeds the tile's text width is
+    # refused; the author shortens it and moves the detail to the label or
+    # the detail line.
+    wide = [(value, _heading_width(value, vpt)) for value, _label, _detail in stats]
+    wide = [f"{value!r} needs {need:.2f} in" for value, need in wide if need > inner + 1e-9]
+    if wide:
+        raise LayoutError(
+            f"{page.where}: stat value{'s' if len(wide) > 1 else ''} {', '.join(wide)} "
+            f"on one line at {vpt} pt; a tile in a row of {n} has {inner:.2f} in"
+        )
+
+    def height(label: str, detail: str) -> float:
         return (
             2 * pad + 2 * pgap + 0.1
-            + _rows(value, _per_line(inner, vpt, heading=True)) * _line_h(vpt, heading=True)
+            + _line_h(vpt, heading=True)
             + _rows(label, _per_line(inner, lpt, bold=True)) * _line_h(lpt)
             + _rows(detail, _per_line(inner, dpt)) * _line_h(dpt)
         )
 
     # Every tile in the row takes the tallest tile's height.
-    th = max((height(*row) for row in stats), default=0.0)
+    th = max((height(label, detail) for _value, label, detail in stats), default=0.0)
     for i, (value, label, detail) in enumerate(stats):
         paras = [
             _p(value, vpt, STYLE["accent"], font="heading_font", bold=True),
@@ -997,12 +1035,18 @@ def _render_layers(page, s) -> None:
 def _render_timeline(page, s) -> None:
     """A rule with one marker per event, each event's when above its marker
     and its what below. Every event gets an equal share of the width,
-    however far apart the dates are, so no time scale is implied."""
+    however far apart the dates are, so no time scale is implied. The when
+    sits on its box's bottom edge and the what hangs from its box's top
+    edge, each inset on that edge by the body face's overhang, so neither
+    label's text reaches out of its box into the gap at the marker. The
+    inset comes out of each box's breathing room, so the boxes keep their
+    height."""
     events = s.items.get("event", [])
     cw = W / len(events)
     tw = cw - LOOK["timeline_col_gap"]
     pt = LOOK["diagram_pt"]
     m, lg, rh = LOOK["timeline_marker"], LOOK["timeline_label_gap"], LOOK["timeline_rule_h"]
+    inset = _overhang(pt)
     when_h = max(_rows(w, _per_line(tw, pt, bold=True)) for w, _ in events) * _line_h(pt) + 0.1
     what_h = max(_rows(t, _per_line(tw, pt)) for _, t in events) * _line_h(pt) + 0.1
     y = _diagram_top(page, s)
@@ -1011,12 +1055,13 @@ def _render_timeline(page, s) -> None:
     for i, (when, what) in enumerate(events):
         cx = X + cw * (i + 0.5)
         page.box("timeline-when", cx - tw / 2, y, tw, when_h,
-                 [_p(when, pt, STYLE["bar"], bold=True)],
+                 [_p(when, pt, STYLE["bar"], bold=True)], margins=(0, 0, 0, inset),
                  align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.BOTTOM)
         page.box("timeline-marker", cx - m / 2, mid - m / 2, m, m, fill=STYLE["bar"],
                  line=(STYLE["bg"], 2.5), kind=MSO_SHAPE.OVAL)
         page.box("timeline-what", cx - tw / 2, mid + m / 2 + lg, tw, what_h,
-                 [_p(what, pt, STYLE["text"])], align=PP_ALIGN.CENTER)
+                 [_p(what, pt, STYLE["text"])], margins=(0, inset, 0, 0),
+                 align=PP_ALIGN.CENTER)
     _caption(page, s, mid + m / 2 + lg + what_h)
 
 

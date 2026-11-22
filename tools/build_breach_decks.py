@@ -2801,7 +2801,7 @@ def _render_sample() -> BDeck:
         _rslide("At a glance", "stats", items={"stat": [
             ["200+", "organizations targeted", "in at least 14 countries over 11 days"],
             ["9", "confirmed compromises", "per CrowdStrike, with high confidence"],
-            ["1,500+", "commands an hour", "at peak, per Check Point"],
+            ["600+", "commands an hour", "at peak, per Check Point"],
             ["40", "commands an hour", "a fast human operator, for comparison"],
         ]}),
         _rslide(
@@ -2810,7 +2810,7 @@ def _render_sample() -> BDeck:
                         "and includes moderate-confidence cases."],
             items={"stat": [
                 ["9", "confirmed", "named in the CrowdStrike report"],
-                ["About 140", "compromised", "from an interview, moderate confidence included"],
+                ["~140", "compromised", "from an interview, moderate confidence included"],
             ]},
         ),
         _rslide(
@@ -3785,6 +3785,112 @@ def _case_type_labels_cannot_wrap(tmp: Path) -> None:
     assert len({sh.width for sh in labels}) == 3, [sh.width for sh in labels]
 
 
+def _case_stat_values_fit_one_line(tmp: Path) -> None:
+    """A stat value has to fit its tile's text width on one line, or the
+    render is refused naming the slide: Google Slides wraps text that does
+    not fit its box, and breaks a word wider than the line."""
+    import breach_deck_render as r
+
+    # Advance widths of whole values, in thousandths of an em, as a browser
+    # canvas measures them in Space Grotesk Bold (fonts/space-grotesk-700.woff2)
+    # and in Arial Bold, the face Google Slides substitutes when it lacks it.
+    em = {
+        "497+": (2408, 2252), "48+": (1856, 1696), "19": (1070, 1112), "79": (1172, 1112),
+        "1,500+": (3262, 3086), "200+": (2510, 2252), "9": (618, 556),
+        "3,218,965": (4676, 4449), "Unstated": (4453, 4278), "~1h 44m": (4068, 4030),
+    }
+
+    def deck(*values: str) -> BDeck:
+        return _one_slide("At a glance", "stats", "st.deck:8",
+                          stat=[[v, "organizations", "per the vendor"] for v in values])
+
+    def room(tile) -> float:
+        """Inches of text width in a tile."""
+        tf = tile.text_frame
+        return (tile.width - tf.margin_left - tf.margin_right) / 914400
+
+    def need(value: str, pt: float) -> float:
+        """Inches value takes in the wider face."""
+        return max(em[value]) / 1000 * pt / 72
+
+    # Values that fit render and verify in rows of four (the narrowest
+    # tiles), three and two, one line each, and each fits its tile by the
+    # browser's own measure in either face.
+    inner = {}
+    for values in (("497+", "48+", "19", "79"), ("1,500+", "200+", "9"), ("3,218,965", "9")):
+        (sl,) = _rendered(tmp, deck(*values))
+        tiles = _shapes(sl, "stat-tile")
+        assert len(tiles) == len(values), len(tiles)
+        for value, tile in zip(values, tiles):
+            first = tile.text_frame.paragraphs[0]
+            pt = first.runs[0].font.size.pt
+            assert first.text == value, first.text
+            assert need(value, pt) <= room(tile), (value, need(value, pt), room(tile))
+            inner[len(values)] = (pt, room(tile))
+    # "Unstated" is wider than a tile in a row of four or three holds; the
+    # render is refused naming the slide and the value, and writes no file.
+    out = tmp / "st.pptx"
+    for values in (("Unstated", "48+", "19", "79"), ("Unstated", "200+", "9")):
+        pt, have = inner[len(values)]
+        assert need("Unstated", pt) > have, (len(values), need("Unstated", pt), have)
+        e = _layout_error(lambda values=values: r.render_deck(deck(*values), out), "st.deck:8")
+        assert "Unstated" in str(e), e
+        assert not out.exists(), "a refused render wrote a file"
+    # A character count calls "~1h 44m" one line in a row of three, but it
+    # measures wider than the tile, so it is refused too.
+    pt, have = inner[3]
+    assert r._rows("~1h 44m", r._per_line(have, pt, heading=True)) == 1
+    assert need("~1h 44m", pt) > have, (need("~1h 44m", pt), have)
+    _layout_error(lambda: r.render_deck(deck("~1h 44m", "200+", "9"), out), "st.deck:8")
+    assert not out.exists(), "a refused render wrote a file"
+
+
+def _case_timeline_labels_hold_text(tmp: Path) -> None:
+    """Each timeline label keeps its text inside its box on the edge that
+    faces the marker. Source Sans 3's ascent and descent (1.024 and 0.400 em,
+    as a browser canvas reads fonts/source-sans-3-700.woff2) are taller than
+    a line set 1.2 em apart, so a line flush with a box edge reaches past it
+    by half the difference, about 3 px at 20 pt. The when label sits on its
+    box's bottom edge and the what label hangs from its top edge."""
+    import breach_deck_render as r
+
+    over = (1.024 + 0.400 - 1.2) / 2
+    # Control: the overhang is real, so a label flush with its edge fails.
+    assert over * r.LOOK["diagram_pt"] / 72 > 0.025
+    events = [
+        ["August 2026", "Microsoft starts observing GitHub queries for secrets"],
+        ["September 20 to October 14", "Malware sent through that server to customer VMs"],
+        ["October 21", "Every plan shut down"],
+    ]
+    (sl,) = _rendered(tmp, _one_slide("When", "timeline", "t.deck:3", event=events))
+    whens, whats = _shapes(sl, "timeline-when"), _shapes(sl, "timeline-what")
+    markers = _shapes(sl, "timeline-marker")
+    assert len(whens) == len(whats) == len(markers) == len(events), (len(whens), len(whats))
+    for when, what, marker in zip(whens, whats, markers):
+        pt = when.text_frame.paragraphs[0].runs[0].font.size.pt
+        reach = over * pt / 72 * 914400
+        line = r._line_h(pt) * 914400
+        # The when's last line ends reach below the top of its bottom inset;
+        # that has to be inside the box, and the box above the marker.
+        tf = when.text_frame
+        assert tf.vertical_anchor == r.MSO_ANCHOR.BOTTOM, tf.vertical_anchor
+        bottom = when.top + when.height
+        assert bottom - tf.margin_bottom + reach <= bottom + 1, (tf.text, tf.margin_bottom)
+        assert bottom <= marker.top, (bottom, marker.top)
+        # The inset leaves room for the lines the box was sized for, and
+        # for the first line's reach above them.
+        rows = r._rows(tf.text, r._per_line(when.width / 914400, pt, bold=True))
+        assert when.height >= tf.margin_bottom + rows * line + reach, (tf.text, rows)
+        # The what's first line starts reach above the bottom of its top
+        # inset; that has to be inside the box, and the box below the marker.
+        tf = what.text_frame
+        assert tf.vertical_anchor == r.MSO_ANCHOR.TOP, tf.vertical_anchor
+        assert what.top + tf.margin_top - reach >= what.top - 1, (tf.text, tf.margin_top)
+        assert what.top >= marker.top + marker.height, (what.top, marker.top + marker.height)
+        rows = r._rows(tf.text, r._per_line(what.width / 914400, pt))
+        assert what.height >= tf.margin_top + rows * line + reach, (tf.text, rows)
+
+
 def _case_links_name_plain_url_linked(tmp: Path) -> None:
     import breach_deck_render as r
 
@@ -3819,8 +3925,10 @@ RENDER_CASES: list = [
     ("bars_to_scale", _case_bars_to_scale),
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
+    ("timeline_labels_hold_text", _case_timeline_labels_hold_text),
     ("checklist_even", _case_checklist_even),
     ("type_labels_cannot_wrap", _case_type_labels_cannot_wrap),
+    ("stat_values_fit_one_line", _case_stat_values_fit_one_line),
     ("links_name_plain_url_linked", _case_links_name_plain_url_linked),
     ("matrix_marks", _case_matrix_marks),
     ("diagram_overflow_refused", _case_diagram_overflow_refused),

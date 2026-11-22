@@ -296,7 +296,12 @@ Speaker notes run to the next "== " line. Every slide has them.
   en or em dash, and no shape below the bottom limit or off the side of the
   slide. A deck that fails any step leaves no
   .pptx. A `LayoutError` names the slide (`<slug>.deck:<line>`) whose content
-  would end below the room it has; trim that slide's text.
+  would end below the room it has; trim that slide's text. It also names a
+  stat value too wide to fit its tile on one line, measured glyph by glyph in
+  the wider of Space Grotesk Bold and Arial Bold with a margin, since Google
+  Slides wraps whatever does not fit; shorten the value and move the rest
+  into its label or detail, keeping any hedge ("~$2.85B" becomes "$2.85B"
+  with "approximately" in the label or detail).
 - `--stamp` removes every deck line and writes one after the last `pm-link`
   line of each mapped page, planning every page before writing any.
   `--record` refuses an outline with any finding `--check` reports, and
