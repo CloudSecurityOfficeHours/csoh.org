@@ -1,0 +1,427 @@
+title: Uber 2022
+page: breaches/uber.html
+as-of: 2026-11-22
+promise: An 18-year-old attacker bought an Uber contractor's VPN credentials, pushed MFA prompts and posed as Uber IT until one was approved, then found hardcoded Thycotic admin credentials that unlocked full admin within hours.
+
+== At a glance
+layout: stats
+stat: Admin | full admin on AWS, GCP, Slack, SentinelOne and HackerOne | and more, per the page's summary
+stat: <24h | under 24 hours from initial access to full compromise | the summary says within hours
+stat: 18 | year-old attacker | allegedly LAPSUS$-affiliated
+Purchased VPN credentials, an approved push and hardcoded Thycotic admin credentials took the attacker from a contractor account to full admin.
+notes:
+Start with the three points the page leads with.
+
+First, the reach. The attacker ended up with full admin on AWS, GCP, Slack, SentinelOne and HackerOne, and the page's summary adds "and more". AWS and GCP are Amazon's and Google's cloud platforms.
+
+Second, the speed. The page puts initial access to full compromise at under 24 hours, and its summary says the Thycotic credentials unlocked full admin access within hours.
+
+Third, the attacker. The page describes an 18-year-old, allegedly LAPSUS$-affiliated. Keep the word allegedly when you say it: the page reports the affiliation as an allegation.
+
+The caption traces the path the rest of the deck follows: purchased VPN credentials, an approved MFA push, and hardcoded Thycotic admin credentials. MFA is multi-factor authentication.
+
+The page dates the incident September 15-16, 2022.
+
+== What happened
+layout: text
+The page dates the incident September 15-16, 2022. The attacker bought a contractor's VPN credentials, pushed MFA prompts for about an hour, then posed as Uber IT on WhatsApp. Hardcoded Thycotic admin credentials unlocked full admin within hours.
+notes:
+Here is the page's summary in short.
+
+An 18-year-old attacker purchased an Uber contractor's VPN credentials from a dark web infostealer marketplace. They then combined MFA push-bombing with social engineering on WhatsApp to get past two-factor authentication. Once inside the corporate network, they found a PowerShell script with hardcoded admin credentials for Thycotic, Uber's PAM system. PAM is privileged access management: the tooling that controls who can use high-privilege accounts. Those credentials unlocked full admin access to AWS, GCP, Slack, SentinelOne, HackerOne and more within hours.
+
+The page dates the incident September 15-16, 2022, and gives no time for the individual steps. The contractor's device had been infected with infostealer malware earlier, and the page gives no date for that either, so this deck has no timeline.
+
+The page leads with two sources: Uber's official security update and GitGuardian's technical analysis. Both are on the sources slide at the end.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | VPN credentials bought | T1078
+step: 02 | MFA Bypass | Push fatigue, WhatsApp | T1621
+step: 03 | Internal Recon | Shares scanned over VPN | T1046
+step: 04 | Critical Discovery | Hardcoded PAM secret | T1552.001
+step: 05 | Total Compromise | All secrets extracted | T1078.004
+step: 06 | Discovery | Attacker self-announces | -
+Arrows follow the page's stage order. Stage 06 is how Uber found the breach: the attacker announced it.
+notes:
+Here is the whole chain on one slide: the page's six stages, each with its phase and ATT&CK technique.
+
+Stage 01, Initial Access, is the contractor's VPN credentials, bought from an infostealer log. Stage 02, under the page's MFA Bypass phase, is the push bombing and the WhatsApp message claiming to be Uber IT. Stage 03, Internal Recon, is the scan of the internal network over the contractor's VPN access. Stage 04, Critical Discovery, is the PowerShell script with hardcoded Thycotic admin credentials. Stage 05, Total Compromise, is the Thycotic login, the extraction of all stored secrets, and admin access across cloud and SaaS systems.
+
+Stage 06, Discovery, carries no ATT&CK technique. The page uses that phase for how the breach was discovered: the attacker announced it in Uber's company Slack.
+
+Read the arrows as the page's stage order. The page gives no time for each stage. The next slides take each stage in turn.
+
+== Contractor VPN credentials, bought from an infostealer log
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1078 | Valid Accounts
+fact: Leaked by | earlier infostealer malware on the contractor's device
+fact: Source | an infostealer log purchased from a dark web forum
+fact: Gap | no monitoring for credential leakage
+fact: Gap | device not enrolled in MDM or health-checked before VPN access
+No zero-day or technical exploit was required.
+notes:
+Stage 01 is the way in, and the page maps it to T1078, Valid Accounts.
+
+The targeted contractor's device had previously been infected with infostealer malware, which exfiltrated saved browser credentials to a dark web marketplace. The attacker purchased the username and password. The page lists the source as an infostealer log purchased from a dark web forum, and the credential type as Uber contractor corporate VPN credentials. It notes that no zero-day or technical exploit was required.
+
+VPN is a virtual private network, here the connection into Uber's corporate network. A zero-day is a flaw the vendor has not yet fixed.
+
+The page names two gaps at this stage. Nothing was monitoring for credential leakage, and the contractor's device, a third-party device, was not enrolled in MDM or health-checked before VPN access. MDM is mobile device management, software an organization uses to enrol and manage the devices that connect to it. The page tags the stage Third-Party Risk.
+
+The next slide explains infostealers, and ATT&CK's Valid Accounts, in general terms.
+
+== What an infostealer is, and what ATT&CK calls Valid Accounts
+layout: background
+source: csoh.org glossary, Infostealer | https://csoh.org/glossary.html#term-infostealer
+credit: Also from MITRE ATT&CK T1078 (attack.mitre.org)
+An infostealer is commodity malware that scrapes browser-saved credentials, cookies and tokens off an infected workstation; the logs are sold on criminal markets.
+
+ATT&CK's Valid Accounts covers abusing existing credentials, including on externally available services such as VPNs.
+notes:
+Background, from the csoh.org glossary and MITRE ATT&CK, in general terms.
+
+The glossary defines an infostealer as commodity malware that scrapes browser-saved credentials, session cookies, crypto wallets and authenticated SaaS tokens off an infected workstation. The logs are then sold on criminal markets. The glossary's point is that a workstation infection is now a cloud problem. The page says only that saved browser credentials were taken in this case, and it does not name the malware.
+
+ATT&CK describes Valid Accounts as adversaries obtaining and abusing the credentials of existing accounts. Compromised credentials may be used to bypass access controls, and even for persistent access to remote systems and externally available services, such as VPNs. ATT&CK lists the technique under four tactics: Stealth, Persistence, Privilege Escalation and Initial Access.
+
+Also from MITRE ATT&CK T1078: https://attack.mitre.org/techniques/T1078/
+
+== About an hour of MFA pushes, then a fake Uber IT message
+layout: stage
+stage: 02
+phase: MFA Bypass
+technique: T1621 | Multi-Factor Authentication Request Generation
+fact: Push bombing | repeated VPN login attempts for approximately an hour
+fact: WhatsApp message | "I'm from Uber IT. Accept the push to stop the notifications."
+fact: MFA type | push notification, not phishing-resistant FIDO2
+fact: Why it worked | no number matching, and no limit on push attempt rate
+Push notification MFA is defeated by fatigue attacks, the page says.
+notes:
+Stage 02 got the attacker past multi-factor authentication. The page maps it to T1621, Multi-Factor Authentication Request Generation.
+
+With the password in hand, the attacker repeatedly attempted VPN login, flooding the contractor's phone with MFA push notifications. This is push bombing, also called MFA fatigue. After approximately an hour of notifications, the attacker contacted the contractor on WhatsApp, claiming to be Uber IT support and stating that the only way to stop the notifications was to approve one. The page gives the message as: I'm from Uber IT. Accept the push to stop the notifications. The contractor complied.
+
+The page names the MFA type as push notification, not phishing-resistant FIDO2, and gives two reasons it worked: no number matching, and no limit on the push attempt rate. Number matching, in the page's words, requires users to match a code shown on screen. FIDO2 is a public-key sign-in standard used by hardware security keys and passkeys.
+
+The next slide explains MFA request generation in general terms.
+
+== What ATT&CK calls MFA request generation
+layout: background
+source: MITRE ATT&CK T1621 | https://attack.mitre.org/techniques/T1621/
+credit: Also from the csoh.org glossary, MFA Fatigue / Push Bombing (csoh.org)
+ATT&CK describes adversaries who hold valid credentials generating MFA push requests so the user grants access. Some repeat login attempts to bombard users, and a user may finally accept one in response to MFA fatigue.
+notes:
+Background, from MITRE ATT&CK and the csoh.org glossary, in general terms.
+
+ATT&CK files this as T1621, Multi-Factor Authentication Request Generation, under Credential Access. Adversaries who hold credentials to valid accounts may be unable to complete a login without the second factor. To get around it, they may abuse the automatic generation of push notifications to have the user grant access to their account.
+
+In some cases, ATT&CK says, adversaries continuously repeat login attempts to bombard users with MFA push notifications, SMS messages and phone calls, potentially resulting in the user finally accepting the request in response to MFA fatigue.
+
+The csoh.org glossary describes MFA fatigue, or push bombing, as spamming push prompts until the user accepts one, and says it is defeated by number matching and FIDO2. Both are among the page's own defenses.
+
+Also from the csoh.org glossary: https://csoh.org/glossary.html#term-mfa-fatigue
+
+== A contractor VPN account could reach all internal file shares
+layout: stage
+stage: 03
+phase: Internal Recon
+technique: T1046 | Network Service Discovery
+fact: Access level | contractor VPN, low privilege
+fact: Recon target | internal file shares and intranet services
+fact: Gap | no micro-segmentation; no east-west network segmentation
+fact: Gap | contractor VPN had broad internal network visibility
+The page calls this reach a single-hop lateral movement risk.
+notes:
+Once the contractor approved the push, the attacker connected to Uber's corporate VPN and began scanning the internal network. The page maps this to T1046, Network Service Discovery.
+
+At this point the attacker held only contractor VPN access, which the page calls low privilege. The recon targets were internal file shares and intranet services.
+
+The page explains how far that access reached. Internal infrastructure had no micro-segmentation, and a contractor VPN account could reach all internal file shares. It lists the gaps as no east-west network segmentation, and a contractor VPN with broad internal network visibility. East-west traffic is traffic between systems inside a network, as opposed to traffic entering or leaving it.
+
+In its defenses, the page calls a contractor VPN with visibility across all internal file shares a single-hop lateral movement risk. Lateral movement is pivoting from one foothold to other systems.
+
+The next slide explains network service discovery and microsegmentation in general terms.
+
+== Network service discovery and microsegmentation, in general
+layout: background
+source: MITRE ATT&CK T1046 | https://attack.mitre.org/techniques/T1046/
+credit: Also from the csoh.org glossary, Microsegmentation (csoh.org)
+ATT&CK's Network Service Discovery covers listing the services running on remote hosts. Common methods include port, vulnerability or wordlist scans with tools brought onto a system.
+
+The csoh.org glossary defines microsegmentation as fine-grained network isolation between workloads.
+notes:
+Background, from MITRE ATT&CK and the csoh.org glossary, in general terms.
+
+ATT&CK files Network Service Discovery, T1046, under the Discovery tactic. Adversaries may attempt to get a listing of services running on remote hosts and local network infrastructure devices, including those that may be vulnerable to remote software exploitation. Common methods include port, vulnerability and wordlist scans using tools brought onto a system.
+
+The page says the attacker began scanning the internal network. It does not say which tools were used.
+
+The csoh.org glossary defines microsegmentation as fine-grained network isolation between workloads.
+
+Also from the csoh.org glossary: https://csoh.org/glossary.html#term-microsegmentation
+
+== A PowerShell script on a share held Thycotic admin credentials
+layout: stage
+stage: 04
+phase: Critical Discovery
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Location | internal network share, reachable over the contractor VPN
+fact: Contents | Thycotic domain admin username and password, in plaintext
+fact: Root cause | a static credential instead of a scoped service account
+fact: Irony | Thycotic, Uber's PAM, was designed to prevent hardcoded secrets
+This single file became the skeleton key to every system, the page says.
+notes:
+On an internal network share reachable over the contractor VPN, the attacker found a PowerShell script containing plaintext admin credentials for Thycotic, Uber's Privileged Access Management platform. The page maps this to T1552.001, Credentials In Files.
+
+The page details the contents as a hardcoded Thycotic domain admin username and password, in plaintext. Its root cause: an automation script needed PAM API access, but used a static credential instead of a scoped service account. A service account is the non-human identity a workload uses to authenticate. PowerShell is Microsoft's command shell and scripting language.
+
+The page points out the irony. Thycotic was the PAM system specifically designed to prevent hardcoded secrets. It tags the stage Secrets Sprawl.
+
+Its conclusion is that this single file became the skeleton key to every system in the organization. Stage 05 shows what it opened.
+
+The next slide explains PAM, and ATT&CK's Credentials In Files, in general terms.
+
+== What PAM is, and what ATT&CK calls credentials in files
+layout: background
+source: csoh.org glossary, PAM (Privileged Access Management) | https://csoh.org/glossary.html#term-pam
+credit: Also from MITRE ATT&CK T1552.001 (attack.mitre.org)
+PAM is the discipline, and product category, for controlling who can use high-privilege accounts, when, and with what audit trail.
+
+ATT&CK's Credentials In Files covers searching local files and remote file shares for insecurely stored credentials.
+notes:
+Background, from the csoh.org glossary and MITRE ATT&CK, in general terms.
+
+The glossary defines privileged access management as the discipline, and the product category, for controlling who can use high-privilege accounts, when, and with what audit trail. Among its patterns it lists vaulted credentials that users check out.
+
+ATT&CK files Credentials In Files, T1552.001, under Unsecured Credentials. Adversaries may search local file systems and remote file shares for files containing insecurely stored credentials. These can be files users create to store their own credentials, shared credential stores for a group, configuration files containing passwords for a system or service, or source code and binaries with embedded passwords.
+
+In some cases, ATT&CK says, such files can be copied and reused on another machine, or their contents read and then used to authenticate without copying any files.
+
+Also from MITRE ATT&CK T1552.001: https://attack.mitre.org/techniques/T1552/001/
+
+== Logged into Thycotic, the attacker extracted all stored secrets
+layout: stage
+stage: 05
+phase: Total Compromise
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: Logged into | Thycotic, using the admin credentials from the script
+fact: Extracted | all stored secrets
+fact: Systems | AWS, GCP, Slack, SentinelOne, HackerOne and more
+fact: Elapsed | under 24 hours from initial access to full compromise
+Thycotic was the single source of truth for Uber's cloud and SaaS credentials.
+notes:
+Using the admin credentials, the attacker logged into Thycotic and extracted all stored secrets. The page maps this stage to T1078.004, Valid Accounts: Cloud Accounts.
+
+The page adds the context: Thycotic was the single source of truth for credentials across Uber's entire cloud and SaaS footprint. SaaS is software as a service: applications the vendor hosts and runs.
+
+The page lists the systems fully compromised: AWS, GCP with Google Workspace, Slack, SentinelOne XDR, the HackerOne admin console, and DUO, OneLogin, VMware vSphere and Uber internal dashboards. The next slide sets out what the page says each one gave.
+
+The page's headline figure is under 24 hours from initial access to full compromise. Its summary says the Thycotic credentials unlocked full admin access within hours.
+
+No defense on the page is tied to this stage. That gap is one of the discussion questions at the end.
+
+== What the Thycotic secrets reached
+layout: table
+row: System | Access the page lists
+row: AWS | Cloud infrastructure admin
+row: GCP and Google Workspace | Admin
+row: Slack workspace | Admin, used to announce the breach to all Uber employees
+row: SentinelOne XDR | Admin, with the ability to suppress security alerts
+row: HackerOne admin console | Access to private vulnerability reports
+The page also lists DUO, OneLogin, VMware vSphere and Uber internal dashboards as fully compromised, with no detail.
+notes:
+This table sets out the systems the page lists for stage 05, with the access it gives for each.
+
+AWS gave cloud infrastructure admin. GCP and Google Workspace gave admin. The Slack workspace gave admin, which the attacker used to announce the breach to all Uber employees, as stage 06 shows. SentinelOne XDR gave admin, with the ability to suppress security alerts. The HackerOne admin console gave access to private vulnerability reports.
+
+XDR is extended detection and response, security tooling that brings together telemetry from endpoints and other sources. HackerOne is a bug bounty platform, where outside researchers report vulnerabilities to organizations.
+
+The page also lists DUO, OneLogin, VMware vSphere and Uber internal dashboards, without saying what access each gave, so do not add any.
+
+Keep the page's wording for SentinelOne. The access gave the ability to suppress security alerts, and the page says at stage 06 that the attacker could have suppressed EDR alerts. It does not say they did.
+
+== The attacker announced the breach in Uber's company Slack
+layout: stage
+stage: 06
+phase: Discovery
+fact: Slack broadcast | to all Uber employees, using Slack admin access
+fact: Then | screenshots posted on Twitter under "teapotuberhacker"
+fact: Found by | Uber's security team, within hours, through the announcement
+fact: Key gap | no alert on new AWS admin account creation
+fact: Key gap | no alert on PAM admin login from an unknown device
+Uber's security team found the breach through the attacker's announcement rather than through monitoring.
+notes:
+Stage 06 is how the breach came to light, and the page maps it to no ATT&CK technique. The page uses the Discovery phase here for how the breach was discovered.
+
+The attacker used their Slack admin access to broadcast a message to all Uber employees announcing the breach, then posted screenshots on Twitter under the name teapotuberhacker. Uber's security team discovered the breach within hours, through the attacker's announcement rather than through monitoring.
+
+The page names two key gaps: no alert fired on new AWS admin account creation, and no alert on a PAM admin login from an unknown device.
+
+It adds what the SentinelOne access meant: the attacker could have suppressed EDR alerts to cover tracks. Keep the words could have. The page does not say the attacker did. EDR is endpoint detection and response.
+
+The page's defense on anomalous PAM admin logins answers the second of those gaps, as the matrix shows next.
+
+== Five defenses against six stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: Contractor devices in MDM, health-checked | 01
+row: Phishing-resistant MFA, number matching | 02
+row: Network segmentation for contractor VPNs | 03
+row: No hardcoded credentials in scripts | 04
+row: Alerts on anomalous PAM admin logins | 06
+No defense on the page is tied to stage 05. The PAM-login alert answers the gap stage 06 names.
+notes:
+This matrix sets the page's five defenses against the six stages. A cell is marked only where the page's own words tie that defense to that stage.
+
+Enrolling contractor devices in MDM, with health attestation before VPN admission, answers stage 01, where the third-party device was not enrolled in MDM or health-checked. Phishing-resistant MFA, and number matching, answer stage 02, where a push notification, with no number matching, was approved. Segmenting the network so contractor VPNs cannot reach all internal shares answers stage 03. Never hardcoding credentials in scripts answers stage 04, where the root cause was a static credential instead of a scoped service account. Alerting on anomalous PAM admin logins answers the gap stage 06 names: no alert on a PAM admin login from an unknown device.
+
+Now look at the empty column. No defense on the page is tied to stage 05, where the attacker extracted all stored secrets from Thycotic. That gap is the second discussion question.
+
+== Push, number matching and FIDO2, as the page compares them
+layout: compare
+col: Push notification MFA | The contractor's MFA type at stage 02 | Defeated by fatigue attacks
+col: Number matching | Users match a code shown on screen | Stops automated bombing
+col: FIDO2 and passkeys | Phishing-resistant MFA, the page's recommendation | Immune to both fatigue and phishing, the page says
+Stage 02 worked with no number matching and no limit on push attempt rate.
+notes:
+This defense answers stage 02.
+
+The page recommends phishing-resistant MFA: FIDO2, or hardware security keys. It says push notification MFA is defeated by fatigue attacks. Number matching, which requires users to match a code shown on screen, stops automated bombing. FIDO2 and passkeys, the page says, are immune to both fatigue and phishing.
+
+Stage 02 gave the reasons the attack worked. The contractor's MFA was push notification, not phishing-resistant FIDO2, with no number matching and no limit on the push attempt rate.
+
+A passkey is a FIDO2 credential that can sync between a person's devices.
+
+== Never hardcode credentials in scripts
+layout: text
+- Use dynamic secrets from your PAM: scripts authenticate through a scoped, short-lived service account.
+- Or use cloud-native options: AWS Secrets Manager, or GCP Secret Manager with Workload Identity.
+- Run Trufflehog or GitLeaks in CI/CD.
+notes:
+This defense answers stage 04, where an automation script needed PAM API access and used a static credential instead of a scoped service account.
+
+The page's rule is never to hardcode credentials in scripts, and to use dynamic secrets from your PAM. Scripts should authenticate to the PAM through a scoped, short-lived service account. The page also names cloud-native options: AWS Secrets Manager, and GCP Secret Manager with Workload Identity. Secrets Manager and Secret Manager are the two clouds' managed stores for credentials.
+
+Finally, the page says to run Trufflehog or GitLeaks in CI/CD. Both are open-source scanners that look for credentials in code and files. CI/CD is continuous integration and continuous delivery, the pipeline that builds and ships code.
+
+== Check contractor devices, segment contractor access
+layout: compare
+col: Check contractor devices (stage 01) | Enrol them in MDM | Require health attestation before VPN admission | Health checks can catch infostealer infections before credential theft
+col: Segment the network (stage 03) | Contractor VPNs should not reach all internal shares | Contractors access only what their role requires | Visibility across all internal shares is a single-hop lateral movement risk
+Stage 01's device was not in MDM; stage 03 had no east-west segmentation.
+notes:
+Two defenses come from the contractor's side of the chain.
+
+For stage 01, enrol contractor devices in MDM and require health attestation before VPN admission. The page says device health checks can catch infostealer infections before they translate into credential theft. At stage 01 the third-party device was neither enrolled in MDM nor health-checked before VPN access. Health attestation means a device reporting its security state before it is admitted.
+
+For stage 03, segment your network so contractor VPNs cannot reach all internal shares. Contractors should only access the resources their role requires. The page calls a contractor VPN with visibility across all internal file shares a single-hop lateral movement risk.
+
+== Alert on anomalous PAM admin logins immediately
+layout: text
+Stage 06's gap: no alert on PAM admin login from unknown device.
+- The page calls PAM the crown jewels.
+- Alert immediately, not at a periodic review, on PAM admin logins from a new device, new IP or unusual time.
+notes:
+This defense answers the gap the page names at stage 06: no alert on a PAM admin login from an unknown device.
+
+The page calls PAM the crown jewels. A PAM admin login from a new device, a new IP address, or at an unusual time should trigger an immediate alert, not wait for a periodic review.
+
+The page lists a second gap at stage 06, no alert fired on new AWS admin account creation. None of its five defenses names that alert.
+
+== Check your own environment
+layout: checklist
+check: Are contractor devices enrolled in MDM and health-checked before VPN admission?
+check: Is your MFA FIDO2 or passkeys, and does push MFA use number matching?
+check: Can a contractor VPN account reach all of your internal file shares?
+check: Do scripts get PAM secrets through a scoped, short-lived service account?
+check: Do you run Trufflehog or GitLeaks in CI/CD?
+check: Would a PAM admin login from a new device or IP alert immediately?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether contractor devices are enrolled in MDM and must pass a health check before they are admitted to the VPN.
+
+Ask whether your MFA is FIDO2 or passkeys, and whether any push MFA you still run requires number matching.
+
+Ask whether a contractor VPN account can reach all of your internal file shares, or only the resources the contractor's role requires.
+
+Ask whether scripts get their secrets from your PAM through a scoped, short-lived service account, or from a cloud-native secrets manager, and whether Trufflehog or GitLeaks runs in your CI/CD.
+
+Finally, ask whether a PAM admin login from a new device, a new IP address or at an unusual time would alert immediately.
+
+== Would your MFA hold after about an hour of pushes?
+layout: question
+The attacker flooded the contractor's phone with MFA pushes for about an hour, then posed as Uber IT on WhatsApp. The contractor approved one.
+
+Name one account in your environment that still accepts a push approval like that.
+notes:
+Give the room a minute with this one before moving on.
+
+At stage 02 the attacker repeatedly attempted VPN login, flooding the contractor's phone with MFA push notifications for approximately an hour. Then came a WhatsApp message claiming to be Uber IT support, saying the only way to stop the notifications was to approve one. The contractor complied.
+
+Ask each person to name one account in their own environment that still accepts a plain push approval before you show the answer slide. The answer slide gives what the page says about push MFA.
+
+== What the page says about push MFA
+layout: answer
+- Push notification MFA is defeated by fatigue attacks.
+- Number matching, where users match a code shown on screen, stops automated bombing.
+- FIDO2 and passkeys are immune to both fatigue and phishing, the page says.
+notes:
+The page's answer is phishing-resistant MFA: FIDO2, or hardware security keys.
+
+Push notification MFA is defeated by fatigue attacks. Number matching, which requires users to match a code shown on screen, stops automated bombing. FIDO2 and passkeys, the page says, are immune to both fatigue and phishing.
+
+The page's reasons stage 02 worked are worth repeating: no number matching, and no limit on the push attempt rate.
+
+Bring the group's examples back to this. An account that accepts a plain push approval has the MFA type stage 02 describes.
+
+== What would you add for stage 05?
+layout: question
+The page ties no defense to stage 05, where the attacker logged into Thycotic and extracted all stored secrets.
+
+What would you add, and which detail from the page would it catch?
+notes:
+This question comes from the gap in the defense matrix.
+
+The page offers defenses tied to stages 01, 02, 03, 04 and 06. It ties none to stage 05, where the attacker logged into Thycotic with the admin credentials and extracted all stored secrets, and where the page lists admin access across AWS, GCP, Slack, SentinelOne, HackerOne and more.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stage 05
+layout: answer
+This deck adds no defense of its own. The PAM-login alert answers the gap stage 06 names. Test any idea against stage 05: all stored secrets extracted, and admin on AWS, GCP, Slack, SentinelOne and HackerOne.
+notes:
+Be clear that the page stops here. It ties no defense to stage 05, and this deck adds none of its own.
+
+The PAM-login alert is tied to the gap the page names at stage 06, no alert on a PAM admin login from an unknown device. The group may argue that it reaches stage 05 too; that argument is the group's own.
+
+Test each idea against what the page reports for stage 05. The attacker logged into Thycotic using the admin credentials and extracted all stored secrets. Thycotic was the single source of truth for credentials across Uber's entire cloud and SaaS footprint. The page lists AWS, GCP and Google Workspace, Slack, SentinelOne XDR and the HackerOne admin console as compromised, along with DUO, OneLogin, VMware vSphere and Uber internal dashboards. Its headline figure is under 24 hours from initial access to full compromise.
+
+== Sources
+layout: links
+link: Uber, official security update | https://www.uber.com/us/en/newsroom/security-update/
+link: GitGuardian, technical analysis | https://blog.gitguardian.com/uber-breach-2022/
+link: UpGuard | https://www.upguard.com/blog/what-caused-the-uber-data-breach
+link: MITRE ATT&CK T1621 | https://attack.mitre.org/techniques/T1621/
+link: MITRE ATT&CK T1552.001 | https://attack.mitre.org/techniques/T1552/001/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Uber's official security update and GitGuardian's technical analysis are the two sources linked in the page's header. The page also lists UpGuard. The two MITRE pages define T1621 and T1552.001, the techniques behind stages 02 and 04.
+
+The background slides name their own sources: the csoh.org glossary and MITRE ATT&CK.
+
+== Related defense topics
+layout: links
+link: IAM, MFA & cloud identity | iam.html
+link: Detection engineering | detection-engineering.html
+link: Cloud incident response | incident-response.html
+link: Cloud threat research | threat-research.html
+The page names no related kill chain. These are its related defense topics.
+notes:
+The page names no related kill chain on csoh.org. These four are the related defense topics it links: IAM, MFA and cloud identity; detection engineering; cloud incident response; and cloud threat research.
+
+IAM stands for identity and access management.
