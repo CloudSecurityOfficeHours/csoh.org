@@ -1,0 +1,420 @@
+title: XZ Utils backdoor
+page: breaches/xz-utils-backdoor.html
+as-of: 2026-11-22
+promise: An identity using the name Jia Tan spent roughly two years building a contribution history in XZ Utils, then shipped a backdoor that hooked sshd; it was caught by accident.
+
+== At a glance
+layout: stats
+stat: 2 years | roughly, of legitimate contributions | Before anything malicious appeared
+stat: 10.0 | CVSS score for CVE-2024-3094 | Pre-auth RCE, but only for the key holder
+stat: 500ms | approximate extra sshd latency | The anomaly that caught it, which nobody was looking for
+The payload sat in git as test files. The build script that unpacked it existed only in the release tarballs.
+notes:
+Start with the figures the page leads with.
+
+XZ Utils is a compression library present on essentially every Linux system. Roughly two years of legitimate contributions to it, under the name Jia Tan, came before anything malicious appeared.
+
+The page tracks the backdoor as CVE-2024-3094, with a CVSS score of 10.0. A CVE is a public identifier for one disclosed vulnerability, and CVSS is a severity score whose scale tops out at 10.0. The page qualifies the score straight away: pre-authentication remote code execution, meaning attacker code run before any login completes, but only for whoever held one specific Ed448 private key.
+
+The payload sat in the git repository disguised as binary test files, and the build script that unpacked it existed only in the release tarballs. A tarball is an archive file, the form in which many projects publish each release.
+
+It was caught by accident. Andres Freund, a Microsoft engineer investigating a performance regression, noticed sshd logins taking about half a second longer than they should. sshd is the OpenSSH server, the program that accepts remote logins.
+
+== What happened, and when
+layout: timeline
+event: January 2021 | GitHub account created
+event: October 2021 | First patch to the XZ mailing list
+event: By January 2023 | Jia Tan holds maintainer privileges
+event: Around June 2023 | IFUNC support added to the CRC code
+event: February and March 2024 | Versions 5.6.0 and 5.6.1 ship the backdoor
+event: March 29, 2024 | Andres Freund discloses it on oss-security
+Jia Tan made a first release, 5.4.2, in March 2023. The page does not date the pressure campaign. Spacing is not to scale.
+notes:
+The page gives only a few dates, and the timeline shows only those. It dates the whole campaign from 2021 to March 2024.
+
+In January 2021 the GitHub account was created. In October 2021 the first patch reached the XZ mailing list, and minor patches followed.
+
+Accounts now believed to be sock puppets pressured the maintainer, Lasse Collin, to hand over responsibility. The page does not date that pressure, so the timeline leaves it out. By January 2023 Jia Tan held maintainer privileges, and made a first release, 5.4.2, in March 2023.
+
+Around June 2023 a series of changes added IFUNC support to the CRC code. In February and March 2024 versions 5.6.0 and 5.6.1 shipped the backdoor. Andres Freund disclosed it on the oss-security mailing list on March 29, 2024.
+
+The markers are evenly spaced, and the slide says the gaps between them are not to scale.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Resource Development | Two years of real work | T1585
+step: 02 | Social Engineering | Pressure on the maintainer | T1684.001
+step: 03 | Preparation | IFUNC support, added early | T1195.001
+step: 04 | Supply Chain | Trigger only in tarballs | T1027
+step: 05 | The Backdoor | sshd hooked via liblzma | T1574
+step: 06 | Discovery | ~500ms of latency | -
+Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's six stages, each with its phase and primary ATT&CK technique.
+
+Stage 01, Resource Development, is roughly two years of legitimate contributions under the name Jia Tan. Stage 02, Social Engineering, is public pressure on the maintainer from accounts now believed to be sock puppets. Stage 03, Preparation, is IFUNC support added to the CRC code months before the payload. Stage 04, Supply Chain, is the trigger that existed only in the release tarballs. Stage 05, The Backdoor, is the hook into sshd through liblzma, the XZ library. Stage 06, Discovery, carries no ATT&CK technique: it is how the backdoor was found, through about half a second of extra latency.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== Two years of legitimate, reviewed contributions came first
+layout: stage
+stage: 01
+phase: Resource Development
+technique: T1585 | Establish Accounts
+technique: T1587.001 | Develop Capabilities: Malware
+fact: January 2021 | GitHub account created
+fact: October 2021 | first patch to the XZ mailing list; minor patches follow
+fact: Duration | roughly two years of legitimate, useful, reviewed contributions
+fact: Detectable anomaly | none, per the page
+The community's trust was a correct inference from everything visible.
+notes:
+From 2021, an identity using the name Jia Tan created accounts, joined the mailing list and contributed legitimate patches to XZ Utils for roughly two years. The page maps this stage to T1585, Establish Accounts, and also tags T1587.001, Develop Capabilities: Malware.
+
+The page says most other supply-chain chains on this site start with theft or exploitation: a stolen token, a phished maintainer, a poisoned build step. This one starts with work. The contributions were real, useful and reviewed, and they continued for about two years before anything malicious appeared. The page calls that patience the entire innovation.
+
+There was no exploit to detect and no anomaly to alert on. For two years the attacker was doing exactly what a valuable open-source contributor does, and the page calls the community's response of trust, gratitude and increasing responsibility the correct response to what it could observe.
+
+The next slide explains, in general, what ATT&CK means by establishing accounts.
+
+== What ATT&CK means by establishing accounts
+layout: background
+source: MITRE ATT&CK T1585 | https://attack.mitre.org/techniques/T1585/
+ATT&CK describes adversaries creating and cultivating accounts that build a persona to further operations. Persona development covers public information, presence, history and appropriate affiliations, which others may scrutinize for legitimacy.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files Establish Accounts under Resource Development. Adversaries may create and cultivate accounts with services that can be used during targeting, and can use those accounts to build a persona to further operations.
+
+Persona development consists of the development of public information, presence, history and appropriate affiliations. ATT&CK says this could be applied to social media, websites or other publicly available information that could be referenced and scrutinized for legitimacy over the course of an operation.
+
+A persona may exist on a single site or across multiple sites, and ATT&CK lists GitHub among its examples. Establishing one may also mean filling out profile information and developing social networks.
+
+== Suspected sock puppets pressured the maintainer to hand over
+layout: stage
+stage: 02
+phase: Social Engineering
+technique: T1684.001 | Social Engineering: Impersonation
+fact: Accounts | Jigar Kumar, krygorin4545, misoeater91 and others
+fact: Pressure | on Lasse Collin, an unpaid volunteer, over slow releases
+fact: Jia Tan, 2023 | maintainer by January; first release, 5.4.2, in March
+The page says this attack targeted the sustainability crisis in open source as precisely as any technical vulnerability.
+notes:
+The page maps this stage to T1684.001, Social Engineering: Impersonation.
+
+Multiple accounts, among them Jigar Kumar, krygorin4545 and misoeater91, complained publicly about the pace of XZ releases and pushed for a new maintainer. The summary calls them suspected sock puppets, and this stage says they are now believed to be sock puppets. A sock puppet is an account that poses as an independent person while someone else controls it. Keep the hedge when you name them.
+
+Lasse Collin maintained the project as an unpaid volunteer. Answering the pressure, he replied on the list that long-term mental health issues had limited his capacity, and the page says the campaign exploited that directly. By January 2023 Jia Tan held maintainer privileges, and made a first release, 5.4.2, in March 2023.
+
+The page's lesson: the exploit was one exhausted person maintaining critical infrastructure alone for free, which describes a large fraction of the dependency tree every organization in this site's kill chains relies on. The page also says the pressure campaign is worth reading in the original mailing-list archives, because it is difficult to look at.
+
+== IFUNC support went in months early, reviewed as ordinary optimization
+layout: stage
+stage: 03
+phase: Preparation
+technique: T1195.001 | Compromise Software Dependencies and Development Tools
+fact: Around June 2023 | IFUNC support added to crc64_fast.c
+fact: IFUNC, in glibc | selects an optimized implementation at load time
+fact: Why plausible | exactly the performance work a compression library should do
+fact: What it provides | a hook point running during dynamic linking, before main
+No single commit ever looks wrong, the page says; the capability is genuine.
+notes:
+Around June 2023, a series of changes added indirect function, or IFUNC, support to the CRC code in crc64_fast.c. A CRC is a checksum that detects corrupted data. The page maps this stage to T1195.001, Compromise Software Dependencies and Development Tools.
+
+IFUNC is a legitimate glibc mechanism that lets a program select an optimized implementation at load time based on CPU features. glibc is the GNU C library, the standard C library on most Linux systems. In a compression library, the page says, that is exactly the kind of performance work you would expect and welcome. The changes were committed openly and reviewed as ordinary optimization work.
+
+IFUNC also provides a hook point that runs during dynamic linking, before main, and that is what the backdoor would later use. Dynamic linking loads a program's shared libraries when it starts, and main is where a C program's own code begins.
+
+Splitting the attack this way means no single commit ever looks wrong. The enabling infrastructure arrives months early with a genuine justification, and the payload arrives later as data rather than as reviewable source.
+
+== The backdoor's trigger shipped only in the release tarballs
+layout: stage
+stage: 04
+phase: Supply Chain
+technique: T1195.002 | Compromise Software Supply Chain
+technique: T1027 | Obfuscated Files or Information
+fact: Affected versions | XZ Utils 5.6.0 and 5.6.1
+fact: Injection point | a modified build-to-host.m4, present only in release tarballs
+fact: Payload | files in git resembling binary compression test fixtures
+fact: Conditions | x86-64 Linux, glibc, GCC, built via dpkg or rpm
+Auditing the git repository would have found only harmless-looking test files.
+notes:
+Versions 5.6.0 and 5.6.1 carried a modified build-to-host.m4 that existed only in the release tarballs, not in the git repository, and extracted the payload from test files during the build. The page maps the stage to T1195.002, Compromise Software Supply Chain, and T1027, Obfuscated Files or Information.
+
+The page calls this the detail that defeats how nearly everyone verifies open-source software. Auditing the git repository would have found only harmless-looking test files, because the build script that unpacked them was present only in the tarballs Jia Tan released separately.
+
+The payload lived in files that looked like binary compression test fixtures, the kind of unreadable blob a compression project legitimately contains by the hundred. The modified build script extracted and assembled it during compilation.
+
+The injection was also conditional. It ran only when building on x86-64 Linux with glibc and GCC, the GNU compiler, under dpkg or rpm, the package tools of Debian-family and Red Hat-family distributions. The page says that narrowed it to the distribution packages that mattered, while keeping it invisible almost everywhere else, including in most casual build-from-source testing.
+
+The next slide sets the repository beside the tarball.
+
+== What the repository held, and what the tarball added
+layout: compare
+col: The git repository | The payload, as opaque test files | Not the build script that unpacked them | Auditing it would have found only harmless-looking files
+col: The release tarball | The modified build-to-host.m4 | It extracted and assembled the payload during the build | Jia Tan released the tarballs separately
+Any process that reproduced the tarball from the tree would have caught it, the page says.
+notes:
+This slide sets the two side by side, as the page does in its first defense.
+
+The git tree held the payload only as opaque test files. The release tarball added the modified build-to-host.m4 that extracted and assembled the payload during the build, and that script existed only in the tarballs Jia Tan released separately.
+
+So, the page says, any verification anchored on the repository would have missed it, and any process that reproduced the tarball from the tree would have caught it. The defenses come back to this.
+
+The next slide explains, in general, what ATT&CK means by obfuscated files.
+
+== What ATT&CK means by obfuscated files
+layout: background
+source: MITRE ATT&CK T1027 | https://attack.mitre.org/techniques/T1027/
+ATT&CK describes adversaries making a file difficult to discover or analyze by encrypting, encoding or otherwise obfuscating its contents. Payloads may be compressed, archived or encrypted to avoid detection, and parts of files encoded to hide plain-text strings.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files Obfuscated Files or Information under Stealth. Adversaries may attempt to make an executable or file difficult to discover or analyze by encrypting, encoding or otherwise obfuscating its contents, on the system or in transit.
+
+Payloads may be compressed, archived or encrypted in order to avoid detection. Portions of files can be encoded to hide the plain-text strings that would otherwise help defenders with discovery. ATT&CK adds that payloads may be split into separate, seemingly benign files that only reveal malicious functionality when reassembled.
+
+The same technique also covers command obfuscation, which hides commands from signature-based detection.
+
+== Through systemd, liblzma's IFUNC hook reached sshd's authentication
+layout: stage
+stage: 05
+phase: The Backdoor
+technique: T1574 | Hijack Execution Flow
+technique: T1554 | Compromise Host Software Binary
+fact: Linkage | distribution-patched sshd, then systemd, then liblzma
+fact: IFUNC hook | intercepts RSA_public_decrypt during authentication
+fact: Capability | pre-authentication remote code execution as root
+fact: Access control | restricted to the holder of a specific Ed448 private key
+Your attack surface includes what your transitive dependencies are linked into.
+notes:
+OpenSSH does not depend on liblzma. It got there transitively: several distributions patch sshd to integrate with systemd notification, systemd links against liblzma, and so a compression library ends up inside the address space of the most security-critical daemon on the machine. systemd is the service manager on most Linux distributions. The page maps this stage to T1574, Hijack Execution Flow, and T1554, Compromise Host Software Binary.
+
+The backdoor used its IFUNC hook to intercept RSA_public_decrypt during authentication, so a client presenting a certificate signed with the attacker's Ed448 key could have commands executed before authentication completed. The page gives the capability as pre-authentication remote code execution as root.
+
+The page notes two properties. The backdoor was authenticated: only the key holder could use it, so it was not a vulnerability others could stumble into, and it left no obvious open door. And the reachability came from a dependency relationship nobody had deliberately created. That is the general hazard, the page says: your attack surface includes what your dependencies' dependencies are linked into.
+
+The next slide draws the linkage as the page gives it.
+
+== How liblzma reached sshd, as the page draws it
+layout: layers
+layer: sshd | Patched by several distributions for systemd notification
+layer: systemd | Links against liblzma
+layer: liblzma | The backdoor's IFUNC hook intercepts RSA_public_decrypt
+OpenSSH does not depend on liblzma. The reachability came from a dependency relationship nobody had deliberately created.
+notes:
+The page draws this chain itself: distribution-patched sshd, then systemd, then liblzma. Read the arrows as that linkage and nothing more.
+
+Several distributions patch sshd to integrate with systemd notification. systemd links against liblzma. So a compression library ends up inside the address space of sshd, and the backdoor's IFUNC hook could intercept RSA_public_decrypt during authentication.
+
+OpenSSH itself does not depend on liblzma. The page's point is that nobody had deliberately created this dependency relationship. The defense that answers it comes later: know the full transitive linkage of anything doing authentication.
+
+The next slide explains Ed448 signatures in general.
+
+== What an Ed448 signature is
+layout: background
+source: RFC 8032, Edwards-Curve Digital Signature Algorithm | https://www.rfc-editor.org/rfc/rfc8032
+Ed448 is EdDSA, an elliptic curve signature scheme, instantiated with the edwards448 curve. Signing takes the private key; verifying a signature takes the public key, which is generated from the private key.
+notes:
+Background, from RFC 8032, in general terms.
+
+EdDSA, the Edwards-curve Digital Signature Algorithm, is an elliptic curve signature scheme, a variant of Schnorr's signature system. RFC 8032 instantiates it with recommended parameters for two curves, edwards25519 and edwards448. Ed448 is EdDSA instantiated with the edwards448 parameters.
+
+In the RFC's Ed448 procedures, the private key is 57 octets of cryptographically secure random data, and the public key is generated from it. The signing procedure takes the private key and the message. Verification takes the message, the signature and the public key, and the signature is rejected if parsing fails or if the check does not hold.
+
+Ed448 uses 57-byte public keys and 114-byte signatures. The RFC says Ed448 is intended to operate at around the 224-bit security level, against around the 128-bit level for Ed25519.
+
+== Half a second of unexplained latency gave it away
+layout: stage
+stage: 06
+phase: Discovery
+fact: Discoverer | Andres Freund, Microsoft engineer and PostgreSQL developer
+fact: Signal | ~500ms extra sshd latency and unexplained CPU usage
+fact: Disclosed | March 29, 2024, on the oss-security mailing list
+fact: Reached | mainly testing and rolling distros, such as Debian sid
+fact: A few more months | and it would have been in stable releases worldwide
+The page says there is no defensive lesson in the discovery.
+notes:
+Stage 06 has no ATT&CK technique. It is how the backdoor was found.
+
+Andres Freund, a Microsoft engineer and PostgreSQL developer, was investigating a performance regression in Debian. He noticed that SSH logins on a testing distribution felt slightly slow, with sshd using unexpectedly high CPU and about 500ms of extra latency. He was curious enough to profile rather than shrug, and found the time going into liblzma, consuming CPU it had no business consuming. From there he found the backdoor, and he disclosed it on the oss-security mailing list on March 29, 2024.
+
+The page says there is no defensive lesson in the discovery, and that pretending otherwise would be dishonest.
+
+The malicious versions had reached mainly testing and rolling distributions: Debian sid, Fedora Rawhide and 40 beta, openSUSE Tumbleweed and Kali. As a result, the blast radius on stable production systems was small. Had it survived a few more months into stable releases of major distributions, the page says, it would have been present on a very large share of the internet's Linux servers, with pre-auth root access available to one party.
+
+== No amount of reading diffs finds this, the page says
+layout: text
+From the page's sixth defense:
+- Two years of legitimate contributions (stage 01)
+- An enabling change with a genuine performance justification (stage 03)
+- A payload disguised as test fixtures; an injection path outside the repository (stage 04)
+notes:
+The page's sixth defense gathers four facts from the chain that code review was up against.
+
+Of stage 03, the page says splitting the attack this way means no single commit ever looks wrong. The enabling infrastructure arrived months early with a genuine justification, and the payload arrived later as data rather than as reviewable source.
+
+The page's sixth defense puts the pieces together: two years of legitimate contributions, an enabling change with a genuine performance justification, a payload disguised as binary test fixtures, and an injection path outside the repository entirely. No amount of reading diffs finds that, the page says.
+
+Code review catches malicious code. In the page's words, it does not catch a legitimate capability being added early by someone who intends to use it later.
+
+The defenses that follow start from that.
+
+== Six defenses against six stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: Build from the repository; verify tarballs match | 04
+row: Reduce what is linked into critical processes | 05
+row: Treat maintainer sustainability as a control | 02
+row: Watch maintainership changes | 02
+row: Take performance anomalies seriously | 06
+row: Assume a dependency may be hostile | 01 | 03 | 04
+Stages 01 and 03 are tied only to the sixth defense, which begins by accepting that code review would not have caught this.
+notes:
+This matrix sets the page's six defenses against its six stages. The defenses name no stage numbers, so a cell is marked only where a defense's own words cite that stage's facts.
+
+Building from the repository and verifying the tarball cites the build script that existed only in the tarball, stage 04. Reducing what is linked into critical processes cites the compression library that ended up inside sshd, stage 05. Treating maintainer sustainability as a security control cites the exhausted unpaid volunteer, and watching maintainership changes cites pressure campaigns pushing for handover; both are stage 02. Taking performance anomalies seriously cites the half second someone did not ignore, stage 06. Stage 06 itself says there is no defensive lesson in the discovery, and the page calls this a weak control.
+
+The sixth defense cites two years of legitimate contributions, stage 01; an enabling change with a genuine performance justification, stage 03; and a payload disguised as test fixtures with an injection path outside the repository, stage 04. Its answer is defence in depth around the assumption that a dependency may be hostile.
+
+So every stage has a tie, but stages 01 and 03 only through a defense that starts by accepting that code review would not have caught this.
+
+== Build from the repository, and reduce what critical processes link
+layout: compare
+col: Repository, not tarball (stage 04) | Prefer builds from tagged source | Use reproducible builds where you can | Check released artifacts correspond to the commits they claim
+col: Less linkage (stage 05) | Prefer minimal distributions and images | Remove unnecessary integrations from security-critical daemons | Know the full transitive linkage of anything doing authentication
+The page calls the first the most transferable control here.
+notes:
+Two defenses answer the build and the linkage.
+
+First, build from the repository, not from tarballs, and verify the two match. The page calls this the most transferable control here. The git tree held the payload only as opaque test files and the release tarball added the build script that unpacked it, so any verification anchored on the repository would have missed it, and any process that reproduced the tarball from the tree would have caught it. Prefer builds from tagged source, use reproducible builds where you can, and check that released artifacts correspond to the commits they claim. A reproducible build is one that anyone can repeat from the same source to get byte-for-byte the same output. The page says the same class of check would have caught LiteLLM's untagged PyPI uploads.
+
+Second, reduce what is linked into your most critical processes. A compression library ended up inside sshd because of a distribution patch for systemd notification. Prefer minimal distributions and images, remove unnecessary integrations from security-critical daemons, and know the full transitive linkage of anything doing authentication. The page's rule: attack surface is everything that ends up in the address space, including what you never chose to install.
+
+== Support the maintainers, and watch who takes over
+layout: compare
+col: Sustainability (stage 02) | Fund the projects in your dependency path | Contribute maintenance effort, not only feature requests | Support foundations doing this systematically
+col: Maintainer changes (stage 02) | Track ownership changes for the dependencies that matter most | Be suspicious of pressure campaigns pushing for handover | An unknown new maintainer of something in every Linux install is worth a look
+The page says money and help are the only controls that change the conditions that make this attack repeatable.
+notes:
+Two defenses answer stage 02.
+
+First, treat maintainer sustainability as a security control, because this attack targeted it directly. The exploit was one exhausted unpaid volunteer maintaining critical infrastructure alone. Fund the projects in your dependency path, contribute maintenance effort rather than only feature requests, and support foundations doing this systematically. The page says every organization in this site's kill chains depends on software maintained under conditions that make this attack repeatable, and that money and help are the only controls that change those conditions.
+
+Second, watch maintainership changes in critical dependencies as a security event. A new maintainer taking over a package deep in your tree is a supply-chain risk signal, and the page says it is usually visible in public. Track ownership changes for the dependencies that matter most, and be suspicious of pressure campaigns pushing for handover. The page's example of what is worth a look: one new maintainer, previously unknown, who now has commit and release rights to something in every Linux install.
+
+== Investigate anomalies, and assume a dependency may be hostile
+layout: compare
+col: Anomalies (stage 06) | Baseline the resource profile of authentication daemons | Investigate unexplained CPU or latency changes | A weak control, the page says, but a cheap one
+col: Defence in depth (stages 01, 03, 04) | Minimal linkage and reproducible builds | Artifact-to-source verification | Blast-radius limits on what one compromised component can reach
+Accept honestly, the page says, that code review would not have caught this.
+notes:
+The last two defenses.
+
+First, take performance anomalies in security-critical paths seriously. This was found because someone did not ignore half a second. Baseline the resource profile of authentication daemons and critical services, and investigate unexplained CPU or latency changes rather than accepting them. Keep the page's caveat with this one: it is a weak control and it should not have been the one that worked, but it did, and it is cheap.
+
+Second, accept honestly that code review would not have caught this, and adjust expectations. Two years of legitimate contributions, an enabling change with a genuine performance justification, a payload disguised as binary test fixtures, and an injection path outside the repository entirely: the page says no amount of reading diffs finds that. The defensible response is defence in depth around the assumption that a dependency may be hostile: minimal linkage, reproducible builds, artifact-to-source verification, and blast-radius limits on what any single compromised component can reach.
+
+== Check your own environment
+layout: checklist
+check: Do you build critical dependencies from tagged source rather than tarballs?
+check: Could you show a released artifact matches the commit it claims?
+check: Do you know the full transitive linkage of your authentication daemons?
+check: Do you fund or help maintain the projects in your dependency path?
+check: Would you notice a new maintainer on a package deep in your tree?
+check: Do you baseline CPU and latency for authentication daemons?
+check: What limits what any single compromised component can reach?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether you build critical dependencies from tagged source rather than release tarballs, and whether you could show that a released artifact corresponds to the commit it claims, with reproducible builds where you can.
+
+Ask whether you know the full transitive linkage of anything doing authentication, and whether your security-critical daemons carry integrations they do not need.
+
+Ask whether your organization funds or contributes maintenance to the projects in its dependency path, and whether you track ownership changes for the dependencies that matter most.
+
+Ask whether you have a baseline for the CPU and latency of authentication daemons and critical services, so an unexplained change would get investigated.
+
+Finally, ask what limits what any single compromised component can reach, on the page's assumption that a dependency may be hostile.
+
+== Would your verification have caught build-to-host.m4?
+layout: question
+The git repository held the payload only as opaque test files. The build script that unpacked it existed only in the release tarball.
+
+Which of your checks reads what you actually build from?
+notes:
+Give the room a minute with this one before moving on.
+
+The page's facts: auditing the git repository would have found only harmless-looking test files, because the modified build-to-host.m4 that unpacked them was present only in the tarballs Jia Tan released separately. The injection also ran only when building on x86-64 Linux with glibc and GCC under dpkg or rpm, which the page says kept it invisible in most casual build-from-source testing.
+
+Ask each person to name the check in their own pipeline that looks at what they actually build from, the repository or the release artifact, before you show the answer slide.
+
+== The page's answer: verify the tarball matches the repository
+layout: answer
+Verification anchored on the repository would have missed it. Reproducing the tarball from the tree would have caught it.
+- Prefer builds from tagged source.
+- Use reproducible builds where you can.
+- Check released artifacts correspond to the commits they claim.
+notes:
+The page's answer is its first defense, which it calls the most transferable control here.
+
+The git tree held the payload only as opaque test files, and the release tarball added the build script that unpacked it. So any verification anchored on the repository would have missed it, and any process that reproduced the tarball from the tree would have caught it.
+
+Its advice: prefer builds from tagged source, use reproducible builds where you can, and check that released artifacts correspond to the commits they claim.
+
+Bring the group's examples back to that test. A check that reads only the repository would have seen harmless-looking test files.
+
+== Stage 01 left nothing to detect. Where does that leave you?
+layout: question
+For roughly two years the attacker did exactly what a valuable open-source contributor does. The page calls the community's trust the correct response to what it could observe.
+
+What would you change, knowing that?
+notes:
+This question comes from the first stage and the matrix.
+
+The page says there was no exploit to detect and no anomaly to alert on in stage 01. The contributions were real, useful and reviewed, and continued for about two years before anything malicious appeared. In the matrix, stage 01 is tied only to the sixth defense, which begins by accepting that code review would not have caught this.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to say what it would have seen during those two years.
+
+== The page's answer: assume a dependency may be hostile
+layout: answer
+The page says no amount of reading diffs finds this. It answers with defence in depth:
+- Minimal linkage
+- Reproducible builds and artifact-to-source verification
+- Blast-radius limits on what one compromised component can reach
+notes:
+The page's answer starts from its sixth defense.
+
+It says to accept honestly that code review would not have caught this, and to adjust expectations. Code review was up against two years of legitimate contributions, an enabling change with a genuine performance justification, a payload disguised as binary test fixtures, and an injection path outside the repository entirely.
+
+The defensible response, in the page's words, is defence in depth around the assumption that a dependency may be hostile: minimal linkage, reproducible builds, artifact-to-source verification, and blast-radius limits on what any single compromised component can reach.
+
+If the group proposes ways to spot the contributor during stage 01, treat them as the group's own. The page offers none: it says there was no anomaly to alert on, and that the community's trust was a correct inference from everything visible.
+
+== Primary sources
+layout: links
+link: Andres Freund, oss-security disclosure | https://www.openwall.com/lists/oss-security/2024/03/29/4
+link: JFrog, CVE-2024-3094 technical analysis | https://jfrog.com/blog/xz-backdoor-attack-cve-2024-3094-all-you-need-to-know/
+link: Wikipedia, XZ Utils backdoor timeline and references | https://en.wikipedia.org/wiki/XZ_Utils_backdoor
+link: OffSec, understanding the threat of the XZ backdoor | https://www.offsec.com/blog/xz-backdoor/
+link: NVD, CVE-2024-3094 | https://nvd.nist.gov/vuln/detail/CVE-2024-3094
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Andres Freund's post to the oss-security mailing list is the original disclosure. JFrog published a full technical analysis. The Wikipedia article carries a timeline and references, OffSec explains the threat, and NVD, the US National Vulnerability Database, holds the record for CVE-2024-3094.
+
+The background slides name their own sources: MITRE ATT&CK, and the RFC that defines Ed448.
+
+== Related kill chain and defense topics
+layout: links
+link: LiteLLM, untagged PyPI uploads | breaches/litellm-pypi-teampcp.html
+link: CI/CD & supply chain | ci-cd.html
+link: Vulnerability management | vulnerability-management.html
+link: Container security | containers.html
+link: Threat modeling | threat-modeling.html
+The first defense says the same class of check would have caught LiteLLM's untagged PyPI uploads. The four topics are the page's related defense topics.
+notes:
+The page links one other kill chain, and four defense topics.
+
+In its first defense, the page says that checking released artifacts correspond to the commits they claim is the same class of check that would have caught LiteLLM's untagged PyPI uploads. That incident has its own kill chain. PyPI is the Python Package Index. The page draws no other connection between the two.
+
+The related defense topics are CI/CD and supply chain, vulnerability management, container security, and threat modeling. CI/CD stands for continuous integration and continuous delivery.
