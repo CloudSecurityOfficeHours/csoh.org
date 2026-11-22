@@ -24,7 +24,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-11-01">
-    <meta property="article:modified_time" content="2026-11-09">
+    <meta property="article:modified_time" content="2026-11-22">
     <meta property="article:author" content="Cloud Security Office Hours">
     <meta property="article:section" content="Breach Kill Chains">
     <meta property="article:tag" content="PHP2Shell / PAN-OS Firewalls 2026">
@@ -88,7 +88,7 @@
     }
   },
   "datePublished": "2026-11-01",
-  "dateModified": "2026-11-09",
+  "dateModified": "2026-11-22",
   "mainEntityOfPage": "https://csoh.org/breaches/php2shell-pan-os.html",
   "speakable": {
     "@type": "SpeakableSpecification",
@@ -586,7 +586,7 @@
       <div class="step-num">10</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">A Linux kernel flaw overwrote the <a class="glossary-link" href="../glossary.html#term-pam">PAM</a> configuration, so su root needed no password</div>
+          <div class="step-title">A Linux kernel flaw overwrote the <span class="no-glossary">PAM</span> configuration, so su root needed no password</div>
           <a class="mt mt-p2" href="https://attack.mitre.org/techniques/T1068/" target="_blank" rel="noopener">T1068 - Exploitation for Privilege Escalation</a>
         </div>
         <p class="step-desc">A shell as <code>nobody</code> on a firewall gets an attacker very little, so the operator brought a second exploit. CVE-2026-46300, known as Fragnesia, is a privilege-escalation flaw in the kernel's XFRM ESP-in-TCP code. Dream says it was used to overwrite <code>/etc/pam.d/su</code> to accept all authentication, after which <code>su root</code> succeeded without a password.</p>
@@ -597,7 +597,7 @@
           <span class="hl">Automation:</span> batch runner, 5 targets at a time, 1,800-second timeout<br>
           <span class="hl">Yield:</span> 24 of 240 firewalls rooted
         </div>
-        <div class="step-tags"><span class="stag">Fragnesia</span><span class="stag">CVE-2026-46300</span><span class="stag">PAM</span><span class="stag">T1068</span></div>
+        <div class="step-tags"><span class="stag">Fragnesia</span><span class="stag">CVE-2026-46300</span><span class="stag no-glossary">PAM</span><span class="stag">T1068</span></div>
       </div>
     </div>
 
@@ -630,7 +630,7 @@
           <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1572/" target="_blank" rel="noopener">T1572 - Protocol Tunneling</a>
         </div>
         <p class="step-desc">The second firewall was exploited at 10:09 UTC on October 24 and got the full treatment. Dream describes an eight-port reverse SSH tunnel to operator infrastructure, reaching domain controllers over LDAP, LDAPS and RDP, along with the firewall management server, GlobalProtect infrastructure and a SOCKS5 proxy.</p>
-        <p class="step-desc">A systemd service and an <code>rc.local</code> hook launched scripts from <code>/usr/local/lib/.panops/</code>, so the access survived a reboot. iox, a Chinese-developed tunneling utility, was among the recovered tools. Dream says the tunnel and webshells are likely still active and could not confirm it.</p>
+        <p class="step-desc">A systemd service and an <code>rc.local</code> hook launched scripts from <code>/usr/local/lib/.panops/</code>, and Dream says the tunnel survives reboots and reconnects automatically. iox, a Chinese-developed tunneling utility, was among the recovered tools. Dream says the tunnel and webshells are likely still active and could not confirm it.</p>
         <div class="step-code">
           <span class="hl">Tunnel:</span> reverse SSH, 8 ports, firewall to operator infrastructure<br>
           <span class="hl">Reached:</span> domain controllers (LDAP, LDAPS, RDP), firewall management server, SOCKS5 proxy<br>
@@ -646,15 +646,15 @@
       <div class="step-num">13</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Root decrypted the LDAP <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> and exposed the private keys and SAML settings on the device</div>
+          <div class="step-title">Root exposed the firewall's private keys and network topology, and the LDAP <a class="glossary-link" href="../glossary.html#term-service-account">service account</a> password was decrypted later, on the management server</div>
           <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Credentials in Files</a>
         </div>
-        <p class="step-desc">A firewall that authenticates VPN users keeps a directory credential on the device. With root the operator had the master key, decrypted the LDAP service account password from the configuration, and hardcoded it into later scripts. Private keys for HA replication, SSL/<a class="glossary-link" href="../glossary.html#term-tls">TLS</a> and device authentication came off the filesystem, along with the full network topology.</p>
+        <p class="step-desc">Private keys for HA replication, SSL/<a class="glossary-link" href="../glossary.html#term-tls">TLS</a> and device authentication came off the firewall's filesystem, along with the full network topology. The directory credential came later, from the management server taken in the next step. Dream lists the decryption of the LDAP service account password among the domain attacks launched from that server, which needs LDAP connectivity to authenticate VPN users. With root the operator had the master key, decrypted the password from the configuration, and hardcoded it into later scripts.</p>
         <p class="step-desc">The haul also included a SAML <a class="glossary-link" href="../glossary.html#term-idp">IdP</a> configuration with <code>validate-idp-certificate: no</code>, which Dream lists among weak security settings and does not tie to a specific device. None of this depended on PHP. A perimeter device carries the organization's trust relationships, and a rooted one hands them over.</p>
         <div class="step-code">
-          <span class="hl">Decrypted:</span> LDAP service account password, using the master key available at root<br>
-          <span class="hl">Taken:</span> private keys for HA replication, SSL/TLS and device authentication<br>
+          <span class="hl">Taken from the firewall:</span> private keys for HA replication, SSL/TLS and device authentication<br>
           <span class="hl">Also taken:</span> complete network topology<br>
+          <span class="hl">Decrypted later, on the management server:</span> LDAP service account password, using the master key available at root<br>
           <span class="hl">Weakness found:</span> SAML IdP config with validate-idp-certificate: no
         </div>
         <div class="step-tags"><span class="stag">LDAP Bind Account</span><span class="stag">Private Keys</span><span class="stag">SAML</span><span class="stag">T1552.001</span><span class="stag">T1552.004</span></div>
@@ -750,12 +750,12 @@
         <p class="step-desc">Exposure figures depend on what is counted, and a version match does not prove exploitability. Silas Cutler roughly estimated 1.3 million potentially vulnerable hosts, Shodan showed about 1.9 million PHP hosts, VirusTotal about 5.1 million, Cortex Xpanse 22.6 million instances, Censys's dashboard about 30.3 million services on an affected version on October 29, per Tenable, and Bitsight nearly 37 million systems running PHP or related software.</p>
         <p class="step-desc">Exposure fell quickly in the first week. Wiz says organizations with an exposed vulnerable instance fell by about 47.9%, though it cannot split that between patching, retirement and restricted access, and notes that changes in scan coverage can also move the numbers. Qualys counted only 199,000 instances patched in the first 12 hours. The PHP project published no fix for 5.4 through 7.3, so those installs need a vendor backport or an upgrade.</p>
         <p class="step-desc">Several early claims did not hold. Sophos corrected a report of a successful Mirai-variant install to an attempt. Unit 42 retracted an October 23 update describing an attack on a European government agency, including stolen password hashes and an NTLM relay, because it could not tie the initial access to these CVEs. BankInfoSecurity notes that Sophos and Palo Alto Networks each reported working exploits and later retracted those claims.</p>
-        <p class="step-desc">The story is not finished. CVE-2026-115560 is a separate flaw that the October 21 releases do not fix. It affects applications that change <code>session.serialize_handler</code> to <code>php</code> at runtime with upload progress enabled, PHP calls exploitation unlikely in practice, and the fix is planned for a regular release. Datadog notes the counter-before-allocation pattern remains in PHP and expects more variants. PHP 8.4.27 and 8.5.12 also shipped a regression that can crash some SimpleXML applications, from an unrelated garbage collector fix.</p>
+        <p class="step-desc">The story is not finished. CVE-2026-115560 is a separate flaw in session upload progress that the October 21 releases did not fix. PHP's October 23 notice tied it to applications that switch <code>session.serialize_handler</code> to <code>php</code> at runtime and called that setup unlikely in practice. PHP fixed it in its November 19 security releases: 8.5.13, 8.4.28, 8.3.37 and 8.2.36. The advisory published with them rates it critical and says a runtime change is not required: the mismatch can also arise between applications, pools or processes with different serializer settings that share a session store. The fix turns upload progress off by default, but an explicit setting overrides that, and from code inspection PHP says unsupported releases back to 5.4 may also be affected. Datadog notes the counter-before-allocation pattern remains in PHP and expects more variants. PHP 8.4.27 and 8.5.12 also shipped a regression that can crash some SimpleXML applications, from an unrelated garbage collector fix.</p>
         <div class="step-code">
           <span class="hl">Exposure:</span> 1.3 million to 37 million, by method<br>
           <span class="hl">Patching:</span> organizations exposed down about 47.9% in a week, per Wiz<br>
           <span class="hl">Withdrawn:</span> Unit 42's European agency update; Sophos's Mirai report<br>
-          <span class="hl">Still open:</span> CVE-2026-115560, fix due in a regular release<br>
+          <span class="hl">Fixed November 19:</span> CVE-2026-115560, in 8.5.13, 8.4.28, 8.3.37 and 8.2.36<br>
           <span class="hl">Expected:</span> more variants, per Datadog
         </div>
         <div class="step-tags"><span class="stag">Exposure</span><span class="stag">Retractions</span><span class="stag">CVE-2026-115560</span></div>
@@ -766,11 +766,11 @@
       <h3>🛡 How to Defend Against This Chain</h3>
       <div class="def-items">
         <div class="def-item"><strong>Take management interfaces off the internet.</strong> Everything in the PAN-OS chain began at a management interface reachable from anywhere. Palo Alto's guidance is to remove internet access immediately and restrict the interface to trusted internal addresses or a <a class="glossary-link" href="../glossary.html#term-bastion-host">jump box</a>. Apply the same rule to every appliance you run, and alert when one becomes reachable.</div>
-        <div class="def-item"><strong>Find every PHP, then patch the one serving requests.</strong> Inventory AMIs, container images, <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> workloads, <a class="glossary-link" href="../glossary.html#term-serverless">serverless</a> functions, appliances and products that bundle PHP, and do not stop at old versions, as the NCSC warns. The fixed releases are 8.5.12, 8.4.27, 8.3.36 and 8.2.35, with source backports for 7.4, 8.0 and 8.1. The PHP project published no fix for 5.4 to 7.3, so those need a vendor backport or an upgrade, and PHP 8.2 itself reaches end of life on December 31, 2026. Compare the full package revision with your vendor's advisory, because backports do not always change the version. For appliances, follow the vendor's fixed build.</div>
+        <div class="def-item"><strong>Find every PHP, then patch the one serving requests.</strong> Inventory AMIs, container images, <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a> workloads, <a class="glossary-link" href="../glossary.html#term-serverless">serverless</a> functions, appliances and products that bundle PHP, and do not stop at old versions, as the NCSC warns. The releases that fixed the two CVEs are 8.5.12, 8.4.27, 8.3.36 and 8.2.35, with source backports for 7.4, 8.0 and 8.1, and the security releases of November 19 (8.5.13, 8.4.28, 8.3.37 and 8.2.36) add the fix for CVE-2026-115560. The PHP project published no fix for 5.4 to 7.3, so those need a vendor backport or an upgrade, and PHP 8.2 itself reaches end of life on December 31, 2026. Compare the full package revision with your vendor's advisory, because backports do not always change the version. For appliances, follow the vendor's fixed build.</div>
         <div class="def-item"><strong>Know who patches each cloud runtime.</strong> Check each service against the provider's bulletin instead of assuming that managed means patched. Turn on Managed Platform Updates and automatic base image updates where you rely on them, redeploy everything built from a custom image, and move off App Service for Windows built-in PHP and any runtime on 8.1 or earlier.</div>
         <div class="def-item"><strong>Restart workers, and capture memory first if you see signs of probing.</strong> A package update on disk leaves vulnerable code running until PHP-FPM, Apache, FrankenPHP or LiteSpeed restarts. Google's guidance is to capture worker memory before patching or rebooting a server showing active probing or anomalous <code>PHPSESSID</code> cookies, because a restart destroys that evidence. During mass scanning almost every exposed host sees probes, so in practice reserve this for anomalous cookies or signs of compromise, isolate that host first, as the FBI advises, and do not let it hold up patching the rest.</div>
         <div class="def-item"><strong>Treat a WAF as time, and do not call it a fix.</strong> AWS WAF, Azure WAF, <a class="glossary-link" href="../glossary.html#term-cloud-armor">Cloud Armor</a> and Cloudflare all shipped rules, and each vendor says they do not replace patching. Cloudflare says attackers mutated payloads to try to bypass its rules and that, for the related CVE-2026-115560, customers who changed <code>session.upload_progress.name</code> are not covered. Rules cover only traffic that passes through them, and rules in detection-only mode block nothing.</div>
-        <div class="def-item"><strong>Treat interim settings as partial.</strong> PHP's advisories say no configuration fully mitigates these flaws. Set <code>session.upload_progress.enabled=0</code> in <code>php.ini</code> or the pool configuration, not with <code>ini_set()</code> or <code>.user.ini</code>, and restart every worker. PHP advises leaving it off after patching if you do not use the feature, and it is also the interim answer to CVE-2026-115560. On PHP 8.5, also set <code>fatal_error_backtraces=0</code>. <code>memory_limit=-1</code> removes the predictable limit, but an allocation failure can still reach the bug, so pair it with a container or cgroup limit as an availability boundary, check that nothing restores a finite limit, and put one back after patching. Avoid <code>RLIMIT_AS</code> and <code>RLIMIT_DATA</code>, which can cause the failure you are trying to prevent.</div>
+        <div class="def-item"><strong>Treat interim settings as partial.</strong> PHP's advisories say no configuration fully mitigates these flaws. Set <code>session.upload_progress.enabled=0</code> in <code>php.ini</code> or the pool configuration, not with <code>ini_set()</code> or <code>.user.ini</code>, and restart every worker. PHP advises leaving it off after patching if you do not use the feature. The November 19 releases that fix CVE-2026-115560 turn it off by default, but PHP notes that an explicit setting in your configuration overrides that default. On PHP 8.5, also set <code>fatal_error_backtraces=0</code>. <code>memory_limit=-1</code> removes the predictable limit, but an allocation failure can still reach the bug, so pair it with a container or cgroup limit as an availability boundary, check that nothing restores a finite limit, and put one back after patching. Avoid <code>RLIMIT_AS</code> and <code>RLIMIT_DATA</code>, which can cause the failure you are trying to prevent.</div>
         <div class="def-item"><strong>Look back further than the patch date.</strong> Begin no later than October 17, Amazon's earliest published sighting. Sophos recommends reviewing from August 1. Look for <code>Set-Cookie: PHPSESSID</code> values over 256 bytes, bursts of 50 to 150 <code>OPTIONS *</code> keep-alive connections, rapid interleaved 500 and 200 POST responses, POST requests containing <code>PHP_SESSION_UPLOAD_PROGRESS</code>, and <code>sh</code>, <code>curl</code> or <code>wget</code> spawned by a PHP worker. No single signal confirms exploitation. Memory disclosure may leave no shell at all, so rotate secrets that exposed workers handled.</div>
         <div class="def-item"><strong>Treat a rooted firewall as a directory compromise.</strong> On PAN-OS, hunt for <code>/unauth/php/change_password.php</code> and <code>/usr/local/lib/.panops/</code>. If you find either, assume the attacker holds the LDAP service account, the device's private keys and its configuration. Rotate those, reissue certificates, and review the directory for new users and machine accounts rather than stopping at the firewall.</div>
         <div class="def-item"><strong>Fix the directory settings this operator went looking for.</strong> A <code>lockoutThreshold</code> of zero makes spraying free, a default <code>MachineAccountQuota</code> lets ordinary accounts add machines, and SAML configuration that skips certificate validation weakens assertion checking. Each one helps turn a foothold on a firewall into a path to the domain. On Linux hosts you run yourself, patch the kernel too: Fragnesia, public since May, is what took this chain from a low-privileged worker to root.</div>
@@ -783,6 +783,7 @@
         <a class="src-link" href="https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/" target="_blank" rel="noopener">PHP Foundation - Release and embargo account</a>
         <a class="src-link" href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w" target="_blank" rel="noopener">PHP - Advisory, RCE via OOM corruption</a>
         <a class="src-link" href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp" target="_blank" rel="noopener">PHP - Advisory, RCE via stale global state</a>
+        <a class="src-link" href="https://github.com/php/php-src/security/advisories/GHSA-658j-r8rw-q6mx" target="_blank" rel="noopener">PHP, advisory for CVE-2026-115560 (session serializer mismatch)</a>
         <a class="src-link" href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">PHP - Release announcement</a>
         <a class="src-link" href="https://scherzer.dev/Blog/20261022-php2shell-timeline" target="_blank" rel="noopener">Daniel Scherzer - PHP2Shell timeline</a>
         <a class="src-link" href="https://calif.io/php2shell" target="_blank" rel="noopener">Calif - Discovery write-up</a>
