@@ -178,12 +178,11 @@ def render_card(d: Deck) -> list[str]:
         f'        <a class="card-action" href="{base}/copy" {EXT}>Make your own copy</a>',
         f'        <a class="card-action" href="breaches/{d.slug}.html">Read the kill chain</a>',
         "    </div>",
-        '    <details class="deck-embed">',
-        '        <summary><span class="no-glossary">Preview the slides</span></summary>',
-        '        <div class="deck-frame">',
-        f'            <iframe src="{base}/embed" title="{_attr(d.title)} slide deck" loading="lazy" allowfullscreen></iframe>',
-        "        </div>",
-        "    </details>",
+        # The preview shows without a toggle; loading="lazy" holds each
+        # iframe back until its card nears the viewport.
+        '    <div class="deck-frame">',
+        f'        <iframe src="{base}/embed" title="{_attr(d.title)} slide deck" loading="lazy" allowfullscreen></iframe>',
+        "    </div>",
         "</div>",
     ]
 
