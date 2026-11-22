@@ -49,7 +49,7 @@ row: Polymarket's postmortem, October 30 | The attack, without naming the vendor
 row: Hudson Rock | The drainer, retrieved from cdn.debugbear.com
 row: A Polymarket build that afternoon | A commit removing the "debugbear rum script"
 row: DebugBear's first notice | RUM customers asked to remove the embed code
-row: DebugBear's follow-up | DNS records compromised through its domain registrar
+row: DebugBear's follow-up | Says its DNS records were compromised through its domain registrar
 DebugBear has not named the registrar or said how the records were changed. RUM stands for real user monitoring.
 notes:
 Polymarket's own postmortem, published on its status page on October 30, describes the attack and does not name the vendor. The page draws on the other records shown here.
@@ -132,7 +132,7 @@ CircleID, covering a separate registrar-level hijacking campaign against 12 cryp
 == What ATT&CK calls compromising domains
 layout: background
 source: MITRE ATT&CK T1584.001 | https://attack.mitre.org/techniques/T1584/001/
-ATT&CK describes domain registration hijacking as changing a domain name's registration without the original registrant's permission. Routes it lists include social engineering a registration help desk, gaps in the renewal process, and a compromised cloud service that manages domains.
+Domain registration hijacking, per ATT&CK, changes a domain's registration without the original registrant's permission. Routes include social engineering a registration help desk, renewal process gaps or a cloud service managing domains. The page does not say how DebugBear's records changed.
 notes:
 Background, from MITRE ATT&CK, in general terms.
 
@@ -180,17 +180,15 @@ Keep the caveats with that date. It is Helme's reading of a header sent by the s
 == What Subresource Integrity checks
 layout: background
 source: OWASP Third Party JavaScript Management Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Third_Party_Javascript_Management_Cheat_Sheet.html
-OWASP names a compromise of the vendor's JavaScript server as the single greatest risk of third-party tags. With Subresource Integrity, the script element carries integrity metadata for the vendor's file, so only reviewed code runs.
+OWASP warns there is usually no guarantee that code a third party hosts stays the same as what your developers tested. With Subresource Integrity, the script element carries integrity metadata for the vendor's file, so only reviewed code runs.
 notes:
 Background, from OWASP's Third Party JavaScript Management Cheat Sheet, in general terms.
 
-OWASP calls the single greatest risk with third-party tags a compromise of the third party's JavaScript server, and the injection of malicious JavaScript into the original tag. It also notes that third-party code runs with the exact same privileges granted to the user, similar to cross-site scripting.
-
-Its typical defenses include mirroring the script in-house, sub-resource integrity to enable interception at the browser level, and secure transmission of the code.
+OWASP notes there is usually no guarantee that the code a third party hosts will remain the same as what your developers and testers saw. It also notes that third-party code runs with the exact same privileges granted to the user, similar to cross-site scripting.
 
 With Subresource Integrity, the developer generates integrity metadata for the vendor's JavaScript and adds it to the script element as an integrity attribute, a value such as sha384 followed by the hash. OWASP says this ensures that only the code that has been reviewed is executed.
 
-Two practical points from OWASP: SRI needs CORS enabled on the vendor's host, and it is a good idea to monitor vendor JavaScript for changes regularly, because a vendor update can leave you with secure but non-working code. CORS, cross-origin resource sharing, is how a server tells browsers that other sites may read its responses.
+Two practical points from OWASP: SRI needs CORS enabled on the vendor's host, and a vendor update can leave you with secure but non-working code. CORS, cross-origin resource sharing, is how a server tells browsers that other sites may read its responses.
 
 == The drainer exited unless three Polymarket login keys were in localStorage
 layout: stage
@@ -222,8 +220,6 @@ Background, from OWASP's HTML5 Security Cheat Sheet, in general terms.
 Local storage, also called web storage, lets a site keep data in the browser. OWASP notes that every object is shared within an origin and protected with the Same Origin Policy, and that there is no way to limit an object to a path, as a cookie's path attribute can. An origin is the combination of scheme, host and port a page comes from.
 
 OWASP says the data is always accessible by JavaScript. It warns that a single cross-site scripting flaw can steal all the data in these objects, or load malicious data into them, so their contents should not be considered trusted.
-
-It contrasts sessionStorage, which is available only to its window or tab until that closes, and cookies, whose httpOnly flag keeps them away from JavaScript.
 
 == The drainer found Polymarket's order client and acted through the live session
 layout: stage
@@ -274,7 +270,7 @@ Fetch directives name trusted locations. script-src sets where scripts can execu
 
 Reporting directives deliver violations to a chosen location and do nothing on their own. report-to is the current directive; report-uri is deprecated, and OWASP suggests declaring both for older browsers. A Content-Security-Policy-Report-Only header sends reports without blocking, often as a step before enforcing.
 
-OWASP adds that a CSP can enforce Subresource Integrity, which can help prevent malicious code from loading if a third-party host of JavaScript files, such as analytics scripts, is compromised. It describes the original allowlist approach and recommends a strict policy, built on nonces or hashes, as less likely to be bypassed.
+OWASP adds that a CSP can enforce Subresource Integrity, which can help prevent malicious code from loading if a third-party host of JavaScript files, such as analytics scripts, is compromised.
 
 == Positions were sold or transferred and cash swept through Polymarket's relayer
 layout: stage
@@ -332,7 +328,7 @@ Earlier, between 17:45 and 17:56, the position tokens had gone to a fourth walle
 layout: table
 row: Incident | What happened | Its tie to this incident
 row: Polyfill.io, 2024 | A widely embedded script's domain was sold; its new owner served malicious code | The shape matches, per the page; DebugBear has described no change of ownership
-row: Polymarket, June 25, 2026 | A separate vendor-script injection, about $3M, as Decrypt reported | cside: the shared pattern does not establish the same attacker or method
+row: Polymarket, disclosed June 25, 2026 | A separate vendor-script injection, about $3M, as Decrypt reported | cside: the shared pattern does not establish the same attacker or method
 row: 12 cryptocurrency sites | A separate registrar-level hijacking campaign, per CircleID | CircleID: no common attacker, registrar or technical cause established
 Polyfill.io has its own csoh.org kill chain, linked at the end of this deck.
 notes:
@@ -349,7 +345,7 @@ Neither source establishes a common attacker with this incident, and this deck d
 == Seven defenses against seven stages
 layout: matrix
 columns: 01 | 02 | 03 | 04 | 05 | 06 | 07
-row: Pin third-party scripts to a hash | 02
+row: Pin third-party scripts to a hash | 02 | 07
 row: Keep scripts off session pages | 03 | 04
 row: CSP as if any allowed host can turn hostile | 02 | 05
 row: Fresh confirmation before code moves money | 04
@@ -360,9 +356,7 @@ No defense on the page is tied to stage 01, DebugBear's domain.
 notes:
 This matrix sets the page's seven defenses against its seven stages. A cell is marked only where the defense's own words cite that stage's facts.
 
-Pinning to a hash cites the genuine file and an address identical before, during and after the attack: stage 02. Keeping scripts off session pages cites the login keys read from localStorage, stage 03, and the order client found in memory, stage 04. The CSP defense cites two files at the same URL, stage 02, and the missing reporting directive, stage 05. Fresh confirmation cites the drainer asking Polymarket's own signer: stage 04. Stopping the money path cites drains sent by the relayer, stage 06, and the pause and the 19:11 drain, stage 07. Resetting sessions cites the readable credential map, stage 03, and the session reset, stage 07. Keeping the bytes cites the two file sizes and the header switch: stage 02.
-
-The hash defense also mentions the version pinning among Polymarket's stage 07 fixes, to say a version alone would not have stopped this swap; that cell stays empty.
+Pinning to a hash cites the genuine file and an address identical before, during and after the attack, stage 02, and the version pinning among Polymarket's fixes, which it says would not have stopped this swap, stage 07. Keeping scripts off session pages cites the login keys read from localStorage, stage 03, and the order client found in memory, stage 04. The CSP defense cites two files at the same URL, stage 02, and the missing reporting directive, stage 05. Fresh confirmation cites the drainer asking Polymarket's own signer: stage 04. Stopping the money path cites drains sent by the relayer, stage 06, and the pause and the 19:11 drain, stage 07. Resetting sessions cites the readable credential map, stage 03, and the session reset, stage 07. Keeping the bytes cites the two file sizes and the header switch: stage 02.
 
 Column 01 is empty: no defense cites DebugBear's registrar, its DNS records or the 16:54 failure. That gap is a discussion question at the end.
 
@@ -406,8 +400,8 @@ Second, require fresh, explicit confirmation before page code can move money. Th
 
 == Stop the money path, then reset and revoke
 layout: compare
-col: Stop the path that moves money | Polymarket paused trading and the relayer to stop further drains | Per Bitquery, every drain went through the relayer and stopped when it did | One more account was drained at 19:11 UTC, October 29, after the relayer resumed
-col: Reset and revoke after removal | Polymarket cleared every cache and reset all active login sessions | The drainer could read the credential map; Hudson Rock found no code sending it | Search Engine Journal: revoke exposed API credentials; confirm old sessions are rejected
+col: Stop the path that moves money | Polymarket's postmortem: trading and relayer paused to stop further drains | Per Bitquery, every drain went through the relayer and stopped when it did | One more account was drained at 19:11 UTC, October 29, after the relayer resumed
+col: Reset and revoke after removal | Polymarket's postmortem: every cache cleared, all active login sessions reset | The drainer could read the credential map; Hudson Rock found no code sending it | Search Engine Journal: revoke exposed API credentials; confirm old sessions are rejected
 DeFi Prime: the removal could not reach browsers that already had the page loaded.
 notes:
 Two defenses are about the response.
@@ -462,9 +456,9 @@ Ask each person to pick one third-party script in their own environment and say 
 
 == Only a hash of the expected bytes tells the files apart
 layout: answer
-A URL version does not help; Report URI notes dynamic third-party scripts are hard to pin.
-- Use Subresource Integrity where assets can be pinned, per Hudson Rock and cside.
-- Add 'report-sha256' so a changed file can alert, per Report URI.
+A URL version does not help when the host serves different bytes. Report URI notes dynamic third-party scripts are hard to pin.
+- Hudson Rock, cside: Subresource Integrity where assets can be pinned.
+- Report URI: 'report-sha256' can flag a changed file.
 notes:
 The page's answer: only a hash of the expected bytes tells the two files apart.
 
