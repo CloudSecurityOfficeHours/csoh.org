@@ -1,0 +1,522 @@
+title: LiteLLM 1.107.0 Release Hijack
+page: breaches/litellm-1-107-release-hijack.html
+as-of: 2026-11-21
+promise: Per LiteLLM's attack-chain record, an admin key committed in May and never revoked led to an owner's GitHub token, a lookalike repository in the release workflow, and signed malware.
+
+== At a glance
+layout: stats
+stat: 136 | days between the key's exposure and first malicious use | LiteLLM's records do not say when the attacker found it
+stat: 1h 44m | live on PyPI, approximately | About 2h 33m on Docker Hub
+stat: 49,000 | downloads of the malicious release, approximately | Per Wiz via The Register (disclosure: the site's author works at Wiz)
+The threat actor is unidentified; LiteLLM's record does not discuss identity or motive.
+notes:
+Start with the three figures the page leads with, and with who stands behind each one.
+
+The first is 136 days. An administrative key was committed to a public repository on May 27, and its first malicious use came on October 10. LiteLLM's records do not say when the attacker found the key.
+
+The second is how long the malicious release stayed up: about an hour and 44 minutes on PyPI, and about two and a half hours, 2h 33m, for the Docker Hub tags.
+
+The third is downloads. Wiz, as reported by The Register, put downloads of the malicious release at about 49,000. Name the source when you use the number.
+
+Say the disclosure aloud as the page gives it: research published by Wiz is one of the sources cited on the page, and the site's author works at Wiz. Every source is linked so you can read it directly.
+
+The threat actor is unidentified, and LiteLLM's record does not discuss identity or motive. This is LiteLLM's second supply chain compromise of 2026, and a separate incident from the March TeamPCP attack.
+
+== What happened, and when
+layout: timeline
+event: May 27, 2026 | An admin key lands in a public commit, removed about three hours later
+event: October 10 | Key yields an owner's GitHub token; CI posts two maintainers' tokens
+event: October 21 | The release workflow builds from a lookalike; 1.107.0 is published
+event: October 22 | The original commit leaves public history
+event: October 23 | LiteLLM replaces the signing key
+event: October 30 | LiteLLM publishes what it is changing
+LiteLLM's first post suspected tokens scraped from logs of an internal deployment. Its later attack-chain record corrects that, and the page follows the correction. Spacing is not to scale.
+notes:
+Every date on this timeline is one the page gives.
+
+On May 27, 2026, a file holding an administrative key to an internal service, the LiteLLM Agent Platform, was committed to a public repository. The team removed the file about three hours later and noted the key needed revoking. Nobody did.
+
+On October 10 the attacker used the key to read the platform's agent configuration, which held the GitHub CLI OAuth token of one of the organization's two owners. Within the hour, CI workflows posted the tokens of two more maintainers to a webhook.
+
+On October 21 the attacker changed the release workflow to build from a lookalike repository and published litellm==1.107.0 to PyPI, GHCR and Docker Hub with a credential stealer inside. The original commit stayed in public history until October 22. LiteLLM replaced its signing key on October 23, and on October 30 published what it is changing.
+
+Keep the correction in mind. LiteLLM's first post suspected tokens scraped from logs of an internal deployment. Its later attack-chain record corrects that, and the page, like this deck, follows the correction.
+
+The markers are evenly spaced, and the gaps between them are not to scale.
+
+== Who reported what
+layout: table
+row: Source | What the page takes from it
+row: LiteLLM, attack-chain record | The attack chain; the page marks it canonical
+row: LiteLLM, initial post | Suspected tokens scraped from logs, since corrected
+row: LiteLLM, October 30 post | What it is changing, and its status table
+row: StepSecurity | Payload analysis; when litellm.dev was registered
+row: Wiz, via The Register | Downloads at about 49,000
+row: Wiz, via The Hacker News | Stolen role credentials validated from outside
+Disclosure: research published by Wiz is one of the page's sources, and the site's author works at Wiz.
+notes:
+The page draws on several sources and says which one stands behind each claim. This table sorts them.
+
+The page marks LiteLLM's attack-chain record as its canonical source. LiteLLM's first post suspected tokens scraped from logs of an internal deployment; the record corrects that, and the page follows the correction. On October 30 LiteLLM published what it is changing, with its own status table. GitHub issue 47826 holds the original report.
+
+StepSecurity analyzed the payload, counting 16 collection modules, and says the second stage was never armed while the dead drop existed. It also reports that litellm.dev was registered on October 13, and gives the CloudTrail advice in stage 08.
+
+Two findings come from Wiz through news outlets. The Register reports Wiz's figure of about 49,000 downloads. The Hacker News reports, from Wiz's observations, that stolen AWS instance role credentials were validated from external addresses on October 21.
+
+The page discloses that research published by Wiz is one of its sources, and that the site's author works at Wiz. Every source is linked so you can read it directly.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Credential Exposure | Key in a commit | T1552.001
+step: 02 | Initial Access | Key still worked | T1078
+step: 03 | Credential Access | Owner token read | T1528
+step: 04 | Credential Access | Tokens via CI | T1677
+step: 05 | Execution | Workflow change | T1677
+step: 06 | Supply Chain | Signed release | T1195.002
+step: 07 | Execution | Startup stealer | T1546.018
+step: 08 | Impact | Cloud roles used | T1078.004
+Arrows show the page's stage order. Stages 04 and 05 both map to T1677, Poisoned Pipeline Execution.
+notes:
+Here is the whole chain on one slide: the page's eight stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is the admin key committed to a public repository in May. Stage 02 is the October 10 use of that key against the Agent Platform API. Stage 03 is the owner's GitHub token read from an agent configuration. Stage 04 is CI workflows posting two more maintainers' tokens to a webhook. Stage 05 is the workflow change pushed past branch protection with the owner's token, and the release staged from a lookalike repository. Stage 06 is the release itself, published and signed. Stage 07 is the stealer that ran on every Python start. Stage 08, Impact, is stolen AWS instance role credentials tested from outside.
+
+The page maps stages 04 and 05 to the same technique, T1677, Poisoned Pipeline Execution.
+
+Tokens carry the story from stage to stage. The owner's token from stage 03 deleted the stage 04 runs and overrode branch protection in stage 05. The second maintainer's token from stage 04 approved the production gate in stage 05, and the third maintainer's token deleted the release run records in stage 06.
+
+== An admin key removed in hours, never revoked
+layout: stage
+stage: 01
+phase: Credential Exposure
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Committed | 18:53:14 UTC May 27, opencode.json in LiteLLM-Labs/lite-harness
+fact: Key | admin access to an internal LiteLLM Agent Platform deployment
+fact: Removed | about three hours later; in public history until October 22
+fact: Revoked | not before the attack, which LiteLLM puts down to human error
+Removing a secret from a repository's current state leaves it valid and, in this case, still readable.
+notes:
+At 18:53:14 UTC on May 27, 2026, an opencode.json file was committed to the public LiteLLM-Labs/lite-harness repository. It held an administrative key to an internal deployment of the LiteLLM Agent Platform, an experimental service for self-hosted agents that file pull requests. The page maps this stage to T1552.001, Credentials in Files.
+
+The team removed the file about three hours later and noted the keys needed revoking. Nobody followed through, which LiteLLM puts down to human error, and the original commit stayed in public history until October 22.
+
+That is the lesson of this stage. Removing a secret from a repository's current state leaves it valid and, in this case, still readable.
+
+The page's first defense starts here: revoke first, clean the repository second.
+
+== More than four months later, the key still opened the API
+layout: stage
+stage: 02
+phase: Initial Access
+technique: T1078 | Valid Accounts
+fact: Window | 21:13 to 21:28 UTC October 10
+fact: Source | 69.48.229.143
+fact: Credential | the admin key from the May commit
+fact: Gap | 136 days after the commit
+LiteLLM's records do not say when the attacker found the key.
+notes:
+Between 21:13 and 21:28 UTC on October 10, the attacker made authenticated API requests with the admin key, from 69.48.229.143. That is 136 days after the commit. The page maps this stage to T1078, Valid Accounts.
+
+The key had not been revoked, so more than four months after the team noted it needed revoking, it still opened the Agent Platform API.
+
+LiteLLM's records do not say when the attacker found the key. Leave that gap open when you tell the story, as the page does.
+
+No defense on the page cites a fact from this stage, though the revoke defense says the entire chain rests on this key. That comes back in the discussion at the end.
+
+== One API call returned an owner's GitHub token
+layout: stage
+stage: 03
+phase: Credential Access
+technique: T1528 | Steal Application Access Token
+fact: Request | GET /api/v1/managed_agents/agents?limit=100 at 21:27:10
+fact: Returned | every managed agent's configuration
+fact: Token | GitHub CLI OAuth token of one of two organization owners
+fact: Why it mattered | unscoped, and no 2FA reauthentication prompt, per LiteLLM
+An experimental internal tool had become the most valuable system LiteLLM ran.
+notes:
+At 21:27:10 a single request, GET /api/v1/managed_agents/agents?limit=100, returned the configuration of every managed agent. The page maps this stage to T1528, Steal Application Access Token.
+
+The platform had been given a GitHub token so it could open pull requests. That token was the GitHub CLI OAuth token of one of the organization's two owners, in place of a scoped service credential. CLI means command-line interface, and OAuth is an authorization framework that issues access tokens.
+
+LiteLLM notes that such tokens are unscoped and are not subject to GitHub's super-user 2FA reauthentication. 2FA is two-factor authentication. With the token, the attacker held owner capabilities over the whole organization.
+
+The page's verdict: an experimental internal tool had become the most valuable system LiteLLM ran. The next slide explains application access tokens in general.
+
+== What ATT&CK calls stealing an application access token
+layout: background
+source: MITRE ATT&CK T1528 | https://attack.mitre.org/techniques/T1528/
+Application access tokens make authorized API requests for a user or service. In cloud and containerized environments, an adversary who steals one may access data and act with that account's permissions.
+
+OAuth is one commonly implemented framework that issues them.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes application access tokens as a way to make authorized API requests on behalf of a user or service. They are commonly used to reach resources in cloud and container-based applications and in software-as-a-service.
+
+In cloud and containerized environments, an adversary who steals an account's API token may be able to access data and perform actions with that account's permissions, which ATT&CK says can lead to privilege escalation and further compromise. One example it gives is CI/CD pipelines, which often use API tokens to authenticate to other services for testing and deployment. If a pipeline is compromised, an adversary may be able to steal those tokens and use their privileges.
+
+OAuth is one commonly implemented framework that issues tokens. ATT&CK notes that application access tokens may function within a limited lifetime, which limits how long a stolen one is useful, but that in some cases stolen refresh tokens can let an adversary obtain new access tokens without prompting the user.
+
+== October 10: CI posted two maintainers' tokens
+layout: stage
+stage: 04
+phase: Credential Access
+technique: T1677 | Poisoned Pipeline Execution
+fact: 22:11:45 UTC | six secrets posted, including a second maintainer's token
+fact: 22:12:09 UTC | a third maintainer's token posted, from BerriAI/litellm-auto
+fact: 22:14 UTC | both runs deleted with the owner's token
+fact: October 12 | private repositories' secrets posted, minimally sensitive per LiteLLM
+Within the hour, the attacker used CI to collect more identities.
+notes:
+Within the hour, the attacker used CI to collect more identities. CI is continuous integration: workflows that run automatically on a repository. The page maps this stage to T1677, Poisoned Pipeline Execution.
+
+At 22:11:45 UTC on October 10, a workflow on a branch of BerriAI/litellm posted six secrets to a webhook.site endpoint. One was GH_TOKEN, a second maintainer's GitHub CLI token. At 22:12:09 a workflow in BerriAI/litellm-auto posted RELEASE_PLEASE_TOKEN, a third maintainer's token. At 22:14 UTC both runs were deleted with the owner's token, within about three minutes.
+
+Between 12:08 and 12:30 UTC on October 12, workflows on a variety of private repositories posted all their secrets to the same endpoint. LiteLLM says those were minimally sensitive and played no part in the path to the poisoned artifacts.
+
+StepSecurity reports that the domain litellm.dev was registered on October 13.
+
+Both maintainer tokens come back. The second maintainer's token approves the production gate in stage 05, and the third deletes the release run records in stage 06.
+
+== What ATT&CK calls poisoned pipeline execution
+layout: background
+source: MITRE ATT&CK T1677 | https://attack.mitre.org/techniques/T1677/
+Poisoned pipeline execution injects malicious code into a CI/CD build process. In the direct form, the adversary edits the CI configuration file, and may add a command that sends the build's credentials to a remote server.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+CI/CD pipelines build, test and deploy code automatically. ATT&CK describes poisoned pipeline execution as manipulating those processes by injecting malicious code into the build process.
+
+It names several mechanisms. In direct pipeline execution, the adversary modifies the CI configuration file itself, and may include a command to exfiltrate credentials used in the build to a remote server, or to export them as a workflow artifact. In indirect pipeline execution, the code goes into files the configuration references, such as makefiles, scripts, unit tests and linters. In public pipeline execution, an adversary without access to the repository opens a malicious pull request from a fork that triggers part of the pipeline.
+
+ATT&CK says that by poisoning a pipeline an adversary may be able to gain credentials, move to other hosts, or ship malicious components further down the pipeline, which it ties to supply chain compromise.
+
+== October 21: branch protection was overridden
+layout: stage
+stage: 05
+phase: Execution
+technique: T1677 | Poisoned Pipeline Execution
+fact: 10:08:29 UTC | push to BerriAI/project-releaser rejected by branch protection
+fact: 10:08:34 UTC | the owner's token pushes the same commit
+fact: The change | a source_owner input where the workflow had hardcoded BerriAI
+fact: 10:46:39 UTC | staging dispatched from the lookalike Berri-AI/litellm
+The second maintainer's token approved production; LiteLLM says the rule had been relaxed earlier that week so any two engineers could release.
+notes:
+On October 21 at 10:08:29 UTC, commit 9cf97e9 was pushed to main of BerriAI/project-releaser with the second maintainer's token, and branch protection rejected it. Five seconds later, at 10:08:34, the owner's token pushed the same commit, overriding the protection. The page maps this stage to T1677, Poisoned Pipeline Execution.
+
+The change added a source_owner input where the workflow had hardcoded BerriAI. At 10:46:39 staging was dispatched from Berri-AI/litellm, a lookalike organization one hyphen away from the real one.
+
+The production gate was approved at 11:11:18 with the second maintainer's token. LiteLLM says that approval rule had been relaxed earlier that week, allowing any two engineers to trigger and approve a release so that bugfix backports could go out.
+
+Three of the page's defenses cite facts from this stage, as the matrix later shows.
+
+== Signed and published by the real pipeline
+layout: stage
+stage: 06
+phase: Supply Chain
+technique: T1195.002 | Compromise Software Supply Chain
+technique: T1553.002 | Code Signing
+technique: T1070 | Indicator Removal
+fact: PyPI | seven wheels, live 11:39:51 to 13:23 UTC
+fact: Images | four tags at 11:46:56; Docker Hub to 14:20, GHCR to 13:51 UTC
+fact: Signature | valid under the previous key, replaced October 23
+fact: Cleanup | run records deleted at 11:53:49 UTC
+Verification alone passes on the malicious images, so their digests have to be checked against the affected list.
+notes:
+Seven litellm==1.107.0 wheels reached PyPI between 11:39:51 and 11:40:13 UTC, and images followed at 11:46:56 on Docker Hub and GHCR, the GitHub Container Registry, under v1.107.0, latest, main-latest and main-stable. The page maps this stage to T1195.002, Compromise Software Supply Chain, and tags T1553.002 for code signing and T1070 for indicator removal.
+
+The official v1.107.0 source tag did not contain the malicious files, and the private enterprise registry was not affected.
+
+The images carry a valid signature from the previous signing key, and the release went out under LiteLLM's own Trusted Publisher identity, because the real pipeline built, signed and published it. LiteLLM believes the private half of that key was exposed when the attacker exfiltrated additional tokens. It replaced the key on October 23, and the first releases signed with the new key went out on October 24. It now says to trust a signature from the previous key only on an image published before v1.107.0 on October 21.
+
+At 11:53:49 the third maintainer's token deleted the production and staging run records, removing the workflow logs.
+
+== What ATT&CK calls code signing
+layout: background
+source: MITRE ATT&CK T1553.002 | https://attack.mitre.org/techniques/T1553/002/
+Code signing gives a binary a level of authenticity from its developer and a guarantee it was not tampered with. Adversaries may create, acquire or steal signing materials to sign malware, which results in a valid signature.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Subvert Trust Controls: Code Signing. Code signing provides a level of authenticity on a binary from the developer, and a guarantee that the binary has not been tampered with.
+
+Adversaries may create, acquire or steal code signing materials to sign their malware or tools. ATT&CK sets this apart from an invalid code signature, because this activity results in a valid signature.
+
+ATT&CK also notes that code signing certificates may be used to bypass security policies that require signed code to execute on a system.
+
+== cook.pth ran a stealer on every Python start
+layout: stage
+stage: 07
+phase: Execution
+technique: T1546.018 | Event Triggered Execution: Python Startup Hooks
+technique: T1041 | Exfiltration Over C2 Channel
+fact: Trigger | cook.pth, on every Python interpreter start, including pip
+fact: Collection | 16 modules per StepSecurity, including cloud credentials
+fact: Exfiltration | HTTP POST to www.litellm.dev/healthcheck, RSA-wrapped
+fact: Loader | domain.txt dead drop, polled hourly, empty at release
+Per StepSecurity, the second stage was never armed while the dead drop existed. Infected hosts keep polling; whoever re-registers its account could reach them.
+notes:
+Each wheel installs cook.pth, cook.py and sitecustomize.py. The .pth file runs on every interpreter start, whether or not anything imports litellm, and that includes pip itself, which is why LiteLLM warns against reinstalling before removing the files. The page maps this stage to T1546.018, Python Startup Hooks, and calls it the same class of startup trick as the March attack.
+
+StepSecurity counts 16 collection modules covering browser data, SSH and cloud credentials, Kubernetes and CI secrets, instance metadata, the environment of readable processes, configs for over 20 AI coding tools, and on proxy hosts the LiteLLM database with its stored provider keys. Data left by plain HTTP POST to www.litellm.dev, wrapped in AES-256 and RSA-4096. The page tags T1041, Exfiltration Over C2 Channel; C2 means command and control.
+
+A daemon polled a GitHub-hosted domain.txt every hour for code to run; that file is the dead drop. It was empty at release, so StepSecurity says the second stage was never armed while the dead drop existed. Infected hosts keep polling the same URL, though, and anyone who re-registers the account could reach them. That is why the daemon has to be killed.
+
+== What ATT&CK calls Python startup hooks
+layout: background
+source: MITRE ATT&CK T1546.018 | https://attack.mitre.org/techniques/T1546/018/
+Python processes path configuration (.pth) files and sitecustomize.py when the interpreter starts. In a .pth file in site-packages, lines beginning with import run on every Python invocation.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes adversaries using Python's startup mechanisms for persistence: path configuration files, which end in .pth, and the sitecustomize.py and usercustomize.py modules. These are processed automatically when the Python interpreter initializes, so code in them can run whenever Python is invoked.
+
+Path configuration files exist to extend Python's module search paths. If a .pth file sits in Python's site-packages or dist-packages directory, any line in it that begins with import is executed automatically when Python is invoked. If sitecustomize.py or usercustomize.py is on the Python path, it is imported during interpreter startup and its code runs.
+
+ATT&CK notes adversaries may abuse these mechanisms to persist on systems where Python is widely used, such as for automation or scripting in production environments.
+
+== Stolen role credentials tested from outside, per Wiz via The Hacker News
+layout: stage
+stage: 08
+phase: Impact
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: When | 16:20 to 17:01 UTC October 21, hours after the release
+fact: What | AWS instance role credentials validated from external addresses
+fact: CloudTrail signal | GetCallerIdentity around install time, then use of the role from outside, per StepSecurity
+LiteLLM now assumes every token, key and authenticator was taken.
+notes:
+Between 16:20 and 17:01 UTC on October 21, stolen AWS instance role credentials were validated from external addresses, as reported by The Hacker News from Wiz's observations. The page maps this stage to T1078.004, Cloud Accounts.
+
+StepSecurity says to look in CloudTrail, the AWS audit log, for GetCallerIdentity calls from the instance or task role around install time, then check whether those credentials were used from outside your infrastructure. The next slide explains GetCallerIdentity in general.
+
+LiteLLM now assumes every token, key and authenticator was taken. It is revoking tokens across internal systems and vendor platforms, cut its GitHub organization down to one temporarily promoted account, and removed GitHub permissions from the release workflow. The page's host defense says to rotate everything reachable, including the instance role.
+
+== What GetCallerIdentity answers
+layout: background
+source: AWS STS API Reference, GetCallerIdentity | https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html
+credit: Also from Logging IAM and AWS STS API calls with AWS CloudTrail (docs.aws.amazon.com)
+GetCallerIdentity returns the account and identity behind the credentials that call it. It needs no permissions, and an explicit deny does not stop it. CloudTrail records AWS STS calls, including the IP address each came from.
+notes:
+Background, from AWS documentation, in general terms.
+
+GetCallerIdentity is an operation of AWS STS, the Security Token Service. It returns details about the IAM user or role whose credentials are used to call it: the account ID, the ARN, which is the Amazon Resource Name, and a unique user ID.
+
+AWS notes that no permissions are required to call it. Even if an administrator attaches a policy that explicitly denies sts:GetCallerIdentity, the call still works, because the same information is returned when access is denied.
+
+IAM and AWS STS are integrated with AWS CloudTrail, which captures all API calls to them as events. From a CloudTrail event you can see the IP address the request came from, who made it and when.
+
+Also from Logging IAM and AWS STS API calls with AWS CloudTrail: https://docs.aws.amazon.com/IAM/latest/UserGuide/cloudtrail-integration.html
+
+== What LiteLLM says it is changing
+layout: table
+row: Area | Where it stands, per LiteLLM
+row: GitHub organization | Cut down to one temporarily promoted account
+row: Release workflow | GitHub permissions removed
+row: Release approval | Again only one account, tied to one device in its office
+row: Owner work | Dedicated owner accounts; no tokens, OAuth apps, API or gh CLI
+row: Audit logs | Organization audit logs stream to Splunk with alerting
+row: Ticketed revocation | Planned for November 30
+Approval, owner work and audit logs are from LiteLLM's October 30 status table.
+notes:
+After the attack, LiteLLM says it is revoking tokens across internal systems and vendor platforms. It cut its GitHub organization down to one temporarily promoted account, and removed GitHub permissions from the release workflow.
+
+On October 30 it published what it is changing. By its own status table, release approval is again held only by a single account tied to one device in its office. Owner work has moved to dedicated owner accounts that may not use tokens, OAuth apps, the API or the gh CLI, which is GitHub's command-line tool. Organization audit logs stream to Splunk with alerting.
+
+Ticketed revocation is planned for November 30. Under it, secret-scanning alerts open tickets that close only when revocation is confirmed.
+
+These are LiteLLM's own statements about its changes, and the page reports them that way.
+
+== What March changed, and how October went around it
+layout: compare
+col: After March | Releases moved to a private repository | Trusted Publishers adopted | Docker tags made immutable | Images signed
+col: In October | The real pipeline built, signed and published the release | It went out under LiteLLM's own Trusted Publisher identity | Verification alone passes on the malicious images
+The October attack went around those controls with something simpler. The page says the whole chain rests on a key that was removed from view and left valid.
+notes:
+The page draws one pattern from this incident.
+
+After the March TeamPCP attack, LiteLLM moved releases to a private repository, adopted Trusted Publishers, made Docker tags immutable and began signing images. Trusted Publishers is PyPI's way of letting a named CI workflow publish with short-lived credentials in place of a stored token.
+
+The October attack went around those controls with something simpler. The release went out under LiteLLM's own Trusted Publisher identity, and the images carry a valid signature, because the real pipeline built, signed and published it. Verification alone passes on the malicious images, so their digests have to be checked against the affected list.
+
+In the page's words, this entire chain rests on a key that was removed from view and left valid.
+
+== Six defenses against eight stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
+row: Revoke first, clean the repository second | 01
+row: Keep personal OAuth tokens out of services | 03
+row: Limit who can override branch protection | 05
+row: Do not relax release gates in a hurry | 05
+row: Pin release inputs, verify more than signatures | 05 | 06
+row: Assume the host is lost if the package ran | 07 | 08
+No defense on the page cites a fact from stage 02 or 04.
+notes:
+This matrix sets the page's six defenses against the eight stages. The defenses name no stage numbers, so a cell is marked only where a defense's own words cite that stage's facts.
+
+Revoking first cites the key that was removed from view, noted down and forgotten: stage 01. Keeping personal OAuth tokens out of services cites the experimental tool that held an owner's GitHub CLI token: stage 03. Limiting branch protection overrides cites the rejected push accepted five seconds later, and the release gate defense cites the approval rule loosened that same week: both stage 05. Pinning release inputs cites the owner token that rewrote a hardcoded repository name, stage 05, and the signed images from a real pipeline fed by the wrong source, stage 06. Assuming the host is lost names the payload files and pip, stage 07, and says to rotate the instance role, the credential tested from outside in stage 08.
+
+One cell stays empty on purpose. The revoke defense says the entire chain rests on the key, but its words cite stage 01's facts, not the key's use on October 10.
+
+No defense cites a fact from stage 02 or 04. That gap is a discussion question at the end.
+
+== Revoke first; keep personal tokens out of services
+layout: compare
+col: Revoke first (stage 01) | Treat a secret in a public commit as burned | Revoke it before anything else | Put a named owner and a deadline on the revocation
+col: Scoped credentials (stage 03) | Give each service a scoped credential of its own | Such as a GitHub App installation token | Treat a personal token in a service config as an incident
+The page says this entire chain rests on a key that was removed from view and left valid.
+notes:
+Two defenses answer the start of the chain.
+
+First, revoke first and clean the repository second. The moment a secret lands in a public commit, treat it as burned and revoke it before anything else. Put a named owner and a deadline on the revocation, because this one was noted down and forgotten.
+
+Second, keep personal OAuth tokens out of services. An experimental tool held the GitHub CLI token of an organization owner. Give each service a scoped credential of its own, such as a GitHub App installation token, and treat any personal token found in a service config as an incident to fix.
+
+Keep the page's framing with these two: this entire chain rests on a key that was removed from view and left valid.
+
+== Limit overrides; do not relax release gates in a hurry
+layout: compare
+col: Overrides (stage 05) | Keep owner accounts few, with phishing-resistant sign-in | Alert on every override | LiteLLM notes the audit log recorded each one; that helps only if watched
+col: Release gates (stage 05) | Give temporary changes an expiry and a review | Two stolen maintainer tokens then satisfy a two-person rule | Prefer an approval that requires a hardware-backed human action
+A rejected push became an accepted one in five seconds because an owner can override protection.
+notes:
+Two defenses answer stage 05.
+
+First, limit who can override branch protection. A rejected push became an accepted one in five seconds because an owner can override protection. Keep owner accounts few, require phishing-resistant sign-in, and alert on every override. LiteLLM notes the audit log recorded each one, which helps only if someone is watching it.
+
+Second, do not relax release gates in a hurry. The approval rule was loosened that same week so any two engineers could release. Temporary changes to a release gate need an expiry and a review, since two stolen maintainer tokens then satisfy a two-person rule. The page prefers an approval that requires a hardware-backed human action.
+
+== Pin release inputs; assume the host is lost if the package ran
+layout: compare
+col: Pin and verify (stages 05, 06) | Alert on any change to a release workflow | Compare published artifacts with the source tag | Consumers should pin by digest and hold new versions for a soak period
+col: If it ran (stages 07, 08) | Remove the payload files before running any Python, including pip | Kill the process holding /tmp/remote_code_loader.lock | Rebuild clean; rotate the instance role, provider keys, master keys, DATABASE_URL
+A missing marker file proves nothing, the page warns.
+notes:
+Two more defenses, one for the release and one for anyone who installed it.
+
+Pin release inputs, and verify more than signatures. The signed images came from a real pipeline fed by the wrong source, after an owner token rewrote a repository name that had been hardcoded. Alert on any change to a release workflow, and compare published artifacts with the source tag. Consumers should pin by digest and hold new versions for a soak period rather than following latest.
+
+Assume the host is lost if the package ran. Remove the payload files before running any Python, including pip, and kill the process holding /tmp/remote_code_loader.lock. Rebuild from a clean version and rotate everything reachable: the instance role, provider keys in the proxy database, master keys and DATABASE_URL.
+
+The page ends that defense with a warning: a missing marker file proves nothing.
+
+== Markers and checks the page gives
+layout: table
+row: Where | What the page names
+row: Python environment | cook.pth, cook.py and sitecustomize.py
+row: Processes | the process holding /tmp/remote_code_loader.lock
+row: Network | POST to www.litellm.dev/healthcheck; hourly domain.txt poll
+row: CloudTrail | GetCallerIdentity around install time, then use from outside
+row: Images | digests checked against the affected list
+row: Signatures | previous key trusted only on images before v1.107.0, October 21
+The CloudTrail check is StepSecurity's. A missing marker file proves nothing, the page warns.
+notes:
+These are the traces and checks the page names, gathered in one place.
+
+On a host, each wheel installs cook.pth, cook.py and sitecustomize.py, and the page says to kill the process holding /tmp/remote_code_loader.lock. Stolen data left by HTTP POST to www.litellm.dev/healthcheck, and a daemon polled a GitHub-hosted domain.txt every hour.
+
+In AWS, StepSecurity says to look in CloudTrail for GetCallerIdentity calls from the instance or task role around install time, then check whether those credentials were used from outside your infrastructure.
+
+For images, verification alone passes on the malicious ones, so check their digests against the affected list. LiteLLM says to trust a signature from the previous key only on an image published before v1.107.0 on October 21.
+
+Two warnings from the page. Remove the payload files before running any Python, including pip, because the .pth file runs on every interpreter start. And a missing marker file proves nothing.
+
+== Check your own environment
+layout: checklist
+check: When a secret lands in a public commit, who revokes it, and by when?
+check: Does any service hold a person's OAuth token instead of a scoped credential?
+check: Who can override branch protection, and would anyone see the alert?
+check: Do temporary changes to a release gate carry an expiry and a review?
+check: Would a change to a release workflow raise an alert?
+check: Do you pin images by digest, or follow latest?
+check: Would you remove payload files before running any Python, including pip?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask who revokes a secret that lands in a public commit, and by when. The page wants a named owner and a deadline. Ask whether any service holds a person's OAuth token where it should hold a scoped credential of its own, such as a GitHub App installation token.
+
+Ask who can override branch protection, and whether anyone would see an alert when they do. Ask whether temporary changes to a release gate carry an expiry and a review, and whether a change to a release workflow raises an alert.
+
+Ask whether you pin images by digest and hold new versions for a soak period, or follow latest. Finally, ask whether your response plan removes payload files before running any Python, including pip.
+
+== Your images are signed. Would verification have caught this?
+layout: question
+The malicious 1.107.0 images carried a valid signature from LiteLLM's previous key, and the release went out under its own Trusted Publisher identity.
+
+What would you check besides the signature?
+notes:
+Give the room a minute with this one before moving on.
+
+The page's facts: the real pipeline built, signed and published the release, fed by a lookalike repository after an owner token changed the release workflow. The images carry a valid signature from the previous signing key, and the release went out under LiteLLM's own Trusted Publisher identity.
+
+Ask each person to name one check in their own pipeline or deployment that does not rely on the signature, before you show the answer slide.
+
+== Verification alone passes on the malicious images
+layout: answer
+The signed images came from a real pipeline fed by the wrong source.
+- Alert on any change to a release workflow.
+- Compare published artifacts with the source tag.
+- Pin by digest; check digests against the affected list.
+notes:
+The page's answer is to verify more than signatures.
+
+Verification alone passes on the malicious images, so their digests have to be checked against the affected list. LiteLLM now says to trust a signature from the previous key only on an image published before v1.107.0 on October 21.
+
+The release side of the defense is to alert on any change to a release workflow and compare published artifacts with the source tag. The consumer side is to pin by digest and hold new versions for a soak period rather than following latest.
+
+Bring the group's examples back to this. The page's point is to verify more than signatures: these signed images came from a real pipeline fed by the wrong source.
+
+== What would you add for stages 02 and 04?
+layout: question
+No defense cites what happened at stage 02 or 04: the key's use on October 10, or the CI workflows that posted tokens.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the gaps in the defense matrix.
+
+The page's defenses name no stage numbers. This deck marks a stage where a defense's own words cite its facts, and that places them at stages 01, 03, 05, 06, 07 and 08. No defense cites stage 02, where the key still worked 136 days after the commit, or stage 04, where CI workflows posted two maintainers' tokens to a webhook.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== What the page offers for stages 02 and 04
+layout: answer
+The revoke defense says the entire chain rests on a key left valid, the key stage 02 used. No defense cites stage 04's CI workflows. Test ideas against reported details, like the throwaway branches and deleted runs.
+notes:
+Be clear where the page stops. No defense on the page cites a fact from stage 02 or 04, and this deck adds none of its own.
+
+For stage 02, the page comes close. The revoke defense says the entire chain rests on a key that was removed from view and left valid, and that is the key the attacker used on October 10. Its specific advice, a named owner and a deadline on the revocation, answers stage 01, where the key was noted down and forgotten.
+
+For stage 04, no defense cites the CI workflows on throwaway branches, the webhook.site endpoint or the deleted runs. Any control the group proposes there is its own suggestion.
+
+Test each proposal against the facts the page reports. For stage 02, those are the 21:13 to 21:28 UTC window on October 10 and the source address. For stage 04, the throwaway branches, the webhook.site endpoint and the runs deleted within about three minutes.
+
+== Primary sources
+layout: links
+link: LiteLLM, attack chain record | https://docs.litellm.ai/blog/security-incident-oct-21-2026-attack-chain
+link: LiteLLM, initial post | https://docs.litellm.ai/blog/security-incident-oct-21-2026
+link: LiteLLM, what we are changing | https://docs.litellm.ai/blog/security-changes-after-oct-21-2026
+link: GitHub, original report, issue 47826 | https://github.com/BerriAI/litellm/issues/47826
+link: StepSecurity, payload analysis | https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer
+link: The Register, root cause and downloads | https://www.theregister.com/security/2026/10/26/litellm-supply-chain-attack-started-with-an-exposed-master-key/5305544
+link: The Hacker News, stolen role credentials | https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html
+link: MITRE ATT&CK T1546.018 | https://attack.mitre.org/techniques/T1546/018/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+LiteLLM's attack-chain record is the canonical account, and it corrects the initial post. A later LiteLLM post sets out what it is changing. The GitHub issue holds the original report. StepSecurity analyzed the payload. The Register reports Wiz's download figure, and The Hacker News reports the stolen role credentials from Wiz's observations; the site's author works at Wiz. The MITRE page defines the Python startup hooks technique behind stage 07.
+
+The background slides name their own sources, from MITRE ATT&CK and AWS.
+
+== Related kill chain and defense topics
+layout: links
+link: LiteLLM / PyPI 2026, the March TeamPCP attack | breaches/litellm-pypi-teampcp.html
+link: CI/CD security | ci-cd.html
+link: GitHub Actions security | github-actions.html
+link: AI/ML security | ai-ml-security.html
+link: AWS security | aws-security.html
+The page calls October a separate incident from the March TeamPCP attack, and its stealer the same class of startup trick. The four topics are the page's related defense topics.
+notes:
+The page links one other kill chain, and four defense topics.
+
+It calls this a separate incident from the March TeamPCP attack, which has its own kill chain, and says the October stealer used the same class of Python startup trick as the March attack. After March, LiteLLM hardened its releases; the October attack went around those controls.
+
+The page's related defense topics are CI/CD security, GitHub Actions security, AI/ML security and AWS security. CI/CD stands for continuous integration and continuous delivery, and AI/ML for artificial intelligence and machine learning.

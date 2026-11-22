@@ -1,0 +1,511 @@
+title: CHAINDROP / keyv npm Worm
+page: breaches/chaindrop-keyv-npm.html
+as-of: 2026-11-21
+promise: Attackers compromised the keyv maintainer; by August 6, per Elastic, 400+ npm packages were compromised, and the worm leaves a watcher that runs a remote-supplied handler when a stolen token is revoked.
+
+== At a glance
+layout: stats
+stat: 400+ | npm packages compromised | by August 6, per Elastic
+stat: 1.3B+ | combined monthly downloads | over 1.3 billion, of the co-owned packages, per Elastic
+stat: 300+ | credential patterns targeted | across AI, cloud and developer tools
+Elastic names no actor. It links the campaign to the earlier Shai-Hulud attacks through similarities and Dune-themed strings.
+notes:
+Start with the three figures the page leads with, and with who stands behind them.
+
+Elastic Security Labs identified the campaign on August 4, 2026. By August 6, more than 400 unique npm packages had been compromised, per Elastic. Elastic puts the co-owned packages at over 1.3 billion monthly downloads combined.
+
+The third figure is about what the worm steals. Its collector scans for over 300 unique credential patterns across AI tooling, cloud accounts and developer tools. Stage 03 covers the list.
+
+Elastic names no actor. It links the campaign to the earlier Shai-Hulud attacks through similarities and Dune-themed strings. Keep that wording when you repeat it: Elastic draws the link from similarities and strings, and names no actor.
+
+npm is the default package registry for JavaScript and Node.js.
+
+== What happened, and when
+layout: timeline
+event: August 4, 2026 | Elastic Security Labs identifies the campaign
+event: By August 6 | More than 400 unique npm packages compromised, per Elastic
+Attackers compromised the keyv maintainer and trojanized the monorepo; how has not been published. The page gives no other dates. Spacing is not to scale.
+notes:
+The page gives two dates, and the timeline shows only those.
+
+Elastic Security Labs identified the campaign on August 4, 2026. Attackers compromised the maintainer of keyv, a key-value storage library, and trojanized the monorepo. How the maintainer was compromised has not been published. By August 6, more than 400 unique npm packages had been compromised. The page gives no date for the first malicious release and no end date, so do not supply either.
+
+From there the worm spread itself. Elastic ties its npm republishing to tokens that can publish without two-factor authentication (2FA), and Socket also reports spread through OIDC trusted publishing. OIDC is OpenID Connect, an identity layer on top of OAuth.
+
+It plants hooks in Claude Code and VS Code configuration, so that opening an infected repository can run it. It keeps no hardcoded command-and-control domain, and reads its current endpoint from an Ethereum smart contract.
+
+The next slide covers the part of the summary the page puts in bold.
+
+== If you think you are affected, read stage 05 before revoking
+layout: text
+The worm leaves a dead-man's switch: a watcher that runs a remote-supplied handler when a stolen token is revoked.
+
+Nobody outside the operation can say what that handler does.
+notes:
+The page puts this in bold in its summary, so the deck puts it early.
+
+The worm leaves a dead-man's switch: a watcher that runs a remote-supplied handler when a stolen token is revoked. The handler is fetched at runtime and can change, so nobody outside the operation can say what it does. SANS lists data destruction and re-implantation among the possibilities.
+
+The page's instruction is to read step 05, which is stage 05 in this deck, before you revoke anything. Its defense is to isolate the host first, and SANS and Socket both say to deal with the watcher before revoking credentials. Kodem's runbook rotates first, and the defenses section sets the two orders side by side.
+
+If anyone in the room is responding to this worm today, this is the slide to remember.
+
+== Who reported what, and where the sources differ
+layout: table
+row: Source | What it reports | On the watcher and the response
+row: Elastic | Ties republishing to tokens able to publish without 2FA | No destructive payload described; does not cover the watcher
+row: Socket | Valid provenance on trojanized releases; also spread via trusted publishing | Deal with the watcher before revoking credentials
+row: SANS ISC | Watcher polls every 60 seconds; handler might destroy data or re-implant | Isolate, preserve, eradicate, rotate, audit; do not power off
+row: Kodem | A first-hour response runbook | Rotate first: the worm's next hop is your publishing token
+notes:
+Four sources carry most of the page, and they cover different parts of it.
+
+Elastic Security Labs identified the campaign and ties the worm's npm republishing to tokens that can publish without 2FA. Elastic describes no destructive payload, and its report does not cover the watcher.
+
+Socket says the malicious versions went out through the legitimate release workflow, which built already-trojanized source, so the signed provenance was valid. It also reports republishing through npm OIDC trusted publishing, and it says to deal with the watcher before revoking credentials.
+
+SANS ISC says the watcher polls the GitHub API with the stolen token every 60 seconds, and lists data destruction and re-implantation among the possibilities for its handler. Its order is isolate, preserve, eradicate, rotate, audit, and it says not to power the machine off, because memory is evidence. Socket gives the same order.
+
+Kodem's first-hour runbook rotates first, on the grounds that the worm's next hop is your publishing token. The page keeps both orders, and its advice is to isolate quickly and not let a slow cleanup leave a token live.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | The keyv maintainer | T1195.002
+step: 02 | Execution | preinstall, then Bun | T1059.007
+step: 03 | Credential Access | 300+ patterns | T1552.001
+step: 04 | Propagation | Republish on bypass_2fa | T1195.001
+step: 05 | Persistence | Hooks and a watcher | T1546
+step: 06 | Command and Control | Blockchain dead drop | T1102.001
+step: 07 | Exfiltration | Endpoint, then GitHub | T1567.001
+Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's seven stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is the compromise of the keyv maintainer. Stage 02 is execution: a preinstall hook runs a dropper that fetches its own Bun runtime. Stage 03 is the collector's sweep of over 300 credential patterns. Stage 04 is the worm republishing packages with stolen npm tokens; Propagation is the page's own phase label for that spread. Stage 05 is persistence in developer tool hooks, plus the watcher that waits for a stolen token to be revoked. Stage 06 is command and control through an Ethereum smart contract used as a dead drop. Stage 07 is exfiltration, to the dead-drop endpoint first and the victim's own GitHub last.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== Attackers compromised the keyv maintainer and trojanized the monorepo
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: Entry | keyv maintainer, method not published
+fact: Release | the legitimate workflow built already-trojanized source, so signed provenance was valid, per Socket
+fact: Reach, per Elastic | over 1.3 billion monthly downloads across co-owned packages
+These small utility packages sit deep in other projects' dependency trees, so most of the people installing them never chose them.
+notes:
+Stage 01 is the way in. The page maps it to T1195.002, Compromise Software Supply Chain.
+
+Attackers compromised the maintainer of keyv, a key-value storage library, and trojanized the monorepo. A monorepo is a single repository that holds several packages. How the maintainer's account was compromised has not been published, so do not guess at it when you present this.
+
+Socket says the malicious versions went out through the legitimate release workflow, which built already-trojanized source, so the signed provenance was valid.
+
+The page says the choice of target did the rest. These are small utility packages that sit deep in other projects' dependency trees, so most of the people installing them never chose them.
+
+The next slide shows Elastic's download figures for the packages, and the one after it explains what build provenance records, in general terms.
+
+== Prior-month downloads, by Elastic's figures
+layout: bars
+bar: 600 | keyv, over 600 million
+bar: 580 | flat-cache, nearly 580 million
+bar: 137 | cacheable-request, over 137 million
+bar: 30 | cacheable, over 30 million
+In millions, on one scale from zero. cache-manager had over 16 million. Elastic puts the co-owned packages at over 1.3 billion monthly downloads combined.
+notes:
+This is the page's point that the choice of target did the rest, drawn to scale.
+
+By Elastic's figures, keyv saw over 600 million downloads in the prior month, flat-cache nearly 580 million, cacheable-request over 137 million, cacheable over 30 million and cache-manager over 16 million. The bars show the first four in millions, on one scale from zero, and the labels keep the words over and nearly. cache-manager is in the caption because the slide holds four bars.
+
+Elastic puts the co-owned packages at over 1.3 billion monthly downloads combined.
+
+The page calls this reach. It does not say how many installs pulled a malicious version, so do not read the bars as a count of infections.
+
+== What build provenance records
+layout: background
+source: csoh.org glossary, Provenance | https://csoh.org/glossary.html#term-provenance
+credit: Also from Generate and validate build provenance, Google Cloud Build (cloud.google.com)
+Provenance is a verifiable record of how a build artifact was produced: its source commit, builder and dependencies. Google Cloud says it lets you check that artifacts were created by trusted sources and builders.
+notes:
+Background, from the csoh.org glossary and Google Cloud's documentation, in general terms.
+
+The glossary defines provenance as a verifiable record of how a build artifact was produced: source commit, builder, dependencies.
+
+Google Cloud Build's documentation describes build provenance as a collection of verifiable data about a build. Its metadata includes details such as the digests of the built images, the input source locations, the build arguments and the build duration. Google says you can use this information to ensure that the built artifacts you use are accurate and reliable, created by trusted sources and builders.
+
+So provenance records how, and from what, an artifact was built. Read it beside stage 01, where Socket says the legitimate release workflow built already-trojanized source, so the signed provenance was valid.
+
+Also from Generate and validate build provenance: https://cloud.google.com/build/docs/securing-builds/generate-validate-build-provenance
+
+== A preinstall hook ran a dropper that fetched its own Bun runtime
+layout: stage
+stage: 02
+phase: Execution
+technique: T1059.007 | JavaScript
+technique: T1027 | Obfuscated Files or Information
+fact: Trigger | preinstall hook in package.json
+fact: Dropper | setup.mjs, for Linux, macOS and Windows
+fact: Runtime | Bun v1.3.13 from official releases, deleted afterwards
+fact: Payload | about 711 KB, control-flow flattening, Base91
+A trusted runtime from an official source blends into normal developer traffic.
+notes:
+Stage 02 is how the code runs. The page maps it to T1059.007, JavaScript, and tags T1027, Obfuscated Files or Information.
+
+A preinstall hook in package.json runs during installation with no further interaction. Each affected package carries setup.mjs, which targets Linux, macOS and Windows. If Bun is missing, the dropper downloads v1.3.13 from Bun's official GitHub releases, runs the payload, and deletes the temporary directory. Bun is a JavaScript runtime, an alternative to Node.js.
+
+The payload is about 711 KB, obfuscated with control-flow flattening and Base91 string encoding, and named Math_Symbol.js or math_init.js.
+
+The page explains why the runtime matters. Fetching a trusted runtime from an official source blends into normal developer traffic, and it means the malware does not need Node-specific tricks.
+
+Elastic notes that npm 12 and later block preinstall hooks by default. That comes back in the defenses.
+
+== A collector swept over 300 credential patterns, AI tools beside cloud keys
+layout: stage
+stage: 03
+phase: Credential Access
+technique: T1552.001 | Credentials in Files
+technique: T1552.004 | Unsecured Credentials: Private Keys
+fact: AI tooling | Anthropic, Claude, Codex, Cursor, OpenAI, Gemini
+fact: Cloud | AWS, GCP, Azure, Alibaba Cloud
+fact: Developer | GitHub, Vault, SSH, Kubernetes and npm credentials
+A developer's laptop holds all of these credentials at once, which makes it the most efficient place to steal from.
+notes:
+Stage 03 is the theft. The page maps it to T1552.001, Credentials in Files, and tags T1552.004, Private Keys.
+
+The collector scans for over 300 unique patterns. The list covers AI tooling (Anthropic, Claude, Codex, Cursor, OpenAI, Gemini), cloud accounts (AWS, GCP, Azure, Alibaba Cloud), GitHub tokens, HashiCorp Vault tokens, SSH private keys, Kubernetes service account tokens and npm tokens. Note where the AI keys sit: on the same list as the cloud keys.
+
+Stolen data is gzip-compressed and encrypted with a random AES-256-GCM key, which is itself encrypted with the attacker's hardcoded RSA public key.
+
+The page's lesson is about where these credentials live. A developer's laptop holds all of them at once, which makes it the most efficient place to steal from. The defense to keep cloud keys off developer laptops answers this stage.
+
+The next slide explains, in general terms, what ATT&CK means by credentials in files.
+
+== What ATT&CK calls credentials in files
+layout: background
+source: MITRE ATT&CK T1552.001 | https://attack.mitre.org/techniques/T1552/001/
+ATT&CK says adversaries may search local file systems and remote file shares for insecurely stored credentials. In cloud and container environments, user and service account credentials are often stored in local configuration and credential files.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Unsecured Credentials: Credentials In Files. Adversaries may search local file systems and remote file shares for files containing insecurely stored credentials. These can be files users create to store their own credentials, shared credential stores for a group, configuration files containing passwords for a system or service, or source code and binaries with embedded passwords.
+
+In cloud and containerized environments, it says, authenticated user and service account credentials are often stored in local configuration and credential files. They may also turn up as parameters to deployment commands in container logs.
+
+In some cases these files can be copied and reused on another machine, or their contents read and then used to authenticate without copying any files.
+
+== Stolen npm tokens able to publish without 2FA turned victims into spreaders
+layout: stage
+stage: 04
+phase: Propagation
+technique: T1195.001 | Supply Chain Compromise: Compromise Software Dependencies and Development Tools
+fact: Condition | token with write permission and bypass_2fa, per Elastic
+fact: Also | republishing through npm OIDC trusted publishing, per Socket
+fact: Commit signature | author claude, message chore: update config
+Commit messages say revoking will crash production. Elastic reads that as an attempt to discourage revocation, but stage 05 describes a real trigger.
+notes:
+Stage 04 is how the worm spreads. The page's phase label is Propagation, and it maps the stage to T1195.001, Compromise Software Dependencies and Development Tools.
+
+Elastic says the npm republishing activates only when a stolen token has package write permission and can publish without 2FA, the bypass_2fa setting. Socket also reports republishing through npm OIDC trusted publishing.
+
+For each writable package, the worm downloads the latest tarball, injects its files, adds the preinstall hook, bumps the patch version and publishes it back. A tarball is the packed archive a package version is distributed as.
+
+Commit messages carry the stolen GitHub token and the string IfYouBlockThisAPIKeyItWillCrashTheLiveProductionServersOfAllThirdPartyClients. Elastic reads that as an attempt to discourage revocation. The page adds a warning: do not dismiss the idea that revocation has consequences, because stage 05 describes a real trigger.
+
+Worm commits use the author claude and the message chore: update config. The defenses search for exactly that.
+
+The next slide explains, in general terms, how ATT&CK describes this technique.
+
+== What ATT&CK calls compromising software dependencies
+layout: background
+source: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+ATT&CK describes manipulating software dependencies and development tools before a final consumer receives them. Popular open source projects used as dependencies in many applications, such as npm packages, may be targeted to add malicious code to their users.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Supply Chain Compromise: Compromise Software Dependencies and Development Tools. Adversaries may manipulate software dependencies and development tools before a final consumer receives them, for the purpose of data or system compromise.
+
+Applications often depend on external software to function properly. ATT&CK says popular open source projects that are used as dependencies in many applications, such as pip and npm packages, may be targeted as a means to add malicious code to the users of the dependency.
+
+The page cites this ATT&CK entry among its primary sources.
+
+== Claude Code and VS Code hooks, and a watcher awaiting revocation
+layout: stage
+stage: 05
+phase: Persistence
+technique: T1546 | Event Triggered Execution
+technique: T1543.002 | Create or Modify System Process: Systemd Service
+fact: Claude Code | SessionStart hook in settings.json runs node .claude/setup.mjs
+fact: VS Code | folderOpen task in tasks.json runs node .vscode/setup.mjs
+fact: Spread | up to 50 branches per repository with a GitHub App token
+A developer who only clones and opens a repository can be infected, and removing the npm package leaves the hook in place.
+notes:
+Stage 05 is persistence, and it has two parts. The page maps it to T1546, Event Triggered Execution, and tags T1543.002, Systemd Service.
+
+First, developer tool hooks. A SessionStart hook in the Claude Code settings.json runs node .claude/setup.mjs when a session begins. A folderOpen task in the VS Code tasks.json runs node .vscode/setup.mjs when an infected repository is opened. If the worm steals a GitHub App token, it commits these hooks to up to 50 branches per accessible repository.
+
+That extends the attack beyond package installation. A developer who only clones and opens a repository can be infected, and removing the npm package leaves the hook in place.
+
+Second, the watcher, installed as a macOS LaunchAgent or a Linux systemd user service and named to look like a GitHub token monitor. Its handler is supplied remotely at runtime, and nobody outside the operation can say what it does. The next slide takes the watcher on its own.
+
+== The dead-man's switch: the watcher and its handler
+layout: table
+row: Watcher | What the page reports
+row: Installed as | macOS LaunchAgent or Linux systemd user service: gh-token-monitor
+row: Polling | the GitHub API with the stolen token, every 60 seconds, per SANS
+row: Trigger | an HTTP 4xx on the token, which is what revocation returns
+row: Then | runs a remote-supplied handler, deletes its own state and exits
+row: Lifetime | removes itself after 24 hours
+The handler is fetched at runtime and can change. SANS lists data destruction and re-implantation among the possibilities.
+notes:
+This slide takes the watcher, the dead-man's switch, on its own, because the page's response advice turns on it.
+
+The host gets a watcher, installed as a macOS LaunchAgent or a Linux systemd user service and named to look like a GitHub token monitor. SANS says it polls the GitHub API with the stolen token every 60 seconds. When the token stops working, which is what revocation produces, it evaluates a remote-supplied handler, deletes its own state and exits. It also removes itself after 24 hours. The trigger is an HTTP 4xx on the token, the class of error a revoked token returns.
+
+Nobody outside the operation can say what that handler does, because it is fetched at runtime and can change. SANS lists data destruction and re-implantation among the possibilities. Present those as SANS does, as possibilities.
+
+Elastic's report does not cover the watcher, and SANS and Socket both say to deal with it before revoking credentials. That is why the page tells anyone who thinks they are affected to read this stage before revoking anything.
+
+The next slide explains, in general terms, what a systemd service and a launch agent are.
+
+== What systemd services and launch agents are, per ATT&CK
+layout: background
+source: MITRE ATT&CK T1543.002 | https://attack.mitre.org/techniques/T1543/002/
+credit: Also from MITRE ATT&CK T1543.001 (attack.mitre.org)
+Systemd, the default init system on many Linux distributions, manages background processes called services; user-level unit files sit under the user's home directory. On macOS, a per-user launchd process loads launch agents from property list files at login.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files systemd under Create or Modify System Process: Systemd Service. Systemd is a system and service manager, the default init system on many Linux distributions, used to manage background daemon processes, also known as services. Unit files with the .service extension describe each service. System-level unit files sit in root-owned directories, and user-level unit files in the user's home directory. ATT&CK says adversaries may create or modify systemd services to repeatedly execute malicious payloads as part of persistence.
+
+Launch agents are the macOS counterpart ATT&CK describes under T1543.001. When a user logs in, a per-user launchd process loads each launch agent's parameters from a property list file, including those in the user's own Library/LaunchAgents folder. Launch agents are created with user-level privileges and run with user-level permissions. ATT&CK notes that an agent's name may be disguised with a name from the operating system or from benign software.
+
+Also from MITRE ATT&CK T1543.001: https://attack.mitre.org/techniques/T1543/001/
+
+== The worm reads its current exfiltration endpoint from an Ethereum smart contract
+layout: stage
+stage: 06
+phase: Command and Control
+technique: T1102.001 | Web Service: Dead Drop Resolver
+fact: Contract | 0xE1f2395ee43e45A1556EC6438a88c31B83493103
+fact: Lookup | multiple RPC providers; updating it can move infrastructure
+fact: Seen by Elastic | awqhnjewqjkl[.]icu, npm-cache[.]com, during detonation
+fact: Fallback | GitHub commit search for a signed marker
+A takedown can remove a domain, and it cannot remove a contract from Ethereum.
+notes:
+Stage 06 is command and control. The page maps it to T1102.001, Dead Drop Resolver.
+
+CHAINDROP has no hardcoded command-and-control (C2) domain. It queries an Ethereum smart contract through multiple RPC providers, so operators can move infrastructure by updating the contract. A smart contract is a program stored on a blockchain, and an RPC provider is a hosted endpoint that answers queries against the chain. Elastic saw awqhnjewqjkl[.]icu and npm-cache[.]com during detonation, which means running the malware in a controlled environment to watch what it does.
+
+The page's point is durability. A takedown can remove a domain, and it cannot remove a contract from Ethereum.
+
+As a fallback, the malware searches GitHub commit history for the signed marker thebeautifulmarchoftime, and accepts a domain only after validating it against an embedded RSA public key, so a defender cannot simply plant a fake one.
+
+The next slide explains, in general terms, what ATT&CK means by a dead drop resolver.
+
+== What ATT&CK calls a dead drop resolver
+layout: background
+source: MITRE ATT&CK T1102.001 | https://attack.mitre.org/techniques/T1102/001/
+Adversaries may post content on a legitimate web service that points to further command and control infrastructure. Infected hosts reach out to it and are redirected. This can hide back-end infrastructure from binary analysis, and lets that infrastructure change.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Web Service: Dead Drop Resolver. Adversaries may use an existing, legitimate external web service to host information that points to additional command and control infrastructure. The content they post, known as a dead drop resolver, carries embedded domains or IP addresses, often obfuscated or encoded. Once infected, victims reach out to these resolvers and are redirected by them.
+
+ATT&CK says a dead drop resolver may also protect back-end command and control infrastructure from discovery through malware binary analysis, while enabling operational resiliency, because that infrastructure may be changed dynamically.
+
+The page maps its stage 06 to this technique. There, the worm reads its current endpoint from an Ethereum smart contract.
+
+== Data goes to the dead-drop endpoint, or failing that, the victim's GitHub
+layout: stage
+stage: 07
+phase: Exfiltration
+technique: T1567.001 | Exfiltration Over Web Service: Exfiltration to Code Repository
+fact: Primary | the endpoint read from the dead drop
+fact: Fallback | a public repository created under the victim's GitHub account
+fact: Marker | Dune names; description Shai-Hulud: Here We Go Again
+fact: Destruction | none described by Elastic; the watcher's handler is unknown
+That description is a family marker; searching for it is a quick exposure check.
+notes:
+Stage 07 is exfiltration. The page maps it to T1567.001, Exfiltration to Code Repository.
+
+The primary path is the endpoint read from the contract at stage 06. If the earlier paths fail, data goes to a public GitHub repository created under the victim's account, named with Dune references and described as Shai-Hulud: Here We Go Again.
+
+That description is a family marker, and searching for it is a quick exposure check. The defenses come back to it.
+
+On damage, keep the page's exact wording. Elastic describes no destructive payload, and the one anti-forensic step it documents is removing the temporary Bun directory. An anti-forensic step is one that hinders later investigation. The open question is the watcher from stage 05, whose handler is supplied by the attacker at runtime.
+
+== Six defenses against seven stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07
+row: Remove tokens that can skip 2FA | 04
+row: Block install scripts, add a soak period | 02
+row: Review developer tool configuration like code | 04 | 05
+row: Isolate the host before you revoke anything | 02 | 03 | 04 | 05
+row: Keep cloud keys off developer laptops | 03
+row: Look for the family's markers | 06 | 07
+No defense on the page is tied to stage 01, the maintainer compromise.
+notes:
+This matrix sets the page's six defenses against the seven stages. A cell is marked only where the defense names something from that stage.
+
+Removing tokens that can skip 2FA answers stage 04, where Elastic ties republishing to bypass_2fa and Socket reports republishing through trusted publishing. Blocking install scripts answers stage 02's preinstall hook. The soak period names no single stage.
+
+Reviewing developer tool configuration covers stage 05's settings.json and tasks.json, and its commit search looks for stage 04's commit signature: author claude, message chore: update config.
+
+Isolating before revoking reaches four stages. It stops stage 05's watcher seeing a 4xx and removes its hooks. It removes stage 02's payload. The credentials it revokes afterwards overlap stage 03's list, Kubernetes and Vault among them. And Kodem rotates first because the worm's next hop is your publishing token, which is stage 04's spread.
+
+Keeping cloud keys off laptops answers stage 03's collector. The family's markers cover stage 06's domains and Ethereum RPC traffic, and stage 07's repository description.
+
+Column 01 is empty. How the maintainer was compromised has not been published, and no defense names anything only that stage has. That gap is the second discussion question.
+
+== Remove tokens that can skip 2FA, and block install scripts
+layout: compare
+col: Tokens that skip 2FA (stage 04) | Enable 2FA on all npm accounts | Retire automation tokens with bypass_2fa wherever you can | Restrict which workflows and branches may publish
+col: Install scripts (stage 02) | Elastic notes npm 12 and later block preinstall hooks by default | Upgrade, and delay adopting newly published versions | So malicious releases are caught before your builds
+Trusted publishing removes the long-lived token, but Socket reports this worm republishing through it as well.
+notes:
+Two defenses that close the paths the worm used to spread and to run.
+
+First, tokens. Elastic ties npm republishing to tokens with write access and bypass_2fa. Enable 2FA on all npm accounts and retire those automation tokens wherever you can. Trusted publishing removes the long-lived token, but Socket reports this worm republishing through it as well, so restrict which workflows and branches may publish.
+
+Second, install scripts. Elastic notes that npm 12 and later block preinstall hooks by default. Upgrade, and delay adoption of newly published versions, so that malicious releases are caught before they reach your builds. That delay is the soak period in the defense's name.
+
+The page gives no length for the soak period. If someone asks how long to wait, say the page does not say.
+
+== Review developer tool configuration like code
+layout: text
+Stage 05's hooks can be committed to repositories.
+- Check .claude/settings.json and .vscode/tasks.json in repositories and in pull requests
+- Protect those paths with code owners
+- Search for commits from claude@users.noreply.github.com with the message chore: update config that nobody can account for
+notes:
+This defense answers stage 05 and stage 04.
+
+Check .claude/settings.json and .vscode/tasks.json in repositories and in pull requests, and protect those paths with code owners. Those are the files that hold stage 05's SessionStart hook and folderOpen task. Code owners are the people or teams named as responsible for a path, whose review a repository can require.
+
+Then search for commits from claude@users.noreply.github.com with the message chore: update config that nobody can account for. Stage 04 records that worm commits use the author claude and that message.
+
+The page's reason is in stage 05. A developer who only clones and opens a repository can be infected, and removing the npm package leaves the hook in place.
+
+== Isolate the host before you revoke anything
+layout: compare
+col: SANS, and Socket: isolate first | Cut the host from the network, so the watcher sees no 4xx | Copy ~/.config/gh-token-monitor/ and service files before they clear | Remove the watcher, hooks and payload | Only then revoke npm, GitHub, cloud, Kubernetes, Vault, AI and CI credentials
+col: Kodem: rotate first | Its reason: the worm's next hop is your publishing token | The page's answer: isolate quickly | And do not let a slow cleanup leave a token live
+SANS's order is isolate, preserve, eradicate, rotate, audit. SANS also says not to power the machine off, because memory is evidence.
+notes:
+The page's summary puts this advice in bold, and it answers stage 05 first.
+
+Revoking a token while the watcher is running can fire its handler. SANS gives the order as isolate, preserve, eradicate, rotate, audit. Cut the host from the network, which stops the watcher seeing a 4xx. Copy ~/.config/gh-token-monitor/ and the service files before they clear themselves. Remove the watcher, hooks and payload. Only then revoke npm, GitHub, cloud, Kubernetes, Vault, AI and CI credentials. Socket gives the same order. SANS also says not to power the machine off, because memory is evidence.
+
+Kodem's runbook rotates first, on the grounds that the worm's next hop is your publishing token. The page's answer is to isolate quickly and not let a slow cleanup leave a token live.
+
+The page names the audit step without describing it.
+
+== Keep cloud keys off laptops, and look for the family's markers
+layout: compare
+col: Cloud keys off laptops (stage 03) | Everything on the collector's list is valuable because it sits on one machine | Use short-lived credentials from an SSO flow | Keep long-lived keys out of plaintext dotfiles
+col: Family markers (stages 06, 07) | Search your organization for the description Shai-Hulud: Here We Go Again | Block npm-cache[.]com and awqhnjewqjkl[.]icu at egress | Alert on Ethereum RPC traffic from build agents
+The page says Ethereum RPC traffic from build agents rarely has a legitimate reason to exist.
+notes:
+Two more defenses.
+
+Keep cloud keys off developer laptops. Everything on the collector's list from stage 03 is valuable because it sits on one machine. Use short-lived credentials from an SSO flow, and keep long-lived keys out of plaintext dotfiles. SSO is single sign-on: sign in once, and get into many applications. A dotfile is a configuration file whose name starts with a dot, usually kept in a home directory.
+
+Look for the family's markers. Search your organization for public repositories with the description Shai-Hulud: Here We Go Again, which stage 07 names as a family marker. Block npm-cache[.]com and awqhnjewqjkl[.]icu at egress; those are the domains Elastic saw at stage 06. Egress means outbound traffic. Alert on Ethereum RPC traffic from build agents, which the page says rarely has a legitimate reason to exist.
+
+== Check your own environment
+layout: checklist
+check: Can any of your npm tokens publish without 2FA?
+check: Which workflows and branches may publish your packages?
+check: Do your builds use npm 12 or later, and wait before adopting new versions?
+check: Do code owners guard .claude/settings.json and .vscode/tasks.json?
+check: Does your runbook isolate a host before revoking its tokens?
+check: Do developer laptops hold long-lived keys in plaintext dotfiles?
+check: Would you notice Ethereum RPC traffic from a build agent?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether any of your npm tokens can publish without 2FA, and which workflows and branches may publish your packages. Ask whether your builds use npm 12 or later, which Elastic notes blocks preinstall hooks by default, and whether you wait before adopting newly published versions.
+
+Ask whether code owners guard .claude/settings.json and .vscode/tasks.json, and whether anyone would question a commit from claude@users.noreply.github.com with the message chore: update config.
+
+Ask whether your incident runbook isolates a host before revoking its tokens, and whether it keeps the machine powered on.
+
+Finally, ask whether developer laptops hold long-lived keys in plaintext dotfiles, and whether anything would alert on Ethereum RPC traffic from a build agent.
+
+== You find the watcher on a laptop. What do you do first?
+layout: question
+The stolen token still works. When it stops working, the watcher runs a remote-supplied handler, and nobody outside the operation can say what it does.
+
+Put your first three steps in order.
+notes:
+Give the room a minute with this one before moving on.
+
+The setting is stage 05. The watcher polls the GitHub API with the stolen token every 60 seconds, per SANS, and when the token stops working, which is what revocation produces, it evaluates a remote-supplied handler. SANS lists data destruction and re-implantation among the possibilities.
+
+Ask each person to write down their first three steps before you show the answer slide. Watch for anyone whose first step is to revoke the token.
+
+== Isolate the host, preserve, remove, and only then revoke
+layout: answer
+SANS and Socket: isolate, preserve, eradicate, rotate, audit. Kodem rotates first; the page says isolate quickly.
+- Cut the host from the network, so the watcher sees no 4xx
+- Do not power it off: memory is evidence, per SANS
+notes:
+The page's answer is to isolate before you revoke.
+
+SANS gives the order as isolate, preserve, eradicate, rotate, audit, and Socket gives the same order. Cut the host from the network, which stops the watcher seeing a 4xx. Then copy ~/.config/gh-token-monitor/ and the service files before they clear themselves, remove the watcher, hooks and payload, and only then revoke npm, GitHub, cloud, Kubernetes, Vault, AI and CI credentials. SANS also says not to power the machine off, because memory is evidence.
+
+Kodem's runbook rotates first, on the grounds that the worm's next hop is your publishing token. The page keeps both orders, and its advice is to isolate quickly and not let a slow cleanup leave a token live.
+
+Bring the group's answers back to this. Anyone who revoked first, with the watcher still running, could have fired its handler. That is the risk the page warns about.
+
+== What would you add for stage 01?
+layout: question
+The page's defenses reach stages 02 to 07. None is tied to the maintainer compromise, and how it happened has not been published.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the gap in the defense matrix.
+
+The page offers defenses tied to stages 02 through 07. It ties nothing to stage 01, where attackers compromised the keyv maintainer and trojanized the monorepo, and it says how the maintainer's account was compromised has not been published.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stage 01
+layout: answer
+Any control you propose is your own suggestion. Test it against what the page reports: per Socket, the legitimate release workflow built already-trojanized source, so the signed provenance was valid.
+notes:
+Be clear that the page stops here. It ties no defense to stage 01, and this deck adds none of its own. The group may argue that enabling 2FA on all npm accounts, or restricting which workflows may publish, reaches this stage. The page ties that advice to republishing, and says how the maintainer was compromised has not been published, so that argument is the group's own.
+
+Test each proposal against the facts the page reports for stage 01. Attackers compromised the keyv maintainer and trojanized the monorepo. Socket says the malicious versions went out through the legitimate release workflow, which built already-trojanized source, so the signed provenance was valid. And these are small utility packages that sit deep in other projects' dependency trees, so most of the people installing them never chose them.
+
+The soak period, which delays adopting newly published versions, names no stage on the page either.
+
+== Sources
+layout: links
+link: Elastic Security Labs, CHAINDROP | https://www.elastic.co/security-labs/shai-hulud-chaindrop-npm-supply-chain
+link: SANS ISC, Don't revoke that token yet | https://isc.sans.edu/diary/rss/33218
+link: Socket, keyv and cacheable compromise | https://socket.dev/blog/popular-npm-packages-in-the-keyv-and-cacheable-namespaces-compromised-in-active-supply-chain
+link: Kodem, First-hour response runbook | https://www.kodemsecurity.com/resources/keyv-supply-chain-attack-shai-hulud-npm-worm-affected-versions-iocs-and-first-hour-response-runbook
+link: MITRE ATT&CK T1102.001 | https://attack.mitre.org/techniques/T1102/001/
+link: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Elastic Security Labs' analysis identified the campaign; its report does not cover the watcher. SANS ISC covers the dead-man's switch and the response order. Socket covers the keyv and cacheable compromise, including the release workflow and trusted publishing. Kodem's first-hour runbook gives the rotate-first order. The two MITRE pages define the techniques at stages 06 and 04.
+
+The background slides name their own sources: the csoh.org glossary, Google Cloud and MITRE ATT&CK.
+
+== Related kill chain and defense topics
+layout: links
+link: Shai-Hulud npm worm | breaches/shai-hulud-npm-worm.html
+link: CI/CD security | ci-cd.html
+link: GitHub Actions security | github-actions.html
+link: Detection engineering | detection-engineering.html
+link: Incident response | incident-response.html
+Elastic links this campaign to the earlier Shai-Hulud attacks through similarities and Dune-themed strings. The other four are the page's related defense topics.
+notes:
+One related kill chain on csoh.org, and the page's related defense topics.
+
+The page links the Shai-Hulud kill chain in its summary. Elastic links this campaign to the earlier Shai-Hulud attacks through similarities and Dune-themed strings, and names no actor. The exfiltration repositories' description, Shai-Hulud: Here We Go Again, is the family marker stage 07 names.
+
+The four defense topics the page links are CI/CD security, GitHub Actions security, detection engineering and incident response. CI/CD stands for continuous integration and continuous delivery.

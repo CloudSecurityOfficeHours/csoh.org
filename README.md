@@ -607,7 +607,7 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [Polymarket / DebugBear](https://csoh.org/breaches/polymarket-debugbear-rum-drainer.html) | 2026 | Third-Party Script / DNS | T1584.001, T1195.002, T1059.007, T1185 |
 | [Binance / TraderTraitor](https://csoh.org/breaches/binance-tradertraitor-signing-service.html) | 2026 | Crypto Exchange / Containers | T1204, T1566.003, T1554, T1552 |
 
-The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 so far](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)).
+The recurring root causes across all of these are synthesized in **[breach-lessons.html](https://csoh.org/breach-lessons.html)**, and the incidents that defined each year are collected in the **[Cloud Breach Year in Review](https://csoh.org/cloud-breach-year-in-review.html)** series ([2021-2022](https://csoh.org/cloud-breach-year-in-review-2021-2022.html), [2023](https://csoh.org/cloud-breach-year-in-review-2023.html), [2024](https://csoh.org/cloud-breach-year-in-review-2024.html), [2025](https://csoh.org/cloud-breach-year-in-review-2025.html), [2026 so far](https://csoh.org/cloud-breach-year-in-review-2026-h1.html)). Kill chains that have a slide deck, to read alone or present, are listed on **[breach-kill-chain-decks.html](https://csoh.org/breach-kill-chain-decks.html)**.
 
 ### How to contribute a kill chain
 
@@ -727,6 +727,7 @@ csoh.org/
 │  ── Breach kill chains ──
 ├── breach-timeline.html        # Index of breach kill chains (per-breach pages in breaches/)
 ├── breach-lessons.html         # Cross-incident synthesis: recurring root causes across the 60 chains
+├── breach-kill-chain-decks.html # Slide decks made from the kill chains (list generated from tools/decks/breaches/published.json)
 ├── cloud-breach-year-in-review.html       # Every-year hub for the reviews below
 ├── cloud-breach-year-in-review-2021-2022.html # 2021-2022 review
 ├── cloud-breach-year-in-review-2023.html  # 2023 review
@@ -953,6 +954,7 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) |
 | `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_PAGES_README.md) |
 | `sync_glossary_usage.py` | Lists, under each glossary entry, every page that links to it ("Used on N pages") | docstring |
+| `sync_breach_deck_index.py` | Renders the deck cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |
@@ -1349,7 +1351,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 - ✅ **Article** / **NewsArticle** - pillar pages and the news index, with `datePublished`, `dateModified`, `author`, `publisher`
 - ✅ **HowTo** + **HowToStep** - step-by-step content (e.g. learning path, GitHub Actions guide)
 - ✅ **Course** + **CourseInstance** - learning-path roadmap and certifications comparison (Google Course rich result eligible)
-- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->65<!--/count--> pages with structured Q&A for featured snippets
+- ✅ **FAQPage** + **Question** / **Answer** - <!--count:faq_pages-->66<!--/count--> pages with structured Q&A for featured snippets
 - ✅ **CollectionPage** - resource hub pages eligible for sitelinks rich results
 - ✅ **Event** + **VirtualLocation** + **Schedule** - weekly Friday Zoom session
 - ✅ **VideoObject** - each YouTube talk on `presentations.html` and meeting recaps
@@ -1365,14 +1367,14 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Author authority (E-E-A-T)
 
 - ✅ Dedicated bio page at `/about-shawn-nunley.html` with full Person schema
-- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->122<!--/count--> pages and counting)
+- ✅ Visible "About the author" card at the bottom of all pillar articles (<!--count:author_card_pages-->123<!--/count--> pages and counting)
 - ✅ Visible byline + footer "Founded by" link site-wide
 - ✅ `rel="author"` on every author link
 - ✅ `sameAs` external profile links (LinkedIn, GitHub, csoh.org)
 
 ### Discoverability
 
-- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->335<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
+- ✅ **`sitemap.xml`** - <!--count:sitemap_urls-->336<!--/count--> URLs, `<lastmod>` refreshed from git commit dates on every deploy ([tools/update_sitemap.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/update_sitemap.py))
 - ✅ **`robots.txt`** - Allow: / for all major crawlers, plus explicit allow-rules for 21 AI/LLM bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended, CCBot, MistralAI-User, Cohere, etc.)
 - ✅ **RSS feed** (`feed.xml`) for the news aggregator
 - ✅ **`humans.txt`** for human-readable credits, linked via `<link rel="author">`
@@ -1383,7 +1385,7 @@ CSOH is engineered for organic discovery across traditional search (Google, Bing
 ### Social previews
 
 - ✅ **Open Graph** + **Twitter Card** meta on every indexable page (title, description, type, url, image)
-- ✅ **Per-article social images** - <!--count:og_images-->321<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->121<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
+- ✅ **Per-article social images** - <!--count:og_images-->322<!--/count--> unique 1200×630 JPG previews under `img/og/` (top-level pages via [tools/generate_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_og_images.py), plus `img/og/breaches/`, `img/og/portfolio/`, and <!--count:meetings-->121<!--/count--> meeting recaps in `img/og/meetings/` via [tools/generate_meeting_og_images.py](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/generate_meeting_og_images.py)) so each page has its own LinkedIn/Slack/Twitter preview, not a generic site banner
 - ✅ **`og:type`: profile** on the bio page with `profile:first_name` / `profile:last_name`
 
 ### Performance signals (Core Web Vitals)
