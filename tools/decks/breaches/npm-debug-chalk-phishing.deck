@@ -1,0 +1,391 @@
+title: npm debug / chalk
+page: breaches/npm-debug-chalk-phishing.html
+as-of: 2026-11-22
+promise: An attacker phished one npm maintainer and relayed a live TOTP code; eighteen packages with over 2.6 billion weekly downloads carried a browser crypto drainer, pulled within hours.
+
+== At a glance
+layout: stats
+stat: 2.6B | weekly downloads | over 2.6 billion across the affected packages
+stat: 18 | packages trojanized | including chalk, debug and ansi-styles
+stat: Hours | from acknowledging it to removal | acknowledged shortly after 11:00 EDT, September 8
+stat: Week | until Shai-Hulud | one week later, it went after the same target: maintainers' npm publishing rights
+Disclosure: research published by Wiz is one of the page's sources, and the site's author works at Wiz.
+notes:
+Start with the four figures the page leads with.
+
+On September 8, 2025, an attacker phished the npm account of the maintainer known as Qix. Eighteen packages were trojanized, including chalk, debug and ansi-styles. The page says the eighteen together account for over 2.6 billion downloads a week. Keep the word over when you say the number.
+
+The third tile is the response. The maintainer acknowledged the compromise shortly after 11:00 EDT, Eastern Daylight Time, and the malicious versions were pulled within hours.
+
+The fourth tile is why the page covers a small, fast-contained incident at all. A week later the Shai-Hulud worm went after the same target, maintainers' npm publishing rights.
+
+npm is the default package registry for JavaScript and Node.js.
+
+Say the disclosure aloud as the page gives it: research published by Wiz is one of the sources cited on the page, and the site's author works at Wiz. Every source is linked so you can read it directly.
+
+== What happened, and when
+layout: timeline
+event: September 8, 2025 | An attacker phishes the maintainer and publishes trojanized versions of 18 packages
+event: Shortly after 11:00 EDT, September 8 | The maintainer acknowledges the compromise publicly
+event: Same day | npm pulls the malicious versions, within hours
+event: Within a day | Platforms including Vercel publish response guidance for customers
+event: September 14 | The Shai-Hulud worm goes after the same target
+The page gives no time for the phishing email or the first malicious release. Spacing is not to scale.
+notes:
+The page gives these dates and times, and the timeline shows only those.
+
+On September 8, 2025, an attacker phished the maintainer's npm account with a two-factor-reset email from the lookalike domain npmjs.help, and published trojanized versions of eighteen packages by hand. The page gives no time for the email or for the first malicious release, so do not supply one.
+
+The maintainer acknowledged the compromise publicly shortly after 11:00 EDT the same day. npm pulled the malicious versions the same day, within hours. Within a day, platforms including Vercel published response guidance for customers.
+
+On September 14, the Shai-Hulud worm went after the same target, maintainers' npm publishing rights. The page calls that a week later in its summary and six days later in its defenses. It does not say whether the same attacker was behind both, so do not link them.
+
+The markers are evenly spaced, and the slide says the gaps between them are not to scale.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | 2FA reset, TOTP relayed | T1566.002
+step: 02 | Account Takeover | 18 packages trojanized | T1195.002
+step: 03 | Execution | Drainer in the browser | T1059.007
+step: 04 | Response | Pulled within hours | -
+step: 05 | Aftermath | Shai-Hulud a week later | T1195
+Arrows follow the page's stage order. Stage 05 is a second attack, the Shai-Hulud worm, a week later.
+notes:
+Here is the whole chain on one slide: the page's five stages, each with its phase and primary ATT&CK technique.
+
+Stage 01, Initial Access, is the fake two-factor-reset email and the relayed TOTP code. Stage 02, under the page's Account Takeover phase, is the attacker publishing trojanized versions of eighteen packages. Stage 03, Execution, is the crypto drainer that ran in end users' browsers. Stage 04, Response, carries no ATT&CK technique: it is the maintainer's public acknowledgement and the removal of the malicious versions within hours. Stage 05, Aftermath, is the Shai-Hulud worm going after the same target a week later.
+
+The last arrow joins two attacks a week apart. The page reads debug/chalk as a proof of concept for what followed, and it does not say the same attacker ran both. The next slides take each stage in turn.
+
+== A 2FA-reset email from npmjs.help, and a live TOTP code relayed
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1566.002 | Phishing: Spearphishing Link
+technique: T1111 | Multi-Factor Authentication Interception
+fact: Lookalike domain | npmjs.help, reads as a support domain, not a typo
+fact: Pretext | a required two-factor-authentication update
+fact: Captured, relayed | username, password and a live TOTP code, to npm in real time
+This is MFA working exactly as designed while being proxied. "We require MFA" and "we require phishing-resistant MFA" describe different security postures.
+notes:
+Stage 01 is the way in. The page maps it to T1566.002, Spearphishing Link, and T1111, Multi-Factor Authentication Interception.
+
+The page calls the domain choice the craft here. npmjs.help reads as a plausible support domain for a registry whose real home is npmjs.com, rather than as a misspelling anyone would catch by squinting. The pretext was a required two-factor-authentication update, routine and mildly urgent, which makes entering a one-time code the obviously correct action rather than a red flag.
+
+The attacker collected the username, the password and a live TOTP code, and relayed all three to the real npm in real time, inside the code's validity window. TOTP is a time-based one-time password. MFA is multi-factor authentication, and 2FA is two-factor authentication.
+
+The page's point is that this is MFA working exactly as designed while being proxied, rather than MFA being absent. That is why "we require MFA" and "we require phishing-resistant MFA" describe different security postures. The control that breaks it is origin-bound FIDO2 or passkeys, which will not authenticate to the wrong domain.
+
+The next slide explains TOTP and phishing-resistant MFA in general terms.
+
+== What TOTP and phishing-resistant MFA are
+layout: background
+source: csoh.org glossary, Phishing-Resistant MFA | https://csoh.org/glossary.html#term-phishing-resistant
+credit: Also from RFC 6238, TOTP: Time-Based One-Time Password Algorithm (www.rfc-editor.org)
+TOTP, from RFC 6238, derives a short-lived one-time code from a shared secret and the current time. Phishing-resistant MFA binds the second factor to the origin, so an attacker cannot relay or replay it. One-time codes do not qualify.
+notes:
+Background, from the csoh.org glossary and RFC 6238, in general terms.
+
+RFC 6238 defines TOTP as an extension of the HMAC-based one-time password algorithm, HOTP, that uses time as its moving factor. The client and the server share a secret key, and the code is computed from that key and the number of time steps since a starting time. The time step is a system parameter. The RFC recommends a default of 30 seconds, and recommends allowing at most one time step for network delay. That is a default; the page does not say what npm uses.
+
+The glossary defines phishing-resistant MFA as multi-factor methods that cannot be relayed or replayed by an attacker, because the second factor is cryptographically bound to the origin: FIDO2 security keys, passkeys and smartcards. It says push prompts, OTP codes and SMS are explicitly not phishing-resistant.
+
+The glossary also describes FIDO2 and WebAuthn as public-key authentication standards that resist phishing, and passkeys as syncable WebAuthn credentials.
+
+Also from RFC 6238: https://www.rfc-editor.org/rfc/rfc6238
+
+== One maintainer, eighteen trojanized packages
+layout: stage
+stage: 02
+phase: Account Takeover
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+technique: T1078 | Valid Accounts
+fact: Packages | 18, including chalk, debug and ansi-styles
+fact: Combined reach | over 2.6 billion downloads per week
+fact: Asymmetry | enormous downstream reach, essentially no upstream security budget
+The blast radius here is a property of how the JavaScript ecosystem is shaped rather than anything the attacker engineered.
+notes:
+With full account control, the attacker published trojanized versions of eighteen packages, among them chalk, debug and ansi-styles. The page maps this to T1195.002, Compromise Software Supply Chain, and T1078, Valid Accounts.
+
+The page says the blast radius here is a property of how the JavaScript ecosystem is shaped rather than anything the attacker engineered. These are tiny, boring, extremely stable utilities that thousands of other packages depend on transitively, so almost nobody installs them deliberately and almost every JavaScript project has them. A transitive dependency is one a project pulls in through another package rather than by naming it.
+
+Together the affected set carries over 2.6 billion downloads a week. The page draws the consequence: one maintainer's inbox sat upstream of a substantial fraction of all JavaScript builds on Earth. It adds that the maintainer of a widely depended-upon utility typically has none of the security budget, tooling or support that their downstream consumers do.
+
+The next slide shows what three of the packages do.
+
+== Three of the eighteen, and what each does
+layout: table
+row: Package | What it does
+row: chalk | Colours terminal output
+row: debug | Prints debug messages
+row: ansi-styles | Handles terminal escape codes
+Thousands of other packages depend on them transitively, so almost nobody installs them deliberately and almost every JavaScript project has them.
+notes:
+The page describes three of the eighteen packages, and this table uses its words.
+
+chalk colours terminal output. debug prints debug messages. ansi-styles handles terminal escape codes.
+
+The page does not list the other fifteen packages, so do not name them.
+
+These are packages almost nobody installs deliberately and almost every JavaScript project has. A defense later in the deck comes back to this: nobody installs ansi-styles on purpose, which is why a surprise release of it deserves attention.
+
+The next slide explains blast radius, and the ATT&CK technique behind this stage, in general terms.
+
+== What blast radius means, and what T1195.002 covers
+layout: background
+source: csoh.org glossary, Blast Radius | https://csoh.org/glossary.html#term-blast-radius
+credit: Also from MITRE ATT&CK T1195.002 (attack.mitre.org)
+Blast radius is the scope of damage if a credential, identity or system is compromised; minimizing it is a design principle.
+
+ATT&CK's T1195.002 covers adversaries manipulating application software before a final consumer receives it.
+notes:
+Background, from the csoh.org glossary and MITRE ATT&CK, in general terms.
+
+The glossary defines blast radius as the scope of damage if a credential, identity or system is compromised, and calls minimizing it a design principle.
+
+In ATT&CK, T1195.002, Compromise Software Supply Chain, is a sub-technique of Supply Chain Compromise. ATT&CK describes it as adversaries manipulating application software before it is received by a final consumer, for the purpose of data or system compromise, and says this can take place in a number of ways.
+
+Also from MITRE ATT&CK T1195.002: https://attack.mitre.org/techniques/T1195/002/
+
+== A drainer hooked window.ethereum and rewrote transaction destinations
+layout: stage
+stage: 03
+phase: Execution
+technique: T1059.007 | Command and Scripting Interpreter: JavaScript
+technique: T1657 | Financial Theft
+fact: Mechanism | hook window.ethereum, mutate destinations in flight
+fact: Effect | a correct-looking transfer is approved; the funds go elsewhere
+fact: Not targeted | build-machine credentials, unusually restrained for its class
+The harm landed not on the maintainer or the developers who installed the package, but on their users, several dependency hops away.
+notes:
+The page calls the payload unusually disciplined. Rather than harvest credentials from build machines, which the page calls the obvious play and the one Shai-Hulud would run a week later, it targeted end users of applications built with the compromised packages. The page maps it to T1059.007, JavaScript, and T1657, Financial Theft.
+
+It intercepted browser wallet interactions through window.ethereum, the interface a browser wallet exposes to web pages. It rewrote the destination address on transactions in flight and sent funds to the attacker. The victim approves a transfer that looks correct in their own interface, and the money goes elsewhere.
+
+Note where the harm lands: not on the maintainer, and not on the developers who installed the package, but on their users, several dependency hops away and with no visibility into any of it.
+
+The page does not say how much was stolen, so do not put a figure on it.
+
+== Removed from npm the same day, within hours
+layout: stage
+stage: 04
+phase: Response
+fact: Acknowledged | publicly, shortly after 11:00 EDT on September 8
+fact: Removed | malicious versions taken off npm the same day
+fact: Guidance | within a day, from platforms including Vercel
+fact: Damage limited by | one volunteer noticing quickly and disclosing openly
+fact: Corollary | that is not a control, and it cannot be depended on
+The ecosystem got a good outcome here from an individual's fast, transparent response rather than from any structural protection.
+notes:
+Stage 04 is the response, and the page maps it to no ATT&CK technique.
+
+The maintainer publicly acknowledged the phishing shortly after 11:00 EDT on September 8. npm pulled the malicious versions the same day, and platforms including Vercel published response guidance for customers within a day.
+
+The page calls containment fast, and says that given the download numbers, that speed is the reason this did not become a far larger incident.
+
+Then it says something uncomfortable. The limiting factor on damage was how quickly a single volunteer noticed an email had been fake and said so publicly. That is not a control anyone designed, and it is not one that can be relied upon. The ecosystem got a good outcome from an individual's fast, transparent response rather than from any structural protection.
+
+No defense on the page is tied to this stage. That gap is one of the discussion questions at the end.
+
+== A week later, the Shai-Hulud worm went after the same target
+layout: stage
+stage: 05
+phase: Aftermath
+technique: T1195 | Supply Chain Compromise
+fact: September 8 | debug/chalk: published by hand, 18 packages, contained in hours
+fact: September 14 | Shai-Hulud: same target, self-replicating, 500+ packages
+fact: What changed | automation of the republication step
+Maintainer-account takeover was demonstrated in public and industrialized within a week.
+notes:
+Stage 05 is why the page gives a fast-contained incident a full write-up. The page maps it to T1195, Supply Chain Compromise.
+
+On its own, the page says, debug/chalk is a story about eighteen packages, a crypto drainer and a good response. Read next to what followed on September 14, it is a proof of concept. The Shai-Hulud worm went after the same prize, maintainers' npm publishing rights. Where this attacker published by hand, the worm automated republication: up to twenty packages each compromised maintainer owned, and then the packages of every maintainer infected downstream.
+
+Same target, self-replicating body, 500+ packages instead of 18. Maintainer-account takeover was demonstrated in public and industrialized within a week, which the page calls a useful calibration on how quickly successful tradecraft is copied in this ecosystem.
+
+The page does not say whether the same attacker was behind both. Shai-Hulud has its own kill chain, linked at the end of this deck.
+
+== Same target, a week apart: what changed
+layout: compare
+col: debug/chalk, September 8 | The attacker published by hand | 18 packages | A browser drainer aimed at end users | Contained in hours
+col: Shai-Hulud, September 14 | The worm automated republication | 500+ packages | Harvested credentials from build machines | Did not stay contained
+Both went after maintainers' npm publishing rights. What changed was automation of the republication step.
+notes:
+This is the pattern the page draws.
+
+debug/chalk, on September 8, was published by hand, reached 18 packages, carried a browser drainer aimed at end users, and was contained in hours. Shai-Hulud, on September 14, automated the republication step, reached 500+ packages and did not stay contained. Its payload ran the play the page says debug/chalk passed up: harvesting credentials from build machines.
+
+Both went after the same target, maintainers' npm publishing rights. What changed was automation of the republication step.
+
+The page calls the gap one week from public demonstration to industrialized worm. The last defense turns that into a planning assumption.
+
+== Six defenses against five stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05
+row: Phishing-resistant MFA on maintainer accounts | 01
+row: Pin by hash, add a publication delay | -
+row: Watch version churn in utility packages | 02
+row: The payload can target your users | 03
+row: Support the maintainers you depend on | 02
+row: Assume industrialization within about a week | 05
+No defense is tied to stage 04, the response. The pinning row cites the hours the malicious versions existed, and names no single stage.
+notes:
+This matrix sets the page's six defenses against the five stages. A cell is marked only where a defense's own words name something only that stage has.
+
+Phishing-resistant MFA answers stage 01: TOTP was relayed in real time, and FIDO2 keys and passkeys will not authenticate to npmjs.help. Watching version churn names ansi-styles, one of stage 02's packages, which nobody installs on purpose. Remembering that the payload can target your users names stage 03's payload, which shipped to production and stole from end users in their browsers. Supporting maintainers names stage 02's asymmetry: a single volunteer's inbox upstream of 2.6 billion weekly downloads. Assuming industrialization within about a week names stage 05: the same entry vector back six days later with self-replication, reaching 500+ packages.
+
+Pinning by hash and adding a publication delay names no single stage. It cites the hours the malicious versions existed.
+
+No defense is tied to stage 04, the response itself. That gap is the second discussion question.
+
+== Use phishing-resistant MFA on maintainer accounts
+layout: text
+- 2FA did not help: a proxied one-time code is a working credential.
+- FIDO2 keys and passkeys are origin-bound and will not authenticate to npmjs.help.
+- Registry-level enforcement for high-download packages is the ecosystem-level version of the same fix.
+notes:
+This defense answers stage 01, because TOTP was relayed in real time.
+
+The account had two-factor authentication and it did not help, since a proxied one-time code is a working credential. FIDO2 keys and passkeys are bound to the origin and will not authenticate to npmjs.help.
+
+The page says that if you maintain a package anyone depends on, this is the change available to you that is most worth your effort. Registry-level enforcement for high-download packages is the ecosystem-level version of the same fix.
+
+== Pin, delay, and watch version churn
+layout: compare
+col: Pin and delay | Pin dependencies by hash in a lockfile with enforced integrity | Skip anything published within the last 24 to 48 hours | Together they neutralize most short-lived registry compromises
+col: Watch version churn (stage 02) | A surprise release of ansi-styles deserves attention | Flag new transitive versions: unusually small, unusually stable historically, or unusually deep | Alert on package size jumping between patch versions
+Malicious versions existed for hours. The page says a 24 to 48 hour delay would have skipped this entire window.
+notes:
+Two defenses work on what enters your build.
+
+First, pin dependencies by hash and add a publication delay. Malicious versions existed for hours. A lockfile with enforced integrity hashes means a new version cannot silently enter your build at all, and a policy of not installing anything published within the last 24 to 48 hours would have skipped this entire window. The page says that between them these two controls neutralize most short-lived registry compromises, without requiring you to know anything about the specific attack. Keep the word most.
+
+Second, watch for suspicious version churn in utility packages you never think about. Nobody installs ansi-styles on purpose, which is exactly why a surprise release of it deserves attention. Alert on new versions of transitive dependencies that are unusually small, unusually stable historically, or unusually deep in your tree, and on package size jumping between patch versions. The page calls that last one a cheap signal that catches injected payloads across several of the chains on the site.
+
+== Look past your build, and fix the asymmetry
+layout: compare
+col: Your users (stage 03) | It never touched build machines; it stole from end users in their browsers | CSP and Subresource Integrity constrain what injected client-side code can do | Treat a payment or wallet app's dependencies as inside its payment security boundary
+col: Your maintainers (stage 02) | A single volunteer's inbox sat upstream of 2.6 billion weekly downloads | Fund projects in your critical path; contribute maintenance effort | Support registry-level protections for high-impact packages
+The page calls supporting maintainers the structural fix, and everything else on its list mitigation.
+notes:
+Two more defenses, one for stage 03 and one for stage 02.
+
+Most dependency-compromise response focuses inward: rotate CI credentials, check the build machines. This payload never touched them. It shipped to production and stole from end users in their browsers. Content Security Policy and Subresource Integrity constrain what injected client-side code can do. CSP is a response header that tells the browser which scripts and other resources may load, and Subresource Integrity is a browser check that a fetched file matches the hash the page expects. Any application handling payments or wallets should treat its dependency tree as part of its payment security boundary. CI is continuous integration.
+
+The second answers the asymmetry in stage 02. A single volunteer's inbox sat upstream of 2.6 billion weekly downloads with none of the security tooling their consumers take for granted. Fund the projects in your critical path, contribute maintenance effort, and support registry-level protections for high-impact packages. The page calls this the structural fix, and everything else on its list mitigation.
+
+== Assume a successful technique is industrialized within about a week
+layout: text
+- Six days after this compromise, the same entry vector returned with self-replication and reached 500+ packages.
+- When a novel technique works in your ecosystem, assume a worse version is imminent.
+- Respond to the class of attack, not the specific incident.
+notes:
+The last defense is a planning assumption, and it comes from stage 05.
+
+This compromise was contained quickly and well, and six days later the same entry vector reappeared with self-replication attached and reached 500+ packages. When you see a novel technique work anywhere in your ecosystem, the page says, the planning assumption should be that a worse version is imminent. So respond to the class of attack, not the specific incident.
+
+The page puts the gap between the two attacks at a week in its summary and at six days here.
+
+== Check your own environment
+layout: checklist
+check: Do accounts that publish your packages use FIDO2 keys or passkeys, not one-time codes?
+check: Are your dependencies pinned in a lockfile with enforced integrity hashes?
+check: Do you hold back packages published within the last 24 to 48 hours?
+check: Would a surprise release of a transitive utility like ansi-styles get noticed?
+check: Do you alert when package size jumps between patch versions?
+check: Do apps handling payments or wallets use CSP and Subresource Integrity?
+check: Do you fund or support the maintainers in your critical path?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether the accounts that publish your packages use FIDO2 keys or passkeys rather than one-time codes that can be relayed.
+
+Ask whether your dependencies are pinned by hash in a lockfile with enforced integrity, and whether you hold back anything published within the last 24 to 48 hours.
+
+Ask whether anyone would notice a surprise release of a transitive utility nobody installs on purpose, and whether anything alerts on package size jumping between patch versions.
+
+Ask whether applications that handle payments or wallets use Content Security Policy and Subresource Integrity, and treat their dependency tree as part of the payment security boundary.
+
+Finally, ask whether you fund or contribute to the projects in your critical path.
+
+== Which of your publishing accounts would accept a relayed code?
+layout: question
+The maintainer's account had two-factor authentication. The attacker relayed the username, password and a live TOTP code in real time and took it over.
+
+Name one account that can publish code you depend on and still accepts a one-time code.
+notes:
+Give the room a minute with this one before moving on.
+
+The maintainer's account had two-factor authentication. The phishing page captured a username, a password and a live TOTP code, and the attacker relayed all three to the real npm in real time.
+
+Ask each person to name one specific account, their own or one upstream of them, before you show the answer slide. The answer slide gives what the page says about relayed codes.
+
+== What the page says about relayed codes
+layout: answer
+- A proxied one-time code is a working credential.
+- FIDO2 keys and passkeys are bound to the origin and will not authenticate to npmjs.help.
+- Registry-level enforcement for high-download packages is the ecosystem-level version of the fix.
+notes:
+The page's answer is phishing-resistant MFA on maintainer accounts.
+
+The account had two-factor authentication and it did not help, since a proxied one-time code is a working credential. FIDO2 keys and passkeys are bound to the origin and will not authenticate to npmjs.help.
+
+For anyone who maintains a package others depend on, the page calls this the change available to them that is most worth the effort. Registry-level enforcement for high-download packages is the ecosystem-level version of the same fix.
+
+Bring the group's examples back to this. If an account in the chain accepts a one-time code, the page's point applies: a proxied one-time code is a working credential.
+
+== What would you put in place of one volunteer's fast response?
+layout: question
+The page says damage was limited by how quickly one volunteer noticed the email was fake and said so, and that this is not a control.
+
+No defense on the page is tied to stage 04. What would you add?
+notes:
+This question comes from the gap in the defense matrix.
+
+The page offers defenses tied to stages 01, 02, 03 and 05, and one more that names no single stage. It ties nothing to stage 04, the response.
+
+The page is plain about that stage. The limiting factor on damage was how quickly a single volunteer noticed an email had been fake and said so publicly. It is not a control anyone designed, and it is not one that can be relied upon.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have changed.
+
+== The page ties no defense to stage 04
+layout: answer
+The page ties no defense to the response, and this deck adds none. Any control you propose is your own. Test it against what stage 04 reports: acknowledgement shortly after 11:00 EDT, removal the same day, guidance within a day.
+notes:
+Be clear that the page stops here. It ties no defense to stage 04, and this deck adds none of its own.
+
+If the group proposes ideas, treat them as the group's, and test each one against the facts the page reports for stage 04. The maintainer acknowledged the compromise publicly shortly after 11:00 EDT on September 8. npm pulled the malicious versions the same day, and platforms including Vercel published response guidance for customers within a day.
+
+The page's own reading is that the good outcome came from an individual's fast, transparent response rather than from any structural protection. Any proposal that claims to replace that response should say what would have noticed the fake email, and who would have said so publicly.
+
+== Sources
+layout: links
+link: Aikido, debug and chalk compromised | https://www.aikido.dev/blog/npm-debug-and-chalk-packages-compromised
+link: Wiz, impact and scope breakdown | https://www.wiz.io/blog/widespread-npm-supply-chain-attack-breaking-down-impact-scope-across-debug-chalk
+link: Vercel, response, September 8, 2025 | https://vercel.com/blog/critical-npm-supply-chain-attack-response-september-8-2025
+link: Semgrep, security alert and analysis | https://semgrep.dev/blog/2025/chalk-debug-and-color-on-npm-compromised-in-new-supply-chain-attack/
+link: MITRE ATT&CK T1111 | https://attack.mitre.org/techniques/T1111/
+Disclosure: research published by Wiz is one of these sources, and the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Aikido and Wiz are the two sources linked in the page's header: Aikido on the compromise of debug and chalk, and Wiz's breakdown of impact and scope. Vercel's post is its response, dated September 8, 2025. Semgrep published a security alert and analysis. The MITRE page defines T1111, Multi-Factor Authentication Interception, behind stage 01.
+
+The page discloses that research published by Wiz is one of its sources and that the site's author works at Wiz.
+
+The background slides name their own sources: the csoh.org glossary, the RFC that defines TOTP, and MITRE ATT&CK.
+
+== Related kill chain and defense topics
+layout: links
+link: Shai-Hulud npm Worm, a week later | breaches/shai-hulud-npm-worm.html
+link: CI/CD security | ci-cd.html
+link: Non-human identity | non-human-identity.html
+link: Git and version control | version-control.html
+link: Detection engineering | detection-engineering.html
+The page reads this incident beside the Shai-Hulud worm, which went after the same target a week later. The four topics are the page's related defense topics.
+notes:
+The page links one other kill chain, and four defense topics.
+
+A week after this incident, the Shai-Hulud worm went after the same target, maintainers' npm publishing rights, and it has its own kill chain. Read the two together to see what changed when the republication step was automated.
+
+The page's related defense topics are CI/CD security, non-human identity, Git and version control, and detection engineering. CI/CD stands for continuous integration and continuous delivery.
