@@ -92,6 +92,12 @@ LOOK = {
     "why_pt": 20,
     "why_pad": 0.16,
     "why_accent_w": 0.08,
+    # A stage-group row: the stage number on a phase-coloured tile, then
+    # what happened, at the fact rows' size.
+    "group_num_w": 0.75,
+    "group_pt": 20,
+    "group_col_gap": 0.3,
+    "group_row_gap": 0.12,
     "stat_value_pt": {2: 72, 3: 60, 4: 48},
     "stat_label_pt": 22,
     "stat_detail_pt": 18,
@@ -715,20 +721,24 @@ def _why(page, s, color: str) -> None:
              [_p(t, pt, STYLE["text"]) for t in prose], gap=LOOK["para_gap"], track=False)
 
 
-def _render_stage(page, s) -> None:
-    phase, stage = s.phase or "", s.stage or ""
-    color = phase_color(phase)
-    # The phase band runs the full slide width; its text lines up with the
-    # content column.
-    band_text = f"{phase.upper()} · STAGE {stage}"
+def _phase_band(page, phase: str, stages: str) -> float:
+    """The band across the top of a stage or stage-group slide, in the
+    phase colour, reading "<PHASE> · <stages>"; returns its height. It runs
+    the full slide width and its text lines up with the content column."""
+    band_text = f"{phase.upper()} · {stages}"
     bpt, bsp, bpad = LOOK["band_pt"], LOOK["band_spacing_pt"], LOOK["band_pad"]
     band_h = _rows(band_text, _caps_per_line(W, bpt, bsp)) * _line_h(bpt) + 2 * bpad
     right = STYLE["slide_w"] - X - W
     page.box("phase-band", 0, 0, STYLE["slide_w"], band_h,
              [_p(band_text, bpt, STYLE["white"], font="heading_font", bold=True, spacing=bsp)],
-             fill=color, margins=(X, 0, right, 0), anchor=MSO_ANCHOR.MIDDLE)
+             fill=phase_color(phase), margins=(X, 0, right, 0), anchor=MSO_ANCHOR.MIDDLE)
+    return band_h
 
-    y = band_h + LOOK["after_band"]
+
+def _render_stage(page, s) -> None:
+    phase, stage = s.phase or "", s.stage or ""
+    color = phase_color(phase)
+    y = _phase_band(page, phase, f"STAGE {stage}") + LOOK["after_band"]
     tile = LOOK["tile"]
     page.box("stage-number", X, y, tile, tile,
              [_p(stage, LOOK["tile_pt"], STYLE["white"], font="heading_font", bold=True)],
@@ -757,6 +767,43 @@ def _render_stage(page, s) -> None:
         page.box("fact-rule", X, y - gap / 2, W, 0.012, fill=STYLE["light"])
         page.box("fact-label", X, y, lw, h, [_p(label, lpt, STYLE["muted"], bold=True)])
         page.box("fact-value", vx, y, vw, h, [_p(value, vpt, STYLE["text"])])
+        y += h + gap
+
+
+def _stage_list(nums: list[str]) -> str:
+    """The band's list of a group's stages: "03 AND 04", "03, 04 AND 05"."""
+    return "".join(nums) if len(nums) < 2 else ", ".join(nums[:-1]) + " AND " + nums[-1]
+
+
+def _render_stage_group(page, s) -> None:
+    """Several stages of one phase on one slide. The band names every
+    stage, chips and the "why it matters" box are a stage slide's, and each
+    row gives one stage: its number on a tile in the phase colour, then
+    what happened there. Rows take the room between the chips and the
+    pinned box; rows that do not fit raise LayoutError naming the slide,
+    and the author splits the group."""
+    phase = s.phase or ""
+    color = phase_color(phase)
+    y = _phase_band(page, phase, f"STAGES {_stage_list(s.stages or [])}") + LOOK["after_band"]
+    y = _heading(page, s.heading, y, pt=LOOK["stage_heading_pt"])
+    techniques = s.items.get("technique", [])
+    if techniques:
+        y = _chips(page, techniques, y + 0.25)
+    _why(page, s, color)
+
+    nw, pt, gap = LOOK["group_num_w"], LOOK["group_pt"], LOOK["group_row_gap"]
+    tx = X + nw + LOOK["group_col_gap"]
+    tw = X + W - tx
+    line = _line_h(pt) + 0.05
+    y += LOOK["section_gap"]
+    for num, text in s.items.get("row", []):
+        h = _rows(text, _per_line(tw, pt)) * _line_h(pt) + 0.05
+        page.box("row-rule", X, y - gap / 2, W, 0.012, fill=STYLE["light"])
+        page.box("row-number", X, y, nw, line,
+                 [_p(num, pt, STYLE["white"], font="heading_font", bold=True)],
+                 fill=color, kind=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.2,
+                 align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE, wrap=False)
+        page.box("row-text", tx, y, tw, h, [_p(text, pt, STYLE["text"])])
         y += h + gap
 
 
@@ -1108,6 +1155,7 @@ RENDERERS = {
     "text": _render_text,
     "stats": _render_stats,
     "stage": _render_stage,
+    "stage-group": _render_stage_group,
     "background": _render_background,
     "question": _render_question,
     "answer": _render_answer,

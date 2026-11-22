@@ -17,8 +17,8 @@ Outline format:
 
     == <slide heading>
     layout: <name>              (text when absent)
-    stage: 04                   (control lines: layout, stage, phase, source,
-    phase: Credential Access     credit; each at most once per slide)
+    stage: 04                   (control lines: layout, stage, stages, phase,
+    phase: Credential Access     source, credit; each at most once per slide)
     source: <name> | <url>
     technique: T1552.005 | Cloud Instance Metadata API   (typed line)
     fact: Queried | the cloud Instance Metadata Service
@@ -119,7 +119,9 @@ KNOWN_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z-]*):\s*(.*)$")
 # middle one empty, so the empty field is reported rather than swallowed.
 FIELD_SPLIT_RE = re.compile(r"\s+\|(?=\s|$)")
 
-CONTROL_KEYS = ("layout", "stage", "phase", "source", "credit")
+CONTROL_KEYS = ("layout", "stage", "stages", "phase", "source", "credit")
+# How many stages one stage-group slide may list.
+MIN_GROUP, MAX_GROUP = 2, 6
 # A flow step's technique field for a stage the page maps to no technique.
 NO_TECHNIQUE = "-"
 
@@ -143,6 +145,14 @@ LAYOUTS: dict[str, LayoutSpec] = {
         {"technique": (0, 3, 2, 2), "fact": (1, 5, 2, 2)},
         "optional",
         ("stage", "phase"),
+    ),
+    # One phase the page splits into several stages, on one slide, for a
+    # chain too long for a slide per stage. stages: lists the stages and
+    # each row is one of them ("NN | what happened"), in the listed order.
+    "stage-group": LayoutSpec(
+        {"technique": (0, 3, 2, 2), "row": (MIN_GROUP, MAX_GROUP, 2, 2)},
+        "optional",
+        ("stages", "phase"),
     ),
     "background": LayoutSpec({}, "required", ("source",)),
     "question": LayoutSpec({}, "prose-only"),
@@ -175,6 +185,8 @@ class BSlide:
     items: dict[str, list[list[str]]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     stage: str | None = None
+    # A stage-group slide's stage numbers, as its stages: line lists them.
+    stages: list[str] | None = None
     phase: str | None = None
     source: tuple[str, str] | None = None
     credit: str | None = None
@@ -244,7 +256,8 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
     # Typed lines are checked against the layout when the slide ends, because
     # the layout line may come after them. Each entry keeps its line number.
     typed: list[tuple[int, str, list[str]]] = []
-    seen: set[str] = set()
+    # Control lines given on this slide, each with its line number.
+    seen: dict[str, int] = {}
 
     def flush_para() -> None:
         if para and cur is not None:
@@ -275,6 +288,13 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
                     f"{key}: line has {len(parts)} fields; a {cur.layout} slide takes {want}",
                 )
             cur.items.setdefault(key, []).append(parts)
+        if "stages" in seen and cur.layout != "stage-group":
+            raise _err(
+                name, seen["stages"],
+                f"a {cur.layout} slide does not take a stages: line; a stage-group slide does",
+            )
+        if "stage" in seen and cur.layout == "stage-group":
+            raise _err(name, seen["stage"], "a stage-group slide takes stages:, not stage:")
         if not cur.notes:
             raise _err(name, at, "slide has no notes: block")
         slides.append(cur)
@@ -345,7 +365,7 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
         if key in CONTROL_KEYS:
             if key in seen:
                 raise _err(name, lineno, f"slide has two {key}: lines")
-            seen.add(key)
+            seen[key] = lineno
             if not rest:
                 raise _err(name, lineno, f"empty {key}: line")
             if key == "layout":
@@ -360,6 +380,8 @@ def _parse_slides(lines: list[str], first_lineno: int, name: str) -> list[BSlide
                 if len(parts) != 2:
                     raise _err(name, lineno, "source: takes 'name | url'")
                 cur.source = (parts[0], parts[1])
+            elif key == "stages":
+                cur.stages = rest.split()
             else:
                 setattr(cur, key, rest)
         elif key in TYPED_KEYS:
@@ -415,6 +437,33 @@ BAR_NUMBER_RE = re.compile(r"\d[\d,]*(\.\d+)?\+?")
 
 def _bar_number_ok(value: str) -> bool:
     return BAR_NUMBER_RE.fullmatch(value) is not None
+
+
+def _stage_group_findings(s: BSlide) -> list[str]:
+    """A stage-group slide's stages: line and rows, checked against each
+    other: MIN_GROUP to MAX_GROUP two-digit stage numbers in ascending
+    order, and one row per listed stage, in the listed order."""
+    out: list[str] = []
+    nums = s.stages or []
+    well_formed = all(STAGE_NUM_RE.fullmatch(n) for n in nums)
+    ascending = all(a < b for a, b in zip(nums, nums[1:]))
+    if not (MIN_GROUP <= len(nums) <= MAX_GROUP and well_formed and ascending):
+        out.append(
+            f"{s.where}: stages: must list {MIN_GROUP} to {MAX_GROUP} two-digit stage "
+            f"numbers in ascending order, got {' '.join(nums)!r}"
+        )
+    got = [row[0] for row in s.items.get("row", [])]
+    for n in dict.fromkeys(got):
+        if n not in nums:
+            out.append(f"{s.where}: row {n} is for a stage the stages: line does not list")
+        elif got.count(n) > nums.count(n):
+            out.append(f"{s.where}: stage {n} has {got.count(n)} rows; it takes one")
+    for n in dict.fromkeys(nums):
+        if n not in got:
+            out.append(f"{s.where}: stage {n} has no row")
+    if got != nums and sorted(got) == sorted(nums):
+        out.append(f"{s.where}: rows are not in the order the stages: line lists them")
+    return out
 
 
 def slide_findings(s: BSlide) -> list[str]:
@@ -481,6 +530,8 @@ def slide_findings(s: BSlide) -> list[str]:
         for row in s.items.get("bar", []):
             if not _bar_number_ok(row[0]):
                 out.append(f"{s.where}: bar number {row[0]!r} is not a number")
+    if s.layout == "stage-group" and s.stages:
+        out += _stage_group_findings(s)
 
     texts = [s.heading, *prose, *fields, *s.notes]
     for extra in (s.credit, s.phase, s.stage, s.source[0] if s.source else None):
@@ -644,19 +695,28 @@ PHASE_LBL_RE = re.compile(r'<div\b[^>]*\bclass="phase-lbl\b[^"]*"[^>]*>(.*?)</di
 # Emoji and the joiners and variation selectors that build them.
 EMOJI_CATEGORIES = frozenset({"So", "Sk", "Cf"})
 VARIATION_SELECTORS = frozenset({"︎", "️"})
+# Where a phase label's name ends and its subtitle starts: a colon, or a
+# hyphen with whitespace on both sides. A hyphen inside a word does not end it.
+PHASE_END_RE = re.compile(r":|\s-\s")
 
 
 def phase_name(text: str) -> str:
     """The name in a phase label or a phase: line: the text before its first
-    colon, with emoji removed and spaces collapsed. The page's label
-    "🔀 Execution and Privilege Escalation: Containers" and the outline's
-    "Execution and Privilege Escalation" both give the same name."""
-    head = text.split(":", 1)[0]
+    colon or spaced hyphen, whichever comes first, with emoji removed, every
+    leading character that is not a letter or digit dropped, and spaces
+    collapsed. So the page's label "🔀 Execution and Privilege Escalation:
+    Containers" and the outline's "Execution and Privilege Escalation" give
+    the same name, "₿ Impact: Coins taken" gives "Impact", and
+    "Reconnaissance - Open Source Intelligence" gives "Reconnaissance".
+    Reading the spaced hyphen lets a page that writes its labels as a name,
+    a spaced hyphen and a subtitle stay as written."""
+    head = PHASE_END_RE.split(text, 1)[0]
     kept = "".join(
         ch for ch in head
         if unicodedata.category(ch) not in EMOJI_CATEGORIES and ch not in VARIATION_SELECTORS
     )
-    return " ".join(kept.split())
+    start = next((i for i, ch in enumerate(kept) if ch.isalnum()), len(kept))
+    return " ".join(kept[start:].split())
 
 
 def parse_breach_page(html: str, path: str) -> BreachPage:
@@ -752,6 +812,34 @@ def _phase_finding(where: str, what: str, given: str, stage: PageStage) -> str |
     return f"{where}: {what} {got!r} is not stage {stage.num}'s phase on the page, {want!r}"
 
 
+def _either(nums: list[str]) -> str:
+    """"03 or 04", "03, 04 or 05"."""
+    return nums[0] if len(nums) < 2 else ", ".join(nums[:-1]) + " or " + nums[-1]
+
+
+def _stage_group_page_findings(s: BSlide, page: BreachPage) -> list[str]:
+    """A stage-group slide against its page: every listed stage is on the
+    page under the slide's phase, and every technique is on a listed stage."""
+    out: list[str] = []
+    nums = s.stages or []
+    known = [n for n in nums if n in page.stages]
+    for n in nums:
+        if n not in page.stages:
+            out.append(f"{s.where}: stage {n} is not a stage on {page.path}")
+    if s.phase is not None:
+        for n in known:
+            f = _phase_finding(s.where, "phase", s.phase, page.stages[n])
+            if f:
+                out.append(f)
+    carried = set().union(*(page.stages[n].techniques for n in known))
+    for row in s.items.get("technique", []):
+        if row[0] not in carried:
+            out.append(
+                f"{s.where}: technique {row[0]} is not on stage {_either(nums)} of the page"
+            )
+    return out
+
+
 def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
     out: list[str] = []
     stage_ok = s.stage is None or s.stage in page.stages
@@ -768,6 +856,8 @@ def _slide_page_findings(s: BSlide, page: BreachPage) -> list[str]:
                     out.append(
                         f"{s.where}: technique {row[0]} is not on stage {s.stage} of the page"
                     )
+        if s.layout == "stage-group" and s.stages:
+            out += _stage_group_page_findings(s, page)
         if s.layout == "flow":
             for row in s.items.get("step", []):
                 num, tactic, tech = row[0], row[1], row[3]
@@ -1944,6 +2034,201 @@ def _case_phase_checked(tmp: Path) -> None:
     _only(_gate(*STAGE_LINES, page=bare), "has no phase label on the page")
 
 
+def _case_phase_name_symbols(tmp: Path) -> None:
+    assert phase_name("₿ Impact: Coins taken") == "Impact"
+    assert phase_name("Reconnaissance - Open Source Intelligence") == "Reconnaissance"
+    # An unspaced hyphen is part of the name.
+    assert phase_name("Cross-Site Scripting: x") == "Cross-Site Scripting"
+    assert phase_name("🍯 The Counter-Offensive - A Honeypot") == "The Counter-Offensive"
+    assert phase_name("☎️ First Contact at Scale - War Dialing") == "First Contact at Scale"
+    # The name ends at whichever separator comes first.
+    assert phase_name("Collection - Mail: Inboxes") == "Collection"
+    assert phase_name("Collection: Mail - Inboxes") == "Collection"
+    # Controls: a bare name, and a digit leading a name, are kept.
+    assert phase_name("Credential Access") == CA
+    assert phase_name("2FA Bypass: Codes") == "2FA Bypass"
+    # A stage under a label with a symbol before its name takes the bare
+    # name; the symbol itself is not a phase.
+    page = parse_breach_page(
+        _breach_page(
+            stages=[("04", "Coins taken", ["T1552.005"], "₿ Impact: Two Million Downloads")],
+            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
+        ),
+        PAGE_PATH,
+    )
+    assert page.stages["04"].phase == "Impact", page.stages["04"].phase
+    lines = list(STAGE_LINES)
+    lines[2] = "phase: Impact"
+    assert _gate(*lines, page=page) == []
+    lines[2] = "phase: ₿ Impact"
+    assert _gate(*lines, page=page) == []
+    lines[2] = "phase: Collection"
+    _only(_gate(*lines, page=page), "'Collection' is not stage 04's phase on the page, 'Impact'")
+
+
+def _case_phase_gate_real_labels(tmp: Path) -> None:
+    """Two real pages whose labels carry a symbol before the name or a
+    spaced hyphen after it. Only their structure is read, so a prose edit
+    does not fail the deck self-test."""
+    root = Path(__file__).resolve().parent.parent
+    raw: list[str] = []
+    for rel in ("breaches/mitnick-novell.html", "breaches/event-stream-npm.html"):
+        html = (root / rel).read_text(encoding="utf-8")
+        raw += [_strip_tags(m.group(1)) for m in PHASE_LBL_RE.finditer(_main_html(html))]
+        page = parse_breach_page(html, rel)
+        assert len(page.stages) >= 6, (rel, list(page.stages))
+        for num, st in page.stages.items():
+            name = st.phase
+            ok = bool(name) and name[0].isalpha() and ":" not in name and " - " not in name
+            assert ok, (rel, num, name)
+    # Control: the labels as written do carry what the rule removes, so the
+    # loop above saw it handled rather than absent.
+    assert any(" - " in label for label in raw), raw
+    assert any(not label[0].isalnum() for label in raw), raw
+
+
+# A synthetic page whose stages 03, 04 and 05 share one phase label.
+PHASE_06 = "⬆️ Privilege Escalation: Containers"
+GROUP_STAGES = [
+    ("01", "Agents planned the run", ["T1588.007", "T1606"], PHASE_01),
+    ("03", "Keys sat in code", ["T1552.001"], PHASE_04),
+    ("04", "The metadata service yielded a role", ["T1552.005", "T1651"], None),
+    ("05", "A token was replayed", ["T1550.001"], None),
+    ("06", "A pod escaped to the node", ["T1611"], PHASE_06),
+]
+GROUP_LINES = (
+    "layout: stage-group", "stages: 03 04", f"phase: {CA}",
+    "technique: T1552.001 | Credentials In Files",
+    "technique: T1552.005 | Cloud Instance Metadata API",
+    "row: 03 | Keys sat in code and config files",
+    "row: 04 | The metadata service handed over a role",
+    "Credentials opened every door.",
+)
+
+
+def _group_page() -> BreachPage:
+    return parse_breach_page(
+        _breach_page(
+            stages=GROUP_STAGES,
+            body='    <p class="inc-summary">200 organizations in 11 days.</p>\n',
+        ),
+        PAGE_PATH,
+    )
+
+
+def _group(stages: str, *rows: str, extra: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Lines for a stage-group slide in the Credential Access phase."""
+    return ("layout: stage-group", f"stages: {stages}", f"phase: {CA}", *extra,
+            *(f"row: {r} | Something happened" for r in rows), "Prose.")
+
+
+def _group_findings(*lines: str, page: BreachPage | None = None) -> list[str]:
+    """Every finding --check reports for one slide: its limits and its page."""
+    deck = _parse(_body("== S", *lines))
+    return [f for s in deck.slides for f in slide_findings(s)] + page_findings(
+        deck, page or _group_page()
+    )
+
+
+def _case_stage_group_parse(tmp: Path) -> None:
+    s = _parse(_body("== S", *GROUP_LINES)).slides[0]
+    assert s.layout == "stage-group" and s.stages == ["03", "04"] and s.phase == CA
+    assert s.stage is None
+    assert s.items["row"] == [["03", "Keys sat in code and config files"],
+                              ["04", "The metadata service handed over a role"]], s.items
+    assert len(s.items["technique"]) == 2 and s.paragraphs == ["Credentials opened every door."]
+    assert slide_findings(s) == [], slide_findings(s)
+    # A stages: line belongs on a stage-group slide only, and a stage-group
+    # slide names its stages with stages:, never stage:.
+    e = _raises(lambda: _parse(_slide_text(*STAGE_LINES, "stages: 03 04")),
+                "does not take a stages: line")
+    assert str(e).startswith("d.deck:12:"), e
+    _raises(lambda: _parse(_slide_text("stages: 03 04", "Text.")), "does not take a stages: line")
+    e = _raises(lambda: _parse(_slide_text(*GROUP_LINES[:1], "stage: 03", *GROUP_LINES[1:])),
+                "takes stages:, not stage:")
+    assert str(e).startswith("d.deck:8:"), e
+    _raises(lambda: _parse(_slide_text(*_group("03 04", "03", "04"), "row: 05 | a | b")),
+            "3 fields")
+    # The stages: line: two to six two-digit numbers, ascending.
+    _only(_group_findings(*GROUP_LINES[:1], *GROUP_LINES[2:]), "needs a stages: line")
+    _only(_group_findings(*GROUP_LINES[:2], *GROUP_LINES[3:]), "needs a phase: line")
+    for stages, alone in (("04 03", True), ("03 03", True), ("3 4", True),
+                          ("03", False), ("03 04 05 06 07 08 09", False)):
+        f = [x for s in _parse(_slide_text(*_group(stages, *stages.split()))).slides
+             for x in slide_findings(s)]
+        assert any("stages: must list 2 to 6 two-digit stage numbers" in x for x in f), (stages, f)
+        assert not alone or len(f) == 1, (stages, f)
+    # Control: six in order is clean.
+    six = "03 04 05 06 07 08"
+    assert [x for s in _parse(_slide_text(*_group(six, *six.split()))).slides
+            for x in slide_findings(s)] == []
+
+
+def _case_stage_group_gate(tmp: Path) -> None:
+    assert [_group_page().stages[n].phase for n in ("03", "04", "05")] == [CA] * 3
+    assert _group_findings(*GROUP_LINES) == []
+    assert _group_findings(*_group("03 04 05", "03", "04", "05")) == []
+    # A stage from another phase.
+    _only(_group_findings(*_group("03 06", "03", "06")),
+          "phase 'Credential Access' is not stage 06's phase on the page, 'Privilege Escalation'")
+    # A row for a stage the stages: line does not list.
+    _only(_group_findings(*_group("03 04", "03", "04", "05")),
+          "row 05 is for a stage the stages: line does not list")
+    # A listed stage with no row.
+    _only(_group_findings(*_group("03 04 05", "03", "04")), "stage 05 has no row")
+    # A listed stage with two rows, and rows out of the listed order.
+    _only(_group_findings(*_group("03 04", "03", "03", "04")), "stage 03 has 2 rows")
+    _only(_group_findings(*_group("03 04", "04", "03")), "rows are not in the order")
+    # A technique from a stage the group does not list. T1611 is on the page
+    # (stage 06), so only the group check can catch it.
+    tech = ("technique: T1611 | Escape to Host",)
+    _only(_group_findings(*_group("03 04", "03", "04", extra=tech)),
+          "technique T1611 is not on stage 03 or 04 of the page")
+    # A listed stage the page does not have.
+    f = _group_findings(*_group("03 09", "03", "09"))
+    assert any("stage 09 is not a stage on breaches/vapor-panda-artex.html" in x for x in f), f
+    # Control: a technique from any listed stage is accepted.
+    for t in ("T1552.001", "T1651", "T1550.001"):
+        line = (f"technique: {t} | Name",)
+        assert _group_findings(*_group("03 04 05", "03", "04", "05", extra=line)) == [], t
+
+
+def _case_crosslink_skips_deck_line(tmp: Path) -> None:
+    """The glossary cross-linker leaves a deck line exactly as --stamp wrote
+    it, and still links the same term in the page's prose."""
+    import crosslink_pages as cp
+    from build_howto_decks import deck_line_html as howto_deck_line_html
+
+    key = "Google account"
+    patterns, slugs = cp.build_term_regexes([key]), {key.lower(): "term-google-account"}
+    link = f'<a class="glossary-link" href="../glossary.html#term-google-account">{key}</a>'
+    prose = "<p>Copying a deck needs a Google account of your own.</p>\n"
+    (tmp / "breaches").mkdir()
+    page = tmp / "breaches" / "x.html"
+    old = cp.REPO_ROOT
+    cp.REPO_ROOT = tmp
+    try:
+        for attr, line in (("data-breach-deck", deck_line_html(ID_A)),
+                           ("data-howto-deck", howto_deck_line_html(ID_A))):
+            assert key in line and attr in line, line
+            html = f"<html><body><main>\n{line}\n{prose}</main></body></html>\n"
+            page.write_text(html, encoding="utf-8")
+            cp.crosslink_page(page, patterns, slugs)
+            once = page.read_text(encoding="utf-8")
+            assert line + "\n" in once, (attr, once)
+            assert once.count(link) == 1 and link in once.split(line)[1], (attr, once)
+            cp.crosslink_page(page, patterns, slugs)
+            assert page.read_text(encoding="utf-8") == once, attr
+            # Control: without its deck attribute the same line takes the
+            # page's one link, so the term does match inside it.
+            page.write_text(_plant(html, f" {attr}>", ">"), encoding="utf-8")
+            cp.crosslink_page(page, patterns, slugs)
+            bare = page.read_text(encoding="utf-8")
+            assert bare.count(link) == 1 and link in bare.split("</p>")[0], (attr, bare)
+    finally:
+        cp.REPO_ROOT = old
+
+
 def _case_matrix_columns_checked(tmp: Path) -> None:
     assert _gate("layout: matrix", "columns: 01 | 04", "row: A | 01", "row: B | -") == []
     f = _gate("layout: matrix", "columns: 01 | 09", "row: A | 01", "row: B | -")
@@ -2454,6 +2739,11 @@ CASES: list = [
     ("flow_step_checked", _case_flow_step_checked),
     ("stage_without_techniques", _case_stage_without_techniques),
     ("phase_checked", _case_phase_checked),
+    ("phase_name_symbols", _case_phase_name_symbols),
+    ("phase_gate_real_labels", _case_phase_gate_real_labels),
+    ("stage_group_parse", _case_stage_group_parse),
+    ("stage_group_gate", _case_stage_group_gate),
+    ("crosslink_skips_deck_line", _case_crosslink_skips_deck_line),
     ("matrix_columns_checked", _case_matrix_columns_checked),
     ("number_not_on_page", _case_number_not_on_page),
     ("unit_suffixed_number", _case_unit_suffixed_number),
@@ -3214,6 +3504,67 @@ def _case_render_without_techniques(tmp: Path) -> None:
     assert len({b.height for b in boxes}) == 1
 
 
+def _case_stage_group_render(tmp: Path) -> None:
+    """A stage-group slide: the band names every stage, each row shows its
+    stage number and text, chips and the why box are a stage slide's. Six
+    short rows fit; seven long ones are refused, naming the slide."""
+    import breach_deck_render as r
+
+    def group(nums: list[str], text: str, where: str, phase: str, techniques=(),
+              why: str = "Credentials opened every door.") -> BSlide:
+        items = {"row": [[n, text] for n in nums]}
+        if techniques:
+            items["technique"] = [list(t) for t in techniques]
+        return _rslide("Keys, then a role", "stage-group", stages=list(nums), phase=phase,
+                       items=items, paragraphs=[why], where=where)
+
+    chips = [["T1552.001", "Unsecured Credentials: Credentials In Files"],
+             ["T1552.005", "Cloud Instance Metadata API"],
+             ["T1651", "Cloud Administration Command"]]
+    pair = group(["03", "04"], "Keys sat in code and config files", "g.deck:5",
+                 "Credential Access: Keys and Roles", chips)
+    pair.items["row"][1][1] = "The metadata service handed over a role"
+    six_nums = [f"{n:02d}" for n in range(19, 25)]
+    six = group(six_nums, "The agents already knew the answer before they broke in",
+                "g.deck:30", "Root Cause")
+    deck = BDeck("g", "T", RENDER_PAGE, "2026-11-20", "P.", [pair, six], "")
+    a, b = _rendered(tmp, deck)
+
+    band = _one(a, "phase-band")
+    assert band.text_frame.text == "CREDENTIAL ACCESS: KEYS AND ROLES · STAGES 03 AND 04", \
+        band.text_frame.text
+    color = r.phase_color("Credential Access")
+    assert _fill(band) == color
+    assert _one(b, "phase-band").text_frame.text == \
+        "ROOT CAUSE · STAGES 19, 20, 21, 22, 23 AND 24"
+    assert _fill(_one(b, "phase-band")) == r.FALLBACK_PHASE
+    # No single stage tile: the heading takes the full content width.
+    assert not _shapes(a, "stage-number")
+    assert _one(a, "heading").left == r.Inches(r.X)
+    nums, texts = _shapes(a, "row-number"), _shapes(a, "row-text")
+    assert [n.text_frame.text for n in nums] == ["03", "04"]
+    assert [t.text_frame.text for t in texts] == [row[1] for row in pair.items["row"]]
+    assert all(_fill(n) == color for n in nums)
+    assert all(n.top == t.top and n.left + n.width < t.left for n, t in zip(nums, texts))
+    assert [sh.text_frame.text for sh in _shapes(a, "chip")] == [
+        f"{tid}  {name}" for tid, name in chips
+    ]
+    # Rows sit below the chips and above the pinned why box, top to bottom.
+    lowest_chip = max(sh.top + sh.height for sh in _shapes(a, "chip"))
+    assert lowest_chip < nums[0].top < nums[1].top
+    assert texts[-1].top + texts[-1].height <= _one(a, "why").top
+    assert _one(a, "why-text").text_frame.text == "Credentials opened every door."
+    assert _texts(b, "row-number") == six_nums and not _shapes(b, "chip")
+
+    long = "the agent asked the metadata service for credentials and received a very powerful role"
+    assert _words(long) == MAX_FIELD_WORDS
+    seven = group([f"{n:02d}" for n in range(1, 8)], long, "seven.deck:9", "Root Cause")
+    out = tmp / "seven.pptx"
+    _layout_error(lambda: r.render_deck(BDeck("s", "T", RENDER_PAGE, "2026-11-20", "P.",
+                                              [seven], ""), out), "seven.deck:9")
+    assert not out.exists(), "a refused render wrote a file"
+
+
 def _case_bars_to_scale(tmp: Path) -> None:
     import breach_deck_render as r
 
@@ -3464,6 +3815,7 @@ RENDER_CASES: list = [
     ("verify_plants", _case_verify_plants),
     ("render_diagrams", _case_render_diagrams),
     ("render_without_techniques", _case_render_without_techniques),
+    ("stage_group_render", _case_stage_group_render),
     ("bars_to_scale", _case_bars_to_scale),
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),

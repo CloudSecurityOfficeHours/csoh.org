@@ -200,19 +200,41 @@ Speaker notes run to the next "== " line. Every slide has them.
 
 - The header holds exactly `title`, `page`, `as-of` and `promise`, each once.
 - A slide's first line is `layout: <name>`; `text` when absent. `stage:`,
-  `phase:`, `source: name | url` and `credit:` are control lines, each at most
-  once per slide. Typed lines are `key: field | field`, and every field is
-  non-empty.
+  `stages:`, `phase:`, `source: name | url` and `credit:` are control lines,
+  each at most once per slide. Typed lines are `key: field | field`, and every
+  field is non-empty.
 - Notes are required on every slide. There are no includes and no code fences.
 - A non-background slide says nothing its page does not: every number,
   technique ID, stage and link must appear on the page. A version, IPv4
   address or CIDR (`8.4.28`, `10.0.0.0/8`) is one number, compared whole.
 - A `stage` slide's techniques must be on that stage of the page, which
   counts every ATT&CK link in the stage header and every technique tag. Its
-  `phase:` (the part before any colon) must name the stage's phase label: the
-  `phase-lbl` text before its colon, emoji and markup removed, such as
-  `Execution and Privilege Escalation`. A `flow` step's tactic follows the same
-  rule.
+  `phase:` must name the stage's phase label. The name in a `phase-lbl`, and
+  in a `phase:` line, is the text before its first colon or its first spaced
+  hyphen (`" - "`), whichever comes first, with markup and emoji removed and
+  every leading character that is not a letter or digit dropped:
+  `🔀 Execution and Privilege Escalation: Containers` gives `Execution and
+  Privilege Escalation`, `₿ Impact: Coins taken` gives `Impact`, and
+  `Reconnaissance - Open Source Intelligence` gives `Reconnaissance`. A hyphen
+  inside a word stays (`Cross-Site Scripting`). Some pages write a label as a
+  name, a spaced hyphen and a subtitle, and the gate reads that form so those
+  pages stay as written. A `phase:` line is held to the dash rule, so for such
+  a label it gives the name alone or the name, a colon and the subtitle. A
+  `flow` step's tactic follows the same rule.
+- A chain too long for a slide per stage groups its stages by phase on
+  `stage-group` slides. `stages:` lists 2 to 6 two-digit stage numbers in
+  ascending order and `phase:` names the phase they share; both are required.
+  A `stage-group` slide takes no `stage:` line, and no other layout takes
+  `stages:`. Each `row: NN | what happened` is one listed stage, one row per
+  stage in the listed order; up to three `technique:` lines give the chips;
+  the prose is the "why it matters" line, and it has to be true of every
+  stage in the group. The gate requires every listed stage to be on the page
+  under the slide's phase label, every technique to be on one of the listed
+  stages, and the rows to name exactly the listed stages. The band reads
+  `<PHASE> · STAGES 03, 04 AND 05`, and each row shows its stage number on a
+  tile in the phase colour. When the rows do not fit, `--build` raises a
+  `LayoutError` naming the slide; split the group into two slides of the same
+  phase.
 - A stage the page maps to no technique (a detection or response stage)
   still gets a `stage` slide, with no `technique:` line and no chip row; in a
   `flow` step its technique is `-`, and the box shows no ID.
@@ -236,6 +258,7 @@ Speaker notes run to the next "== " line. Every slide has them.
 | `text`, `background`, `question`, `answer` | none; prose and bullets (`question` takes prose only, `background` needs `source:`) |
 | `stats` | `stat` 2 to 4: `value \| label \| detail` |
 | `stage` | `technique` 0 to 3: `id \| name`; `fact` 1 to 5: `label \| value`; needs `stage:` and `phase:` |
+| `stage-group` | `technique` 0 to 3: `id \| name`; `row` 2 to 6: `NN \| what happened`, one per listed stage; needs `stages:` and `phase:` |
 | `checklist` | `check` 2 to 7 |
 | `links` | `link` 1 to 8: `name \| url` |
 | `flow` | `step` 3 to 8: `NN \| tactic \| short title \| technique id or -` |
@@ -279,6 +302,10 @@ Speaker notes run to the next "== " line. Every slide has them.
   `--record` refuses an outline with any finding `--check` reports, and
   otherwise writes the id, both hashes and today's date, then stamps. A
   refused record writes neither the mapping nor any page.
+- The glossary cross-linker (`tools/crosslink_pages.py`) never links inside a
+  deck line: a `<p>` carrying `data-breach-deck` or `data-howto-deck` is one
+  of its skip zones, because each tool's `--check` requires a deck line to be
+  exactly the text its `--stamp` writes.
 
 Publishing follows the how-to steps: build, upload privately, export and
 inspect the PDF, fact-review against the page, get the owner's approval, then
