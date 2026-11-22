@@ -386,8 +386,10 @@ PHASE_COLORS: dict[str, str] = {t: _darken_for_white(c) for t, c in SITE_PHASE_H
 def phase_color(phase: str) -> str:
     """The colour for a phase: line. The tactic is the start of the text
     before any colon ("Persistence and Collection: Mail" is Persistence),
-    matched as whole words in any case; anything else gets the fallback."""
-    head = phase.split(":", 1)[0].strip().lower()
+    matched as whole words in any case; anything else gets the fallback. An
+    ampersand reads as "and", since pages write "Command & Control"."""
+    head = phase.split(":", 1)[0].replace("&amp;", "&").replace("&", " and ")
+    head = " ".join(head.split()).lower()
     for tactic in sorted(PHASE_COLORS, key=len, reverse=True):
         t = tactic.lower()
         if head == t or (head.startswith(t) and not head[len(t)].isalnum()):

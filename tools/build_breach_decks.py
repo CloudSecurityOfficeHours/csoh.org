@@ -3088,6 +3088,11 @@ def _case_phase_contrast(tmp: Path) -> None:
     assert r.phase_color("Credential Access: Keys Nobody Rotated") == cred
     assert r.phase_color("credential access") == cred
     assert r.phase_color("Persistence and Collection: Mail") == r.PHASE_COLORS["Persistence"]
+    # Pages write "Command & Control"; the ampersand reads as "and".
+    c2 = r.PHASE_COLORS["Command and Control"]
+    assert r.phase_color("Command & Control") == c2
+    assert r.phase_color("Command &amp; Control: Prompts as Beacons") == c2
+    assert r.phase_color("Command&Control") == c2
     for unknown in ("Recon & Upstream Compromise", "Impactful: a word, not a tactic", "Background"):
         assert r.phase_color(unknown) == r.FALLBACK_PHASE, unknown
 
