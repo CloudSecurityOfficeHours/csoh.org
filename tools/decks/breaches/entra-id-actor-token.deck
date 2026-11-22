@@ -1,0 +1,488 @@
+title: Entra ID Actor Token
+page: breaches/entra-id-actor-token.html
+as-of: 2026-11-22
+promise: In July 2025 a researcher found that, through legacy Azure AD Graph, an Actor token from his own tenant allowed impersonating any user in any Entra ID tenant; Microsoft found no evidence of exploitation before the fix.
+
+== At a glance
+layout: stats
+stat: 10.0 | CVSS score | for CVE-2025-55241: impersonate any user in any tenant, Global Admin included
+stat: 3 days | from report to global fix | July 14 to July 17, 2025
+stat: Zero | customer-side mitigations available | while the flaw was live
+The page calls it not a breach: it was responsibly disclosed, and Microsoft's telemetry found no evidence anyone exploited it beforehand.
+notes:
+Start with the three figures the page leads with.
+
+CVE-2025-55241 was scored CVSS 10.0. A CVE is the public identifier for a disclosed vulnerability. CVSS, the Common Vulnerability Scoring System, rates severity on a scale whose top score is 10.0. The flaw allowed impersonation of any user in any Entra ID tenant, up to and including Global Administrator.
+
+Microsoft shipped a global fix three days after the report: it was reported on July 14, 2025 and fixed on July 17.
+
+The third figure is the one the page builds its lesson on. While the flaw was live, there was no customer-side configuration that mitigated it, in any tenant, at any price tier.
+
+The page is explicit that this is not a breach. It was responsibly disclosed, and Microsoft's telemetry found no evidence anyone exploited it beforehand. Keep that qualifier whenever you present it.
+
+== What happened, and when
+layout: timeline
+event: July 14, 2025 | Mollema reports the flaw to MSRC
+event: July 17 | Microsoft deploys a production fix globally
+event: August 6 | A second mitigation blocks apps from requesting Actor tokens for Azure AD Graph
+event: September 4 | CVE-2025-55241 assigned, CVSS 10.0
+event: September 17 | The research is published
+In July 2025 Dirk-jan Mollema found legacy Azure AD Graph would accept an Actor token from a tenant he controlled in any other. Microsoft's telemetry found no evidence of exploitation before the fix. Spacing is not to scale.
+notes:
+The page gives these dates, and the timeline shows only those. The markers are evenly spaced, and the gaps between them are not to scale.
+
+In July 2025 the security researcher Dirk-jan Mollema found that an Actor token, requested from a tenant he controlled, would be accepted by the legacy Azure AD Graph API in any other tenant.
+
+He reported it to MSRC, the Microsoft Security Response Center, on July 14, 2025. Microsoft deployed a production fix globally on July 17, three days later, restoring the tenant check.
+
+On August 6 Microsoft shipped a second mitigation, preventing applications from obtaining Actor tokens for Azure AD Graph using service principal credentials. The page says that narrowed the mechanism to Microsoft's own internal services.
+
+The CVE was assigned on September 4, and the research was published on September 17. Microsoft's internal telemetry found no evidence of exploitation before the fix.
+
+== Not a breach: who found it, and who fixed it
+layout: compare
+col: Dirk-jan Mollema, the researcher | Requested an Actor token from a tenant he controlled | Found legacy Azure AD Graph would accept it in any other tenant | Says no setting could have mitigated it
+col: Microsoft | Fixed it globally on July 17, three days after the report | Blocked apps from requesting Actor tokens for Azure AD Graph, August 6 | Its telemetry found no evidence of exploitation before the fix
+The page includes it for what it shows: every control the site recommends sat outside this path.
+notes:
+The page says plainly that this entry is not a breach, and that it belongs in the collection for a different reason than the rest.
+
+The researcher, Dirk-jan Mollema, found the flaw and disclosed it responsibly. An Actor token requested from a tenant he controlled would be accepted by the legacy Azure AD Graph API in any other tenant, because that API never checked which tenant the token came from. As he put it plainly, there was no setting that could have mitigated this, including for tenants that had done everything right.
+
+Microsoft fixed it on the provider's side: globally on July 17, three days after the report, then with a second mitigation on August 6. Microsoft's telemetry found no evidence anyone exploited it beforehand.
+
+The page says the entry earns its place because of what it demonstrates. Every control the site recommends, including MFA, Conditional Access, device compliance and least privilege, sat entirely outside this path, and so did nearly all of the logging. MFA is multi-factor authentication.
+
+== The chain on one slide
+layout: flow
+step: 01 | Discovery | Unwatched token class | T1580
+step: 02 | Credential Access | From own tenant | T1528
+step: 03 | Privilege Escalation | Unsigned wrapper | T1606
+step: 04 | Initial Access | No tenant check | T1078.004
+step: 05 | Discovery | Finding a netId | T1087.004
+step: 06 | Impact | Global Admin | T1098
+step: 07 | Defense Impairment | Almost no logs | T1685.002
+step: 08 | Resolution | Fixed July 17 | -
+The research showed this chain possible; Microsoft found no evidence of exploitation before the fix.
+notes:
+Here is the whole chain on one slide: the page's eight stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is the token class itself: Actor tokens, which nobody was watching. Stage 02 is requesting one legitimately from a tenant the requester controls. Stage 03 is editing the unsigned impersonation token that wraps it. Stage 04 is the legacy API that never checked the tenant, the one missing comparison the page says the whole vulnerability reduces to. Stage 05 is finding a target user's netId. Stage 06 is impersonating a Global Administrator, with every customer control bypassed by construction. Stage 07 is how little reached the victim's logs. Stage 08 is the resolution, which the page maps to no ATT&CK technique, so its box shows no ID.
+
+Read the arrows as the page's stage order. The page writes the steps as an attacker would take them, but this was responsibly disclosed research, and Microsoft's telemetry found no evidence of exploitation before the fix. The next slides take each stage in turn.
+
+== Actor tokens: no revocation, no issuance log
+layout: stage
+stage: 01
+phase: Discovery
+technique: T1580 | Cloud Infrastructure Discovery
+fact: Validity | 24 hours, not revocable in that window
+fact: Key claim | trustedfordelegation, true for Microsoft first-party apps
+fact: Issuance log | none
+fact: Conditional Access | explicitly outside it: not a user sign-in
+Together, the page says, they describe a bearer credential with no issuance record, no revocation and no policy engine in front.
+notes:
+Stage 01 is where the research started, somewhere unglamorous: hybrid Exchange. The page maps it to T1580, Cloud Infrastructure Discovery.
+
+Microsoft's own back-end services need to act on a user's behalf when talking to Azure AD Graph, SharePoint and Exchange Online. The mechanism they use is an undocumented service-to-service credential called an Actor token, issued by the Access Control Service, ACS.
+
+Read the properties together: twenty-four hour validity; a trustedfordelegation claim marking the holder as allowed to act as anyone, set true for Microsoft first-party apps; no audit log when one is issued; no way to revoke one inside its validity window; and explicitly outside Conditional Access, because Conditional Access evaluates user sign-ins and this is not one.
+
+The page says each property is defensible in isolation as an internal service mechanism, and that the risk is obvious in hindsight. Together they describe a bearer credential with no issuance record, no revocation, and no policy engine in front of it. The next slide explains bearer tokens in general.
+
+== What a bearer token is
+layout: background
+source: RFC 6750, OAuth 2.0 Bearer Token Usage | https://www.rfc-editor.org/rfc/rfc6750
+RFC 6750 defines a bearer token as one any holder can use, as any other holder can, without proving possession of a cryptographic key.
+
+The page calls the Actor token a bearer credential. The RFC is written for OAuth.
+notes:
+This is a background slide. It explains a general idea from RFC 6750, the OAuth 2.0 bearer token standard.
+
+RFC 6750 defines a bearer token as a security token with the property that any party in possession of the token, a bearer, can use it in any way that any other party in possession of it can. Using a bearer token does not require the bearer to prove possession of cryptographic key material, which the RFC calls proof-of-possession.
+
+So whoever holds a bearer token can use it. The page uses the phrase for the Actor token: a bearer credential with no issuance record, no revocation, and no policy engine in front of it.
+
+The page does not say that Actor tokens are OAuth access tokens, or that they follow RFC 6750. Read this slide as the general idea only.
+
+== Any tenant would do, even a free trial
+layout: stage
+stage: 02
+phase: Credential Access
+technique: T1528 | Steal Application Access Token
+fact: Prerequisite | any Entra ID tenant the attacker controls, trials included
+fact: Target relationship | none: no guest account, no federation, no prior access
+fact: Cost | effectively zero
+fact: Signal generated | a legitimate request by the attacker tenant's own admin
+The attacker needs no foothold near the target, only a tenant, which anyone can create in minutes for nothing.
+notes:
+The page calls this the step that sets the severity. It maps it to T1528, Steal Application Access Token.
+
+An Actor token could be requested from a tenant the researcher fully controlled, including a free trial tenant, with no relationship to any target. The attacker does not need a foothold anywhere near the target. They need a tenant, and anyone can create one in minutes for nothing.
+
+The token is requested legitimately in the requester's own tenant, where they are already the administrator and entitled to it. No unusual event is generated on either side, because nothing unusual has happened yet.
+
+Everything that follows, the page says, is a matter of what the requester then puts inside the next token, and which API is willing to read it without asking where it came from. The next slide explains tenants and federation in general.
+
+== What a tenant is, and what federation means
+layout: background
+source: csoh.org glossary, Tenant / Multi-Tenant | https://csoh.org/glossary.html#term-tenant
+credit: Also from the csoh.org glossary entry Federation
+The csoh.org glossary defines a tenant as a logical boundary for one customer's data, identities and configuration in a shared platform. It calls the cross-tenant boundary the provider's most security-critical control.
+
+Federation means trusting tokens from a foreign identity provider.
+notes:
+This is a background slide. It explains two general ideas from the csoh.org glossary.
+
+A tenant is a logical boundary for one customer's data, identities and configuration in a shared platform. Multi-tenant software as a service keeps many tenants isolated on the same infrastructure, and the glossary calls the cross-tenant boundary the provider's most security-critical control.
+
+Federation means trusting tokens from a foreign identity provider. The glossary's example is AWS trusting GitHub Actions OpenID Connect tokens to assume a role.
+
+The page says stage 02 needed no federation, no guest account and no prior access to the target tenant, only a tenant of the requester's own.
+
+Also from the csoh.org glossary entry Federation: https://csoh.org/glossary.html#term-federation
+
+== The impersonation token carried no signature
+layout: stage
+stage: 03
+phase: Privilege Escalation
+technique: T1606 | Forge Web Credentials
+technique: T1550.001 | Use Alternate Authentication Material: Application Access Token
+fact: Structure | an unsigned outer JWT wrapping the Actor token
+fact: Edited | the target tenant GUID and the target user's nameid
+fact: Result | a working session, not the expected tenant-mismatch denial
+The trust was meant to come from the embedded Actor token, not from a signature over the whole token.
+notes:
+Stage 03 is where the impersonation token is edited. The page maps it to T1606, Forge Web Credentials, and T1550.001, Application Access Token.
+
+To impersonate a user, a Microsoft service builds a second JWT, a JSON Web Token, that contains the Actor token, the target tenant ID and the target user's identifier. It does not sign that outer token. The trust is meant to come from the embedded Actor token rather than from a signature over the whole thing.
+
+So the researcher edited it. He changed the tenant GUID, the globally unique identifier of a tenant, to a different organization's, and the nameid to a different user. He expected the token to be rejected instantly for the obvious tenant mismatch. Sending it to graph.windows.net returned a valid session instead.
+
+The UPN fields, the user principal names, turned out to be decorative. Azure AD Graph ignored them and keyed entirely off nameid.
+
+The next slide explains what a JWT signature protects, in general.
+
+== What a JWT signature protects
+layout: background
+source: RFC 7519, JSON Web Token (JWT) | https://www.rfc-editor.org/rfc/rfc7519
+credit: Also from RFC 6750, OAuth 2.0 Bearer Token Usage (rfc-editor.org)
+RFC 7519 says JWT claims can be signed or integrity protected, encrypted, or both. It also allows an Unsecured JWT, with no signature, for content secured by other means.
+
+The page says only that the outer token was unsigned.
+notes:
+This is a background slide. It explains general ideas from RFC 7519, the JSON Web Token standard, and from RFC 6750.
+
+RFC 7519 describes a JWT as a compact, URL-safe way of representing claims to be transferred between two parties. The claims are encoded as a JSON object, carried in a JSON Web Signature or JSON Web Encryption structure, so they can be digitally signed or integrity protected with a Message Authentication Code, a MAC, or encrypted, or both.
+
+The RFC also allows JWTs created with no signature or encryption, which it calls Unsecured JWTs. They are meant for cases where the content is secured by some means other than a signature or encryption contained within the JWT.
+
+RFC 6750 lists token manufacture or modification among the threats to token-based protocols: an attacker generates a bogus token, or modifies the contents of an existing one, causing the server to grant inappropriate access.
+
+The page does not describe how the outer token was encoded. It says only that it carried no signature, and that its tenant ID and target user could be edited.
+
+Also from RFC 6750: https://www.rfc-editor.org/rfc/rfc6750
+
+== Azure AD Graph never checked the token's tenant
+layout: stage
+stage: 04
+phase: Initial Access
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: Vulnerable API | graph.windows.net, Microsoft Graph's deprecated predecessor
+fact: It validated | that nameid mapped to a real user
+fact: It never validated | that the Actor token came from the tenant being accessed
+fact: Blast radius | every Entra ID tenant: the flaw was in the shared service
+Legacy surfaces are dangerous precisely because they are quiet, the page says.
+notes:
+The page says the whole vulnerability reduces to one missing comparison. It maps this stage to T1078.004, Valid Accounts: Cloud Accounts.
+
+Azure AD Graph, at graph.windows.net, is the deprecated predecessor to Microsoft Graph. It checked that the nameid corresponded to a real user and then served the request. It never asked whether the Actor token authorizing that impersonation had been issued in the same tenant as the user being impersonated.
+
+A single boundary check, absent from an API old enough that most of its consumers had already been migrated away, converted a legitimate internal delegation mechanism into cross-tenant impersonation for the entire service. That is why the blast radius was every Entra ID tenant: the flaw was in the shared service. This missing check is CVE-2025-55241, scored CVSS 10.0.
+
+The page draws a general lesson here. Legacy surfaces are dangerous precisely because they are quiet: nobody is adding features, so nobody is re-reviewing the assumptions, and the traffic is low enough that anomalies do not stand out.
+
+== A target's netId could be found three ways
+layout: stage
+stage: 05
+phase: Discovery
+technique: T1087.004 | Account Discovery: Cloud Account
+fact: Needed | the target user's internal netId
+fact: Brute force | netIds increment, so they enumerate in minutes to hours
+fact: B2B guest objects | hold the home tenant user's netId, readable by the inviter
+fact: Leaked tokens | any with a puid claim, even expired, yields a usable netId
+Values nobody designed to be secret become the last remaining control the moment the boundary above them fails.
+notes:
+Stage 05 is finding a target. The page maps it to T1087.004, Account Discovery: Cloud Account.
+
+The one thing standing between an attacker and a given tenant was knowing a user's internal netId, and the page says it did not stand for long. Because netIds increment rather than being randomly assigned, they can be walked systematically, reducing the search for a valid user in a tenant to minutes or hours of automation.
+
+If the attacker had ever invited someone as a B2B guest, the guest object stored the home tenant user's netId in its alternativeSecurityIds attribute, readable by whoever issued the invitation. B2B is business-to-business collaboration.
+
+And any token that had ever leaked, whether expired, redacted in a bug report or pasted into a support ticket, carried a puid claim that yields a working netId.
+
+The page's point: values that are not secret, because nobody designed them to be secret, become the last remaining control the moment the boundary above them fails. The next slide explains B2B guests in general.
+
+== What a B2B guest is
+layout: background
+source: Microsoft Learn, What is Microsoft Entra B2B collaboration? | https://learn.microsoft.com/en-us/entra/external-id/what-is-b2b
+Microsoft Learn says B2B collaboration lets partners use their own credentials to reach your resources. Once a guest redeems an invitation, they are a user object in your directory, typically with user type guest.
+notes:
+This is a background slide, from Microsoft Learn, in general terms.
+
+B2B collaboration is how an organization's workforce tenant shares its applications and services with people from outside, called guests. A simple invitation and redemption process lets partners use their own credentials. Once the guest redeems the invitation or completes sign-up, Microsoft says, they are represented in your directory as a user object, and the user type for these users is typically set to guest.
+
+Guest users sign in with their own work, school or social identities, so the inviting organization does not manage their accounts or passwords.
+
+The page adds a detail this overview does not cover: the guest object stored the home tenant user's netId in its alternativeSecurityIds attribute, readable by whoever issued the invitation. That detail comes from the page, not from this source.
+
+== Global Admin, with every control bypassed by construction
+layout: stage
+stage: 06
+phase: Impact
+technique: T1098 | Account Manipulation
+fact: Access | Global Administrator equivalent, by impersonation
+fact: Conditional Access | not evaluated: no user sign-in occurs
+fact: MFA | never prompted: no user-layer authentication
+fact: Hardened tenants | equally affected; no configuration mitigated it
+No customer decision affected the outcome, the page says.
+notes:
+Stage 06 is impact. The page maps it to T1098, Account Manipulation.
+
+With a Global Administrator impersonated, the attacker holds the tenant: directory contents, group and role membership, application and service principal configuration, and the ability to grant themselves durable access through more conventional means.
+
+The page says what makes this different from the other identity chains in the collection is that no customer decision affected the outcome. Conditional Access never evaluated the request, because there was no user sign-in to evaluate. MFA was never prompted, because no authentication occurred at the user layer. Device compliance, sign-in risk policies, named locations and token protection did not sit on this path either.
+
+As the researcher put it plainly, there was no setting that could have mitigated this, including for tenants that had done everything right. A stolen token stayed useful for 24 hours, and could not be revoked.
+
+The next slide explains Conditional Access in general.
+
+== What Conditional Access evaluates
+layout: background
+source: Microsoft Learn, Microsoft Entra Conditional Access overview | https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview
+Microsoft Learn describes Conditional Access policies as if-then statements: if a user wants to access a resource, then they must complete an action. Policies are enforced after first-factor authentication is completed.
+notes:
+This is a background slide, from Microsoft Learn, in general terms.
+
+Microsoft calls Conditional Access its Zero Trust policy engine. It brings signals together to make decisions and enforce organizational policies. At their simplest, Conditional Access policies are if-then statements: if a user wants to access a resource, then they must complete an action, such as multifactor authentication.
+
+The signals Microsoft lists include the user, group or agent, IP location, the device, the application, and real-time and calculated risk detection. Decisions range from blocking access to granting it with requirements such as multifactor authentication or a device marked as compliant.
+
+Microsoft also notes that Conditional Access policies are enforced after first-factor authentication is completed.
+
+The page says Conditional Access evaluates user sign-ins, and that no user sign-in occurred on this path, so Conditional Access never evaluated the request.
+
+== Almost nothing reached the victim's logs
+layout: stage
+stage: 07
+phase: Defense Impairment
+technique: T1685.002 | Disable or Modify Tools: Disable or Modify Cloud Log
+fact: Token issuance | no log
+fact: Impersonation token | no log, when crafted
+fact: Directory reads | no log
+fact: Writes | logged: the impersonated user's UPN, Exchange's display name
+The page's conclusion: a victim organization could not have answered the question "were we accessed."
+notes:
+Stage 07 is about the victim's logs. The page maps it to T1685.002, Disable or Modify Tools: Disable or Modify Cloud Log.
+
+The page reads the telemetry picture as a whole, and its honest conclusion is that a victim organization could not have answered the question: were we accessed?
+
+Issuing the Actor token, crafting the impersonation token and reading the entire directory through Azure AD Graph each produced no log.
+
+Only write operations landed in the audit log, and even those arrived confusingly. They recorded the impersonated Global Administrator's UPN alongside the display name of Exchange. That artifact pattern reads as a Microsoft service doing something odd rather than as an intrusion.
+
+The page calls this the same failure that made Storm-0558 so painful two years earlier, and names the general form. When authentication material is forged rather than stolen, logs are the only remaining detection, and a design that does not log issuance has removed the last one.
+
+== Fixed on the provider's side, three days after the report
+layout: stage
+stage: 08
+phase: Resolution
+fact: July 14, 2025 | reported to the Microsoft Security Response Center
+fact: July 17 | production fix deployed globally, tenant validation restored
+fact: August 6 | apps blocked from requesting Actor tokens for Azure AD Graph
+fact: Exploitation | no evidence before the fix, per Microsoft's internal telemetry
+fact: Customer action | none required
+It was fixed on the provider's side because it could only be fixed there, the page says.
+notes:
+Stage 08 is the resolution. The page maps it to no ATT&CK technique, so the slide shows no chip. The page calls the disclosure timeline the encouraging part of this entry.
+
+Mollema reported to MSRC on July 14, 2025. Microsoft deployed a production fix globally on July 17, three days later, restoring tenant validation. On August 6 it shipped a second mitigation, preventing applications from obtaining Actor tokens for Azure AD Graph using service principal credentials, which the page says narrowed the mechanism to Microsoft's own internal services.
+
+CVE-2025-55241 was assigned on September 4, and the research was published on September 17. Microsoft's internal telemetry found no evidence of exploitation before the fix.
+
+Nothing here required customer action, and the page says that is the point: this was fixed on the provider's side because it could only be fixed on the provider's side.
+
+== Every control the site recommends sat outside this path
+layout: table
+row: Control | On this path? | Per the page
+row: MFA | Never prompted | No user-layer authentication occurred
+row: Conditional Access | Never evaluated | There was no user sign-in to evaluate
+row: Device compliance, named locations | Not on the path | Nor were sign-in risk policies or token protection
+row: Target tenant logging | Writes only | Those showed a misleading actor
+No customer-side configuration mitigated it, in any tenant, at any price tier, the page says; hardened tenants were equally affected.
+notes:
+This is the pattern the page draws from the chain, and it is why the entry is in the collection at all.
+
+Every control the site recommends, including MFA, Conditional Access, device compliance and least privilege, sat entirely outside this path, and so did nearly all of the logging. MFA was never prompted, because no authentication occurred at the user layer. Conditional Access never evaluated the request, because there was no user sign-in. Device compliance, sign-in risk policies, named locations and token protection did not sit on the path either.
+
+In the target tenant, only writes were logged, and those showed the impersonated user's UPN beside Exchange's display name.
+
+Hardened tenants were equally affected. There was no customer-side configuration that mitigated it, in any tenant, at any price tier. The defenses that follow start from that.
+
+== Six defenses against eight stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
+row: Accept the ceiling; spend on containment | -
+row: Retire legacy API surfaces | 04
+row: Treat internal identifiers as sensitive | 05
+row: Log what your provider does not | 07
+row: Hunt for the audit artifact | 07
+row: Reduce standing Global Administrator | 05 | 06
+No defense on the page is tied to stages 01, 02, 03 or 08. The first defense names no stage.
+notes:
+This matrix sets the page's six defenses against the eight stages. A cell is marked only where the page ties that defense to that stage.
+
+Retiring legacy API surfaces answers stage 04: the page says the flaw lived in Azure AD Graph, an API already deprecated. Treating internal identifiers as sensitive answers stage 05, where netIds were enumerable because nobody needed them to be unguessable.
+
+Logging what your provider does not, and hunting for the audit artifact, both answer stage 07. Reducing standing Global Administrator answers stage 06, the impersonated Global Administrator, and stage 05, because it aims to keep the high-value nameid values out of guest invitations.
+
+The first defense names no stage. It asks you to accept that you could not have stopped this one, and to spend on containment.
+
+Now look at the empty columns. Nothing on the page is tied to stages 01, 02 or 03, the token, the request and the unsigned wrapper, or to stage 08, the provider's fix. That gap is one of the discussion questions at the end.
+
+== Spend on containment; shrink the Global Admin target set
+layout: compare
+col: Accept the ceiling, no stage | No tenant setting, licence tier or architecture mitigated it | Limit what an account reaches; notice and revoke fast | Prevention has a ceiling your provider sets; containment does not
+col: Fewer standing Global Admins, stages 05 and 06 | Use Privileged Identity Management for just-in-time elevation | Keep break-glass accounts minimal and monitored | Separate admin identities, keeping their nameids out of guest invitations
+The page calls the first an argument for containment, not a counsel of despair.
+notes:
+Two defenses about where to spend once prevention has run out.
+
+First, the page asks you to accept honestly that you could not have stopped this one, and to let that inform where you spend. There was no tenant setting, no licence tier and no architecture that mitigated it. The page calls this an argument for controls that limit consequences rather than prevent access, and not a counsel of despair. Those controls cover what an account can reach once it is inside, how quickly you would notice a change, and how fast you can revoke. Prevention has a ceiling that your provider sets; containment does not.
+
+Second, reduce standing Global Administrator, since impersonation targets whoever holds the role. Fewer permanent Global Admins is a smaller target set. Use Privileged Identity Management for just-in-time elevation, keep break-glass accounts minimal and monitored, and separate administrative identities from day-to-day ones, so the high-value nameid values are not the ones that appear in every guest invitation and shared document. Break-glass accounts are emergency administrator accounts kept for when normal access fails.
+
+== Retire legacy APIs; treat internal identifiers as sensitive
+layout: compare
+col: Retire legacy APIs, stage 04 | The flaw lived in Azure AD Graph, already deprecated | Audit which apps still call graph.windows.net, and migrate them | Then block the legacy endpoint where you can; push vendors to retire theirs
+col: Guard identifiers, stage 05 | netIds were enumerable because nobody needed them unguessable | Apply that suspicion to your own object IDs, tenant GUIDs and user IDs | Redact them by default; prefer non-sequential identifiers
+Every deprecated but reachable interface in your estate carries assumptions nobody has re-reviewed in years, the page says.
+notes:
+Two defenses aimed at the legacy API and the identifiers.
+
+Retire legacy API surfaces on your side, and push your vendors to retire theirs. The flaw lived in Azure AD Graph, an API already deprecated in favour of Microsoft Graph. Audit which applications in your tenant still call graph.windows.net, migrate them, and then block the legacy endpoint where you can. The page says every deprecated but reachable interface in your estate carries assumptions nobody has re-reviewed in years, and this is what that costs.
+
+Treat internal identifiers as sensitive, because a boundary failure promotes them into the only control left. netIds were enumerable because nobody needed them to be unguessable. Apply the same suspicion to your own systems: object IDs, tenant GUIDs and user identifiers that leak through APIs, error messages, support tickets and screenshots. Redact them by default, and prefer non-sequential identifiers so enumeration is not free.
+
+== Log what your provider does not; hunt the audit artifact
+layout: compare
+col: Own your logs, stage 07 | Put Entra ID audit and sign-in logs in your SIEM, with retention you control | List what your provider does not log; put it in your incident response plan
+col: Hunt the artifact, stage 07 | Only trace: a write showing a user's UPN with a service's display name | Detect any audit event whose actor identity is internally inconsistent | It generalizes past this CVE to impersonation flaws of the same shape
+You cannot add logging inside Microsoft's service, the page says, but you can know where your telemetry stops.
+notes:
+Two defenses aimed at stage 07, the logs.
+
+Log what your provider does not, and know where your telemetry stops. You cannot add logging inside Microsoft's service, but you can collect Entra ID audit and sign-in logs into your own SIEM, a security information and event management system, with retention you control, so the record survives an attacker who reaches the tenant. Then write down which activities your provider does not log at all. The page calls that list your blind spot inventory, and says it belongs in your incident response plan rather than being discovered during an incident.
+
+Hunt for the specific artifact pattern this produced. The only trace was a write operation where the initiator's UPN belonged to a user while the display name belonged to a Microsoft service such as Exchange. Build a detection for that mismatch generally, an audit event whose actor identity is internally inconsistent, because the page says it generalizes past this particular CVE to any impersonation flaw with the same shape.
+
+== Check your own environment
+layout: checklist
+check: Which applications in your tenant still call graph.windows.net?
+check: Do object IDs, tenant GUIDs or user identifiers leak in tickets, errors or screenshots?
+check: Do Entra ID audit and sign-in logs reach your SIEM, with retention you control?
+check: Have you written down which activities your provider does not log at all?
+check: Would an audit event with an internally inconsistent actor identity raise an alert?
+check: How many permanent Global Administrators do you have, and is elevation just-in-time?
+check: How quickly would you notice a change inside, and how fast could you revoke?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask which applications in your tenant still call graph.windows.net, and whether you can block the legacy endpoint once they are migrated. Ask whether object IDs, tenant GUIDs or user identifiers leak through your APIs, error messages, support tickets or screenshots, and whether your identifiers are sequential.
+
+Ask whether Entra ID audit and sign-in logs reach your own SIEM, with retention you control, and whether you have written down what your provider does not log at all. Ask whether an audit event whose actor identity is internally inconsistent would raise an alert.
+
+Ask how many permanent Global Administrators you have, whether elevation goes through Privileged Identity Management, and whether break-glass accounts are minimal and monitored. Finally, ask the containment question: once an account is inside, how quickly would you notice a change, and how fast could you revoke?
+
+== Could you tell whether you were accessed?
+layout: question
+For this flaw, token issuance, impersonation and directory reads left no log in the target tenant.
+
+Name one activity in your own environment that your provider does not log at all.
+notes:
+Give the room a minute with this one before moving on.
+
+The page says a victim organization could not have answered the question "were we accessed." Issuing the Actor token, crafting the impersonation token and reading the entire directory through Azure AD Graph produced no log. Only writes were logged, with the impersonated user's UPN beside Exchange's display name.
+
+Ask each person to name one specific activity, in any cloud service they rely on, that the provider does not log at all. Then ask where that gap is written down today. The answer slide gives what the page says to do with that list.
+
+== Write the blind spots down before an incident
+layout: answer
+Write down what your provider does not log at all, the page says.
+- Keep that blind spot inventory in your incident response plan.
+- Collect Entra ID audit and sign-in logs in your own SIEM, with retention you control.
+notes:
+The page's answer is to know where your telemetry stops, and to write it down.
+
+You cannot add logging inside Microsoft's service. You can collect Entra ID audit and sign-in logs into your own SIEM, with retention you control, so the record survives an attacker who reaches the tenant.
+
+Then write down which activities your provider does not log at all. The page calls that list your blind spot inventory, and says it belongs in your incident response plan rather than being discovered during an incident.
+
+For this flaw, the only trace was a write whose initiator's UPN belonged to a user while the display name belonged to a Microsoft service such as Exchange. The page's hunt is for that mismatch in general: an audit event whose actor identity is internally inconsistent.
+
+Bring the group's examples back to this. For each gap named, ask whether it is on a written list today.
+
+== What could a customer have done about stages 01 to 03?
+layout: question
+The page ties no defense to the token, the request or the unsigned wrapper, stages 01 to 03.
+
+What would you change in your own tenant, and would it have mattered here?
+notes:
+This question comes from the empty columns in the defense matrix.
+
+The page ties defenses to stages 04, 05, 06 and 07, and one more that names no stage. It ties none to stage 01, the Actor token itself, to stage 02, requesting one from a tenant the requester controls, or to stage 03, editing the unsigned impersonation token. Stage 08 is Microsoft's fix.
+
+Let the group propose ideas before you show the answer slide. For each proposal, ask whether anything a customer could set would have sat on this path.
+
+== The page says you could not have stopped this one
+layout: answer
+No tenant setting, licence tier or architecture mitigated it, the page says. It was fixed on the provider's side because it could only be fixed there.
+
+Spend on containment: what an account reaches, how fast you notice and revoke.
+notes:
+Be clear that the page answers this directly, and that this deck adds no control of its own.
+
+The page says there was no tenant setting, no licence tier and no architecture that mitigated it, and the researcher said there was no setting that could have mitigated it, including for tenants that had done everything right. It was fixed on the provider's side because it could only be fixed on the provider's side.
+
+The page's advice is to let that inform where you spend: on controls that limit consequences rather than prevent access. That means what an account can reach once it is inside, how quickly you would notice a change, and how fast you can revoke. Prevention has a ceiling that your provider sets; containment does not.
+
+If the group proposes a control for stages 01 to 03, treat it as the group's own. The page ties none to those stages.
+
+== Sources
+layout: links
+link: Dirk-jan Mollema, One Token to rule them all | https://dirkjanm.io/obtaining-global-admin-in-every-entra-id-tenant-with-actor-tokens/
+link: MSRC, CVE-2025-55241 | https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-55241
+link: NVD, CVE-2025-55241 | https://nvd.nist.gov/vuln/detail/CVE-2025-55241
+link: The Hacker News, Microsoft patches the Entra ID flaw | https://thehackernews.com/2025/09/microsoft-patches-critical-entra-id.html
+link: MITRE ATT&CK T1606 | https://attack.mitre.org/techniques/T1606/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Dirk-jan Mollema's write-up is the researcher's own account of the research. The Microsoft Security Response Center entry and the National Vulnerability Database entry record the CVE. The Hacker News reported Microsoft's fix. The MITRE page defines T1606, Forge Web Credentials, the technique the page maps to stage 03.
+
+The background slides name their own sources: the IETF standards for OAuth bearer tokens and JSON Web Tokens, published by the RFC Editor, the csoh.org glossary, and Microsoft Learn.
+
+== Related kill chain and defense topics
+layout: links
+link: Storm-0558 | breaches/storm-0558.html
+link: Azure security | azure-security.html
+link: IAM and cloud identity | iam.html
+link: Detection engineering | detection-engineering.html
+link: Shared responsibility | shared-responsibility-model.html
+Stage 07 names Storm-0558: the same failure, the page says, that made it so painful two years earlier.
+notes:
+One related kill chain on csoh.org, and the page's related defense topics.
+
+Stage 07 names Storm-0558, which has its own kill chain. After describing how little reached the victim's logs, the page says this is the same failure that made Storm-0558 so painful two years earlier, and names the general form: when authentication material is forged rather than stolen, logs are the only remaining detection. The page draws no other connection between the two.
+
+The defense topics cover Azure security, identity and access management in the cloud, detection engineering, and the shared responsibility model.
