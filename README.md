@@ -561,7 +561,7 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [Storm-0558](https://csoh.org/breaches/storm-0558.html) | 2023 | Azure | T1078, T1552, T1606.001, T1114.002 |
 | [Microsoft SAS Leak](https://csoh.org/breaches/microsoft-sas-leak.html) | 2023 | Azure | T1552.004, T1530 |
 | [Scattered Spider / MGM](https://csoh.org/breaches/scattered-spider-mgm.html) | 2023 | Okta / Azure | T1598, T1078, T1484, T1486 |
-| [3CX / X_TRADER](https://csoh.org/breaches/3cx-x-trader.html) | 2023 | Supply chain (desktop app) | T1195.002, T1204.002, T1555, T1133 |
+| [3CX / X_TRADER](https://csoh.org/breaches/3cx-x-trader.html) | 2023 | Supply chain (desktop app) | T1195.002, T1204.002, T1078, T1133 |
 | [CircleCI](https://csoh.org/breaches/circleci-session-theft.html) | 2023 | CircleCI / CI | T1204.002, T1027, T1539, T1552.007 |
 | [MOVEit / Cl0p](https://csoh.org/breaches/moveit-cl0p.html) | 2023 | MFT / on-prem | T1594, T1190, T1505.003, T1036.005 |
 | [Okta Support System](https://csoh.org/breaches/okta-support-har.html) | 2023 | Okta | T1555.003, T1078, T1213, T1539 |
