@@ -1,0 +1,463 @@
+title: Log4Shell
+page: breaches/log4shell.html
+as-of: 2026-11-22
+promise: Not a breach: CVE-2021-44228 made any logged string a potential remote code execution vector, and most organizations could not answer whether they were affected.
+
+== At a glance
+layout: stats
+stat: 10.0 | CVSS score | unauthenticated remote code execution, trivially exploitable
+stat: Most | affected teams never chose to install Log4j | overwhelmingly a transitive dependency
+stat: Hours | to answer, with an SBOM | against weeks without one
+stat: 2021 | the turning point | for SBOM and dependency inventory as practice
+CVE-2021-44228 in Apache Log4j 2, disclosed December 10, 2021. The page says this one is not a breach, and that is deliberate.
+notes:
+Start with the four points the page leads with.
+
+CVE-2021-44228 was disclosed on December 10, 2021, in Apache Log4j 2, a logging library so common in the Java ecosystem that most teams did not know they used it. A CVE is a public identifier for one known vulnerability. CVSS, the Common Vulnerability Scoring System, rates a vulnerability's severity, and this one scored 10.0. RCE is remote code execution: running an attacker's code on a server. The page calls it unauthenticated and trivially exploitable.
+
+The second tile is why it was hard. Log4j was overwhelmingly a transitive dependency: most affected teams never chose to install it.
+
+The third tile is the gap the page keeps returning to. Organizations with an accurate SBOM, a software bill of materials, and a real asset inventory answered in hours; everyone else spent weeks.
+
+The fourth is the page's reading of what Log4Shell changed: it calls it the turning point for SBOM and dependency inventory as practice.
+
+Make the framing clear from the start: the page says this one is not a breach, and that is deliberate.
+
+== What happened, and when
+layout: timeline
+event: December 10, 2021 | CVE-2021-44228 is disclosed, and leadership asks "are we affected?"
+event: Within hours | Internet-wide scanning begins, cryptominers and botnets first
+event: Quickly after | Ransomware operators and state actors establish footholds
+event: Over the following weeks | Follow-up CVEs land, and teams patch repeatedly
+The page dates only the disclosure, December 10, 2021, and places the rest relative to it. Spacing is not to scale.
+notes:
+The page dates only the disclosure, and the timeline places everything else where the page does: relative to it.
+
+CVE-2021-44228 was disclosed on December 10, 2021, and the page says leadership asked the same day whether they were affected.
+
+Mass scanning began almost immediately. The internet was being sprayed within hours of the details becoming public, first opportunistically, by coin miners and botnet recruitment. More deliberate actors followed quickly, ransomware operators and state actors among them, establishing footholds for later use.
+
+Over the following weeks, several follow-up CVEs landed, so teams patched repeatedly.
+
+The page gives no dates for the scanning waves or for the follow-up CVEs, so do not supply any. The markers are evenly spaced, and the slide says the gaps between them are not to scale.
+
+== Not a breach, and that is deliberate
+layout: text
+Log4Shell marks the moment vulnerability management stopped being about patching known assets and became about knowing what is inside your software at all.
+- Most organizations were never confirmed compromised.
+- The honest answer to "are we affected": "we do not know."
+notes:
+This slide sets the frame for everything after it.
+
+The page says plainly that Log4Shell is not a breach, and that this is deliberate. It covers it because it was the moment vulnerability management stopped being about patching known assets and became about knowing what is inside your software at all.
+
+The page says the defining experience of December 2021 was the honest answer to "are we affected": "we do not know," followed by weeks of finding out. Most organizations were never confirmed compromised.
+
+So read the kill chain that follows as the story of a vulnerability and how it was exploited across the internet, with the inventory problem at its centre, rather than as one organization's intrusion.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | A crafted string gets logged | T1190
+step: 02 | The Real Problem | Nobody knew where it was | T1195.001
+step: 03 | Exploitation | Scanning within hours | T1595.002
+step: 04 | Impact | The practice changed | -
+Arrows follow the page's stage order. The page describes a vulnerability, not a single breach.
+notes:
+Here is the whole chain on one slide: the page's four stages, each with its phase and primary ATT&CK technique.
+
+Stage 01, Initial Access, is the flaw itself: a crafted value in any logged field could make the server call out to an attacker. Stage 02 sits under the phase the page calls The Real Problem: Log4j was overwhelmingly a transitive dependency, so most organizations could not say whether they used it. Stage 03, Exploitation, is the internet-wide scanning that began within hours of disclosure. Stage 04, Impact, carries no ATT&CK technique. It is the lasting change in practice: SBOMs, dependency inventory and the maintainer-sustainability argument.
+
+The arrows follow the page's order. The page describes a vulnerability and its exploitation across the internet rather than one victim's path through four steps. The next slides take each stage in turn.
+
+== Log4j evaluated lookups in logged strings
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1190 | Exploit Public-Facing Application
+technique: T1059 | Command and Scripting Interpreter
+fact: Mechanism | message lookup substitution evaluates JNDI expressions
+fact: Trigger | any attacker-controlled value that reaches a log statement
+fact: Common vectors | usernames, HTTP headers, device names, chat messages
+fact: Failure | a logging library treating data as instructions
+Applications log untrusted input as their normal function, which made the reachable surface enormous.
+notes:
+Stage 01 is the flaw. The page maps it to T1190, Exploit Public-Facing Application, and tags T1059, Command and Scripting Interpreter.
+
+The page calls it a category error rather than a coding slip: a logging library was interpreting its input as instructions. Log4j's message lookup substitution would evaluate expressions embedded in logged strings, and one supported scheme was JNDI, which can fetch and deserialize a remote object. JNDI is the Java Naming and Directory Interface, a Java API for naming and directory services.
+
+So an attacker who could get a string into a log, through a username field, an HTTP header, a device name, a chat message or an email subject, could cause the server to reach out to their host and execute what came back. No authentication, no user interaction, and payloads short enough to fit in a User-Agent, the header in which a client names its software.
+
+Applications log untrusted input as their normal function, which the page says is what made the reachable surface enormous.
+
+The next slide draws that path; the one after explains deserialization in general terms.
+
+== From a logged string to code from the attacker's server
+layout: layers
+layer: Attacker | Puts a crafted string in any field that gets logged
+layer: Application | Logs the value, as it logs untrusted input normally
+layer: Log4j | Evaluates the lookup; JNDI reaches the attacker's server
+layer: Attacker's server | Its response is what the vulnerable server executes
+The page's sequence, top to bottom. No authentication or user interaction was needed.
+notes:
+This is the page's own description of the path, drawn top to bottom.
+
+An attacker puts a crafted value into any field that gets logged: a username, an HTTP header, a device name, a chat message, an email subject. The application logs it, because applications log untrusted input as their normal function. Log4j evaluates the lookup expression in the logged string, and its JNDI support makes a request to a server the attacker named. The page says Log4j would fetch and execute code from that server.
+
+Read the arrows as that order and nothing more. The page gives no more detail about the exchange between the vulnerable server and the attacker's server, so do not add steps to it.
+
+The attacker needed no authentication and no user interaction, and the page notes that payloads were short enough to fit in a User-Agent header.
+
+== What deserialization is, and why untrusted input matters
+layout: background
+source: OWASP Deserialization Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+Serialization turns an object into a data format that can be restored later; deserialization rebuilds the object from that data. OWASP warns that native deserialization features can be repurposed for malicious effect on untrusted data.
+notes:
+Background, from OWASP's Deserialization Cheat Sheet, in general terms.
+
+OWASP defines serialization as the process of turning some object into a data format that can be restored later. People often serialize objects to save them for storage or to send them as part of communications. Deserialization is the reverse: taking data structured in some format and rebuilding it into an object. OWASP says JSON is the most popular format for serialized data today, and XML was before it.
+
+Many programming languages also have native ways to serialize objects, and these native formats usually offer more features than JSON or XML. OWASP warns that those features can sometimes be repurposed for malicious effect when operating on untrusted data, and that attacks against deserializers have been found to allow denial-of-service, access control or remote code execution attacks.
+
+This slide explains the general idea only. The page says JNDI can fetch and deserialize a remote object, and it gives no more detail about how Log4j did so.
+
+== Most could not say whether they used Log4j
+layout: stage
+stage: 02
+phase: The Real Problem
+technique: T1195.001 | Compromise Software Dependencies and Development Tools
+fact: How it arrived | transitively: frameworks, agents, appliances, vendor products
+fact: Hiding places | fat JARs, shaded dependencies, stale container images, unpatchable appliances
+fact: Vendor dependency | many organizations had to wait on suppliers to answer at all
+The question leadership asked on December 10 was simple and reasonable. At most organizations, the honest answer was that they would have to go and find out.
+notes:
+The page calls this stage the real problem. It maps it to T1195.001, which the page labels Compromise Software Dependencies; ATT&CK's full name adds "and Development Tools".
+
+Almost nobody chose Log4j. It arrived several levels down a dependency tree, bundled inside application servers, monitoring agents, network appliances, build tools and commercial products whose vendors themselves took days or weeks to answer. A transitive dependency is one a project pulls in through another package rather than by naming it.
+
+Teams found it inside fat JARs, container images they had not rebuilt in a year, and hardware they could not patch at all. A fat JAR is a Java archive that bundles an application with its dependencies, and a shaded dependency is one copied into another archive, usually under a renamed package.
+
+The question leadership asked on December 10 was simple and reasonable, and at most organizations the honest answer was that they would have to go and find out, by grepping filesystems, scanning images and emailing vendors.
+
+The next slide sets the two outcomes side by side.
+
+== Hours with an SBOM, weeks without
+layout: compare
+col: An accurate SBOM and a real asset inventory | Exposure identified in hours
+col: Without one | Finding out by grepping filesystems, scanning images, emailing vendors | Weeks, and often no definitive answer | Some never reached certainty
+The page calls not knowing, and the weeks it took to find out, the defining experience of December 2021.
+notes:
+This is the gap the page keeps coming back to.
+
+At most organizations, the honest answer was that they would have to go and find out, by grepping filesystems, scanning images and emailing vendors. Organizations with an accurate SBOM and a real asset inventory answered in hours. Everyone else spent weeks, and some never reached certainty.
+
+Keep the page's wording on the second column: weeks, and often no definitive answer. It does not say every organization without an SBOM failed to find out, and it does not give a count of either group.
+
+The page calls this, rather than exploitation, the defining experience of December 2021: when leadership asked "are we affected," the honest answer was "we do not know," and finding out took weeks.
+
+The next slide explains what an SBOM is, in general terms.
+
+== What an SBOM is
+layout: background
+source: csoh.org glossary, SBOM | https://csoh.org/glossary.html#term-sbom
+credit: Also from OWASP Component Analysis (community.owasp.org)
+An SBOM, a software bill of materials, is the ingredient list for a piece of software: components, versions, licenses and hashes. Common formats are SPDX and CycloneDX. OWASP calls an accurate component inventory pivotal for risk identification.
+notes:
+Background, from the csoh.org glossary and OWASP, in general terms.
+
+The glossary defines an SBOM, a software bill of materials, as the ingredient list for a piece of software: its components, versions, licenses and hashes. It names two formats, SPDX and CycloneDX.
+
+OWASP's Component Analysis page explains why an inventory matters. Modern software is assembled from third-party and open-source components, and by using open-source components, it says, organizations take responsibility for code they did not write. It calls an accurate inventory of all third-party and open-source components pivotal for risk identification, and says that without such knowledge, other risk factors become impractical to determine with high confidence.
+
+This slide explains the general idea only.
+
+Also from OWASP Component Analysis: https://community.owasp.org/Component_Analysis
+
+== Scanning began within hours, while defenders were still taking inventory
+layout: stage
+stage: 03
+phase: Exploitation
+technique: T1595.002 | Active Scanning: Vulnerability Scanning
+fact: First wave | cryptominers and botnets, opportunistic
+fact: Second wave | ransomware operators and state actors establishing footholds
+fact: Mitigation churn | early workarounds proved insufficient in some configurations; follow-up CVEs meant repeated patching
+Patching late still required hunting back to day one.
+notes:
+Stage 03 is exploitation, and the page maps it to T1595.002, Vulnerability Scanning.
+
+Because the exploit string was short and the surface was everything, the internet was being sprayed within hours of the details becoming public. The early wave was opportunistic: coin miners and botnet recruitment. More deliberate actors followed quickly, establishing footholds for later use.
+
+The page says that ordering matters for defenders. In its words, the initial noisy exploitation is not the risk, the quiet access established during the same window is. That is why an organization that patched in week two still needed to hunt for compromise dating to day one.
+
+Mitigations evolved messily too. Early advice to set formatMsgNoLookups or remove the JndiLookup class was later found insufficient in some configurations, and several follow-up CVEs landed over the following weeks, so teams patched repeatedly. Keep the words "in some configurations".
+
+Remember the page's frame: most organizations were never confirmed compromised.
+
+== Noisy first, then quiet footholds in the same window
+layout: compare
+col: First wave | Cryptominers and botnets | Opportunistic | Within hours of disclosure
+col: Second wave | Ransomware operators and state actors | Establishing footholds for later use | Followed quickly
+The page says the quiet access established in the same window, rather than the noisy exploitation, is the risk.
+notes:
+The page describes two waves, and it gives no dates for either.
+
+The first wave was opportunistic: coin miners and botnet recruitment, within hours of the details becoming public. More deliberate actors followed quickly. The page names ransomware operators and state actors, establishing footholds for later use.
+
+The page draws the lesson for defenders from that ordering: in its words, the initial noisy exploitation is not the risk, the quiet access established during the same window is. An organization that patched in week two still needed to hunt for compromise dating to day one.
+
+The page does not say how many organizations either wave reached, so do not put a number on it.
+
+The next slide explains persistence and footholds in general terms.
+
+== What persistence means
+layout: background
+source: csoh.org glossary, Persistence | https://csoh.org/glossary.html#term-persistence
+credit: Also from MITRE ATT&CK, Persistence tactic TA0003 (attack.mitre.org)
+Persistence covers the mechanisms attackers leave to survive reboots, password rotations and credential rotations. ATT&CK describes it as an adversary trying to maintain their foothold across restarts, changed credentials and other interruptions.
+notes:
+Background, from the csoh.org glossary and MITRE ATT&CK, in general terms.
+
+The glossary defines persistence as the mechanisms attackers leave to survive reboots, password rotations and credential rotations.
+
+ATT&CK's Persistence tactic describes the adversary as trying to maintain their foothold. It says persistence consists of techniques adversaries use to keep access to systems across restarts, changed credentials and other interruptions that could cut off their access. Those techniques include any access, action or configuration changes that let them keep that foothold, such as replacing or hijacking legitimate code or adding startup code.
+
+This slide explains the general idea only. It says nothing about which persistence techniques were used after Log4Shell; the page names what to hunt for in its defenses.
+
+Also from MITRE ATT&CK, Persistence tactic: https://attack.mitre.org/tactics/TA0003/
+
+== The reference event for SBOMs, inventory and the maintainer-sustainability argument
+layout: stage
+stage: 04
+phase: Impact
+fact: SBOM | moved from compliance artifact to operational necessity
+fact: SCA | became standard in mature pipelines rather than optional
+fact: Procurement | buyers began requiring component inventories from suppliers
+fact: Maintainer reality | critical infrastructure maintained by unpaid volunteers under pressure
+fact: Same condition in | event-stream (2018), XZ Utils (2024)
+The page says the lasting effect was organizational rather than technical.
+notes:
+Stage 04 carries no ATT&CK technique. It is the lasting change, and the page says that change was organizational rather than technical.
+
+SBOMs moved from a compliance idea to something security teams wanted, because the difference between having one and not having one had just been demonstrated as hours versus weeks. Software composition analysis, or SCA, stopped being optional in mature pipelines. Regulators and large buyers began asking suppliers for component inventories.
+
+The sustainability argument got its clearest example. A library underpinning a vast share of enterprise Java was maintained by a small number of unpaid volunteers, who spent that December fixing it under extraordinary pressure and public abuse.
+
+The page calls that the same structural condition that event-stream exposed in 2018 and that XZ Utils would be built on in 2024. Both have their own kill chains, linked at the end of this deck.
+
+The next slide explains software composition analysis in general terms.
+
+== What software composition analysis is
+layout: background
+source: csoh.org glossary, SCA | https://csoh.org/glossary.html#term-sca
+credit: Also from OWASP Component Analysis (community.owasp.org)
+Software composition analysis identifies open-source dependencies and their known vulnerabilities. OWASP describes it as a software-only subset of Component Analysis, which identifies potential areas of risk from using third-party and open-source components.
+notes:
+Background, from the csoh.org glossary and OWASP, in general terms.
+
+The glossary defines software composition analysis, SCA, as identifying open-source dependencies and their known vulnerabilities.
+
+OWASP's Component Analysis page places it in a wider practice. Component Analysis is the process of identifying potential areas of risk from the use of third-party and open-source software and hardware components. OWASP says a software-only subset of it, with limited scope, is commonly referred to as software composition analysis.
+
+OWASP adds that known vulnerabilities historically meant CVE entries in the National Vulnerability Database, but that the NVD is not the only source, and that component analysis commonly identifies known vulnerabilities from several sources of vulnerability intelligence.
+
+This slide explains the general idea only.
+
+Also from OWASP Component Analysis: https://community.owasp.org/Component_Analysis
+
+== The same structural condition, before and after
+layout: timeline
+event: 2018 | event-stream exposes the condition
+event: December 2021 | A small number of unpaid volunteers fix Log4j under extraordinary pressure and public abuse
+event: 2024 | XZ Utils is built on the same condition
+The condition: critical infrastructure maintained by unpaid volunteers under pressure. Spacing is not to scale.
+notes:
+This is the pattern the page draws.
+
+The page names the condition as critical infrastructure maintained by unpaid volunteers under pressure. In December 2021, a library underpinning a vast share of enterprise Java was maintained by a small number of unpaid volunteers, who spent that month fixing it under extraordinary pressure and public abuse.
+
+The page calls this the same structural condition that event-stream exposed in 2018 and that XZ Utils would be built on in 2024. In its defenses it adds that the XZ Utils chain makes the same argument from the attack side rather than the incident side.
+
+The page links these three by that condition only. It does not say the same people were involved, so do not draw any other connection between them. Each of the other two has its own kill chain, linked at the end of this deck.
+
+== Six defenses against four stages
+layout: matrix
+columns: 01 | 02 | 03 | 04
+row: SBOMs for everything you build and run | 02
+row: Component inventories from vendors | 02
+row: Default-deny egress from application servers | 01
+row: Assume compromise back to the disclosure date | 03
+row: Practise the emergency response | -
+row: Fund the maintainers | 04
+Each stage has at least one defense tied to it. The emergency-response drill names no single stage.
+notes:
+This matrix sets the page's six defenses against its four stages. A cell is marked only where a defense's own words name something that stage has.
+
+SBOMs answer stage 02: the page calls them the direct answer to the question that stumped everyone, and asks you to include container images and third-party products, where stage 02 found Log4j hiding. Vendor inventories answer stage 02 too, because much of the delay was waiting on suppliers.
+
+Restricting egress answers stage 01. The attack requires the server to make an outbound connection to fetch the payload, which is stage 01's JNDI request to an attacker-controlled server.
+
+Assuming compromise back to the disclosure date answers stage 03, where quiet foothold-establishment followed the noisy scanning.
+
+Funding maintainers answers stage 04: a handful of volunteers carried the emergency, and the page calls funding the only control that addresses the underlying condition.
+
+Practising the emergency response names no single stage. It rehearses inventory, change approval and patching together.
+
+== Keep SBOMs, and get them from vendors
+layout: compare
+col: SBOMs for everything (stage 02) | Produce at build time; store them queryable across your estate | Include container images and third-party products | Treat it as the declared inventory; check it against what actually runs
+col: Vendor inventories (stage 02) | Make SBOM provision a procurement requirement | Ask how fast vendors will confirm exposure to a new critical CVE | Remember the answer when the next one lands
+Members at the 30 October 2026 session noted that SBOMs list declared components rather than what is present, and many leave out developer dependencies.
+notes:
+Two defenses answer stage 02.
+
+First, generate and keep an SBOM for everything you build and everything you run. Produce SBOMs at build time, store them so they are queryable across your estate, and include container images and third-party products. The page's goal is turning "are we affected by X" from a project into a database query, the capability that separated hours from weeks in December 2021.
+
+Keep the page's caveat with it. Treat the SBOM as the declared inventory, not the whole answer. Members at the 30 October 2026 session pointed out that SBOMs list declared components rather than what is actually present, and that many leave out developer dependencies, which can leave systems exposed to a Log4j-style flaw. Check it against what actually runs.
+
+Second, demand component inventories from vendors, and test that you can get them quickly. Much of the delay was waiting on suppliers. Make SBOM provision a procurement requirement for software you deploy, ask vendors during assessment how fast they will confirm exposure to a new critical CVE, and remember the answer when the next one lands.
+
+== Restrict egress, so exploitation fails with vulnerable code present
+layout: text
+The attack requires the server to make an outbound connection to fetch the payload.
+- Default-deny egress from application servers, with a narrow allow-list.
+- The page says this would have neutralized most exploitation regardless of patch status.
+notes:
+This defense answers stage 01.
+
+The attack requires the server to make an outbound connection to fetch the payload. The page says default-deny egress from application servers, with a narrow allow-list, would have neutralized most exploitation regardless of patch status. Keep the word most. Egress is outbound traffic.
+
+The page adds that it works the same way for the next unknown vulnerability of this shape. Of the controls on its list, the page says this one returns the most for the effort, because it does not depend on knowing about the flaw.
+
+That is the page's judgment of its own defenses, so attribute it when you repeat it.
+
+== Assume compromise back to the disclosure date, not the patch date
+layout: text
+Patching closes the door; it does not evict.
+- Quiet foothold-establishment followed the noisy scanning.
+- Patching days or weeks later still meant hunting for persistence back to day one.
+- Look for web shells, new accounts, scheduled tasks and outbound beacons.
+notes:
+This defense answers stage 03.
+
+Exploitation began within hours, and quiet foothold-establishment followed the noisy scanning. So anyone patching days or weeks later needed to hunt for persistence dating to day one. The page names what to look for: web shells, new accounts, scheduled tasks and outbound beacons.
+
+In the page's words, patching closes the door; it does not evict.
+
+A web shell is a script placed on a web server that gives an attacker remote control of it. A beacon is a regular outbound check-in from an implant to its controller.
+
+== Drill the response, and fund the maintainers
+layout: compare
+col: Drill (no single stage) | Rehearse rapid inventory, emergency change approval, out-of-cycle patching | Use a fictional critical CVE | Time enumeration and deployment; name who authorizes; verify completion
+col: Funding (stage 04) | A handful of volunteers carried an emergency for a large share of enterprise software | The XZ Utils chain makes the same argument from the attack side | The page calls it the only control addressing the underlying condition
+The organizations that coped had already rehearsed, the page says.
+notes:
+Two more defenses.
+
+Practise the emergency response before the emergency. The page says the organizations that coped had already rehearsed rapid inventory, emergency change approval and out-of-cycle patching. Run the drill on a fictional critical CVE: how fast can you enumerate affected systems, who authorizes an emergency change, how long does deployment take, and how do you verify completion? This defense names no single stage.
+
+Fund the maintainers of what you depend on. A handful of volunteers carried an emergency affecting a large share of enterprise software. The page calls this the same argument the XZ Utils chain makes from the attack side rather than the incident side, and says it remains the only control that addresses the underlying condition. It answers stage 04's unpaid volunteers.
+
+== Check your own environment
+layout: checklist
+check: Is "are we affected by X" a database query for you, or a project?
+check: Do your SBOMs include container images and third-party products?
+check: Do you check your SBOMs against what actually runs, developer dependencies included?
+check: How fast will each vendor confirm exposure to a new critical CVE?
+check: Is egress from your application servers default-deny, with a narrow allow-list?
+check: After a late patch, would you hunt for persistence back to the disclosure date?
+check: Have you drilled an emergency change, and do you fund what you depend on?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether "are we affected by X" is a database query for you or a project, and whether your SBOMs cover container images and third-party products. Ask whether you check them against what actually runs, since members at the 30 October 2026 session noted that SBOMs list declared components and many leave out developer dependencies.
+
+Ask whether you know how fast each vendor will confirm exposure to a new critical CVE, and whether SBOM provision is a procurement requirement.
+
+Ask whether egress from your application servers is default-deny with a narrow allow-list.
+
+Ask whether, after patching late, you would hunt for web shells, new accounts, scheduled tasks and outbound beacons back to the disclosure date.
+
+Finally, ask whether you have drilled an emergency change on a fictional critical CVE, and whether you fund the maintainers of what you depend on.
+
+== How long would it take you to say whether you are affected?
+layout: question
+On December 10, 2021, leadership asked "are we affected," and at most organizations the honest answer was "we do not know."
+
+Pick a component several levels down your stack. How long would it take to find everywhere it runs?
+notes:
+Give the room a minute with this one before moving on.
+
+The page says the question leadership asked on December 10 was simple and reasonable, and that the honest answer at most organizations was that they would have to go and find out, by grepping filesystems, scanning images and emailing vendors.
+
+Ask each person to name one component and an honest estimate, hours or weeks, before you show the answer slide. Push on where it would hide: inside a fat JAR, a container image nobody has rebuilt, an appliance or a vendor product. The answer slide gives what the page says.
+
+== What the page says about answering it
+layout: answer
+Organizations with an accurate SBOM and a real asset inventory answered in hours; everyone else spent weeks.
+- Keep SBOMs queryable across your estate, container images and third-party products included.
+- Check them against what actually runs.
+notes:
+The page's answer is an SBOM for everything you build and everything you run, kept so it is queryable across the estate.
+
+Organizations with an accurate SBOM and a real asset inventory answered in hours. Everyone else spent weeks, and some never reached certainty. The goal is turning "are we affected by X" from a project into a database query.
+
+Keep the page's caveat. Members at the 30 October 2026 session pointed out that SBOMs list declared components rather than what is actually present, and that many leave out developer dependencies, which can leave systems exposed to a Log4j-style flaw. So check the SBOM against what actually runs.
+
+Bring the group's estimates back to this. If anyone's answer was weeks, ask which of these would have shortened it.
+
+== What can your application servers connect to?
+layout: question
+Log4Shell needed the vulnerable server to make an outbound connection to a host the attacker named.
+
+Name one application server you run. Could it reach that host today?
+notes:
+Give the room a minute with this one too.
+
+The attack required the vulnerable server to make an outbound connection to fetch the payload from a server the attacker named. Ask each person to name one application server in their environment and say what it is allowed to connect to, before you show the answer slide.
+
+The answer slide gives what the page says about egress.
+
+== What the page says about egress
+layout: answer
+The page says default-deny egress from application servers, with a narrow allow-list, would have neutralized most exploitation regardless of patch status.
+- It works the same way for the next unknown vulnerability of this shape.
+notes:
+The page's answer is to restrict egress, so that exploitation fails even when the vulnerable code is present.
+
+Default-deny egress from application servers with a narrow allow-list would have neutralized most exploitation regardless of patch status. Keep the word most. It works the same way for the next unknown vulnerability of this shape.
+
+The page says that of its defenses, this one returns the most for the effort, because it does not depend on knowing about the flaw.
+
+Bring the group's answers back to this. A server that can reach any host is where the page's defense applies, including against the next unknown vulnerability of this shape.
+
+== Sources
+layout: links
+link: CISA, Apache Log4j vulnerability guidance | https://www.cisa.gov/news-events/news/apache-log4j-vulnerability-guidance
+link: Apache Logging Services, Log4j security advisories | https://logging.apache.org/log4j/2.x/security.html
+link: NVD, CVE-2021-44228 | https://nvd.nist.gov/vuln/detail/CVE-2021-44228
+link: Wikipedia, Log4Shell (timeline and references) | https://en.wikipedia.org/wiki/Log4Shell
+link: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+link: CSOH session recap, 30 October 2026 | meetings/2026-10-30.html
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the vulnerability in this deck comes from that page, which draws on these.
+
+CISA's guidance and Apache's Log4j security advisories are the two sources linked in the page's header. NVD, the National Vulnerability Database, carries the record for CVE-2021-44228. Wikipedia's Log4Shell article is cited for its timeline and references. The MITRE page defines T1195.001, the technique behind stage 02.
+
+The last link is the recap of the 30 October 2026 CSOH session, where members raised the caveat about what SBOMs leave out.
+
+The background slides name their own sources: OWASP, the csoh.org glossary and MITRE ATT&CK.
+
+== Related kill chains and defense topics
+layout: links
+link: event-stream npm, 2018 | breaches/event-stream-npm.html
+link: XZ Utils backdoor, 2024 | breaches/xz-utils-backdoor.html
+link: Vulnerability management | vulnerability-management.html
+link: CI/CD and supply chain | ci-cd.html
+link: Container security | containers.html
+link: Network security | network-security.html
+The page ties event-stream and XZ Utils to the same structural condition. The four topics are the page's related defense topics.
+notes:
+The page links two other kill chains, and four defense topics.
+
+The page says event-stream exposed the same structural condition in 2018, and that XZ Utils would be built on it in 2024: critical infrastructure maintained by unpaid volunteers under pressure. It adds that the XZ Utils chain makes the argument for funding maintainers from the attack side. Read them beside this deck for that condition.
+
+The page's related defense topics are vulnerability management, CI/CD and supply chain, container security, and network security. CI/CD stands for continuous integration and continuous delivery.
