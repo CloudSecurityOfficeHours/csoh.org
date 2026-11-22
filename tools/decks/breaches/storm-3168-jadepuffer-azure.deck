@@ -1,0 +1,491 @@
+title: Storm-3168 / JADEPUFFER Azure Destruction
+page: breaches/storm-3168-jadepuffer-azure.html
+as-of: 2026-11-22
+promise: Per Microsoft, two compromised Azure service principals moved from hours of reads to 100+ storage deletion attempts in about seven minutes; how they were compromised is unconfirmed.
+
+== At a glance
+layout: stats
+stat: ~15.5 | hours of reconnaissance | by the first service principal, per Microsoft
+stat: ~7 | minutes of deletions | covering 100+ storage deletion attempts and other deletions
+stat: 30+ | successful ListKeys calls | after the destruction ended
+Microsoft tracks the actor as Storm-3168 and associates the activity with JADEPUFFER.
+notes:
+Start with the three figures the page leads with. All of them come from Microsoft's account, published on September 25, 2026.
+
+The first service principal spent about 15 and a half hours on reconnaissance. The second ran discovery, then a destructive burst of about seven minutes covering more than 100 storage account deletion attempts, plus a Key Vault, a Function App and an App Service plan. After the destruction ended, it made more than 30 successful ListKeys calls, collecting storage keys.
+
+A service principal is an identity that an application or automation uses in Azure. ListKeys is the Azure operation that returns a storage account's access keys.
+
+Microsoft tracks the actor as Storm-3168 and associates the activity with JADEPUFFER, the actor Sysdig reported in July.
+
+Keep the words about and more than when you say these figures aloud.
+
+== What happened
+layout: text
+Microsoft's account, published September 25, 2026, covers early June activity in one Azure tenant.
+- One compromised service principal spent about 15.5 hours on reconnaissance.
+- The other ran discovery, about seven minutes of deletions, then storage key collection.
+notes:
+Here is the page's summary in brief.
+
+Microsoft published this account on September 25, 2026, describing activity from early June. Two compromised service principals in one Azure tenant did the work. A tenant is one organization's own instance of Microsoft's cloud identity service.
+
+One principal spent about 15 and a half hours on reconnaissance. The other ran discovery, then a destructive burst of about seven minutes covering more than 100 storage account deletion attempts plus a Key Vault, a Function App and an App Service plan, along with attempts to strip recovery locks. It then collected storage keys.
+
+The page adds that the operations followed the identities' existing Azure role assignments.
+
+Two caveats come with this summary, and the slide after next sets them out: how the principals were compromised is unconfirmed, and the evidence does not directly show an AI agent at work.
+
+== Early June 2026, in the order Microsoft reports
+layout: timeline
+event: Start | The first principal begins about 15.5 hours of reads
+event: About 90 minutes in | The second principal enumerates two subscriptions in five seconds
+event: About 16 hours later | The second principal lists App Service configuration stores
+event: Under a second after a failed ListKey | Deletions begin, for about seven minutes
+event: About 30 minutes after the burst ends | 30+ successful ListKeys calls
+Times are relative, as the page gives them. Spacing is not to scale.
+notes:
+The page gives these times relative to one another, not as clock times, and the timeline shows them that way.
+
+The first service principal read the tenant for about 15 hours and 30 minutes, with more than 300 successful reads. About 90 minutes after it started, the second principal enumerated VMs and resource groups across two subscriptions in five seconds.
+
+About 16 hours after that discovery, the second principal listed App Service configuration stores. An attempted ListKey failed less than a second before the destruction began. The burst lasted about seven minutes. About 30 minutes after the last destruction, the principal made more than 30 successful ListKeys calls.
+
+In all, the second principal attempted more than 150 destructive or credential-collection operations in a 35-minute window.
+
+The markers are evenly spaced, so do not read the gaps between them as durations.
+
+== Two caveats the page puts beside the headline
+layout: compare
+col: How the principals were compromised | A client secret had been posted in a public GitHub issue | Microsoft could not confirm that secret was used | It does not say which principal the secret belonged to
+col: Whether an AI agent was at work | Microsoft's title says agentic-driven | Microsoft cites strong indications of automated or scripted execution | The page says that evidence does not directly show an AI agent at work
+Microsoft did not observe a ransom note or confirm exfiltration.
+notes:
+The page says two caveats belong next to the headline, and this slide puts them there.
+
+First, how the principals were compromised. A service principal's client secret had been posted in a public GitHub issue, and Microsoft could not confirm that secret was used. It does not say which of the two principals the secret belonged to.
+
+Second, whether an AI agent was at work. Sysdig reports JADEPUFFER as the first documented agentic ransomware operation, and Microsoft's title says agentic-driven. Microsoft cites timing, the division of work between principals and overlapping token streams as strong indications of automated or scripted execution. The page says that evidence does not directly show an AI agent at work.
+
+Microsoft also did not observe a ransom note or confirm exfiltration. Exfiltration means data taken out of the environment.
+
+== What Microsoft saw here, and what Sysdig reported elsewhere
+layout: compare
+col: Microsoft, this Azure tenant | Consistent with tactics that can support ransomware and extortion | No ransom note observed | No exfiltration confirmed
+col: Sysdig, a different environment | A ransom table on a database server | Encrypted Nacos configuration | Initial access through CVE-2025-3248 in Langflow
+Microsoft associates this activity with JADEPUFFER, which Sysdig reports as the first documented agentic ransomware operation.
+notes:
+These are two vendors' accounts of two different environments, so keep them apart.
+
+Microsoft assesses the Azure activity as consistent with tactics that can support ransomware and extortion, and it stops there: it did not observe a ransom note or confirm successful data exfiltration.
+
+Sysdig's earlier JADEPUFFER report describes something more complete in a different environment: a ransom table and encrypted Nacos configuration on a database server, after initial access through CVE-2025-3248 in Langflow. A CVE is a public identifier for a known vulnerability.
+
+Microsoft associates the Azure activity with JADEPUFFER, the actor Sysdig reported in July, and tracks it as Storm-3168.
+
+When you present this deck, keep Sysdig's ransom table with Sysdig's environment. Nothing on the page puts one in this Azure tenant.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Possible Initial Access | Secret in a public issue | T1552.001
+step: 02 | Discovery | Hours of reads | T1580
+step: 03 | Credential Access | Configuration stores | T1552
+step: 04 | Impact | Bulk deletion | T1485
+step: 05 | Impact | Recovery locks | T1490
+step: 06 | Credential Access | Storage keys | T1552
+Arrows show the page's stage order. Stage 01 is possible: Microsoft could not confirm the posted secret was used.
+notes:
+Here is the whole chain on one slide: the page's six stages, each with its phase and ATT&CK technique.
+
+Stage 01 is possible initial access: a client secret posted in a public GitHub issue, which Microsoft could not confirm was used. Stage 02 is discovery, about 15 and a half hours of reads by the first principal and a fast enumeration by the second. Stage 03 is credential access, the listing of App Service configuration stores. Stages 04 and 05 are both impact: more than 100 storage deletion attempts in about seven minutes, and the failed attempts to remove recovery locks. Stage 06 returns to credential access, collecting storage keys after the destruction.
+
+The page says this final phase reversed the usual order.
+
+The next slides take each stage in turn.
+
+== A service principal's secret had been posted in a public GitHub issue
+layout: stage
+stage: 01
+phase: Possible Initial Access
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Posted | client ID, client secret and tenant ID, in plaintext
+fact: Posted by | an employee of the affected organization
+fact: Removed | from the issue, and still in the public edit history
+Microsoft could not confirm this secret was used, and says it is unclear how the principal was first compromised.
+notes:
+Stage 01 is the page's possible initial access, and the word possible matters. The page maps it to T1552.001, Unsecured Credentials: Credentials In Files.
+
+An employee of the affected organization had posted a service principal's client ID, client secret and tenant ID in plaintext in a public GitHub issue. The secret was later removed from the issue, and it stayed in the public edit history.
+
+Microsoft is careful here. It could not confirm that this secret was used, it does not say which of the two principals the secret belonged to, and it says it is unclear how the service principal was first compromised.
+
+Storm-3168 infrastructure also probed Azure App Services belonging to other customers, and Microsoft found no App Service to Azure Resource Manager credential path for this tenant.
+
+Present this stage as a possibility, as the page does. The next slide explains service principals and client secrets in general terms.
+
+== What a service principal and a client secret are
+layout: background
+source: Microsoft Learn, Application and service principal objects in Microsoft Entra ID | https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals
+credit: Also from Add and manage application credentials, and the OAuth 2.0 client credentials flow (learn.microsoft.com)
+A service principal represents an app in one Microsoft Entra tenant.
+
+A client secret, or application password, is a string the app uses to identify itself. Sent with the tenant and client ID, it can request an access token.
+notes:
+This is a background slide. It explains two ideas in general, from Microsoft Learn, and says nothing about the incident.
+
+To access resources secured by a Microsoft Entra tenant, an application must be represented there by a security principal, called a service principal. The service principal defines what the app can actually do in that tenant, who can access the app, and what resources it can access. A managed identity is also represented by a service principal, and Microsoft says managed identities eliminate the need for developers to manage credentials.
+
+A client secret, sometimes called an application password, is a string value an app can use in place of a certificate to identify itself.
+
+In the OAuth 2.0 client credentials flow, an application authenticates with its own credentials rather than as a user. Its token request names the tenant, and carries the client ID, the application ID assigned to the app, together with the client secret.
+
+Also from Add and manage application credentials: https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials
+
+And from Microsoft identity platform and the OAuth 2.0 client credentials flow: https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow
+
+== One principal spent about 15.5 hours enumerating the tenant
+layout: stage
+stage: 02
+phase: Discovery
+technique: T1580 | Cloud Infrastructure Discovery
+fact: First principal | 300+ successful reads over about 15 hours 30 minutes
+fact: Second principal | two subscriptions enumerated in five seconds
+fact: Both shared | Storm-3168 infrastructure, a network fingerprint, one user agent
+Microsoft cites timing like this as a strong indication of automated or scripted execution.
+notes:
+Stage 02 is discovery, which the page maps to T1580, Cloud Infrastructure Discovery.
+
+The first service principal made more than 300 successful read operations over about 15 hours and 30 minutes, listing VMs, subscriptions, resource groups and resources. VMs are virtual machines.
+
+About 90 minutes after the first principal started, the second enumerated VMs and resource groups across two subscriptions in five seconds.
+
+Both principals shared Storm-3168 infrastructure, a network fingerprint and the user agent python-requests/2.34.2. A user agent is the string a client sends to identify its software.
+
+Microsoft cites timing like this, the division of work between principals, and overlapping token streams as strong indications of automated or scripted execution. Keep the page's caveat with it: that evidence does not directly show an AI agent at work.
+
+The next slide explains Azure Resource Manager and its scopes in general terms.
+
+== What Azure Resource Manager and its scopes are
+layout: background
+source: Microsoft Learn, What is Azure Resource Manager? | https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/overview
+Azure Resource Manager is Azure's deployment and management service. Requests from Azure's APIs, tools and SDKs reach it, and it authenticates and authorizes each one.
+
+Scopes nest: management groups, subscriptions, resource groups, then resources such as VMs.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+Azure Resource Manager is the deployment and management service for Azure. It provides a management layer for creating, updating and deleting resources, with management features such as access control, locks and tags. When a request comes through any of the Azure APIs, tools or SDKs, Resource Manager receives it, then authenticates and authorizes it before forwarding it to the right Azure service. An API is a programming interface, and an SDK is a software development kit.
+
+Microsoft defines a resource as a manageable item available through Azure, such as a virtual machine, storage account, web app or database. A resource group is a container that holds related resources for an Azure solution.
+
+Azure provides four levels of management scope: management groups, subscriptions, resource groups and resources. Settings applied at one level are inherited by the levels below it.
+
+== The second principal listed App Service configuration stores
+layout: stage
+stage: 03
+phase: Credential Access
+technique: T1552 | Unsecured Credentials
+fact: When | about 16 hours after stage 02's discovery
+fact: Why, per Microsoft | possibly a search for exposed credentials
+fact: Then failed | an OpenSearch lookup, and 70 seconds later a ListKey on a non-existent account
+That failure came less than a second before the destruction began.
+notes:
+About 16 hours after that discovery, the second principal listed App Service configuration stores. Microsoft says this was possibly a search for exposed credentials, so keep the word possibly. The page maps the stage to T1552, Unsecured Credentials. App Service is Azure's service for hosting web apps.
+
+An OpenSearch lookup failed. Seventy seconds later the principal attempted ListKey on a storage account that did not exist. That failure came less than a second before the destruction began.
+
+The page does not say whether the listing turned up any credentials.
+
+== More than 100 storage deletion attempts ran in about seven minutes
+layout: stage
+stage: 04
+phase: Impact
+technique: T1485 | Data Destruction
+fact: Storage | 100+ deletion attempts, most of which succeeded
+fact: Also deleted | one Key Vault, one Function App, one App Service plan
+fact: Failed | parallel SQL database deletions, on an unsupported API version
+Resource locks and deletion protection blocked deletion for a few storage accounts: the controls that visibly worked in this incident.
+notes:
+Stage 04 is the destructive burst, which the page maps to T1485, Data Destruction.
+
+It lasted about seven minutes and included more than 100 storage account deletion attempts, most of which succeeded. One Key Vault, one Function App and one App Service plan in the same resource group were deleted as well. A Key Vault is Azure's store for keys, secrets and certificates.
+
+Multiple parallel SQL database deletion attempts all failed, because the requests used an unsupported API version.
+
+Resource locks and deletion protection blocked deletion attempts for a few of the storage accounts. The page calls them the controls that visibly worked in this incident.
+
+The next slide shows the principal's roles and tokens.
+
+== The deleting principal's three ordinary roles and five tokens
+layout: compare
+col: Roles the principal held | Storage Account Contributor, granted through a group | Contributor, assigned directly | SQL DB Contributor, assigned directly
+col: Tokens it used | Five unique tokens | Four for deletion, one for inventory and key retrieval | Two deletion tokens active in the same 70-second window
+The page says three ordinary role assignments were enough for this entire chain.
+notes:
+The principal behind the burst held ordinary roles: Storage Account Contributor, granted through a group, plus Contributor and SQL DB Contributor, both assigned directly. These are Azure built-in roles. The page says the operations followed the identities' existing Azure role assignments.
+
+It used five unique tokens: four for deletion, and one for inventory and key retrieval. Two of the deletion tokens were active in the same 70-second window.
+
+The page draws the lesson in its defenses: three ordinary role assignments were enough for this entire chain, and group-granted roles are easy to miss in a per-identity review.
+
+The next slide explains resource locks in general terms.
+
+== What Azure resource locks do
+layout: background
+source: Microsoft Learn, Lock your Azure resources to protect your infrastructure | https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/lock-resources
+An administrator can lock a subscription, resource group or resource. A CanNotDelete lock lets authorized users read and modify a resource, but not delete it, whatever their role.
+
+Locks apply to control plane operations, not data plane operations.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+An administrator can lock a subscription, a resource group or a resource to protect it from accidental deletions and modifications. The lock overrides any user permissions, and applies across all users and roles.
+
+There are two kinds. CanNotDelete, called Delete in the portal, lets authorized users read and modify a resource but not delete it. ReadOnly lets them read a resource but not delete or update it.
+
+A lock applied at a parent scope is inherited by every resource within that scope.
+
+Locks apply only to control plane operations, which go to Azure Resource Manager, and not to data plane operations, which go to the service instance itself. Microsoft notes, for example, that a lock on a storage account does not protect the data inside it from being deleted or modified.
+
+== The principal tried to strip recovery locks, and failed
+layout: stage
+stage: 05
+phase: Impact
+technique: T1490 | Inhibit System Recovery
+fact: Targeted | backup and recovery resources, which could impair recovery
+fact: Attempted, unsuccessfully | removing Site Recovery locks and an Azure Backup protection lock
+fact: Not observed | a ransom note, or confirmed exfiltration
+Microsoft assesses this as consistent with tactics that can support ransomware and extortion, and stops there.
+notes:
+The destruction targeted backup and recovery resources, which could impair recovery. The page maps this to T1490, Inhibit System Recovery.
+
+Attempts to remove Azure Site Recovery locks and an Azure Backup protection lock were unsuccessful. The page does not say why they failed.
+
+In all, the second principal attempted more than 150 destructive or credential-collection operations in a 35-minute window.
+
+Microsoft assesses this as consistent with tactics that can support ransomware and extortion, and it stops there: it did not observe a ransom note or confirm successful data exfiltration. Sysdig's ransom table belongs to its own report on a different environment, as the earlier slide showed.
+
+The next slide explains Azure Backup and Site Recovery in general terms.
+
+== What Azure Backup and Site Recovery do
+layout: background
+source: Microsoft Learn, What is the Azure Backup service? | https://learn.microsoft.com/en-us/azure/backup/backup-overview
+credit: Also from About Site Recovery (learn.microsoft.com)
+Azure Backup helps protect data and restore it when required.
+
+Site Recovery replicates workloads from a primary site to a secondary location, so apps can fail over there during an outage and fail back later.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+Azure Backup is a native Azure service that helps protect data and restore it when required. It offers a centralized, policy-based way to back up workloads across Azure and on-premises environments, without deploying or managing backup infrastructure. Microsoft notes that Backup focuses on data protection, meaning backup and restore, and points to Site Recovery for disaster recovery and failover orchestration.
+
+Site Recovery helps keep business apps and workloads running during outages. It replicates workloads running on physical and virtual machines from a primary site to a secondary location. When the primary site has an outage, you fail over to the secondary location and run apps from there, then fail back once the primary location is running again.
+
+Also from About Site Recovery: https://learn.microsoft.com/en-us/azure/site-recovery/site-recovery-overview
+
+== After the destruction, 30+ ListKeys calls collected storage keys
+layout: stage
+stage: 06
+phase: Credential Access
+technique: T1552 | Unsecured Credentials
+fact: When | about 30 minutes after the last destruction
+fact: Keys returned | for storage accounts including Site Recovery related ones
+fact: Spared, then targeted | a similarly named account in the same resource group
+Those keys work independently of the service principal, so disabling it does not revoke them.
+notes:
+The page says the final phase reversed the usual order. About 30 minutes after the last destruction, the second principal listed storage accounts and made more than 30 successful ListKeys requests. They returned access keys for storage accounts including Site Recovery related ones. The page maps this to T1552, Unsecured Credentials.
+
+A similarly named account in the same resource group had been spared from deletion, and was then targeted for key retrieval.
+
+Those keys work independently of the service principal, so disabling it does not revoke them. Microsoft notes that the collection could enable future data access.
+
+Microsoft reports no Key Vault secret retrieval: the vault was deleted.
+
+The next slide explains storage account access keys in general terms.
+
+== What storage account access keys are
+layout: background
+source: Microsoft Learn, Manage storage account access keys | https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage
+credit: Also from Prevent Shared Key authorization for an Azure Storage account (learn.microsoft.com)
+Azure generates two access keys for each storage account. They authorize requests through Shared Key, and Microsoft says they give full access to the account's data.
+
+Disallowing Shared Key makes Azure Storage reject requests authorized with the keys.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+When you create a storage account, Azure generates two 512-bit access keys for it. They can authorize access to data in the account through Shared Key authorization, or through shared access signature (SAS) tokens signed with the key. Microsoft says the access keys provide full access to the storage account's data.
+
+By default, a storage account accepts requests authorized with either Microsoft Entra credentials or the account access key. Microsoft recommends Microsoft Entra ID over Shared Key. When Shared Key authorization is disallowed for an account, Azure Storage rejects all subsequent requests authorized with the account access keys, and only requests authorized with Microsoft Entra ID succeed.
+
+Also from Prevent Shared Key authorization for an Azure Storage account: https://learn.microsoft.com/en-us/azure/storage/common/shared-key-authorization-prevent
+
+== Six defenses against six stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: Treat posted credentials as compromised | 01
+row: Workload identity instead of client secrets | 01
+row: Keep Contributor from automation that does not need it | 04
+row: Resource locks and independent recovery | 04 | 05
+row: Disable shared key access | 06
+row: Alert on the shift from reading to deleting | 04
+No defense on the page cites a fact from stage 02 or stage 03.
+notes:
+This matrix sets the page's six defenses against its six stages. A cell is marked only where the defense's own words cite a fact from that stage.
+
+Treating a posted credential as compromised names the issue and its edit history, from stage 01. The page calls workload identity the durable answer to this initial access path. Keeping Contributor from automation names stage 04's roles, among them a group-granted one. Locks and independent recovery cite the few deletions locks blocked at stage 04 and the failed attempts on recovery locks at stage 05. Disabling shared key access cites stage 06's ListKeys calls. The read-to-delete alert describes bulk deletion and the seven minutes of stage 04.
+
+Microsoft's recommended Defender for Cloud plans name services, not stages, so they mark no cell.
+
+Now look at the empty columns. No defense cites a fact from stage 02, the hours of reads, or stage 03, the configuration-store listing, though the page says three ordinary role assignments were enough for this entire chain. That gap is a discussion question at the end.
+
+== Treat a posted secret as compromised, and retire client secrets
+layout: compare
+col: Treat it as compromised | Removing a secret from an issue does not invalidate it | Rotate first | Scan issues and pull request comments as well as code
+col: Use workload identity | A client secret works from anywhere | Managed identities and federated credentials remove the long-lived secret | The page calls them the durable answer to this initial access path
+Microsoft's advice is explicit that removal does not invalidate a credential.
+notes:
+Two defenses answer stage 01.
+
+First, treat any publicly posted credential as compromised. Removing a secret from an issue leaves it in the edit history and does nothing to invalidate it, so rotate first. Scan issues and pull request comments as well as code, since this one sat in an issue. Microsoft's advice is explicit that removal does not invalidate a credential.
+
+Second, replace client secrets with workload identity. A client secret works from anywhere. Managed identities and federated credentials remove the long-lived secret altogether, and the page calls them the durable answer to this initial access path. A managed identity is an identity Azure provides for a workload, so no one has to handle its credentials.
+
+Keep the stage's hedge with these defenses: Microsoft could not confirm that the posted secret was used.
+
+== Keep Contributor away from automation that does not need it
+layout: text
+The page says three ordinary role assignments were enough for this entire chain.
+- Restrict each service principal to what its workload requires, at the narrowest scope.
+- Review group-granted roles, which are easy to miss in a per-identity review.
+notes:
+This defense cites stage 04, where the principal held Storage Account Contributor through a group, and Contributor and SQL DB Contributor assigned directly.
+
+The page says three ordinary role assignments were enough for this entire chain. Restrict each service principal to what its workload requires, at the narrowest scope.
+
+Review group-granted roles too. The page says they are easy to miss in a per-identity review, and one of the three roles here came through a group.
+
+== Lock what matters, and keep recovery out of reach
+layout: compare
+col: Resource locks | Locks and deletion protection blocked a few deletions | The attempts on recovery locks failed | Put CanNotDelete locks on storage accounts
+col: Independent recovery | Keep backups in a service such as Azure Backup | Under an identity production service principals cannot touch | Blob soft delete does not protect against deletion of the whole account
+The page calls locks and deletion protection the controls that visibly worked in this incident.
+notes:
+This defense answers stages 04 and 05.
+
+Locks and deletion protection blocked a few of the deletions, and the attempts on recovery locks failed. Put CanNotDelete locks on storage accounts.
+
+Keep backups in a service such as Azure Backup, under an identity that production service principals cannot touch.
+
+One warning from the page: blob soft delete does not protect against deletion of the whole account. Blob soft delete is an Azure Storage setting that keeps deleted blobs recoverable for a set period.
+
+== Disable shared key access, and alert when reading turns to deleting
+layout: compare
+col: Shared key access | ListKeys gave this actor credentials that survive the service principal | Disable shared key authorization where workloads allow, and use Entra ID | Alert on ListKeys calls in bulk, and rotate keys listed in an incident
+col: Reading to deleting | Per Microsoft, Defender for Cloud plans: Resource Manager, Storage, Key Vault, App Service, Databases | No deletion history, then deleting in bulk seconds after a burst of reads | Pre-authorize someone to disable an identity without a meeting
+Seven minutes leaves no time to convene one, the page says.
+notes:
+Two more defenses.
+
+Disable shared key access on storage accounts. ListKeys gave this actor credentials that survive the service principal. Where workloads allow it, disable shared key authorization and use Entra ID, Microsoft's cloud identity service. Alert on ListKeys calls in bulk. If keys were listed in an incident, rotate them.
+
+Alert on the shift from reading to deleting. Microsoft recommends the Defender for Cloud plans for Resource Manager, Storage, Key Vault, App Service and Databases. The page says the behavior itself is simple to detect: a service principal with no history of deletion, deleting in bulk, seconds after a burst of reads.
+
+Pre-authorize someone to disable an identity without a meeting, because seven minutes leaves no time to convene one.
+
+== Check your own environment
+layout: checklist
+check: Are secrets in issues and pull request comments found and rotated, not just removed?
+check: Which of your service principals still authenticate with a client secret?
+check: Does any automation hold Contributor it does not need, directly or through a group?
+check: Do your storage accounts carry CanNotDelete locks?
+check: Are backups held under an identity production service principals cannot touch?
+check: Is shared key authorization disabled where workloads allow, with bulk ListKeys calls alerted?
+check: Can someone disable an identity without convening a meeting?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether a secret posted in an issue or a pull request comment, not only in code, would be found and rotated. Ask which service principals still authenticate with a client secret rather than a managed identity or federated credential.
+
+Ask whether any automation holds Contributor it does not need, including roles granted through a group. Ask whether storage accounts carry CanNotDelete locks, and whether backups sit under an identity production service principals cannot touch.
+
+Ask whether shared key authorization is disabled where workloads allow, and whether bulk ListKeys calls raise an alert. Finally, ask whether someone is pre-authorized to disable an identity without a meeting.
+
+== After you disable the principal, what does the attacker still hold?
+layout: question
+The second principal made 30+ successful ListKeys calls after the destruction ended.
+
+Which of those keys would still work after you disable it, and what would you do?
+notes:
+Give the room a minute with this one before moving on.
+
+About 30 minutes after the last destruction, the second principal made more than 30 successful ListKeys requests, returning access keys for storage accounts including Site Recovery related ones.
+
+Ask each person what disabling the principal would stop, and what it would leave in place, before you show the answer slide. The answer slide gives what the page says.
+
+== Storage keys outlive the service principal
+layout: answer
+The page says those keys work independently of the service principal, so disabling it does not revoke them.
+- If keys were listed in an incident, rotate them.
+- Where workloads allow it, disable shared key authorization and use Entra ID.
+notes:
+The page's answer is that the keys outlive the identity that collected them.
+
+Those keys work independently of the service principal, so disabling it does not revoke them. Microsoft notes that the collection could enable future data access.
+
+The page's defense follows from that. If keys were listed in an incident, rotate them. Alert on ListKeys calls in bulk. Where workloads allow it, disable shared key authorization and use Entra ID.
+
+Bring the group's answers back to this. Disabling the principal is still worth doing fast, as the page's last defense says, but the keys need their own step.
+
+== What would you add for stages 02 and 03?
+layout: question
+No defense on the page cites a fact from stage 02, the hours of reads, or stage 03, the configuration-store listing.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the empty columns in the defense matrix.
+
+At stage 02, the first principal made more than 300 successful reads over about 15 hours and 30 minutes, and the second enumerated two subscriptions in five seconds. Both shared Storm-3168 infrastructure, a network fingerprint and the user agent python-requests/2.34.2.
+
+At stage 03, the second principal listed App Service configuration stores, possibly searching for exposed credentials, then an OpenSearch lookup and a ListKey on a non-existent account failed.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page's defenses cite no fact from stages 02 and 03
+layout: answer
+Your proposals are your own. Three defenses come near:
+- Least privilege, because three ordinary role assignments were enough for the entire chain.
+- The alert on bulk deletion seconds after a burst of reads.
+- Microsoft's recommended Defender for Cloud plans.
+notes:
+Be clear that the page stops here. No defense cites a fact from stage 02 or stage 03, and this deck adds none of its own.
+
+Three of the page's defenses come near. The least-privilege defense says three ordinary role assignments were enough for this entire chain. The read-to-delete alert describes a service principal with no history of deletion, deleting in bulk, seconds after a burst of reads. And Microsoft recommends Defender for Cloud plans for Resource Manager, Storage, Key Vault, App Service and Databases. The group may argue that these reach stages 02 and 03; that argument is the group's own.
+
+Test each proposal against the facts the page reports: hours of reads from one principal, a five-second enumeration from the other, the shared user agent, and the listing of App Service configuration stores.
+
+== Sources
+layout: links
+link: Microsoft, Storm-3168 and compromised service principals | https://www.microsoft.com/en-us/security/blog/2026/09/25/storm-3168-agentic-driven-cloud-attacks-using-compromised-service-principals/
+link: Sysdig, JADEPUFFER | https://www.sysdig.com/blog/jadepuffer-agentic-ransomware-for-automated-database-extortion
+link: BleepingComputer, JADEPUFFER background | https://www.bleepingcomputer.com/news/security/jadepuffer-ransomware-used-ai-agent-to-automate-entire-attack/
+link: Cloud Security Alliance, research note | https://labs.cloudsecurityalliance.org/research/csa-research-note-storm3168-jadepuffer-azure-agentic-attack/
+link: MITRE ATT&CK T1485 | https://attack.mitre.org/techniques/T1485/
+link: MITRE ATT&CK T1490 | https://attack.mitre.org/techniques/T1490/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Microsoft's post is the account of the Azure activity. Sysdig's report describes JADEPUFFER in a different environment, and BleepingComputer carries background on it. The Cloud Security Alliance's research note is also among them. The two MITRE pages define the techniques behind stages 04 and 05.
+
+The background slides name their own sources, all from Microsoft Learn.
+
+== Related defense topics
+layout: links
+link: Azure security | azure-security.html
+link: IAM & cloud identity | iam.html
+link: Incident response | incident-response.html
+link: Detection engineering | detection-engineering.html
+The page names no related kill chain. These are its related defense topics.
+notes:
+The page names no related kill chain on csoh.org. These four are the related defense topics it links: Azure security, IAM and cloud identity, incident response, and detection engineering.
+
+IAM stands for identity and access management.
