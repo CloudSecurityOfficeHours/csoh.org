@@ -6,7 +6,7 @@ promise: A former AWS engineer used SSRF via a misconfigured WAF to steal IAM ro
 == At a glance
 layout: stats
 stat: 106M | records exposed | 100M US and 6M Canadian credit card application records
-stat: 117 | days of dwell time | undetected until a member of the public reported it
+stat: 117 | days of dwell time | undetected until a GitHub user reported it to Capital One
 stat: $80M | civil penalty | the page gives no date or issuer for it
 Threat actor, per the page: Paige Thompson, a former AWS employee. The page says the attack directly caused AWS to build IMDSv2.
 notes:
@@ -14,7 +14,7 @@ Start with the three figures the page leads with.
 
 The page counts 106 million customer records exposed, and breaks them down as 100 million US and 6 million Canadian credit card application records.
 
-The attack ran undetected for 117 days. Dwell time is how long an attacker is in an environment before detection. Here no internal monitoring caught the breach; a member of the public reported it.
+The attack ran undetected for 117 days. Dwell time is how long an attacker is in an environment before detection. Here no internal monitoring caught the breach; a GitHub user who saw Thompson's post reported it to Capital One.
 
 The page lists an $80M civil penalty. It does not say who imposed it or when, so do not add either.
 
@@ -24,7 +24,7 @@ The page names the threat actor as Paige Thompson, a former AWS employee, and it
 layout: timeline
 event: March to July 2019 | The incident window the page gives
 event: 117 days | The attack runs undetected
-event: July 17, 2019 | A member of the public files a responsible disclosure with Capital One
+event: July 17, 2019 | A GitHub user who saw Thompson's post emails Capital One's responsible disclosure address
 event: July 29, 2019 | Paige Thompson is arrested
 event: Date not given | AWS builds IMDSv2, which the page says the attack directly caused
 The page does not date the scanning, the SSRF or the sync, and gives no start day. Spacing is not to scale.
@@ -33,16 +33,16 @@ The page gives only a few dates, and the timeline shows only those.
 
 The page dates the incident to March through July 2019. The attack ran undetected for 117 days, and no internal monitoring caught it during that dwell period. The page gives no start day, so do not count back from July 17 to name one.
 
-On July 17, 2019, a member of the public who had noticed Thompson's posts and reviewed the data filed a responsible disclosure with Capital One. Paige Thompson was arrested on July 29, 2019.
+On July 17, 2019, a GitHub user who saw Thompson's post emailed Capital One's responsible disclosure address. The Justice Department says the user "alerted Capital One to the possibility it had suffered a data theft." Paige Thompson was arrested on July 29, 2019.
 
-The page says the attack directly caused AWS to build IMDSv2, and gives no date for that. Its sources include AWS's own post on the IMDSv2 changes, listed at the end of the deck.
+The page says the attack directly caused AWS to build IMDSv2, and gives no date for that.
 
 The markers are evenly spaced, and the slide says the gaps between them are not to scale.
 
 == The kill chain on one slide
 layout: flow
 step: 01 | Reconnaissance | Scanning for SSRF-vulnerable apps | T1595
-step: 02 | Initial Access | SSRF through the WAF | T1190
+step: 02 | Initial Access | SSRF requests reach IMDS | T1190
 step: 03 | Credential Access | Role credentials from IMDSv1 | T1552.005
 step: 04 | Privilege Abuse | 700+ S3 buckets listed | T1619
 step: 05 | Exfiltration | About 30GB synced out | T1530
@@ -51,7 +51,7 @@ Arrows follow the page's stage order. Stage 06 is how the breach came to light, 
 notes:
 Here is the whole chain on one slide: the page's six stages, each with its phase and ATT&CK technique.
 
-Stage 01, Reconnaissance, is automated scanning for AWS-hosted applications vulnerable to SSRF. Stage 02, Initial Access, is the SSRF itself: a misconfigured WAF relayed crafted requests to the instance metadata service. Stage 03, Credential Access, is IMDSv1 returning the role's temporary credentials. Stage 04 sits under the page's Privilege Abuse phase: the stolen credentials listed 700+ S3 buckets. Stage 05, Exfiltration, is approximately 30GB synced to external storage. Stage 06, which the page labels Discovery, is how the breach came to light 117 days later, and it carries no ATT&CK technique.
+Stage 01, Reconnaissance, is automated scanning for AWS-hosted applications vulnerable to SSRF. Stage 02, Initial Access, is the SSRF itself: a firewall misconfiguration let crafted requests reach the instance metadata service, and the page's sources differ on how. Stage 03, Credential Access, is IMDSv1 returning the role's temporary credentials. Stage 04 sits under the page's Privilege Abuse phase: the stolen credentials listed 700+ S3 buckets. Stage 05, Exfiltration, is approximately 30GB synced to external storage. Stage 06, which the page labels Discovery, is how the breach came to light 117 days later, and it carries no ATT&CK technique.
 
 The page's own title runs the chain the same way: SSRF, then IMDSv1, then an over-privileged IAM role, then 106 million records taken from S3. The next slides take each stage in turn.
 
@@ -71,17 +71,17 @@ Thompson built a custom tool to scan the internet for EC2-hosted web application
 
 The target here was a public-facing ModSecurity web application firewall, a WAF, running on EC2.
 
-Why was SSRF not blocked? The page's answer is that SSRF was not in ModSecurity's default detection rule set and had to be explicitly configured. SSRF is server-side request forgery. The next slide explains WAFs in general terms, and the one after stage 02 explains SSRF.
+Why was SSRF not blocked? The page's answer is that SSRF was not in ModSecurity's default detection rule set and had to be explicitly configured. SSRF is server-side request forgery. The next slide explains WAFs in general terms, and a background slide after stage 02 explains SSRF.
 
 == What a WAF is, and what ModSecurity is
 layout: background
 source: OWASP, Web Application Firewall | https://community.owasp.org/Web_Application_Firewall
 credit: Also from OWASP ModSecurity (owasp.org)
-A web application firewall applies a set of rules to an HTTP conversation; the rules generally cover common attacks like cross-site scripting and SQL injection. A WAF can be considered a reverse proxy. ModSecurity is an open-source WAF engine.
+A web application firewall applies a set of rules to an HTTP conversation; the rules generally cover common attacks like cross-site scripting and SQL injection. ModSecurity is an open-source WAF engine.
 notes:
 Background, from OWASP, in general terms.
 
-OWASP describes a web application firewall as an application firewall for HTTP applications that applies a set of rules to an HTTP conversation. Generally those rules cover common attacks such as cross-site scripting and SQL injection. Where proxies generally protect clients, OWASP says, WAFs protect servers. A WAF is deployed to protect a specific web application or set of web applications, and can be considered a reverse proxy.
+OWASP describes a web application firewall as an application firewall for HTTP applications that applies a set of rules to an HTTP conversation. Generally those rules cover common attacks such as cross-site scripting and SQL injection. Where proxies generally protect clients, OWASP says, WAFs protect servers. A WAF is deployed to protect a specific web application or set of web applications.
 
 A WAF may come as an appliance, a server plugin or a filter, and may be customized to an application. OWASP says the effort to perform this customization can be significant, and needs to be maintained as the application is modified.
 
@@ -89,26 +89,43 @@ OWASP describes ModSecurity as an open-source web application firewall engine, o
 
 Also from OWASP ModSecurity: https://owasp.org/projects/modsecurity
 
-== The WAF was tricked into relaying requests to IMDS
+== A firewall misconfiguration let crafted requests reach IMDS
 layout: stage
 stage: 02
 phase: Initial Access
 technique: T1190 | Exploit Public-Facing Application
-fact: The WAF | misconfigured: in logging-only mode, or bypassable
 fact: Target URL | /latest/meta-data/ on 169.254.169.254
+fact: Effect | the EC2 instance itself issued the metadata request
 fact: IMDSv1 behaviour | no authentication; any GET request from the instance is served
-fact: WAF failure | relayed the SSRF payload rather than blocking it
-Relayed server-side by the WAF, the request came from the EC2 instance itself.
+fact: WAF failure | did not block the SSRF payload; sources differ on how
+The ACM analysis calls this step "the source of some controversy and speculation."
 notes:
 Stage 02 is initial access. The page maps it to T1190, Exploit Public-Facing Application.
 
-The page says the WAF was misconfigured, running in logging-only mode or bypassable. It gives both possibilities and does not say which, so keep the or when you tell it.
-
-Thompson sent crafted HTTP requests containing the IMDS endpoint, http://169.254.169.254/latest/meta-data/, as the target URL. IMDS is the instance metadata service. The WAF relayed these requests server-side rather than blocking them, so the EC2 instance itself issued the metadata request.
+Thompson sent crafted HTTP requests containing the IMDS endpoint, http://169.254.169.254/latest/meta-data/, as the target URL, making the EC2 instance itself issue the metadata request. IMDS is the instance metadata service.
 
 That matters because of how IMDSv1, the original version of the service, behaved: no authentication, and any GET request from the instance is served.
 
-The next slide explains server-side request forgery in general terms.
+How the requests got past the firewall is less certain. The page says the WAF did not block the SSRF payload, and reports differing accounts of how, each attributed. The ACM analysis calls this step "the source of some controversy and speculation."
+
+The next slide sets the accounts side by side, and the one after explains server-side request forgery in general terms.
+
+== What each source says happened at the firewall
+layout: compare
+col: The DOJ complaint says only | "A firewall misconfiguration permitted commands to reach and be executed by" the server
+col: Krebs's source, and ACM | The misconfigured WAF was tricked into relaying requests to the metadata service
+col: Appsecco suggests instead | An SSRF in an application behind the WAF | Either a bypass was used, or the WAF was in logging mode
+The ACM analysis calls this step "the source of some controversy and speculation."
+notes:
+The page gives three accounts of how the crafted requests got through, and attributes each one.
+
+The Justice Department's complaint says only that "a firewall misconfiguration permitted commands to reach and be executed by" the server.
+
+Krebs's source says the misconfigured WAF was tricked into relaying requests to the metadata service, and the page says that is the position the ACM analysis takes.
+
+Appsecco suggests instead an SSRF in an application behind the WAF, with either a bypass used or the WAF not configured to block attacks, which it calls logging mode.
+
+The ACM analysis calls this step "the source of some controversy and speculation." Keep each account with its source when you tell it, and do not present any one of them as settled.
 
 == What server-side request forgery is
 layout: background
@@ -194,7 +211,7 @@ S3 access logs were not monitored for volume anomalies.
 notes:
 Stage 05 is exfiltration. The page maps it to T1530, Data from Cloud Storage.
 
-Thompson synced S3 bucket contents to external storage using aws s3 sync: approximately 30GB, over multiple sessions. The page lists what it held: 100 million US and 6 million Canadian credit card application records, 140,000 SSNs, 80,000 bank account numbers, credit scores, and transaction history. SSN stands for Social Security number. The next slide sets those figures side by side.
+Thompson synced S3 bucket contents to external storage using aws s3 sync: approximately 30GB, over multiple sessions. The page lists what it held: 100 million US and 6 million Canadian credit card application records, 140,000 SSNs, 80,000 bank account numbers, credit scores, and fragments of transaction data from a total of 23 days in 2016, 2017 and 2018. Its step code also lists payment history. SSN stands for Social Security number. The next slide sets those figures side by side.
 
 The page names the detection gap at this stage. GuardDuty, AWS's threat detection service, was not enabled, and S3 access logs were not monitored for volume anomalies. Both come back in the defenses.
 
@@ -203,28 +220,28 @@ layout: stats
 stat: 100M | US records | credit card application records
 stat: 6M | Canadian records | credit card application records
 stat: 140K | SSNs | Social Security numbers
-stat: 80K | bank account numbers | alongside credit scores and transaction history
-Approximately 30GB, over multiple sessions. Together, the US and Canadian records match the page's 106M figure.
+stat: 80K | bank account numbers | alongside credit scores and payment history
+Approximately 30GB, over multiple sessions, with fragments of transaction data from a total of 23 days in 2016, 2017 and 2018.
 notes:
 These are the figures the page gives for what was taken at stage 05.
 
-Approximately 30GB was synced over multiple sessions. It held 100 million US and 6 million Canadian credit card application records, which together match the 106 million records in the page's headline. It also held 140,000 Social Security numbers and 80,000 bank account numbers, along with credit scores and transaction history.
+Approximately 30GB was synced over multiple sessions. It held 100 million US and 6 million Canadian credit card application records, which together match the 106 million records in the page's headline. It also held 140,000 Social Security numbers and 80,000 bank account numbers, along with credit scores, payment history, and fragments of transaction data from a total of 23 days in 2016, 2017 and 2018.
 
-The page gives these counts and no others, so do not break them down further or say how many people they cover.
+The page counts records, not people, so keep its unit, and do not break the counts down further.
 
-== Reported 117 days later, after Thompson bragged on GitHub, Slack and IRC
+== Reported 117 days later, after Thompson bragged on GitHub, Slack and Twitter
 layout: stage
 stage: 06
 phase: Discovery
-fact: Bragging | on GitHub, Slack and IRC, under the handle "erratic"
-fact: Reported by | a member of the public, via Capital One's responsible disclosure program
-fact: Reported on | July 17, 2019
+fact: Bragging | on GitHub, and on Slack and Twitter under the handle "erratic"
+fact: Reported by | a GitHub user who saw the post
+fact: Reported on | July 17, 2019, to Capital One's responsible disclosure address
 fact: Monitoring failures | no GuardDuty, no S3 volume alerts, no anomalous IAM activity detection
 No internal monitoring caught the breach during the 117-day dwell period.
 notes:
 Stage 06 is how the breach came to light; the page labels the phase Discovery, and maps the stage to no ATT&CK technique.
 
-Thompson bragged about the breach on GitHub and in Slack and IRC channels under the handle "erratic". IRC is Internet Relay Chat. A member of the public noticed the posts, reviewed the data, and filed a responsible disclosure with Capital One on July 17, 2019. The page calls this an external tipster, through Capital One's responsible disclosure program. Paige Thompson was arrested on July 29, 2019.
+Thompson bragged about the breach on GitHub, and on Slack and Twitter under the handle "erratic". On July 17, 2019, a GitHub user who saw the post emailed Capital One's responsible disclosure address. The Justice Department says the user "alerted Capital One to the possibility it had suffered a data theft." The page calls this an external tipster, through Capital One's responsible disclosure program. Paige Thompson was arrested on July 29, 2019.
 
 No internal monitoring caught the breach during the 117-day dwell period: not GuardDuty, not S3 access logs, not IAM anomaly detection.
 
@@ -232,17 +249,17 @@ Two of the page's defenses, GuardDuty and alerts on S3 access volume, answer thi
 
 == The failure the page names at each stage
 layout: table
-row: Stage | The failure, in the page's words
+row: Stage | The failure the page names
 row: 01 | SSRF not in default WAF rules; required manual configuration
-row: 02 | The WAF relayed the SSRF payload rather than blocking it
+row: 02 | The WAF did not block the SSRF payload; sources differ on how
 row: 03 | The role had S3 permissions far beyond what a WAF needs
 row: 04 | Role permissions never reviewed against least privilege
 row: 05 | GuardDuty not enabled; S3 access logs not monitored for volume anomalies
 row: 06 | No GuardDuty, no S3 volume alerts, no anomalous IAM activity detection
 notes:
-The page labels a failure at every stage, and this table uses its labels.
+The page labels a failure at every stage, and this table restates each one.
 
-At stage 01, SSRF was not blocked because it was not in the default WAF rules and required manual configuration. At stage 02, the WAF relayed the SSRF payload rather than blocking it. At stage 03, the page calls the key problem a role with S3 permissions far beyond what a WAF needs. At stage 04, the root failure is that the IAM role's permissions were never reviewed against the principle of least privilege. At stage 05, the detection gap is GuardDuty not enabled and S3 access logs not monitored for volume anomalies. At stage 06, the monitoring failures are no GuardDuty, no S3 volume alerts and no anomalous IAM activity detection.
+At stage 01, SSRF was not blocked because it was not in the default WAF rules and required manual configuration. At stage 02, the WAF did not block the SSRF payload: it relayed it, per Krebs's source and ACM, or was bypassed or only logging, per Appsecco. At stage 03, the page calls the key problem a role with S3 permissions far beyond what a WAF needs. At stage 04, the root failure is that the IAM role's permissions were never reviewed against the principle of least privilege. At stage 05, the detection gap is GuardDuty not enabled and S3 access logs not monitored for volume anomalies. At stage 06, the monitoring failures are no GuardDuty, no S3 volume alerts and no anomalous IAM activity detection.
 
 The next slide sets the page's five defenses against the six stages.
 
@@ -250,7 +267,7 @@ The next slide sets the page's five defenses against the six stages.
 layout: matrix
 columns: 01 | 02 | 03 | 04 | 05 | 06
 row: Enforce IMDSv2 on all EC2 instances | 03
-row: Least-privilege IAM on every role | 04
+row: Least-privilege IAM on every role | 03 | 04
 row: Enable Amazon GuardDuty | 05 | 06
 row: Alert on anomalous S3 access volume | 05 | 06
 row: Add SSRF rules to your WAF | 01 | 02
@@ -258,35 +275,34 @@ Every stage has at least one defense the page ties to it.
 notes:
 This matrix sets the page's five defenses against its six stages. A cell is marked only where the page's own words tie that defense to that stage.
 
-Enforcing IMDSv2 answers stage 03, where IMDSv1 returned the role's credentials to a GET request with no token. Least-privilege IAM answers stage 04, the over-permissioned role whose sweeping S3 list and read permissions let 700+ buckets be listed.
+Enforcing IMDSv2 answers stage 03, where IMDSv1 returned the role's credentials to a GET request with no token. Least-privilege IAM answers stages 03 and 04. Stage 03 names as its key problem a role with S3 permissions far beyond what a WAF needs, and at stage 04 those sweeping S3 list and read permissions let 700+ buckets be listed.
 
 GuardDuty and alerts on S3 access volume answer stages 05 and 06. Stage 05 names GuardDuty not enabled and S3 access logs not monitored for volume anomalies as its detection gap, and stage 06 lists no GuardDuty and no S3 volume alerts among its monitoring failures.
 
-Adding SSRF rules to the WAF answers stages 01 and 02. At stage 01 the page says SSRF was not in ModSecurity's default rule set and had to be explicitly configured, and the defense says the same of default WAF configurations. At stage 02 the WAF relayed the SSRF payload to 169.254.169.254 rather than blocking it.
+Adding SSRF rules to the WAF answers stages 01 and 02. At stage 01 the page says SSRF was not in ModSecurity's default rule set and had to be explicitly configured, and the defense says the same of default WAF configurations. At stage 02 the WAF did not block the SSRF payload aimed at 169.254.169.254, though the page's sources differ on how.
 
 Every column has at least one mark.
 
 == Enforce IMDSv2, and give every role least privilege
 layout: compare
-col: Enforce IMDSv2 (stage 03) | IMDSv2 requires a session token obtained via a PUT request | SSRF attacks that can only issue GET requests cannot obtain credentials | AWS defaults new instances to IMDSv2; enforce it via SCP across your organisation
-col: Least privilege (stage 04) | A WAF role should only write WAF logs, not list or read S3 | Use IAM Access Analyzer findings and Access Advisor unused-permission reports | Identify and tighten over-privileged roles
-These answer two links in the page's title: IMDSv1, and the over-privileged IAM role.
+col: Enforce IMDSv2 (stage 03) | IMDSv2 needs a PUT for a session token, so GET-only SSRF cannot obtain credentials | AWS's documentation says "By default, you can use either IMDSv1 or IMDSv2, or both." | Set the account-level default to IMDSv2; enforce it via SCP
+col: Least privilege (stages 03, 04) | A WAF role should only write WAF logs, not list or read S3 | Use IAM Access Analyzer findings and Access Advisor unused-permission reports | Identify and tighten over-privileged roles
 notes:
-The page's first two defenses each answer one stage.
+The page's first two defenses answer stages 03 and 04.
 
-Enforce IMDSv2 on all EC2 instances. IMDSv2 requires a session token obtained via a PUT request, so SSRF attacks that can only issue GET requests cannot obtain credentials. That answers stage 03, where IMDSv1 handed the role's credentials to a GET request with no token. AWS defaults new instances to IMDSv2, and you can enforce it across your organisation with an SCP, a service control policy in AWS Organizations.
+Enforce IMDSv2 on all EC2 instances. IMDSv2 requires a session token obtained via a PUT request, so SSRF attacks that can only issue GET requests cannot obtain credentials. That answers stage 03, where IMDSv1 handed the role's credentials to a GET request with no token. AWS's documentation says "By default, you can use either IMDSv1 or IMDSv2, or both." The page says console Quick Start launches and Amazon Linux 2023 default to IMDSv2 only, and that AWS said instance types released from mid-2024 would too, but other launches still accept IMDSv1 unless you change that. So set the account-level default to IMDSv2, and enforce it across your organisation with an SCP, a service control policy in AWS Organizations.
 
-Apply least-privilege IAM to every role. The page says a WAF role should only write WAF logs, not list or read S3. That answers stage 04, where the role's sweeping S3 list and read permissions let 700+ buckets be listed. Use IAM Access Analyzer findings and Access Advisor unused-permission reports to identify and tighten over-privileged roles. IAM Access Analyzer is an AWS service that, among other things, surfaces unused permissions.
+Apply least-privilege IAM to every role. The page says a WAF role should only write WAF logs, not list or read S3. That answers stage 03's key problem, a role with S3 permissions far beyond what a WAF needs, and stage 04, where those sweeping S3 list and read permissions let 700+ buckets be listed. Use IAM Access Analyzer findings and Access Advisor unused-permission reports to identify and tighten over-privileged roles. IAM Access Analyzer is an AWS service that, among other things, surfaces unused permissions.
 
-== Detect what nobody saw for 117 days
+== Enable GuardDuty, and alert on S3 access volume
 layout: compare
-col: Enable Amazon GuardDuty (stages 05, 06) | Its instance credential exfiltration finding detects role credentials used from outside the issuing instance | GuardDuty was not enabled
+col: Enable Amazon GuardDuty (stages 05, 06) | Its .OutsideAWS finding detects EC2 instance credentials used from an external IP address | Its .InsideAWS counterpart detects their use from another AWS account
 col: Alert on S3 access volume (stages 05, 06) | Large-scale GetObject or ListBucket calls | From an unexpected IP or at an unusual rate | Should trigger a CloudWatch and SNS alert immediately
 No internal monitoring caught the breach during the 117-day dwell period.
 notes:
 The page's next two defenses are detection, and both answer stages 05 and 06, where the page lists GuardDuty and S3 volume alerts among what was missing.
 
-Enable Amazon GuardDuty. The page says its UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration finding specifically detects role credentials being used from outside the EC2 instance that issued them. At stage 05 GuardDuty was not enabled, and stage 06 lists no GuardDuty among its monitoring failures.
+Enable Amazon GuardDuty. The page says its UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS finding detects credentials created for an EC2 instance being used from an external IP address, and its .InsideAWS counterpart detects their use from another AWS account. At stage 05 GuardDuty was not enabled, and stage 06 lists no GuardDuty among its monitoring failures.
 
 Alert on anomalous S3 access volume. Large-scale GetObject or ListBucket calls from an unexpected IP or at an unusual rate should trigger a CloudWatch and SNS alert immediately. At stage 05, S3 access logs were not monitored for volume anomalies, and at stage 06 the page lists no S3 volume alerts. CloudWatch is AWS's monitoring service, and SNS is its Simple Notification Service.
 
@@ -296,28 +312,29 @@ The page does not say what either control would have caught in this incident, so
 layout: text
 - Block requests containing 169.254.169.254 in URL, body, or headers.
 - This is not in default WAF configurations; it must be explicitly added.
-- It answers stages 01 and 02: SSRF was not in the default rules, and the WAF relayed the payload.
+- The rule answers stages 01 and 02.
 notes:
 The last defense answers stages 01 and 02.
 
 Add SSRF rules to your WAF: block requests containing 169.254.169.254 in the URL, body or headers. The page says this is not in default WAF configurations, and must be explicitly added.
 
-That matches what stage 01 found. SSRF was not in ModSecurity's default detection rule set and had to be explicitly configured. At stage 02, the misconfigured WAF relayed the SSRF payload to 169.254.169.254 rather than blocking it.
+That matches what stage 01 found. SSRF was not in ModSecurity's default detection rule set and had to be explicitly configured. At stage 02, the WAF did not block the SSRF payload aimed at 169.254.169.254. The page reports differing accounts of how: relayed, per Krebs's source and ACM, or bypassed or only logging, per Appsecco.
 
 == Check your own environment
 layout: checklist
-check: Do all your EC2 instances require IMDSv2, enforced by SCP across the organisation?
+check: Do all your EC2 instances require IMDSv2, or do some still accept IMDSv1?
+check: Is your account-level default IMDSv2, with an SCP enforcing it organisation-wide?
 check: Does any role hold S3 list or read permissions its job does not need?
 check: Do you act on IAM Access Analyzer findings and Access Advisor unused-permission reports?
-check: Is Amazon GuardDuty enabled, so its instance credential exfiltration finding can fire?
+check: Is Amazon GuardDuty enabled, so its instance credential exfiltration findings can fire?
 check: Would large-scale GetObject or ListBucket calls trigger a CloudWatch and SNS alert?
 check: Does your WAF block requests containing 169.254.169.254 in URL, body or headers?
 notes:
-Turn the page's five defenses into questions about your own estate. Each question comes from one of them.
+Turn the page's five defenses into questions about your own estate. Each question comes from one of them; the first defense gives two.
 
-Ask whether every EC2 instance requires IMDSv2, and whether an SCP enforces it across the organisation. Ask whether any role, a WAF's or any other, holds S3 list or read permissions its job does not need, and whether anyone acts on IAM Access Analyzer findings and Access Advisor unused-permission reports.
+Ask whether every EC2 instance requires IMDSv2, or whether some still accept IMDSv1, since AWS's documentation says that by default you can use either IMDSv1 or IMDSv2, or both. Ask whether the account-level default is IMDSv2, and whether an SCP enforces it across the organisation. Ask whether any role, a WAF's or any other, holds S3 list or read permissions its job does not need, and whether anyone acts on IAM Access Analyzer findings and Access Advisor unused-permission reports.
 
-Ask whether Amazon GuardDuty is enabled, so its finding for role credentials used outside their instance can fire. Ask whether large-scale GetObject or ListBucket calls from an unexpected IP, or at an unusual rate, would trigger a CloudWatch and SNS alert.
+Ask whether Amazon GuardDuty is enabled, so its findings for EC2 instance credentials used from an external IP address or from another AWS account can fire. Ask whether large-scale GetObject or ListBucket calls from an unexpected IP, or at an unusual rate, would trigger a CloudWatch and SNS alert.
 
 Finally, ask whether your WAF blocks requests containing 169.254.169.254 in the URL, body or headers, since the page says that rule is not in default configurations.
 
@@ -329,42 +346,42 @@ Name one instance or workload where you could not say for certain that IMDSv2 is
 notes:
 Give the room a minute with this one before moving on.
 
-At stage 03, IMDSv1 returned the role's temporary credentials, an AccessKeyId, a SecretAccessKey and a SessionToken, to a GET request from within the instance. No token, header or authentication was required, and the SSRF through the WAF provided the request.
+At stage 03, IMDSv1 returned the role's temporary credentials, an AccessKeyId, a SecretAccessKey and a SessionToken, to a GET request from within the instance. No token, header or authentication was required, and the SSRF provided the request.
 
 Ask each person to name one instance or workload before you show the answer slide. The answer slide gives what the page says about IMDSv2.
 
 == What the page says about IMDSv2
 layout: answer
-- IMDSv2 requires a session token obtained via a PUT request.
-- SSRF attacks that can only issue GET requests cannot obtain credentials.
-- AWS defaults new instances to IMDSv2, and you can enforce it via SCP.
+- IMDSv2 requires a PUT for a session token, so GET-only SSRF cannot obtain credentials.
+- AWS's documentation says "By default, you can use either IMDSv1 or IMDSv2, or both."
+- Set the account-level default to IMDSv2, and enforce it via SCP.
 notes:
 The page's first defense is to enforce IMDSv2 on all EC2 instances.
 
-IMDSv2 requires a session token obtained via a PUT request, so SSRF attacks that can only issue GET requests cannot obtain credentials. AWS defaults new instances to IMDSv2, and you can enforce it across your organisation with a service control policy.
+IMDSv2 requires a session token obtained via a PUT request, so SSRF attacks that can only issue GET requests cannot obtain credentials. AWS's documentation says "By default, you can use either IMDSv1 or IMDSv2, or both." The page says some launch paths default to IMDSv2 only, but other launches still accept IMDSv1 unless you change that, so set the account-level default to IMDSv2 and enforce it across your organisation with a service control policy.
 
 Bring the group's examples back to this. An instance that still serves credentials to a GET request with no token is the condition stage 03 relied on. The page also says the attack directly caused AWS to build IMDSv2.
 
 == If nobody had bragged, what would have told you?
 layout: question
-The breach was reported 117 days later by a member of the public who noticed Thompson's posts. No internal monitoring caught it.
+The breach was reported 117 days later, by a GitHub user who saw Thompson's post. No internal monitoring caught it.
 
 What in your environment would have noticed stage 04 or stage 05?
 notes:
 This question comes from stage 06.
 
-Thompson bragged about the breach on GitHub, Slack and IRC. A member of the public noticed the posts, reviewed the data and filed a responsible disclosure with Capital One on July 17, 2019. No internal monitoring caught the breach during the 117-day dwell period: not GuardDuty, not S3 access logs, not IAM anomaly detection.
+Thompson bragged about the breach on GitHub, Slack and Twitter. On July 17, 2019, a GitHub user who saw the post emailed Capital One's responsible disclosure address. No internal monitoring caught the breach during the 117-day dwell period: not GuardDuty, not S3 access logs, not IAM anomaly detection.
 
 Stage 04 listed 700+ buckets with stolen role credentials. Stage 05 synced approximately 30GB to external storage over multiple sessions. Let the group name what in their own environment would notice either one, before you show the answer slide.
 
 == The page's two detection defenses
 layout: answer
-- GuardDuty's instance credential exfiltration finding detects role credentials used outside the instance that issued them.
+- GuardDuty's .OutsideAWS and .InsideAWS findings detect EC2 instance credentials used from an external IP or another AWS account.
 - Large-scale GetObject or ListBucket calls from an unexpected IP or at an unusual rate should trigger a CloudWatch and SNS alert.
 notes:
 The page gives two detection defenses, and both answer stages 05 and 06.
 
-Enable Amazon GuardDuty. Its UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration finding specifically detects role credentials being used from outside the EC2 instance that issued them.
+Enable Amazon GuardDuty. Its UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS finding detects credentials created for an EC2 instance being used from an external IP address, and its .InsideAWS counterpart detects their use from another AWS account.
 
 Alert on anomalous S3 access volume. Large-scale GetObject or ListBucket calls from an unexpected IP or at an unusual rate should trigger a CloudWatch and SNS alert immediately.
 
@@ -373,14 +390,14 @@ The page lists both among what was missing: GuardDuty was not enabled, and S3 ac
 == Sources
 layout: links
 link: KrebsOnSecurity post-mortem | https://krebsonsecurity.com/2019/08/what-we-can-learn-from-the-capital-one-hack/
-link: Appsecco technical analysis | https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af
+link: Appsecco technical analysis, archived | https://web.archive.org/web/20251220173147/https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af
 link: AWS IMDSv2 response | https://aws.amazon.com/blogs/security/defense-in-depth-open-firewalls-reverse-proxies-ssrf-vulnerabilities-ec2-instance-metadata-service/
 link: ACM systematic analysis | https://dl.acm.org/doi/full/10.1145/3546068
 link: MITRE ATT&CK T1552.005 | https://attack.mitre.org/techniques/T1552/005/
 notes:
 These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
 
-KrebsOnSecurity's post-mortem and Appsecco's technical analysis are linked in the page's header, alongside AWS's IMDSv2 response, its post on defense in depth against open firewalls, reverse proxies and SSRF vulnerabilities. The page also cites a systematic analysis in the ACM Digital Library, ACM being the Association for Computing Machinery, and the MITRE page that defines T1552.005, the technique behind stage 03.
+KrebsOnSecurity's post-mortem and Appsecco's technical analysis, linked as an archived copy, are in the page's header, alongside AWS's IMDSv2 response, its post on defense in depth against open firewalls, reverse proxies and SSRF vulnerabilities. The page also cites a systematic analysis in the ACM Digital Library (ACM is the Association for Computing Machinery), which it quotes at stage 02, and the MITRE page that defines T1552.005, the technique behind stage 03.
 
 The background slides name their own sources: OWASP, the csoh.org glossary and AWS's EC2 documentation.
 
