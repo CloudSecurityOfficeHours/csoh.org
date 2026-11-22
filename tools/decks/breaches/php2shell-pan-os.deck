@@ -1,0 +1,589 @@
+title: PHP2Shell / PAN-OS Firewalls
+page: breaches/php2shell-pan-os.html
+as-of: 2026-11-22
+promise: Mass exploitation of two PHP flaws ran into a limit, since an exploit must fit each target's build; per Dream, a chain built on one tuned to PAN-OS versions rooted 24 Palo Alto firewalls and a firewall management server.
+
+== At a glance
+layout: stats
+stat: 25 | systems rooted, per Dream | 24 firewalls and a firewall management server
+stat: <15 | minutes to a persistent root webshell | from connecting without credentials, per Dream
+stat: 20 | HTTP requests at most, to win Steal My Bitcoin | by the winner's account
+stat: <53% | of initially affected organizations still vulnerable after a week | per Wiz (disclosure: the site's author works at Wiz)
+notes:
+Four figures lead the page, and each one has a source to name aloud.
+
+Dream recovered the operator's toolkit and reports 24 of 240 targeted firewalls rooted, plus a 25th system: a firewall management server in a US government-affiliated network, from which the operator reached Active Directory. Unit 42 says it independently verified the tooling and results.
+
+Dream also says the chain from an unauthenticated HTTPS connection to a persistent root webshell takes under 15 minutes.
+
+The third figure comes from a different event, the Steal My Bitcoin challenge. By the winner's account, his Python script needed at most 20 HTTP requests.
+
+The fourth is Wiz's: under 53% of initially affected organizations were still vulnerable after a week. Say the disclosure aloud. Research published by Wiz is one of the sources the page cites, and the site's author works at Wiz. Every source is linked on the page so you can read it directly.
+
+The page names the threat actor for the PAN-OS campaign as CL-UNK-1280, Unit 42's name as cited by Dream, assessed as Chinese-speaking.
+
+== What happened, and when
+layout: timeline
+event: August 11, 2026 | Calif reports the flaws to PHP
+event: October 17 | Earliest known attempt, in Amazon's honeypots, per Amazon
+event: October 20 | The CVE IDs leak, and the embargo breaks in stages
+event: October 21 | Fixed releases; European governments pull services offline as a precaution
+event: October 23 and 24 | An operator takes root on PAN-OS firewalls with exposed management interfaces
+event: October 28 | Wordfence knows of no WordPress site compromised this way
+The bug class dates to 2004. Mass exploitation ran into a limit: an exploit has to fit the target's build. Tenable points to the exception, appliances, where many devices share one build. Spacing is not to scale.
+notes:
+PHP2Shell covers two memory-safety flaws in core PHP, CVE-2026-109618 and CVE-2026-109619, each scored 9.2 under CVSS 4.0, with affected code reaching back to PHP 5.4. The bug class dates to 2004.
+
+Calif reported the problem to PHP on August 11, and OpenAI and Wiz followed with the same root cause or further attack vectors. Amazon reported the earliest known attempt, against a honeypot, dated October 17. The CVE IDs leaked on October 20 and the embargo broke in stages. The fixed releases came out on October 21, and governments across Europe pulled services offline as a precaution.
+
+Mass exploitation then ran into a practical limit: a working exploit has to fit the target's build, configuration and worker model. As of October 28 Wordfence knew of no WordPress site compromised this way, despite more than 77,000 related requests.
+
+Tenable points to the exception: appliances, where many devices share one build, so one calibrated exploit can reach them. On October 23 and 24 an operator chained a private exploit tuned to specific PAN-OS versions with the Fragnesia Linux kernel flaw, and took root on Palo Alto Networks firewalls with internet-exposed management interfaces.
+
+The markers are evenly spaced, and the gaps between them are not to scale.
+
+== The kill chain, stages 01 to 08
+layout: flow
+step: 01 | Background | A bug class from 2004 | -
+step: 02 | Background | What the flaws do | -
+step: 03 | Disclosure | An embargo that broke in stages | -
+step: 04 | Reaction | Patch or go offline | -
+step: 05 | Mass Scanning | Loud and mostly unsuccessful | -
+step: 06 | Working Exploits | Favorable targets first | -
+step: 07 | The PAN-OS Chain, Reconnaissance | 19,000 firewalls narrowed to 240 | T1595.002
+step: 08 | Resource Development | Calibrated to the firmware | T1587.004
+The PAN-OS chain starts at stage 07. Arrows show the page's order only.
+notes:
+The page has 18 stages, so the chain takes three slides. Each box gives the stage number, the page's phase label, a short title and, where the page maps one, the ATT&CK technique.
+
+The page runs in order: the flaws and the disclosure, the scanning and first working exploits, the PAN-OS kill chain, then what changed on cloud platforms and what is still unresolved.
+
+Stages 01 and 02 are background: where the bug class came from and what the flaws do. Stage 03 is the disclosure, an embargo that broke in stages. Stage 04 is the reaction, when agencies said to patch or go offline. Stage 05 is mass scanning, loud and mostly unsuccessful, and stage 06 is the first working exploits, against favorable targets.
+
+The PAN-OS chain starts at stage 07, reconnaissance, which the page maps to T1595.002, and stage 08, resource development, mapped to T1587.004.
+
+Read the arrow from stage 06 to stage 07 as the page's order. The page does not say the PAN-OS operator used the exploits from stage 06; its exploit was a private one, tuned to specific PAN-OS versions.
+
+== The kill chain, stages 09 to 15
+layout: flow
+step: 09 | Initial Access | No credentials needed | T1190
+step: 10 | Privilege Escalation | Fragnesia | T1068
+step: 11 | Persistence | Park most, work a few | T1505.003
+step: 12 | Command and Control | The firewall as a bridge | T1572
+step: 13 | Credential Access | What a firewall holds | T1552.001
+step: 14 | Lateral Movement | The firewall manager | T1210
+step: 15 | Discovery | Enumeration, then unknowns | T1087.002
+Arrows show the page's order only.
+notes:
+This is the hands-on part of the PAN-OS chain, from first code execution to the directory.
+
+Stage 09, initial access, maps to T1190: a staged exploit against PHP's upload-progress handling gave code execution on the management web server, with no credentials. Stage 10, privilege escalation, maps to T1068: the Fragnesia kernel flaw took the operator to root.
+
+At stage 11, persistence, mapped to T1505.003, the operator triaged. For 22 of the 24 rooted firewalls a webshell was all. The operator prioritized two firewalls in one US government-affiliated network.
+
+Stage 12, command and control, maps to T1572: a reverse SSH tunnel turned a firewall into a bridge to the internal network. Stage 13, credential access, maps to T1552.001: what a firewall holds. Stage 14, lateral movement, maps to T1210: the server that manages all of the organization's firewalls. Stage 15, discovery, maps to T1087.002: directory enumeration, then unknowns.
+
+The arrows show the page's order. The next slide covers the last three stages, which leave the PAN-OS chain.
+
+== The kill chain, stages 16 to 18
+layout: flow
+step: 16 | Cloud Platforms | Who owns the patch | -
+step: 17 | Hidden PHP | Products that bundle it | -
+step: 18 | The Record So Far | Exposure, patching, corrections | -
+These stages turn from the PAN-OS chain to what changed on cloud platforms and what is still unresolved. Arrows show the page's order only.
+notes:
+The page maps no ATT&CK technique to these three stages.
+
+Stage 16 asks who owns the patch on cloud platforms, and the page's answer moves from service to service. Stage 17 covers products that bundle PHP, where vendors kept finding it in their own products. Stage 18 is the record so far: exposure counts that differ by more than 20 times, exposure that fell quickly, and early claims that were withdrawn.
+
+After these come the stage slides, one per stage, with the two background stages sharing one slide because they share a phase on the page.
+
+== A 2004 bug class; two flaws whose risk depends on deployment
+layout: stage-group
+stages: 01 02
+phase: Background
+row: 01 | The bug class dates to 2004; a 2024 audit saw it without proving exploitability
+row: 02 | CVE-2026-109618, out-of-memory corruption; CVE-2026-109619, stale global state; PHP rates Apache mod_php highest
+At stage 09, the page says the flaws work on PAN-OS the way these two stages describe.
+notes:
+The band is the page's own Background phase label. These facts come from the page, unlike the background explainer slides, which name their own sources.
+
+Stage 01 is history. Calif's write-up starts with Stefan Esser's 2004 memory-limit remote code execution bug. In 2024 an audit by OSTIF and Quarkslab turned up a related issue; the PHP Foundation says a potential exploit was theorized then, with no concrete vectors, and Calif says the lack of proven exploitation is why it stayed unfixed. Calif reported to PHP on August 11, 2026. It says AI tools helped, and its author argues the models needed steering from someone who knew the target's vulnerability history. OpenAI independently reported the same root cause, and Wiz and OpenAI followed with further attack vectors.
+
+Stage 02 is the mechanism. CVE-2026-109618 comes from PHP using longjmp to escape an out-of-memory error. CVE-2026-109619 is stale state a worker keeps from a previous request, and session upload progress, on by default, can both leave and read it. PHP rates Apache mod_php highest and validated full code execution there; PHP-FPM exits the child on a startup failure, which limits exposure. Wiz says the flaws can also disclose live worker memory, with no code execution at all. The 10.0 score that circulated with the leak was wrong; the official score is 9.2.
+
+== On October 20 the CVE IDs leaked, and the embargo kept breaking
+layout: stage
+stage: 03
+phase: Disclosure
+fact: About 15:00 UTC | the CVE IDs circulate, with a wrong release time and CVSS score
+fact: About 20:00 UTC | Calif mistakenly publishes a video of its proof of concept
+fact: Release moved up | October 21, 14:00 UTC; about 23 hours with no installable patch
+fact: Chainguard | fixed images 07:41 UTC October 21: an embargo break, per the PHP Foundation
+PHP says no technical details leaked with the IDs; the PHP Foundation says the video helped speed up other proofs of concept.
+notes:
+The disclosure broke in stages, and the times matter.
+
+Tags and tarballs for the fixed releases were built on October 19, for publication at 14:00 UTC on October 22. At about 15:00 UTC on October 20 the two CVE IDs began circulating online, with a wrong release time and the wrong CVSS score. PHP says no technical details leaked. It moved the release up to October 21, which left about 23 hours with a public warning and no installable patch.
+
+Around 20:00 UTC on October 20 Calif mistakenly published a video of its proof of concept, and copies spread after it was deleted. The PHP Foundation says mitigation advice given to critical infrastructure providers from about 23:00 UTC may also have leaked. Amazon puts the earliest proofs of concept at around 02:00 UTC on October 21. The Foundation says Chainguard published fixed images more than six hours before the coordinated release.
+
+One attempt predates all of this. Amazon found it in its MadPot honeypots dated October 17, from an address tied to a commercial anonymization network. Amazon says it is unclear whether these early attempts would have succeeded on real systems, or how the actor got exploit details ahead of disclosure.
+
+The next slide explains coordinated disclosure in general.
+
+== What coordinated disclosure means
+layout: background
+source: OWASP Vulnerability Disclosure Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Vulnerability_Disclosure_Cheat_Sheet.html
+In coordinated, or responsible, disclosure, the first report goes privately to the organization. The full details are published once a patch is available, sometimes after a delay that gives users more time to install it.
+notes:
+This is a background slide. It explains an idea in general, from OWASP's Vulnerability Disclosure Cheat Sheet, and says nothing about the incident.
+
+OWASP describes several models for disclosing vulnerabilities. In private disclosure, the vulnerability is reported privately to the organization, which decides whether to publish the details.
+
+Responsible or coordinated disclosure tries to find a middle ground. The initial report is made privately, and the full details are published once a patch has been made available, sometimes with a delay to allow more time for the patches to be installed.
+
+OWASP's cheat sheet does not use the word embargo.
+
+== Patch or go offline: many pulled services before any confirmed exploitation
+layout: stage
+stage: 04
+phase: Reaction
+fact: CISA, October 21 | update or take PHP offline; this applies to 8.1 and earlier too
+fact: NSA and FBI | much the same, on October 21 and October 23
+fact: Bundled PHP | the FBI, like CISA: look for vendor products that bundle PHP
+fact: Offline, October 21 | Germany, France, Belgium, Czech Republic, Finland, Netherlands
+fact: KEV, October 26 | CISA lists both CVEs, with a federal deadline of October 29
+As of October 22, eBuilder Security's round-up called the shutdowns reported so far precautionary, with no government reporting a breach.
+notes:
+CISA told organizations that could not update immediately, or that still ran PHP 8.1 or earlier, to take PHP systems offline until patched. The NSA said much the same on October 21 and the FBI on October 23, and the FBI, like CISA, told organizations to look for vendor products that bundle PHP. The UK's NCSC warned against limiting discovery to outdated versions.
+
+Governments across Europe went further on October 21. eBuilder Security's round-up lists Germany's federal IT provider ITZBund, French prefecture websites, Belgian foreign ministry sites, the Czech government and Finland's Valtori. The Dutch list was the longest: NCSC-NL took down its own site, and the Port of Rotterdam, Overheid.nl, the KNVB and many hospitals followed. SecurityWeek reported 32 UK services unavailable and four partly unavailable, largely as a precaution. Belgium's foreign ministry acted after reports of attacks, though its cybersecurity centre had recorded none against Belgian sites.
+
+Assessments then cooled. By October 23 NCSC-NL said large-scale exploitation was less likely than it had estimated, while still telling organizations to patch at once. CISA added both CVEs to its Known Exploited Vulnerabilities catalog, KEV, on October 26. The Register notes the listing does not say how many production systems were breached.
+
+== Millions of attempts, per SecurityWeek, and little shown to have worked
+layout: stage
+stage: 05
+phase: Mass Scanning
+fact: Delft University | 171 of 600+ addresses sent exploit code or droppers
+fact: Wordfence | no compromised WordPress site known as of October 28
+fact: Wiz telemetry | no successful end-to-end exploitation as of October 27
+fact: SOCRadar | an operator screened about 20 sites; none met the preconditions
+fact: CYFIRMA | suspected North Korean effort; web-shell claims self-reported
+Much of that traffic failed on the targets it hit, and success depended on the target.
+notes:
+SecurityWeek reported that attempts ran into the millions. Delft University's Threat Intelligence Lab tracked more than 50,000 exploitation requests from over 600 addresses across 70 countries, and 171 of those addresses went beyond probing to send exploit code or droppers. Cato Networks said about 96% of the attacks it blocked targeted CVE-2026-109618.
+
+Much of it failed. In the attempts Wiz captured, two variants of an open-source kit hit request-size limits or failed to obtain memory addresses, even though two of those same source addresses succeeded against honeypots in the next stage. A PHP2Shell-branded tool exploited neither CVE, relying on session poisoning and a separate local file inclusion endpoint.
+
+SOCRadar found an operator's open server with a lab-tested exploit for PHP 8.4.26 under mod_php. It depended on a debug-style setup: visible errors, a very low memory limit and a single Apache worker. Hunt.io counted 123 servers targeted from that host with none exploited. Sophos saw a blocked attempt to install Potassium, which it believes is a Mirai variant.
+
+Attribution is thin. CYFIRMA's suspected North Korean link rests on Korean-language operator chat, targeting pattern and past Lazarus tradecraft. Its fourth version raised confidence from moderate to high without explanation, and its first cautioned that language alone could reflect a Korean-speaking criminal crew. CISA's alert names no actor.
+
+== Working exploits appeared within days, each needing the right conditions or tuning
+layout: stage
+stage: 06
+phase: Working Exploits
+fact: Honeypots | October 24: 35 shells on single-worker mod_php; no second stage
+fact: Steal My Bitcoin | won October 25; 20 requests or fewer and past ASLR, by the winner's account
+fact: Early reports | had treated ASLR as a major barrier
+fact: Karimi's caveat | reliability not measured on other worker counts, builds or applications
+Researchers still disagree on how much of a barrier per-target tuning is.
+notes:
+The first solid proof came from honeypots. On October 24 Adel Karimi's sensors recorded 35 shells across three targets running PHP 8.4.26 under single-worker Apache mod_php, from two source addresses. The activity fits CVE-2026-109618; attackers tried to fetch more with PHP, curl and wget, and no second stage was downloaded. Karimi says this deliberately favorable profile does not measure reliability on other worker counts, builds or applications. GreyNoise later said it had seen at least six successful exploitations.
+
+James Pavur's Steal My Bitcoin challenge put a vulnerable server behind Nginx with a 1 MB request limit. After Pavur apparently added a PHP endpoint, Jaydip Modhwadia won at 15:47 UTC on October 25. By his account his script needed at most 20 requests and got past ASLR, address space layout randomization. Alon Gal of Hudson Rock said this shows PHP2Shell can be weaponized against a live target, and cautioned that it was a sophisticated, target-specific exploit, no sign that autonomous AI agents could compromise PHP servers at scale.
+
+Tenable says Trail of Bits reported exploits against PHP 8.2 through 8.5; VulnCheck built one available only to its customers. Tenable's own testing found exploits had to be fitted to each target. Wiz expects that barrier to shrink over time.
+
+== FOFA listed about 19,000 PAN-OS firewalls; a filter cut them to 240
+layout: stage
+stage: 07
+phase: The PAN-OS Chain, Reconnaissance
+technique: T1595.002 | Active Scanning: Vulnerability Scanning
+fact: Source | FOFA, about 19,000 internet-facing PAN-OS firewalls
+fact: Fingerprinted | about 5,000 responded to a scanner on 200 concurrent threads
+fact: Filter | US, Japan, Taiwan, South Korea; PAN-OS 12.1 and 12.2
+fact: Palo Alto's figure | about 0.02% of its installed base internet-facing and affected
+Every target was reachable because its management interface had been exposed.
+notes:
+The PAN-OS chain begins here. The page maps this stage to T1595.002, Vulnerability Scanning.
+
+The target lists Dream recovered show a plain funnel. The FOFA internet search platform supplied about 19,000 internet-facing PAN-OS firewalls. A fingerprinting scanner running 200 concurrent threads got responses from about 5,000. The operator then kept devices in the United States, Japan, Taiwan and South Korea on the 12.1 and 12.2 branches, which left 240 targets.
+
+Every one of those devices was reachable because its management interface had been exposed. Palo Alto Networks says the interface is not internet-exposed by default, and puts the affected share at about 0.02% of its installed base.
+
+Dream reads the four countries as a sign of Chinese state-aligned targeting. Present that as Dream's interpretation, because the page does.
+
+== The exploit shipped with a profile per PAN-OS version, making it reusable
+layout: stage
+stage: 08
+phase: Resource Development
+technique: T1587.004 | Develop Capabilities: Exploits
+fact: Profiles | 11 JSON files, one per tested PAN-OS version
+fact: 11.1 branch | PHP 7.4.33, two provisional profiles
+fact: 12.1 and 12.2 | PHP 8.0.30: one calibrated on a running VM, eight provisional
+fact: AI, per Dream | Claude Code present; no direct evidence AI wrote the exploit
+Every device on a release shares one build, so one calibration carries over.
+notes:
+The page maps this stage to T1587.004, Develop Capabilities: Exploits.
+
+Public proofs of concept were a poor guide to this bug. PHP's security team said it identified no functional exploit at the time of release, and Tenable spent a week showing why: the memory layout an exploit relies on shifts with the PHP build, server API, extensions and runtime settings.
+
+An appliance removes that obstacle. Dream recovered 11 JSON version profiles: two for the 11.1 branch on PHP 7.4.33, and nine for 12.1 and 12.2 on PHP 8.0.30. One of the nine had been calibrated against a running virtual machine; the rest used offsets derived from the binary without live testing. Tenable's advice for appliances is to go by the vendor's build, since PHP version numbers do not apply.
+
+The page calls the AI angle narrower than the headlines. Dream found Claude Code installed in the attack infrastructure, the aiscan platform configured with DeepSeek and Kimi, and scripts whose structure suggests AI-assisted development. Dream also says it has no direct evidence that AI tools wrote the exploit or the post-exploitation scripts, and that the operation does not appear fully autonomous. Keep both halves when you tell it.
+
+== A staged PHP exploit gave code execution on the management web server
+layout: stage
+stage: 09
+phase: Initial Access
+technique: T1190 | Exploit Public-Facing Application
+fact: Target | PAN-OS management web interface, PHP 8.0.30 on 12.1 and 12.2
+fact: Four stages | memory exhaustion, information leak, stale reference, execution
+fact: Result | runs as nobody, a low-privileged user; no credentials needed
+PHP processes the request before any application code runs, so the management interface's own login offers no protection.
+notes:
+The page maps initial access to T1190, Exploit Public-Facing Application, and says the flaws work here the way the background stages describe.
+
+Dream describes a custom build aimed at PHP's session upload-progress mechanism on the PAN-OS management web server. It runs in stages: memory exhaustion, an information leak, a stale-reference setup, then a final request that yields code execution as the low-privileged nobody user.
+
+Because PHP processes the request before any application code runs, the management interface's own login offers no protection. No credentials were needed.
+
+Palo Alto's advisory scopes the issue to the management web interface, meaning the HTTPS web UI and XML API, and says GlobalProtect and Captive Portal are not impacted.
+
+== A Linux kernel flaw overwrote PAM's configuration; su root needed no password
+layout: stage
+stage: 10
+phase: Privilege Escalation
+technique: T1068 | Exploitation for Privilege Escalation
+fact: Flaw | CVE-2026-46300, Fragnesia, in the kernel's XFRM ESP-in-TCP code
+fact: Method | overwrite /etc/pam.d/su to accept all authentication, per Dream
+fact: Final request | one HTTP request carried both exploits, per Dream
+fact: Batch runner | five targets at a time; 24 of 240 firewalls rooted
+A shell as nobody on a firewall gets an attacker very little.
+notes:
+The page maps this stage to T1068, Exploitation for Privilege Escalation.
+
+A shell as the nobody user gets an attacker very little on a firewall. CVE-2026-46300, known as Fragnesia, is a privilege-escalation flaw in the Linux kernel's XFRM ESP-in-TCP code. Dream says it was used to overwrite the su configuration file for PAM so that it accepted all authentication, after which su root succeeded without a password. PAM here is Linux's Pluggable Authentication Modules, which decide whether a login such as su succeeds; /etc/pam.d/su is the file that configures su.
+
+Dream says the final stage's single HTTP request carried both exploits, with no credentials, and that the chain from an unauthenticated HTTPS connection to a persistent root webshell takes under 15 minutes. A batch runner worked five targets at a time, with a 30-minute timeout on each, and 24 of the 240 were rooted.
+
+CISA added Fragnesia to its Known Exploited Vulnerabilities catalog on October 28. The defenses later in the deck come back to patching the kernel on Linux hosts you run yourself.
+
+== Most victims received a 103-byte webshell and were left alone
+layout: stage
+stage: 11
+phase: Persistence
+technique: T1505.003 | Server Software Component: Web Shell
+fact: Parked | 22 of 24 rooted firewalls: webshell only, no tunnel, no tools
+fact: Prioritized | two firewalls in one US government-affiliated network
+fact: First, October 23 | rooted at 18:14 UTC in the batch run, crashed, never came back
+fact: Second | had only timed out; then the operator ran a dedicated campaign
+Dream says parked firewalls keep active webshells and the operator could return.
+notes:
+The page maps this stage to T1505.003, Web Shell.
+
+The operator's next move was triage. A 103-byte PHP root webshell went to /unauth/php/change_password.php, confirmed by running the id command. For 22 of the 24 rooted firewalls that was all: no tunnel and no tools. Dream says they remain parked with active webshells, and that the operator could return at any time.
+
+The first firewall in the US government-affiliated network fell at 18:14 UTC on October 23 during the batch run, crashed shortly afterwards and never came back. Hours earlier, SecurityWeek's round-up had reported no confirmed compromise from any vendor.
+
+A second firewall, whose certificate data tied it to the same organization, had only timed out in the batch. Once the first firewall's configuration suggested a government affiliation, the operator ran a dedicated campaign against the second. The next slide picks up that second firewall.
+
+== An eight-port reverse SSH tunnel put the internal network within reach
+layout: stage
+stage: 12
+phase: Command and Control
+technique: T1572 | Protocol Tunneling
+technique: T1543.002 | Create or Modify System Process: Systemd Service
+fact: Exploited | the second firewall, at 10:09 UTC on October 24
+fact: Reached | domain controllers over LDAP, LDAPS, RDP; the management server
+fact: Boot survival | systemd service and rc.local hook; access survived a reboot
+fact: Tooling | iox, a Chinese-developed tunneling utility
+Dream says the tunnel and webshells are likely still active; it could not confirm.
+notes:
+The page maps this stage to T1572, Protocol Tunneling, and tags T1543.002 for the systemd service.
+
+The second firewall was exploited at 10:09 UTC on October 24 and got the full treatment. Dream describes an eight-port reverse SSH tunnel to operator infrastructure, reaching domain controllers over LDAP, LDAPS and RDP, along with the firewall management server, GlobalProtect infrastructure and a SOCKS5 proxy.
+
+A reverse tunnel is opened from the inside: the compromised device connects out to the operator's server, and the operator's traffic comes back in through that connection.
+
+A systemd service and an rc.local hook launched scripts from /usr/local/lib/.panops/, so the access survived a reboot. iox, a Chinese-developed tunneling utility, was among the recovered tools.
+
+Keep Dream's hedge: it says the tunnel and webshells are likely still active, and it could not confirm that. The next slide explains protocol tunneling in general.
+
+== What protocol tunneling does
+layout: background
+source: MITRE ATT&CK T1572 | https://attack.mitre.org/techniques/T1572/
+Tunneling encapsulates one protocol inside another. ATT&CK says adversaries may use it to avoid network filtering and reach otherwise unreachable systems. SSH tunneling, also called SSH port forwarding, forwards arbitrary data over an encrypted SSH tunnel.
+notes:
+This is a background slide, from MITRE ATT&CK's entry for T1572, Protocol Tunneling, in general terms. It says nothing about the incident.
+
+ATT&CK says adversaries may tunnel network communications to and from a victim system within a separate protocol, to avoid detection or network filtering, or to enable access to otherwise unreachable systems. Tunneling explicitly encapsulates one protocol within another. It may conceal malicious traffic by blending in with existing traffic, or provide an outer layer of encryption, similar to a VPN.
+
+ATT&CK adds that tunneling can route packets that would otherwise not reach their destination, such as SMB, RDP or other traffic that would be filtered by network appliances or not routed over the internet.
+
+One example ATT&CK gives is SSH tunneling, also known as SSH port forwarding, which forwards arbitrary data over an encrypted SSH tunnel.
+
+== Root decrypted the LDAP service account, exposing private keys and SAML settings
+layout: stage
+stage: 13
+phase: Credential Access
+technique: T1552.001 | Unsecured Credentials: Credentials in Files
+technique: T1552.004 | Unsecured Credentials: Private Keys
+fact: Decrypted | the LDAP service account password, using the master key
+fact: Private keys taken | for HA replication, SSL/TLS and device authentication
+fact: SAML IdP config | validate-idp-certificate: no; Dream ties it to no device
+None of this depended on PHP. A perimeter device carries the organization's trust relationships, and a rooted one hands them over.
+notes:
+The page maps this stage to T1552.001, Credentials in Files, and tags T1552.004, Private Keys.
+
+A firewall that authenticates VPN users keeps a directory credential on the device. With root, the operator had the master key, decrypted the LDAP service account password from the configuration, and hardcoded it into later scripts. LDAP is the Lightweight Directory Access Protocol, which the firewall uses to check users against the directory.
+
+Private keys for HA replication, SSL/TLS and device authentication came off the filesystem, along with the full network topology. HA stands for high availability.
+
+The haul also included a SAML identity provider configuration with validate-idp-certificate set to no. Dream lists it among weak security settings and does not tie it to a specific device, so do not present it as this firewall's setting.
+
+The page's point is in the last line of the slide: none of this depended on PHP. A perimeter device carries the organization's trust relationships, and a rooted one hands them over.
+
+== Through the tunnel, the same chain took the organization's firewall management server
+layout: stage
+stage: 14
+phase: Lateral Movement
+technique: T1210 | Exploitation of Remote Services
+fact: October 24 | 11:35 UTC, under 90 minutes after the second firewall
+fact: Its role | manages all of the organization's firewalls, per Dream
+fact: Active Directory | LDAP connectivity, because it authenticates VPN users
+fact: Product | not named by Dream
+That brought the total to 25 rooted systems.
+notes:
+The page maps this stage to T1210, Exploitation of Remote Services.
+
+At 11:35 UTC on October 24, under 90 minutes after the second firewall, the operator exploited a central firewall management server through the tunnel. That brought the total to 25 rooted systems.
+
+Dream says this server manages all of the organization's firewalls, and held LDAP connectivity to Active Directory because it authenticates VPN users. Dream does not name the product, and neither does the page.
+
+Keep the scope when you say this aloud: the server manages this one organization's firewalls.
+
+Look ahead to the defense slides: no defense on the page is tied to this stage. That gap is one of the discussion questions at the end.
+
+== Directory enumeration confirmed; outcomes of the spray, backdoors and SAML theft unknown
+layout: stage
+stage: 15
+phase: Discovery
+technique: T1087.002 | Account Discovery: Domain Account
+technique: T1110.003 | Brute Force: Password Spraying
+fact: Confirmed | full LDAP enumeration of users and groups, per Dream
+fact: Outcome unknown | a password spray against all users; backdoor users in every OU
+fact: Also attempted | machine accounts, ACL chain analysis, SAML keys from Keycloak
+fact: Domain setting | lockoutThreshold=0, so spraying triggered no lockout
+Dream recovered no results, so treat every item past enumeration as attempted.
+notes:
+The page maps this stage to T1087.002, Domain Account discovery, and tags T1110.003, Password Spraying.
+
+Dream confirms full enumeration of users and groups over LDAP. The recovered scripts went further: a password spray against all users on a domain with lockoutThreshold set to zero, backdoor user accounts in every OU, meaning organizational unit, machine accounts through MachineAccountQuota, access control list chain analysis, SAML signing key extraction from Keycloak configuration, and probing Keycloak for an authentication bypass.
+
+The results of those runs were not among the artifacts Dream recovered, so the page says to treat every item in that list as attempted. Dream also lists the full extent of the compromise in this environment as unknown.
+
+Be careful with the heading. Enumeration is confirmed. For everything after it, the outcome is unknown, so do not say the spray worked or that backdoor accounts exist.
+
+== On cloud platforms, whoever owns the runtime owns the patch
+layout: stage
+stage: 16
+phase: Cloud Platforms
+fact: Provider patched | WorkMail, Static Web Apps, Logic Apps, App Engine standard 8.2+
+fact: Conditions apply | Elastic Beanstalk and Cloud Run, with automatic updates enabled
+fact: You redeploy | Lambda custom runtimes, Lightsail, App Engine flexible, GKE
+fact: You migrate | App Service for Windows built-in PHP; PHP 8.1 and earlier
+fact: Everywhere | vulnerable code stays resident until workers restart
+Custom images and containers carry their own PHP, so updating the host does nothing for them.
+notes:
+The three big clouds drew the line in different places, and a managed service label does not settle it.
+
+On AWS, Amazon WorkMail was patched for customers. Elastic Beanstalk applies updated platforms at the next maintenance window for those using Managed Platform Updates. Lambda has no managed PHP runtime, so custom runtimes, container images and Bref users must redeploy. Running Lightsail instances cannot be updated in place.
+
+On Azure, App Service on Linux, Static Web Apps and Logic Apps run updated built-in runtimes. The built-in PHP runtimes on App Service for Windows are end of life, so Microsoft says to move to Linux or bring a supported runtime.
+
+On Google Cloud, App Engine standard on PHP 8.2 or later is patched automatically. Cloud Run is patched automatically only with automatic base image updates enabled, and GKE is entirely on the customer.
+
+Two rules hold everywhere. Custom images and containers carry their own PHP. And Google notes that libphp.so and php-fpm stay resident in workers until they restart.
+
+Wiz's October 27 post says it had not seen successful end-to-end exploitation in its own telemetry, a statement about its data at the time. A compromised worker runs with whatever identity the platform gave it, which is the reason to scope that identity tightly.
+
+== Bundled-PHP warnings held up: vendors kept finding it in their own products
+layout: stage
+stage: 17
+phase: Hidden PHP
+fact: Oracle | eight Communications products, Secure Backup and Solaris 11
+fact: Sophos, October 21 | MyUTM portal offline; no evidence of exploitation to date
+fact: AWS | its own list includes Ganglia on EMR, and WorkMail
+fact: Palo Alto | PAN-OS 10.2 through 12.2 affected; hotfixes listed by branch
+fact: Qualys | 110 million of 156 million known-version installs, end of life
+NCSC-NL warned that PHP is embedded in appliances and management interfaces that administrators may not be able to update themselves.
+notes:
+PAN-OS was the sharpest case and not the only one.
+
+Oracle's alert lists eight Communications products, Oracle Secure Backup and Solaris 11, and it was still adding products on October 26. Sophos took its legacy MyUTM licensing portal offline on October 21 and says it found no evidence of exploitation to date. AWS's own list includes Ganglia on EMR and WorkMail.
+
+Palo Alto's advisory shows how a vendor scopes this. It lists the affected PAN-OS branches and fixed hotfixes, lists its cloud services as not currently affected, and says Cortex XCORE and WildFire Cloud were impacted until patched on October 21 and 22.
+
+Qualys data from more than 10,000 customers shows the scale of the inventory problem: of 156 million PHP installations with a known version, 110 million ran end-of-life releases from 5.4 to 8.1.
+
+NCSC-NL warned that PHP is embedded in appliances and management interfaces that administrators may not be able to update themselves.
+
+== Exposure counts differ over 20 times, and several early claims were withdrawn
+layout: stage
+stage: 18
+phase: The Record So Far
+fact: Exposure | 1.3 million to 37 million; a version match does not prove exploitability
+fact: Wiz, first week | exposed organizations down about 47.9%; causes not separated
+fact: Withdrawn | Unit 42's European agency update; Sophos's Mirai report
+fact: Still open | CVE-2026-115560, a separate flaw; fix due in a regular release
+fact: Expected | more variants, per Datadog
+Several early claims did not hold, and the story is not finished.
+notes:
+Exposure figures depend on what is counted. Silas Cutler roughly estimated 1.3 million potentially vulnerable hosts; at the other end, Bitsight counted nearly 37 million systems running PHP or related software. Shodan, VirusTotal, Cortex Xpanse and Censys sit in between.
+
+Exposure fell quickly in the first week. Wiz says organizations with an exposed vulnerable instance fell by about 47.9%, though it cannot split that between patching, retirement and restricted access, and notes that changes in scan coverage can also move the numbers. Qualys counted only 199,000 instances patched in the first 12 hours.
+
+Several early claims did not hold. Sophos corrected a successful Mirai-variant install to an attempt. Unit 42 retracted an October 23 update describing an attack on a European government agency, because it could not tie the initial access to these CVEs. BankInfoSecurity notes that Sophos and Palo Alto Networks each reported working exploits and later retracted those claims.
+
+The story is not finished. CVE-2026-115560 is a separate flaw the October 21 releases do not fix; PHP calls exploitation unlikely in practice. Datadog notes the counter-before-allocation pattern remains in PHP and expects more variants. PHP 8.4.27 and 8.5.12 also shipped a regression that can crash some SimpleXML applications.
+
+== Which stages each defense answers, part one
+layout: table
+row: Defense | Stages the page ties it to
+row: Take management interfaces off the internet | 07, 09
+row: Find every PHP, then patch the one serving requests | 02, 04, 08, 17, 18
+row: Know who patches each cloud runtime | 16
+row: Restart workers; capture memory first if you see probing | 16
+row: Treat a WAF as time, and do not call it a fix | No stage named
+The page gives nine defenses. A stage is listed where the defense names something from that stage.
+notes:
+The page gives nine defenses. A stage is listed only where the defense's own words name something from that stage.
+
+Taking management interfaces off the internet answers stage 07, where every target was reachable through an exposed management interface, and stage 09, the exploit against the management web interface.
+
+Finding every PHP names the NCSC warning from stage 04 and the bundled products of stage 17. Its fixed releases and missing fixes for 5.4 to 7.3 repeat stages 02 and 18, and its advice to follow the vendor's fixed build for appliances repeats stage 08.
+
+Knowing who patches each cloud runtime answers stage 16. Restarting workers answers stage 16 too, where code stays resident in workers until they restart.
+
+Interim settings answer stage 02's session upload progress and are also the interim answer to CVE-2026-115560 at stage 18.
+
+The WAF defense names no stage. Every vendor that shipped rules says they do not replace patching.
+
+== Which stages each defense answers, part two
+layout: table
+row: Defense | Stages the page ties it to
+row: Treat interim settings as partial | 02, 18
+row: Look back further than the patch date | 02, 03, 06
+row: Treat a rooted firewall as a directory compromise | 11, 12, 13, 15
+row: Fix the directory settings this operator went looking for | 10, 13, 15
+No defense on the page is tied to stage 01, the history; stage 05, the mass scanning; or stage 14, the management server.
+notes:
+Looking back further than the patch date answers stage 03, because the page says to begin no later than October 17, Amazon's earliest published sighting. Its signals include sh, curl or wget spawned by a PHP worker, which matches stage 06: a shell started by an Apache worker, and attempts to fetch more with curl and wget. And its warning that memory disclosure may leave no shell at all comes from stage 02.
+
+Treating a rooted firewall as a directory compromise names the webshell path from stage 11, the .panops directory from stage 12, the LDAP service account and private keys from stage 13, and the new users and machine accounts from stage 15.
+
+Fixing the directory settings names lockoutThreshold and MachineAccountQuota from stage 15, SAML configuration that skips certificate validation from stage 13, and Fragnesia from stage 10.
+
+Now look at the gaps. No defense on the page is tied to stage 01, the history of the bug class; to stage 05, the mass scanning; or to stage 14, where the same chain took the firewall management server. Stage 14 is one of the discussion questions at the end.
+
+== What to do, on appliances and on the PHP you run
+layout: compare
+col: On PAN-OS and other appliances | Restrict management interfaces to trusted internal addresses or a jump box | Hunt for /unauth/php/change_password.php and /usr/local/lib/.panops/ | If found, rotate the LDAP account and device keys; reissue certificates
+col: On PHP you run yourself | Patch to 8.5.12, 8.4.27, 8.3.36 or 8.2.35, then restart every worker | Check each cloud service against its provider's bulletin | Treat session.upload_progress.enabled=0 as a partial interim step
+A WAF buys time; each vendor says its rules do not replace patching.
+notes:
+The page's defenses split into two groups.
+
+For appliances, Palo Alto's guidance is to remove internet access to the management interface immediately and restrict it to trusted internal addresses or a jump box. Apply the same rule to every appliance, and alert when one becomes reachable. On PAN-OS, hunt for the webshell path and the .panops directory. If you find either, assume the attacker holds the LDAP service account, the device's private keys and its configuration; rotate those, reissue certificates, and review the directory for new users and machine accounts. Fix the directory settings this operator went looking for, and patch the kernel on Linux hosts you run yourself.
+
+For PHP you run, the fixed releases are 8.5.12, 8.4.27, 8.3.36 and 8.2.35, with source backports for 7.4, 8.0 and 8.1. The PHP project published no fix for 5.4 to 7.3. PHP's advisories say no configuration fully mitigates these flaws, so treat the upload-progress setting as partial and restart every worker. Begin your review no later than October 17, Amazon's earliest published sighting; Sophos recommends reviewing from August 1.
+
+A WAF buys time. Rules cover only traffic that passes through them, and rules in detection-only mode block nothing.
+
+== Check your own environment
+layout: checklist
+check: Is any appliance's management interface reachable from the internet, and would you be alerted?
+check: Can you list every PHP you run, including images, functions, appliances and bundled products?
+check: For each cloud service, do you know whether you or the provider patches PHP?
+check: After patching, did every PHP worker restart?
+check: Have you looked back to at least October 17 for the page's probing signals?
+check: On PAN-OS, have you hunted for the webshell path and the .panops directory?
+check: Is your domain's lockoutThreshold above zero, and MachineAccountQuota changed from its default?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Start with exposure: is any appliance's management interface reachable from the internet, and would anything alert you when one becomes reachable? Then inventory: can you list every PHP you run, including AMIs, container images, Kubernetes workloads, serverless functions, appliances and products that bundle PHP, without stopping at old versions?
+
+For each cloud service, check the provider's bulletin rather than assuming managed means patched. After patching, confirm every worker restarted, because a package update on disk leaves vulnerable code running.
+
+For the lookback, the page's signals include PHPSESSID cookies over 256 bytes, bursts of OPTIONS keep-alive connections, rapid interleaved 500 and 200 POST responses, POST requests containing PHP_SESSION_UPLOAD_PROGRESS, and sh, curl or wget spawned by a PHP worker. No single signal confirms exploitation.
+
+On PAN-OS, hunt for the two paths from stages 11 and 12. And check the directory settings the operator went looking for.
+
+== Where could one calibrated exploit reach many of your systems?
+layout: question
+An exploit has to fit the target's build. Tenable points to the exception: appliances, where many devices share one build.
+
+Which of your systems share a build so closely that one calibrated exploit could reach them all?
+notes:
+This question comes from the page's central point.
+
+Mass exploitation ran into a practical limit, because the memory layout an exploit relies on shifts with the PHP build, server API, extensions and runtime settings. An appliance removes that obstacle: on PAN-OS, every device on a release shares one build, so one calibration carries over.
+
+Give the room a minute. Ask each person to name one fleet in their own environment that runs an identical build everywhere, then show the answer slide.
+
+== What the page says about shared builds
+layout: answer
+The PAN-OS exploit carried a profile per tested PAN-OS version, and every device on a release shares one build.
+- For appliances, go by the vendor's fixed build; PHP version numbers do not apply.
+notes:
+The page's answer comes from Tenable and from Dream's recovered toolkit.
+
+Tenable points to appliances as the exception to the practical limit on mass exploitation, because many devices share one build, so one calibrated exploit can reach them. Dream recovered 11 JSON profiles, one per tested PAN-OS version, and one of them had been calibrated against a running virtual machine.
+
+Tenable's advice for appliances is to go by the vendor's build, since PHP version numbers do not apply. Bring the group's examples back to that: for the appliances among them, the vendor's fixed build is what to check.
+
+== What would you add for stage 14?
+layout: question
+The page ties no defense to stage 14, where the same chain, sent through the tunnel, took the server that manages the organization's firewalls.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the gaps in the defense tables.
+
+The page ties defenses to most stages, but none to stage 14, the lateral movement to the firewall management server. Stages 01 and 05 have none either, but stage 01 is the bug class's history and stage 05 is mass scanning that mostly failed.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stage 14
+layout: answer
+Any control you propose is your own suggestion. Test it against reported details: the exploit ran through the tunnel at 11:35 UTC on October 24, and the server held LDAP connectivity to Active Directory.
+notes:
+Be clear that the page stops here. It ties no defense to stage 14, and this deck adds none of its own.
+
+Treating a rooted firewall as a directory compromise reaches past the firewall, but it does not name the management server. If the group argues it covers stage 14, that argument is the group's own.
+
+Test each idea against what the page reports. The operator exploited the central firewall management server through the tunnel at 11:35 UTC on October 24, under 90 minutes after the second firewall. Dream says the server manages all of the organization's firewalls and held LDAP connectivity to Active Directory because it authenticates VPN users. Dream does not name the product.
+
+== Sources
+layout: links
+link: PHP Foundation, release and embargo account | https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/
+link: Calif, discovery write-up | https://calif.io/php2shell
+link: Amazon, exploitation before disclosure | https://aws.amazon.com/blogs/security/amazon-threat-intelligence-identifies-php2shell-exploitation-prior-to-public-disclosure-in-madpot/
+link: Tenable, why one exploit does not work everywhere | https://www.tenable.com/blog/php2shell-one-week-later-why-one-exploit-doesnt-work-everywhere
+link: Wiz, exploitation and remediation trends | https://wiz.io/blog/php2shell-exploitation-so-far
+link: Dream, the PAN-OS campaign | https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers
+link: Unit 42, threat brief | https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/
+link: Palo Alto Networks, product advisory | https://security.paloaltonetworks.com/CVE-2026-109618
+notes:
+These are eight of the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which links all of its sources.
+
+The PHP Foundation's post covers the release and the embargo. Calif's write-up covers the discovery. Amazon's post covers the attempt before disclosure. Tenable explains why one exploit does not work everywhere. Wiz's post covers exploitation and remediation trends; as the page discloses, the site's author works at Wiz. Dream, Unit 42 and Palo Alto Networks cover the PAN-OS campaign and advisory.
+
+Left out here, and linked on the page: PHP's two advisories and release announcement; Daniel Scherzer's timeline; the PHP2Shell disclosure site; Wiz's research post; guidance from AWS, Microsoft, Google Cloud and Cloudflare; notices from CISA, the NSA, the FBI, the UK NCSC and NCSC-NL, and NCSC-NL's information repository; Oracle and Sophos advisories; analyses by Adel Karimi, SOCRadar, CYFIRMA, Arctic Wolf, Datadog, Qualys and Tenable's FAQ; and coverage by The Register, The Record, SecurityWeek, BankInfoSecurity, BleepingComputer, The Hacker News and eBuilder Security.
+
+The background slides name their own sources, from OWASP and MITRE ATT&CK.
