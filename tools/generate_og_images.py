@@ -556,7 +556,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/kaseya-vsa-revil.html",
      "Kaseya VSA / REvil 2021 Kill Chain",
-     "One RMM server reaches every client an MSP administers - ~1,500 businesses encrypted via a trusted update.",
+     "One RMM server reaches every client an MSP administers: up to 1,500 businesses hit through a trusted update.",
      "Breach Kill Chain"),
     ("breaches/event-stream-npm.html",
      "event-stream npm 2018 Kill Chain",
