@@ -24,7 +24,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-04-30">
-    <meta property="article:modified_time" content="2026-10-25">
+    <meta property="article:modified_time" content="2026-11-22">
     <meta property="article:author" content="Cloud Security Office Hours">
     <meta property="article:section" content="Breach Kill Chains">
     <meta property="article:tag" content="Capital One 2019">
@@ -77,7 +77,7 @@
         }
       },
       "datePublished": "2026-04-30",
-      "dateModified": "2026-10-25",
+      "dateModified": "2026-11-22",
       "mainEntityOfPage": "https://csoh.org/breaches/capital-one.html",
       "speakable": {
         "@type": "SpeakableSpecification",
@@ -369,7 +369,7 @@
       <div class="inc-stat"><strong>Threat actor:</strong> Paige Thompson, former AWS employee</div>
     </div>
     <a class="pm-link" href="https://krebsonsecurity.com/2019/08/what-we-can-learn-from-the-capital-one-hack/" target="_blank" rel="noopener">📄 KrebsOnSecurity post-mortem ↗</a>
-    <a class="pm-link" href="https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af" target="_blank" rel="noopener">📄 Appsecco technical analysis ↗</a>
+    <a class="pm-link" href="https://web.archive.org/web/20251220173147/https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af" target="_blank" rel="noopener">📄 Appsecco technical analysis ↗</a>
     <a class="pm-link" href="https://aws.amazon.com/blogs/security/defense-in-depth-open-firewalls-reverse-proxies-ssrf-vulnerabilities-ec2-instance-metadata-service/" target="_blank" rel="noopener">📄 AWS IMDSv2 response ↗</a>
   </div>
   <div class="kill-chain">
@@ -397,14 +397,14 @@
       <div class="step-num">02</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">SSRF exploitation - WAF tricked into relaying requests to IMDS</div>
+          <div class="step-title">SSRF exploitation: a firewall misconfiguration let requests reach IMDS</div>
           <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">T1190 - Exploit Public-Facing App</a>
         </div>
-        <p class="step-desc">The WAF was misconfigured, running in logging-only mode or bypassable, so Thompson sent crafted HTTP requests containing the IMDS endpoint as the target URL. The WAF relayed these server-side, making the EC2 instance itself issue the metadata request.</p>
+        <p class="step-desc">Thompson sent crafted HTTP requests containing the IMDS endpoint as the target URL, making the EC2 instance itself issue the metadata request. The DOJ complaint says only that "a firewall misconfiguration permitted commands to reach and be executed by" the server, and the ACM analysis calls this step "the source of some controversy and speculation." Krebs's source says the misconfigured WAF was tricked into relaying requests to the metadata service, the position the ACM analysis takes. Appsecco suggests instead an SSRF in an application behind the WAF, with either a bypass used or the WAF not configured to block attacks (logging mode).</p>
         <div class="step-code">
           <span class="hl">SSRF payload target:</span> http://169.254.169.254/latest/meta-data/<br>
           <span class="hl">IMDSv1 behaviour:</span> No authentication - any GET request from the instance is served<br>
-          <span class="hl">WAF failure:</span> Relayed SSRF payload rather than blocking it
+          <span class="hl">WAF failure:</span> Did not block the SSRF payload (relayed it, per Krebs's source and ACM; bypassed or logging only, per Appsecco)
         </div>
         <div class="step-tags"><span class="stag">SSRF</span><span class="stag">IMDSv1</span><span class="stag">T1190</span><span class="stag">169.254.169.254</span></div>
       </div>
@@ -454,10 +454,10 @@
           <div class="step-title">30GB bulk S3 exfiltration - 106M customer records</div>
           <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 - Data from Cloud Storage</a>
         </div>
-        <p class="step-desc">Thompson synced S3 bucket contents to external storage using aws s3 sync. Approximately 30GB over multiple sessions: 100M US and 6M Canadian credit card application records, 140,000 SSNs, 80,000 bank account numbers, credit scores, and transaction history.</p>
+        <p class="step-desc">Thompson synced S3 bucket contents to external storage using aws s3 sync. Approximately 30GB over multiple sessions: 100M US and 6M Canadian credit card application records, 140,000 SSNs, 80,000 bank account numbers, credit scores, and fragments of transaction data from a total of 23 days in 2016, 2017 and 2018.</p>
         <div class="step-code">
           <span class="hl">Tool:</span> aws s3 sync<br>
-          <span class="hl">Data exfiltrated:</span> 106M records, 140K SSNs, 80K bank accounts, credit/financial history<br>
+          <span class="hl">Data exfiltrated:</span> 106M records, 140K SSNs, 80K bank accounts, credit scores, payment history, 23 days of transaction fragments<br>
           <span class="hl">Detection gap:</span> <a class="glossary-link" href="../glossary.html#term-guardduty">GuardDuty</a> not enabled; S3 access logs not monitored for volume anomalies
         </div>
         <div class="step-tags"><span class="stag">aws s3 sync</span><span class="stag">PII</span><span class="stag">T1530</span><span class="stag">Financial Data</span></div>
@@ -468,8 +468,8 @@
     <div class="kc-step step-g">
       <div class="step-num">06</div>
       <div class="step-body">
-        <div class="step-hdr"><div class="step-title">Reported 117 days later: Thompson bragged about it on GitHub, Slack, and IRC</div></div>
-        <p class="step-desc">Thompson bragged about the breach on GitHub and in Slack and IRC channels under the handle "erratic." A member of the public noticed the posts, reviewed the data, and filed a responsible disclosure with Capital One on July 17, 2019. No internal monitoring caught the breach during the 117-day dwell period: not GuardDuty, not S3 access logs, not IAM anomaly detection.</p>
+        <div class="step-hdr"><div class="step-title">Reported 117 days later: Thompson bragged about it on GitHub, Slack, and Twitter</div></div>
+        <p class="step-desc">Thompson bragged about the breach on GitHub, and on Slack and Twitter under the handle "erratic." On July 17, 2019, a GitHub user who saw the post emailed Capital One's responsible disclosure address. The Justice Department says the user "alerted Capital One to the possibility it had suffered a data theft." No internal monitoring caught the breach during the 117-day dwell period: not GuardDuty, not S3 access logs, not IAM anomaly detection.</p>
         <div class="step-code">
           <span class="hl">Discovery method:</span> External tipster via Capital One responsible disclosure program<br>
           <span class="hl">Monitoring failures:</span> No GuardDuty · No S3 volume alerts · No anomalous IAM activity detection<br>
@@ -482,9 +482,9 @@
     <div class="def-box">
       <h3>🛡 How to Defend Against This Chain</h3>
       <div class="def-items">
-        <div class="def-item"><strong>Enforce IMDSv2 on all EC2 instances.</strong> IMDSv2 requires a session token obtained via a PUT request - SSRF attacks that can only issue GET requests cannot obtain credentials. AWS defaults new instances to IMDSv2 and you can enforce it via <a class="glossary-link" href="../glossary.html#term-scp">SCP</a> across your organisation.</div>
+        <div class="def-item"><strong>Enforce IMDSv2 on all EC2 instances.</strong> IMDSv2 requires a session token obtained via a PUT request, so SSRF attacks that can only issue GET requests cannot obtain credentials. AWS's documentation says "By default, you can use either IMDSv1 or IMDSv2, or both." Console Quick Start launches and Amazon Linux 2023 default to IMDSv2 only, and AWS said instance types released from mid-2024 would too, but other launches still accept IMDSv1 unless you change that. Set the account-level default to IMDSv2 and enforce it via <a class="glossary-link" href="../glossary.html#term-scp">SCP</a> across your organisation.</div>
         <div class="def-item"><strong>Apply least-privilege IAM to every role.</strong> A WAF role should only write WAF logs - not list or read S3. Use <a class="glossary-link" href="../glossary.html#term-iam-access-analyzer">IAM Access Analyzer</a> findings and Access Advisor unused-permission reports to identify and tighten over-privileged roles.</div>
-        <div class="def-item"><strong>Enable Amazon GuardDuty.</strong> GuardDuty's UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration finding specifically detects role credentials being used from outside the EC2 instance that issued them.</div>
+        <div class="def-item"><strong>Enable Amazon GuardDuty.</strong> GuardDuty's UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS finding detects credentials created for an EC2 instance being used from an external IP address, and its .InsideAWS counterpart detects their use from another AWS account.</div>
         <div class="def-item"><strong>Alert on anomalous S3 access volume.</strong> Large-scale GetObject or ListBucket calls from an unexpected IP or at an unusual rate should trigger a CloudWatch + SNS alert immediately.</div>
         <div class="def-item"><strong>Add SSRF rules to your WAF.</strong> Block requests containing 169.254.169.254 in URL, body, or headers. This is not in default WAF configurations - it must be explicitly added.</div>
       </div>
@@ -493,7 +493,7 @@
       <h4>Primary Sources</h4>
       <div class="src-links">
         <a class="src-link" href="https://krebsonsecurity.com/2019/08/what-we-can-learn-from-the-capital-one-hack/" target="_blank" rel="noopener">KrebsOnSecurity</a>
-        <a class="src-link" href="https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af" target="_blank" rel="noopener">Appsecco</a>
+        <a class="src-link" href="https://web.archive.org/web/20251220173147/https://blog.appsecco.com/an-ssrf-privileged-aws-keys-and-the-capital-one-breach-4c3c2cded3af" target="_blank" rel="noopener">Appsecco</a>
         <a class="src-link" href="https://aws.amazon.com/blogs/security/defense-in-depth-open-firewalls-reverse-proxies-ssrf-vulnerabilities-ec2-instance-metadata-service/" target="_blank" rel="noopener">AWS IMDSv2 Blog</a>
         <a class="src-link" href="https://dl.acm.org/doi/full/10.1145/3546068" target="_blank" rel="noopener">ACM Systematic Analysis</a>
         <a class="src-link" href="https://attack.mitre.org/techniques/T1552/005/" target="_blank" rel="noopener">MITRE T1552.005</a>
