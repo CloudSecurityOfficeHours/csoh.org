@@ -162,7 +162,7 @@ The rest of the curriculum lives on [`topics.html`](https://csoh.org/topics.html
 #### Archive
 | Resource | What it covers |
 |---|---|
-| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->121<!--/count--> weekly session recaps, searchable |
+| 📝 [Meeting Recaps](https://csoh.org/meetings.html) | <!--count:meetings-->122<!--/count--> weekly session recaps, searchable |
 | 🎬 [Presentations](https://csoh.org/presentations.html) | Archive of recorded talks with topic tags and direct video links |
 | 💬 [Chat Resources](https://csoh.org/chat-resources.html) | 570+ community-shared URLs from live sessions, security-validated |
 
@@ -492,7 +492,7 @@ Archive of past Zoom session presentations:
 
 ### 📝 Meeting Recaps ([`meetings.html`](https://csoh.org/meetings.html))
 Topic-by-topic recaps of every weekly session:
-- **<!--count:meetings-->121<!--/count--> meeting recaps** with per-topic summaries and speaker notes
+- **<!--count:meetings-->122<!--/count--> meeting recaps** with per-topic summaries and speaker notes
 - Searchable, filterable by tag (AWS, Azure, AI, supply chain, conferences, etc.)
 - **Speaker filter** - auto-detects recurring community members across recaps and surfaces a one-click filter row (Shawn, Neil, Jay, Matt, etc.) with appearance counts
 - Auto-ingested from Zoom AI Companion summaries or VTT transcripts via `tools/add_meeting.py`
@@ -778,7 +778,7 @@ csoh.org/
 ├── mentorship.html             # Community mentorship program
 ├── conferences.html            # Security & hacker conferences directory with pros/cons
 ├── presentations.html          # Archive of recorded presentations
-├── meetings.html               # Weekly meeting recaps (121 entries, topic-by-topic)
+├── meetings.html               # Weekly meeting recaps (122 entries, topic-by-topic)
 ├── chat-resources.html         # Community-shared URLs from Zoom sessions (570+ URLs)
 ├── what-practitioners-think.html # Hub for the session-digest series below
 ├── what-practitioners-think-about-ai-security.html
@@ -821,7 +821,7 @@ csoh.org/
 │
 │  ── Subdirectory page sets ──
 ├── breaches/                   # 60 per-breach kill chain pages (Capital One, SolarWinds, etc.)
-├── meetings/                   # 121 per-meeting recap pages (split from meetings.html)
+├── meetings/                   # 122 per-meeting recap pages (split from meetings.html)
 ├── portfolio/                  # 7 hands-on portfolio-project walkthroughs (see hub page above)
 ├── homelab/                    # 4 deep command-line home-lab walkthroughs
 ├── howto/                      # 24 how-to guides: policy, query and SIEM detection languages
