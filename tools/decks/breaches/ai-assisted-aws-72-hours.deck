@@ -57,7 +57,7 @@ layout: flow
 step: 01 | Initial Access | App weakness | T1078
 step: 02 | Discovery | Trust mapping | T1580
 step: 03 | Credential Access | Secrets sprawl | T1552
-step: 04 | Persistence | Many footholds | T1059
+step: 04 | Persistence | Footholds | T1059
 step: 05 | Execution | Pipeline abuse | T1677
 step: 06 | Lateral Movement | Four accounts | T1078.004
 step: 07 | Collection & Exfiltration | SQL queries | T1213
@@ -68,7 +68,7 @@ Here is the whole chain on one slide: the page's eight stages, each with its pha
 
 Stage 01 is initial access through an application weakness that yielded an AWS access key. Stage 02 is discovery, repeated from every new key. Stage 03 is credential access, where secrets sprawl paid out. Stage 04 is persistence through redundant footholds. Stage 05 is execution through CI/CD pipeline abuse. Stage 06 is lateral movement: four accounts' keys used in one observed second. Stage 07 is collection and exfiltration through several hundred SQL queries. Stage 08 is the impact: extortion by demonstrating control.
 
-Read the arrows as the page's order of stages. The page does describe one loop: every secret recovered at stage 03 fed stage 02 again, with a wider permission scope each time. It gives no times for individual stages, only roughly 72 hours overall.
+Read the arrows as the page's order of stages. The page does describe a loop: every secret recovered at stage 03 fed stage 02 again, with a wider permission scope each time. It gives no times for individual stages, only roughly 72 hours overall.
 
 The next slides take each stage in turn.
 
@@ -116,7 +116,7 @@ fact: Secrets sweep | ECS and EC2 env vars, S3, Parameter Store, Secrets Manager
 fact: Detection gap | high-volume enumeration across accounts, no correlated alert
 Each new key restarted the loop: what can this identity do, and what can it reach?
 notes:
-Stage 02 is discovery. The page maps it to T1580, Cloud Infrastructure Discovery, and also tags T1619, Cloud Storage Object Discovery, and T1087, Account Discovery, which the slide leaves off for space.
+Stage 02 is discovery. The page maps it to T1580, Cloud Infrastructure Discovery, and also tags T1619, Cloud Storage Object Discovery, shown on the slide, and T1087, Account Discovery, left off for space.
 
 The page calls discovery a subroutine in this intrusion rather than a phase. Each time the actor obtained a new credential, they validated it and repeated the same loop from the new permission scope: what can this identity do, what can it reach, and which trust relationships lead somewhere better.
 
@@ -324,7 +324,7 @@ col: Familiar, per the page | No custom malware and no zero-day | Every action m
 col: Fast and parallel, per Sygnia | Roughly 72 hours to broad cloud compromise | Four accounts' keys in one observed second | Several hundred unique SQL queries, rapidly enumerating schemas
 The page says programs sized for multi-week dwell time are obsolete against parallel workstreams across accounts.
 notes:
-The page draws a pattern from this case: familiar techniques, run fast and in parallel.
+This slide sets two things the page says side by side: the techniques were familiar, and they ran fast and in parallel.
 
 There was no custom malware and no zero-day, and every action mapped to techniques defenders have tracked for years. Even the impact ran through routine cloud administration calls.
 
@@ -340,16 +340,16 @@ row: Fix secrets sprawl before rotating | 03
 row: Retire long-lived access keys | 01 | 03 | 05
 row: GuardDuty findings for this behavior | 02 | 03 | 04
 row: SCPs to cap the blast radius | 04 | 06
-row: Detection budget in hours, not weeks | 05 | 06 | 08
-No defense on the page is tied to stage 07, the RDS queries.
+row: Detection budget in hours, not weeks | 05 | 06
+No defense on the page is tied to stage 07, the RDS queries, or to stage 08, the impact.
 notes:
-This matrix sets the page's six defenses against the eight stages. A cell is marked only where the defense's own words name something from that stage.
+This matrix sets the page's six defenses against the eight stages. A cell is marked only where the defense's own words name something only that stage has.
 
 Correlating CloudTrail across accounts answers stage 06: four keys, four accounts, one source IP, one user agent, one second. Fixing secrets sprawl answers stage 03, where the same material sat in several layers at once. Retiring long-lived keys answers stage 01's static access key, and its OIDC federation keeps keys out of CI, whose runner environments stages 03 and 05 say were harvested.
 
-The GuardDuty findings answer what the page calls the enumerate, harvest, persist loop, stages 02, 03 and 04. The SCP defense denies iam:CreateUser and iam:CreateAccessKey, behind stage 04's new IAM users and keys, and its heading says one key cannot become four accounts, which is stage 06. Rebuilding detection around hours names stage 06's parallel workstreams, and its pre-authorized containment names a pipeline freeze, for stage 05, and IP allowlisting on the cloud control plane, which stage 08's impact ran through.
+The GuardDuty findings answer what the page calls the enumerate, harvest, persist loop, stages 02, 03 and 04. The SCP defense denies iam:CreateUser and iam:CreateAccessKey, behind stage 04's new IAM users and keys, and its heading says one key cannot become four accounts, which is stage 06. Rebuilding detection around hours names stage 06's parallel workstreams, and its pre-authorized containment names a pipeline freeze, for stage 05.
 
-Now look at the empty column. No defense on the page is tied to stage 07, the RDS queries. That gap is a discussion question at the end.
+Now look at the empty columns. No defense on the page is tied to stage 07, the RDS queries, or to stage 08's impact actions. The page does not tie its IP allowlisting on the cloud control plane to stage 08. The stage 07 gap is a discussion question at the end.
 
 == Correlate CloudTrail across accounts, not one at a time
 layout: compare
@@ -394,8 +394,8 @@ Turn GuardDuty on in every region of every account through the delegated adminis
 
 == Cap the blast radius with SCPs; plan for hours, not weeks
 layout: compare
-col: SCPs at the OU level (04, 06) | Deny iam:CreateUser and iam:CreateAccessKey outside a break-glass path | Deny ec2:ModifyInstanceMetadataOptions | Deny deleting or reconfiguring CloudTrail and GuardDuty
-col: Hours, not weeks (05, 06, 08) | Pre-authorize key disablement and session revocation | Also IP allowlisting on the control plane, and a pipeline freeze | Rehearse it, so on-call can act before scoping is complete
+col: SCPs, where not needed (04, 06) | Deny iam:CreateUser and iam:CreateAccessKey outside a break-glass path | Deny ec2:ModifyInstanceMetadataOptions | Deny deleting or reconfiguring CloudTrail and GuardDuty
+col: Hours, not weeks (05, 06) | Pre-authorize key disablement and session revocation | Also IP allowlisting on the control plane, and a pipeline freeze | So on-call can act before scoping is complete; rehearse it
 The page calls an SCP the one control a compromised account's own administrator cannot switch off.
 notes:
 Two more defenses.
@@ -432,7 +432,7 @@ Give the room a minute with this one before moving on.
 
 This is the observation the page says the whole case study turns on. Each account's trail showed only its own slice, so the shared client fingerprint stayed invisible.
 
-Ask each person to name where, in their own environment, those four calls would land, and whether any single person or detection sees all four together. Then show the answer slide, which gives what the page says.
+Ask each person to name where, in their own environment, the four keys' calls would land, and whether any single person or detection sees all four together. Then show the answer slide, which gives what the page says.
 
 == What the page says about the cross-account join
 layout: answer
@@ -450,15 +450,15 @@ Bring the group's answers back to this. If their trails sit in separate accounts
 
 == What would you add for stage 07?
 layout: question
-The page ties a defense to every stage except 07, where several hundred unique SQL queries ran across dozens of RDS databases.
+The page ties no defense to stage 07, where several hundred unique SQL queries ran across dozens of RDS databases.
 
 What would you add, and which reported detail would it catch?
 notes:
-This question comes from the empty column in the defense matrix.
+This question comes from an empty column in the defense matrix.
 
-The page offers defenses tied to every stage except stage 07. There, RDS databases were queried for user data, transaction information and other potentially sensitive records: several hundred unique SQL queries across dozens of databases, rapidly enumerating schemas and identifying relevant data.
+Two columns are empty, 07 and 08, because no defense on the page names stage 07's RDS queries or stage 08's actions on S3, ECS, network ACLs and SQS queues. The page's containment list includes IP allowlisting on the cloud control plane, but the page does not tie it to stage 08. This question takes stage 07.
 
-Stage 08's one tie is pre-authorized containment that includes IP allowlisting on the cloud control plane, which its impact ran through.
+The page ties no defense to stage 07. There, RDS databases were queried for user data, transaction information and other potentially sensitive records: several hundred unique SQL queries across dozens of databases, rapidly enumerating schemas and identifying relevant data.
 
 Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
 
