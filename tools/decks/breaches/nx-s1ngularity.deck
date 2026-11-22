@@ -1,0 +1,469 @@
+title: Nx / s1ngularity
+page: breaches/nx-s1ngularity.html
+as-of: 2026-11-22
+promise: In August 2025, shell commands in a pull request title led to the theft of Nx's npm token, and the trojanized packages drove AI command-line tools installed on developers' machines to hunt for secrets.
+
+== At a glance
+layout: stats
+stat: 2,349 | distinct secrets | from 1,079 systems, per The Hacker News
+stat: 4 | hours of malicious versions live on npm, roughly | nx and several @nx/* packages, first published August 26
+stat: 5,500+ | private repos flipped public, per Wiz | 400+ accounts, phase two (disclosure: the site's author works at Wiz)
+The page calls s1ngularity the first known supply-chain attack to weaponize AI coding agents already installed on victim machines.
+notes:
+Start with the three figures the page leads with, and with who stands behind each one.
+
+The Hacker News reported 2,349 distinct secrets from 1,079 systems. Keep its name on that figure when you say it aloud.
+
+Trojanized versions of nx and several @nx/* packages were live on npm for roughly four hours, starting August 26. npm is the default package registry for JavaScript and Node.js.
+
+The third figure is phase two, when stolen GitHub tokens were used to make private repositories public. Wiz counted more than 400 affected users and organizations and over 5,500 private repositories exposed.
+
+Say the disclosure aloud as the page gives it: research published by Wiz is one of the sources cited on the page, and the site's author works at Wiz. Every source is linked so you can read it directly.
+
+The page calls this the first known supply-chain attack to weaponize AI coding agents already installed on victim machines. Keep the word known.
+
+== What happened, and when
+layout: timeline
+event: August 24, 2025 | An attacker opens a pull request against Nx with shell commands in its title
+event: August 26, 22:32 UTC | First malicious publish; trojanized versions were live for roughly four hours
+event: August 27, around 09:00 UTC | GitHub disables the public repositories holding harvested secrets
+event: August 28 to 29 | Phase two: stolen GitHub tokens flip private repositories public
+All times UTC. The page dates no step between the pull request and the first publish. Spacing is not to scale.
+notes:
+The page gives these dates, and the timeline shows only those.
+
+On August 24, 2025, an attacker opened a pull request against the Nx build platform whose title contained shell commands. A workflow echoed that title without sanitizing it, and from there the attacker walked away with Nx's npm token. The page dates none of the steps between the pull request and the first malicious publish.
+
+The first malicious version was published at 22:32 UTC on August 26, and the trojanized versions were live for roughly four hours. Harvested secrets went to public repositories in victims' own GitHub accounts. GitHub disabled those repositories around 09:00 UTC on August 27, about ten and a half hours after the first malicious publish.
+
+Phase two ran from roughly 16:00 UTC on August 28 to roughly 14:00 UTC on August 29, when the stolen GitHub tokens were used to make victims' private repositories public.
+
+The markers are evenly spaced, so read them as order only.
+
+== Who reported which figures
+layout: table
+row: Source | What the page attributes to it
+row: Nx's postmortem | Three weaknesses that had to line up
+row: Wiz | 1,000+ valid GitHub tokens, dozens of cloud credentials and npm tokens, roughly 20,000 files
+row: Wiz | Phase two: 400+ users and organizations, 5,500+ private repositories exposed
+row: The Hacker News | 2,349 distinct secrets from 1,079 systems
+The page sets these counts side by side and does not combine them. Disclosure: research published by Wiz is one of the page's sources, and the site's author works at Wiz.
+notes:
+The page names who stands behind each figure, and this slide keeps those names attached.
+
+Nx's postmortem names three weaknesses that had to line up. Stage 01 sets them out.
+
+Wiz counted, in what the public repositories exposed, over a thousand valid GitHub tokens, dozens of cloud credentials and npm tokens, and roughly 20,000 files. For phase two, Wiz counted more than 400 affected users and organizations and over 5,500 private repositories exposed.
+
+The Hacker News reported 2,349 distinct secrets from 1,079 systems.
+
+The page gives the Wiz and Hacker News counts side by side and does not combine them, so do not add them together when you present them.
+
+The disclosure belongs with this slide: research published by Wiz is one of the page's sources, and the site's author works at Wiz. GitGuardian and StepSecurity are also among the page's sources, listed at the end of the deck.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | Shell in a PR title | T1059.004
+step: 02 | Credential Access | Token, branch, publish | T1552.007
+step: 03 | Stealth | Branch and runs deleted | T1070
+step: 04 | Supply Chain | Trojanized npm releases | T1195.002
+step: 05 | Credential Access | AI CLIs turned around | T1552.001
+step: 06 | Exfiltration | Public repo, victim's account | T1567.001
+step: 07 | Impact | Private repos made public | T1485
+Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's seven stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is the entry: shell commands in a pull request title, run by a pull_request_target workflow. Stage 02, under Credential Access, is the sequence from a read/write GitHub token to Nx's npm token. Stage 03, under Stealth, is the attacker deleting the branch and the workflow runs. Stage 04 is the trojanized releases of nx and several @nx/* packages, which the page files under Supply Chain. Stage 05, a second Credential Access stage, is the payload turning the developer's own AI command-line tools to hunt for secrets. Stage 06 is exfiltration into a public repository in the victim's own account. Stage 07, under Impact, is phase two, when stolen GitHub tokens were used to make private repositories public.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== A PR title ran as shell commands with repository permissions
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1059.004 | Command and Scripting Interpreter: Unix Shell
+technique: T1190 | Exploit Public-Facing Application
+fact: Trigger | pull_request_target: base-repo secrets, fork-controlled input
+fact: Injection point | the PR title, unsanitized in a shell step
+fact: Second weakness | Actions token on the read/write default
+fact: Third weakness | workflow_dispatch: publish triggerable via the API
+The code and metadata are attacker-controlled while the credentials are yours.
+notes:
+Stage 01 is the entry. The page maps it to T1059.004, Unix Shell, and T1190, Exploit Public-Facing Application.
+
+pull_request_target is the trigger that exists so a workflow can run with the base repository's secrets and permissions when the pull request comes from a fork. The page says that is its purpose, and that is the trap: the code and metadata are attacker-controlled while the credentials are yours.
+
+Anything interpolated from the pull request into a shell step is an injection point, and the page calls a PR title about as attacker-controlled as data gets. PR is short for pull request. Anyone with a GitHub account can set one, and no fork approval is required. A workflow echoed this title without sanitizing it, so a title containing shell metacharacters, characters a shell treats as syntax rather than text, executed with repository permissions.
+
+Nx's postmortem names three weaknesses that had to line up: the unsanitized title in a pull_request_target workflow, a repository still on the deprecated read/write default for the Actions token, and a workflow_dispatch trigger that let the publish pipeline be invoked programmatically through the API. workflow_dispatch is the trigger for starting a workflow on demand.
+
+== Documented GitHub features, used as designed, yielded NPM_TOKEN
+layout: stage
+stage: 02
+phase: Credential Access
+technique: T1552.007 | Unsecured Credentials: Container API
+fact: Step A | capture GITHUB_TOKEN, read/write by repository default
+fact: Step B | push a branch with a replaced CI script
+fact: Step C | dispatch the publish workflow against that branch
+fact: Step D | the publish job runs attacker code holding NPM_TOKEN
+Each hop used a documented GitHub capability exactly as designed.
+notes:
+Stage 02 is the theft. The page maps it to T1552.007, Unsecured Credentials: Container API.
+
+The page says the sequence is worth reading slowly, because it is a small privilege escalation carried out entirely with intended features. The injected shell first captured the GitHub token available to the running job, GITHUB_TOKEN. That token was read/write, because the repository had never moved off that default.
+
+That token allowed pushing a branch, and on that branch the attacker replaced a script the release pipeline would execute. CI is continuous integration, the automation that builds and tests code. Then, using workflow_dispatch through the API, the attacker triggered the publish workflow against that branch, so the publish job ran the attacker's script while holding the real NPM_TOKEN, the npm publishing token the repository held.
+
+At no point was a maintainer phished or a laptop compromised. Each hop, the page says, used a documented GitHub capability exactly as designed.
+
+The next slide explains, in general terms, what a workflow's permissions block controls.
+
+== What a workflow's permissions block controls
+layout: background
+source: How We Use GitHub Actions | https://csoh.org/github-actions.html#anatomy-2
+credit: Also from the same page's Concepts that bite newcomers (csoh.org)
+Every workflow run gets an automatic GITHUB_TOKEN. A workflow's permissions: block sets what that token may do, such as contents: read, and governs that token and nothing else.
+notes:
+Background, from the csoh.org GitHub Actions page, in general terms.
+
+Every workflow run gets an automatic, scoped GITHUB_TOKEN, usable for most repository operations. A workflow file can carry a permissions: block, and the site pins its own workflows to the minimum, for example contents: read to read the code, plus pull-requests: write where a job posts pull request comments.
+
+The page stresses one subtlety: the permissions: block governs that ambient GITHUB_TOKEN and nothing else. It does not constrain any other credential a workflow's steps happen to carry. So the question it says to ask is what a job does with the token GitHub injected for free.
+
+The site gives its reason for pinning the block: if a malicious dependency ever landed in one of its Actions, it could not push to the repository, because the workflow never granted that scope.
+
+Also from the same page's Concepts that bite newcomers: https://csoh.org/github-actions.html#concepts
+
+== The attacker deleted the branch and the workflow runs
+layout: stage
+stage: 03
+phase: Stealth
+technique: T1070 | Indicator Removal
+fact: Deleted | the pushed branch and the associated workflow run records
+fact: Enabled by | the same read/write token used for the theft
+fact: For investigators | malicious releases, no on-platform trace of the publish path
+fact: Countermeasure | Actions and audit logs off-platform, out of repo tokens' reach
+The most direct evidence of the intrusion lived in GitHub's own UI.
+notes:
+Stage 03 is the cleanup. The page files it under Stealth and maps it to T1070, Indicator Removal.
+
+Having spent the token, the attacker deleted the branch they had pushed and removed the workflow runs that recorded the dispatch. The page calls it a small detail with a large operational consequence: the most direct evidence of the intrusion lived in GitHub's own UI, and the same over-permissive token that enabled the theft also permitted the cleanup.
+
+Anyone investigating from the repository alone would find trojanized packages with no visible explanation for how they were published.
+
+The page draws a standing argument from this: ship Actions audit logs off-platform into a SIEM, where an attacker holding a repository token cannot reach them. A SIEM, security information and event management, gathers logs in one place, correlates them and alerts on them.
+
+That countermeasure sits in the stage itself. No defense in the page's defense list names the cleanup, and the last discussion question comes back to it.
+
+== Trojanized nx releases carried telemetry.js, live for roughly four hours
+layout: stage
+stage: 04
+phase: Supply Chain
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: Packages | nx and several @nx/* packages, across many version lines
+fact: Delivery | a telemetry.js postinstall script; installing was enough
+fact: Window | roughly four hours before removal
+fact: Why many versions | maximizes the chance of matching a manifest's allowed range
+"Are we affected" is about resolved lockfiles, not a single version string.
+notes:
+Stage 04 is the release. The page files it under Supply Chain and maps it to T1195.002, Compromise Software Supply Chain.
+
+Trojanized releases of nx and several @nx/* packages carried a telemetry.js postinstall script and were live for roughly four hours. The page says Nx is a build platform with millions of weekly downloads, so a four-hour window is not a small window.
+
+A postinstall script is a script a package asks npm to run automatically after it is installed. The payload ran that way, so simply installing the dependency was enough. Nothing had to import or call Nx.
+
+The page calls publishing across many version lines at once deliberate. It maximizes the chance of matching whatever range a given consumer's manifest allows, and it makes "are we affected" a question about resolved lockfiles rather than a single version string. A lockfile records the exact versions a project installed.
+
+The next slide lists the versions the page names.
+
+== The trojanized versions the page lists
+layout: table
+row: Package | Malicious versions
+row: nx | 20.9.0, 20.10.0, 20.11.0, 20.12.0, 21.5.0, 21.6.0, 21.7.0, 21.8.0
+row: @nx/devkit, @nx/js, @nx/workspace, @nx/node | 21.5.0 and 20.9.0
+row: @nx/eslint | 21.5.0
+row: @nx/key, @nx/enterprise-cloud | 3.2.0
+Versions as the page lists them. They were live for roughly four hours before removal.
+notes:
+These are the versions the page lists as malicious.
+
+nx itself was trojanized at eight versions: 20.9.0, 20.10.0, 20.11.0, 20.12.0, 21.5.0, 21.6.0, 21.7.0 and 21.8.0. @nx/devkit, @nx/js, @nx/workspace and @nx/node were trojanized at 21.5.0 and 20.9.0, @nx/eslint at 21.5.0, and @nx/key and @nx/enterprise-cloud at 3.2.0.
+
+The spread across version lines is why the page points at resolved lockfiles. It says publishing many versions at once maximizes the chance of matching whatever range a consumer's manifest allows, so are we affected is a question about what your lockfiles resolved to, rather than a single version string.
+
+The payload ran as a postinstall script, so simply installing the dependency was enough. Nothing had to import or call Nx.
+
+The next slide explains, in general terms, what a supply-chain attack is.
+
+== What a supply-chain attack is
+layout: background
+source: CSOH glossary, Supply-Chain Attack | https://csoh.org/glossary.html#term-supply-chain
+credit: Also from the glossary's npm entry (csoh.org)
+A supply-chain attack compromises the path that produces or delivers software, so the malicious change rides through trusted channels. The glossary counts post-install scripts that steal secrets among npm's threats.
+notes:
+Background, from the csoh.org glossary, in general terms.
+
+The glossary defines a supply-chain attack as compromising the path that produces or delivers software, so the malicious change rides through trusted channels. Its examples include a poisoned dependency, a backdoored build step, a stolen signing key and a malicious GitHub Action. It names SolarWinds, the PyPI and npm typosquats, Codecov and the XZ backdoor as cases.
+
+npm, the glossary says, is the default package registry for JavaScript and Node.js. It gives npm the same threat profile as PyPI: typosquatting, dependency confusion, post-install scripts that steal secrets, and high-blast-radius compromises of popular packages.
+
+Also from the glossary's npm entry: https://csoh.org/glossary.html#term-npm
+
+== The payload drove the developer's own AI CLIs to hunt for secrets
+layout: stage
+stage: 05
+phase: Credential Access
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+technique: T1059 | Command and Scripting Interpreter
+fact: Targeted tools | Claude, Gemini and Q command-line agents
+fact: Flags used | --dangerously-skip-permissions, --yolo, --trust-all-tools
+fact: Usual targets too | crypto wallets, GitHub/npm tokens, SSH keys, environment files
+fact: Why it works | trusted, has filesystem access, reasons better than a regex
+The first known supply-chain attack to weaponize installed AI coding agents.
+notes:
+The page says this is the step that made s1ngularity a landmark rather than another npm incident. It maps it to T1552.001, Credentials In Files, and T1059, Command and Scripting Interpreter.
+
+Beyond scanning for the usual artifacts, cryptocurrency wallets, GitHub and npm tokens, SSH keys and environment files, the payload checked whether the developer had Claude, Gemini or Q command-line tools installed. If so, it drove them with flags that disable their safety interlocks: --dangerously-skip-permissions, --yolo and --trust-all-tools. A CLI is a command-line interface, a tool you run by typing commands.
+
+The page calls the reasoning uncomfortable and sound. An AI coding agent is already trusted on that machine, already has filesystem access, and is better than a regex at working out which of ten thousand files contains something that looks like a credential. The malware did not need to be clever, the page says, because it could ask something clever that was already installed and already authorized.
+
+Keep the word known when you call this the first such attack.
+
+== Secrets went to a new public repository in the victim's own account
+layout: stage
+stage: 06
+phase: Exfiltration
+technique: T1567.001 | Exfiltration Over Web Service: Exfiltration to Code Repository
+fact: Destination | a new public repo in the victim's own account, via GitHub CLI
+fact: Names | s1ngularity-repository, -0, -1
+fact: Egress filtering | does not help: github.com, with the victim's own token
+Public repositories left every harvested secret world-readable for as long as it stood, to anyone scraping GitHub for credentials.
+notes:
+Stage 06 is the exfiltration. The page maps it to T1567.001, Exfiltration to Code Repository.
+
+Harvested secrets were committed through the GitHub CLI to a newly created public repository in the victim's own account, named s1ngularity-repository, or the same name ending in -0 or -1. There was no attacker-controlled server to block. The destination was GitHub, reached with the victim's own credentials, over a connection every developer machine makes constantly. Egress filtering, which limits where outbound traffic may go, does not help when the destination is the same host your build already talks to.
+
+The page says the choice also multiplied the damage. The repositories were public, so every harvested secret was world-readable for as long as it stood, exposed not only to the original attacker but to anyone scraping GitHub for credentials.
+
+The exposure window ran up to about ten and a half hours, from the first malicious publish at 22:32 UTC on August 26 until GitHub disabled the repositories around 09:00 UTC on August 27. The counts of what was exposed are on the slide of who reported which figures.
+
+The next slide explains, in general terms, how ATT&CK describes this technique.
+
+== What ATT&CK calls exfiltration to a code repository
+layout: background
+source: MITRE ATT&CK T1567.001 | https://attack.mitre.org/techniques/T1567/001/
+ATT&CK describes adversaries exfiltrating data to a code repository, often reachable through an API over HTTPS. If it is a popular service that hosts on the network already use, it can give significant cover.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Exfiltration Over Web Service: Exfiltration to Code Repository. Adversaries may exfiltrate data to a code repository. Code repositories are often accessible through an API, such as GitHub's, and access to those APIs is often over HTTPS, which ATT&CK says gives the adversary an additional level of protection.
+
+Exfiltration to a code repository can also provide a significant amount of cover, ATT&CK says, if it is a popular service already used by hosts within the network.
+
+The page maps its stage 06 to this technique.
+
+== Two days later, stolen tokens made private repositories public
+layout: stage
+stage: 07
+phase: Impact
+technique: T1485 | Data Destruction
+technique: T1530 | Data from Cloud Storage
+fact: Private repos | made public, renamed s1ngularity-repository-<5 letters>
+fact: Scale, per Wiz | 400+ users and organizations; 5,500+ private repos exposed
+fact: From the payload | shutdown commands appended to ~/.bashrc and ~/.zshrc
+Organizations that rotated GitHub tokens promptly on the 27th were not exposed on the 28th.
+notes:
+Stage 07 is phase two. The page maps it to T1485, Data Destruction, and T1530, Data from Cloud Storage.
+
+Between roughly 16:00 UTC on August 28 and 14:00 UTC on August 29, the attacker used the harvested tokens for a second, automated wave: taking private repositories belonging to the victims and making them public, renamed to s1ngularity-repository- plus five random letters. Wiz counted more than 400 affected users and organizations and over 5,500 private repositories exposed.
+
+The payload had also appended shutdown commands to shell startup files such as ~/.bashrc and ~/.zshrc, so some developers found their machines powering off on the next terminal launch.
+
+The page draws its lesson from the two phases: response tempo. Organizations that rotated GitHub tokens promptly on the 27th were not exposed on the 28th, and those that treated it as a package-version problem rather than a credential-compromise problem were.
+
+== The two-phase structure punished slow responders
+layout: compare
+col: Public repos, August 26 to 27 | The payload put secrets in public repos in victims' own accounts | GitHub disabled those repos around 09:00 UTC on August 27
+col: Phase two, August 28 to 29 | The stolen GitHub tokens flipped private repos public | Those rotating GitHub tokens promptly on the 27th were not exposed on the 28th
+The page: treat "we installed a bad package" as credential compromise, not a package-version problem.
+notes:
+This is the pattern the page draws from the chain's two phases.
+
+First, the payload committed harvested secrets to public repositories in victims' own accounts, and GitHub disabled those repositories around 09:00 UTC on August 27. Then, in phase two, from roughly 16:00 UTC on August 28, the attacker used the stolen GitHub tokens to make private repositories public.
+
+The page calls response tempo the lesson, and says the two-phase structure punished slow responders specifically. Organizations that rotated GitHub tokens promptly on the 27th were not exposed on the 28th, and those that treated it as a package-version problem rather than a credential-compromise problem were.
+
+So the page's advice is to treat we installed a bad package as credential compromise. When a dependency compromise is announced, it says, the immediate action is to rotate every credential reachable from the machines and pipelines that installed it, rather than to downgrade the package.
+
+== Six defenses against seven stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07
+row: PR data out of shell; read-only token | 01 | 02
+row: Trusted publishing; a human for releases | 02
+row: AI agents as a credential-access surface | 05
+row: Install scripts off by default | 04
+row: Credentials rotated on day one | 06 | 07
+row: Legitimate destinations watched | 06 | 07
+No defense in the page's defense list is tied to stage 03.
+notes:
+This matrix sets the page's six defenses against the seven stages. A cell is marked only where a defense's own words name something that stage has.
+
+Keeping pull request data out of shell steps and treating pull_request_target as privileged answers stage 01. A read-only default Actions token, the page says, would alone have stopped this at step two.
+
+Trusted publishing leaves no long-lived NPM_TOKEN to steal, the token stage 02 captured. Its manual approval on every release, with two-factor authentication, is not tied by the page to a stage. Disabling install scripts answers stage 04's postinstall hook; the page says it would have neutralized the entire payload. The AI agent defense names stage 05's permission-bypass flags.
+
+Rotating on day one answers stage 07's second wave, and its audit for repositories you did not create answers stage 06. Watching the API layer names stage 06's repository creation and stage 07's visibility changes from private to public.
+
+Column 03 is empty. Stage 03's cleanup used the same read/write token, but the page ties the read-only default to step two, not to the cleanup. Stage 03 itself names a countermeasure, shipping Actions audit logs off-platform, and the second discussion question returns to it.
+
+== Keep pull request data out of shell; make the token read-only
+layout: compare
+col: Pull request data (01) | Titles, branch names, body text and author fields are attacker-controlled | Pass them through env:, not ${{ }} inlined into run: | Reserve pull_request_target for workflows that need base-repo secrets
+col: Read-only token (02) | Set the repository's default Actions token to read-only | Grant write scopes per job | The page: this alone would have stopped the chain at step two
+The page: treat pull_request_target as privileged by definition.
+notes:
+The first defense answers the entry and the theft.
+
+Never interpolate pull request data into a shell step. Titles, branch names, body text and author fields are all attacker-controlled. Pass them through the env: block rather than inlining ${{ }} into run:. Here ${{ }} is the expression syntax GitHub Actions uses to insert a value into a workflow, and run: holds a step's shell commands.
+
+Treat pull_request_target as privileged by definition. Reserve it for workflows that need base-repo secrets, and keep those workflows free of any step that executes fork-controlled content.
+
+Then set the repository's default Actions token to read-only and grant write scopes per job. The page says that alone would have stopped this at step two, where the injected commands used a read/write token to push a branch.
+
+== Publish without a stored token; turn off install scripts
+layout: compare
+col: Publishing (02) | npm Trusted Publishers with OIDC: no long-lived NPM_TOKEN to steal | Mandatory manual 2FA approval on every release | External-contributor pipeline runs disabled pending approval
+col: Install scripts (04) | The entire payload ran from a postinstall hook | npm install --ignore-scripts, or your package manager's equivalent, would have neutralized it | Allow-list the few packages that need install-time scripts
+The page calls Nx's own remediation the right template.
+notes:
+Two defenses answer the stolen token and the install.
+
+First, publish through OIDC trusted publishing rather than a stored token, and require a human for releases. The page calls Nx's own remediation the right template: npm Trusted Publishers with OIDC, so there is no long-lived NPM_TOKEN to steal, mandatory manual 2FA approval on every release, and external-contributor pipeline runs disabled pending approval. OIDC is OpenID Connect, an identity layer, and 2FA is two-factor authentication. The page says a static publish token sitting in a repository is a single object whose theft is equivalent to owning the package.
+
+Second, disable install scripts by default in CI and on developer machines. The entire payload ran from a postinstall hook, so npm install --ignore-scripts, or the equivalent in your package manager's configuration, would have neutralized it without knowing anything about this attack. Allow-list the small number of packages that need install-time scripts, and deny the rest.
+
+== Treat installed AI agents as a credential-access surface
+layout: text
+The page: the agent was present, trusted, and drivable with its safety flags disabled.
+- Inventory the agents installed on developer machines
+- Restrict or alert on --dangerously-skip-permissions, --yolo or --trust-all-tools
+- Keep agent configuration and credential files out of postinstall scripts' reach
+notes:
+This defense answers stage 05.
+
+The page says to treat installed AI agents as a credential-access surface with their own threat model. This payload succeeded because the agent was present, trusted, and drivable from the command line with its safety flags disabled.
+
+Inventory which agents are installed on developer machines. Restrict or alert on invocations carrying --dangerously-skip-permissions, --yolo or --trust-all-tools. Keep agent configuration and credential files out of directories that arbitrary postinstall scripts can read.
+
+The page closes this defense with a rule worth repeating: assume any capability you install for convenience is a capability an attacker inherits.
+
+== Rotate on day one; watch legitimate destinations
+layout: compare
+col: Rotate on day one (06, 07) | Treat a bad package install as credential compromise | Rotate every reachable credential: GitHub, npm, cloud, SSH | Audit for repositories you did not create; check shell startup files
+col: Watch the API layer (06, 07) | Alert on repository creation events | Alert on visibility changes from private to public | Alert on unusual bursts of GitHub API activity from a user account
+Egress filtering will not catch exfiltration to legitimate destinations, the page says.
+notes:
+Two defenses answer the exfiltration and phase two.
+
+First, rotate credentials on day one, and treat we installed a bad package as credential compromise. The page says the two-phase structure punished slow responders specifically. When a dependency compromise is announced, rotate every credential that was reachable from the machines and pipelines that installed it: GitHub tokens, npm tokens, cloud keys, SSH keys. Then audit your GitHub account for repositories you did not create, and check shell startup files for appended content.
+
+Second, watch for exfiltration to legitimate destinations, since egress filtering will not catch it. Here the secrets went to a public GitHub repository created with the victim's own token, over a connection to a host every developer machine already talks to. Detect it at the API layer instead: alert on repository creation events, on visibility changes from private to public, and on unusual bursts of GitHub API activity from a user account. The page adds that secret scanning with push protection helps on the receiving end.
+
+== Check your own environment
+layout: checklist
+check: Does any workflow inline pull request titles, branch names or body text into run:?
+check: Which workflows use pull_request_target, and does each need base-repo secrets?
+check: Is your default Actions token read-only, with write granted per job?
+check: Do you publish from a stored npm token, or through OIDC trusted publishing?
+check: Do CI and developer machines install packages with scripts disabled by default?
+check: Would you notice an AI CLI run with --yolo or --dangerously-skip-permissions?
+check: Would you alert on a new repository, or one turning public?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether any workflow inlines pull request titles, branch names, body text or author fields into a run: step, and which workflows use pull_request_target. Ask whether your repository's default Actions token is read-only, with write scopes granted per job.
+
+Ask whether you publish packages from a stored token or through OIDC trusted publishing, with a human approving each release. Ask whether CI and developer machines install packages with install scripts disabled, and which packages are allowed to run them.
+
+Ask whether you know which AI agents are installed on developer machines, and whether anything would alert on invocations carrying --dangerously-skip-permissions, --yolo or --trust-all-tools.
+
+Finally, ask whether anything would alert on repository creation events, visibility changes from private to public, or unusual bursts of GitHub API activity from a user account.
+
+== What could a postinstall script ask your AI agent to do?
+layout: question
+This payload checked for installed Claude, Gemini and Q CLIs and, where it found them, drove them with their safety flags disabled to enumerate secrets.
+
+Which agents run on your developers' machines, and would you see one invoked that way?
+notes:
+Give the room a minute with this one before moving on.
+
+The setting is stage 05. The payload checked whether the developer had Claude, Gemini or Q command-line tools installed, and if so drove them with --dangerously-skip-permissions, --yolo and --trust-all-tools to enumerate secrets on the developer's filesystem. It ran from a postinstall script, so installing the package was enough.
+
+Ask each person to name the agents installed on their own team's machines, and how they would know if one ran with those flags, before you show the answer slide.
+
+== Give installed AI agents their own threat model
+layout: answer
+The page treats installed AI agents as a credential-access surface.
+- Inventory which agents are installed on developer machines
+- Restrict or alert on the permission-bypass flags
+- Keep agent configuration and credential files out of postinstall scripts' reach
+notes:
+The page's answer is to treat installed AI agents as a credential-access surface with their own threat model.
+
+Inventory which agents are installed on developer machines. Restrict or alert on invocations carrying --dangerously-skip-permissions, --yolo or --trust-all-tools. Keep agent configuration and credential files out of directories that arbitrary postinstall scripts can read.
+
+The page also offers a defense that works without knowing anything about this attack: disable install scripts by default, because the entire payload ran from a postinstall hook.
+
+Bring the group's answers back to the page's rule: assume any capability you install for convenience is a capability an attacker inherits.
+
+== If an attacker holds your repository token, what evidence survives?
+layout: question
+At stage 03 the attacker deleted the branch and the workflow runs, using the same token that enabled the theft.
+
+Where would your record of a CI compromise survive?
+notes:
+This question comes from the empty column in the defense matrix.
+
+At stage 03, having spent the token, the attacker deleted the branch they had pushed and removed the workflow runs that recorded the dispatch. The same over-permissive token that enabled the theft also permitted the cleanup. Anyone investigating from the repository alone would find trojanized packages with no visible explanation for how they were published.
+
+No defense in the page's defense list names the cleanup. Let the group propose where evidence should live before you show the answer slide.
+
+== Ship Actions audit logs off-platform
+layout: answer
+Stage 03 names its own countermeasure: ship Actions audit logs off-platform into a SIEM, where an attacker holding a repository token cannot reach them.
+notes:
+The page's answer sits in stage 03 itself rather than in its defense list. It calls the cleanup a standing argument for shipping Actions audit logs off-platform into a SIEM, where an attacker holding a repository token cannot reach them. A SIEM, security information and event management, gathers logs in one place, correlates them and alerts on them.
+
+The reason is in the stage: the most direct evidence of the intrusion lived in GitHub's own UI, and the same token that enabled the theft also permitted the cleanup.
+
+If the group proposes other ideas, treat them as the group's, and test each one against what the page reports: the deleted branch, the removed workflow run records, and malicious releases with no on-platform trace of the publish path.
+
+== Sources
+layout: links
+link: Nx, s1ngularity postmortem | https://nx.dev/blog/s1ngularity-postmortem
+link: Wiz, s1ngularity supply chain attack | https://www.wiz.io/blog/s1ngularity-supply-chain-attack
+link: GitGuardian, inside the credential leak | https://blog.gitguardian.com/the-nx-s1ngularity-attack-inside-the-credential-leak/
+link: StepSecurity, Nx build system compromised | https://www.stepsecurity.io/blog/supply-chain-security-alert-popular-nx-build-system-package-compromised-with-data-stealing-malware
+link: MITRE ATT&CK T1567.001 | https://attack.mitre.org/techniques/T1567/001/
+Disclosure: research published by Wiz is one of the page's sources, and the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Nx's official postmortem describes what happened and how Nx responded, and names the three weaknesses stage 01 sets out. Wiz's post covers the attack, and the page credits Wiz with the exposure and phase two counts. GitGuardian looks inside the credential leak, and StepSecurity reported the compromised Nx build system. The MITRE page defines T1567.001, the technique behind stage 06. The page attributes the 2,349 figure to The Hacker News without linking it.
+
+As the page discloses, research published by Wiz is one of its sources, and the site's author works at Wiz.
+
+The background slides name their own sources: the csoh.org GitHub Actions page and glossary, and MITRE ATT&CK.
+
+== Related defense topics
+layout: links
+link: CI/CD security | ci-cd.html
+link: GitHub Actions | github-actions.html
+link: AI/ML security | ai-ml-security.html
+link: Git and version control | version-control.html
+The page lists no related kill chains; these are the defense topics it links.
+notes:
+The page lists no related kill chains, so this slide carries the four defense topics it links instead.
+
+They are CI/CD security, GitHub Actions, AI/ML security, and Git and version control. CI/CD stands for continuous integration and continuous delivery, and AI/ML for artificial intelligence and machine learning. The GitHub Actions page also supplied one of this deck's background slides.
