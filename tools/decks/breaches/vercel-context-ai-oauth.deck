@@ -1,0 +1,459 @@
+title: Vercel / Context.ai
+page: breaches/vercel-context-ai-oauth.html
+as-of: 2026-11-22
+promise: Per Vercel, a compromise of AI vendor Context.ai led through an employee's Google Workspace account into Vercel, exposing non-sensitive environment variables in a subset of customer projects; researchers trace it to an infostealer.
+
+== At a glance
+layout: stats
+stat: ~2 | months from vendor infection to disclosure | per researchers, around February 2026, to Vercel's bulletin on April 19
+stat: None | Vercel exploits in the chain | every hop used a granted authorization, the page says
+stat: Opt-in | the sensitive flag on variables | unflagged environment variables decrypt to plaintext
+Exposed: environment variables not flagged sensitive, in a subset of customer projects.
+notes:
+Start with the figures the page leads with.
+
+About two months passed between the vendor endpoint infection and Vercel's disclosure. Researchers place the infection of a Context.ai employee's machine around February 2026, and Vercel published its security bulletin on April 19, 2026. Context.ai is the third-party AI tool one of Vercel's employees used.
+
+The page stresses that the chain involved no Vercel exploit. In its words, the chain never involved a Vercel vulnerability, a stolen Vercel credential, or malware on a Vercel machine, and it ran entirely on authorizations that people had legitimately granted.
+
+What was exposed: environment variables, in a subset of customer projects, that were not flagged as sensitive. Those values decrypt to plaintext. An environment variable is a named setting a platform hands to an application when it runs, often a key or a connection string.
+
+Keep the two kinds of source apart when you present. Vercel's own account covers the hops from Context.ai into Vercel, and independent researchers reconstructed the earlier ones. The next slides show which is which.
+
+== What happened, and when
+layout: timeline
+event: Around February 2026 | Lumma Stealer infects a Context.ai employee's machine, per researchers
+event: By March 2026 | Attacker reaches Context.ai's AWS and OAuth tokens, per researchers
+event: April 19 | Vercel's bulletin: indicators of compromise at 11:04, attack origin at 18:01
+event: April 20 | Clarification on compromised credentials; npm token validation, MFA guidance
+event: April 22 to 23 | More affected accounts identified
+No further updates by April 24. The page gives no date for the Workspace or Vercel account takeovers. Spacing is not to scale.
+notes:
+The page gives these dates, and the timeline shows only those.
+
+Researchers place the Lumma Stealer infection of a Context.ai employee around February 2026. By March 2026, roughly a month later, the attacker was inside Context.ai's AWS environment and had compromised the OAuth tokens the product held for its users.
+
+Vercel's bulletin runs as a live log. On April 19 it gave indicators of compromise at 11:04 and the origin of the attack at 18:01. On April 20 came clarification on the compromised credentials, npm token validation and MFA guidance. Expanded investigation findings on April 22 and 23 identified additional affected accounts, and there were no further updates by April 24.
+
+The page gives no date for the Workspace takeover, the Vercel account compromise or the access to environment variables, so they are not on the timeline. The markers are evenly spaced, so read them as order only.
+
+Indicators of compromise are traces, such as addresses or file hashes, that suggest a system was breached. MFA is multi-factor authentication. npm is the default package registry for JavaScript.
+
+== Vercel's account and the researchers' reconstruction
+layout: compare
+col: Vercel's bulletin | Context.ai's compromise was used to hijack an employee's Workspace account | Then used to compromise their Vercel account and pivot into internal systems | A subset of customer projects' non-sensitive variables were decrypted
+col: Researchers, on the earlier hops | Lumma Stealer infected a Context.ai employee around February 2026 | Harvested credentials led to Context.ai's AWS and OAuth app in March | Broad consent scopes let the attacker mint tokens for users who had connected
+Researcher accounts differ slightly on the exact surface into Workspace. Separately, a BreachForums sale listing remains an unverified attacker claim.
+notes:
+Three kinds of source sit behind this chain, and the page keeps them apart.
+
+Vercel's own account, which the page calls short and precise: an attacker compromised Context.ai, leveraged that access to hijack the employee's Google Workspace account, then used it to compromise their Vercel account and pivot into internal systems, where non-sensitive environment variables belonging to a subset of customer projects were decrypted and exposed.
+
+Independent researchers reconstructed the earlier hops: Lumma Stealer on a Context.ai employee's machine around February 2026, harvested credentials leading to Context.ai's AWS environment and its OAuth application in March, and the OAuth app's broad consent scopes letting the attacker mint valid tokens for users who had connected their accounts. Researcher accounts differ slightly on the exact surface at the Workspace hop. The page does not say which researchers said which part.
+
+Separately, a seller on BreachForums offered what they described as a Vercel database access key and portions of source code for two million dollars. The page calls that an attacker claim advertised on a criminal market, not a confirmed finding, and says it should be read as such.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | Infostealer at the vendor | T1555.003
+step: 02 | Credential Access | Vendor AWS and OAuth tokens | T1528
+step: 03 | Privilege Escalation | Tokens for any consenting user | T1550.001
+step: 04 | Lateral Movement | Workspace account hijacked | T1199
+step: 05 | Discovery | Into Vercel by Google sign-in | T1078
+step: 06 | Credential Access | Non-sensitive variables | T1552.001
+step: 07 | Impact | Disclosure and a sale claim | T1657
+Researchers reconstructed stages 01 to 03. Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's seven stages, each with its phase and an ATT&CK technique the page maps to it.
+
+Stage 01 is the start: Lumma Stealer on a Context.ai employee's machine. Stage 02 is the attacker reaching Context.ai's AWS environment and the OAuth tokens the product held for its users. Stage 03 is the broad consent scopes that let the attacker mint valid tokens for any user who had consented. Stage 04 is the bridge into Vercel: an employee's enterprise Google Workspace account, connected to Context.ai and taken over. Stage 05 runs from the Workspace identity into the employee's Vercel account and internal systems through federated sign-in; the page files it under Discovery. Stage 06 is the environment variables not flagged sensitive, decrypted across a subset of projects. Stage 07 is Vercel's disclosure, and a sale listing that remains unverified.
+
+Independent researchers reconstructed the earlier hops, stages 01 to 03. The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== Researchers trace the start to an infostealer on a Context.ai employee's machine
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1204.002 | User Execution: Malicious File
+technique: T1555.003 | Credentials from Web Browsers
+fact: Malware | Lumma Stealer, commodity malware-as-a-service
+fact: Delivery | a malicious game script or exploit, on a personal machine
+fact: Approximate date | February 2026
+fact: Harvested | admin access to Context.ai's infrastructure and OAuth app
+No targeting and no zero-day: what mattered was what the machine happened to hold.
+notes:
+Researchers attribute the initial compromise to Lumma Stealer. The page maps this stage to T1204.002, User Execution: Malicious File, and T1555.003, Credentials from Web Browsers, a sub-technique of Credentials from Password Stores.
+
+A Context.ai employee was infected around February 2026 after downloading a malicious game script; the page's stage details say a malicious game script or exploit, downloaded to a personal machine. Lumma Stealer is an ordinary malware-as-a-service infostealer, sold since 2022, that scrapes browser credentials, session cookies and wallet data for resale on criminal markets. Malware-as-a-service means criminals buy or rent the malware rather than write it.
+
+The page stresses that there was no targeting, no zero-day and no sophistication in this step at all. A zero-day is a flaw attackers use before a fix exists. What made the infection consequential is what the machine happened to hold: administrative access to Context.ai's infrastructure and to its OAuth application.
+
+The page calls this the same root as UNC5537 / Snowflake, where infostealer logs from unmanaged endpoints became the entry point to 165 organizations. That chain has its own kill chain on csoh.org. An unmanaged endpoint is a device the organization does not manage.
+
+== By March 2026, the attacker reached Context.ai's AWS and stored OAuth tokens
+layout: stage
+stage: 02
+phase: Credential Access
+technique: T1528 | Steal Application Access Token
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: Timing | March 2026, roughly a month after infection, per researchers
+fact: Reached | Context.ai's AWS and the OAuth tokens held for consenting users
+fact: Dense token store | an AI tool must hold durable read access to mail and documents
+fact: One compromise | standing access across every customer that connected
+The attacker only needed the vendor every connected organization had authorized.
+notes:
+The stolen administrative credentials led into Context.ai's cloud environment, and from there to the tokens the application stored on behalf of the people who had connected it to their accounts. The page maps this to T1528, Steal Application Access Token, and T1078.004, Valid Accounts: Cloud Accounts. The page's summary credits independent researchers with this hop.
+
+The page explains why such a vendor is worth so much. An AI productivity tool is an unusually dense token store by design: it cannot summarize a user's mail or documents without holding durable access to them, so its database is effectively a directory of standing grants across many organizations.
+
+The attacker did not need to compromise any of those organizations. It only needed the vendor that all of them had already authorized. The page compares this with the structure that made Salesloft Drift reach 700 Salesforce tenants from one integration; Salesloft Drift has its own kill chain on csoh.org.
+
+An OAuth token is a credential an application holds so it can act on a user's behalf. The next slide explains OAuth access tokens in general terms.
+
+== What OAuth access tokens are
+layout: background
+source: IETF RFC 6749, The OAuth 2.0 Authorization Framework | https://www.rfc-editor.org/rfc/rfc6749
+OAuth 2.0 lets a third-party application obtain limited access to a service on a user's behalf, with their approval. Instead of the user's password, the application gets an access token: a string denoting a specific scope, lifetime and other attributes.
+notes:
+Background, from the OAuth 2.0 specification, RFC 6749, in general terms.
+
+RFC 6749 describes a framework that lets a third-party application obtain limited access to an HTTP service, either on behalf of a resource owner, through an approval interaction between that owner and the service, or on its own behalf.
+
+It names four roles. The resource owner can grant access to a protected resource; when that owner is a person, the specification calls them the end user. The client is the application making requests on the owner's behalf and with their authorization. The authorization server issues access tokens to the client after authenticating the owner and obtaining authorization. The resource server hosts the protected resources and accepts requests that carry access tokens.
+
+The specification's own example: a user can grant a printing service access to her photos stored at a photo-sharing service, without sharing her username and password with the printing service.
+
+An access token represents specific scopes and durations of access, granted by the resource owner. A client can ask for a scope. The authorization server may fully or partly ignore what was requested, and must tell the client the scope it actually granted when that differs.
+
+== Broad consent scopes let the attacker mint tokens for any consenting user
+layout: stage
+stage: 03
+phase: Privilege Escalation
+technique: T1550.001 | Use Alternate Authentication Material: Application Access Token
+fact: Scope posture | broad, "allow all" style consent, as researchers describe it
+fact: Capability | mint valid tokens for any user who had connected their account
+fact: Invisible to users | no sign-in, no MFA challenge, no notification
+fact: Not revoked by | password resets, credential rotation, or device compliance
+No login event to alert on, no MFA prompt, no password reset that revokes it.
+notes:
+Researchers describe the OAuth app as having been given "allow all" style permissions during onboarding. The page calls that the ordinary outcome when an employee installs a productivity tool and clicks through the consent screen. It maps this stage to T1550.001, Use Alternate Authentication Material: Application Access Token.
+
+Control of the application therefore meant the ability to issue working tokens for any consenting identity, silently, without that user's involvement.
+
+The page says this is what makes consent-based access different from a stolen password: there is no login event to alert on, no MFA prompt to fail, and no password reset that revokes it. MFA is multi-factor authentication, a second proof of identity on top of a password. The grant was made once, by a person acting reasonably, and it stayed valid.
+
+Consent is the step where a user approves an application's request for access. The next slide explains it in general terms, from Microsoft's documentation.
+
+== What user consent to an application is
+layout: background
+source: Microsoft Learn, Overview of user and admin consent | https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/user-admin-consent-overview
+credit: Also from Overview of permissions and consent in the Microsoft identity platform (learn.microsoft.com)
+In Microsoft Entra ID, consent lets a user grant an application access to a protected resource, such as their mailbox. Once recorded, users usually don't consent again on later sign-ins. Administrators choose whether users may consent, and on what conditions.
+notes:
+Background, from Microsoft Learn, in general terms. Microsoft describes its own platform, Microsoft Entra ID.
+
+Consent is a process where users can grant permission for an application to access a protected resource. An application requests the API permissions it needs, for example to see a signed-in user's profile and read the contents of the user's mailbox. Users can be prompted for consent when they first sign in to an application.
+
+Permissions that let an application act as the signed-in user are called delegated permissions, and Microsoft says they can also be called scopes. If a user is allowed to consent and accepts the requested permissions, the consent is recorded, and users usually don't have to consent again on future sign-ins to the same application.
+
+An administrator chooses whether user consent is allowed and, if it is, what conditions must be met before a user can consent. Some applications need an administrator to grant consent, and an admin consent workflow lets users request admin approval for an application they cannot consent to themselves.
+
+Also from Overview of permissions and consent in the Microsoft identity platform: https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
+
+== Vercel: the Context.ai compromise was used to hijack an employee's Workspace account
+layout: stage
+stage: 04
+phase: Lateral Movement
+technique: T1199 | Trusted Relationship
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: Connected | at least one Vercel employee's enterprise Workspace account
+fact: Researchers differ | an OAuth app, or a browser extension with Drive read access
+fact: Researchers agree | broad, employee-granted access to a corporate identity
+fact: Governance gap | self-service authorization bypassed vendor review
+Nobody reviewed Context.ai: from the company's perspective, nobody bought it.
+notes:
+Vercel's bulletin states that the attacker leveraged the Context.ai compromise to hijack the employee's Google Workspace account. At least one Vercel employee had connected their enterprise Google Workspace account to Context.ai, and the attacker used the compromised token to take over that identity. The page maps this to T1199, Trusted Relationship, and T1078.004, Valid Accounts: Cloud Accounts.
+
+Researcher accounts differ slightly on the exact surface: either a connected OAuth application, or a browser extension associated with the tool holding broad read access to the employee's Google Drive. The shared substance is that an employee had personally authorized a third-party AI tool against a corporate identity.
+
+The page calls that authorization an identity bridge. It sits outside the vendor risk process entirely: nobody reviewed Context.ai, because from the company's perspective nobody bought it. The page tags this stage Shadow AI, meaning AI tools staff adopt without review or approval.
+
+The page calls this the hop that turns a small vendor's bad day into a platform's incident.
+
+== Control of the Workspace identity became control of the Vercel account
+layout: stage
+stage: 05
+phase: Discovery
+technique: T1078 | Valid Accounts
+technique: T1580 | Cloud Infrastructure Discovery
+fact: Pivot | Workspace to Vercel by federated sign-in, then internal systems
+fact: Surface reached | the project environment variables management interface
+fact: First remediation | enable MFA with an authenticator app or passkey, per Vercel
+fact: Lesson | federated login is as strong as the identity provider account
+The upstream identity had been handed over by an app the employee trusted.
+notes:
+The hijacked Google Workspace account was used to compromise the employee's Vercel account. The page maps this to T1078, Valid Accounts, and T1580, Cloud Infrastructure Discovery, under its Discovery phase.
+
+Because Vercel accounts can be reached through Google sign-in, control of the Workspace identity converted directly into control of the Vercel account, and the employee's internal access came with it. From there the attacker navigated to the project settings surface where environment variables are managed, and began enumerating.
+
+The page finds Vercel's later guidance revealing about which controls would have interrupted this. The bulletin's first remediation item is to enable multi-factor authentication using an authenticator app or passkey, followed by reviewing activity logs and recent deployments and enabling Deployment Protection. A passkey is a public-key sign-in credential designed to resist phishing.
+
+Federated sign-in inherits the security of the upstream identity. Here, the page says, the upstream identity had been handed over by an application the employee trusted. The next slide explains single sign-on and identity providers in general terms.
+
+== What single sign-on and an identity provider are
+layout: background
+source: Microsoft Learn, What is single sign-on in Microsoft Entra ID? | https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/what-is-single-sign-on
+credit: Also from the csoh.org glossary, identity provider (csoh.org)
+Microsoft describes single sign-on as signing in once and reaching many applications. When Entra ID is the identity provider, it verifies each user and confirms their identity to the app, and apps no longer manage separate usernames and passwords.
+notes:
+Background, from Microsoft Learn and the csoh.org glossary, in general terms.
+
+Single sign-on, or SSO, lets users sign in once and reach many applications. With SSO, Microsoft says, users sign in with one set of credentials and can then open every assigned application without signing in again.
+
+The csoh.org glossary defines an identity provider, or IdP, as the system that authenticates users, and names Okta, Entra ID and Google Workspace as examples.
+
+Microsoft describes its own platform. When Microsoft Entra ID is the identity provider, users sign in once with their work credentials, and Entra ID verifies each user and confirms their identity to the app. In federation-based SSO, Entra ID authenticates users and sends identity information to apps through standard protocols such as SAML 2.0 and OpenID Connect. Microsoft sets out the sign-in in four steps: a user opens an app, the app sends the user to the identity provider, the identity provider verifies the user's credentials, and it confirms the user's identity so the app grants access.
+
+Also from the csoh.org glossary: https://csoh.org/glossary.html#term-idp
+
+== Variables not flagged sensitive were decrypted across a subset of projects
+layout: stage
+stage: 06
+phase: Credential Access
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+technique: T1530 | Data from Cloud Storage
+fact: Exposed | variables not flagged sensitive, which decrypt to plaintext
+fact: Vercel said rotate | API keys, tokens, database credentials, signing keys
+fact: Scope | a subset of customer projects, expanded during investigation
+fact: Root cause | an opt-in classification flag, not a broken control
+A classification-based control is worth exactly what the classification is worth.
+notes:
+Environment variables that customers had not flagged as sensitive were enumerated and decrypted across a subset of projects. The page maps this to T1552.001, Unsecured Credentials: Credentials In Files, and T1530, Data from Cloud Storage.
+
+In practice, the page says, teams had left real credentials unflagged: Vercel's own remediation guidance tells customers to rotate the non-sensitive values, and specifically names API keys, tokens, database credentials and signing keys as the kinds of thing to rotate.
+
+The scope was a subset of customer projects, expanded during the investigation of April 22 to 23. The page is careful about the cause: nothing was misconfigured in the sense of a broken setting. The classification was simply wrong.
+
+Its practical response is to pull every variable, scan it for secrets, and rotate upstream before updating the value. Rotating upstream means replacing the credential at the service that issued it, not only the copy stored on the platform.
+
+The next slide sets the two kinds of variable side by side.
+
+== Flagged sensitive, or left unflagged
+layout: compare
+col: Flagged sensitive | Protected so the values cannot be read back through the interface
+col: Not flagged | Stored so the values decrypt to plaintext | Readable by anyone with project-level permissions | Where the exposed variables sat
+The flag is opt-in, and the page says its name invited exactly the mistake that followed.
+notes:
+This is the distinction stage 06 turns on.
+
+Vercel offers a sensitive flag on environment variables. Values marked sensitive are protected so they cannot be read back through the interface. Values left unmarked are stored so they decrypt to plaintext, and are readable by anyone with project-level permissions. The exposed variables were the ones not flagged sensitive.
+
+The flag is opt-in, and the page says the name invited exactly the mistake that followed. In practice, teams had left real credentials unflagged.
+
+The page calls the whole exposure a classification gap, and that comes back in the defenses, where the page says to assume every environment variable holds a secret.
+
+== What a secrets manager is for
+layout: background
+source: OWASP Secrets Management Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+credit: Also from the csoh.org glossary, secrets manager (csoh.org)
+OWASP counts API keys and database credentials among secrets, and sees a growing need to centralize how they are stored, provisioned, audited, rotated and managed. A secrets manager is a managed store for credentials, API keys and connection strings.
+notes:
+Background, from OWASP's Secrets Management Cheat Sheet and the csoh.org glossary, in general terms.
+
+OWASP lists application programming interface keys, database credentials, identity and access management permissions, SSH keys and certificates as examples of secrets.
+
+It sees a growing need for organizations to centralize the storage, provisioning, auditing, rotation and management of secrets, to control access to them and prevent them from leaking. It adds that services often share the same secrets, which makes the source of a compromise or leak hard to identify.
+
+The csoh.org glossary defines a secrets manager, or vault, as a managed store for credentials, API keys and connection strings, and names AWS Secrets Manager, Azure Key Vault, HashiCorp Vault and GCP Secret Manager as examples.
+
+Also from the csoh.org glossary: https://csoh.org/glossary.html#term-secrets-manager
+
+== Vercel disclosed on April 19; a BreachForums sale listing is unverified
+layout: stage
+stage: 07
+phase: Impact
+technique: T1657 | Financial Theft
+fact: April 19 | indicators of compromise at 11:04; attack origin at 18:01
+fact: April 20 | npm token validation, MFA guidance, credential clarification
+fact: April 22 to 23 | expanded investigation finds additional affected accounts
+fact: Unverified listing | claims a Vercel database access key and source code, at $2M
+The intrusion was real and disclosed, and the sale listing remains unverified.
+notes:
+Vercel's bulletin runs as a live log. Indicators of compromise went up at 11:04 on April 19, and the origin of the attack at 18:01 the same day. April 20 brought clarification on the compromised credentials, npm token validation and MFA guidance. Expanded investigation findings on April 22 and 23 identified additional affected accounts, and there were no further updates by April 24. Vercel also noted separate compromise indicators that did not appear to have originated on its systems.
+
+Separately, a seller on BreachForums offered what they described as a Vercel database access key and portions of source code for two million dollars. The page maps this stage to T1657, Financial Theft.
+
+The page is explicit about how to read the listing: it is an attacker claim advertised on a criminal market, not a confirmed finding. Both things can be true at once. The intrusion was real and disclosed, and the sale listing remains unverified. Keep that distinction when you present this slide.
+
+== No Vercel exploit: the page says every hop used a granted authorization
+layout: text
+The page: no Vercel vulnerability, stolen Vercel credential or malware on a Vercel machine.
+- Stage 03: a grant made once, by a person acting reasonably, stayed valid
+- Stage 04: an employee personally authorized an AI tool against a corporate identity
+notes:
+This is the pattern the page draws from the whole chain.
+
+In its summary the page says the chain never involved a Vercel vulnerability, a stolen Vercel credential, or malware on a Vercel machine. It ran entirely on authorizations that people had legitimately granted.
+
+The stages show what that means where the page says so. At stage 03, the consent grant was made once, by a person acting reasonably, and it stayed valid. At stage 04, an employee had personally authorized a third-party AI tool against a corporate identity, outside the vendor risk process.
+
+The malware in this chain sat at the start, on a Context.ai employee's personal machine, not on a Vercel machine.
+
+== Six defenses against seven stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07
+row: OAuth grants governed as identity | 03 | 04
+row: AI tools vetted as their own category | 01 | 02 | 03 | 04
+row: Every variable treated as a secret | 06
+row: Federated sign-in hardened on both ends | 05
+row: Detect the token, not the login | 03
+row: Vendor endpoints and the fourth party | 01
+No defense on the page names anything only stage 07 has: the disclosure or the sale listing.
+notes:
+This matrix sets the page's six defenses against the seven stages. A cell is marked only where a defense's instruction names something only that stage has.
+
+Governing OAuth grants answers stage 03's broad consent scopes, by restricting user consent and requiring admin approval for broad mail or drive scopes, and stage 04's corporate Workspace identity, connected to a tool nobody in procurement saw.
+
+Vetting AI tools as their own category asks about endpoint controls on the vendor's own staff, stage 01; token storage and encryption at what the page calls the densest token stores, stage 02; scope minimization, stage 03; and no connecting them to corporate identities until assessed, stage 04.
+
+Treating every variable as a secret answers stage 06. Hardening federated sign-in answers stage 05, where control of the Google account became control of the Vercel account. Detecting the token answers stage 03, where there is no login event to alert on; it says to alert on grants being created or re-scoped. Planning for vendor endpoints answers stage 01's commodity infostealer.
+
+Column 07 is empty. The AI-tools defense asks AI vendors for breach notification commitments, but stage 07 is Vercel's own disclosure, so the deck does not read that as a tie. That gap is the second discussion question.
+
+== Govern OAuth grants, and vet AI tools before they connect
+layout: compare
+col: OAuth grants (03, 04) | Enumerate third-party app consents in Workspace or Entra ID | Restrict user consent to a vetted allow-list | Admin approval for broad mail or drive scopes; review on a schedule
+col: AI tools (01 to 04) | Assess token storage and encryption, and endpoint controls on their own staff | Assess breach notification commitments and scope minimization | No connecting them to corporate identities until assessed
+The page: every connected app is a standing, password-independent grant against a corporate identity, and nobody in procurement saw it.
+notes:
+Two defenses about what employees connect, and what those tools hold.
+
+First, inventory and govern OAuth grants as identity infrastructure, because, the page says, that is what they are. Every connected application is a standing, password-independent grant against a corporate identity, and nobody in procurement saw it. Enumerate third-party app consents in Google Workspace or Entra ID, restrict user consent to a vetted allow-list, require admin approval for anything requesting broad mail or drive scopes, and review the list on a schedule. Entra ID is Microsoft's cloud identity service. The page notes that the Salesloft Drift chain a year earlier ran on exactly this surface.
+
+Second, treat AI productivity tools as a distinct vendor category with tighter criteria. These products cannot deliver value without ingesting organizational data, so they ask for broad scopes as a matter of function, not carelessness. The page calls them the densest token stores your employees will ever authorize. Assess them for token storage and encryption, endpoint controls on their own staff, breach notification commitments, and scope minimization, and prohibit connecting them to corporate identities until that assessment is done.
+
+== Treat every variable as a secret; harden federated sign-in
+layout: compare
+col: Every variable a secret (06) | Turn on the protected variant for everything | Better: a secrets manager, injecting short-lived values at deploy | Scan your variables; rotate findings upstream before updating
+col: Federated sign-in (05) | Phishing-resistant MFA, passkeys or FIDO2 keys, on the identity provider | Require it again for privileged actions on downstream platforms | Conditional access, such as device compliance, on both
+The page calls the exposure entirely a classification gap, and says federated login inherits upstream security wholesale.
+notes:
+Two defenses, one for what was exposed and one for how the attacker reached it.
+
+First, stop classifying secrets by hand, and assume every environment variable holds one. The page says the exposure here was entirely a classification gap: an opt-in sensitive flag that real credentials sat outside of. Turn on the protected variant for everything, or better, keep credentials in a secrets manager and inject short-lived values at deploy time. Then verify rather than trust: pull your variables, run a secret scanner over them, and rotate whatever it finds upstream before you update the platform value. A secret scanner is a tool that searches text for strings shaped like keys and passwords.
+
+Second, harden federated sign-in on both ends. Control of the Google account became control of the Vercel account because federated login inherits upstream security wholesale. Enforce phishing-resistant MFA, passkeys or FIDO2 keys, on the identity provider, require it again for privileged actions on downstream platforms, and apply conditional access conditions such as device compliance to both. FIDO2 keys are hardware security keys built on a public-key standard that resists phishing. Conditional access grants access only when conditions such as a compliant device are met.
+
+== Detect the token, not the login; plan for the fourth party
+layout: compare
+col: Detect the token (03) | Alert on app-based access from new networks or geographies | Alert on unusual API call volume through a connected app | Alert on grants being created or re-scoped
+col: Vendor endpoints (01) | Ask vendors how they manage endpoint compromise and credential rotation | Scoped tokens, short lifetimes, revocation you can execute in minutes | An inventory of which of your systems each vendor can reach
+A compromised OAuth grant produces no failed authentication, no MFA denial and no impossible-travel sign-in.
+notes:
+Two defenses for what the earlier stages make hard to see.
+
+First, detect the token, not the login, because there is no login. A compromised OAuth grant produces no failed authentication, no MFA denial and no impossible-travel sign-in. Alert instead on application-based access from new networks or geographies, on unusual API call volume through a connected app, and on grants being created or re-scoped. Feed Workspace and Entra ID application audit logs into your SIEM and baseline them like any other identity source. A SIEM is the system that collects and correlates security logs. Impossible travel means sign-ins from places too far apart for one person to reach in the time between them.
+
+Second, assume vendor endpoints are as messy as yours, and plan for the fourth party. This chain began with a commodity infostealer on one person's machine at a company most of Vercel's customers had never heard of. Ask vendors how they manage endpoint compromise and credential rotation, and design so that a vendor breach is survivable: scoped tokens, short lifetimes, revocation you can execute in minutes, and an inventory that tells you which of your systems a given vendor can reach. A fourth party is a vendor's own vendor.
+
+== Check your own environment
+layout: checklist
+check: Can you list every third-party app with consent to your corporate identities?
+check: Is user consent limited to a vetted allow-list, with admin approval for broad scopes?
+check: Are AI tools assessed before anyone connects them to a corporate identity?
+check: Is every environment variable protected, or kept in a secrets manager?
+check: Is phishing-resistant MFA enforced on the identity provider and downstream?
+check: Would you alert on a grant being created or re-scoped?
+check: Could you revoke a vendor's tokens in minutes, and list what it can reach?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether you can list every third-party application with consent to your corporate identities, in Google Workspace or Entra ID, and whether anyone reviews that list on a schedule. Ask whether user consent is restricted to a vetted allow-list, with admin approval for anything requesting broad mail or drive scopes, and whether AI productivity tools are assessed before anyone connects them to a corporate identity.
+
+Ask whether every environment variable is protected, or kept in a secrets manager, and when anyone last ran a secret scanner over them. Ask whether phishing-resistant MFA is enforced on the identity provider and again for privileged actions downstream.
+
+Finally, ask whether anything would alert on a grant being created or re-scoped, and whether you could revoke a given vendor's tokens in minutes and say which of your systems it can reach.
+
+== Could an employee connect an AI tool to a corporate identity today?
+layout: question
+At least one Vercel employee had connected an enterprise Google Workspace account to Context.ai. Nobody reviewed Context.ai because, from the company's perspective, nobody bought it.
+
+In your organization, who would see that grant, and when?
+notes:
+Give the room a minute with this one before moving on.
+
+The setting is stage 04. At least one Vercel employee had connected their enterprise Google Workspace account to Context.ai, and the attacker used the compromised token to take over that identity. The page calls that authorization an identity bridge that sits outside the vendor risk process entirely.
+
+Ask each person to say who in their own organization would see a new grant like that, and how soon. Watch for answers that start from procurement or vendor review, since in this case nothing was procured.
+
+The answer slide gives what the page says to do.
+
+== The page: govern grants as identity infrastructure
+layout: answer
+Each connected app is a standing grant, the page says.
+- Enumerate app consents in Workspace or Entra ID
+- Restrict user consent to a vetted allow-list
+- Admin approval for broad mail or drive scopes
+- Assess AI tools before they connect
+notes:
+The page's answer is to treat OAuth grants as identity infrastructure, because that is what they are.
+
+Enumerate third-party app consents in Google Workspace or Entra ID, restrict user consent to a vetted allow-list, require admin approval for anything requesting broad mail or drive scopes, and review the list on a schedule.
+
+For AI productivity tools in particular, the page asks for tighter criteria: assess them for token storage and encryption, endpoint controls on their own staff, breach notification commitments and scope minimization, and prohibit connecting them to corporate identities until that assessment is done.
+
+Bring the group's answers back to this. If the only path to noticing a new grant runs through procurement, the page's point is that nobody in procurement saw this one.
+
+== What would you add for stage 07?
+layout: question
+No defense on the page names Vercel's disclosure or the BreachForums sale listing, an attacker claim that remains unverified.
+
+What would you add, and which reported detail would it address?
+notes:
+This question comes from the empty column in the defense matrix.
+
+The page's defenses name stages 01 to 06. None names anything only stage 07 has: Vercel's bulletin, run as a live log from April 19 with no further updates by April 24, or the BreachForums listing that claimed a Vercel database access key and source code for two million dollars.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would address.
+
+== No defense on the page names stage 07
+layout: answer
+Any control you propose is your own suggestion. Test it against what the page reports: a disclosure run as a live log, more affected accounts found on April 22 to 23, and a sale listing that remains unverified.
+notes:
+Be clear that the page stops here. No defense on the page names stage 07's disclosure or the sale listing, and this deck adds none of its own.
+
+The group may argue that the AI-tools defense reaches this stage, since it asks AI vendors for breach notification commitments. That defense is about the AI vendors employees connect, and stage 07 is Vercel's own disclosure, so that argument is the group's own.
+
+Test each proposal against the facts the page reports for stage 07: indicators of compromise at 11:04 and the attack origin at 18:01 on April 19; clarification on compromised credentials, npm token validation and MFA guidance on April 20; additional affected accounts identified on April 22 and 23; separate compromise indicators that did not appear to originate on Vercel's systems; and a listing that remains an attacker claim, not a confirmed finding.
+
+== Sources
+layout: links
+link: Vercel, April 2026 security incident bulletin | https://vercel.com/kb/bulletin/vercel-april-2026-security-incident
+link: Cloud Security Alliance, AI SaaS as enterprise attack vector | https://labs.cloudsecurityalliance.org/research/csa-research-note-ai-saas-supply-chain-vercel-contextai-2026/
+link: GitGuardian, Non-sensitive variables need investigation too | https://blog.gitguardian.com/vercel-april-2026-incident-non-sensitive-environment-variables-need-investigation-too/
+link: OX Security, Vercel breached via Context.ai | https://www.ox.security/blog/vercel-context-ai-supply-chain-attack-breachforums/
+link: MITRE ATT&CK T1528 | https://attack.mitre.org/techniques/T1528/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Vercel's bulletin is Vercel's own account and its live log of updates. The Cloud Security Alliance research note treats AI SaaS as an enterprise attack vector. GitGuardian's post, by its title, argues that non-sensitive variables need investigation too, and OX Security's post covers Vercel being breached via Context.ai. The MITRE page defines T1528, Steal Application Access Token, which the page maps to stage 02.
+
+The background slides name their own sources: the OAuth specification, Microsoft Learn, OWASP and the csoh.org glossary.
+
+== Related kill chains and defense topics
+layout: links
+link: UNC5537 / Snowflake | breaches/snowflake-unc5537.html
+link: Salesloft Drift | breaches/salesloft-drift-unc6395.html
+link: SaaS security (SSPM) | saas-security.html
+link: IAM & cloud identity | iam.html
+link: AI/ML security | ai-ml-security.html
+link: Non-human identity | non-human-identity.html
+The page names two related kill chains: the same infostealer root as UNC5537 / Snowflake, and the vendor structure behind Salesloft Drift.
+notes:
+Two related kill chains on csoh.org, and the page's related defense topics.
+
+At stage 01 the page calls this chain the same root as UNC5537 / Snowflake, where infostealer logs from unmanaged endpoints became the entry point to 165 organizations.
+
+At stage 02 it says the structure, one vendor already authorized by many organizations, is the same one that made Salesloft Drift reach 700 Salesforce tenants from one integration. Its OAuth defense adds that the Salesloft Drift chain a year earlier ran on exactly this surface.
+
+The four defense topics the page links are SaaS security, IAM and cloud identity, AI and machine learning security, and non-human identity. SSPM stands for SaaS security posture management, and IAM for identity and access management.
