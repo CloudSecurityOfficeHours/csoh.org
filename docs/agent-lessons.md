@@ -53,6 +53,22 @@ Durable rules learned from Shawn's past agent sessions. They add to CLAUDE.md an
 
 - **Stale SRI is local-only.** `deploy.yml` re-stamps hashes on every deploy, so run `update_sri.py`, reload, and move on. Never block a push or warn about production over a stale local hash. CLAUDE.md states the same rule.
 - **main gets dozens of bot commits a day.** Fetch and rebase before every push. Resolve conflicts in generated files by regenerating them, never by picking a side.
+- **A PR that waits for review must not commit what main's pipeline regenerates.** Bots rewrite these files on main several times a day, so a committed copy becomes a merge conflict that blocks the PR, and the pipeline rebuilds each one from the edited pages anyway. This covers the nightly bot's PRs, and for PRs it corrects CLAUDE.md's "rebuild both indexes after editing recap prose": run the generators to check your work, then restore their output with `git checkout origin/main -- <file>` before you commit. A direct push to `main` lands on current main, so committing regenerated files there is fine.
+  - `search-index.json`: the deploy rebuilds it on every build. Don't edit it in place either.
+  - `meetings-search-index.json`: the deploy rebuilds it, and housekeeping commits it after every push.
+  - `<lastmod>` dates in `sitemap.xml`: housekeeping sets them from commit dates after the merge. A new page still needs its `<url>` entry added by hand, because no tool adds one.
+  - The `?v=` and `integrity=` stamps that `update_sri.py` writes into pages: the deploy re-stamps them.
+  - The next-session dates that `tools/sync_next_session.py` writes into `index.html` and `sessions.html`: housekeeping and the deploy stamp them.
+  - `news.html` and `feed.xml`: the news workflow re-renders every card on the page through `update_news.py` several times a day. Fix a wrong card in `update_news.py` and name in the PR body the cards the next run will change. If an updater fix can't reach a card, list the card for Shawn instead of editing the page.
+
+  Before opening or updating the PR, each command below must print nothing. If one names a file or prints a line, restore that file from `origin/main` and re-apply only your own edits. If nothing else is left, don't open the PR.
+
+  ```sh
+  git fetch -q origin main
+  git diff --name-only origin/main...HEAD -- search-index.json meetings-search-index.json news.html feed.xml
+  git diff origin/main...HEAD -- sitemap.xml | grep -E '^-[[:space:]]*<lastmod>'
+  git diff origin/main...HEAD -- '*.html' | grep -E '^[-+].*(\?v=[0-9a-f]|integrity="sha)'
+  ```
 - **`gh run list --commit` needs the full 40-character SHA.** A short SHA returns an empty list, which looks like "CI didn't run".
 - **In `update-news.yml` the App token authors the PR and `CSOH_PAT` approves it.** Never make the PAT the author, even when a Copilot PR suggests it. A blank create-PR failure is transient, so retry it.
 - **Weekly docs-review and SEO findings are leads, not facts.** Grep the whole site, check `origin/main` (another session may already have fixed it), and re-verify claims about live infrastructure against the provider.
