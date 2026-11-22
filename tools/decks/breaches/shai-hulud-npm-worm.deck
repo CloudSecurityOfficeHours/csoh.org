@@ -41,7 +41,7 @@ layout: table
 row: Who | What the page reports
 row: Unit 42 | Said it may have started with phishing spoofing npm, leading to fake MFA-update pages
 row: The @ctrl/tinycolor maintainer | Wrote: no phishing; his npm token was taken from a shared repo's Actions secret
-row: Wiz | Assessed it as directly downstream of the late-August s1ngularity/Nx compromise
+row: Wiz | Assessed it as directly downstream of s1ngularity/Nx (disclosure: the site's author works at Wiz)
 row: CISA | Its alert names no initial access vector
 What every account agrees on is the target: a maintainer's npm publishing token.
 notes:
@@ -51,7 +51,7 @@ Unit 42 said the attack may have started with a credential-harvesting campaign s
 
 The maintainer of @ctrl/tinycolor, among the first packages hit, wrote that there was no phishing involved: his npm token was taken from a GitHub Actions secret in a shared repository.
 
-Wiz assessed the campaign as directly downstream of the late-August 2025 s1ngularity/Nx compromise.
+Wiz assessed the campaign as directly downstream of the late-August 2025 s1ngularity/Nx compromise. Say the disclosure aloud as the page gives it: research published by Wiz is one of the sources cited on the page, and the site's author works at Wiz. Every source is linked so you can read it directly.
 
 CISA's alert names no initial access vector.
 
@@ -68,7 +68,7 @@ step: 06 | Exfiltration | Public Shai-Hulud repo | T1567.001
 step: 07 | Impact | CISA alert, two descendants | T1195
 Arrows follow the page's stage order.
 notes:
-Here is the whole chain on one slide: the page's seven stages, each with its phase and primary ATT&CK technique.
+Here is the whole chain on one slide: the page's seven stages, each with its phase and the first ATT&CK technique the page maps to it.
 
 Stage 01 is the theft of maintainer publishing tokens, with the vector disputed. Stage 02 is the trojanized versions, a roughly 3.6MB bundle run by a postinstall script; the page files it under a phase it calls Supply Chain. Stage 03 is TruffleHog, run against the developer's own machine. Stage 04 is what made it a worm: up to 20 of the maintainer's packages, re-published automatically. Stage 05 is a GitHub Actions workflow, planted where the malware could reach a repository, that leaks the secrets context on every push. Stage 06 is the exfiltration, into a public repository in the victim's own account. Stage 07 is the impact: CISA's alert, then two descendants.
 
@@ -272,11 +272,11 @@ Stage 06 is exfiltration. The page maps it to T1567.001, Exfiltration to Code Re
 
 Using the stolen GitHub token and GitHub's /user/repos endpoint, the malware created a public repository named Shai-Hulud in the victim's own account and committed the harvested secrets into it as JSON. Shai-Hulud 2.0 used the name Sha1-Hulud: The Second Coming.
 
-As with Nx / s1ngularity, the page says, the destination is GitHub itself, so there is no attacker infrastructure to blocklist and no unusual egress to notice. Egress is outbound traffic. And as there, the repositories were public, which converted a theft into a broadcast: every secret was readable by anyone who found the repo, including the many automated scrapers that watch GitHub for exactly this.
+As with Nx / s1ngularity three weeks earlier, the page says, the destination is GitHub itself, so there is no attacker infrastructure to blocklist and no unusual egress to notice. Egress is outbound traffic. And as there, the repositories were public, which converted a theft into a broadcast: every secret was readable by anyone who found the repo, including the many automated scrapers that watch GitHub for exactly this.
 
 Some variants also exfiltrated to a webhook.site endpoint, a public service that collects web requests sent to a unique address.
 
-The page reads two independent groups of npm incidents in one month settling on the same trick as a pattern rather than a coincidence. Nx / s1ngularity has its own kill chain on csoh.org.
+The page reads two independent groups of npm incidents within three weeks settling on the same trick as a pattern rather than a coincidence. Nx / s1ngularity has its own kill chain on csoh.org.
 
 == What ATT&CK calls exfiltration to a code repository
 layout: background
@@ -358,16 +358,16 @@ At stage 01, MFA answers the phishing route, one disputed account of the entry.
 notes:
 This matrix sets the page's six defenses against its seven stages. A cell is marked only where a defense's own words name something that stage has.
 
-Phishing-resistant MFA breaks the phishing route at step one, so it marks stage 01. Disabling install scripts answers stage 02, since everything the payload did began with a postinstall hook, and enforced lockfile hashes keep stage 04's force-published versions out of your build. Short-lived, scoped publishing answers stage 04: the page says the worm propagated because a stolen token was a standing licence to publish anything the account owned.
+Phishing-resistant MFA breaks the phishing route at step one, so it marks stage 01. Disabling install scripts answers stage 02, since everything the payload did began with a postinstall hook, and with enforced lockfile hashes, stage 04's force-published versions cannot silently enter your build. Short-lived, scoped publishing answers stage 04: the page says the worm propagated because a stolen token was a standing licence to publish anything the account owned.
 
-Hunting the persistence names stage 05's workflow file and toJSON(secrets), stage 06's public Shai-Hulud repositories, and stage 07's discussion.yaml and self-hosted runners from the 2.0 wave. Alerting on security tooling in a build names stage 03's TruffleHog fetch. Rotating everything a developer machine could reach answers stage 03's haul.
+Hunting the persistence names stage 05's workflow file and toJSON(secrets), stage 06's public Shai-Hulud repositories, and stage 07's discussion.yaml and self-hosted runners from the 2.0 wave. Alerting on security tooling in a build names stage 03's TruffleHog fetch. Rotating everything a developer machine could reach answers stage 03's haul. Its audit-log check names repositories you did not create, and stage 06 created one, but the page gives the late-August s1ngularity second wave as the reason for that check, so that cell stays empty.
 
 At stage 01, the MFA defense answers the phishing route Unit 42 suggested. The page does not say which account of the entry is right. That is the second discussion question.
 
 == Phishing-resistant MFA, and no install scripts
 layout: compare
-col: Phishing-resistant MFA (01) | FIDO2 keys and passkeys are bound to the origin | A lookalike domain cannot relay them | Registry-level enforcement for high-download packages
-col: Install scripts and hashes (02, 04) | npm install --ignore-scripts in CI and on developer machines | Enforced lockfile integrity hashes keep force-published versions out | Skip anything published in the last 24 to 48 hours
+col: Phishing-resistant MFA (01) | Breaks the phishing route Unit 42 suggested | FIDO2 keys and passkeys are bound to the origin | A lookalike domain cannot relay them | Registry-level enforcement for high-download packages
+col: Install scripts and hashes (02, 04) | npm install --ignore-scripts in CI and on developer machines | Enforced lockfile hashes: a force-published version cannot silently enter your build | Skip anything published in the last 24 to 48 hours
 The page says that delay would have skipped most of this worm's usable window.
 notes:
 Two defenses, one for the way in and one for the install hook.
@@ -391,14 +391,14 @@ Second, alert on your own security tooling being fetched and run by a build. A p
 == Hunt the persistence; rotate everything a machine could reach
 layout: compare
 col: Hunt the persistence (05, 06, 07) | shai-hulud-workflow.yml, and toJSON(secrets) in any workflow | Public repos named Shai-Hulud or Sha1-Hulud, in your org and developers' accounts | For the 2.0 wave: discussion.yaml and unexpected self-hosted runners
-col: Rotate on reach (03) | Every credential on or reachable from an affected machine | The haul spanned npm, GitHub, all three major clouds and SSH keys | Audit logs: repos you did not create, private repos that changed visibility
+col: Rotate on reach (03) | Every credential on or reachable from an affected machine | The haul spanned npm, GitHub, all three major clouds and SSH keys | Audit logs: repos you did not create, private repos changing visibility, as in s1ngularity
 The page: downgrading a package removes none of the persistence.
 notes:
 The last two defenses are about clean-up beyond the package itself.
 
 Hunt the persistence, not just the package. Search every repository for .github/workflows/shai-hulud-workflow.yml and for any workflow containing toJSON(secrets), and look for public repositories named Shai-Hulud or Sha1-Hulud in your organization and in your developers' personal accounts. For the 2.0 wave, check for discussion.yaml and for unexpected self-hosted runners registered against your repositories. Downgrading a package removes none of these.
 
-Then assume anything a developer machine could reach is compromised, and rotate on that basis. The haul spanned npm, GitHub, all three major clouds and SSH keys, so the response scope is every credential present on or reachable from an affected machine, not just the npm token. The page also says to check GitHub audit logs for repositories you did not create and for private repositories that changed visibility, because that is how the same month's s1ngularity second wave played out.
+Also assume anything a developer machine could reach is compromised, and rotate on that basis. The haul spanned npm, GitHub, all three major clouds and SSH keys, so the response scope is every credential present on or reachable from an affected machine, not just the npm token. The page also says to check GitHub audit logs for repositories you did not create and for private repositories that changed visibility, because that is how the late-August s1ngularity second wave played out.
 
 == Traces the page names, and where they show up
 layout: table
@@ -451,19 +451,19 @@ The setting is stages 05 to 07. The page says removing the malicious dependency 
 
 Ask each person to name what they would look for, and where, before you show the answer slide. Watch for answers that stop at the npm side.
 
-== Hunt the persistence, then rotate on reach
+== Hunt the persistence, and rotate on reach
 layout: answer
-The page: downgrading a package removes none of the persistence. Hunt for it, then rotate.
+The page: downgrading a package removes none of the persistence. Hunt for it, and rotate.
 - shai-hulud-workflow.yml, firing on every push
 - Public Shai-Hulud repos holding the secrets
 - For 2.0: discussion.yaml and self-hosted runners
-- Then rotate every credential the machine could reach
+- Rotate every credential the machine could reach
 notes:
 The page's answer is to hunt the persistence, not just the package.
 
 The planted workflow, .github/workflows/shai-hulud-workflow.yml, keeps firing on every push by whoever commits next, so search every repository for it and for toJSON(secrets) in any workflow. Look for public repositories named Shai-Hulud or Sha1-Hulud in your organization and your developers' personal accounts. For the 2.0 wave, check for discussion.yaml and for unexpected self-hosted runners.
 
-Then rotate. The page says to assume anything a developer machine could reach is compromised: npm, GitHub, all three major clouds and SSH keys, not just the npm token.
+Rotate as well. The page says to assume anything a developer machine could reach is compromised. The haul spanned npm, GitHub, all three major clouds and SSH keys, so the scope is every credential on or reachable from an affected machine, not just the npm token.
 
 Bring the group's answers back to this. Anyone who stopped at the package left the workflow running.
 
@@ -503,7 +503,7 @@ link: MITRE ATT&CK T1195.002 | https://attack.mitre.org/techniques/T1195/002/
 notes:
 These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
 
-Unit 42's write-up covers the worm and the phishing hypothesis. CISA's alert of September 23, 2025 covers the npm ecosystem compromise. Scott Cooper's post-mortem covers @ctrl/tinycolor. Wiz Research, ReversingLabs and Datadog Security Labs published their own analyses, Datadog's on Shai-Hulud 2.0. The MITRE page defines T1195.002, which the page maps to stages 02 and 04.
+Unit 42's write-up covers the worm and the phishing hypothesis. CISA's alert of September 23, 2025 covers the npm ecosystem compromise. Scott Cooper's post-mortem covers @ctrl/tinycolor. Wiz Research, ReversingLabs and Datadog Security Labs published their own analyses, Datadog's on Shai-Hulud 2.0. As the page discloses, research published by Wiz is one of its sources, and the site's author works at Wiz. The MITRE page defines T1195.002, which the page maps to stages 02 and 04.
 
 The background slides name their own sources: the csoh.org glossary and GitHub Actions page, Microsoft Learn and MITRE ATT&CK.
 
@@ -520,7 +520,7 @@ The page compares stage 06 with Nx / s1ngularity, follows the technique into Min
 notes:
 Three related kill chains on csoh.org, and the page's related defense topics.
 
-At stage 06 the page compares the exfiltration with Nx / s1ngularity, where the destination was also GitHub itself. Its rotation defense points to how the same month's s1ngularity second wave played out.
+At stage 06 the page compares the exfiltration with Nx / s1ngularity, where the destination was also GitHub itself. Its rotation defense points to how the late-August s1ngularity second wave played out.
 
 At stage 07 it follows the technique into Mini Shai-Hulud / TanStack, which needed no stolen token at all.
 
