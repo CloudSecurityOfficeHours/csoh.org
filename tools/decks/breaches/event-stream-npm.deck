@@ -1,0 +1,393 @@
+title: event-stream / npm 2018
+page: breaches/event-stream-npm.html
+as-of: 2026-11-22
+promise: In 2018, event-stream's maintainer handed publish rights to a volunteer who asked, whose new dependency carried an encrypted payload aimed at one Bitcoin wallet app.
+
+== At a glance
+layout: stats
+stat: ~2M | weekly downloads | roughly two million, at the time
+stat: None | compromise involved | handed over on request: no compromise, no theft
+stat: 1 | wallet app targeted | only wallets above roughly 100 BTC or 1,000 BCH
+stat: ~10 | weeks, injection to discovery | September 9 to November 20, 2018
+The page calls this the oldest supply-chain kill chain on the site, and the template for several of the newest.
+notes:
+Start with the four figures the page leads with.
+
+event-stream was an npm package doing roughly two million downloads a week, and its maintainer had not actively maintained it since 2012. npm is the default package registry for JavaScript and Node.js. In September 2018 he handed publish rights over to a volunteer who asked for them. The page stresses that the handover itself involved no compromise and no theft.
+
+The payload was precision-targeted: one wallet application, Copay, and within it only wallets above roughly 100 BTC or 1,000 BCH. BTC is bitcoin and BCH is Bitcoin Cash.
+
+About ten weeks passed from injection on September 9 to discovery on November 20, 2018.
+
+The page calls this the oldest supply-chain kill chain on the site and the template for several of the newest.
+
+== What happened, and when
+layout: timeline
+event: 2012 | Dominic Tarr, who wrote event-stream, stops using it
+event: September 2018 | Tarr hands publish rights to right9ctrl, a volunteer who asked
+event: September 9, 2018 | event-stream 3.3.6 adds flatmap-stream as a dependency
+event: November 20, 2018 | A developer investigating a deprecation warning finds it
+event: Afterwards | npm removes the malicious package and version, and takes ownership
+The page gives no date for npm's removal, or for the Copay releases that carried the code. Spacing is not to scale.
+notes:
+The page gives these dates, and the timeline shows only those.
+
+Dominic Tarr, who wrote event-stream, stopped using it in 2012. In September 2018 he transferred publish rights to a volunteer, using the handle right9ctrl, who asked for them. On September 9, 2018, version 3.3.6 added flatmap-stream as a dependency. It was found on November 20, 2018, by a developer investigating a deprecation warning. That developer noticed the unfamiliar dependency and opened GitHub issue #116.
+
+npm then removed flatmap-stream and the affected version and took ownership of event-stream. The page gives no date for that, or for Copay's versions 5.0.2 through 5.1.0, which Copay confirmed carried the malicious code.
+
+The markers are evenly spaced, and the slide says the gaps between them are not to scale.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | Rights handed over on request | T1684.001
+step: 02 | Supply Chain | flatmap-stream added | T1195.001
+step: 03 | Stealth | Payload stays encrypted | T1027
+step: 04 | Impact | One wallet app's build | T1657
+step: 05 | Discovery | A deprecation warning | -
+step: 06 | Response | npm takes it back | -
+Arrows follow the page's stage order. Stages 05 and 06 carry no ATT&CK technique.
+notes:
+Here is the whole chain on one slide: the page's six stages, each with its phase and, where the page gives one, the first ATT&CK technique it lists.
+
+Stage 01, Initial Access, is the handover of publish rights to a volunteer who asked. Stage 02, under the page's Supply Chain phase, is version 3.3.6 adding flatmap-stream as a dependency. Stage 03, under Stealth, is the payload staying encrypted, keyed to the consuming package's description. Stage 04, Impact, is the theft from one wallet application's build.
+
+Stage 05, Discovery, and stage 06, Response, carry no ATT&CK technique. They are a developer's curiosity about a deprecation warning, and npm taking the package back.
+
+The next slides take each stage in turn.
+
+== Tarr handed publish rights to right9ctrl, a volunteer who asked
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1684.001 | Social Engineering: Impersonation
+technique: T1195.002 | Compromise Software Supply Chain
+fact: Maintainer | had not used it since 2012; unpaid, still fielding issues
+fact: Compromise involved | none: no credential stolen, no system exploited
+fact: Repeated in | XZ Utils, 2022 to 2024: same route, plus manufactured pressure
+The handover transferred write access to a substantial share of the JavaScript ecosystem on the strength of a friendly request.
+notes:
+Stage 01 is the way in. No credential was stolen and no system was exploited. The page maps it to T1684.001, Social Engineering: Impersonation, and T1195.002, Compromise Software Supply Chain.
+
+Dominic Tarr had written event-stream years earlier, stopped using it in 2012, and kept receiving issues and requests for a package he had no personal stake in. Someone offered to help, and he did what the page says the open-source ecosystem asks maintainers to do in that situation: he handed it over. The volunteer used the handle right9ctrl.
+
+The package still served around two million downloads a week, so the handover transferred write access to a substantial share of the JavaScript ecosystem on the strength of a friendly request.
+
+The page calls this the template. The same route was taken again, far more patiently, against XZ Utils, where the backdoor surfaced in 2024. In that case sock puppets manufactured the pressure that made handover feel necessary. A sock puppet is a fake identity that one person runs while presenting it as someone else.
+
+== On September 9, 2018, version 3.3.6 added flatmap-stream as a dependency
+layout: stage
+stage: 02
+phase: Supply Chain
+technique: T1195.001 | Compromise Software Dependencies and Development Tools
+fact: flatmap-stream | a package created for this purpose
+fact: Payload | in the new dependency, not in event-stream's own source
+fact: Consumer visibility | effectively none: it arrived transitively
+fact: Later releases | legitimate, further normalizing the package's activity
+The change that mattered was a single line in a manifest.
+notes:
+On September 9, 2018, event-stream version 3.3.6 added flatmap-stream as a dependency, a package created for this purpose. The page maps this to T1195.001, which ATT&CK names Compromise Software Dependencies and Development Tools.
+
+The malicious code was never in event-stream itself. The new dependency carried the payload, so anyone auditing event-stream's own source found nothing wrong, and the change that mattered was a single line in a manifest. A manifest is the file where a package declares its dependencies.
+
+Adding a dependency is among the most routine things a maintainer does and among the least scrutinized by consumers. Most of them never saw the change at all, because it arrived transitively, several hops down a tree they had no reason to inspect. A transitive dependency is one a project pulls in through another package rather than by naming it. Legitimate later versions were also released, which the page says further normalized the package's activity.
+
+The next slide explains what T1195.001 covers, in general terms.
+
+== What ATT&CK's T1195.001 covers
+layout: background
+source: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+ATT&CK describes adversaries manipulating software dependencies and development tools before a final consumer receives them. Popular open source projects used as dependencies in many applications, such as npm packages, may be targeted to add malicious code.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+T1195.001 is a sub-technique of Supply Chain Compromise. ATT&CK says adversaries may manipulate software dependencies and development tools prior to receipt by a final consumer, for the purpose of data or system compromise.
+
+ATT&CK adds that applications often depend on external software to function properly, and that popular open source projects that are used as dependencies in many applications, such as pip and npm packages, may be targeted as a means to add malicious code to users of the dependency.
+
+== The payload stayed encrypted, keyed to the consuming package's description
+layout: stage
+stage: 03
+phase: Stealth
+technique: T1027 | Obfuscated Files or Information
+technique: T1059.007 | Command and Scripting Interpreter: JavaScript
+fact: Storage | encrypted data in a file disguised as a test fixture
+fact: Decryption key | the description field of the consuming package
+fact: Effect | the payload only decrypts inside the intended victim's build
+fact: Analysis elsewhere | an opaque blob that decrypts to nothing
+That is targeting enforced by cryptography rather than by a conditional statement.
+notes:
+Stage 03 is how the payload hid. The page maps it to T1027, Obfuscated Files or Information, and T1059.007, JavaScript.
+
+The malicious logic sat encrypted in a file dressed as a test fixture, a file of sample data that a project's tests read. The decryption key was the description field of the package that would consume it. So the payload only decrypted successfully inside the intended victim's build, and anyone examining the code elsewhere saw an opaque blob that decrypted to nothing.
+
+The page says the construction is elegant in a way worth appreciating for what it defeats. Targeting is enforced by cryptography rather than by a conditional statement, which makes analysis outside the target environment close to useless.
+
+The page notes how directly this prefigures XZ Utils, where the payload also hid in files presenting as binary test fixtures.
+
+No defense on the page is tied to this stage. That gap is one of the discussion questions at the end. The next slide explains T1027 in general terms.
+
+== What ATT&CK's T1027 covers
+layout: background
+source: MITRE ATT&CK T1027 | https://attack.mitre.org/techniques/T1027/
+credit: Also from MITRE ATT&CK T1059.007 (attack.mitre.org)
+ATT&CK describes adversaries making a file difficult to discover or analyze by encrypting, encoding or otherwise obfuscating its contents. Payloads may be compressed, archived or encrypted to avoid detection.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+T1027, Obfuscated Files or Information, covers adversaries attempting to make an executable or file difficult to discover or analyze by encrypting, encoding or otherwise obfuscating its contents, on the system or in transit. ATT&CK calls this common behavior across platforms. Payloads may be compressed, archived or encrypted to avoid detection, and portions of files can be encoded to hide the plain-text strings that would otherwise help defenders with discovery.
+
+ATT&CK's entry for JavaScript, T1059.007, adds that because such payloads are text-based, it is very common for adversaries to obfuscate their content.
+
+Also from MITRE ATT&CK T1059.007: https://attack.mitre.org/techniques/T1059/007/
+
+== The payload activated only in Copay's build, for wallets above a threshold
+layout: stage
+stage: 04
+phase: Impact
+technique: T1657 | Financial Theft
+technique: T1555 | Credentials from Password Stores
+fact: Target | Copay, a Bitcoin wallet application, and its build process
+fact: Threshold | wallets holding more than ~100 BTC or ~1,000 BCH
+fact: Taken | account data and private keys, sent to an external server
+fact: Affected releases | Copay 5.0.2 through 5.1.0, as Copay confirmed
+Precision targeting made millions of collateral installs the attacker's camouflage.
+notes:
+Stage 04 is the theft. The page maps it to T1657, Financial Theft, and T1555, Credentials from Password Stores.
+
+Millions of installations, and the attacker wanted exactly one application. The code injected itself into the build of Copay, a Bitcoin wallet application, checked balances, and exfiltrated account data and private keys only from wallets above roughly 100 BTC or 1,000 BCH. BTC is bitcoin and BCH is Bitcoin Cash. The page says it deliberately ignored smaller holdings to reduce the chance of anyone noticing: fewer victims noticing means longer dwell time. Copay confirmed the malicious code shipped in its versions 5.0.2 through 5.1.0.
+
+The page calls the strategic point uncomfortable. Precision targeting makes the enormous population of collateral installs the camouflage for the attacker's plan. It also means "we use that package but we're not the target" is true right up until someone else's payload has a broader trigger.
+
+The page does not say how much was stolen, so do not put a figure on it. The next slide explains dwell time and T1657 in general terms.
+
+== What dwell time means, and what T1657 covers
+layout: background
+source: csoh.org glossary, Dwell Time | https://csoh.org/glossary.html#term-dwell-time
+credit: Also from MITRE ATT&CK T1657 (attack.mitre.org)
+Dwell time is how long an attacker is in your environment before detection, the metric defenders try to shrink. ATT&CK's T1657 covers adversaries stealing monetary resources from targets for their own financial gain.
+notes:
+Background, from the csoh.org glossary and MITRE ATT&CK, in general terms.
+
+The glossary defines dwell time as how long an attacker is in your environment before detection, and calls it the metric defenders try to shrink.
+
+ATT&CK's T1657, Financial Theft, covers adversaries stealing monetary resources from targets through extortion, social engineering, technical theft or other methods aimed at their own financial gain, at the expense of the availability of those resources for victims.
+
+Also from MITRE ATT&CK T1657: https://attack.mitre.org/techniques/T1657/
+
+== A developer investigating a deprecation warning opened GitHub issue #116
+layout: stage
+stage: 05
+phase: Discovery
+fact: Injected | September 9, 2018
+fact: Discovered | November 20, 2018, about ten weeks later
+fact: Noticed | an unfamiliar dependency
+fact: Venue | GitHub issue #116, "I don't know what to say."
+Ten weeks passed between injection and discovery, and it ended because one person was curious about something minor.
+notes:
+Stage 05 is the discovery, and the page maps it to no ATT&CK technique.
+
+Ten weeks passed between injection on September 9 and discovery on November 20, 2018. It ended because one person was curious about something minor. A developer noticed an unfamiliar dependency while looking into a deprecation notice, opened GitHub issue #116, and the encrypted payload unravelled from there. A deprecation warning is a notice that a package or feature is no longer recommended.
+
+The thread that followed was titled "I don't know what to say." The page calls it one of the more consequential documents in open-source security, for Tarr's response to the anger directed at him rather than for the technical analysis. The next slide sets out that response.
+
+== The argument in issue #116, unanswered since, per the page
+layout: text
+The page calls Tarr's reply the sharpest statement of the sustainability problem.
+- He gave away a package he no longer used, for free.
+- People who had taken his work without payment blamed him for not guarding it indefinitely.
+notes:
+The page's funding defense starts from this argument.
+
+In the thread, Tarr pointed out that he had published the package for free, stopped using it years earlier, and was being blamed by people who had taken his work without payment and without contributing, for failing to keep guarding it indefinitely. The page's summary puts it this way: he had given away a package he no longer used, for free, and owed nobody anything.
+
+The page says the argument has not been answered since. It calls it the same condition XZ Utils exploited in 2024, and the reason maintainer funding shows up as a security control on csoh.org rather than as a goodwill gesture.
+
+== npm took ownership, since Tarr no longer had rights to fix it
+layout: stage
+stage: 06
+phase: Response
+fact: Removed | flatmap-stream and the affected event-stream version
+fact: Ownership | npm assumed ownership of event-stream
+fact: Tarr | could not act: he had already transferred publish rights
+fact: Guidance | run npm audit and update
+fact: Structural point | handover is irreversible from the transferring side
+Handing a package over effectively means trusting the recipient permanently.
+notes:
+Stage 06 is the response, and the page maps it to no ATT&CK technique.
+
+The page calls this a detail that catches people out. When Tarr was told about the backdoor, he could not remove it. He had transferred publish rights, so he had no more authority over the package than any other user, and had to ask npm to intervene. npm removed flatmap-stream and the affected version, took ownership of event-stream itself, and advised users to run npm audit and update. npm audit asks the registry for a report of known vulnerabilities in a project's dependencies.
+
+The page draws the structural point: transferring maintainership is irreversible from the transferring side. So the decision to hand a package over is effectively a decision to trust the recipient permanently, made at a moment when the maintainer is usually tired and relieved that someone volunteered.
+
+No defense on the page is tied to this stage either.
+
+== The same route, taken again at XZ Utils
+layout: compare
+col: event-stream, 2018 | A volunteer asked, and the maintainer handed it over | The payload sat encrypted in a file disguised as a test fixture | Tarr's argument: free work, abandoned years earlier, guarded indefinitely by whom?
+col: XZ Utils, 2022 to 2024 | The same route, far more patiently, with sock puppets manufacturing the pressure | The payload also hid in files presenting as binary test fixtures | The same condition, exploited in 2024
+The page calls event-stream the earliest instance of the handover pattern and XZ Utils the most sophisticated.
+notes:
+This is the pattern the page draws, and it returns to it at stages 01, 03 and 05.
+
+At stage 01, the same handover route was taken again, far more patiently, against XZ Utils, where the backdoor surfaced in 2024. In that case sock puppets manufactured the pressure that made handover feel necessary. The page's summary says the handover mechanism reappears in XZ Utils about four years later.
+
+At stage 03, the page notes that XZ Utils' payload also hid in files presenting as binary test fixtures. At stage 05, it calls Tarr's unanswered argument the same condition XZ Utils exploited in 2024.
+
+The page calls event-stream the earliest instance of the pattern and XZ Utils the most sophisticated. XZ Utils has its own kill chain on csoh.org, linked at the end of this deck. Every XZ Utils detail on this slide comes from the event-stream page.
+
+== Six defenses, and where the page ties them
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: Pin by hash, review new dependencies | 02
+row: Watch maintainership and ownership changes | 01
+row: Disable install scripts, deny build egress | 04
+row: High-value assets: assume you're targeted | 04
+row: Fund the maintainers | 01 | 05
+row: Reduce the tree | -
+No defense on the page is tied to stage 03 or stage 06. Reducing the tree names no single stage.
+notes:
+This matrix sets the page's six defenses against its six stages. A cell is marked only where a defense's own words name something that stage has.
+
+Pinning by hash names stage 02: the malicious code arrived as one added line in a manifest, several hops down the tree. Watching for maintainership changes names stage 01's handover; the page calls event-stream the earliest instance of that pattern. Disabling install scripts and constraining egress names stage 04: the payload executed during Copay's build and exfiltrated to an external server. Assuming, if you hold high-value assets, that you are the specific target also names stage 04: the payload ignored every install except one application, and within that, only wallets above a threshold.
+
+Funding the maintainers names two stages. It cites Tarr handing the package on when someone offered, at stage 01, and his argument, which stage 05 calls the reason maintainer funding is a security control on csoh.org.
+
+Reducing the tree cites event-stream as a whole, two million downloads a week of code its author had not needed since 2012, and names no single stage.
+
+No defense is tied to stage 03, the encrypted payload, or stage 06, npm's response. That gap is the second discussion question.
+
+== Make new dependencies visible, and watch who can publish
+layout: compare
+col: Pin and review (stage 02) | The code arrived as one added manifest line, several hops down the tree | Enforced lockfile integrity hashes: nothing enters your build unreviewed | Tooling that surfaces new transitive dependencies in a diff
+col: Watch handovers (stage 01) | A package changing hands is a security-relevant event | It is usually visible in public metadata | For your critical path, alert on it rather than discover it afterwards
+Per the page: event-stream is the earliest instance of the pattern, XZ Utils the most sophisticated.
+notes:
+Two defenses work on what enters your build, and on who can change it.
+
+First, pin dependencies by hash and treat a new transitive dependency as a reviewable change. The malicious code arrived as one added line in a manifest, several hops down the tree. A lockfile with enforced integrity hashes means nothing enters your build unreviewed, and tooling that surfaces new transitive dependencies in a diff turns the change that mattered here into something a human sees. A lockfile records the exact version of every package a build installs, and can record a hash of each one.
+
+Second, watch for maintainership and ownership changes in your dependency path. The page calls event-stream the earliest instance of this pattern and XZ Utils the most sophisticated. A package changing hands is a security-relevant event, it is usually visible in public metadata, and for the dependencies in your critical path it is worth alerting on rather than discovering afterwards.
+
+== Constrain the build, and assume you are the target
+layout: compare
+col: Scripts and egress (stage 04) | The payload executed during Copay's build and exfiltrated to an external server | Run installs with --ignore-scripts | Default-deny build egress, with a narrow allow-list
+col: High-value assets (stage 04) | One app, and only wallets above a threshold | Treat the build pipeline as directly targeted infrastructure | Reproducible builds and human dependency review | Build systems hard-separated from keys
+Per the page, the left column breaks both halves with nobody spotting the dependency.
+notes:
+Two defenses answer stage 04.
+
+First, disable install scripts and constrain what a build can reach. The payload executed during Copay's build and exfiltrated to an external server. The page says running installs with --ignore-scripts, and default-denying egress from build environments with a narrow allow-list, breaks both halves of that without requiring anyone to have spotted the dependency. Install scripts are commands a package can declare for the package manager to run when it is installed. Egress is outbound traffic.
+
+Second, if you handle high-value assets, assume you are the specific target. The payload ignored every install except one application, and within that only wallets above a threshold. The page says organizations holding cryptocurrency, payment flows or similar should treat their build pipeline as directly targeted infrastructure: reproducible builds, dependency review by a human, and a hard separation between build systems and anything holding keys.
+
+== Fund the maintainers, and shrink the tree
+layout: compare
+col: Fund maintainers (stages 01 and 05) | Tarr gave away free work and handed it on when someone offered | Fund the projects in your dependency path | Contribute maintenance, not only issues
+col: Reduce the tree (no single stage) | Two million weekly downloads of code its author had not needed since 2012 | Audit whether each dependency still earns its place | Prefer the standard library or a small vendored function over a micro-package
+The page calls funding the control that addresses the cause of both this chain and XZ Utils, and removing a dependency the only permanent mitigation.
+notes:
+The last two defenses are about the dependencies themselves and the people who maintain them.
+
+Fund the maintainers, and understand why the page calls that a control and not a courtesy. Tarr's argument was never really rebutted: he gave away free work, stopped needing it, and handed it on when someone offered. Every organization depending on the package benefited from years of unpaid labour and contributed nothing to the moment it became a liability. In the page's words, funding the projects in your dependency path, and contributing maintenance rather than only issues, is the control that addresses the cause of both this chain and XZ Utils.
+
+Reduce the tree, since every package is a trust decision that outlives its author's interest. event-stream was two million downloads a week of code its author had not needed since 2012. Periodically audit whether each dependency still earns its place, prefer the standard library or a small vendored function over a micro-package, and remember that the page calls removing a dependency the only mitigation that is permanent. Vendoring means copying a dependency's code into your own repository.
+
+== Check your own environment
+layout: checklist
+check: Is every dependency pinned by hash, in a lockfile with enforced integrity?
+check: Would a new transitive dependency show up in a diff a human reviews?
+check: Would you be alerted if a package in your critical path changed hands?
+check: Do installs run with --ignore-scripts, and does build egress default to deny?
+check: If you hold high-value assets, are build systems kept apart from anything holding keys?
+check: Do you fund, or help maintain, the projects in your dependency path?
+check: When did you last check that each dependency still earns its place?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether your dependencies are pinned by hash in a lockfile with enforced integrity, and whether a new transitive dependency would appear in a diff that a human reads.
+
+Ask whether you would be alerted when a package in your critical path changes hands, since the page says that is usually visible in public metadata.
+
+Ask whether installs run with --ignore-scripts, and whether build environments default-deny egress with a narrow allow-list. If you hold cryptocurrency, payment flows or similar, ask whether your build systems are hard-separated from anything holding keys, with reproducible builds and dependency review by a human.
+
+Finally, ask whether you fund or help maintain the projects in your dependency path, and whether each dependency still earns its place.
+
+== Would you know if a package in your critical path changed hands?
+layout: question
+event-stream changed hands on request, with no compromise. The volunteer who took it over added the dependency that carried the payload.
+
+Name one package in your critical path: who can publish it today, and would you hear if that changed?
+notes:
+Give the room a minute with this one before moving on.
+
+event-stream changed hands on request. No credential was stolen and no system was exploited. The volunteer who took it over, right9ctrl, added the new dependency, flatmap-stream, that carried the payload.
+
+Ask each person to name one specific package before you show the answer slide. The answer slide gives what the page says about handovers.
+
+== What the page says about handovers
+layout: answer
+- A package changing hands is a security-relevant event, usually visible in public metadata.
+- For your critical path, it is worth alerting on rather than discovering afterwards.
+- Handover is irreversible from the transferring side; Tarr had to ask npm.
+notes:
+The page's answer is to watch for maintainership and ownership changes in your dependency path.
+
+A package changing hands is a security-relevant event, it is usually visible in public metadata, and for the dependencies in your critical path the page says it is worth alerting on rather than discovering afterwards.
+
+The page also makes a point about handovers at stage 06. Transferring maintainership is irreversible from the transferring side. When Tarr was told about the backdoor he could not remove it, because he had already transferred publish rights, and he had to ask npm to intervene.
+
+Bring the group's examples back to this. If nobody would hear when a critical package changed hands, the page's defense applies.
+
+== What would you add for stages 03 and 06?
+layout: question
+The page ties its defenses to stages 01, 02, 04 and 05. None is tied to stage 03's encrypted payload or stage 06's response.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the gaps in the defense matrix.
+
+The page ties defenses to stages 01, 02, 04 and 05, and one more, reducing the tree, names no single stage. It ties nothing to stage 03, where the payload stayed encrypted outside the intended victim's build, or to stage 06, where npm removed the malicious package and took ownership of event-stream.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stages 03 and 06
+layout: answer
+The page ties no defense to these stages, and this deck adds none. Test any idea against reported details: a file disguised as a test fixture, a package description used as the key, npm taking ownership.
+notes:
+Be clear that the page stops here. It ties no defense to stage 03 or stage 06, and this deck adds none of its own. Reducing the tree names no single stage. Some proposals will apply the page's other defenses to these stages; that argument is the group's own.
+
+If the group proposes ideas, treat them as the group's, and test each one against the facts the page reports.
+
+For stage 03, those facts are the encrypted data in a file disguised as a test fixture, the decryption key taken from the description field of the consuming package, and an opaque blob that decrypts to nothing anywhere else.
+
+For stage 06, they are npm removing flatmap-stream and the affected version, npm assuming ownership of event-stream, its advice to run npm audit and update, and the page's point that handover is irreversible from the transferring side.
+
+== Sources
+layout: links
+link: npm, details about the event-stream incident | https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident
+link: GitHub issue #116, the original thread | https://github.com/dominictarr/event-stream/issues/116
+link: Snyk, post-mortem of the backdoor | https://snyk.io/blog/a-post-mortem-of-the-malicious-event-stream-backdoor/
+link: A systematic analysis of the event-stream incident | https://es-incident.github.io/paper.html
+link: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+npm's post gives its details about the incident. GitHub issue #116 is the original thread, where the payload unravelled and where Tarr answered the anger directed at him. Snyk published a post-mortem of the backdoor, and the fourth link is a systematic analysis of the incident. The MITRE page defines T1195.001, behind stage 02.
+
+The background slides name their own sources: MITRE ATT&CK and the csoh.org glossary.
+
+== Related kill chain and defense topics
+layout: links
+link: XZ Utils Backdoor 2024, the same route | breaches/xz-utils-backdoor.html
+link: CI/CD and supply chain | ci-cd.html
+link: Git and version control | version-control.html
+link: Vulnerability management | vulnerability-management.html
+link: Threat modeling | threat-modeling.html
+The page reads XZ Utils as the same handover route, taken again. The four topics are the page's related defense topics.
+notes:
+The page links one other kill chain, and four defense topics.
+
+XZ Utils is where, in the page's words, the same route was taken again, far more patiently, with sock puppets manufacturing the pressure that made handover feel necessary. Its own kill chain covers that incident in full.
+
+The page's related defense topics are CI/CD and supply chain, Git and version control, vulnerability management, and threat modeling. CI/CD stands for continuous integration and continuous delivery.
