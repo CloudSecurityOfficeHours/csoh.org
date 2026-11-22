@@ -42,7 +42,7 @@ Phased restoration of Microsoft 365 backups began on October 28. By November 4, 
 == Who reported what
 layout: table
 row: Source | What the page draws from it
-row: Microsoft | The assessment that Storm-0940 was responsible; the 2,250+ tenants; the techniques
+row: Microsoft | The assessment that Storm-0940 was responsible; sign-in attempts at 2,250+ tenants; the techniques
 row: ConnectWise | Its advisory: root cause still under investigation as of November 4
 row: Wiz | Overlapping observations: Okta, Entra ID and AWS Cognito targeting
 row: GTIG, citing Wiz | UNC7228, which overlaps Storm-0940, from at least August 2026
@@ -56,10 +56,10 @@ Wiz, whose observations overlap with Microsoft's Storm-0940 report, describes id
 
 Say the disclosure aloud as the page gives it. The page cites research published by Wiz, and a Google Threat Intelligence report that draws on it. Google acquired Wiz in March 2026, and the site's author works at Wiz. Every source is linked so you can read it directly.
 
-== Storm-0940 and UNC7228 overlap; GTIG does not call them one actor
+== GTIG says UNC7228 overlaps Storm-0940, without calling them one actor
 layout: compare
 col: Storm-0940, per Microsoft | A China-state aligned actor, active since 2021 | ARTEX-driven activity as early as September 2026 | Initial targeting to privileged access in under 3 hours, in multiple instances
-col: UNC7228, per GTIG citing Wiz | A campaign Wiz tracks, which GTIG says overlaps Storm-0940 | At least August 2026 | About four hours from first compromised account to deep system access
+col: UNC7228, per GTIG citing Wiz | A campaign Wiz tracks, which GTIG says overlaps Storm-0940 | At least August 2026 | Typically around four hours from first compromised account to deep system access
 The page keeps Microsoft's September date for Storm-0940. The two times start from different points, so they are not directly comparable.
 notes:
 Two names appear for activity that overlaps, and the page keeps them apart.
@@ -109,7 +109,7 @@ On October 8, the day after CrowdStrike reported ARTEX's use against South Korea
 
 Microsoft describes Storm-0940 as an actor focused on data theft that historically relies on password spraying and internet-facing exploits, then OAuth application abuse for persistence. The pattern slide after the stages comes back to that.
 
-== Other named ARTEX users, and who named them
+== Named ARTEX users, and who named them
 layout: table
 row: Actor | Named by | What the page says
 row: Storm-0940 | Microsoft | China-state aligned; ARTEX-driven activity as early as September 2026
@@ -134,7 +134,7 @@ technique: T1110.003 | Brute Force: Password Spraying
 fact: Target | Microsoft 365 and Exchange Online, October 10 to 14
 fact: Volume | 151,000+ failed logons; peak 2,900 a minute on October 11
 fact: Overlap, per Wiz | Okta, Entra ID and AWS Cognito targeting; most attempts failed
-Its address, 144.172.64.99, appears in ConnectWise's indicators, which helps tie the two activities together.
+Its address, 144.172.64.99, appears in ConnectWise's indicators, which helps tie the spray to the ConnectWise activity.
 notes:
 From October 10 to 14, infrastructure at 144.172.64.99 sprayed 327 accounts across eight organizations, aimed at Microsoft 365 and Exchange Online. The page maps this to T1110.003, Password Spraying.
 
@@ -269,8 +269,6 @@ Background, from MITRE ATT&CK, in general terms.
 
 ATT&CK describes adversaries adding adversary-controlled credentials to a cloud account to maintain persistent access to victim accounts and instances. In Azure and Entra ID, its example is adding credentials for service principals and applications in addition to existing legitimate credentials, and it says these include both x509 keys and passwords. With sufficient permissions, they can be added through the Azure portal, the Azure command line interface, or PowerShell modules.
 
-It also describes an escalation risk. In Entra ID, an adversary with the Application Administrator role can add a new set of credentials to an application's service principal, and so gain that service principal's roles and permissions, which may differ from those of the Application Administrator.
-
 ATT&CK lists the technique under both Persistence and Privilege Escalation.
 
 == One ConnectWise management application assigned itself Global Administrator
@@ -294,15 +292,13 @@ The page lists a Microsoft Defender XDR alert for this step: Application self-as
 == What the Global Administrator role can do
 layout: background
 source: Microsoft Learn, Microsoft Entra built-in roles | https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference
-Global Administrator can manage all aspects of Microsoft Entra ID and the Microsoft services that use Entra identities. Its holders can reset any user's or administrator's password, and can elevate their access to manage all Azure subscriptions.
+Global Administrator can manage all aspects of Microsoft Entra ID and the Microsoft services that use Entra identities. Microsoft marks it a privileged role, and its holders can reset any user's or administrator's password.
 notes:
 Background, from Microsoft Learn, in general terms.
 
 Microsoft marks Global Administrator as a privileged role. It gives access to all administrative features in Microsoft Entra ID, and to services that use Microsoft Entra identities, such as the Microsoft Defender portal, the Microsoft Purview portal, Exchange Online and SharePoint Online.
 
-Global Administrators can reset the password for any user and all other administrators. They can also elevate their access to manage all Azure subscriptions and management groups, which gives them full access to all Azure resources through that Microsoft Entra tenant.
-
-As a best practice, Microsoft recommends assigning the Global Administrator role to fewer than five people in an organization.
+Global Administrators can reset the password for any user and all other administrators.
 
 == Secrets were read at scale across multiple Azure Key Vaults
 layout: stage
@@ -339,7 +335,7 @@ The REST API reference describes unwrap as the reverse of wrap: it decrypts a sy
 
 Also from the Key Vault REST API reference, Unwrap Key: https://learn.microsoft.com/en-us/rest/api/keyvault/keys/unwrap-key/unwrap-key
 
-== None of the methods is new; the operator is what changed
+== Storm-0940's usual methods are not new; the operator is what changed
 layout: text
 Microsoft says Storm-0940 historically relies on password spraying, internet-facing exploits and OAuth app abuse. None of that is new.
 - In multiple instances, targeting to privileged access took under 3 hours, per Microsoft.
@@ -357,22 +353,22 @@ Keep the rest of Microsoft's account beside the speed. Microsoft says most of th
 layout: matrix
 columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
 row: Inventory multi-tenant apps by application ID | 03 | 07
-row: Preserve evidence before deleting anything | 05 | 06
-row: Alert on app credential and role changes | 05 | 06 | 07
+row: Preserve evidence before deleting anything | 04 | 05 | 06
+row: Alert on app credential and role changes | 04 | 05 | 06 | 07
 row: Shrink what third-party apps can do | 03 | 07
 row: Watch vault access per identity | 08
-row: Confirm the vendor's fix covers your tenant | 06
-No defense on the page is tied by its words to stages 01, 02 or 04.
+row: Confirm the vendor's fix covers your tenant | 03 | 06
+No defense on the page is tied by its words to stage 01 or 02.
 notes:
 This matrix sets the page's six defenses against the eight stages. A cell is marked only where the defense's own words name something that stage reports.
 
-Inventorying multi-tenant applications answers stage 03's multi-tenant route, and asks whether any application could grant itself more, as one did in stage 07. Preserving evidence keeps the Graph telemetry and sign-in records stage 05 names as its log source, and the Entra audit records where stage 06 says to look. Alerting covers stage 06's credential additions, new owners and consent grants, stage 07's role assignment, and stage 05's pairing of sign-ins with Graph activity. Shrinking third-party access answers stage 03's multi-tenant permissions and, through its review of high-privilege applications, stage 07's application that added itself to a high-privilege role. Watching vault access answers stage 08's bulk reads, enumeration and unwrap. Confirming the vendor's fix checks that credential rotation removed remaining access, which answers stage 06's warning that the vendor's rotation says nothing about a credential added inside your tenant.
+Inventorying multi-tenant applications answers stage 03's multi-tenant route, and asks whether any application could grant itself more, as one did in stage 07. Preserving evidence keeps the sign-in records and Graph telemetry stage 05 names as its log source, reviews the application sign-ins stage 04 reports, and keeps the Entra audit records where stage 06 says to look. Alerting covers stage 06's credential additions, new owners and consent grants, stage 07's role assignment, and, through service principal sign-ins with Graph activity, stages 04 and 05. Shrinking third-party access answers stage 03's multi-tenant permissions and, through its review of high-privilege applications, stage 07's application that added itself to a high-privilege role. Watching vault access answers stage 08's bulk reads, enumeration and unwrap. Confirming the vendor's fix checks that rotating the credentials stage 03 reports accessed removed any remaining access, and answers stage 06's warning that the vendor's rotation says nothing about a credential added inside your tenant.
 
-No defense is tied by its words to stage 01, the framework, stage 02, the failed spray, or stage 04, the sign-in attempts. That gap is a discussion question at the end.
+No defense is tied by its words to stage 01, the framework, or stage 02, the failed spray. That gap is a discussion question at the end.
 
 == Inventory apps by ID, and preserve evidence before deleting
 layout: compare
-col: Inventory by application ID | Search every tenant where the apps were installed or authorized, even unused | Display names can mislead | ConnectWise's advisory lists seven app IDs and three suspicious addresses | Ask of every vendor: could any app grant itself more?
+col: Inventory by application ID | Search every tenant that installed or authorized the apps, even ones no longer used | Display names can mislead | ConnectWise's advisory lists seven app IDs and three suspicious addresses | Ask of every vendor: could any app grant itself more?
 col: Preserve evidence first | Keep affected connections disabled; don't delete enterprise apps first, per Microsoft | Keep Entra sign-in and audit records, Purview audit logs, Graph telemetry | Microsoft: review from at least October 15; service principal sign-ins from October 1 | ConnectWise: review from October 13
 notes:
 The first two defenses come before any cleanup.
@@ -408,7 +404,7 @@ Confirm the vendor's fix covers your tenant. Check that credential rotation remo
 
 == Check your own environment
 layout: checklist
-check: Can you list every multi-tenant app by application ID, including unused ones?
+check: Can you list every multi-tenant app by application ID, including ones no longer used?
 check: Could any vendor app in your tenant grant itself more?
 check: Would you keep sign-in, audit and Graph records before deleting an enterprise app?
 check: Would an app adding itself to a directory role page someone immediately?
@@ -451,27 +447,25 @@ Start in the Entra audit records: credential additions, new owners and consent g
 
 ConnectWise's November 4 update also says not to re-enable previously disabled applications unless ConnectWise instructs you to.
 
-== What would you add for stages 01, 02 and 04?
+== What would you add for stages 01 and 02?
 layout: question
-By their words, the page's defenses reach stages 03 and 05 to 08, not the framework, the failed spray or the 2,250+ sign-in attempts.
+By their words, the page's defenses reach stages 03 to 08, not the framework or the failed spray.
 
 What would you add, and which reported detail would it catch?
 notes:
 This question comes from the gaps in the defense matrix.
 
-The page offers six defenses. By their own words they reach stage 03, the multi-tenant application route, and stages 05 to 08, from Graph reconnaissance to the Key Vault reads. None names stage 01, the ARTEX framework, stage 02, the spray from which Microsoft observed no success, or stage 04, the sign-in attempts at more than 2,250 tenants.
+The page offers six defenses. By their own words they reach stages 03 to 08, from the multi-tenant application route to the Key Vault reads. None names stage 01, the ARTEX framework, or stage 02, the spray from which Microsoft observed no success.
 
 Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
 
-== The page ties no defense to stages 01, 02 and 04
+== The page ties no defense to stages 01 and 02
 layout: answer
-Any control you propose is your own suggestion. Test it against reported details, like the spray from 144.172.64.99, or sign-ins that need no user and raise no MFA prompt.
+Any control you propose is your own suggestion. Test it against reported details, like the spray from 144.172.64.99, or ARTEX's forks and rebrands.
 notes:
-Be clear that the page stops here. Its defenses name nothing from stages 01, 02 or 04, and this deck adds no defense of its own.
+Be clear that the page stops here. By the matrix's rule, no defense is tied to stage 01 or stage 02, and this deck adds no defense of its own.
 
-The group may argue that inventorying applications or reviewing service principal sign-ins reaches stage 04, since those defenses deal with the same applications. That argument is the group's own.
-
-Test each proposal against the facts the page reports. For stage 01, those are ARTEX itself, its forks and rebrands, and its other named users. For stage 02, they are the spray from 144.172.64.99 on October 10 to 14, its peak of 2,900 failures a minute, and Wiz's account of Okta, Entra ID and AWS Cognito targeting. For stage 04, they are the attempts at more than 2,250 tenants through existing application trust with no interactive sign-in, and Microsoft's caution that even a successful authentication does not necessarily mean customer data was accessed or taken.
+Test each proposal against the facts the page reports. For stage 01, those are ARTEX itself, its forks and rebrands, and its other named users. For stage 02, they are the spray from 144.172.64.99 on October 10 to 14, its peak of 2,900 failures a minute, and Wiz's account of Okta, Entra ID and AWS Cognito targeting.
 
 == Sources
 layout: links
