@@ -612,7 +612,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/unc6040-salesforce-vishing.html",
      "UNC6040 Salesforce Vishing 2025 Kill Chain",
-     "A phone call and a genuine OAuth consent screen emptied Salesforce tenants - no product vulnerability involved.",
+     "A phone call and a genuine OAuth consent screen let attackers take Salesforce data, with no product vulnerability involved.",
      "Breach Kill Chain"),
     ("breaches/sharepoint-toolshell.html",
      "SharePoint ToolShell 2025 Kill Chain",
