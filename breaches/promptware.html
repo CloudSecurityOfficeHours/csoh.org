@@ -361,7 +361,7 @@
     </div>
     <h2 class="inc-title">Promptware - Indirect Prompt Injection → Context Poisoning → Persistence → C2 → Covert Camera Livestream</h2>
     <p class="inc-summary">
-      Researchers mapped a seven-stage kill chain onto attacks against cloud-connected AI assistants. Most of its stages draw on one demonstrated attack, which ran from a malicious Google Calendar invite to covert Zoom video streaming, all triggered by the victim typing "thanks." Analysed across 36 studies and real-world incidents by Brodt, Feldman, Schneier and Nassi, the pattern, termed "<a class="glossary-link" href="../glossary.html#term-promptware">promptware</a>", mirrors classical malware kill chains but executes entirely through the <a class="glossary-link" href="../glossary.html#term-llm">LLM</a> prompt layer. The Calendar attack established no <a class="glossary-link" href="../glossary.html#term-c2">C2</a> channel; C2 was confirmed in the ChatGPT ZombAI attack (disclosed to OpenAI Oct 2024, write-up Jan 2025) and the Microsoft Copilot Reprompt attack (Jan 2026, <a class="glossary-link" href="../glossary.html#term-cve">CVE</a>-2026-24307), both patched after disclosure.
+      Researchers mapped a seven-stage kill chain onto attacks against cloud-connected AI assistants. Most of its stages draw on one demonstrated attack, which ran from a malicious Google Calendar invite to covert Zoom video streaming, all triggered by the victim typing "thanks." Analysed across 36 studies and real-world incidents by Brodt, Feldman, Schneier and Nassi, the pattern, termed "<a class="glossary-link" href="../glossary.html#term-promptware">promptware</a>", mirrors classical malware kill chains but executes entirely through the <a class="glossary-link" href="../glossary.html#term-llm">LLM</a> prompt layer. The Calendar attack established no <a class="glossary-link" href="../glossary.html#term-c2">C2</a> channel; C2 was confirmed in the ChatGPT ZombAI attack (disclosed to OpenAI Oct 2024, write-up Jan 2025) and the Microsoft Copilot Reprompt attack (Jan 2026, <a class="glossary-link" href="../glossary.html#term-cve">CVE</a>-2026-24307). Microsoft patched Reprompt after disclosure. ZombAI's finder, Johann Rehberger, presented it at Black Hat Europe 2024; in 2026 he wrote that changes OpenAI made to its url_safe URL checks around August 2025 "mitigated the attacks shown at BlackHat", and that the mitigation "is about the data exfiltration channel", not prompt injection.
     </p>
     <div class="inc-stats">
       <div class="inc-stat"><strong>36</strong> studies and real-world incidents analysed</div>
@@ -433,22 +433,22 @@
       <div class="step-num">03</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">LLM queried for connected apps, available tools, and stored user memories - invisibly</div>
+          <div class="step-title">Promptware can query the LLM about its own context after compromise; the Calendar attack has no such stage</div>
           <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1082/" target="_blank" rel="noopener">T1082 - System Information Discovery</a>
         </div>
         <p class="step-desc">
-          Following jailbreak, the injected prompt queries Gemini for its available tool inventory: connected agents (Google Calendar, Google Home, Gmail, Meet), installed mobile applications (Zoom, browser), and the user's stored memories and calendar data. </p>
-        <p class="step-desc">Unlike classical malware reconnaissance, which precedes initial access, promptware recon occurs after context poisoning, because the LLM's tool inventory is only enumerable once the assistant is under attacker control. The enumeration results feed back into the attacker's context silently; nothing is displayed to the victim.
+          The Calendar attack has no reconnaissance stage. The kill chain paper says "No reconnaissance stage is observed in this attack", and the paper's authors write in their essay that "C2 and reconnaissance weren't demonstrated in this attack." The prompt in its Zoom variant carried a fixed meeting link and the trigger words, written in advance. </p>
+        <p class="step-desc">This stage draws on other work. The kill chain paper places promptware reconnaissance after initial access and jailbreaking, carried out by the prompt itself rather than by the attacker: by querying the LLM about its context at inference time, promptware may uncover exposed digital assets such as files, accessible agents such as terminals, persistence channels such as databases, and the malicious actions the application can trigger. The paper names APwT (Cohen, Bitton and Nassi, August 2024), an attack on a GenAI-powered e-commerce chatbot, as the first to explicitly demonstrate this stage. It also says reconnaissance "is not a mandatory step": in many attacks the later steps are fixed when the prompt is written for a specific application.
         </p>
         <div class="step-code">
-          <span class="hl">Information gathered:</span> Active agents (Calendar, Home, Gmail, Meet), installed apps (Zoom, browser), user memories<br>
+          <span class="hl">What it can uncover:</span> Exposed files, accessible agents, persistence channels, actions the application can trigger<br>
           <span class="hl">Key difference from classical recon:</span> Occurs post-initial-access, not before - order is inverted<br>
-          <span class="hl">Visibility to victim:</span> None - responses go to model context, not rendered in the chat UI
+          <span class="hl">Where it was shown:</span> APwT (Aug 2024); none observed in the Calendar attack
         </div>
         <div class="step-tags">
           <span class="stag">Tool Enumeration</span>
           <span class="stag">Context Poisoning</span>
-          <span class="stag">Google Workspace</span>
+          <span class="stag">APwT</span>
           <span class="stag">T1082</span>
         </div>
       </div>
@@ -519,11 +519,11 @@
         </div>
         <p class="step-desc">
           On-device lateral movement: the injected calendar prompt instructs Gemini to invoke a second agent or app. On mobile, Automatic App Invocation allows the assistant to launch Zoom, open a browser URL, or trigger Google Home actions (unlock smart windows, activate boiler), all from a single compromised calendar entry. </p>
-        <p class="step-desc">Off-device worm propagation: in a parallel threat class, a compromised email assistant is instructed to forward the poisoned payload to every address in the victim's contact book, achieving org-wide spread without any further attacker action. Nassi et al. demonstrated both paths; their risk assessment rated 73% of the analysed threats High-Critical.
+        <p class="step-desc">Off-device worm propagation: in the same threat class as the Zoom launch (Automatic App Invocation), Nassi et al. write that their email exfiltration attack could be extended: "attackers could exploit it to propagate a worm that leverages the same mechanism." The worm can take user data and email contacts from compromised emails, send them through the browser to an attacker-controlled server, and then generate new emails to those contacts carrying the same prompt. Nassi et al. demonstrated the on-device path and state the worm as a capability; their risk assessment rated 73% of the analysed threats High-Critical.
         </p>
         <div class="step-code">
           <span class="hl">On-device:</span> Calendar Agent → Google Home (turn on boiler, open windows) or → Zoom (launch and stream)<br>
-          <span class="hl">Off-device worm:</span> Infected email assistant self-replicates payload to entire contact list<br>
+          <span class="hl">Off-device worm (capability):</span> Contacts exfiltrated through the browser, then new emails carrying the same prompt generated for them<br>
           <span class="hl">Physical world impact:</span> Smart home device control demonstrated - digital breach crosses into physical environment
         </div>
         <div class="step-tags">
@@ -582,6 +582,7 @@
         <a class="src-link" href="https://www.lawfaremedia.org/article/the-promptware-kill-chain" target="_blank" rel="noopener">Lawfare</a>
         <a class="src-link" href="https://www.safebreach.com/blog/invitation-is-all-you-need-hacking-gemini/" target="_blank" rel="noopener">SafeBreach - Gemini Attack</a>
         <a class="src-link" href="https://embracethered.com/blog/posts/2025/spaiware-and-chatgpt-command-and-control-via-prompt-injection-zombai/" target="_blank" rel="noopener">Embrace The Red - ZombAI</a>
+        <a class="src-link" href="https://embracethered.com/blog/posts/2026/data-exfiltration-mitigation-paper-by-openai/" target="_blank" rel="noopener">Embrace The Red: OpenAI url_safe mitigations</a>
         <a class="src-link" href="https://www.varonis.com/blog/reprompt" target="_blank" rel="noopener">Varonis - Reprompt</a>
         <a class="src-link" href="https://blackhat.com/html/webcast/02262026.html" target="_blank" rel="noopener">Black Hat Webinar</a>
       </div>
