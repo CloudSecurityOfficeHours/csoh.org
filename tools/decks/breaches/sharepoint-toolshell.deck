@@ -1,0 +1,431 @@
+title: SharePoint ToolShell
+page: breaches/sharepoint-toolshell.html
+as-of: 2026-11-22
+promise: Around July 18, 2025, on-premises SharePoint came under active, unauthenticated exploitation; attackers stole servers' ASP.NET machine keys, and requests forged with them survive patching until the keys are rotated.
+
+== At a glance
+layout: stats
+stat: None | credentials needed | unauthenticated remote code execution
+stat: 2 | CVEs under active exploitation | from around July 18, 2025
+stat: 75-85+ | servers assessed as compromised | roughly, globally, per reporting
+Stolen machine keys outlive the patch, and the attacker stays until they are rotated. SharePoint Online in Microsoft 365 was not affected.
+notes:
+Start with what the page leads with.
+
+No credential was needed. A crafted request to on-premises SharePoint Server gave remote code execution, RCE: running code of the attacker's choosing on someone else's server.
+
+The two vulnerabilities are CVE-2025-53770 and CVE-2025-53771, which came under active exploitation around July 18, 2025. A CVE is a public identifier for a disclosed vulnerability.
+
+Reporting placed compromises at roughly 75 to 85 or more servers globally. Keep the word roughly, and the words assessed as compromised.
+
+The point the page stresses has no number. Stolen machine keys outlive the patch: an attacker holding them can return through requests indistinguishable from normal traffic, and stays until the keys are rotated. SharePoint Online in Microsoft 365 was not affected.
+
+== What happened, and when
+layout: timeline
+event: Around July 18, 2025 | CVE-2025-53770 and CVE-2025-53771 come under active exploitation
+event: Within days | A public advisory, then broad opportunistic scanning
+Exploitation was underway before advisories landed. Microsoft attributed some activity to Storm-2603, which went on to deploy Warlock ransomware; the page gives no date for that. Spacing is not to scale.
+notes:
+The page gives one date, and the timeline shows only that date and the sequence the page describes.
+
+Around July 18, 2025, CVE-2025-53770 and CVE-2025-53771 came under active exploitation against on-premises Microsoft SharePoint Servers. The page says exploitation was underway before advisories landed, and that ToolShell went from active exploitation to public advisory to broad opportunistic scanning within days.
+
+In outline: a crafted HTTP POST to ToolPane.aspx gave unauthenticated remote code execution, attackers dropped a web shell, typically spinstall0.aspx, and then they stole the server's ASP.NET machine keys and used them to forge requests SharePoint accepts as legitimate.
+
+Microsoft attributed some of the activity to Storm-2603, assessed with moderate confidence as China-based, which went on to deploy Warlock ransomware. The page gives no date for the ransomware. The markers are evenly spaced, so read them as order only.
+
+== Who says what, and how sure
+layout: table
+row: Claim | Who | How sure
+row: Some activity was Storm-2603 | Microsoft | Some, not all
+row: Storm-2603 is China-based | Microsoft | Moderate confidence
+row: Warlock deployed through this access | Microsoft observed it | By the Storm-2603 cluster
+row: 75-85+ servers assessed as compromised | Unnamed reporting | Roughly
+row: A permanent backdoor | Multiple analyses | Fair, the page says, until keys rotate
+The page asks that Microsoft's confidence language be preserved.
+notes:
+The page is careful about who says what, and this slide keeps that.
+
+Microsoft attributed some of the exploitation to Storm-2603, and tracks part of the activity under that name. It assesses Storm-2603 with moderate confidence as China-based. The page says that confidence language is doing real work and should be preserved rather than flattened into a claim. Microsoft also observed Warlock ransomware deployed through this access, and the page says that cluster went on to deploy it.
+
+Multiple actors moved on these CVEs, which the page calls the normal pattern once a reliable unauthenticated exploit for widely deployed software becomes known. So Storm-2603 is part of the activity, not all of it.
+
+Reporting placed compromises at roughly 75 to 85 or more servers globally. The page does not say who counted.
+
+Multiple analyses described the result as a permanent backdoor. The page calls the phrasing fair, with its condition attached: until the machine keys are rotated.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | One POST to a settings page | T1190
+step: 02 | Persistence | A web shell in layouts | T1505.003
+step: 03 | Credential Access | Machine keys extracted | T1552.004
+step: 04 | Stealth | Forged __VIEWSTATE | T1606
+step: 05 | Lateral Movement | Sits next to everything | T1078.002
+step: 06 | Impact | Warlock ransomware | T1486
+Arrows follow the page's stage order. Stage 06 covers the cluster Microsoft tracks as Storm-2603.
+notes:
+Here is the whole chain on one slide: the page's six stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is initial access: one crafted HTTP POST to ToolPane.aspx, a web part settings page, gave unauthenticated remote code execution. Stage 02 is persistence, a web shell in SharePoint's layouts folder. Stage 03 is credential access: the attackers extracted the ASP.NET machine keys. Stage 04, which the page files under Stealth, is the forged __VIEWSTATE requests those keys allow. Stage 05, under Lateral Movement, is about where on-premises SharePoint sits: domain-joined, rich in service accounts, and full of documents. Stage 06 is impact: Microsoft attributed some of the exploitation to Storm-2603, which went on to deploy Warlock ransomware.
+
+Read the arrows as the page's stage order. The next slides take each stage in turn.
+
+== One POST to ToolPane.aspx ran code, no credential needed
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1190 | Exploit Public-Facing Application
+fact: Endpoint | ToolPane.aspx, normally used to manage web part settings
+fact: Bug class | deserialization of untrusted data
+fact: Exposure | on-premises SharePoint is very often published to the internet
+fact: Scope | on-premises SharePoint Server only; not SharePoint Online
+No credential and no user interaction: reachability was the entire prerequisite.
+notes:
+Stage 01 is how the attackers got in. The page maps it to T1190, Exploit Public-Facing Application, and lists the CVEs as CVE-2025-53770 and CVE-2025-53771.
+
+A crafted HTTP POST to ToolPane.aspx, an ordinary endpoint for managing web part settings, triggered deserialization of untrusted input and unauthenticated remote code execution. An HTTP POST is a request that sends data to the server, and a web part is a configurable building block on a SharePoint page.
+
+The page calls unsafe deserialization a decades-old bug class and still one of the most reliable paths to code execution in enterprise .NET applications, because deserializing attacker-controlled data means instantiating attacker-chosen types and running their constructors. ToolPane.aspx is a routine part of SharePoint's web part configuration machinery that most administrators would never think of as security-relevant.
+
+No authentication was required, so the prerequisite was simply network reachability. On-premises SharePoint is very often published to the internet precisely so that remote staff and partners can use it. SharePoint Online was not affected.
+
+The next slide explains deserialization in general terms.
+
+== What deserializing untrusted data can do
+layout: background
+source: OWASP Deserialization Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+Serialization turns an object into data; deserialization rebuilds the object from it. OWASP says attacks on deserializers have allowed denial of service, access control attacks or remote code execution.
+
+In .NET, a type check after deserialization comes too late.
+notes:
+Background, from OWASP's Deserialization Cheat Sheet, in general terms.
+
+Serialization is the process of turning an object into a data format that can be restored later. Deserialization is the reverse: taking data structured in some format and rebuilding it into an object. Today JSON is the most popular format, and before it XML; many languages also have native serialization formats with more features.
+
+OWASP says those features can sometimes be repurposed for malicious effect when they operate on untrusted data, and that attacks against deserializers have been found to allow denial of service, access control attacks or remote code execution.
+
+For .NET, OWASP notes that a deserializer can only instantiate types it knows about, and lists known .NET types that can be abused for remote code execution. It warns that checking an object's type after deserialization is too late, because execution may already have occurred.
+
+== A web shell in the layouts folder made one request a foothold
+layout: stage
+stage: 02
+phase: Persistence
+technique: T1505.003 | Server Software Component: Web Shell
+fact: Artifact | web shells including spinstall0.aspx
+fact: Location | the layouts folder, full of legitimate .aspx files
+fact: Capability | persistent command execution and staging of further malware
+fact: The trap | deleting it feels like remediation, and is not
+Removing the shell will not affect what the attacker has usually already taken.
+notes:
+Stage 02 is persistence. The page maps it to T1505.003, Server Software Component: Web Shell.
+
+Attackers planted web shells such as spinstall0.aspx in SharePoint's layouts directory, giving persistent command execution and a stage for further payloads. An .aspx file is an ASP.NET web page. The layouts folder legitimately contains many of them, so one more does not stand out to a human browsing the directory. The observed shells fetched and ran further malware from attacker infrastructure, converting a single exploited request into an interactive foothold on the server.
+
+This is the artifact most defenders went looking for once the advisories landed. The page warns that finding and deleting it feels like resolution, and that this is exactly the trap the next step sets: by the time the shell is found, the attacker has usually already taken something that removing it will not affect.
+
+The next slide explains web shells in general terms.
+
+== What ATT&CK calls a web shell
+layout: background
+source: MITRE ATT&CK T1505.003 | https://attack.mitre.org/techniques/T1505/003/
+A web shell is a web script placed on an openly accessible web server, letting an adversary use the server as a gateway into a network. It may provide functions to execute, or a command line on the host.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files web shells under Server Software Component, a Persistence technique. Adversaries may backdoor web servers with web shells to establish persistent access to systems.
+
+A web shell is a web script that is placed on an openly accessible web server, to allow an adversary to access the web server as a gateway into a network. It may provide a set of functions to execute, or a command-line interface on the system that hosts the web server.
+
+Besides the server-side script, ATT&CK says, a web shell may have a client interface program that is used to talk to the web server.
+
+The page maps its stage 02 to this technique.
+
+== The attackers extracted the server's ASP.NET machine keys
+layout: stage
+stage: 03
+phase: Credential Access
+technique: T1552.004 | Unsecured Credentials: Private Keys
+fact: Stolen | ASP.NET ValidationKey and DecryptionKey
+fact: Purpose | signing and encrypting __VIEWSTATE, trusted client-side state
+fact: Effect of theft | the ability to produce state the application accepts as its own
+fact: Why forgotten | rarely rotated, inventoried or thought of as credentials
+The page calls the keys the server's identity to itself.
+notes:
+Stage 03 is the move the page says elevates ToolShell above a typical web application compromise. The page maps it to T1552.004, Unsecured Credentials: Private Keys.
+
+The attackers extracted the ASP.NET machine keys, the ValidationKey and DecryptionKey, from the compromised server. ASP.NET uses them to sign and encrypt __VIEWSTATE, the mechanism by which the framework trusts state that round-trips through the client, the user's browser. Whoever holds those keys can produce state the application will accept as its own.
+
+The page calls them the server's identity to itself. Unlike a password, nobody thinks of them as a credential with a rotation policy. Most administrators have never touched them, and many do not know they exist.
+
+The page reads this alongside Storm-0558, which has its own kill chain on csoh.org, and calls the shared lesson stark: theft of signing material converts a bounded intrusion into indefinite trusted access. That comes back after the stages.
+
+The next slide explains view state and machine keys in general terms.
+
+== What ASP.NET view state and machine keys are
+layout: background
+source: Microsoft Learn, ASP.NET View State Overview | https://learn.microsoft.com/en-us/previous-versions/aspnet/bb386448(v=vs.100)
+credit: Also from machineKey Element (ASP.NET Settings Schema) (learn.microsoft.com)
+View state carries a page's values between round trips in a hidden field. ASP.NET adds a keyed hash, rechecks it on postback, and raises an exception on a mismatch. The machineKey element configures the keys.
+notes:
+Background, from Microsoft Learn's ASP.NET documentation, in general terms.
+
+A web application is stateless: a new instance of the page class is created for every request. View state is how the ASP.NET page framework preserves page and control values between round trips. When the page is rendered, those values are serialized into base64-encoded strings and put in a hidden field or fields in the page.
+
+Microsoft's security note says it is easy for a malicious user to see and modify the contents of a hidden field. So by default ASP.NET creates a hash of the view state data with a key and adds it to the encoded data. When the page is posted back, the framework recomputes the hash and compares the two; if they do not match, it raises an exception indicating the view state might be invalid. View state can also be encrypted.
+
+The machineKey element configures those keys. The validationKey is used to validate data, and the decryptionKey to encrypt and decrypt forms-authentication data, and view state when view state is encrypted.
+
+Also from machineKey Element (ASP.NET Settings Schema): https://learn.microsoft.com/en-us/previous-versions/dotnet/netframework-4.0/w8h3skw9(v=vs.100)
+
+== Forged __VIEWSTATE signed with the stolen keys passed as legitimate
+layout: stage
+stage: 04
+phase: Stealth
+technique: T1606 | Forge Web Credentials
+technique: T1550 | Use Alternate Authentication Material
+fact: Technique | forged __VIEWSTATE payloads signed with the stolen keys
+fact: Application's view | a correctly signed, entirely legitimate request
+fact: Result | authenticated command execution that survives patching
+fact: Recovery needs | rotating the machine keys, then restarting IIS
+Until the keys are rotated, log review will not separate this from legitimate use.
+notes:
+Stage 04 is what the stolen keys buy. The page files it under Stealth and maps it to T1606, Forge Web Credentials, and T1550, Use Alternate Authentication Material.
+
+With the keys, attackers forged __VIEWSTATE payloads that SharePoint accepted as legitimate, giving authenticated command execution that survives patching. To the application, a forged __VIEWSTATE signed with the real keys is a correctly signed request, and SharePoint validates it exactly as it validates its own. The page calls this the most important operational fact about ToolShell, and the one most likely to be missed during response.
+
+Multiple analyses described the result as a permanent backdoor. The page calls the phrasing fair, with a condition: until the machine keys are rotated, the attacker can return through traffic that is cryptographically indistinguishable from legitimate use, and no amount of log review will separate the two.
+
+Recovery requires rotating the machine keys, then restarting IIS. IIS, Internet Information Services, is Microsoft's web server.
+
+== What patching, shell removal and key rotation each do
+layout: compare
+col: Patching | Closes the entry path | Does nothing about the copied key
+col: Removing the web shell | Deletes the artifact | Leaves the capability
+col: Rotating keys, then restarting IIS | Required for recovery | Restarting IIS makes the new keys take effect
+The page says everything else in a response is undone if key rotation is skipped.
+notes:
+The page lines up three response steps against what each one does.
+
+Applying the patch closes the door the attacker came through, and does nothing about the key they copied on the way in. Removing the web shell deletes the artifact and leaves the capability.
+
+Recovery needs the third step: rotate the machine keys, then restart IIS so the new keys take effect. The page calls this the most important instruction on the page, and says everything else in a response is undone if it is skipped, because forged __VIEWSTATE traffic is cryptographically valid and will not be found in logs.
+
+Stage 06 comes back to what can happen when an organization takes the first two steps and not the third.
+
+== SharePoint is domain-joined, rich in service accounts and full of documents
+layout: stage
+stage: 05
+phase: Lateral Movement
+technique: T1078.002 | Valid Accounts: Domain Accounts
+technique: T1213.002 | Data from Information Repositories: Sharepoint
+fact: Position | domain-joined; service accounts often hold excess privilege
+fact: Content | network documentation, pasted credentials, contracts, HR files
+fact: Scale | roughly 75-85+ servers globally assessed as compromised
+Those hit tend to have kept SharePoint on-premises for regulatory or residency reasons.
+notes:
+Stage 05 is about where the server sits. The page files it under Lateral Movement and maps it to T1078.002, Valid Accounts: Domain Accounts, and T1213.002, Data from Information Repositories: Sharepoint.
+
+On-premises SharePoint is rarely isolated, the page says. It is domain-joined, and it runs under service accounts that frequently hold more Active Directory privilege than anyone intended. Active Directory is Microsoft's directory of users, computers and permissions in a Windows network, and a service account is an account an application runs under rather than a person. The server stores the corpus an intruder most wants next: network documentation, credentials pasted into pages, contracts, HR files and project material.
+
+Reporting placed compromises at roughly 75 to 85 or more servers globally, which the page calls a small number for a mass-exploitation event, reflecting both the on-premises footprint and the targeting. The organizations hit tend to be the ones that kept SharePoint on-premises for regulatory or data-residency reasons, which correlates with holding exactly the material worth stealing.
+
+The page describes the server's position and contents here. It gives no account of a particular intrusion moving on from SharePoint into the domain.
+
+== Storm-2603, per Microsoft, was behind some exploitation and deployed Warlock ransomware
+layout: stage
+stage: 06
+phase: Impact
+technique: T1486 | Data Encrypted for Impact
+fact: Attributed cluster | Storm-2603, China-based per Microsoft, with moderate confidence
+fact: Payload | Warlock ransomware
+fact: Multiple actors | typical once a reliable unauthenticated exploit is public
+fact: Dangerous sequence | patch, delete the shell, skip key rotation
+Without rotation, an organization could be encrypted weeks later, with no idea how.
+notes:
+Stage 06 is the impact. The page maps it to T1486, Data Encrypted for Impact. Ransomware is malware that encrypts a victim's data and demands payment to restore it.
+
+Multiple actors moved on these CVEs, which the page calls the normal pattern once a reliable unauthenticated exploit for widely deployed software becomes known. Microsoft tracks part of the activity as Storm-2603, assessed with moderate confidence to be China-based. The page asks you to note that confidence language, which is doing real work, and to preserve it rather than flatten it into a claim. That cluster went on to deploy Warlock ransomware, which Microsoft observed deployed through this access.
+
+The page asks you to sit with the combination: an unauthenticated internet-facing remote code execution, a persistence mechanism that survives patching, and a ransomware payload at the end. An organization that patched promptly, removed the web shell and did not rotate its machine keys could be encrypted weeks later, and have no idea how the actor got back in.
+
+== Stolen signing material outlives the fix
+layout: text
+The page reads ToolShell alongside Storm-0558: theft of signing material converts a bounded intrusion into indefinite trusted access.
+- Machine keys are rarely rotated, inventoried or thought of as credentials.
+- Everything downstream is designed to believe them.
+notes:
+This is the pattern the page draws from the chain.
+
+At stage 03 the page reads ToolShell alongside Storm-0558, and calls the shared lesson stark: theft of signing material converts a bounded intrusion into indefinite trusted access. It is the failure that is hardest to recover from, the page says, because everything downstream is designed to believe it.
+
+Machine keys show why. The page says they are rarely rotated, rarely inventoried and rarely thought of as credentials, and that almost nobody tracks them, which is why stealing them works so well.
+
+In its defenses, the page says the Storm-0558 chain makes the same argument from the cloud side. Storm-0558 has its own kill chain on csoh.org, linked at the end of this deck.
+
+== Six defenses against six stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: Rotate machine keys, then restart IIS | 03 | 04 | 06
+row: Off the public internet | 01
+row: Hunt from the start of the window | 01 | 02
+row: Limit egress and the service account | 02 | 05
+row: Inventory signing material | 03
+row: Emergency patch path in hours | -
+Key rotation reaches stage 06 through the page's own scenario of skipped rotation. The emergency patch path names no stage.
+notes:
+This matrix sets the page's six defenses against the six stages. A cell is marked only where the page's own words tie that defense to that stage.
+
+Rotating the machine keys answers stage 03, since the page says to assume the ValidationKey and DecryptionKey are stolen, and stage 04, where the page names it as required for recovery from forged __VIEWSTATE. It reaches stage 06 through the page's own scenario: an organization that patched and removed the web shell but did not rotate its keys could be encrypted weeks later.
+
+Getting servers off the public internet answers stage 01, where reachability was the entire prerequisite. Hunting from the start of the window answers stage 01 through IIS logs of POST requests to ToolPane.aspx, and stage 02 through unexpected .aspx files such as spinstall0.aspx. Default-deny egress breaks stage 02's payload fetching, in the page's words, and auditing the service account answers stage 05. Inventorying signing material answers stage 03's forgotten keys.
+
+The emergency patch path names no stage. Its own words are about speed: active exploitation to public advisory to broad opportunistic scanning within days.
+
+== Rotate the keys, and inventory signing material
+layout: compare
+col: Rotate machine keys (03, 04, 06) | If the server was exposed in the exploitation window, assume the keys stolen | Rotate them, then restart IIS so the new keys take effect | Patching alone leaves the attacker inside
+col: Inventory signing material (03) | ASP.NET machine keys, SAML signing certificates, JWT signing keys, API signing secrets | Each with an owner, a rotation interval and a tested rotation procedure
+The page calls key rotation its most important instruction.
+notes:
+Two defenses answer the stolen keys.
+
+First, rotate the machine keys, then restart IIS. The page calls this the most important instruction on the page. If a SharePoint server was exposed during the exploitation window, assume the ValidationKey and DecryptionKey are stolen, rotate them, and restart IIS so the new keys take effect. Patching alone leaves the attacker inside, and everything else in the response is undone if this step is skipped, because forged __VIEWSTATE traffic is cryptographically valid and will not be found in logs.
+
+Second, inventory cryptographic material as credentials with owners and rotation schedules. Almost nobody tracks machine keys, which is why stealing them works so well. Build an inventory of signing and encryption material across the estate: ASP.NET machine keys, SAML signing certificates, JWT signing keys and API signing secrets, each with an owner, a rotation interval and a tested rotation procedure. SAML, the Security Assertion Markup Language, and JWT, the JSON Web Token, are formats for signed identity data.
+
+== Take SharePoint off the internet, and limit what it can reach
+layout: compare
+col: Off the public internet (01) | Reachability was the entire prerequisite | Put SharePoint behind a VPN or identity-aware proxy | Or move to SharePoint Online, which this vulnerability did not affect
+col: Egress, service account (02, 05) | Default-deny egress from the host breaks payload fetching | Audit the service account's Active Directory privilege | Apply least privilege; tier administrative accounts
+Surplus service account privilege turns a web compromise into a domain problem, the page says.
+notes:
+Two defenses limit who can reach the server, and what the server can reach.
+
+First, get on-premises collaboration servers off the public internet. The vulnerability was unauthenticated, so reachability was the entire prerequisite. Put SharePoint behind a VPN or an identity-aware proxy, or move to SharePoint Online, which this vulnerability did not affect. An identity-aware proxy checks who is asking before a request reaches the application. The page reads the Microsoft 365 exclusion as a statement about where the maintenance burden lands: someone has to patch it within hours, and it does not have to be you.
+
+Second, constrain what the server can do outbound and what its service account can reach. Web shells fetched further payloads from attacker infrastructure, so default-deny egress from the SharePoint host breaks that stage. Egress is outbound traffic, and default-deny blocks every destination not explicitly allowed. Then audit the service account: the page says SharePoint service accounts routinely accumulate Active Directory privilege far past what the application needs. Apply least privilege and tier your administrative accounts.
+
+== Hunt from the start of the exploitation window
+layout: table
+row: Where | What to look for
+row: Layouts folder | Unexpected .aspx files, including spinstall0.aspx
+row: IIS logs | POST requests to ToolPane.aspx
+row: SharePoint worker process | Unusual child processes it spawns
+Absence of a web shell is not absence of compromise: the keys may already be gone, and forged __VIEWSTATE traffic will not show in logs.
+notes:
+Assume compromise from the start of the exploitation window, and hunt accordingly. The page says exploitation was underway before advisories landed.
+
+It names three places to look. Search the layouts folder for unexpected .aspx files, including spinstall0.aspx. Review IIS logs for POST requests to ToolPane.aspx. And look for unusual child processes spawned by the SharePoint worker process, the process that runs the web application. A child process is a program another process starts.
+
+Keep the page's caveat with these. Absence of a web shell is not absence of compromise, because the keys may already be gone. And the page says forged __VIEWSTATE traffic is cryptographically valid and will not be found in logs, so log review will not separate it from legitimate use.
+
+== An emergency patch path measured in hours
+layout: text
+ToolShell went from active exploitation to public advisory to broad opportunistic scanning within days. The page says any internet-facing enterprise application needs a pre-authorized change path, a named approver and a rehearsed rollback.
+notes:
+The sixth defense names no stage. It is about speed.
+
+ToolShell went from active exploitation to public advisory to broad opportunistic scanning within days. The page says any internet-facing enterprise application needs a pre-authorized change path, a named approver and a rehearsed rollback, so that the decision to patch immediately is not being made for the first time during an active campaign. A rollback is the way back to the previous version when a change breaks something.
+
+The page points to its vulnerability management page for more. It is linked at the end of this deck.
+
+Keep stage 04's limit in mind alongside this one: patching closes the entry path, and does nothing about a key already copied.
+
+== Check your own environment
+layout: checklist
+check: Was a server exposed in the window? Are its keys rotated and IIS restarted?
+check: Is on-premises SharePoint reachable from the internet without a VPN or identity-aware proxy?
+check: Have you searched the layouts folder and IIS logs from the window's start?
+check: Can the SharePoint host reach any destination outbound?
+check: How much Active Directory privilege do your SharePoint service accounts hold?
+check: Does every signing key have an owner, a rotation interval and a tested procedure?
+check: Could you patch an internet-facing system within hours, with a named approver?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether any SharePoint server was exposed during the exploitation window, and if so, whether its machine keys have been rotated and IIS restarted. Ask whether on-premises SharePoint is reachable from the internet without a VPN or identity-aware proxy.
+
+Ask whether anyone has searched the layouts folder for unexpected .aspx files, IIS logs for POST requests to ToolPane.aspx, and the worker process for unusual child processes, from the start of the window. Ask whether the SharePoint host can reach any destination outbound, and how much Active Directory privilege its service accounts hold.
+
+Finally, ask whether every signing key, from ASP.NET machine keys to SAML signing certificates and JWT signing keys, has an owner, a rotation interval and a tested rotation procedure, and whether you could patch an internet-facing system within hours.
+
+== You patched and deleted the web shell. Are you done?
+layout: question
+Your SharePoint server was exposed during the exploitation window. You applied the patch, found spinstall0.aspx in the layouts folder and deleted it, and your logs look clean.
+
+What is still open, and how would you know?
+notes:
+Give the room a minute with this one before moving on.
+
+The scenario is the one the page warns about. Patching closes the entry path, and removing the web shell deletes the artifact. The page says finding and deleting the shell feels like resolution, and calls that a trap.
+
+Ask each person what is still open, and how they would tell, before you show the answer slide. Watch for answers that lean on the clean logs.
+
+== The keys may already be gone
+layout: answer
+Assume the ValidationKey and DecryptionKey are stolen. Rotate them, then restart IIS so the new keys take effect.
+- Forged __VIEWSTATE traffic is cryptographically valid, and will not show in logs.
+- Absence of a web shell is not absence of compromise.
+notes:
+The page's answer is the machine keys.
+
+If a SharePoint server was exposed during the exploitation window, assume the ValidationKey and DecryptionKey are stolen, rotate them, and restart IIS so the new keys take effect. The page calls this its most important instruction.
+
+Clean logs settle nothing here. Forged __VIEWSTATE traffic is cryptographically valid, the page says you will not find it in logs, and no amount of log review will separate it from legitimate use. Absence of a web shell is not absence of compromise, because the keys may already be gone.
+
+Stage 06 gives the stakes: an organization that patched promptly, removed the web shell and did not rotate its machine keys could be encrypted weeks later, and have no idea how the actor got back in.
+
+== Which of your signing keys has no owner?
+layout: question
+The page says almost nobody tracks machine keys, which is why stealing them works so well.
+
+Name one signing or encryption key in your estate with no owner, no rotation interval or no tested rotation procedure.
+notes:
+This question comes from the page's inventory defense and from the pattern it draws with Storm-0558.
+
+The page says machine keys are rarely rotated, rarely inventoried and rarely thought of as credentials, and that theft of signing material converts a bounded intrusion into indefinite trusted access.
+
+Ask each person to name one specific key from their own environment before you show the answer slide. Machine keys are one example; the page's list goes wider.
+
+== Inventory signing material as credentials
+layout: answer
+The page asks for an inventory of signing and encryption material, each with an owner, a rotation interval and a tested rotation procedure.
+- ASP.NET machine keys and SAML signing certificates
+- JWT signing keys and API signing secrets
+notes:
+The page's answer is to treat cryptographic material as credentials, with owners and rotation schedules.
+
+Build an inventory of signing and encryption material across the estate: ASP.NET machine keys, SAML signing certificates, JWT signing keys and API signing secrets. Give each one an owner, a rotation interval and a tested rotation procedure.
+
+The page says the Storm-0558 chain makes the same argument from the cloud side.
+
+Bring the group's examples back to the three things the page says each key needs: an owner, a rotation interval and a tested rotation procedure.
+
+== Sources
+layout: links
+link: Bitsight, ToolShell threat brief | https://www.bitsight.com/blog/toolshell-threat-brief-sharepoint-rce-vulnerabilities-cve-2025-53770-53771-explained
+link: Fastly, ToolShell RCE analysis | https://www.fastly.com/blog/toolshell-remote-code-execution-sharepoint-cve-2025-53770-cve-2025-53771
+link: Censys, July 21 advisory and exposure data | https://censys.com/advisory/cve-2025-53770/
+link: Logpoint, when SharePoint becomes a gateway to RCE | https://logpoint.com/en/blog/toolshell-when-sharepoint-becomes-a-gateway-to-rce
+link: MITRE ATT&CK T1606 | https://attack.mitre.org/techniques/T1606/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Bitsight's ToolShell threat brief and Fastly's analysis of the remote code execution are the two the page also links from its header. Censys's advisory of July 21 carries exposure data. Logpoint describes SharePoint becoming a gateway to remote code execution. The MITRE page defines T1606, Forge Web Credentials, one of the two techniques the page maps to stage 04.
+
+The background slides name their own sources: OWASP, MITRE ATT&CK and Microsoft Learn.
+
+== Related kill chain and defense topics
+layout: links
+link: Storm-0558 | breaches/storm-0558.html
+link: Vulnerability management | vulnerability-management.html
+link: Network security | network-security.html
+link: Detection engineering | detection-engineering.html
+link: Incident response | incident-response.html
+The page reads ToolShell alongside Storm-0558: theft of signing material is the failure hardest to recover from.
+notes:
+One related kill chain on csoh.org, and the page's related defense topics.
+
+At stage 03 the page reads ToolShell alongside Storm-0558, with the shared lesson that theft of signing material converts a bounded intrusion into indefinite trusted access. Its inventory defense says the Storm-0558 chain makes the same argument from the cloud side.
+
+The four defense topics the page links are vulnerability management, network security, detection engineering and incident response. The emergency patch path defense also points to the vulnerability management page.
