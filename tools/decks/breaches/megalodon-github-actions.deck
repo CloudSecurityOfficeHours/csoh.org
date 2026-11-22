@@ -1,0 +1,495 @@
+title: Megalodon / GitHub Actions
+page: breaches/megalodon-github-actions.html
+as-of: 2026-11-22
+promise: On May 18, 2026, an actor pushed 5,718 commits that added or replaced secret-stealing workflows in 5,561 GitHub repositories; per Hudson Rock, 331 of 978 usernames tied to them matched infostealer-infected machines.
+
+== At a glance
+layout: stats
+stat: 5,718 | commits pushed | into 5,561 repositories on May 18, 2026, in one six-hour window
+stat: 331 | of 978 repo owners matched | known infostealer-infected machines, per Hudson Rock
+stat: 2 | payload variants | one loud on every push, one dormant until triggered
+Downstream, poisoned Tiledesk npm releases were published May 19 to 21. SafeDep identified the campaign, which researchers named Megalodon.
+notes:
+Start with the three figures the page leads with, and with who stands behind them.
+
+On May 18, 2026, between 11:36 and 17:48 UTC, an actor pushed 5,718 commits into 5,561 distinct GitHub repositories. Every commit added or replaced a GitHub Actions workflow carrying a payload that swept the runner for secrets. SafeDep identified the campaign, which researchers named Megalodon.
+
+The second figure is Hudson Rock's. In its follow-up, 331 of 978 unique usernames tied to affected repositories, over a third, matched machines already infected by infostealers. Keep the word matched, and keep Hudson Rock's name on the figure. An infostealer is commodity malware that scrapes saved credentials, session cookies and tokens off an infected machine.
+
+The third figure is the two payload variants: one loud on every push, one dormant until triggered. Stage 04 takes them in turn.
+
+Downstream, poisoned versions of a Tiledesk npm package were published May 19 to 21. npm is the default package registry for JavaScript and Node.js.
+
+== What happened, and when
+layout: timeline
+event: May 18, 2026, 11:36 to 17:48 UTC | An actor pushes 5,718 commits into 5,561 repositories
+event: May 19 to 21 | Poisoned Tiledesk npm releases are published
+event: May 23 | Hudson Rock publishes its infostealer analysis
+event: May 28 | A CISA alert covers Nx Console and GitHub repository compromises
+SafeDep identified the campaign; the page gives no date for that. Spacing is not to scale.
+notes:
+The page gives four dates, and the timeline shows only those.
+
+The commits went in on May 18, 2026, between 11:36 and 17:48 UTC: 5,718 of them into 5,561 repositories in one six-hour window. Poisoned versions of @tiledesk/tiledesk-server reached npm between May 19 and 21. Stage 08 explains how that happened without the attacker touching the npm account.
+
+Hudson Rock's analysis, which cross-referenced the usernames behind affected repositories against its infostealer database, was published on May 23. CISA's alert of May 28, 2026 covers Nx Console and GitHub repository compromises. The page calls Nx Console a related compromise and says nothing more about it.
+
+SafeDep identified the campaign, and the page does not say when. The markers are evenly spaced, so read them as order only.
+
+== Who found what, and who responded
+layout: table
+row: Who | What the page reports
+row: SafeDep | Identified the campaign, which researchers named Megalodon
+row: Hudson Rock | 331 of 978 unique usernames matched known infected computers; published May 23
+row: CISA | Alert of May 28, 2026 covering Nx Console and GitHub repository compromises
+row: npm | In the aftermath, invalidated granular write tokens that bypassed 2FA
+The page's primary sources are The Hacker News, SecurityWeek, CSO Online and CISA.
+notes:
+Four organizations appear on the page, each for something different.
+
+SafeDep identified the campaign, which researchers named Megalodon. Hudson Rock supplied the origin story in a follow-up published May 23, 2026. It cross-referenced the usernames behind the affected repositories against its infostealer database, and found that 331 of 978, over 33%, were direct matches to computers known to be infected. The page labels that figure a correlation.
+
+CISA's alert of May 28, 2026 covers Nx Console and GitHub repository compromises. In the aftermath, npm invalidated granular access tokens that carried write permission while bypassing two-factor authentication, and pushed maintainers toward Trusted Publishing. 2FA is two-factor authentication: a second proof of identity on top of a password.
+
+The page's primary sources are The Hacker News, SecurityWeek, CSO Online and CISA, plus MITRE's page for T1552.005. They are listed at the end of the deck.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Resource Development | Infostealer logs | T1555.003
+step: 02 | Initial Access | Throwaway accounts | T1078
+step: 03 | Stealth | Forged bot authors | T1036
+step: 04 | Persistence | Loud and dormant workflows | T1053
+step: 05 | Execution | Base64 bash in the runner | T1059.004
+step: 06 | Credential Access | Metadata and OIDC tokens | T1552.005
+step: 07 | Exfiltration | Straight to C2 | T1041
+step: 08 | Impact | Poisoned npm releases | T1195.002
+Arrows follow the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's eight stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is where the GitHub credentials came from: infostealer logs harvested off developer machines. Stage 02 is the push itself, through throwaway accounts using the stolen credentials as write access. Stage 03 is the disguise, commit authors forged as CI bots; the page files it under Stealth. Stage 04 is persistence through two workflow variants, one loud and one dormant. Stage 05 is execution: a base64-encoded bash payload running in the runner. Stage 06 is the credential sweep, cloud metadata services and Actions OIDC tokens among it. Stage 07 is exfiltration straight from the runner to a command-and-control server. Stage 08 is the impact: poisoned source published to npm by its own maintainer.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== GitHub credentials came from infostealer logs, not a GitHub flaw
+layout: stage
+stage: 01
+phase: Resource Development
+technique: T1555.003 | Credentials from Web Browsers
+technique: T1589.001 | Gather Victim Identity Information: Credentials
+fact: Source | commodity infostealer logs from compromised developer machines
+fact: Correlation | 331 of 978 unique usernames matched known infected computers
+fact: Analysis by | Hudson Rock, published May 23, 2026
+fact: Not involved | any GitHub platform vulnerability
+One developer profile holds repository, registry and cloud credentials together.
+notes:
+Stage 01 is where the access came from. The page maps it to T1555.003, Credentials from Web Browsers, a sub-technique of Credentials from Password Stores, and to T1589.001, Gather Victim Identity Information: Credentials.
+
+Hudson Rock cross-referenced the usernames behind the affected repositories against its infostealer database, and found that 331 of 978, more than a third, were direct matches to computers known to be infected. The page calls that the whole initial access story, and says no GitHub platform vulnerability was involved.
+
+The page describes the market. Commodity stealers scrape saved credentials, session cookies and tokens from developer laptops, the logs are sold in bulk on criminal markets, and somebody bought enough of them to run a campaign. The page says the same economy sits under UNC5537 / Snowflake and under the vendor endpoint that started the Vercel / Context.ai chain. Both have their own kill chains on csoh.org.
+
+Developer machines are unusually valuable in that market, because a developer's browser profile and credential helper hold keys to repositories, registries and cloud accounts all at once.
+
+The next slide explains, in general terms, how ATT&CK describes taking credentials from web browsers.
+
+== What ATT&CK calls credentials from web browsers
+layout: background
+source: MITRE ATT&CK T1555.003 | https://attack.mitre.org/techniques/T1555/003/
+Web browsers commonly save credentials, such as website usernames and passwords, so they need not be typed again. They typically keep them encrypted in a credential store, and ATT&CK says methods exist to extract them in plaintext.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Credentials from Password Stores: Credentials from Web Browsers. Adversaries may acquire credentials from web browsers by reading files specific to the target browser. Browsers commonly save credentials such as website usernames and passwords so that they do not need to be entered manually in the future. They typically store them in an encrypted format within a credential store, but methods exist to extract plaintext credentials from them.
+
+Adversaries may also search browser process memory for patterns that commonly match credentials. After acquiring credentials from web browsers, ATT&CK says, adversaries may try to recycle them across different systems or accounts in order to expand access.
+
+The page maps its stage 01 to this technique.
+
+== Throwaway accounts pushed, using stolen credentials as write access
+layout: stage
+stage: 02
+phase: Initial Access
+technique: T1078 | Valid Accounts
+fact: Account pattern | random eight-character usernames, e.g. rkb8el9r, bhlru9nr
+fact: Authorization | legitimate write access via stolen credentials
+fact: Detection opportunity | first-time contributor, high-entropy username, direct push to default branch
+The credentials were valid, the write permission was real, and GitHub had no reason to refuse the push.
+notes:
+Stage 02 is the push. The page maps it to T1078, Valid Accounts.
+
+Pushes came from disposable accounts named with random eight-character strings, such as rkb8el9r, bhlru9nr and lo6wt4t6, and others in the same shape. A high-entropy username is one that looks random, the opposite of a name a person would choose.
+
+The page calls the pattern deliberately cheap, and also the campaign's most machine-detectable artifact. A first-time contributor with a high-entropy username pushing directly to a default branch, it says, is a two-line rule in any repository policy engine. The default branch is the branch a repository treats as its main line.
+
+Nothing was exploited to get here, and the page lists no platform exploit. The credentials were valid, the write permission was real, and GitHub had no reason to refuse the push.
+
+The pushing accounts are one thing and the commits' author names are another. The next stage covers the author names.
+
+== Commits under forged bot names read like routine CI housekeeping
+layout: stage
+stage: 03
+phase: Stealth
+technique: T1036 | Masquerading
+fact: Forged authors | build-bot, auto-ci, ci-bot, pipeline-bot
+fact: Messages | seven variants, all imitating routine CI maintenance
+fact: Why it works | the git author field is attacker-controlled free text
+fact: Control | required commit signature verification
+Anyone skimming a repository's activity feed sees CI bots doing CI things.
+notes:
+Stage 03 is the disguise. The page files it under Stealth and maps it to T1036, Masquerading.
+
+Git lets the author field be set to anything, so the commits arrived looking like the automation every repository already ignores. Four bot names, build-bot, auto-ci, ci-bot and pipeline-bot, and seven maintenance-flavored messages were rotated across 5,718 commits. Two of the forged author addresses account for 2,878 and 2,841 commits respectively. CI is continuous integration: the automation that builds and tests code on every change.
+
+Anyone skimming a repository's activity feed sees CI bots doing CI things.
+
+The page says this is the point in the chain where signed commits stop being a nice-to-have. A signed commit carries a cryptographic signature made with a key the signer holds, which the hosting platform can check. A required signature check does not care what the author field claims, and the page says it would have rejected every one of these pushes. That control comes back in the defenses.
+
+== SysDiag fired on every push and pull request; Optimize-Build lay dormant
+layout: stage
+stage: 04
+phase: Persistence
+technique: T1053 | Scheduled Task/Job
+technique: T1543 | Create or Modify System Process
+fact: Variants | SysDiag, loud; Optimize-Build, dormant
+fact: Evasion | manual dispatch sidesteps GitHub's anti-recursion suppression
+fact: Run history | none for the dormant variant until it is used
+fact: Where to look | diffs under .github/workflows/, not the Actions run list
+The two variants trade immediacy against stealth.
+notes:
+Stage 04 is persistence. The page maps it to T1053, Scheduled Task/Job, and T1543, Create or Modify System Process.
+
+The two variants trade immediacy against stealth. SysDiag added a new workflow that fired on every push and pull request. Optimize-Build replaced an existing workflow and lay dormant behind workflow_dispatch, a manual trigger. The next slide sets them side by side.
+
+The page says the dormant choice also sidesteps GitHub's anti-recursion behavior, which suppresses workflow runs triggered by commits that a workflow itself authored. A manual dispatch is not subject to it.
+
+A repository owner scanning recent Actions runs for something suspicious would find nothing in the dormant case, because the backdoor's whole design is to have no run history until the attacker wants one. So the page says where to look instead: the diffs under .github/workflows/, not the Actions run list.
+
+== Two variants: one loud, one waiting
+layout: compare
+col: SysDiag | Added a new workflow | Triggered on push and pull_request | Collected on the next commit anybody made
+col: Optimize-Build | Replaced an existing workflow | Triggered by workflow_dispatch only | Never ran on its own; waited to be invoked later with a stolen token | Produced no anomalous job history at all
+A backdoor that has not run yet appears nowhere in the run list.
+notes:
+Here are the two variants side by side, in the page's words.
+
+SysDiag added a new workflow triggered on push and pull_request, so it collected on the next commit anybody made.
+
+Optimize-Build replaced an existing workflow and set its trigger to workflow_dispatch only. That means it never ran on its own and produced no anomalous job history at all. It waited to be invoked later with a stolen token. The page does not say whether it was ever invoked.
+
+The caption is the page's own point, from its defenses: a backdoor that has not run yet appears nowhere in the run list. That is why the page tells you to audit workflow file diffs, not just the Actions run history.
+
+The next slide explains, in general terms, what a workflow and its triggers are.
+
+== What a GitHub Actions workflow and its triggers are
+layout: background
+source: How We Use GitHub Actions | https://csoh.org/github-actions.html#what-is-it
+credit: Also from the same page's section on triggers (csoh.org)
+A workflow is a YAML file under .github/workflows/. GitHub runs it when an event the file lists fires, such as a push, a pull request or a manual run, on a fresh virtual machine called a runner.
+notes:
+Background, from the csoh.org GitHub Actions page, in general terms.
+
+GitHub Actions is GitHub's built-in automation runner. You drop a YAML file under .github/workflows/, and GitHub watches your repository for the events you list: a push to main, a new pull request, a cron schedule, a manual button click. When a matching event fires, GitHub spins up a fresh virtual machine, the runner, runs the steps you wrote, and tears it down. YAML is a plain-text format for structured settings.
+
+A workflow file names its triggers in its on: block, then its jobs and the steps in each job. The site's own example runs when a pull request touches HTML, every Monday, and on workflow_dispatch, which that page translates as whenever someone clicks Run workflow.
+
+Also from the same page's section on triggers: https://csoh.org/github-actions.html#anatomy-1
+
+== Base64 bash ran inside the runner, where the job's secrets already were
+layout: stage
+stage: 05
+phase: Execution
+technique: T1059.004 | Command and Scripting Interpreter: Unix Shell
+technique: T1027 | Obfuscated Files or Information
+fact: Payload form | base64-encoded bash embedded in the workflow YAML
+fact: Execution context | the runner, holding every secret the job is entitled to
+fact: Why base64 suffices | it beats a human skimming a diff and simple keyword scans
+fact: Correct framing | injected workflow step equals RCE with production credentials
+The page calls a CI runner a fully privileged machine that happens to be ephemeral.
+notes:
+Stage 05 is execution. The page maps it to T1059.004, Unix Shell, and T1027, Obfuscated Files or Information.
+
+Each workflow carried a base64-encoded bash payload. Base64 is an encoding that writes any data as letters, digits and a few symbols, and anyone can decode it. The page says it is not sophisticated obfuscation, but it is enough: it defeats a human eye scrolling a YAML diff and most naive keyword greps, and the reviewer in this scenario is usually nobody.
+
+Once the runner executes it, the payload inherits the job's entire context: repository secrets, cloud credentials injected for deployment, the workspace, and the network position of the runner inside whatever environment it was built to reach.
+
+The page calls a CI runner a fully privileged machine that happens to be ephemeral. Treating an injected workflow step as anything less than remote code execution with production credentials, it says, understates it. Remote code execution, RCE, means an attacker running code of their choosing on someone else's machine.
+
+== The payload swept three clouds' metadata services and Actions OIDC tokens
+layout: stage
+stage: 06
+phase: Credential Access
+technique: T1552.005 | Cloud Instance Metadata API
+technique: T1552.007 | Container API
+fact: Cloud | AWS credentials, GCP access tokens, Azure metadata credentials
+fact: IMDSv2 | instance role tokens harvested, not bypassed
+fact: Platform | SSH private keys, Docker and Kubernetes configs, Vault tokens
+fact: Highest value | GitHub Actions OIDC tokens, which federate into cloud accounts
+IMDSv2 stops SSRF from elsewhere, not code already running on the host.
+notes:
+Stage 06 is the sweep. The page maps it to T1552.005, Cloud Instance Metadata API, and T1552.007, Container API, both sub-techniques of Unsecured Credentials.
+
+The page says the list reads like a checklist of everything a build environment can be persuaded to give up: AWS credentials and IMDSv2 instance role tokens, Google Cloud access tokens and metadata, Azure instance metadata credentials, SSH private keys, Docker and Kubernetes configuration, Vault tokens, GitLab and Bitbucket tokens, and GitHub Actions OIDC tokens. Alongside them ran more than thirty regular expressions for API keys, PEM blocks and database connection strings. A PEM block is a key or certificate written out as text.
+
+IMDSv2 was harvested, not bypassed. The page explains that IMDSv2 defends against server-side request forgery from a different origin, and does nothing when the attacker is already executing on the instance. Server-side request forgery, SSRF, tricks a server into making a request on the attacker's behalf.
+
+The page calls the OIDC token the highest-value item, because it is the credential that federates into cloud accounts. It is what Mini Shai-Hulud used a week earlier to publish npm packages carrying valid provenance. The page does not say whether any token stolen here was used.
+
+The next slide explains OIDC federation in general terms.
+
+== What OIDC federation does for a CI workflow
+layout: background
+source: AWS IAM User Guide, OIDC federation | https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html
+credit: Also from Create a role for OpenID Connect federation (docs.aws.amazon.com)
+With OIDC federation, an application such as GitHub Actions exchanges a JSON Web Token for temporary AWS credentials mapped to an IAM role. The role's trust policy can limit which repositories or branches may assume it.
+notes:
+Background, from AWS's IAM documentation, in general terms.
+
+AWS strongly recommends not storing AWS credentials long-term in applications outside AWS. Instead, an application such as GitHub Actions can request temporary security credentials when it needs them, through OIDC federation. It receives an authentication token, known as a JSON Web Token, and exchanges it for temporary credentials that map to an IAM role with permissions for specific resources. OIDC is OpenID Connect, an identity layer on top of OAuth 2.0.
+
+For GitHub, AWS calls it best practice to limit which entities can assume the role. A condition in the role's trust policy, on the key token.actions.githubusercontent.com:sub, can limit the role to a specific GitHub organization, repository or branch, and AWS recommends limiting it to a specific set of repositories or branches. If that key is not limited to a specific organization or repository, AWS warns, GitHub Actions from organizations or repositories outside your control can assume the role.
+
+Also from Create a role for OpenID Connect federation: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-idp_oidc.html
+
+== Collected secrets went straight from the runner to C2
+layout: stage
+stage: 07
+phase: Exfiltration
+technique: T1041 | Exfiltration Over C2 Channel
+fact: C2 | 216.126.225[.]129, port 8443
+fact: Egress | hosted runners allow unrestricted egress by default
+fact: Port choice | 8443 reads as ordinary TLS in flow logs
+fact: Contrast | tj-actions needed no egress; secrets went to public build logs
+Both campaigns come back to runners holding secrets they did not need that long.
+notes:
+Stage 07 is exfiltration. The page maps it to T1041, Exfiltration Over C2 Channel. C2 is command and control: the server an attacker uses to direct malware and receive what it collects.
+
+Collected secrets went to a single hard-coded endpoint, 216.126.225[.]129, on port 8443, a port that reads as TLS in a flow log. Hosted GitHub runners have unrestricted outbound network access by default, so nothing stood between the payload and its C2. Egress is outbound traffic, and a flow log records connections without their contents.
+
+The page compares this with tj-actions/changed-files, which dumped secrets into publicly readable build logs and needed no network path at all. The two campaigns bracket the problem, it says, one exploiting egress and one exploiting log visibility, and both come back to the runner holding secrets it did not need for that long. tj-actions/changed-files has its own kill chain on csoh.org.
+
+== Poisoned source reached npm under a legitimate publisher identity
+layout: stage
+stage: 08
+phase: Impact
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: Package | poisoned @tiledesk/tiledesk-server versions, May 19 to 21
+fact: Mechanism | the maintainer published normally from poisoned GitHub source
+fact: npm account | never touched by the attacker
+fact: Consequence | malicious releases carried legitimate publisher identity
+Every downstream control that verifies who published returned a clean answer.
+notes:
+Stage 08 is the impact. The page maps it to T1195.002, Compromise Software Supply Chain.
+
+The page calls this the part that turns a large credential-theft campaign into a supply-chain one, and asks for precision about the mechanism. The attacker did not hijack the Tiledesk npm account. They poisoned the GitHub source, and the maintainer then published from it in the ordinary way. So poisoned versions of @tiledesk/tiledesk-server reached npm between May 19 and 21, carrying entirely legitimate publisher identity, without the attacker ever touching the npm account.
+
+Every downstream control that verifies who published a package returned a clean answer.
+
+In the aftermath npm invalidated granular access tokens that carried write permission while bypassing two-factor authentication, and pushed maintainers toward Trusted Publishing. CISA issued an alert on May 28, 2026 covering this and the related Nx Console compromise.
+
+The next slide explains, in general terms, how ATT&CK describes this technique.
+
+== What ATT&CK calls compromising the software supply chain
+layout: background
+source: MITRE ATT&CK T1195.002 | https://attack.mitre.org/techniques/T1195/002/
+ATT&CK describes manipulating application software before a final consumer receives it. Its examples include manipulating the source code, manipulating the update or distribution mechanism, and replacing compiled releases with a modified version.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this under Supply Chain Compromise: Compromise Software Supply Chain. Adversaries may manipulate application software prior to receipt by a final consumer, for the purpose of data or system compromise. It can take place in a number of ways, including manipulation of the application source code, manipulation of the update or distribution mechanism for that software, or replacing compiled releases with a modified version.
+
+Targeting may be specific to a desired set of victims, or the software may be distributed to a broad set of consumers, with the adversary moving on to further tactics only on specific victims.
+
+The page maps its stage 08 to this technique. There, the page says, the source was poisoned on GitHub and the maintainer published from it in the ordinary way.
+
+== No clever exploit: a credential market and a script
+layout: text
+The page: no clever exploit, but a market for stolen developer credentials and a script that used them at scale.
+- Stage 01: no GitHub vulnerability involved
+- Stage 02: valid credentials, real write permission
+- Stage 08: publisher checks came back clean
+notes:
+This is the pattern the page draws from the whole chain.
+
+In its summary the page says there was no clever exploit anywhere in this chain. There was a market for stolen developer credentials, and a script that used them at scale.
+
+The stages bear that out where the page says so. Stage 01 lists any GitHub platform vulnerability as not involved. At stage 02, the credentials were valid, the write permission was real, and GitHub had no reason to refuse the push. At stage 08, every downstream control that verifies who published a package returned a clean answer, because the maintainer published from poisoned source in the ordinary way.
+
+The page also says, at stage 07, that this campaign and tj-actions/changed-files both come back to the runner holding secrets it did not need for that long.
+
+== Markers and checks the page gives
+layout: table
+row: Where | What the page names
+row: Pushing accounts | random eight-character usernames, e.g. rkb8el9r, bhlru9nr
+row: Commit authors | build-bot, auto-ci, ci-bot, pipeline-bot
+row: Workflows | SysDiag on push and pull_request; Optimize-Build on workflow_dispatch
+row: Network | 216.126.225[.]129 on port 8443
+row: npm | poisoned @tiledesk/tiledesk-server versions, published May 19 to 21, 2026
+The page's detection opportunity: a first-time contributor with a high-entropy username pushing directly to a default branch.
+notes:
+These are the traces the page names, gathered in one place.
+
+The pushing accounts had random eight-character usernames, such as rkb8el9r, bhlru9nr and lo6wt4t6. The commits' author names were forged as build-bot, auto-ci, ci-bot and pipeline-bot, with seven commit messages imitating routine CI maintenance. The workflows were SysDiag, triggered on push and pull_request, and Optimize-Build, triggered by workflow_dispatch only. Collected secrets went to 216.126.225[.]129 on port 8443. Downstream, poisoned @tiledesk/tiledesk-server versions were published to npm between May 19 and 21, 2026.
+
+The page names one detection opportunity: a first-time contributor with a high-entropy username pushing directly to a default branch, which it calls a two-line rule in any repository policy engine.
+
+For the dormant variant, the page says where to look: diffs under .github/workflows/, not the Actions run list.
+
+== Six defenses against eight stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08
+row: Branch protection and signed commits | 02 | 03
+row: Workflows as protected code | 02 | 04
+row: Long-lived cloud keys out of CI | 06
+row: Runner network reach constrained | 07
+row: Developer endpoints as production hosts | 01
+row: Trusted Publishing and provenance | 08
+No defense on the page is tied to stage 05, the base64 payload in the runner.
+notes:
+This matrix sets the page's six defenses against the eight stages. A cell is marked only where the defense's own words name something only that stage has.
+
+Branch protection stops stage 02's direct push to a default branch, and required signature verification makes stage 03's forged author field worthless. Treating workflows as protected code answers stage 04's injected workflows and names its dormant variant, and its alert on a commit from an account that has not contributed before names stage 02's first-time contributor.
+
+Getting long-lived cloud keys out of CI answers stage 06, where the payload took cloud credentials and Actions OIDC tokens. Constraining runner egress answers stage 07's hard-coded IP on port 8443. Treating developer endpoints as production hosts answers stage 01's infostealer infections. Trusted Publishing answers stage 08's poisoned Tiledesk releases.
+
+Column 05 is empty. Two defenses give reasons that touch it: a workflow change is a change to what executes with your production credentials, and the payload's value came from what was sitting in the runner. Neither names the base64 payload or the runner executing it. That gap is the second discussion question.
+
+== Protect the branch and the workflow path
+layout: compare
+col: Branches, signed commits (02, 03) | Required pull request review stops the direct push | Required signature verification makes the forged author field worthless | Turn both on for default branches everywhere
+col: Workflows as protected code (02, 04) | CODEOWNERS: require security review on .github/workflows/ | Alert on commits there from accounts that have not contributed before | Audit workflow file diffs, not just the Actions run history
+The page: a workflow change is a change to what executes with your production credentials, so it deserves stricter review than application code.
+notes:
+Two defenses that answer the push, the disguise and the planted workflows.
+
+First, protect the branch and require signed commits. Every push in this campaign went in directly under a forged author name. Branch protection with required pull request review stops the direct push. Required commit signature verification makes the forged author field worthless, since a signature cannot be faked by typing a different name into git config. Turn both on for default branches everywhere, and make an exception process rather than an exception habit.
+
+Second, treat .github/workflows/ as protected code with its own reviewers. The page says a workflow change deserves stricter review than application code, not looser. Use CODEOWNERS to require security review on that path; a CODEOWNERS file names the people or teams whose review a path needs. Alert on any commit touching it from an account that has not contributed before.
+
+The dormant workflow_dispatch variant proves the corollary, the page says: audit workflow file diffs, not just the Actions run history, because a backdoor that has not run yet appears nowhere in the run list.
+
+== Get cloud keys out of CI; limit runner egress
+layout: compare
+col: Cloud keys out of CI (06) | Replace static cloud keys with OIDC federation | Scope trust to the repository, branch and environment, not a wildcard | Give the assumed role the shortest workable session
+col: Runner network reach (07) | Self-hosted runners in a controlled network, default-deny egress | An allow-list of registries and cloud endpoints | Hosted runners: use the platform's network restriction features | Monitor unusual outbound destinations from build infrastructure
+A stolen OIDC token is dangerous in proportion to how loose its trust condition is.
+notes:
+Two defenses that limit what a running payload can take and where it can send it.
+
+First, get long-lived cloud credentials out of CI entirely. The page says the payload's value came from what was sitting in the runner. Replace static cloud keys with OIDC federation, scope the trust policy tightly to the specific repository, branch and environment rather than a wildcard, and give the assumed role the shortest workable session. A stolen OIDC token is dangerous in proportion to how loose the trust condition on the other side is, and that condition is yours to write.
+
+Second, constrain what a runner can reach on the network. Exfiltration went to one hard-coded IP on port 8443 because hosted runners have unrestricted egress. Self-hosted runners in a controlled network with default-deny egress and an allow-list of registries and cloud endpoints, the page says, turn that step into a failed connection and an alert. Default-deny means blocking every destination not explicitly allowed. Where hosted runners are required, use the platform's network restriction features and monitor for unusual outbound destinations from build infrastructure.
+
+== Developer endpoints and Trusted Publishing
+layout: compare
+col: Developer endpoints (01) | EDR on developer machines; no credential storage in browser profiles | Hardware-backed keys and short-lived tokens instead of long-lived PATs | Monitor infostealer log dumps for your own domains | Phishing-resistant MFA on GitHub
+col: Publishing and provenance (08) | npm Trusted Publishing and SLSA provenance, attested to a specific workflow run | Revoke granular tokens that bypass 2FA | Consumers: pin dependencies by hash
+The page calls infected developer machines the campaign's actual root cause, and says identity checks alone are insufficient when source is compromised before the publish.
+notes:
+Two defenses, one at each end of the chain.
+
+First, take developer endpoints as seriously as production hosts. A third of the affected repository owners were on machines with active infostealer infections, and the page calls that the campaign's actual root cause, an endpoint management problem. Its list: EDR on developer machines, no credential storage in browser profiles, hardware-backed keys and short-lived tokens instead of long-lived PATs, and monitoring of infostealer log dumps for your own domains. Add phishing-resistant MFA on GitHub so a stolen session or password alone is not enough. EDR is endpoint detection and response, and a PAT is a personal access token.
+
+Second, publish from CI with Trusted Publishing, and verify provenance on the way in. Tiledesk's poisoned releases carried valid publisher identity because the source was compromised before the publish, which the page says is exactly why identity checks alone are insufficient. Adopt npm Trusted Publishing and SLSA provenance so releases are attested to a specific workflow run, and revoke granular tokens that bypass 2FA. On the consuming side, pin dependencies by hash so a poisoned release cannot enter your builds silently. Trusted Publishing lets a CI workflow publish through OIDC, with no long-lived token, and SLSA is a framework of build-integrity levels.
+
+== Check your own environment
+layout: checklist
+check: Do default branches require pull request review and signed commits?
+check: Does CODEOWNERS require security review on .github/workflows/?
+check: Would a first-time account's commit to a workflow file raise an alert?
+check: Do you audit workflow file diffs, not just the Actions run history?
+check: Do pipelines hold static cloud keys? How tightly are OIDC trust conditions scoped?
+check: Can your runners reach any destination on the internet?
+check: Do developer machines run EDR? Do you monitor infostealer log dumps for your domains?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether default branches require pull request review and signed commits, and whether exceptions go through a process or have become a habit. Ask whether CODEOWNERS requires security review on .github/workflows/, whether a commit there from an account that has never contributed would raise an alert, and whether anyone reads workflow file diffs rather than only the Actions run history.
+
+Ask whether your pipelines still hold static cloud keys, and how tightly your OIDC trust conditions are scoped to repository, branch and environment. Ask whether your runners can reach any destination on the internet.
+
+Finally, ask whether developer machines run EDR, whether credentials sit in browser profiles, and whether anyone watches infostealer log dumps for your domains. If you publish packages, ask whether you use Trusted Publishing, and whether your builds pin dependencies by hash.
+
+== A backdoor workflow has never run. How would you find it?
+layout: question
+Optimize-Build replaced an existing workflow and ran only on workflow_dispatch, so it produced no anomalous job history at all.
+
+Where would you look, and what would you look for?
+notes:
+Give the room a minute with this one before moving on.
+
+The setting is stage 04. The dormant variant replaced an existing workflow and set its trigger to workflow_dispatch only, so it never ran on its own and produced no anomalous job history. It waited to be invoked later with a stolen token. A repository owner scanning recent Actions runs would find nothing.
+
+Ask each person to name where they would look in their own repositories before you show the answer slide. Watch for answers that start from the Actions run list.
+
+== Read workflow diffs, not the run list
+layout: answer
+The page: audit workflow file diffs, not just the Actions run history, because a backdoor that has not run yet appears nowhere in the run list.
+- Diffs under .github/workflows/
+- Commits there from accounts that have not contributed before
+notes:
+The page's answer is to look at the workflow files themselves.
+
+Audit workflow file diffs, not just the Actions run history, because a backdoor that has not run yet appears nowhere in the run list. Stage 04 names the place: diffs under .github/workflows/.
+
+The page's workflow defense adds two more things. Use CODEOWNERS to require security review on that path, and alert on any commit touching it from an account that has not contributed before. Stage 02's throwaway accounts fit that description.
+
+Bring the group's answers back to this. Anyone who started from the run list would have found nothing in the dormant case.
+
+== What would you add for stage 05?
+layout: question
+The page's defenses are tied to every stage except 05, where base64 bash ran inside the runner with every secret the job is entitled to.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the empty column in the defense matrix.
+
+The page offers defenses tied to stages 01 to 04 and 06 to 08. It ties none to stage 05, where a base64-encoded bash payload ran inside the runner and inherited the job's entire context.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stage 05
+layout: answer
+Any control you propose is your own suggestion. Test it against what the page reports: base64 that beats a human skimming a diff and simple keyword scans, in a runner holding the job's secrets.
+notes:
+Be clear that the page stops here. It ties no defense to stage 05, and this deck adds none of its own.
+
+The group may argue that the workflow defense reaches this stage, since the page calls a workflow change a change to what executes with your production credentials. Or that moving cloud keys out of CI does, since the page says the payload's value came from what was sitting in the runner. Neither defense names the payload or its execution, so that argument is the group's own.
+
+Test each proposal against the facts the page reports for stage 05. The payload was base64-encoded bash embedded in the workflow YAML. Base64 defeats a human eye scrolling a YAML diff and most naive keyword greps, and the reviewer is usually nobody. Once executed, the payload inherits repository secrets, cloud credentials injected for deployment, the workspace, and the runner's network position.
+
+== Sources
+layout: links
+link: The Hacker News, Megalodon targets 5,561 repos | https://thehackernews.com/2026/05/megalodon-github-attack-targets-5561.html
+link: SecurityWeek, Over 5,500 repositories infected | https://www.securityweek.com/over-5500-github-repositories-infected-in-megalodon-supply-chain-attack/
+link: CSO Online, GitHub Actions abused by Megalodon | https://www.csoonline.com/article/4177124/github-actions-abused-by-megalodon-attack-to-slip-malicious-commits-into-5500-repos.html
+link: CISA, Nx Console and GitHub repositories | https://www.cisa.gov/news-events/alerts/2026/05/28/supply-chain-compromises-impact-nx-console-and-github-repositories
+link: MITRE ATT&CK T1552.005 | https://attack.mitre.org/techniques/T1552/005/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+The Hacker News, SecurityWeek and CSO Online report the campaign. CISA's alert covers the supply chain compromises that hit Nx Console and GitHub repositories. The MITRE page defines T1552.005, the technique behind stage 06.
+
+The background slides name their own sources: MITRE ATT&CK, the csoh.org GitHub Actions page and AWS's IAM documentation.
+
+== Related kill chains and defense topics
+layout: links
+link: UNC5537 / Snowflake | breaches/snowflake-unc5537.html
+link: Vercel / Context.ai | breaches/vercel-context-ai-oauth.html
+link: Mini Shai-Hulud | breaches/mini-shai-hulud-tanstack.html
+link: tj-actions/changed-files | breaches/tj-actions-changed-files.html
+link: CI/CD security | ci-cd.html
+link: GitHub Actions | github-actions.html
+link: Non-human identity | non-human-identity.html
+link: Detection engineering | detection-engineering.html
+The page links four kill chains: two in the same infostealer economy, one that used the OIDC token a week earlier to publish npm packages, and one as a contrast.
+notes:
+Four related kill chains on csoh.org, and the page's related defense topics.
+
+At stage 01 the page says the same infostealer economy sits under UNC5537 / Snowflake and under the vendor endpoint that started the Vercel / Context.ai chain.
+
+At stage 06 it says the OIDC token is what Mini Shai-Hulud used a week earlier to publish npm packages carrying valid provenance.
+
+At stage 07 it compares this campaign with tj-actions/changed-files, which dumped secrets into publicly readable build logs and needed no network path at all.
+
+The four defense topics the page links are CI/CD security, GitHub Actions, non-human identity and detection engineering. CI/CD stands for continuous integration and continuous delivery.
