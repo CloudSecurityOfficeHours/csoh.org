@@ -575,7 +575,7 @@ All <!--count:breaches-->60<!--/count--> reconstructions, one row each. Techniqu
 | [Codefinger / S3](https://csoh.org/breaches/codefinger-s3.html) | 2025 | AWS S3 | T1552, T1078.004, T1486, T1657 |
 | [tj-actions/changed-files](https://csoh.org/breaches/tj-actions-changed-files.html) | 2025 | GitHub Actions | T1195.001, T1552.001, T1078 |
 | [Salesloft Drift / UNC6395](https://csoh.org/breaches/salesloft-drift-unc6395.html) | 2025 | Salesforce / SaaS | T1528, T1078.004, T1213, T1530 |
-| [GTG-1002 / Claude Code](https://csoh.org/breaches/anthropic-gtg-1002.html) | 2025 | AI / LLM (Claude Code) | T1586, T1595, T1590, T1588.005 |
+| [GTG-1002 / Claude Code](https://csoh.org/breaches/anthropic-gtg-1002.html) | 2025 | AI / LLM (Claude Code) | T1588.007, T1595, T1590, T1587.004 |
 | [Entra ID Actor Token](https://csoh.org/breaches/entra-id-actor-token.html) | 2025 | Azure / Entra ID | T1580, T1528, T1606, T1078.004 |
 | [npm debug / chalk](https://csoh.org/breaches/npm-debug-chalk-phishing.html) | 2025 | npm | T1566.002, T1111, T1195.002, T1059.007 |
 | [Nx / s1ngularity](https://csoh.org/breaches/nx-s1ngularity.html) | 2025 | npm / GitHub Actions | T1059.004, T1190, T1552.007, T1070 |
