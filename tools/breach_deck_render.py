@@ -12,7 +12,11 @@ reports anything else it finds in the saved file.
 Every height is estimated before a shape is placed, the way the how-to
 renderer does it, and an element that would end below the content limit
 raises LayoutError naming the outline slide, before anything is saved. So
-does a stat value too wide for its tile on one line.
+does a stat value too wide for its tile on one line, a word too wide for
+the box it sits in, and a timeline label that wraps past its line limit.
+Widths are measured glyph by glyph in the wider of each deck face and Arial,
+the face Google Slides substitutes, because Google Slides wraps whatever
+does not fit its box and breaks a word too wide for it.
 
 The palette, fonts, slide size, attribution and licence lines come from
 howto_deck_render, so the two deck families share one look. Of the breach
@@ -145,6 +149,12 @@ LOOK = {
     "timeline_rule_h": 0.05,
     "timeline_label_gap": 0.1,
     "timeline_col_gap": 0.15,
+    # The most lines a timeline label may wrap to. A when is a date or a
+    # time; past three lines it is prose that belongs in the what. Eight
+    # lines of what under a three-line when is about all a slide holds
+    # above a one-line caption.
+    "timeline_when_lines": 3,
+    "timeline_what_lines": 8,
     "bar_h": 0.5,
     "bar_label_w": 3.6,
     "bar_row_gap": 0.25,
@@ -190,10 +200,48 @@ HEADING_ADVANCE: dict[str, int] = {
     )
     for ch in chars
 }
-# A label's pill, and a stat value's line, is this much wider than its
-# measured text, so a renderer that sets the text a little wider still does
-# not wrap it.
-HEADING_SAFETY = 0.10
+# The same for the body face: for each glyph, the wider of Source Sans 3
+# (fonts/source-sans-3-400.woff2 and -700.woff2, as a browser canvas measures
+# them) and Arial at the same weight, the face Google Slides substitutes when
+# it lacks the body face. A character missing here counts as wide as the
+# widest glyph in its table.
+BODY_REGULAR_SAFE_ADVANCE: dict[str, int] = {
+    ch: width
+    for chars, width in (
+        ("i", 246), ("j", 247), ("'’‘", 249), ("l", 255), ("|", 260), (" ,.:;I", 278),
+        ("!", 289), ("f", 292), ("[]", 303), ("()-·", 333), ("{}", 334), ("t", 338),
+        ("r", 347), ("/\\•", 350), ("*", 418), ('"“”', 426), ("^", 497), ("Jcksvxyz", 500),
+        ("`", 542), ("#$0123456789?L_abdeghnopqué¥€£", 556), ("+<=>~×", 584), ("FTZ", 611),
+        ("&ABEKPSVXY", 667), ("CDHNRUw", 722), ("GOQ", 778), ("Mm", 833), ("%", 889),
+        ("W", 944), ("…", 1000), ("@", 1015),
+    )
+    for ch in chars
+}
+BODY_BOLD_SAFE_ADVANCE: dict[str, int] = {
+    ch: width
+    for chars, width in (
+        (" ij", 278), ("|", 280), ("l", 286), ("',.’‘", 300), ("I", 301), ("-:;·", 333),
+        ("/\\", 339), ("!", 340), ("f", 341), ("()[]", 344), ("•", 350), ("t", 383),
+        ("{}", 389), ("r", 398), ("*", 457), ("z", 500), ('"“”', 537), ("`", 555),
+        ("#$0123456789J_aceksvxyé¥€£", 556), ("+<=>^~×", 584), ("?FLTZbdghnopqu", 611),
+        ("EPSVXY", 667), ("&ABCDHKNRU", 722), ("GOQw", 778), ("M", 833), ("%m", 889),
+        ("W", 944), ("@", 975), ("…", 1000),
+    )
+    for ch in chars
+}
+# The table for a run, by (STYLE font key, bold). The heading face is only
+# ever set bold.
+SAFE_ADVANCE: dict[tuple[str, bool], dict[str, int]] = {
+    ("heading_font", True): HEADING_ADVANCE,
+    ("heading_font", False): HEADING_ADVANCE,
+    ("body_font", False): BODY_REGULAR_SAFE_ADVANCE,
+    ("body_font", True): BODY_BOLD_SAFE_ADVANCE,
+}
+# A label's pill, a stat value and a timeline label's lines are held to this
+# much more than their width measured with these tables, so a renderer that
+# sets the text a little wider still does not wrap it. A single unbroken
+# word is held to its measured width alone (see _Page.check_words).
+WIDTH_SAFETY = 0.10
 
 # Advance widths of the body face (Source Sans 3 Regular), in thousandths of
 # an em, as a browser canvas measures fonts/source-sans-3-400.woff2. Layouts
@@ -367,13 +415,44 @@ def _caps_per_line(width: float, pt: float, spacing: float) -> int:
     return max(1, int(width * 72 / (CAPS_EM * pt + spacing)))
 
 
+def _glyph_width(text: str, pt: float, font: str = "body_font", bold: bool = False,
+                 spacing: float = 0.0) -> float:
+    """Inches one line of text takes at pt in the given STYLE font and
+    weight, measured per glyph from SAFE_ADVANCE, so it holds in the deck's
+    face and in Arial; any letter spacing follows every character."""
+    table = SAFE_ADVANCE[(font, bold)]
+    widest = max(table.values())
+    em = sum(table.get(ch, widest) for ch in text)
+    return (em / 1000 * pt + len(text) * spacing) / 72
+
+
+def _safe_width(text: str, pt: float, font: str = "body_font", bold: bool = False,
+                spacing: float = 0.0) -> float:
+    """_glyph_width with WIDTH_SAFETY added."""
+    return _glyph_width(text, pt, font, bold, spacing) * (1 + WIDTH_SAFETY)
+
+
 def _heading_width(text: str, pt: float, spacing: float = 0.0) -> float:
-    """Inches one line of bold heading-face text takes at pt, with
-    HEADING_SAFETY added. Measured per glyph from HEADING_ADVANCE; any
-    letter spacing follows every character."""
-    widest = max(HEADING_ADVANCE.values())
-    em = sum(HEADING_ADVANCE.get(ch, widest) for ch in text)
-    return (em / 1000 * pt + len(text) * spacing) / 72 * (1 + HEADING_SAFETY)
+    """_safe_width for bold heading-face text: type labels and stat values."""
+    return _safe_width(text, pt, "heading_font", True, spacing)
+
+
+def _safe_rows(text: str, width: float, pt: float, bold: bool = False) -> int:
+    """Lines body text wraps to across width inches at pt, filling each line
+    with whole words measured by _safe_width. A word wider than the line
+    counts as one line: box() refuses it before it is placed."""
+    space = _safe_width(" ", pt, bold=bold)
+    rows, cur = 1, 0.0
+    for word in text.split():
+        w = _safe_width(word, pt, bold=bold)
+        if cur == 0:
+            cur = w
+        elif cur + space + w <= width + 1e-9:
+            cur += space + w
+        else:
+            rows += 1
+            cur = w
+    return rows
 
 
 def _overhang(pt: float) -> float:
@@ -500,6 +579,31 @@ class _Page:
             )
         self.bottom = max(self.bottom, bottom)
 
+    def check_words(self, name: str, paras, room: float) -> None:
+        """Raise LayoutError naming the slide and the word when any
+        whitespace-free run of characters in paras is wider than room
+        inches. Google Slides breaks such a word mid-word, at whatever
+        letter reaches the edge; it does not break at hyphens. A word is
+        measured across runs with each character's own face, size and
+        weight, by _glyph_width without WIDTH_SAFETY: the Arial widths in
+        its tables already run about a tenth wider than Source Sans 3 on
+        running text."""
+        for runs in paras:
+            chars = [(ch, r) for r in runs for ch in r.text]
+            word, need = "", 0.0
+            # A trailing space ends the paragraph's last word.
+            for ch, r in [*chars, (" ", None)]:
+                if not ch.isspace():
+                    word += ch
+                    need += _glyph_width(ch, r.pt, r.font, r.bold, r.spacing)
+                    continue
+                if need > room + 1e-9:
+                    raise LayoutError(
+                        f"{self.where}: {word!r} needs {need:.2f} in unbroken; "
+                        f"its {name} box has {room:.2f} in"
+                    )
+                word, need = "", 0.0
+
     def claim_bottom(self, h: float, gap: float) -> float:
         """Room for an element pinned to the bottom of the content area,
         with gap above it. Returns its top and lowers the floor the rest of
@@ -519,7 +623,11 @@ class _Page:
         """A text box, or a filled shape (with text when paras are given).
         A shape pinned to the bottom, or outside the content area by
         design, passes track=False; everything else is checked against the
-        floor."""
+        floor. Wrapped text is checked for words too wide to fit on a line
+        first."""
+        if paras and wrap:
+            left, _top, right, _bottom = margins if isinstance(margins, tuple) else (margins,) * 4
+            self.check_words(name, paras, w - left - right)
         if track:
             self.reserve(y + h)
         at = (Inches(x), Inches(y), Inches(w), Inches(h))
@@ -880,16 +988,20 @@ def _render_checklist(page, s) -> None:
         y += h + LOOK["check_gap"]
 
 
-def _display_url(href: str, per_line: int) -> str:
-    """The address as shown: host and path when they fit on one line, else
-    the host alone. The run links to the full address either way."""
+def _display_url(href: str, width: float, pt: float) -> str:
+    """The address as shown: host and path when they fit on one line of
+    width inches at pt, else the host alone. They fit when their character
+    count fits _per_line and, since an address has no space to wrap at,
+    when they measure no wider than the line as check_words measures a
+    word. The run links to the full address either way."""
     parts = urlsplit(href)
     full = _host(href) + parts.path.rstrip("/")
     if parts.query:
         full += f"?{parts.query}"
     if parts.fragment:
         full += f"#{parts.fragment}"
-    return full if len(full) <= per_line else _host(href)
+    fits = len(full) <= _per_line(width, pt) and _glyph_width(full, pt) <= width + 1e-9
+    return full if fits else _host(href)
 
 
 def _render_links(page, s) -> None:
@@ -916,7 +1028,7 @@ def _render_links(page, s) -> None:
         href = urljoin(SITE, url)
         h = (_rows(name, _per_line(cw, npt, bold=True)) * _line_h(npt)
              + _line_h(upt) + 0.1)
-        cells.append((name, href, _display_url(href, _per_line(cw, upt)), h))
+        cells.append((name, href, _display_url(href, cw, upt), h))
     row_hs = [max(c[3] for c in cells[row::per_col]) for row in range(per_col)]
     for i, (name, href, shown, _h) in enumerate(cells):
         col, row = divmod(i, per_col)
@@ -1039,16 +1151,32 @@ def _render_timeline(page, s) -> None:
     sits on its box's bottom edge and the what hangs from its box's top
     edge, each inset on that edge by the body face's overhang, so neither
     label's text reaches out of its box into the gap at the marker. The
-    inset comes out of each box's breathing room, so the boxes keep their
-    height."""
+    inset comes out of each box's breathing room.
+
+    Each label's lines are counted from measured glyph widths in the wider
+    of the deck face and Arial (_safe_rows), so a label that wraps in Google
+    Slides has its lines reserved; a label needing more lines than
+    timeline_when_lines or timeline_what_lines raises LayoutError."""
     events = s.items.get("event", [])
     cw = W / len(events)
     tw = cw - LOOK["timeline_col_gap"]
     pt = LOOK["diagram_pt"]
     m, lg, rh = LOOK["timeline_marker"], LOOK["timeline_label_gap"], LOOK["timeline_rule_h"]
     inset = _overhang(pt)
-    when_h = max(_rows(w, _per_line(tw, pt, bold=True)) for w, _ in events) * _line_h(pt) + 0.1
-    what_h = max(_rows(t, _per_line(tw, pt)) for _, t in events) * _line_h(pt) + 0.1
+
+    def lines(text: str, bold: bool, most: int, which: str) -> int:
+        n = _safe_rows(text, tw, pt, bold=bold)
+        if n > most:
+            raise LayoutError(
+                f"{page.where}: timeline {which} {text!r} wraps to {n} lines across "
+                f"{tw:.2f} in; a {which} may take {most}"
+            )
+        return n
+
+    when_rows = max(lines(w, True, LOOK["timeline_when_lines"], "when") for w, _ in events)
+    what_rows = max(lines(t, False, LOOK["timeline_what_lines"], "what") for _, t in events)
+    when_h = when_rows * _line_h(pt) + 0.1
+    what_h = what_rows * _line_h(pt) + 0.1
     y = _diagram_top(page, s)
     mid = y + when_h + lg + m / 2
     page.box("timeline-rule", X, mid - rh / 2, W, rh, fill=STYLE["muted"])
@@ -1091,16 +1219,40 @@ def _render_compare(page, s) -> None:
     _caption(page, s, y + head_h + body_h)
 
 
+def _shares(weights: list[float], floors: list[float], total: float) -> list[float]:
+    """total split in proportion to weights, with no share below its floor:
+    a share that would fall below its floor takes the floor, and the rest
+    is split again among the others. When the floors alone exceed total,
+    the plain proportional split is returned, and check_words refuses the
+    word that does not fit."""
+    if sum(floors) > total + 1e-9:
+        return [total * w / sum(weights) for w in weights]
+    fixed: dict[int, float] = {}
+    while True:
+        free = [i for i in range(len(weights)) if i not in fixed]
+        room = total - sum(fixed.values())
+        share = {i: room * weights[i] / sum(weights[j] for j in free) for i in free}
+        short = [i for i in free if share[i] < floors[i] - 1e-9]
+        if not short:
+            return [fixed[i] if i in fixed else share[i] for i in range(len(weights))]
+        fixed.update((i, floors[i]) for i in short)
+
+
 def _render_table(page, s) -> None:
     """The first row is the header, on the dark fill; body rows alternate
     white and light. Each column's width follows its longest entry, held
     between table_chars, so a column of figures stays narrow and a column
-    of prose gets room."""
+    of prose gets room; no column is narrower than its widest word needs,
+    so no word in it breaks."""
     rows = s.items.get("row", [])
     pt, pad = LOOK["cell_pt"], LOOK["cell_pad"]
     lo, hi = LOOK["table_chars"]
-    weights = [min(max(max(len(row[c]) for row in rows), lo), hi) for c in range(len(rows[0]))]
-    widths = [W * n / sum(weights) for n in weights]
+    cols = range(len(rows[0]))
+    weights = [min(max(max(len(row[c]) for row in rows), lo), hi) for c in cols]
+    floors = [max(_glyph_width(word, pt, bold=i == 0)
+                  for i, row in enumerate(rows) for word in row[c].split()) + 2 * pad
+              for c in cols]
+    widths = _shares(weights, floors, W)
     y = _diagram_top(page, s)
     for i, row in enumerate(rows):
         head = i == 0

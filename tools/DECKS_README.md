@@ -301,7 +301,14 @@ Speaker notes run to the next "== " line. Every slide has them.
   the wider of Space Grotesk Bold and Arial Bold with a margin, since Google
   Slides wraps whatever does not fit; shorten the value and move the rest
   into its label or detail, keeping any hedge ("~$2.85B" becomes "$2.85B"
-  with "approximately" in the label or detail).
+  with "approximately" in the label or detail). It names any word (text
+  with no space in it) wider than the box it sits in, because Google Slides
+  breaks such a word mid-word rather than at a hyphen: move a long name,
+  address or hash to a wider box such as the caption, or say it in words.
+  A table column is first widened to hold its widest word. And it names a
+  timeline label that wraps past three lines (the when) or eight (the
+  what); timeline lines are counted from measured glyph widths, so a label
+  that wraps in Google Slides has its lines reserved.
 - `--stamp` removes every deck line and writes one after the last `pm-link`
   line of each mapped page, planning every page before writing any.
   `--record` refuses an outline with any finding `--check` reports, and

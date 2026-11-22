@@ -3879,7 +3879,7 @@ def _case_timeline_labels_hold_text(tmp: Path) -> None:
         assert bottom <= marker.top, (bottom, marker.top)
         # The inset leaves room for the lines the box was sized for, and
         # for the first line's reach above them.
-        rows = r._rows(tf.text, r._per_line(when.width / 914400, pt, bold=True))
+        rows = r._safe_rows(tf.text, when.width / 914400, pt, bold=True)
         assert when.height >= tf.margin_bottom + rows * line + reach, (tf.text, rows)
         # The what's first line starts reach above the bottom of its top
         # inset; that has to be inside the box, and the box below the marker.
@@ -3887,8 +3887,150 @@ def _case_timeline_labels_hold_text(tmp: Path) -> None:
         assert tf.vertical_anchor == r.MSO_ANCHOR.TOP, tf.vertical_anchor
         assert what.top + tf.margin_top - reach >= what.top - 1, (tf.text, tf.margin_top)
         assert what.top >= marker.top + marker.height, (what.top, marker.top + marker.height)
-        rows = r._rows(tf.text, r._per_line(what.width / 914400, pt))
+        rows = r._safe_rows(tf.text, what.width / 914400, pt)
         assert what.height >= tf.margin_top + rows * line + reach, (tf.text, rows)
+
+
+def _case_timeline_lines_measured(tmp: Path) -> None:
+    """A timeline label's lines are counted from measured glyph widths in
+    the wider of Source Sans 3 and Arial, plus the margin, and its box
+    holds that many lines; a label needing more lines than the layout
+    allows is refused naming the slide."""
+    import breach_deck_render as r
+
+    # Advance widths of whole labels, in thousandths of an em, as a browser
+    # canvas measures them in Source Sans 3 Bold (fonts/source-sans-3-700.woff2)
+    # and Arial Bold. Google Slides wrapped "September 2026" at six to a row.
+    em = {"September 2026": (7162, 7671), "October 13": (4807, 5224)}
+    pt = r.LOOK["diagram_pt"]
+    line = r._line_h(pt)
+
+    def whens(*labels: str):
+        events = [[w, "Something happened"] for w in labels]
+        (sl,) = _rendered(tmp, _one_slide("When", "timeline", "t.deck:3", event=events))
+        return _shapes(sl, "timeline-when")
+
+    six = ("September 2026", "October 13", "June 2026", "May 27", "July 1", "August 2")
+    boxes = whens(*six)
+    room = boxes[0].width / 914400
+    # "September 2026" needs two lines in either face, so the boxes hold two.
+    for face in em["September 2026"]:
+        assert face / 1000 * pt / 72 > room, (face, room)
+    assert em["October 13"][1] / 1000 * pt / 72 <= room
+    rows = {b.text_frame.text: r._safe_rows(b.text_frame.text, room, pt, bold=True) for b in boxes}
+    assert rows["September 2026"] == 2 and rows["October 13"] == 1, rows
+    held = (boxes[0].height / 914400 - 0.1) / line
+    assert abs(held - 2) < 0.01, held
+    # Control: a label a character count calls one line but the measure
+    # calls two gets two, so the measure is what sizes the box.
+    assert r._rows("December 31", r._per_line(room, pt, bold=True)) == 1
+    assert r._safe_rows("December 31", room, pt, bold=True) == 2
+    boxes = whens("December 31", "June 2026", "May 27", "July 1", "August 2", "June 3")
+    assert abs((boxes[0].height / 914400 - 0.1) / line - 2) < 0.01, boxes[0].height
+    # Control: with every label on one line, the boxes hold one.
+    boxes = whens("June 2026", "May 27", "July 1", "August 2", "June 3", "May 9")
+    assert abs((boxes[0].height / 914400 - 0.1) / line - 1) < 0.01, boxes[0].height
+
+    # Too many lines is refused, naming the slide and the label.
+    out = tmp / "tl.pptx"
+    long_when = "September 20 to October 14, then again from November 2"
+    assert r._safe_rows(long_when, room, pt, bold=True) > r.LOOK["timeline_when_lines"]
+    events = [[long_when, "A"]] + [["May 1", "B"]] * 5
+    e = _layout_error(lambda: r.render_deck(_one_slide("When", "timeline", "t.deck:3",
+                                                        event=events), out), "t.deck:3")
+    assert "timeline when" in str(e) and long_when in str(e), e
+    long_what = " ".join(["Malware sent through that server to customer VMs"] * 3)
+    assert r._safe_rows(long_what, room, pt) > r.LOOK["timeline_what_lines"]
+    events = [["May 1", long_what]] + [["May 2", "B"]] * 5
+    e = _layout_error(lambda: r.render_deck(_one_slide("When", "timeline", "t.deck:3",
+                                                        event=events), out), "t.deck:3")
+    assert "timeline what" in str(e), e
+    assert not out.exists(), "a refused render wrote a file"
+    # Control: a three-line when, the most allowed, renders.
+    three = "September 20 to October 14"
+    assert r._safe_rows(three, room, pt, bold=True) == r.LOOK["timeline_when_lines"]
+    whens(three, "June 2026", "May 27", "July 1", "August 2", "June 3")
+
+
+def _case_unbroken_words_refused(tmp: Path) -> None:
+    """A word with no space in it that is wider than the text box it sits
+    in is refused, naming the slide and the word: Google Slides breaks it
+    mid-word. Checked for captions, facts, table cells, timeline labels and
+    flow boxes; a table column is widened to hold its widest word first."""
+    import breach_deck_render as r
+
+    # Advance widths, in thousandths of an em, as a browser canvas measures
+    # them in Source Sans 3 and in Arial, at the weight each is set in here
+    # (the flow title bold, the others regular). Google Slides broke
+    # "color-picker-universal" in a six-to-a-row timeline label.
+    em = {"color-picker-universal": (9089, 9503), "Chainalysis": (4722, 5113),
+          "BLOODALCHEMY": (7226, 8555)}
+    sha = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    out = tmp / "w.pptx"
+
+    def refused(deck: BDeck, where: str, word: str) -> None:
+        e = _layout_error(lambda: r.render_deck(deck, out), f"{where}: {word!r} needs")
+        assert not out.exists(), "a refused render wrote a file"
+        return e
+
+    # Timeline label: the package name is wider than a sixth of the row in
+    # either face. Control: the same words with spaces wrap and render.
+    room = r.W / 6 - r.LOOK["timeline_col_gap"]
+    assert min(em["color-picker-universal"]) / 1000 * r.LOOK["diagram_pt"] / 72 > room
+    what = "The developer installs color-picker-universal on a personal MacBook"
+    events = [["October 20, 2025", what]] + [["May 1", "A"]] * 5
+    e = refused(_one_slide("When", "timeline", "tw.deck:3", event=events), "tw.deck:3",
+                "color-picker-universal")
+    assert "timeline-what" in str(e), e
+    events[0][1] = what.replace("-", " ")
+    _rendered(tmp, _one_slide("When", "timeline", "tw.deck:3", event=events))
+
+    # Fact value and caption: a SHA-256 fits neither column; split in two
+    # it fits both.
+    stage = _rslide("A hash", "stage", stage="04", phase="Execution", where="f.deck:9",
+                    paragraphs=["Why."], items={"fact": [["Hash", sha]]})
+    refused(BDeck("f", "T", RENDER_PAGE, "2026-11-20", "P.", [stage], ""), "f.deck:9", sha)
+    stage.items["fact"] = [["Hash", f"{sha[:32]} {sha[32:]}"]]
+    _rendered(tmp, BDeck("f", "T", RENDER_PAGE, "2026-11-20", "P.", [stage], ""))
+    caption = _one_slide("Steps", "timeline", "c.deck:5", event=[["May 1", "A"], ["May 2", "B"]])
+    caption.slides[0].paragraphs = [sha * 2]
+    refused(caption, "c.deck:5", sha * 2)
+
+    # Flow box: the pilot's "BLOODALCHEMY" fits a step four to a row;
+    # twice as long does not.
+    def steps(title: str) -> BDeck:
+        return _one_slide("Chain", "flow", "fl.deck:7",
+                          step=[[f"0{i}", "Execution", title, "T1059"] for i in range(1, 5)])
+
+    (sl,) = _rendered(tmp, steps("BLOODALCHEMY"))
+    box = _shapes(sl, "flow-step")[0]
+    tf = box.text_frame
+    assert max(em["BLOODALCHEMY"]) / 1000 * 20 / 72 <= (box.width - tf.margin_left
+                                                         - tf.margin_right) / 914400
+    refused(steps("BLOODALCHEMY" * 2), "fl.deck:7", "BLOODALCHEMY" * 2)
+
+    # Table: a long word in a column its character count keeps narrow
+    # widens that column, and every cell then holds its widest word. A
+    # word wider than the whole table is still refused.
+    rows = [["Source", "Total, as each measures it", "Frozen, intercepted or seized"],
+            ["Binance", "~$6.34 billion in digital assets impacted",
+             "~$2.85 billion frozen or intercepted, November 3"],
+            ["Chainalysis", "Not given on the page", "About $2.8 billion by November 3"]]
+    lo, hi = r.LOOK["table_chars"]
+    weights = [min(max(max(len(row[c]) for row in rows), lo), hi) for c in range(3)]
+    pad, pt = r.LOOK["cell_pad"], r.LOOK["cell_pt"]
+    plain = r.W * weights[0] / sum(weights) - 2 * pad
+    # In Arial the word is wider than its column's share by character count.
+    assert em["Chainalysis"][1] / 1000 * pt / 72 > plain, plain
+    (sl,) = _rendered(tmp, _one_slide("Counts", "table", "tb.deck:4", row=rows))
+    cells = [c for c in _shapes(sl, "table-cell") if c.text_frame.text == "Chainalysis"]
+    tf = cells[0].text_frame
+    inner = (cells[0].width - tf.margin_left - tf.margin_right) / 914400
+    assert max(em["Chainalysis"]) / 1000 * pt / 72 <= inner, inner
+    widths = [c.width for c in _shapes(sl, "table-cell")[:3]]
+    assert abs(sum(widths) / 914400 - r.W) < 0.001, widths
+    rows[0][2] = sha * 2
+    refused(_one_slide("Counts", "table", "tb.deck:4", row=rows), "tb.deck:4", sha * 2)
 
 
 def _case_links_name_plain_url_linked(tmp: Path) -> None:
@@ -3926,6 +4068,8 @@ RENDER_CASES: list = [
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
     ("timeline_labels_hold_text", _case_timeline_labels_hold_text),
+    ("timeline_lines_measured", _case_timeline_lines_measured),
+    ("unbroken_words_refused", _case_unbroken_words_refused),
     ("checklist_even", _case_checklist_even),
     ("type_labels_cannot_wrap", _case_type_labels_cannot_wrap),
     ("stat_values_fit_one_line", _case_stat_values_fit_one_line),
