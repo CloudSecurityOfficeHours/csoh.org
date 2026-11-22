@@ -544,7 +544,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/salesloft-drift-unc6395.html",
      "Salesloft Drift / UNC6395 2025 Kill Chain",
-     "Stolen Drift OAuth tokens → bulk SOQL exfil across 700+ Salesforce tenants → secret mining. Full chain and SaaS defenses.",
+     "Stolen Drift OAuth tokens → bulk SOQL exfil from hundreds of Salesforce tenants → secret mining. Full chain and SaaS defenses.",
      "Breach Kill Chain"),
     ("breaches/ultralytics-cache-poisoning.html",
      "Ultralytics / PyPI 2024 Kill Chain",
