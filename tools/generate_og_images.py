@@ -716,7 +716,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/vimeo-anodot-shinyhunters.html",
      "Vimeo / Anodot 2026 Kill Chain",
-     "Stolen analytics-vendor tokens → direct Snowflake and BigQuery access → 119,000 records exfiltrated → extortion deadline.",
+     "Stolen analytics-vendor tokens → direct Snowflake and BigQuery access → 119,000 email addresses exfiltrated → extortion deadline.",
      "Breach Kill Chain"),
     ("breaches/megalodon-github-actions.html",
      "Megalodon / GitHub Actions 2026 Kill Chain",
