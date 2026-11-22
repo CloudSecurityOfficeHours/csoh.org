@@ -387,16 +387,16 @@
       <div class="step-num">01</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">A throwaway account forked TanStack/router, renamed the fork to hide it, and opened a PR that ran fork-controlled code in the base repository's context</div>
+          <div class="step-title">An attacker account forked TanStack/router, renamed the fork to hide it, and opened a PR that ran fork-controlled code in the base repository's context</div>
           <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1677/" target="_blank" rel="noopener">T1677 - Poisoned Pipeline Execution</a>
         </div>
-        <p class="step-desc">On May 10, 2026 the account <code>voicproducoes</code> forked <code>TanStack/router</code>, then renamed the fork so it would not appear in GitHub's fork listing for the upstream repository (Snyk records it as <code>zblgg/configuration</code>). The attacker then opened a pull request against a workflow using the <code>pull_request_target</code> trigger. </p>
-        <p class="step-desc">That trigger is the whole exploit primitive: unlike <code>pull_request</code>, it runs with the <em>base</em> repository's permissions and secrets while checking out the fork's merge ref, so untrusted, attacker-authored code executed with trusted context on the first PR from a brand-new account. No review, no approval, no maintainer mistake was required.</p>
+        <p class="step-desc">On May 10, 2026 the account <code>zblgg</code> forked <code>TanStack/router</code> and named the fork <code>zblgg/configuration</code>, which Snyk says was done to avoid appearing in fork-list searches. On May 11 the attacker opened a pull request from that fork against a workflow using the <code>pull_request_target</code> trigger. A second account, <code>voicproducoes</code> (created 2026-03-19), which GitHub's advisory also lists as an attacker account, forked the repository on May 10 and authored the orphan payload commit that stage 04's <code>optionalDependencies</code> entry points to. </p>
+        <p class="step-desc">That trigger is the whole exploit primitive: unlike <code>pull_request</code>, it runs in the <em>base</em> repository's context, including its Actions cache scope, while checking out the fork's merge ref. The job that built the PR was limited to read-only permissions (<code>contents: read</code>), but Snyk notes that <code>actions/cache</code> saves through a runner-internal token those permissions do not govern, so untrusted, attacker-authored code could write cache entries the release workflow would later restore. No review, no approval, no maintainer mistake was required.</p>
         <div class="step-code">
-          <span class="hl">Attacker account:</span> voicproducoes (created 2026-03-19), fork created 2026-05-10<br>
-          <span class="hl">Malicious commit:</span> 79ac49eedf774dd4b0cfa308722bc463cfe5885c<br>
-          <span class="hl">Why it worked:</span> pull_request_target runs fork code with base-repo permissions and secrets<br>
-          <span class="hl">Evasion:</span> fork renamed so it did not surface in the upstream repo's fork list
+          <span class="hl">PR account:</span> zblgg, fork zblgg/configuration made 2026-05-10, PR commit 65bf499d adding vite_setup.mjs<br>
+          <span class="hl">Payload account:</span> voicproducoes (created 2026-03-19), fork made 2026-05-10, orphan commit 79ac49eedf774dd4b0cfa308722bc463cfe5885c<br>
+          <span class="hl">Why it worked:</span> pull_request_target runs fork code in the base repository's cache scope; permissions: contents: read does not block cache writes<br>
+          <span class="hl">Evasion:</span> fork renamed zblgg/configuration to avoid appearing in fork-list searches
         </div>
         <div class="step-tags"><span class="stag">Pwn Request</span><span class="stag">pull_request_target</span><span class="stag">Fork Abuse</span><span class="stag">T1677</span></div>
       </div>
@@ -410,15 +410,15 @@
           <div class="step-title">The untrusted run wrote a malicious pnpm store into the GitHub Actions cache, which the privileged release workflow later restored and executed</div>
           <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1036/005/" target="_blank" rel="noopener">T1036.005 - Match Legitimate Resource Name or Location</a>
         </div>
-        <p class="step-desc">This is the step that makes the incident genuinely new. From inside the low-privilege PR run, the attacker wrote a poisoned pnpm store to the repository's shared Actions cache at a pre-computed cache key. The store contained a counterfeit <code>@tanstack/setup</code> package whose <code>package.json</code> carried a <code>prepare</code> lifecycle hook that ran the payload and then exited non-zero to keep the output short. </p>
-        <p class="step-desc">The poisoned cache sat dormant for roughly eight hours. When maintainers merged legitimate PRs to <code>main</code>, the release workflow restored that same cache and ran the attacker's <code>prepare</code> hook inside the privileged pipeline. The Actions cache is a mutable artifact written by untrusted context and read by trusted context, which makes it a privilege boundary that GitHub does not enforce.</p>
+        <p class="step-desc">This is the step that makes the incident genuinely new. From inside the low-privilege PR run, the PR's <code>vite_setup.mjs</code> wrote a poisoned pnpm store to the repository's shared Actions cache at a pre-computed cache key, the one the release workflow derives from the public <code>pnpm-lock.yaml</code>. The store held attacker-controlled binaries. </p>
+        <p class="step-desc">The poisoned cache sat dormant for roughly eight hours. When maintainers merged legitimate PRs to <code>main</code>, the release workflow restored that same cache, and the attacker-controlled binaries in it ran during the workflow's build and test steps, inside the privileged pipeline. The Actions cache is a mutable artifact written by untrusted context and read by trusted context, which makes it a privilege boundary that GitHub does not enforce.</p>
         <div class="step-code">
           <span class="hl">Poisoned artifact:</span> pnpm store in the shared Actions cache at a pre-computed key<br>
-          <span class="hl">Payload carrier:</span> fake @tanstack/setup with "prepare": "bun run tanstack_runner.js &amp;&amp; exit 1"<br>
+          <span class="hl">Payload carrier:</span> the PR's vite_setup.mjs, which wrote attacker-controlled binaries into the pnpm store<br>
           <span class="hl">Dwell:</span> ~8 hours between cache poisoning and the first trusted restore<br>
           <span class="hl">Defence gap:</span> Actions caches are not scoped by trust level, so a fork-triggered job can write what a release job reads
         </div>
-        <div class="step-tags"><span class="stag">Cache Poisoning</span><span class="stag">Lifecycle Hook</span><span class="stag">Trust Boundary</span><span class="stag">T1036.005</span></div>
+        <div class="step-tags"><span class="stag">Cache Poisoning</span><span class="stag">pnpm Store</span><span class="stag">Trust Boundary</span><span class="stag">T1036.005</span></div>
       </div>
     </div>
 
@@ -450,13 +450,14 @@
           <div class="step-title">The stolen OIDC token was exchanged for npm publishing credentials outside the workflow's normal publish step, and Sigstore truthfully attested the result</div>
           <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
         </div>
-        <p class="step-desc">The payload posted the stolen OIDC token to <code>registry.npmjs.org/-/npm/v1/oidc/token/exchange</code> to mint per-package publishing credentials, then published outside the workflow's intended publish step. Between 19:20 and 19:26 UTC on May 11, 2026 it pushed 84 versions across 42 <code>@tanstack/*</code> packages, each tarball carrying an injected 2.3 MB <code>router_init.js</code> at the package root plus an <code>optionalDependencies</code> entry pointing at the attacker's fork commit. </p>
+        <p class="step-desc">The payload posted the stolen OIDC token to <code>registry.npmjs.org/-/npm/v1/oidc/token/exchange</code> to mint per-package publishing credentials, then published outside the workflow's intended publish step. Between 19:20 and 19:26 UTC on May 11, 2026 it pushed 84 versions across 42 <code>@tanstack/*</code> packages, each tarball carrying an injected 2.3 MB <code>router_init.js</code> at the package root plus an <code>optionalDependencies</code> entry pointing at the attacker's fork commit. That commit holds a counterfeit <code>@tanstack/setup</code> package whose <code>prepare</code> lifecycle hook runs the payload when an installer resolves the <code>github:</code> dependency, then exits non-zero so the optional dependency fails quietly, leaving little trace in install logs. </p>
         <p class="step-desc">Because the publish really did originate from the genuine <code>TanStack/router</code> release workflow, npm's Sigstore integration issued a <strong>correct</strong> SLSA Build Level 3 attestation and the packages wore npm's "verified provenance" badge. Nothing was forged. </p>
         <p class="step-desc">Provenance answers "which pipeline built this," not "did that pipeline behave," and the pipeline was the attacker. Socket assesses this as the first documented npm <a class="glossary-link" href="../glossary.html#term-supply-chain">supply-chain attack</a> to produce valid SLSA Build Level 3 provenance for malicious artifacts.</p>
         <div class="step-code">
           <span class="hl">Token exchange:</span> registry.npmjs.org/-/npm/v1/oidc/token/exchange for per-package publish creds<br>
           <span class="hl">Injected file:</span> router_init.js (2.3 MB) at package root, plus optionalDependencies → github:tanstack/router#79ac49ee...<br>
-          <span class="hl">Size tell:</span> compromised tarballs ~3.7x larger than clean ones (905 KB vs 190 KB) with 23 extra files<br>
+          <span class="hl">Install hook:</span> fake @tanstack/setup at that commit, "prepare": "bun run tanstack_runner.js &amp;&amp; exit 1"<br>
+          <span class="hl">Size tell:</span> compromised tarballs 905 KB vs 190 KB for clean ones (unpacked 3,209,621 vs 867,818 bytes, 3.7x larger), with 23 extra files<br>
           <span class="hl">Why signing did not help:</span> the attestation was accurate; the trusted pipeline itself was executing attacker code
         </div>
         <div class="step-tags"><span class="stag">SLSA Provenance</span><span class="stag">Sigstore</span><span class="stag">CVE-2026-45321</span><span class="stag">T1195.002</span></div>
