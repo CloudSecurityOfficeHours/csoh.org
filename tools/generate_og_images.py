@@ -692,7 +692,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/entra-id-actor-token.html",
      "Entra ID Actor Token 2025 Kill Chain",
-     "CVE-2025-55241: an undocumented S2S token + a legacy Graph API that never checked the tenant → Global Admin anywhere.",
+     "CVE-2025-55241: an undocumented S2S token + a legacy Graph API that never checked the tenant → cross-tenant Global Admin.",
      "Breach Kill Chain"),
     ("breaches/nx-s1ngularity.html",
      "Nx / s1ngularity 2025 Kill Chain",
