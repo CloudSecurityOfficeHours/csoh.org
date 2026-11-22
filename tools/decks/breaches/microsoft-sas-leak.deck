@@ -1,0 +1,347 @@
+title: Microsoft SAS Leak
+page: breaches/microsoft-sas-leak.html
+as-of: 2026-11-22
+promise: A Microsoft AI researcher's public GitHub link carried a full-control Azure SAS token that, for about 3 years, let anyone who found it read, modify or delete 38TB of internal data.
+
+== At a glance
+layout: stats
+stat: 38 TB | of internal Microsoft data exposed | Including workstation backups, private keys and Teams messages
+stat: 3 years | exposure window | July 20, 2020 to June 24, 2023
+stat: Full | control permissions: read, write and delete | Over the entire storage account, set to expire in 2051
+Discovered and responsibly disclosed by Wiz Research in June 2023 (disclosure: the site's author works at Wiz).
+notes:
+Start with three figures from the page's header, and with who found the exposure.
+
+A Microsoft AI researcher shared a URL to open-source training data on a public GitHub repository. The URL contained an Azure Shared Access Signature, or SAS, token. Instead of being scoped to a specific file or container, it was an Account SAS with full-control permissions to the entire storage account, set to expire in 2051.
+
+Anyone who found the URL could read, modify or delete 38TB of internal Microsoft data, including employee workstation backups, private keys, saved passwords and more than 30,000 internal Teams messages. The URL was publicly visible from July 20, 2020 to June 24, 2023. The page gives that as 2 years 11 months, and as about 3 years in its summary.
+
+Wiz Research discovered the exposure and responsibly disclosed it in June 2023. Say the disclosure aloud as the page gives it: this incident was discovered and disclosed by Wiz Research, and the site's author works at Wiz. The page links the primary source alongside independent coverage so you can check the account against a second reporter, and asks you to caveat the trust you grant accordingly.
+
+== What happened, and when
+layout: timeline
+event: July 20, 2020 | The SAS URL is committed to a public GitHub README
+event: October 2021 | Token renewed; expiry extended from October 5, 2021 to October 6, 2051
+event: June 22, 2023 | Wiz Research reports it to Microsoft's Security Response Center
+event: June 24, 2023 | The token is revoked, 2 days after the report
+event: July 7, 2023 | The GitHub URL is updated
+event: September 18, 2023 | Coordinated public disclosure
+SAS stands for Shared Access Signature, an Azure storage token. The page gives no date for the token's creation. Spacing is not to scale.
+notes:
+The page gives these dates, and the timeline shows only those.
+
+On July 20, 2020, the researcher committed the complete SAS token URL to the README of the public GitHub repository robust-models-transfer, as download instructions. The token's original expiry was October 5, 2021. In October 2021 the token was renewed, with the expiry extended to October 6, 2051. The page does not say when the token was first created.
+
+Wiz Research reported the exposure to MSRC, the Microsoft Security Response Center, on June 22, 2023. The token was revoked two days later, on June 24. The GitHub URL was updated on July 7, 2023, and coordinated public disclosure followed on September 18, 2023.
+
+The markers are evenly spaced, and the gaps between them are not to scale.
+
+== Who found it, and how to weigh the account
+layout: compare
+col: Wiz Research | Found the token and reported it to Microsoft on June 22, 2023 | Its disclosure is the primary source the page links | The site's author works at Wiz
+col: Microsoft | Found no evidence of malicious exfiltration beyond Wiz's research | Has since expanded its SAS detection to any overly permissive token
+col: BleepingComputer | Independent coverage, linked alongside the primary source | A second reporter to check the account against
+The page asks you to caveat the trust you grant accordingly.
+notes:
+The page is open about where its account comes from, and this slide follows it.
+
+Wiz Research discovered and disclosed this incident. It found the token, reported it to MSRC on June 22, 2023, and its disclosure is the primary source the page links. The site's author works at Wiz, and the page says so in its header.
+
+The page links that primary source alongside independent coverage from BleepingComputer, so you can check the account against a second reporter, and it asks readers to caveat the trust they grant accordingly.
+
+The page also reports two things about Microsoft. Microsoft found no evidence of malicious exfiltration beyond Wiz's research. Exfiltration means data taken out of an environment. And Microsoft has since expanded the detection to any SAS token with overly permissive expirations or privileges.
+
+The page cites a GitGuardian analysis among its primary sources as well. It is on the sources slide at the end.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Root Cause | Full-control Account SAS | T1078.004
+step: 02 | Exposure | URL in a public README | T1552.001
+step: 03 | Data Accessible | Full storage account accessible | T1530
+step: 04 | Discovery | Wiz Research finds it | -
+Arrows follow the page's stage order. Stage 04 is how the exposure was found, and maps to no technique.
+notes:
+Here is the whole chain on one slide: the page's four stages, each with its phase and ATT&CK technique.
+
+Stage 01, the root cause, is the misconfigured token: an Account SAS with full-control permissions, whose expiry was later extended 30 years. The page maps it to T1078.004, Valid Accounts: Cloud Accounts. Stage 02, the exposure, is the complete SAS URL committed to a public GitHub README, mapped to T1552.001, Credentials In Files. Stage 03 is what the URL reached: the full storage account, 38TB including employee backups, keys and Teams messages, mapped to T1530, Data from Cloud Storage.
+
+Stage 04 is the discovery by Wiz Research. The page names its phase Discovery and maps it to no technique, so its box shows no ID.
+
+The arrows follow the page's stage order. The next slides take each stage in turn.
+
+== A full-control Account SAS, its expiry later extended to 2051
+layout: stage
+stage: 01
+phase: Root Cause
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+fact: SAS type | Account SAS, covering the entire storage account
+fact: Should have been | Service SAS, scoped to a single container
+fact: Permissions | full control: read, write, delete, list everything
+fact: Expiry | October 5, 2021; extended in October 2021 to October 6, 2051
+Azure does not audit SAS token generation, so administrators had no visibility.
+notes:
+When sharing open-source AI training data publicly, the researcher used Azure's SAS token feature but chose the broadest option, an Account SAS, rather than a narrowly scoped Service SAS. An Account SAS covers the entire storage account; the page says this should have been a Service SAS, scoped to a single container. The page maps the stage to T1078.004, Valid Accounts: Cloud Accounts.
+
+The permissions were set to full control: read, write, delete and list everything. The expiry was set to October 5, 2021, and in October 2021 it was extended to October 6, 2051, 30 more years.
+
+Azure does not audit SAS token generation. The page quotes Azure's own warning that it is not possible to audit generation of SAS tokens, so administrators had no visibility of this token being made.
+
+The next slide explains, in general terms, what a SAS is and how a storage account is organized.
+
+== What a shared access signature is
+layout: background
+source: Microsoft Learn, shared access signatures (SAS) | https://learn.microsoft.com/en-us/azure/storage/common/storage-sas-overview
+credit: Also from Introduction to Azure Blob Storage (learn.microsoft.com)
+A SAS token, appended to a storage URI, sets what a client may access, with which permissions, until when. A service SAS covers a resource, such as a container, in one service. An account SAS covers one or more services.
+notes:
+This is a background slide. It explains shared access signatures in general, from Microsoft Learn, and says nothing about the incident.
+
+Microsoft describes a shared access signature as secure delegated access to resources in a storage account. The token is appended to the URI for an Azure Storage resource, and it controls what resources a client may access, what permissions it has, and how long the SAS is valid.
+
+Azure Storage supports three types: a user delegation SAS, a service SAS and an account SAS. A service SAS delegates access to a resource in only one of the storage services. An account SAS delegates access to resources in one or more of them. Both are signed with the storage account key.
+
+A stored access policy is defined on a container and sets the start time, expiry and permissions for one or more service SAS tokens. An account SAS cannot use one.
+
+From Introduction to Azure Blob Storage: a storage account provides a unique namespace for your data, and a container organizes a set of blobs, much like a directory in a file system. An account can hold an unlimited number of containers.
+
+Also from Introduction to Azure Blob Storage: https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction
+
+== On July 20, 2020, the SAS URL went into a public README
+layout: stage
+stage: 02
+phase: Exposure
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Where | the robust-models-transfer README, as download instructions
+fact: Public | July 20, 2020 to June 24, 2023 (2 years 11 months)
+fact: Renewed | October 2021, expiry extended to 2051 (30 more years)
+fact: Scanning gap | detection flagged only SAS URLs to sensitive content
+Microsoft's own rescan detected this URL but marked it a false positive.
+notes:
+The researcher committed the complete SAS token URL to the public GitHub repository robust-models-transfer, in its README, as download instructions. A README is the document a repository shows on its front page. The page maps this stage to T1552.001, Unsecured Credentials: Credentials In Files.
+
+The URL was publicly visible for nearly 3 years, from July 20, 2020 to June 24, 2023. In October 2021, the token was renewed, with the expiry extended to October 2051.
+
+GitHub's secret scanning, which looks for credentials committed to code, ran a Microsoft-provided SAS detection. That detection flagged only SAS URLs pointing to sensitive content. Microsoft's own rescans of its public repositories detected this URL but marked it a false positive, meaning they judged it not to be a real problem.
+
+Keep both halves when you tell this: detection reached the URL, and it was marked a false positive. The page does not say why.
+
+== The full storage account was accessible, not just the training data folder
+layout: stage
+stage: 03
+phase: Data Accessible
+technique: T1530 | Data from Cloud Storage
+fact: Exposed | 38TB, including backups, credentials, keys and Teams messages
+fact: Workstation backups | 2 employees' disks: passwords, private keys, personal data
+fact: Teams messages | 30,000+ from 359 employees
+fact: Meant to share | the intended open-source AI training data, in the same account
+Write access meant a malicious actor could have injected code into AI model files.
+notes:
+Anyone with the URL had full access to an internal Azure Blob storage account, rather than just the intended training data folder. The page maps this stage to T1530, Data from Cloud Storage.
+
+The account contained disk backups of two Microsoft employees' workstations, with saved passwords, private keys and personal data. It held an archive of more than 30,000 internal Microsoft Teams messages from 359 employees, and internal credentials and secret keys, alongside the intended open-source AI training data. The page puts the total at 38TB.
+
+Full-control permissions also meant a malicious actor could have injected code into AI model files, creating a supply chain attack vector. A supply chain attack compromises something others build on, so the malicious change reaches them through a channel they trust.
+
+Keep the words could have. The page describes what write access made possible, and does not say it happened.
+
+== Wiz Research found the token while scanning GitHub for misconfigured cloud storage
+layout: stage
+stage: 04
+phase: Discovery
+fact: Ongoing project | scanning the internet and public repositories
+fact: Found while | reviewing Microsoft's public AI GitHub repositories
+fact: Reported | to Microsoft's Security Response Center, June 22, 2023
+fact: Revoked | June 24, 2023, 2 days later (48 hours)
+fact: Afterwards | GitHub URL updated July 7; public disclosure September 18, 2023
+Microsoft found no evidence of malicious exfiltration beyond Wiz's research.
+notes:
+Discovery is the page's name for this stage: how the exposure was found. It maps to no ATT&CK technique, so the slide shows none.
+
+Wiz Research runs an ongoing project scanning the internet and public repositories for misconfigured cloud storage. While reviewing Microsoft's public AI GitHub repositories, its researchers found the SAS token URL, followed it, and discovered the full scope of the exposure.
+
+They reported it to MSRC, the Microsoft Security Response Center, on June 22, 2023. The token was revoked two days later, on June 24, which the page also gives as 48 hours. The GitHub URL was updated on July 7, 2023, and coordinated public disclosure followed on September 18, 2023.
+
+Microsoft found no evidence of malicious exfiltration beyond Wiz's research. Keep that wording: it is Microsoft's finding, as the page reports it.
+
+As the page discloses, Wiz Research discovered and disclosed this incident, and the site's author works at Wiz. The next slide explains coordinated disclosure in general terms.
+
+== What responsible or coordinated disclosure means
+layout: background
+source: OWASP Vulnerability Disclosure Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Vulnerability_Disclosure_Cheat_Sheet.html
+OWASP describes three models. Private disclosure leaves publishing to the organization. Full disclosure publishes details as soon as they are found. Responsible or coordinated disclosure reports privately first, then publishes full details once a patch is available.
+notes:
+This is a background slide. It explains disclosure models in general, from OWASP's Vulnerability Disclosure Cheat Sheet, and says nothing about the incident.
+
+In the private disclosure model, a vulnerability is reported privately to the organization, which decides whether to publish the details. OWASP notes that many such vulnerabilities may never be made public.
+
+With full disclosure, the full details are made public as soon as they are identified, sometimes including exploit code, often before a patch is available. OWASP calls this approach very controversial, and says it should generally be a last resort.
+
+Responsible disclosure, which OWASP also calls coordinated disclosure, seeks a reasonable middle ground. The initial report is made privately, and the full details are published once a patch has been made available, sometimes with a delay to allow more time for patches to be installed. In many cases the researcher also gives the organization a deadline to respond or to provide a patch.
+
+== An over-permissioned token: scope, permissions and expiry
+layout: text
+The page's summary describes the token in three parts.
+- An Account SAS for the entire storage account, not a file or container
+- Full-control permissions, to read, modify or delete
+- An expiry in 2051
+notes:
+The page's title calls this an over-permissioned token. Its summary describes the token in three parts.
+
+Instead of being scoped to a specific file or container, the token was an Account SAS with access to the entire storage account. It carried full-control permissions, so anyone who found the URL could read, modify or delete 38TB of internal Microsoft data. And it was set to expire in 2051. Stage 01 gives the detail: the expiry was first set to October 5, 2021, then extended in October 2021 to October 6, 2051.
+
+The first two defenses take up the scope and the lifetime directly.
+
+== Five defenses against four stages
+layout: matrix
+columns: 01 | 02 | 03 | 04
+row: Service SAS, never Account SAS, for sharing | 01
+row: SAS expiry limits on each storage account | 01 | 02
+row: Secret scanning, including SAS patterns | 02
+row: Public data in its own storage account | 03
+row: Monitor SAS-authenticated access | -
+No defense on the page is tied to stage 04, the discovery. The monitoring defense cites no stage's facts.
+notes:
+This matrix sets the page's five defenses against its four stages. The defenses name no stage numbers, so a cell is marked only where a defense's own words cite that stage's facts.
+
+Using a Service SAS scoped to a single container, never an Account SAS, for external sharing answers stage 01, where the page says the Account SAS should have been a Service SAS. Expiry limits answer the 30-year token: the expiry was set and extended in stage 01, and stage 02 reports the October 2021 renewal, 30 more years. Secret scanning for SAS token patterns answers stage 02's scanning gap. Keeping open-source training data in its own storage account, with no internal data co-located, answers stage 03, where the URL reached an internal account rather than just the intended training data folder.
+
+The monitoring defense speaks of storage accounts holding sensitive data, and of long-lived tokens, in general. It cites no stage's facts, so its row is empty.
+
+No defense is tied to stage 04, the discovery by Wiz Research. The first defense's instant revocation is not a tie, because the page does not say how this token was revoked. That gap is a discussion question at the end.
+
+== Scope the token to one container, and cap its lifetime
+layout: compare
+col: Service SAS (stage 01) | Never use an Account SAS for external sharing | A Service SAS scopes access to a single container | A Stored Access Policy allows instant revocation without rotating the account key
+col: Expiry limits (stages 01, 02) | Set a maximum SAS lifetime for each storage account | A 30-year token should never be possible | Set limits, such as 24 hours for external sharing, and alert on violations
+This token was an Account SAS, its expiry extended to 2051.
+notes:
+Two defenses answer the token's own settings.
+
+First, never use an Account SAS for external sharing. Always use a Service SAS with a Stored Access Policy. A Service SAS scopes access to a single container, and a Stored Access Policy allows central management and instant revocation without rotating the account key.
+
+Second, configure and enforce SAS expiration policies at the Azure storage account level. The page says Azure allows you to set a maximum SAS token lifetime, and that a 30-year token should never be possible. Set limits, for example 24 hours for external sharing, and alert on violations.
+
+In this incident, the researcher chose an Account SAS over the entire storage account, and its expiry was extended in October 2021 to October 6, 2051.
+
+== Scan every repository, and keep public data in its own account
+layout: compare
+col: Secret scanning (stage 02) | Scan all repositories, including for SAS token patterns | Trufflehog, GitLeaks and GitHub Advanced Security can detect SAS tokens | Microsoft has since expanded detection to any overly permissive SAS token
+col: Separate the data (stage 03) | Keep open-source training data in a dedicated storage account | Co-locate no internal data with it | A misconfiguration then limits the blast radius to the public data account only
+Here, one storage account held the training data beside workstation backups, keys and Teams messages.
+notes:
+Two more defenses, one for where the URL leaked and one for what it reached.
+
+First, run secret scanning across all repositories, including SAS token patterns. The page says Trufflehog, GitLeaks and GitHub Advanced Security can detect SAS tokens in code, and that Microsoft has since expanded the detection to any SAS token with overly permissive expirations or privileges. That answers stage 02, where the earlier detection flagged only SAS URLs pointing to sensitive content.
+
+Second, separate internal data from public data at the storage account boundary. Open-source training data should live in a dedicated storage account with no internal data co-located. A misconfiguration then limits the blast radius, the scope of damage, to the public data account only. That answers stage 03, where one internal storage account held the intended training data alongside workstation backups, keys and Teams messages.
+
+== Watch SAS-authenticated access to sensitive storage
+layout: text
+This defense cites no stage's facts.
+- Monitor SAS-authenticated access with Azure Monitor and Storage Analytics logs.
+- Alert on access from unexpected IPs or at unusual times, for accounts holding sensitive data.
+- Enable SAS expiration policies to catch long-lived tokens automatically.
+notes:
+The fifth defense is monitoring. Monitor SAS-authenticated access via Azure Monitor and Storage Analytics logs, and alert on access from unexpected IPs or at unusual times for storage accounts holding sensitive data. An IP address identifies where on the network a request came from.
+
+The page adds one more instruction here: enable SAS token expiration policies to catch long-lived tokens automatically, the same policies as the expiry defense.
+
+This defense speaks of sensitive storage accounts and long-lived tokens in general, and cites no stage's facts, so the matrix leaves its row empty. The group may argue that it reaches stage 03, where anyone with the URL had full access to an account holding sensitive data; that argument is the group's own.
+
+== Check your own environment
+layout: checklist
+check: Is any Account SAS used for external sharing?
+check: Could you revoke a shared SAS instantly, without rotating the account key?
+check: Does each storage account set a maximum SAS token lifetime, with alerts?
+check: Would a 30-year token be possible anywhere in your estate?
+check: Do you scan every repository for SAS token patterns?
+check: Does public data live in its own storage account, apart from internal data?
+check: Would you see SAS-authenticated access from an unexpected IP or at an unusual time?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether anything shared outside the organization uses an Account SAS, and whether a shared SAS could be revoked instantly, without rotating the account key, as a Service SAS with a Stored Access Policy allows.
+
+Ask whether each storage account sets a maximum SAS token lifetime and alerts on violations, and whether a 30-year token would be possible anywhere.
+
+Ask whether every repository is scanned for SAS token patterns, and whether public data, such as open-source training data, lives in its own storage account with no internal data beside it.
+
+Finally, ask whether SAS-authenticated access to storage accounts holding sensitive data is monitored, so that access from an unexpected IP or at an unusual time raises an alert.
+
+== Would your secret scanning flag this URL?
+layout: question
+The URL pointed to open-source training data, but its token gave full control of the entire storage account. The detection in place flagged only SAS URLs pointing to sensitive content.
+
+Would your scanning have flagged it, and on what?
+notes:
+Give the room a minute with this one before moving on.
+
+The page's facts: the researcher shared a URL to open-source training data, but the token in it was an Account SAS with full-control permissions to the entire storage account. GitHub's secret scanning ran a Microsoft-provided SAS detection that flagged only SAS URLs pointing to sensitive content. Microsoft's own rescans of its public repositories detected this URL but marked it a false positive. The page does not say why.
+
+Ask each person to say what their own scanning keys on: where a URL points, what the token allows, or how long it lasts. Then show the answer slide.
+
+== What the page says about scanning
+layout: answer
+Run secret scanning across all repositories, including SAS token patterns.
+- Trufflehog, GitLeaks and GitHub Advanced Security can detect SAS tokens in code.
+- Microsoft has since expanded the detection to any SAS token with overly permissive expirations or privileges.
+notes:
+The page's answer is its secret scanning defense.
+
+Run secret scanning across all repositories, including SAS token patterns. Trufflehog, GitLeaks and GitHub Advanced Security can detect SAS tokens in code.
+
+The page also reports that Microsoft has since expanded the detection to any SAS token with overly permissive expirations or privileges. Set that beside the earlier detection, which flagged only SAS URLs pointing to sensitive content.
+
+Bring the group's answers back to the two detections the page describes.
+
+== What would you add for stage 04?
+layout: question
+No defense on the page is tied to stage 04. Wiz Research found the token; it was revoked 2 days after the report.
+
+Who would find such a token in your estate, and how fast could you revoke it?
+notes:
+This question comes from the gap in the defense matrix.
+
+The page's defenses are tied to stages 01, 02 and 03, and the monitoring defense cites no stage. None is tied to stage 04, where Wiz Research found the token while reviewing Microsoft's public AI GitHub repositories and reported it to MSRC on June 22, 2023. The token was revoked two days later.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught or sped up.
+
+== The page ties no defense to stage 04
+layout: answer
+Proposals are the group's own. Test them against these details.
+- Wiz Research found it reviewing Microsoft's public AI GitHub repositories
+- Reported June 22, 2023; token revoked June 24, 2023
+- GitHub URL updated July 7; public disclosure September 18, 2023
+notes:
+Be clear where the page stops. No defense on the page is tied to stage 04, and this deck adds none of its own.
+
+Two defenses come near it, and neither is a tie. The Stored Access Policy in the first defense allows instant revocation without rotating the account key, but the page does not say how this token was revoked. The monitoring defense watches SAS-authenticated access, but cites no stage. The group may argue that either reaches stage 04; that argument is the group's own.
+
+Test each proposal against the facts the page reports for stage 04. Wiz Research found the token while reviewing Microsoft's public AI GitHub repositories, followed the URL, and discovered the full scope of the exposure. It reported to MSRC on June 22, 2023, and the token was revoked on June 24. The GitHub URL was updated on July 7, and public disclosure followed on September 18, 2023. Microsoft found no evidence of malicious exfiltration beyond Wiz's research.
+
+== Sources
+layout: links
+link: Wiz Research disclosure | https://www.wiz.io/blog/38-terabytes-of-private-data-accidentally-exposed-by-microsoft-ai-researchers
+link: BleepingComputer | https://www.bleepingcomputer.com/news/microsoft/microsoft-leaks-38tb-of-private-data-via-unsecured-azure-storage/
+link: GitGuardian analysis | https://blog.gitguardian.com/microsoft-ai-involuntarily-exposed-a-secret-giving-access-to-38tb-of-confidential-data-for-3-years/
+link: MITRE ATT&CK T1552.001 | https://attack.mitre.org/techniques/T1552/001/
+link: MITRE ATT&CK T1530 | https://attack.mitre.org/techniques/T1530/
+Disclosure: Wiz Research discovered and disclosed this incident, and the site's author works at Wiz.
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Wiz Research's disclosure is the primary source. As the page discloses, Wiz Research discovered and disclosed this incident, and the site's author works at Wiz. BleepingComputer is the independent coverage the page links beside it, so you can check the account against a second reporter. The page also cites a GitGuardian analysis. The two MITRE pages define the techniques the page maps to stages 02 and 03.
+
+The background slides name their own sources: Microsoft Learn and OWASP.
+
+== Related defense topics
+layout: links
+link: Azure security | azure-security.html
+link: Cloud data security | data-security.html
+link: CSPM and CNAPP for misconfiguration detection | cspm-vs-cnapp.html
+link: IAM and access control | iam.html
+The page links no other kill chain; these are its related defense topics.
+notes:
+The page links no other kill chain on csoh.org, so this slide carries its related defense topics instead.
+
+They are Azure security, cloud data security, CSPM and CNAPP for misconfiguration detection, and IAM and access control. CSPM is cloud security posture management, CNAPP is a cloud-native application protection platform, and IAM is identity and access management.
