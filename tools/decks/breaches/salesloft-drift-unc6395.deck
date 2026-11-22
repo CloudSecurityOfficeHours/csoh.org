@@ -1,0 +1,414 @@
+title: Salesloft Drift / UNC6395
+page: breaches/salesloft-drift-unc6395.html
+as-of: 2026-11-22
+promise: UNC6395 used stolen Drift OAuth tokens to bulk-export data from hundreds of Salesforce tenants, then combed it for secrets; 700+ organizations were potentially affected.
+
+== At a glance
+layout: stats
+stat: 700+ | organizations potentially affected | including major security vendors
+stat: ~10 | days of bulk exfiltration | August 8 to 18, 2025
+stat: OAuth | stolen Drift integration tokens | no password or MFA challenge
+UNC6395, also referenced as GRUB1, is tracked by Google GTIG and Mandiant. The page says the root cause was traced to Salesloft's GitHub.
+notes:
+Start with the three figures the page leads with.
+
+More than 700 organizations were potentially affected, including major security vendors. Keep the word potentially when you say it aloud. The page's summary uses it, and describes the Salesforce instances the actor reached as hundreds.
+
+The exfiltration window ran from August 8 to 18, 2025, which the page calls roughly ten days.
+
+The actor's credentials were stolen OAuth tokens for the Salesloft Drift integration, so no password or MFA challenge stood in the way. OAuth is an authorization standard that lets one application reach another service with a token in place of a user's password. MFA is multi-factor authentication.
+
+The actor is tracked as UNC6395, also referenced as GRUB1, by Google Threat Intelligence Group, or GTIG, and Mandiant. The page says the root cause was traced back to a compromise of Salesloft's GitHub, with undetected access from March to June 2025, before the Salesforce campaign.
+
+== What happened, and when
+layout: timeline
+event: March to June 2025 | Undetected access to Salesloft's GitHub account
+event: Date not given | Pivot into the Drift AWS environment; customer OAuth tokens harvested
+event: August 8 to 18, 2025 | Bulk SOQL queries and Bulk API exports, about ten days
+event: August 9 | Drift Email tokens used to read a very small number of Workspace accounts' email
+event: August 20, 2025 | Salesloft and Salesforce revoke all active Drift OAuth tokens
+The page says the root cause was traced to Salesloft's GitHub, and that the exports were combed for secrets. Spacing is not to scale.
+notes:
+The timeline shows only the dates the page gives.
+
+From March to June 2025 the actor had undetected access to Salesloft's GitHub account. It then pivoted into the Drift AWS environment, where OAuth tokens for Drift's customer integrations were stored, and harvested them. The page gives no date for the pivot, so the slide does not invent one.
+
+From August 8 to 18, 2025, roughly ten days, the actor ran bulk SOQL queries and Bulk API exports against Salesforce tenants. SOQL is the Salesforce Object Query Language.
+
+Separately, on August 9, the actor used OAuth tokens for the Drift Email integration to read email from a very small number of Google Workspace accounts.
+
+On August 20, 2025, Salesloft and Salesforce revoked all active Drift OAuth tokens, and Salesforce removed the Drift app from AppExchange pending investigation. AppExchange is Salesforce's marketplace for third-party apps.
+
+The markers are evenly spaced, so do not read the gaps between them as durations.
+
+== Two Drift integrations, two kinds of access
+layout: compare
+col: Salesforce, via the Drift chat integration | Customer OAuth tokens harvested from the Drift AWS environment | Hundreds of tenants reached | Bulk exports from August 8 to 18, 2025
+col: Google Workspace, via Drift Email | OAuth tokens for the Drift Email integration | A very small number of accounts that had specifically connected Drift | Email read on August 9
+The page reports the Google Workspace access separately from the Salesforce access.
+notes:
+The page describes two uses of Drift tokens, and this slide keeps them apart.
+
+The main campaign used OAuth tokens tied to the Salesloft Drift third-party chat integration, harvested from the Drift AWS environment. With them the actor reached hundreds of organizations' Salesforce instances and ran bulk exports from August 8 to 18, 2025.
+
+Separately, on August 9, the actor abused OAuth tokens for the Drift Email integration to read email from a very small number of Google Workspace accounts that had specifically connected Drift.
+
+Keep the scopes apart when you present: the Google Workspace access was a very small number of accounts, on August 9.
+
+Keep the page's headline figure as it gives it: 700+ organizations potentially affected.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Recon & Upstream Compromise | GitHub, then Drift's AWS | T1552
+step: 02 | Initial Access | Stolen Drift OAuth tokens | T1528
+step: 03 | Discovery | Salesforce objects mapped | T1213
+step: 04 | Exfiltration | Bulk SOQL exports | T1530
+step: 05 | Impact | Secrets mined from exports | T1552
+Arrows show the page's stage order.
+notes:
+Here is the whole chain on one slide: the page's five stages, each with its phase and ATT&CK technique.
+
+Stage 01 is the upstream compromise: months in Salesloft's GitHub account, then a pivot into the Drift AWS environment where customer OAuth tokens were stored. Stage 02 is initial access, using those tokens against customers' Salesforce tenants. Stage 03 is discovery, mapping Salesforce objects to find where sensitive text lived. Stage 04 is exfiltration through bulk SOQL queries and Bulk API exports. Stage 05, which the page labels Impact, is the mining of those exports for secrets.
+
+The page maps two stages to the same technique, T1552, Unsecured Credentials: stage 01, where the tokens were harvested, and stage 05, where the exports were mined.
+
+The next slides take each stage in turn.
+
+== Months in Salesloft's GitHub, then a pivot to Drift's AWS
+layout: stage
+stage: 01
+phase: Recon & Upstream Compromise
+technique: T1552 | Unsecured Credentials
+fact: Entry | Salesloft's GitHub, undetected March through June 2025
+fact: In GitHub | private repositories downloaded, a guest user and suspicious CI/CD workflows added
+fact: Pivot | the Drift AWS environment, holding customer OAuth tokens
+Those tokens gave pre-authenticated access to every downstream Salesforce tenant that had connected Drift.
+notes:
+Stage 01 is the upstream root cause, which the page maps to T1552, Unsecured Credentials.
+
+From March through June 2025 the actor had access to Salesloft's GitHub account. It downloaded content from multiple private repositories, added a guest user, and established suspicious CI/CD workflows. CI/CD means the pipelines that build, test and deploy code automatically.
+
+From there the actor pivoted into the Drift AWS environment, where the OAuth access and refresh tokens issued to Drift's customer integrations were stored. The page does not say how the pivot was made.
+
+Harvesting those tokens gave the actor pre-authenticated access to every downstream Salesforce tenant that had connected Drift, with no victim-side credential theft required.
+
+Dwell time is how long an attacker is in an environment before detection. Here the GitHub access went undetected from March to June 2025, before the Salesforce campaign.
+
+No defense on the page names Salesloft's GitHub account or the Drift AWS environment. That gap comes back in the discussion at the end.
+
+== Stolen Drift tokens opened Salesforce tenants with no password or MFA challenge
+layout: stage
+stage: 02
+phase: Initial Access
+technique: T1528 | Steal Application Access Token
+fact: Credential | OAuth refresh and access tokens for the Drift integration
+fact: Auth path | trusted third-party app; no login, MFA or password prompt
+fact: Also abused | Drift Email tokens, for a very small number of Workspace accounts
+The tokens were valid, pre-authorized application credentials, so the actor connected directly to each customer's Salesforce instance.
+notes:
+Stage 02 is initial access, which the page maps to T1528, Steal Application Access Token.
+
+The stolen Drift OAuth refresh and access tokens were valid, pre-authorized application credentials. The actor connected directly to each customer's Salesforce instance through the trusted integration, bypassing user login, MFA and password controls entirely. MFA is multi-factor authentication.
+
+Because the access rode an approved third-party integration, the page says, the activity blended in with normal Drift API traffic. An API is the interface programs use to talk to a service.
+
+Separately, on August 9, the actor abused OAuth tokens for the Drift Email integration to read email from a very small number of Google Workspace accounts that had specifically connected Drift. Keep that scope when you tell it.
+
+The next slide explains access tokens and refresh tokens in general terms.
+
+== What OAuth access tokens and refresh tokens are
+layout: background
+source: RFC 6749, The OAuth 2.0 Authorization Framework | https://www.rfc-editor.org/rfc/rfc6749
+An access token is a credential for protected resources, replacing constructs such as a username and password. It represents specific scopes and durations of access.
+
+Refresh tokens are used to obtain a new access token when the current one expires.
+notes:
+This is a background slide. It explains two ideas in general, from RFC 6749, the OAuth 2.0 standard, and says nothing about the incident.
+
+RFC 6749 describes OAuth 2.0 as a framework that lets a third-party application obtain limited access to an HTTP service, either on behalf of a resource owner or on its own behalf.
+
+Access tokens are credentials used to access protected resources. An access token is a string representing an authorization issued to the client, and it represents specific scopes and durations of access, granted by the resource owner. The RFC says the access token replaces different authorization constructs, such as a username and password, with a single token the resource server understands.
+
+Refresh tokens are credentials used to obtain access tokens. The authorization server issues them, and the client presents one to obtain a new access token when the current one becomes invalid or expires, or to obtain additional access tokens with identical or narrower scope. Unlike access tokens, refresh tokens are intended for use only with authorization servers and are never sent to resource servers.
+
+== UNC6395 mapped the Salesforce objects where sensitive text lived
+layout: stage
+stage: 03
+phase: Discovery
+technique: T1213 | Data from Information Repositories
+fact: Tooling | Python-based, through Salesforce's APIs
+fact: Objects targeted | Case, Account, Contact, User, Opportunity
+fact: Evasion | custom user-agent strings, to appear like a legitimate integration
+Support case text was a prime target because customers routinely paste keys, tokens and passwords into tickets.
+notes:
+Stage 03 is discovery, which the page maps to T1213, Data from Information Repositories.
+
+Working through Salesforce's APIs with Python-based tooling, UNC6395 enumerated the standard objects reachable by the compromised Drift integration, to find where sensitive text lived. It focused on records that commonly hold free-text and credential-bearing content: Cases, which hold support ticket bodies, and Accounts, Contacts, Users and Opportunities.
+
+Support case text was a prime target because customers routinely paste keys, tokens and passwords into tickets.
+
+The page says the actor used custom user-agent strings to appear like a legitimate integration and reduce the chance of anomaly detection. A user agent is the string a client sends to identify its software.
+
+The next slide explains, in general terms, what ATT&CK means by an information repository.
+
+== What ATT&CK means by information repositories
+layout: background
+source: MITRE ATT&CK T1213 | https://attack.mitre.org/techniques/T1213/
+ATT&CK says adversaries may mine information repositories, tools that store information for collaboration or sharing, for data that may aid further objectives such as Credential Access.
+
+Common repositories it names include customer relationship management (CRM) databases.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes information repositories as tools that allow for storage of information, typically to facilitate collaboration or information sharing between users. It says they can store a wide variety of data that may aid adversaries in further objectives, such as Credential Access or Lateral Movement, or give direct access to the target information.
+
+Its examples of information with potential value to an adversary include testing and development credentials, source code snippets, and contact or other sensitive information about business partners and customers.
+
+Specific common repositories it names include storage services such as customer relationship management databases, collaboration platforms such as SharePoint and Confluence, and messaging platforms such as Slack and Microsoft Teams. ATT&CK also lists sub-techniques for particular kinds of repository, customer relationship management software among them.
+
+== Bulk SOQL queries and Bulk API exports ran for about ten days
+layout: stage
+stage: 04
+phase: Exfiltration
+technique: T1530 | Data from Cloud Storage
+fact: Method | automated SOQL queries and Bulk API export jobs
+fact: Window | about ten days, August 8 to 18, 2025
+fact: Taken | support-case text, contact and account data, from hundreds of tenants
+The exports looked like ordinary bulk integration activity, and no real-time DLP alert fired during the bulk pulls.
+notes:
+Stage 04 is exfiltration, which the page maps to T1530, Data from Cloud Storage.
+
+The actor ran automated SOQL queries and used the Bulk API to export large volumes of records from the targeted objects across hundreds of tenants. The queries and jobs ran through the same OAuth-authenticated integration channel, so the exfiltration looked like ordinary bulk integration activity.
+
+Over the roughly ten-day window, August 8 to 18, 2025, the actor systematically drained support-case text, contact and account data.
+
+Salesforce event logs retained the queries for post-incident forensics, but the page says no real-time DLP alert fired during the bulk pulls. DLP, data loss prevention, is tooling that detects and blocks sensitive data leaving its boundary. The page also names the gap as no DLP or rate-limit alert on large SOQL or Bulk API exports.
+
+The page's headline figure is 700+ organizations potentially affected. Keep the word potentially with it.
+
+The next slide explains, in general terms, how ATT&CK treats data held in cloud storage, including SaaS platforms.
+
+== What ATT&CK means by data from cloud storage
+layout: background
+source: MITRE ATT&CK T1530 | https://attack.mitre.org/techniques/T1530/
+ATT&CK's examples of cloud storage run from object stores such as Amazon S3 to storage SaaS providers offer, Salesforce among them. In SaaS applications, it says, adversaries may collect data directly from APIs rather than through the front-end interface.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK says adversaries may access data from cloud storage. It names IaaS object storage such as Amazon S3, Azure Storage and Google Cloud Storage, and SaaS enterprise platforms such as Office 365 and Google Workspace, which offer document storage through services such as OneDrive and Google Drive. It adds that SaaS application providers such as Slack, Confluence, Salesforce and Dropbox may provide cloud storage as a peripheral or primary use of their platform.
+
+For IaaS storage, ATT&CK says there may be no overarching application to go through, so data is retrieved directly through the cloud API. In SaaS applications, adversaries may be able to collect data directly from APIs or backend cloud storage objects, rather than through the front-end application or interface.
+
+IaaS is infrastructure as a service, and SaaS is software as a service.
+
+== The exports were combed for keys, tokens and passwords
+layout: stage
+stage: 05
+phase: Impact
+technique: T1552 | Unsecured Credentials
+fact: Method | scanning the stolen exports, likely with scripts and regex
+fact: Secrets hunted | AWS key IDs (AKIA...), Snowflake tokens, VPN credentials, passwords
+fact: Contained | August 20, 2025: Drift tokens revoked; app pulled from AppExchange pending investigation
+Any live secret found became a foothold into a victim's cloud estate.
+notes:
+Stage 05 is the stage the page labels Impact. It maps to T1552, Unsecured Credentials, the same technique as stage 01.
+
+The page says the campaign's real objective was credential harvesting, not the Salesforce data itself. UNC6395 scanned the stolen exports, likely with scripts and regex, for patterns that reveal secrets: AWS access key IDs beginning AKIA, Snowflake tokens, VPN credentials, and password strings pasted into support cases. Keep the word likely; the page gives the method as likely. Regex, short for regular expression, is a pattern language for matching text. Snowflake is a cloud data warehouse.
+
+Any live secret found became a foothold into a victim's cloud estate. The page calls the result potential AWS and data-warehouse compromise.
+
+On August 20, 2025, Salesloft and Salesforce revoked all active Drift OAuth tokens, and Salesforce removed the Drift app from AppExchange pending investigation.
+
+The next slide explains AWS access keys and the AKIA prefix in general terms.
+
+== What an AWS access key is
+layout: background
+source: AWS IAM User Guide, manage access keys for IAM users | https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
+credit: Also from IAM identifiers (docs.aws.amazon.com)
+Access keys are long-term credentials for an IAM user or the account root user: an access key ID plus a secret access key, used together.
+
+IAM's prefix for an access key ID is AKIA; temporary access keys use ASIA.
+notes:
+Background, from AWS's IAM documentation, in general terms. IAM is AWS Identity and Access Management.
+
+AWS describes access keys as long-term credentials for an IAM user or the AWS account root user, used to sign programmatic requests to the AWS command line interface or the AWS API.
+
+An access key has two parts: an access key ID, such as the documentation's example AKIAIOSFODNN7EXAMPLE, and a secret access key. AWS says you must use both together to authenticate requests. It warns that giving your access keys to unauthorized parties might give someone permanent access to your account.
+
+IAM uses prefixes to show what kind of resource a unique ID belongs to, and notes that prefixes may vary based on when they were created. AKIA marks an access key. ASIA marks a temporary access key from AWS STS, the Security Token Service, and such an ID is unique only in combination with its secret access key and session token.
+
+Also from IAM identifiers: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html
+
+== From one vendor's GitHub to customers' secrets, as the page describes it
+layout: layers
+layer: Salesloft | GitHub account, accessed March to June 2025
+layer: Drift | AWS environment holding customer OAuth tokens
+layer: Customers | Salesforce tenants that had connected Drift
+layer: Exports searched | AWS keys, Snowflake tokens, VPN credentials, passwords
+Any live secret found became a foothold toward potential AWS and data-warehouse compromise.
+notes:
+This slide draws the path the page describes, from one vendor's GitHub account to secrets in its customers' data. Each arrow is a step the page states.
+
+The actor accessed Salesloft's GitHub account from March to June 2025, then pivoted into the Drift AWS environment, where OAuth tokens issued to Drift's customer integrations were stored. Those tokens gave pre-authenticated access to every downstream Salesforce tenant that had connected Drift. Records exported from those tenants were combed for AWS keys, Snowflake tokens, VPN credentials and passwords, and any live secret found became a foothold toward potential AWS and data-warehouse compromise.
+
+The page calls this one of the largest SaaS supply-chain incidents of 2025. SaaS is software as a service: a hosted application where the customer manages only its data and users.
+
+The Google Workspace access on August 9 is left off this diagram, because the page describes it as separate.
+
+== Five defenses against five stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05
+row: Inventory and scope OAuth integrations | 02 | 03
+row: SSPM baselines of integration behavior | 03 | 04
+row: No secrets in support cases or CRM fields | 05
+row: Short-lived tokens, revoked on provider incidents | 02
+row: Treat exposed keys as burned, and rotate | 05
+No defense on the page names stage 01's GitHub account or the Drift AWS environment.
+notes:
+This matrix sets the page's five defenses against its five stages. A cell is marked only where the defense's own words name something from that stage.
+
+The inventory defense names connected apps in Salesforce and Google Workspace, and what a stolen token can reach; stage 02 is where stolen tokens reached both. It also names the Case, Account and User objects stage 03 targeted.
+
+The SSPM defense names each integration's objects and user-agent, from stage 03, and a Drift token running bulk SOQL exports, from stage 04. SSPM is SaaS Security Posture Management.
+
+Keeping secrets out of support cases names the AKIA pattern hunted at stage 05. Treating exposed keys as burned answers stage 05 too, where the actor mined exports for embedded secrets.
+
+Short-lived, rotated tokens answer stage 02, where stolen refresh and access tokens were the actor's credential.
+
+Now look at the empty column. Stage 01 is where the tokens were stored and harvested, but no defense names Salesloft's GitHub account or the Drift AWS environment. That gap is a discussion question at the end.
+
+== Inventory every OAuth integration, and keep its tokens short-lived
+layout: compare
+col: Inventory and scope (stages 02 and 03) | Keep a live register of connected apps in Salesforce, Google Workspace and others | Grant each app the minimum OAuth scopes it needs
+col: Short-lease and revoke (stage 02) | Long-lived OAuth refresh tokens are a standing key to your data | Prefer short token lifetimes; rotate integration credentials regularly | When a provider discloses a compromise, revoke its tokens at once
+Narrow scopes shrink what a stolen token can reach, the page says.
+notes:
+Two defenses deal with the integration and its tokens.
+
+First, inventory and scope every third-party OAuth integration connected to your SaaS tenants. Keep a live register of connected apps in Salesforce, Google Workspace and other SaaS platforms, and grant each the minimum OAuth scopes it needs. The page's example: a chat widget should not carry broad read access to every Case, Account and User object. Narrow scopes shrink what a stolen token can reach.
+
+Second, rotate and short-lease integration tokens, and revoke aggressively on any provider incident. The page calls long-lived OAuth refresh tokens a standing key to your data. Prefer short token lifetimes and rotate integration credentials regularly. When a SaaS provider discloses a compromise, immediately revoke that app's tokens and remove it from allowlists, rather than waiting for guaranteed impact confirmation.
+
+== Watch integration behavior with SSPM, as well as user logins
+layout: text
+The page says an IAM-plus-SSPM approach that baselines each integration can flag the anomaly here: a Drift token suddenly running bulk SOQL exports.
+- Baseline each integration's normal API volume, objects and user-agent.
+- Feed connected-app and API telemetry into your SIEM.
+notes:
+This defense answers stages 03 and 04.
+
+Deploy SaaS Security Posture Management, SSPM, to watch integration behavior as well as user logins. The page says an IAM-plus-SSPM approach, one that baselines each integration's normal API volume, objects and user-agent, can flag the anomaly in this case: a Drift token suddenly running bulk SOQL exports against Cases, Accounts, Users and Opportunities. IAM is identity and access management.
+
+Feed connected-app and API telemetry into your SIEM. A SIEM, security information and event management, gathers logs centrally, correlates them and raises alerts.
+
+Recall stage 04's detection gap. The page says no real-time DLP alert fired during the bulk pulls, and that the access blended in with normal Drift API traffic. The page's answer is a baseline of each integration's normal behavior, which it says can flag the anomaly.
+
+== Keep secrets out of tickets, and rotate any that were there
+layout: compare
+col: Keep secrets out of free text (stage 05) | Never store secrets in support cases, CRM notes or free-text fields | Use a dedicated secrets manager | Scan free text for patterns such as AKIA; redact or block at ingestion
+col: Assume exposed keys are burned (stage 05) | Rotate and monitor every key, token or password that touched an affected tenant | Review CloudTrail and Snowflake query history for use after the exposure window
+The page says this breach was devastating because customers had pasted AWS keys, Snowflake tokens and passwords into Salesforce Cases.
+notes:
+Two defenses answer stage 05.
+
+First, never store secrets in support cases, CRM notes or free-text SaaS fields. The page says this breach was devastating because customers had pasted AWS keys, Snowflake tokens and passwords into Salesforce Cases. Use a dedicated secrets manager. Scan CRM and ticketing free text for credential patterns, such as AKIA, token= and password:, and auto-redact or block them at ingestion. CRM is customer relationship management.
+
+Second, assume any exposed key is burned and rotate downstream credentials. Because the actor mined exports for embedded secrets, every AWS access key, Snowflake token or password that ever touched an affected Salesforce or Workspace tenant should be rotated and monitored.
+
+Review CloudTrail and Snowflake query history for use of any potentially exposed credential after the exposure window. CloudTrail is AWS's log of API activity in an account.
+
+== Check your own environment
+layout: checklist
+check: Can you list every third-party OAuth app connected to your SaaS tenants?
+check: Does each integration hold only the OAuth scopes it needs?
+check: Is each integration's API volume, objects and user-agent baselined, with telemetry in your SIEM?
+check: Would you find an AWS key or password pasted into a support case?
+check: How long do your integration tokens live, and when were they last rotated?
+check: Could you revoke a provider's tokens the day it discloses a compromise?
+check: After a SaaS incident, could you rotate every key that touched the tenant?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether you could list every third-party OAuth app connected to your Salesforce, Google Workspace and other SaaS tenants, and whether each holds only the scopes it needs.
+
+Ask whether anything baselines each integration's normal API volume, objects and user-agent, and whether connected-app and API telemetry reaches your SIEM.
+
+Ask whether a scan would find an AWS key, token or password pasted into a support case or CRM note.
+
+Ask how long your integration tokens live, when they were last rotated, and whether you could revoke a provider's tokens the day it discloses a compromise.
+
+Finally, ask whether, after a SaaS incident, you could rotate and monitor every key that ever touched the affected tenant.
+
+== What secrets sit in your support cases today?
+layout: question
+At stage 05 the actor combed exported Salesforce records for AWS keys, Snowflake tokens, VPN credentials and passwords.
+
+Think of your own ticketing and CRM free text. What would turn up, and how would you know?
+notes:
+Give the room a minute with this one before moving on.
+
+At stage 03 the actor targeted support cases because customers routinely paste keys, tokens and passwords into tickets. At stage 05 it scanned the exports, likely with scripts and regex, for AWS access key IDs, Snowflake tokens, VPN credentials and password strings.
+
+Ask each person to picture an export of their own ticketing system or CRM notes. What would a pattern search find? Would anyone know it had been run? The answer slide gives what the page says.
+
+== What the page says about secrets in free text
+layout: answer
+The page says never store secrets in support cases, CRM notes or free-text SaaS fields.
+- Scan free text for credential patterns, and auto-redact or block them at ingestion.
+- Rotate and monitor any key that touched an affected tenant.
+notes:
+The page's answer has two parts.
+
+Keep secrets out: never store them in support cases, CRM notes or free-text SaaS fields. Use a dedicated secrets manager, scan CRM and ticketing free text for credential patterns such as AKIA, token= and password:, and auto-redact or block them at ingestion.
+
+Assume what was there is burned: rotate and monitor every AWS access key, Snowflake token or password that ever touched an affected tenant, and review CloudTrail and Snowflake query history for use after the exposure window.
+
+Bring the group's answers back to this. If someone found a secret in their own free text, the page's guidance is to treat it as burned and rotate it.
+
+== What would you add for stage 01?
+layout: question
+No defense on the page names Salesloft's GitHub account or the Drift AWS environment, where the tokens were stored.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the empty column in the defense matrix.
+
+At stage 01 the actor had undetected access to Salesloft's GitHub account from March to June 2025. It downloaded content from multiple private repositories, added a guest user and established suspicious CI/CD workflows. It then pivoted into the Drift AWS environment, where OAuth tokens for Drift's customer integrations were stored, and harvested them.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught, and whose environment it would run in.
+
+== No page defense names Salesloft's GitHub or Drift's AWS
+layout: answer
+Any control you propose is your own; test it against the guest user, the workflows and the months undetected. One page defense comes near:
+- When a SaaS provider discloses a compromise, revoke that app's tokens at once.
+notes:
+Be clear that the page stops here. No defense names Salesloft's GitHub account or the Drift AWS environment, and this deck adds none of its own.
+
+One page defense comes near. When a SaaS provider discloses a compromise, the page says to immediately revoke that app's tokens and remove it from allowlists, rather than waiting for guaranteed impact confirmation. The group may argue that it reaches stage 01; that argument is the group's own.
+
+Test each proposal against the facts the page reports: the private repositories downloaded, the guest user added, the suspicious CI/CD workflows, the undetected access from March to June 2025, and the pivot into the Drift AWS environment where the tokens were stored.
+
+== Sources
+layout: links
+link: Google GTIG, data theft via Salesloft Drift | https://cloud.google.com/blog/topics/threat-intelligence/data-theft-salesforce-instances-via-salesloft-drift
+link: Cloudflare, response to the Salesloft Drift incident | https://blog.cloudflare.com/response-to-salesloft-drift-incident/
+link: CyberScoop, GitHub root cause | https://cyberscoop.com/salesloft-drift-attack-root-cause-github-oauth/
+link: MITRE ATT&CK T1528 | https://attack.mitre.org/techniques/T1528/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Google Threat Intelligence Group's analysis covers the data theft through Salesloft Drift. Cloudflare published its response to the incident. CyberScoop reported the GitHub root cause. The MITRE page defines T1528, Steal Application Access Token, the technique behind stage 02.
+
+The background slides name their own sources: the OAuth standard, two MITRE ATT&CK techniques, and AWS's IAM documentation.
+
+== Related defense topics
+layout: links
+link: SaaS security (SSPM) | saas-security.html
+link: IAM, OAuth & cloud identity | iam.html
+link: API security | api-security.html
+link: Cloud threat research | threat-research.html
+The page names no related kill chain. These are its related defense topics.
+notes:
+The page names no related kill chain on csoh.org. These four are the related defense topics it links: SaaS security and SSPM, IAM with OAuth and cloud identity, API security, and cloud threat research.
+
+IAM stands for identity and access management.
