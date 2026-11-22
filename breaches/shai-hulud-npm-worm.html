@@ -24,7 +24,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-07-26">
-    <meta property="article:modified_time" content="2026-10-25">
+    <meta property="article:modified_time" content="2026-11-22">
     <meta property="article:author" content="Cloud Security Office Hours">
     <meta property="article:section" content="Breach Kill Chains">
     <meta property="article:tag" content="Shai-Hulud npm worm">
@@ -79,7 +79,7 @@
     }
   },
   "datePublished": "2026-07-26",
-  "dateModified": "2026-10-25",
+  "dateModified": "2026-11-22",
   "mainEntityOfPage": "https://csoh.org/breaches/shai-hulud-npm-worm.html",
   "speakable": {
     "@type": "SpeakableSpecification",
@@ -97,6 +97,10 @@
     "description": "A self-replicating worm compromised more than 500 npm packages after compromising maintainer accounts, using TruffleHog to harvest secrets from developer machines, republishing itself across each maintainer's packages automatically, and committing stolen credentials to public GitHub repositories."
   },
   "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Wiz"
+    },
     {
       "@type": "Organization",
       "name": "npm"
@@ -362,6 +366,7 @@
       <div class="inc-stat"><strong>TruffleHog.</strong> A defender's tool, run against the developer</div>
       <div class="inc-stat"><strong>Returned</strong> as Shai-Hulud 2.0 in November 2025, then Mini Shai-Hulud in 2026</div>
     </div>
+    <p class="inc-summary"><strong>Disclosure:</strong> research published by Wiz is one of the sources cited on this page, and the site's author works at Wiz. Every source is linked so you can read it directly.</p>
     <a class="pm-link" href="https://unit42.paloaltonetworks.com/npm-supply-chain-attack/" target="_blank" rel="noopener">📄 Unit 42 - Shai-Hulud worm compromises the npm ecosystem ↗</a>
     <a class="pm-link" href="https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem" target="_blank" rel="noopener">📄 CISA - Widespread supply chain compromise impacting the npm ecosystem ↗</a>
   </div>
@@ -486,8 +491,8 @@
           <div class="step-title">Harvested credentials were serialized to JSON and committed to a newly created public repository named "Shai-Hulud" in the victim's own GitHub account</div>
           <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1567/001/" target="_blank" rel="noopener">T1567.001 - Exfiltration to Code Repository</a>
         </div>
-        <p class="step-desc">Using the stolen GitHub token and the <code>/user/repos</code> endpoint, the malware created a public repository in the victim's own account and committed the harvested secrets into it as JSON. As with <a href="nx-s1ngularity.html">Nx / s1ngularity</a> the same month, the destination is GitHub itself, so there is no attacker infrastructure to blocklist and no unusual <a class="glossary-link" href="../glossary.html#term-ingress">egress</a> to notice. </p>
-        <p class="step-desc">And as there, the repositories were public, which converted a theft into a broadcast: every secret was readable by anyone who found the repo, including the many automated scrapers that watch GitHub for exactly this. Some variants also exfiltrated to a <code>webhook.site</code> endpoint. Two independent groups of npm incidents in one month settling on the same trick is worth reading as a pattern rather than a coincidence.</p>
+        <p class="step-desc">Using the stolen GitHub token and the <code>/user/repos</code> endpoint, the malware created a public repository in the victim's own account and committed the harvested secrets into it as JSON. As with <a href="nx-s1ngularity.html">Nx / s1ngularity</a> three weeks earlier, the destination is GitHub itself, so there is no attacker infrastructure to blocklist and no unusual <a class="glossary-link" href="../glossary.html#term-ingress">egress</a> to notice. </p>
+        <p class="step-desc">And as there, the repositories were public, which converted a theft into a broadcast: every secret was readable by anyone who found the repo, including the many automated scrapers that watch GitHub for exactly this. Some variants also exfiltrated to a <code>webhook.site</code> endpoint. Two independent groups of npm incidents within three weeks settling on the same trick is worth reading as a pattern rather than a coincidence.</p>
         <div class="step-code">
           <span class="hl">Method:</span> GitHub <code>/user/repos</code> API with the stolen token, creating a public repo<br>
           <span class="hl">Repo name:</span> "Shai-Hulud" (2.0 used "Sha1-Hulud: The Second Coming")<br>
@@ -528,7 +533,7 @@
         <div class="def-item"><strong>Replace long-lived publish tokens with short-lived, scoped, provenance-backed publishing.</strong> The worm propagated because a stolen token was a standing licence to publish anything the account owned. npm Trusted Publishing with OIDC removes the stealable object entirely, SLSA provenance ties a release to a specific workflow run, and granular tokens scoped to one package cap what any single theft can reach. Revoke tokens that bypass 2FA.</div>
         <div class="def-item"><strong>Hunt the persistence, not just the package.</strong> Search every repository for <code>.github/workflows/shai-hulud-workflow.yml</code>, for any workflow containing <code>toJSON(secrets)</code>, and for public repositories named "Shai-Hulud" or "Sha1-Hulud" in your organization and your developers' personal accounts. For the 2.0 wave, check for <code>discussion.yaml</code> and for unexpected self-hosted runners registered against your repositories. Downgrading a package removes none of these.</div>
         <div class="def-item"><strong>Alert on your own security tooling being fetched and run by a build.</strong> A postinstall script downloading and executing TruffleHog is a strong signal precisely because the tool is legitimate: nothing about your dependency install should be pulling a secret scanner off the internet. More generally, treat unexpected ingress of any security binary into a build environment as suspicious, and default-deny egress from build runners so the fetch fails in the first place.</div>
-        <div class="def-item"><strong>Assume anything a developer machine could reach is compromised, and rotate on that basis.</strong> The haul spanned npm, GitHub, all three major clouds and SSH keys, so the response scope is every credential present on or reachable from an affected machine, not just the npm token. Then check GitHub audit logs for repositories you did not create and for private repositories that changed visibility, because that is how the same month's <a href="nx-s1ngularity.html">s1ngularity</a> second wave played out.</div>
+        <div class="def-item"><strong>Assume anything a developer machine could reach is compromised, and rotate on that basis.</strong> The haul spanned npm, GitHub, all three major clouds and SSH keys, so the response scope is every credential present on or reachable from an affected machine, not just the npm token. Then check GitHub audit logs for repositories you did not create and for private repositories that changed visibility, because that is how the late-August <a href="nx-s1ngularity.html">s1ngularity</a> second wave played out.</div>
       </div>
     </div>
 
