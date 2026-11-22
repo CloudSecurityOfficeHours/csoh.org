@@ -1,0 +1,484 @@
+title: LiteLLM / TeamPCP
+page: breaches/litellm-pypi-teampcp.html
+as-of: 2026-11-22
+promise: The maintainers traced it to a poisoned Trivy scanner in LiteLLM's own CI, which leaked the PyPI token; two malicious releases followed that swept cloud and AI provider credentials.
+
+== At a glance
+layout: stats
+stat: 2h 32m | live on PyPI before quarantine | per PyPI's incident report
+stat: 119,000+ | downloads in that window | per PyPI
+Two malicious versions, 1.82.7 and 1.82.8, neither with a matching git tag. The page puts the root cause in the security scanner in CI, not the maintainers' laptops. LiteLLM's own post says about 40 minutes live.
+notes:
+Start with the figures the page leads with, and with who stands behind each one.
+
+PyPI's incident report puts total exposure at 2 hours 32 minutes, and downloads in that window at over 119,000. LiteLLM's own post says about 40 minutes, and the page notes that this conflicts with the 10:39 to 16:00 UTC window LiteLLM tells users to check. Name PyPI when you give these figures.
+
+The two malicious versions were 1.82.7 and 1.82.8. Neither has a matching tag or release in the LiteLLM GitHub repository.
+
+LiteLLM is the open-source LLM gateway that sits in front of model providers for a very large number of AI applications. LLM means large language model. The page puts its downloads on the order of 95 million a month, so the blast pattern was wide by construction.
+
+The maintainers traced the compromise to Trivy, the vulnerability scanner running inside LiteLLM's own CI/CD pipeline. That is why the page puts the root cause in the security scanner in CI, not the maintainers' laptops.
+
+== What happened, and when
+layout: timeline
+event: Roughly March 19 to 23, 2026 | Researchers place the Trivy compromise here
+event: March 24, 10:39 UTC | 1.82.7 published to PyPI, with an obfuscated payload
+event: March 24, 10:52 UTC | 1.82.8 published, adding litellm_init.pth
+event: Same day | PyPI administrators quarantine the project
+event: August | SOCRadar reports its exposure sample
+event: October | LiteLLM compromised again, by a different route
+The page gives no time for the quarantine. The last two markers come after the incident. Spacing is not to scale.
+notes:
+The timeline shows only dates the page gives.
+
+Researchers place the Trivy compromise roughly March 19 to 23, 2026, in the days immediately before the malicious publish. On March 24, version 1.82.7 went up at 10:39 UTC and 1.82.8 at 10:52 UTC. PyPI administrators quarantined the project the same day. The page gives no time for the quarantine, so do not work one out from the exposure figure.
+
+The last two markers come after the incident. In August, SOCRadar reported figures from a record-level sample, which a later slide shows. In October, LiteLLM was compromised again by a different route, after hardening its releases in response to this attack. That is a separate incident with its own kill chain, linked at the end.
+
+The markers are evenly spaced, and the gaps between them are not to scale.
+
+== Who reported what
+layout: table
+row: Source | What the page takes from it
+row: PyPI incident report | 2h 32m live; over 119,000 downloads
+row: LiteLLM's own post | About 40 minutes; users told to check 10:39 to 16:00 UTC
+row: LiteLLM's own advisory | Appears linked to the broader Trivy compromise
+row: One LiteLLM maintainer | Breach originated from Trivy in their CI/CD pipelines
+row: Researchers | Trivy compromised roughly March 19 to 23, 2026
+row: SOCRadar, August | Exposure in a reconstructed sample, not confirmed compromises
+LiteLLM's 40 minutes conflicts with its own window, the page notes.
+notes:
+The page draws on several sources and says which one stands behind each claim. This table sorts them.
+
+PyPI's incident report gives the figures the page leads with: 2 hours 32 minutes live before quarantine, and over 119,000 downloads. LiteLLM's own post says about 40 minutes, which the page says conflicts with the 10:39 to 16:00 UTC window LiteLLM tells users to check. When the figures disagree, say who gave each one.
+
+On the cause, LiteLLM's own advisory says the incident appears linked to the broader Trivy compromise. Keep the word appears. One LiteLLM maintainer stated plainly that the breach originated from Trivy used in their CI/CD pipelines. CI/CD means continuous integration and continuous delivery, the automated pipeline that builds, tests and releases code. Researchers place the Trivy compromise roughly March 19 to 23.
+
+SOCRadar's figures, on the next slide, describe exposure from a reconstructed sample. SOCRadar describes them as exposure figures rather than confirmed compromises.
+
+== Most of SOCRadar's sample was collected before the poisoned releases
+layout: bars
+bar: 2,188 | Organizations in SOCRadar's record-level sample
+bar: 2,085 | Of those, finished being collected before the poisoned versions were published
+The page says this points to the earlier Trivy compromise as the main source of that exposure. SOCRadar calls these exposure figures from a reconstructed sample, not confirmed compromises.
+notes:
+SOCRadar reported in August that 2,085 of the 2,188 organizations in its record-level sample had finished being collected before the poisoned LiteLLM versions were published.
+
+The page says this points to the earlier Trivy compromise as the main source of that exposure.
+
+Keep SOCRadar's own caveat whenever you use these numbers. SOCRadar describes them as exposure figures from a reconstructed sample rather than confirmed compromises, so do not present them as a count of compromised organizations. The page does not say how the sample was built.
+
+The bars share one scale from zero, so their lengths are drawn true to size.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Resource Development | Trivy poisoned | T1195.001
+step: 02 | Credential Access | PyPI token taken | T1552.007
+step: 03 | Initial Access | Direct uploads | T1195.002
+step: 04 | Execution | .pth autorun | T1546
+step: 05 | Credential Access | Credential sweep | T1552.001
+step: 06 | Lateral Movement | Pod token probes | T1078.004
+step: 07 | Persistence | Fake sysmon unit | T1543.002
+Arrows show the page's stage order. The page calls stages 05 to 07 the payload's stages one, two and three.
+notes:
+Here is the whole chain on one slide: the page's seven stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is TeamPCP's compromise of Trivy, the vulnerability scanner LiteLLM ran in its CI. Stage 02 is the poisoned scanner reading the CI job and sending out the project's PyPI publishing token. Stage 03 is the two versions uploaded directly to PyPI, with no matching tag in Git. Stage 04 is the .pth file that ran on every Python start.
+
+Stages 05, 06 and 07 are what the page calls the payload's stages one, two and three: the credential sweep, the Kubernetes probing with a mounted service account token, and the systemd unit that beaconed for more payloads. Keep the two numberings apart when you speak: the payload's stage one is the kill chain's stage 05.
+
+The page files both stage 02 and stage 05 under Credential Access. Read the arrows as the page's stage order. The next slides take each stage in turn.
+
+== TeamPCP poisoned Trivy, a scanner LiteLLM ran in its own CI
+layout: stage
+stage: 01
+phase: Resource Development
+technique: T1195.001 | Compromise Software Dependencies and Development Tools
+fact: Component | Trivy, a vulnerability scanner invoked as a CI step
+fact: Window | roughly March 19 to 23, 2026, per researchers
+fact: LiteLLM's advisory | incident appears linked to the broader Trivy compromise
+fact: Why this target | runs early, with pipeline credentials, trusted by definition
+The tools that scan the supply chain are themselves part of the supply chain.
+notes:
+The chain starts outside LiteLLM's own code. A threat actor group tracked as TeamPCP compromised Trivy, the vulnerability scanner that LiteLLM and thousands of other projects run as a build step. The page maps this stage to T1195.001, Compromise Software Dependencies and Development Tools.
+
+The entry point was a security tool, rather than a typosquatted package or a phished maintainer. A typosquatted package is one named to look like a popular one. The page explains why the entry point matters. Teams add Trivy to CI precisely to reduce supply chain risk, so it is installed early in the job, runs with the pipeline's permissions, and is rarely pinned or reviewed with the suspicion applied to application dependencies. CI is continuous integration.
+
+Researchers place the scanner compromise roughly March 19 to 23, 2026, just before the malicious publish. LiteLLM's own advisory says the incident appears linked to the broader Trivy compromise. Keep the words roughly and appears.
+
+Nothing in the LiteLLM codebase had to be touched. The attacker only had to be present in a step the pipeline ran on the maintainers' behalf.
+
+No defense on the page names the compromise of Trivy itself. That gap comes back at the end.
+
+== What ATT&CK calls compromising development tools
+layout: background
+source: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+ATT&CK describes adversaries manipulating software dependencies and development tools before a final consumer receives them, to compromise data or systems.
+
+Targeting may be narrow, or broad with further tactics used only against specific victims.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK files this sub-technique under Supply Chain Compromise. It describes adversaries manipulating software dependencies and development tools before they reach a final consumer, for the purpose of data or system compromise.
+
+Applications often depend on external software. ATT&CK says popular open source projects used as dependencies in many applications, such as pip and npm packages, may be targeted to add malicious code to the dependency's users. Abandoned packages may be re-registered by threat actors, and typosquatting picks names close to popular libraries to deceive a user.
+
+ATT&CK also names CI/CD pipeline components as targets, for access to an application's building, testing and deployment cycles. Malicious code added there may collect runtime credentials, or insert further malicious components into build pipelines for a second-order supply chain compromise.
+
+Targeting may be specific to a desired victim set, or distributed broadly while moving on to additional tactics only against specific victims.
+
+== Inside LiteLLM's CI, the poisoned scanner took the PyPI token
+layout: stage
+stage: 02
+phase: Credential Access
+technique: T1552.007 | Unsecured Credentials: Container API
+technique: T1555 | Credentials from Password Stores
+fact: Stolen | the LiteLLM project's PyPI publishing token
+fact: Mechanism | a trusted CI step reads the job's environment and secret mounts
+fact: Escalation | none; the runner already held the token for the release job
+fact: Defense gap | long-lived publishing tokens in jobs that run third-party tools
+A build step is a principal, and its blast radius is every secret in the job.
+notes:
+The page maps this stage to T1552.007, Unsecured Credentials: Container API, and T1555, Credentials from Password Stores.
+
+A CI job is a shared credential space, the page says. Every step in it can read the environment, the mounted secret files and, in most configurations, the tokens injected for later publish steps.
+
+One LiteLLM maintainer stated plainly that the breach originated from Trivy used in their CI/CD pipelines. The scanner step did not need to escalate anything. It read what the runner already held and shipped the PyPI publishing token out. A runner is the machine that executes a CI job. PyPI is the Python Package Index, where pip installs packages from.
+
+The page calls this the same lesson that tj-actions/changed-files taught a year earlier and Mini Shai-Hulud taught two months later, each arriving by a different door: a build step is a principal, and its blast radius is every secret in the job. A principal is an identity that can hold permissions.
+
+The defense gap the page names here is long-lived publishing tokens present in jobs that also run third-party tooling.
+
+== Two releases that never existed in Git
+layout: stage
+stage: 03
+phase: Initial Access
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: March 24, 10:39 UTC | 1.82.7, obfuscated payload inside proxy_server.py
+fact: 10:52 UTC | 1.82.8, adding the litellm_init.pth autorun mechanism
+fact: Tell | no matching git tag or GitHub release for either version
+fact: Not affected | the official Proxy Docker image, which pins its dependencies
+The artifact and the source of truth disagreed for the entire window.
+notes:
+On March 24, 2026, two versions were uploaded directly to PyPI thirteen minutes apart, bypassing the release workflow. The page maps this stage to T1195.002, Compromise Software Supply Chain.
+
+At 10:39 UTC version 1.82.7 went up carrying an obfuscated payload inside proxy_server.py. At 10:52 UTC 1.82.8 followed with what the page calls a cleaner delivery mechanism, the .pth file on the next slide. PyPI administrators quarantined the project the same day.
+
+Because the uploads went straight to the index, the repository never showed a matching tag or release. The page calls that the single cheapest detection available here, and the one most consumers never check.
+
+The official LiteLLM Proxy Docker image was not affected, because its dependencies were pinned. Everyone who ran an unpinned pip install, or built an image with a floating requirement, during those minutes was affected. A floating requirement names a package without fixing its exact version.
+
+== litellm_init.pth ran on every Python start, imported or not
+layout: stage
+stage: 04
+phase: Execution
+technique: T1546 | Event Triggered Execution
+technique: T1027 | Obfuscated Files or Information
+fact: Artifact | litellm_init.pth in the environment's site-packages
+fact: Trigger | Python's site module at startup, before application code
+fact: Scope | every Python process in that environment, imported or not
+fact: Accidental tell | a fork bomb pattern: severe system lag or memory exhaustion
+Installed once and never called, its payload still ran on every python invocation.
+notes:
+The page calls this the detail worth carrying away from the whole incident. It maps the stage to T1546, Event Triggered Execution, and T1027, Obfuscated Files or Information.
+
+A .pth file in site-packages, the directory that holds installed Python packages, is processed by Python's site module at interpreter startup, and lines beginning with import are executed. So the payload ran before any application code, before any import guard, and in every Python process on the machine, including ones that had nothing to do with LLM traffic.
+
+One accidental side effect became a useful behavioral indicator. Some hosts saw a fork bomb pattern producing extreme lag or memory exhaustion, which is how a number of teams noticed anything at all. A fork bomb is a process that keeps spawning copies of itself until the machine runs short of resources.
+
+The page gives a hunt command: find / -name 'litellm_init.pth' 2>/dev/null. The next slide explains Python's startup hooks in general.
+
+== What ATT&CK calls Python startup hooks
+layout: background
+source: MITRE ATT&CK T1546.018 | https://attack.mitre.org/techniques/T1546/018/
+Python processes path configuration (.pth) files, and sitecustomize.py or usercustomize.py, when the interpreter starts. In a .pth file in site-packages, lines beginning with import run on every Python invocation.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK lists Python Startup Hooks, T1546.018, as a sub-technique of Event Triggered Execution, the technique the page maps stage 04 to. It describes path configuration files, which end in .pth, and the sitecustomize.py and usercustomize.py modules. These are processed automatically when the Python interpreter initializes, so code in them can run whenever Python is invoked.
+
+Path configuration files are designed to extend Python's module search paths through import statements. If a .pth file sits in Python's site-packages or dist-packages directory, any line in it that begins with import is executed automatically on Python invocation. If sitecustomize.py or usercustomize.py is on the Python path, it is imported during interpreter startup and its code runs.
+
+ATT&CK describes these mechanisms as a way to persist on systems where Python is widely used, such as for automation or scripting in production environments. The page files stage 04 under Execution, and its persistence stage is the systemd unit at stage 07.
+
+== The payload's first stage searched environment variables and files for secrets
+layout: stage
+stage: 05
+phase: Credential Access
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+technique: T1552.004 | Unsecured Credentials: Private Keys
+fact: Cloud and AI | AWS, GCP and Azure credentials; model provider API keys
+fact: Also | SSH private keys, kubeconfigs, database passwords
+fact: Exfiltration | encrypted POST to models.litellm.cloud
+fact: Why it hurts | one host holds provider keys and cloud credentials together
+An LLM gateway is an unusually rich place to land.
+notes:
+The page calls stages 05 to 07 the payload's stages one, two and three, and this is stage one. The page maps it to T1552.001, Credentials In Files, and T1552.004, Private Keys.
+
+An LLM gateway is an unusually rich place to land, the page says. By design it holds provider API keys for OpenAI, Anthropic, Azure OpenAI and others, and it usually runs somewhere that also carries cloud credentials, so it can reach logging, caching and storage.
+
+The payload collected exactly that: environment variables, cloud provider credentials across all three major clouds, model provider keys, SSH private keys, Kubernetes configuration files and database passwords. A kubeconfig is the file that tells the kubectl tool which cluster to reach and with what credentials.
+
+Harvested material was encrypted and posted to models.litellm.cloud, a domain the page says was chosen to read as project infrastructure in any egress log skimmed by a human. A second command and control, or C2, domain, checkmarx.zone, is named after a security vendor.
+
+== In pods, the payload used the mounted service account token
+layout: stage
+stage: 06
+phase: Lateral Movement
+technique: T1078.004 | Valid Accounts: Cloud Accounts
+technique: T1613 | Container and Resource Discovery
+fact: Credential | the pod's mounted Kubernetes service account token
+fact: Activity | API probing to map reachable resources and escalation paths
+fact: Cluster IoC | pods named node-setup-* in the kube-system namespace
+fact: Cheap control | turn off token automount where workloads never call the API
+A pod running an LLM proxy has no business enumerating cluster resources.
+notes:
+This is the payload's stage two. The page maps it to T1078.004, Valid Accounts: Cloud Accounts, and T1613, Container and Resource Discovery.
+
+Where the package landed in a container, the payload reached for the service account token that Kubernetes mounts into pods by default, and used it to query the API server for what that identity could reach, looking for privilege escalation paths. A pod is the smallest unit Kubernetes runs: one or more containers scheduled together.
+
+That default mount is the point, the page says. A pod running an LLM proxy has no business enumerating cluster resources, but unless automountServiceAccountToken is disabled, the token is sitting on the filesystem waiting to be used. The page's cheap control is automountServiceAccountToken: false on workloads that never call the API.
+
+Responders were told to look for pods named node-setup-* in the kube-system namespace, a name the page says was chosen to blend into cluster housekeeping. IoC means indicator of compromise.
+
+The next slide explains the default mount, and how to turn it off, from the Kubernetes documentation.
+
+== What Kubernetes mounts into a pod by default
+layout: background
+source: Kubernetes documentation, Configure Service Accounts for Pods | https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
+A pod authenticates to the API server as a ServiceAccount, the namespace's default one unless another is named. Applications in it can call the API with automatically mounted credentials.
+
+Setting automountServiceAccountToken: false on the ServiceAccount or the pod opts out.
+notes:
+Background, from the Kubernetes documentation, in general terms.
+
+When pods contact the API server, they authenticate as a particular ServiceAccount. Every namespace has at least one, named default, and if you create a pod without naming a ServiceAccount, Kubernetes assigns that default one. An application running inside a pod can access the Kubernetes API using automatically mounted service account credentials. How much it can do depends on the authorization plugin and policy in use.
+
+The kubelet mounts those credentials at /var/run/secrets/kubernetes.io/serviceaccount/token. To opt out, set automountServiceAccountToken: false on the ServiceAccount, or on a particular pod. If both the ServiceAccount and the pod's spec set a value, the pod spec takes precedence.
+
+== A systemd unit masquerading as sysmon beaconed for more payloads
+layout: stage
+stage: 07
+phase: Persistence
+technique: T1543.002 | Systemd Service
+technique: T1036.005 | Masquerading: Match Legitimate Resource Name or Location
+fact: Payload | ~/.config/sysmon/sysmon.py, named like a monitoring agent
+fact: Unit | a matching sysmon.service systemd unit
+fact: C2 domains | models.litellm.cloud and checkmarx.zone
+fact: Why removal fails | unit survives package removal; CI caches re-serve the artifact
+Downgrading litellm and moving on left a live C2 channel running on the host.
+notes:
+This is the payload's stage three, and the page says it made removing the package insufficient. The page maps it to T1543.002, Create or Modify System Process: Systemd Service, and T1036.005, which ATT&CK names Match Legitimate Resource Name or Location.
+
+A systemd unit was written alongside a payload at ~/.config/sysmon/sysmon.py, named to resemble a system monitoring agent, and it polled attacker infrastructure for additional code. systemd is the service manager on many Linux systems, and a .service unit file defines one service.
+
+Anyone who responded by downgrading litellm and moving on left a live C2 channel running on the host. Full recovery meant hunting the unit and the config directory, rotating everything the host could reach, and rebuilding self-hosted runner images and CI caches, because a poisoned cache reintroduces the artifact on the next build.
+
+The next slide explains systemd services in general.
+
+== What ATT&CK says about systemd services
+layout: background
+source: MITRE ATT&CK T1543.002 | https://attack.mitre.org/techniques/T1543/002/
+systemd manages background services on many Linux distributions, each defined in a .service unit file. ATT&CK says adversaries may create or modify these services to run malicious payloads repeatedly, as persistence.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+systemd is a system and service manager, commonly used to manage background daemon processes, also called services, and other system resources. ATT&CK says it is the default initialization system on many Linux distributions, replacing older init systems while staying backwards compatible.
+
+Each service is described in a unit configuration file with the .service extension.
+
+Directives inside the unit file run commands. ExecStart, ExecStartPre and ExecStartPost run when the service is started, manually with systemctl or at system start if the service is set to start automatically. ExecStop and its variants run when it stops.
+
+ATT&CK says adversaries have created new service files and altered the commands an existing service runs, so that a malicious payload executes repeatedly.
+
+== A build step is a principal
+layout: text
+- The tools that scan the supply chain are part of the supply chain.
+- A build step is a principal; its blast radius is every secret in the job.
+- Per the page, tj-actions/changed-files and Mini Shai-Hulud taught that lesson too.
+notes:
+The page draws one lesson from the first two stages.
+
+Stage 01's structural problem: the tools that scan the supply chain are themselves part of the supply chain. Security tooling runs early, with pipeline credentials, and is trusted by definition.
+
+Stage 02's lesson: a build step is a principal, and its blast radius is every secret in the job. The poisoned scanner needed no escalation. It read what the runner already held.
+
+The page says tj-actions/changed-files taught the same lesson a year earlier, and Mini Shai-Hulud two months later, each arriving by a different door. Both have their own kill chains, linked at the end. The page connects them to this incident through the lesson only, so do not tie them to TeamPCP.
+
+== Markers the page gives
+layout: table
+row: Where | What the page names
+row: Python environment | litellm_init.pth in site-packages
+row: Host | ~/.config/sysmon/sysmon.py and a sysmon.service systemd unit
+row: Kubernetes | pods named node-setup-* in the kube-system namespace
+row: EDR and DNS logs | models.litellm.cloud and checkmarx.zone, across the March 2026 window
+row: Host behavior | a fork bomb pattern: severe lag or memory exhaustion
+row: GitHub | no matching tag or release for 1.82.7 or 1.82.8
+Downgrading to 1.82.6 removes the package, not the persistence it installed.
+notes:
+These are the markers the page names, gathered in one place.
+
+On hosts and in images, search for litellm_init.pth in site-packages. The page gives find / -name 'litellm_init.pth' 2>/dev/null as a hunt command. Search also for ~/.config/sysmon/sysmon.py and its systemd unit, sysmon.service. In Kubernetes, look for pods named node-setup-* in kube-system.
+
+Both C2 domains were named to pass a skim: models.litellm.cloud reads as project infrastructure, and checkmarx.zone as a security vendor. The page says to sweep EDR and DNS logs for both across the March 2026 window. EDR is endpoint detection and response.
+
+Some hosts showed a fork bomb pattern, severe lag or memory exhaustion, which is how a number of teams noticed anything at all. And neither malicious version had a matching git tag or GitHub release.
+
+Downgrading to 1.82.6 removes the package. It does not remove the persistence the package installed.
+
+== Six defenses against seven stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07
+row: Pin dependencies with hashes | 03
+row: Check artifacts against the source of truth | 02 | 03
+row: No publishing tokens in jobs running third-party tools | 02 | 07
+row: Scan for the artifacts, not the version | 04 | 06 | 07
+row: Give the AI gateway its own blast radius | 05 | 06
+row: Filter egress, hunt the lookalike domains | 05 | 07
+No defense on the page names stage 01's event, the compromise of Trivy itself.
+notes:
+This matrix sets the page's six defenses against the seven stages. The defenses name no stage numbers, so a cell is marked only where a defense's instruction names something only that stage has.
+
+Pinning cites the official Proxy image that escaped because it pinned: stage 03. Checking artifacts cites the missing tags, stage 03, and prefers Trusted Publishing over long-lived API tokens, stage 02's defense gap. Keeping publishing tokens out of jobs that run third-party tooling answers stage 02, and its call to purge build caches and rebuild runner images answers stage 07. Scanning for artifacts names litellm_init.pth, stage 04, the node-setup pods, stage 06, and the sysmon unit, stage 07. The gateway defense keeps provider keys apart from cloud credentials, stage 05, and turns off the token automount, stage 06. Egress filtering hunts both C2 domains, named in stages 05 and 07.
+
+Column 01 is empty: no defense names the compromise of Trivy itself. Stage 01 says Trivy is rarely pinned, and the first defense pins dependencies, but its instruction names pip installs and lockfiles, not the scanner. That gap is the second discussion question.
+
+== Pin with hashes; check each release against its tag
+layout: compare
+col: Pin with hashes (stage 03) | Treat an unpinned pip install in a build as a control failure | Use a lockfile with hashes, such as uv.lock or Poetry's lock | The page says pinning is the single reason the official Proxy image escaped
+col: Source of truth (stages 02, 03) | Fail the build when a version has no corresponding signed tag | Or require provenance attestation | Prefer SLSA provenance and Trusted Publishing over long-lived API tokens
+Neither malicious version had a matching tag or release on GitHub.
+notes:
+Two defenses answer the release itself.
+
+First, pin dependencies with hashes, and treat an unpinned pip install in a build as a control failure. The page says the single reason the official LiteLLM Proxy image escaped is that it pinned its dependencies. Use a lockfile with hashes, such as pip install --require-hashes, uv.lock or Poetry's lock, so a version published in a window of a few hours cannot enter your builds at all. Floating requirements turn every minute of every registry's uptime into your exposure window.
+
+Second, compare the artifact against the source of truth before you trust it. A release-integrity check that fails the build when a package version has no corresponding signed tag, or that requires provenance attestation, catches this class of direct-to-index upload without needing to understand the payload. Provenance attestation is a signed record of how and from what source an artifact was built.
+
+On the publishing side, the page prefers SLSA provenance and PyPI Trusted Publishing over long-lived API tokens. SLSA, Supply-chain Levels for Software Artifacts, is a framework for build integrity.
+
+== Separate scanning from publishing; contain the AI gateway
+layout: compare
+col: Tokens out of scanning jobs (stages 02, 07) | Split scanning and publishing into jobs with separate permissions | Mint publishing credentials through OIDC-based Trusted Publishing | After a pipeline compromise, purge caches and rebuild self-hosted runners
+col: The gateway's own blast radius (stages 05, 06) | No cloud administrator credentials beside model provider keys | No automounted service account token the pods never use | Least-privilege workload identity; provider keys in a secrets manager
+The scanner read the token because the token was there.
+notes:
+Two defenses limit what a foothold can reach.
+
+Stop keeping publishing tokens in jobs that run third-party tooling. The scanner read the token because the token was there. Split scanning and publishing into separate jobs with separate permissions, mint publishing credentials through OIDC-based Trusted Publishing rather than storing a static token, and scope every remaining CI secret to the single job that needs it. OIDC stands for OpenID Connect, an identity protocol. Purge build caches and rebuild self-hosted runner images after any pipeline compromise, or, as the page puts it, you will restore the payload yourself.
+
+Give the AI gateway its own blast radius. A component holding model provider keys should not also hold cloud administrator credentials, and its pods should not automount a Kubernetes service account token they never use. Set automountServiceAccountToken: false, scope the workload identity to least privilege, and put provider keys in a secrets manager with short-lived retrieval rather than in the process environment.
+
+== Scan for the artifacts; filter egress
+layout: compare
+col: Scan for artifacts (stages 04, 06, 07) | litellm_init.pth in site-packages | ~/.config/sysmon/sysmon.py and its systemd unit | Pods named node-setup-* in kube-system
+col: Egress and lookalike domains (stages 05, 07) | Default-deny egress from build runners and AI workloads | Allow-list the provider endpoints you call | Sweep EDR and DNS logs for both domains, March 2026
+Downgrading to 1.82.6 removes the package; it does not remove the persistence.
+notes:
+Two defenses find what the payload left behind and what it talked to.
+
+Scan for the artifacts, not just the version number. Search hosts and images for litellm_init.pth in site-packages, for ~/.config/sysmon/sysmon.py and its systemd unit, and for pods named node-setup-* in kube-system. Downgrading to 1.82.6 removes the package; it does not remove the persistence the package installed.
+
+Filter egress and hunt the lookalike domains. Both C2 domains were named to pass a skim: models.litellm.cloud reads as project infrastructure, checkmarx.zone as a security vendor. Default-deny egress from build runners and AI workloads, allow-list the provider endpoints you call, and sweep EDR and DNS logs for both domains across the March 2026 window. Default-deny means blocking all outbound traffic except what you explicitly allow.
+
+== Check your own environment
+layout: checklist
+check: Does any build run an unpinned pip install or a floating requirement?
+check: Would a package version with no matching signed tag fail your build?
+check: Do jobs that run third-party tools also hold a publishing token?
+check: Do you publish through Trusted Publishing, or with a stored token?
+check: After a pipeline compromise, would you purge caches and rebuild self-hosted runner images?
+check: Do your AI gateway pods automount a service account token they never use?
+check: Is egress from build runners and AI workloads default-deny?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether any build runs an unpinned pip install or a floating requirement, and whether a package version with no matching signed tag would fail the build.
+
+Ask whether any job that runs third-party tooling, a scanner included, also holds a publishing token, and whether you publish through Trusted Publishing or with a stored token. Ask whether your response plan purges build caches and rebuilds self-hosted runner images after a pipeline compromise.
+
+Ask whether your AI gateway pods automount a service account token they never use, and whether the gateway holds cloud administrator credentials beside its provider keys. Finally, ask whether egress from build runners and AI workloads is default-deny, with only the provider endpoints you call allowed.
+
+== You downgraded to 1.82.6. Is the host clean?
+layout: question
+Downgrading litellm removes the malicious package.
+
+What else would you check, rotate or rebuild before calling a host clean?
+notes:
+Give the room a minute with this one before moving on.
+
+The page's facts: litellm_init.pth ran on every Python start, the payload's first stage swept credentials, and its third stage installed a systemd unit masquerading as sysmon that polled attacker infrastructure for additional code. The page says that last stage made removal of the package insufficient.
+
+Ask each person to list what they would look for, what they would rotate, and what they would rebuild, before you show the answer slide.
+
+== Downgrading removes the package, not the persistence
+layout: answer
+The page says full recovery meant more than a downgrade.
+- Hunt the systemd unit and the ~/.config/sysmon directory.
+- Rotate everything the host could reach.
+- Rebuild self-hosted runner images and CI caches.
+notes:
+The page's answer is that anyone who downgraded and moved on left a live C2 channel running on the host.
+
+Full recovery meant hunting the unit and the config directory, rotating everything the host could reach, and rebuilding self-hosted runner images and CI caches, because a poisoned cache reintroduces the artifact on the next build.
+
+The artifact defense adds where to look: litellm_init.pth in site-packages, ~/.config/sysmon/sysmon.py and its systemd unit, and pods named node-setup-* in kube-system. The egress defense adds a sweep of EDR and DNS logs for both C2 domains across the March 2026 window.
+
+Bring the group's lists back to this. Downgrading to 1.82.6 removes the package; it does not remove the persistence the package installed.
+
+== What would you add for stage 01?
+layout: question
+The page's defenses are tied to stages 02 to 07. None names the compromise of Trivy itself, a scanner the page says is rarely pinned or reviewed.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the gap in the defense matrix.
+
+The page's defenses name stages 02 to 07. None names stage 01's event, TeamPCP's compromise of Trivy itself. The page's point about this stage is that Trivy is installed early in the job, runs with the pipeline's permissions, and is rarely pinned or reviewed with the suspicion applied to application dependencies.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== No defense on the page names the scanner's own compromise
+layout: answer
+Two defenses come near. Splitting scanning from publishing keeps the token out of the scanner's job, at stage 02. Stage 01 says Trivy is rarely pinned; pinning it would be your own extension of the first defense.
+notes:
+Be clear where the page stops. No defense on the page names the compromise of Trivy itself, and this deck adds none of its own.
+
+Two defenses come near. Keeping publishing tokens out of jobs that run third-party tooling, with scanning and publishing split into separate jobs, keeps the token out of the scanner's reach. That answers stage 02, where the scanner read the token, not the scanner's own compromise. And stage 01 says Trivy is rarely pinned or reviewed with the suspicion applied to application dependencies, while the first defense pins dependencies. Its instruction names pip installs and lockfiles, so applying it to the scanner is the group's own step.
+
+Test each proposal against the facts the page reports for stage 01: Trivy invoked as a CI step, a compromise researchers place roughly March 19 to 23, and a tool that runs early, with pipeline credentials, and is trusted by definition.
+
+== Sources
+layout: links
+link: LiteLLM, security update, March 2026 | https://docs.litellm.ai/blog/security-update-march-2026
+link: PyPI, incident report: LiteLLM and Telnyx | https://blog.pypi.org/posts/2026-04-02-incident-report-litellm-telnyx-supply-chain-attack/
+link: Cycode, LiteLLM supply chain attack | https://cycode.com/blog/lite-llm-supply-chain-attack/
+link: Trend Micro, inside the LiteLLM compromise | https://www.trendmicro.com/en_us/research/26/c/inside-litellm-supply-chain-compromise.html
+link: HeroDevs, what happened and what to do next | https://www.herodevs.com/blog-posts/the-litellm-supply-chain-attack-what-happened-why-it-matters-and-what-to-do-next
+link: MITRE ATT&CK T1195.001 | https://attack.mitre.org/techniques/T1195/001/
+link: SecurityWeek, Trivy behind the exposure figures | https://www.securityweek.com/trivy-not-litellm-behind-the-2500-org-compromise/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+LiteLLM's security update is the project's own account. PyPI's incident report, whose title names both LiteLLM and Telnyx, gives the exposure time and download figures the page leads with. Cycode, Trend Micro and HeroDevs each wrote up the attack. The MITRE page defines the technique behind stage 01. The page labels the SecurityWeek link as Trivy behind the exposure figures.
+
+The background slides name their own sources, from MITRE ATT&CK and the Kubernetes documentation.
+
+== Related kill chains and defense topics
+layout: links
+link: LiteLLM 1.107.0 kill chain | breaches/litellm-1-107-release-hijack.html
+link: tj-actions/changed-files | breaches/tj-actions-changed-files.html
+link: Mini Shai-Hulud | breaches/mini-shai-hulud-tanstack.html
+link: CI/CD security | ci-cd.html
+link: AI/ML security | ai-ml-security.html
+link: Kubernetes security | kubernetes.html
+link: Non-human identity | non-human-identity.html
+LiteLLM was compromised again in October, by a different route. The page says the other two taught stage 02's lesson by other doors.
+notes:
+The page links three other kill chains, and four defense topics.
+
+LiteLLM was compromised again in October by a different route, after hardening its releases in response to this attack. That incident has its own kill chain, the LiteLLM 1.107.0 kill chain.
+
+The page says tj-actions/changed-files taught stage 02's lesson a year earlier, and Mini Shai-Hulud two months later, each arriving by a different door: a build step is a principal, and its blast radius is every secret in the job.
+
+The page's related defense topics are CI/CD security, AI/ML security, Kubernetes security and non-human identity. AI/ML stands for artificial intelligence and machine learning. A non-human identity is one held by software rather than a person, such as a CI job's token or a service account.
