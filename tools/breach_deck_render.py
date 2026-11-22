@@ -1289,9 +1289,10 @@ def _render_bars(page, s) -> None:
     lw, pt, vpt = LOOK["bar_label_w"], LOOK["diagram_pt"], LOOK["bar_value_pt"]
     bh, vgap, rgap = LOOK["bar_h"], LOOK["bar_value_gap"], LOOK["bar_row_gap"]
     axis = LOOK["bar_axis_w"]
-    # The widest value, in Space Grotesk: the heading calibration at vpt.
-    char = STYLE["w"] / STYLE["heading_chars_per_line"] * vpt / STYLE["heading_pt"]
-    vw = max(len(v) for v, _ in bars) * char + 0.1
+    # The widest value, measured glyph by glyph in the heading face (and its
+    # Arial Bold fallback) with the safety margin: Google Slides ignores
+    # no-wrap, so a box narrower than its value breaks the number.
+    vw = max(_heading_width(v, vpt) for v, _ in bars)
     tx = X + lw + LOOK["section_gap"]
     track = X + W - tx - vgap - vw
     heights = [max(bh, _rows(label, _per_line(lw, pt)) * _line_h(pt) + 0.1) for _, label in bars]

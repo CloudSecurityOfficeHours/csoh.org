@@ -3597,6 +3597,23 @@ def _case_bars_to_scale(tmp: Path) -> None:
     _layout_error(lambda: r.render_deck(deck, tmp / "z.pptx"), "z.deck:4")
 
 
+def _case_bar_values_fit(tmp: Path) -> None:
+    """A bar's written value has to fit its box on one line, measured glyph
+    by glyph, and the box has to end inside the content width: Google Slides
+    ignores no-wrap, so a box narrower than its value breaks the number."""
+    import breach_deck_render as r
+
+    deck = _one_slide("Prior-month downloads", "bars", "bv.deck:4",
+                      bar=[["600", "keyv, over 600 million"], ["580", "flat-cache"],
+                           ["137", "cacheable-request"], ["30", "cacheable"]])
+    (sl,) = _rendered(tmp, deck)
+    vpt = r.LOOK["bar_value_pt"]
+    for value in _shapes(sl, "bars-value"):
+        need = r.Inches(r._glyph_width(value.text_frame.text, vpt, "heading_font", True))
+        assert value.width >= need, (value.text_frame.text, value.width, need)
+        assert value.left + value.width <= r.Inches(r.X + r.W) + 2, value.text_frame.text
+
+
 def _case_flow_two_rows(tmp: Path) -> None:
     def rows(n: int) -> list[list]:
         steps = [[f"{i:02d}", "Execution", f"Step {i}", "T1059"] for i in range(1, n + 1)]
@@ -4065,6 +4082,7 @@ RENDER_CASES: list = [
     ("render_without_techniques", _case_render_without_techniques),
     ("stage_group_render", _case_stage_group_render),
     ("bars_to_scale", _case_bars_to_scale),
+    ("bar_values_fit", _case_bar_values_fit),
     ("flow_two_rows", _case_flow_two_rows),
     ("timeline_even", _case_timeline_even),
     ("timeline_labels_hold_text", _case_timeline_labels_hold_text),
