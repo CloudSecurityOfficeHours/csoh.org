@@ -32,20 +32,20 @@ Codefinger applied S3 Lifecycle policies to delete the encrypted objects within 
 
 No AWS vulnerability was exploited. The page says the entire campaign relied on abusing valid credentials and native AWS features.
 
-Halcyon disclosed the campaign on January 13, 2025, and observed at least two victim organisations. Apart from that date and January 2025 in its header, the page gives no dates, so this deck has no timeline.
+Halcyon disclosed the campaign on January 13, 2025, and observed at least two victim organisations. Apart from that date and January 2025 in its header, the page's only dates are for AWS's later change to the SSE-C default, which comes up with the defenses. So this deck has no timeline of the incident.
 
 == The kill chain on one slide
 layout: flow
 step: 01 | Credential Acquisition | Exposed AWS keys | T1552
 step: 02 | Initial Access | Valid AWS credentials | T1078.004
-step: 03 | Discovery | Buckets and objects listed | T1619
+step: 03 | Discovery | Not described in the sources | T1619
 step: 04 | Impact | SSE-C encryption | T1486
 step: 05 | Extortion | 7-day delete, Bitcoin ransom | T1657
 Arrows follow the page's stage order.
 notes:
 Here is the whole chain on one slide: the page's five stages, each with its phase and ATT&CK technique. ATT&CK is MITRE's knowledge base of adversary tactics and techniques.
 
-Stage 01, Credential Acquisition: Codefinger obtained AWS access keys from public exposure or prior compromise. Stage 02, Initial Access: it authenticated to the victim's AWS account with them. Stage 03, Discovery: it enumerated buckets and objects to find high-value targets. Stage 04, Impact: it re-uploaded objects encrypted with an AES-256 SSE-C key it held. Stage 05, Extortion: an S3 Lifecycle policy to delete the encrypted objects within seven days, and a ransom note demanding Bitcoin.
+Stage 01, Credential Acquisition: Codefinger obtained AWS access keys from public exposure or prior compromise. Stage 02, Initial Access: it authenticated to the victim's AWS account with them. Stage 03, Discovery: the cited sources do not say how Codefinger found the buckets and objects it encrypted, and the page keeps the stage to mark that gap. Stage 04, Impact: objects were overwritten with copies encrypted under an attacker-held AES-256 SSE-C key. Stage 05, Extortion: an S3 Lifecycle policy to delete the encrypted objects within seven days, and a ransom note demanding Bitcoin.
 
 The next slides take each stage in turn.
 
@@ -90,10 +90,10 @@ layout: stage
 stage: 02
 phase: Initial Access
 technique: T1078.004 | Valid Accounts: Cloud Accounts
-fact: Access method | AWS CLI, SDK or S3 API calls signed with the stolen key pair
 fact: Permissions | s3:GetObject and s3:PutObject on target buckets
 fact: Enough to | read existing objects and overwrite them with encrypted copies
-AWS CloudTrail recorded the API activity, but by default no alert fires on legitimate-looking S3 calls from a new IP or region.
+fact: CloudTrail | object-level calls recorded only with S3 data events on
+No cited source says whether the victims had S3 data events on. Either way, no alert fires by default on legitimate-looking S3 calls from a new IP or region.
 notes:
 Stage 02 is initial access. The page maps it to T1078.004, Valid Accounts: Cloud Accounts.
 
@@ -101,42 +101,44 @@ Using the compromised keys, Codefinger authenticated to the victim's AWS account
 
 The keys carried s3:GetObject and s3:PutObject permissions, which were enough to read existing objects and overwrite them with encrypted copies. Those two permissions come back in the defenses.
 
-AWS CloudTrail, the AWS audit log, recorded the API activity. But by default, the page says, no alert fires on legitimate-looking S3 calls from a new IP or region.
+AWS CloudTrail is the AWS audit log. By default, the page says, it records bucket-level S3 calls such as lifecycle changes, but it records object-level calls such as PutObject and CopyObject only when S3 data events are turned on, which costs extra. No cited source says whether the victims had them on. Either way, no alert fires by default on legitimate-looking S3 calls from a new IP or region.
 
-== Codefinger listed buckets and objects to find high-value targets
+== The sources do not say how Codefinger found the buckets
 layout: stage
 stage: 03
 phase: Discovery
 technique: T1619 | Cloud Storage Object Discovery
-fact: Calls | s3:ListAllMyBuckets, s3:ListBucket (list objects per bucket)
-fact: Goal | readable or writable buckets holding business-critical data
+fact: Reported | no listing step in any cited source
+fact: Calls, if used | ListBuckets (s3:ListAllMyBuckets), ListObjectsV2 (s3:ListBucket)
 fact: Typical targets | backups, application data, customer records, media assets
-These are ordinary read operations that generate no exploitation signal. The output told the attacker exactly which objects to target for encryption.
+Listing buckets and objects takes ordinary read calls that generate no exploitation signal, but no source reports that Codefinger made them.
 notes:
-Stage 03 is discovery. The page maps it to T1619, Cloud Storage Object Discovery.
+Stage 03 is a gap in the public record, and the page keeps it to mark that gap. The page still labels it Discovery and tags it T1619, Cloud Storage Object Discovery.
 
-With valid access, Codefinger enumerated the account's S3 footprint using native API calls to list buckets and objects. It mapped which buckets held valuable data and were reachable with the key's permissions.
+The cited sources do not say how Codefinger found the buckets and objects it encrypted. Halcyon's account goes from locating keys with s3:GetObject and s3:PutObject permissions straight to encrypting files, and Arctic Wolf, The Register and AWS's guidance describe no listing step either.
 
-The page calls these ordinary read operations that generate no exploitation signal. The output told the attacker exactly which objects to target for encryption in the impact phase, stage 04.
+Listing buckets and objects takes ordinary read calls that generate no exploitation signal, but no source reports that Codefinger made them. If listing was used, the calls would be ListBuckets, which needs the s3:ListAllMyBuckets permission, and ListObjectsV2, which needs s3:ListBucket. Do not present either as something Codefinger did.
 
 The page lists backups, application data, customer records and media assets as typical targets. It does not say what data any victim held.
 
 No defense on the page is tied to this stage. That gap is one of the discussion questions at the end.
 
-== Objects re-uploaded, encrypted under a key the attacker held
+== Objects overwritten with copies encrypted under an attacker-held key
 layout: stage
 stage: 04
 phase: Impact
 technique: T1486 | Data Encrypted for Impact
-fact: Method | each target object re-written with SSE-C on a PutObject request
-fact: Headers | the SSE-C customer-algorithm and customer-key request headers
+fact: Method | each target object re-written with SSE-C, key in the headers
+fact: Operation | CopyObject, per AWS, which does not name the actor
 fact: Key custody | AES-256, generated locally by attacker; AWS keeps only an HMAC
 fact: Result | data unrecoverable without the attacker's key, even by AWS
 A native encryption feature became a ransomware primitive; no malware was deployed.
 notes:
 Stage 04 is the impact. The page maps it to T1486, Data Encrypted for Impact.
 
-Codefinger encrypted each target object by re-writing it with Server-Side Encryption using Customer-Provided Keys, SSE-C. The attacker generated an AES-256 key locally and supplied it on the PutObject request, in the x-amz-server-side-encryption-customer-algorithm and x-amz-server-side-encryption-customer-key headers. AES-256 is the Advanced Encryption Standard with a 256-bit key.
+Codefinger encrypted each target object by re-writing it with Server-Side Encryption using Customer-Provided Keys, SSE-C. The attacker generated an AES-256 key locally and supplied it in the request's x-amz-server-side-encryption-customer-algorithm and x-amz-server-side-encryption-customer-key headers. AES-256 is the Advanced Encryption Standard with a 256-bit key.
+
+Halcyon does not name the S3 operation. AWS, in guidance Halcyon says was published in response to its report, describes a large number of S3 CopyObject operations using SSE-C overwriting objects and re-encrypting them with a new key, without naming the actor. Keep that caveat. A copy needs s3:GetObject on the source and s3:PutObject on the destination, the two permissions Halcyon names.
 
 AWS performs the encryption but does not store the key. CloudTrail logs only an HMAC of it, which is insufficient to reconstruct the key. Once complete, the data is unrecoverable without the attacker's key, even by AWS.
 
@@ -168,9 +170,11 @@ With SSE-C, you supply the key with each request. S3 encrypts, removes the key f
 notes:
 Background, from the Amazon S3 User Guide, in general terms.
 
-S3 offers four mutually exclusive server-side encryption options, set apart by who manages the keys. SSE-S3, with Amazon S3 managed keys, is the default encryption configuration for every bucket. SSE-KMS uses keys in AWS Key Management Service, which gives you more control, such as separate keys, control policies and following key use in CloudTrail. DSSE-KMS applies two layers of encryption. With SSE-C, you manage the encryption keys, and S3 manages the encryption as it writes to disks and the decryption when you access your objects.
+S3 offers four mutually exclusive server-side encryption options, set apart by how you manage the keys and how many layers of encryption apply. SSE-S3, with Amazon S3 managed keys, is the default encryption configuration for every bucket. SSE-KMS uses keys in AWS Key Management Service, which gives you more control. DSSE-KMS applies two layers of encryption. With SSE-C, you manage the encryption keys, and S3 manages the encryption as it writes to disks and the decryption when you access your objects.
 
-With SSE-C, request headers name the algorithm, AES256, and carry the key itself. S3 applies AES-256 encryption, then removes the key from memory, and to read the object you must provide the same key again. S3 does not store the key. It stores a randomly salted HMAC of it to validate future requests, and that value cannot be used to derive the key or to decrypt the object. AWS draws the consequence: if you lose the encryption key, you lose the object.
+With SSE-C, request headers name the algorithm, AES256, and carry the key itself. S3 applies AES-256 encryption, then removes the key from memory, and to read the object you must provide the same key again. Instead of the key, S3 stores a randomly salted HMAC of it to validate future requests, and that value cannot be used to derive the key or to decrypt the object. AWS draws the consequence: if you lose the encryption key, you lose the object.
+
+Both AWS pages now also note a later change: in April 2026, S3 began disabling SSE-C by default for new general purpose buckets. That came after this campaign, and the defense slides give the page's account of it.
 
 Also from Protecting data with server-side encryption: https://docs.aws.amazon.com/AmazonS3/latest/userguide/serv-side-encryption.html
 
@@ -180,14 +184,14 @@ stage: 05
 phase: Extortion
 technique: T1657 | Financial Theft
 fact: Pressure | S3 Lifecycle policy, permanent object deletion within 7 days
-fact: Ransom note | in each affected bucket, with a Bitcoin address
+fact: Ransom note | in each affected directory, with a Bitcoin address
 fact: Warning | not to alter account permissions or attempt recovery
 fact: Victims | at least two organisations hit, as Halcyon reported
 AWS never held the key, so victims who did not pay in time lost the data outright.
 notes:
 Stage 05 is the extortion. The page maps it to T1657, Financial Theft.
 
-To force fast payment, Codefinger applied an S3 Lifecycle policy configured to permanently delete the encrypted objects within seven days. The attacker left a ransom note in each affected bucket with a Bitcoin address and payment instructions, and warned victims not to alter account permissions or attempt recovery.
+To force fast payment, Codefinger applied an S3 Lifecycle policy configured to permanently delete the encrypted objects within seven days. The attacker left a ransom note in each affected directory with a Bitcoin address and payment instructions, and warned victims not to alter account permissions or attempt recovery.
 
 Because AWS never held the SSE-C key, victims who did not pay before the lifecycle timer expired lost the data outright. The page does not say whether any victim paid.
 
@@ -211,7 +215,7 @@ AWS adds that when you add a lifecycle configuration to a bucket, its rules appl
 == No AWS vulnerability, no malware: valid keys and native features
 layout: compare
 col: What Codefinger brought | Valid AWS keys, publicly exposed or otherwise compromised | An AES-256 key generated locally | A ransom note with a Bitcoin address
-col: Native AWS features it abused | Ordinary S3 list calls | SSE-C, AWS's own encryption with customer-provided keys | An S3 Lifecycle policy to delete within seven days
+col: Native AWS features it abused | SSE-C, AWS's own encryption with customer-provided keys | An S3 Lifecycle policy to delete within seven days
 No AWS vulnerability was exploited. The entire campaign relied on abusing valid credentials and native AWS features.
 notes:
 This is the pattern the page draws.
@@ -220,7 +224,7 @@ No AWS vulnerability was exploited, and at stage 04 the page says the encryption
 
 On its own side, Codefinger brought valid AWS keys, publicly exposed or otherwise compromised, an AES-256 key it generated locally, and a ransom note with a Bitcoin address.
 
-From AWS, it used ordinary S3 list calls to find its targets, SSE-C to encrypt the objects, and an S3 Lifecycle policy to delete the encrypted objects within seven days.
+From AWS, it used SSE-C to encrypt the objects, and an S3 Lifecycle policy to delete the encrypted objects within seven days. How it found the objects is the gap at stage 03.
 
 == Five defenses against five stages
 layout: matrix
@@ -229,14 +233,14 @@ row: Restrict or disable SSE-C | 04
 row: Eliminate long-lived keys, rotate the rest | 01
 row: Least privilege on S3 permissions | 02
 row: Versioning, Object Lock, isolated backups | 04 | 05
-row: CloudTrail alerts: SSE-C, lifecycle, unfamiliar IPs | 02 | 04 | 05
-No defense on the page is tied to stage 03, the bucket and object listing.
+row: CloudTrail data events and alerts | 02 | 04 | 05
+No defense on the page is tied to stage 03, the step the sources do not describe.
 notes:
 This matrix sets the page's five defenses against the five stages. A cell is marked only where a defense's own words name something that stage has.
 
-Restricting SSE-C answers stage 04: it denies s3:PutObject requests carrying the SSE-C algorithm header, and the page says it closes the exact primitive Codefinger abused. Eliminating long-lived keys and rotating the rest answers stage 01, where keys were never rotated and had no expiry. Least privilege answers stage 02: it names the s3:GetObject and s3:PutObject permissions the keys carried. Versioning answers stage 04, because an SSE-C overwrite then does not destroy the original, and Object Lock answers stage 05, defeating the seven-day lifecycle pressure. The CloudTrail alerts answer stage 04 through the customer-key headers, stage 05 through lifecycle changes, and stage 02 through unfamiliar source IPs on existing keys.
+Restricting SSE-C answers stage 04: it denies s3:PutObject requests carrying the SSE-C algorithm header, and the page says it closes the exact primitive Codefinger abused. Eliminating long-lived keys and rotating the rest answers stage 01, where keys were never rotated and had no expiry. Least privilege answers stage 02: it names the s3:GetObject and s3:PutObject permissions the keys carried. Versioning answers stage 04, because an SSE-C overwrite then does not destroy the original, and Object Lock answers stage 05, defeating the seven-day lifecycle pressure. The CloudTrail alerts answer stage 04 through PutObject and CopyObject events carrying the SSE-C algorithm header, stage 05 through PutBucketLifecycle events, and stage 02 through the S3 data events it says are off by default and through unfamiliar source IPs on existing keys.
 
-No defense is tied to stage 03's listing calls. That gap is the second discussion question.
+No defense is tied to stage 03, the step the sources do not describe. That gap is the second discussion question.
 
 == Restrict or disable unneeded SSE-C
 layout: text
@@ -249,6 +253,22 @@ This defense answers stage 04. The page says it closes the exact primitive Codef
 Most workloads use SSE-S3 or SSE-KMS, not SSE-C. Where you do not need SSE-C, add an S3 bucket policy or an SCP that denies s3:PutObject when the request carries the x-amz-server-side-encryption-customer-algorithm header. Then an attacker cannot encrypt your objects with a key you do not control.
 
 An SCP is a service control policy, an AWS Organizations guardrail. KMS is AWS Key Management Service.
+
+The page adds that AWS has since changed the default, which the next slide covers.
+
+== AWS has since changed the SSE-C default
+layout: compare
+col: SSE-C now off by default | New general purpose buckets, with two exceptions in AWS's FAQ | Existing buckets in accounts that held no SSE-C encrypted objects | Blocked SSE-C writes get a 403 AccessDenied error
+col: Check which case is yours | Accounts that already had SSE-C objects: AWS changed no bucket's configuration | Turning SSE-C back on takes PutBucketEncryption and s3:PutEncryptionConfiguration
+AWS announced the change on November 19, 2025 and deployed it from April 6, 2026, completing it that month, per AWS.
+notes:
+This is the second half of the first defense, as the page gives it. AWS has since changed the default.
+
+In a change announced on November 19, 2025 and deployed from April 6, 2026, completed that month per AWS, S3 disables SSE-C by default on new general purpose buckets. AWS also disabled it on existing buckets in accounts that held no SSE-C encrypted objects. AWS's FAQ lists Middle East (Bahrain) and Middle East (UAE) as exceptions for new buckets.
+
+Writes that specify SSE-C to a bucket where it is blocked are rejected with a 403 AccessDenied error. In accounts that already had SSE-C objects, AWS changed no bucket's configuration, so check which case yours is. Turning SSE-C back on for a bucket takes a PutBucketEncryption call and the s3:PutEncryptionConfiguration permission.
+
+The change came after this campaign, which Halcyon disclosed on January 13, 2025. The page does not say it was a response to Codefinger.
 
 == Fewer long-lived keys, least privilege on S3
 layout: compare
@@ -279,30 +299,32 @@ Finally, maintain backups in a separate account that the leaked key cannot reach
 == Alert on SSE-C use and lifecycle changes
 layout: table
 row: Monitor CloudTrail for | Stage
-row: PutObject calls carrying the customer-key headers | 04, SSE-C encryption
-row: PutBucketLifecycleConfiguration events | 05, the deletion policy
+row: PutObject and CopyObject events carrying the SSE-C algorithm header | 04, SSE-C encryption
+row: PutBucketLifecycle events | 05, the deletion policy
 row: Unfamiliar source IPs on existing keys | 02, no default alert on a new IP
-Route these to your SIEM so unusual S3 encryption or new deletion policies trigger an immediate response.
+First turn on S3 data events, which are off by default and cost extra. Then route these to your SIEM.
 notes:
 The last defense is detection, and it touches three stages.
 
-Monitor CloudTrail for PutObject calls carrying the customer-key headers, which is how stage 04 encrypted the objects. Monitor it for PutBucketLifecycleConfiguration events, which the page pairs with new deletion policies like the one at stage 05. And monitor it for unfamiliar source IPs on existing keys, the gap stage 02 describes, where valid-credential access from a new IP raised no default alert.
+CloudTrail records S3 object-level calls only as data events, which are off by default and cost extra, so turn them on for the buckets you need to watch. That is the logging gap stage 02 describes.
+
+Then monitor for PutObject and CopyObject events whose request parameters carry x-amz-server-side-encryption-customer-algorithm, the header stage 04's requests carried. Monitor for PutBucketLifecycle events, the CloudTrail name for PutBucketLifecycleConfiguration, which the page pairs with new deletion policies like the one at stage 05. And monitor for unfamiliar source IPs on existing keys, the gap stage 02 describes, where valid-credential access from a new IP raised no default alert.
 
 Route these to your SIEM so unusual S3 encryption or new deletion policies trigger an immediate response. SIEM is security information and event management: central log collection, correlation and alerting.
 
 == Check your own environment
 layout: checklist
+check: Which of your accounts kept SSE-C when AWS changed the default?
 check: Where SSE-C is unneeded, do bucket policies or SCPs deny PutObject with its header?
 check: Could IAM roles, SSO or STS replace your remaining long-lived access keys?
-check: Are unavoidable keys rotated regularly and scoped tightly?
-check: Do you scan repos, CI logs and buckets for exposed keys?
+check: Are remaining keys rotated and tightly scoped, and do you scan for exposed ones?
 check: Is s3:PutObject granted only to the principals and buckets that need it?
 check: Do your buckets use Versioning and Object Lock, with backups in a separate account?
-check: Would CloudTrail alerts fire on SSE-C writes, lifecycle changes or unfamiliar source IPs?
+check: With S3 data events on, would SSE-C writes, lifecycle changes or unfamiliar IPs alert?
 notes:
 Turn the page's defenses into questions about your own estate. Each question comes from one of them.
 
-Ask whether a bucket policy or SCP denies s3:PutObject requests that carry the SSE-C algorithm header, wherever you do not need SSE-C.
+Ask which of your accounts already had SSE-C objects when AWS changed the default, because AWS changed no bucket's configuration in those accounts. Then ask whether a bucket policy or SCP denies s3:PutObject requests that carry the SSE-C algorithm header, wherever you do not need SSE-C.
 
 Ask which long-lived IAM access keys remain, and whether IAM roles, SSO or STS could replace them. For the keys that must stay, ask whether they are rotated regularly and scoped tightly, and whether anything scans repos, CI logs and buckets for exposed keys.
 
@@ -310,55 +332,57 @@ Ask whether s3:PutObject and s3:GetObject are granted only to the principals and
 
 Ask whether buckets use Versioning and Object Lock in compliance mode, with backups in a separate account a leaked key cannot reach.
 
-Finally, ask whether CloudTrail findings for SSE-C headers, lifecycle changes and unfamiliar source IPs reach your SIEM.
+Finally, ask whether S3 data events are on for the buckets you watch, and whether alerts on SSE-C headers, PutBucketLifecycle events and unfamiliar source IPs reach your SIEM.
 
-== Where would an SSE-C write succeed today?
+== Where would an SSE-C write still succeed?
 layout: question
-Codefinger's keys carried s3:PutObject, and it re-wrote objects with SSE-C under a key it held. The page says most workloads use SSE-S3 or SSE-KMS, not SSE-C.
+Codefinger re-wrote objects with SSE-C under a key it held. AWS has since disabled SSE-C by default on new general purpose buckets, with exceptions.
 
-Name one bucket where an SSE-C write would succeed today, and who would notice.
+Name one bucket where an SSE-C write would still succeed, and who would notice.
 notes:
 Give the room a minute with this one before moving on.
 
-At stage 04, Codefinger re-wrote each target object with SSE-C, using an AES-256 key it generated and held. The keys it used carried s3:PutObject, which was enough to overwrite objects with encrypted copies.
+At stage 04, Codefinger re-wrote each target object with SSE-C, using an AES-256 key it generated and held. The keys it used carried s3:GetObject and s3:PutObject, which were enough to read existing objects and overwrite them with encrypted copies.
+
+Since then, AWS has disabled SSE-C by default on new general purpose buckets, and on existing buckets in accounts that held no SSE-C encrypted objects. Accounts that already had SSE-C objects kept their configuration, and AWS's FAQ lists two Middle East Regions as exceptions for new buckets.
 
 Ask each person to name one bucket, and who or what would notice an SSE-C write to it, before you show the answer slide. The answer slide gives what the page says.
 
 == What the page says about SSE-C writes
 layout: answer
-- Deny s3:PutObject when a request carries the SSE-C algorithm header, by bucket policy or SCP.
-- Alert in CloudTrail on PutObject calls carrying the customer-key headers.
-- Route those alerts to your SIEM for an immediate response.
+- Check which case your accounts are in under AWS's new default.
+- Where SSE-C is unneeded, deny s3:PutObject with its header, by bucket policy or SCP.
+- Turn on S3 data events; alert on PutObject and CopyObject events with that header.
 notes:
-The page gives two answers.
+The page gives prevention and detection.
 
-First, prevention. Where you do not need SSE-C, a bucket policy or SCP that denies s3:PutObject on requests carrying the x-amz-server-side-encryption-customer-algorithm header means an attacker cannot encrypt your objects with a key you do not control. The page says this closes the exact primitive Codefinger abused.
+First, prevention. AWS's default change blocks SSE-C writes on new general purpose buckets and on existing buckets in accounts that held no SSE-C objects; in accounts that already had SSE-C objects, AWS changed no bucket's configuration, so check which case yours is. Where you do not need SSE-C, a bucket policy or SCP that denies s3:PutObject on requests carrying the x-amz-server-side-encryption-customer-algorithm header means an attacker cannot encrypt your objects with a key you do not control.
 
-Second, detection. Monitor CloudTrail for PutObject calls carrying the customer-key headers, and route them to your SIEM so unusual S3 encryption triggers an immediate response.
+Second, detection. Turn on S3 data events, which are off by default and cost extra, then monitor for PutObject and CopyObject events carrying that header, and route them to your SIEM.
 
 Bring the group's examples back to this. For each bucket the group named, ask whether it needs SSE-C at all; the page's first defense is for the ones that do not.
 
 == What would you add for stage 03?
 layout: question
-The page ties no defense to stage 03, where Codefinger listed buckets and objects with ordinary read calls that generate no exploitation signal.
+The page ties no defense to stage 03. The sources do not say how Codefinger found the buckets and objects it encrypted.
 
-What would you add, and which reported detail would it catch?
+What would you add, and which detail on the page would it use?
 notes:
 This question comes from the gap in the defense matrix.
 
-The page offers defenses tied to stages 01, 02, 04 and 05. It ties none to stage 03, where Codefinger enumerated buckets and objects with s3:ListAllMyBuckets and s3:ListBucket to find high-value targets. The page calls those ordinary read operations that generate no exploitation signal.
+The page offers defenses tied to stages 01, 02, 04 and 05. It ties none to stage 03, where the cited sources do not say how Codefinger found the buckets and objects it encrypted. The page names the calls listing would take if it was used, ListBuckets and ListObjectsV2, calls them ordinary reads that generate no exploitation signal, and says no source reports that Codefinger made them.
 
 Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
 
 == The page ties no defense to stage 03
 layout: answer
-The page ties no defense to the listing, and this deck adds none. Any control you propose is your own. Test it against the reported calls, s3:ListAllMyBuckets and s3:ListBucket, ordinary reads with no exploitation signal.
+The page ties no defense to stage 03, and this deck adds none. Any control you propose is your own. The page names only the calls listing would take if used, ListBuckets and ListObjectsV2.
 notes:
 Be clear that the page ties no defense to stage 03, and this deck adds none of its own.
 
-If the group proposes ideas, treat them as the group's, and test each one against the facts the page reports for stage 03: native API calls to list buckets and objects, s3:ListAllMyBuckets and s3:ListBucket, made with valid access, and read operations that generate no exploitation signal.
+If the group proposes ideas, treat them as the group's, and test each one against what the page says for stage 03. No cited source describes how Codefinger found the buckets and objects. If listing was used, the calls would be ListBuckets, which needs s3:ListAllMyBuckets, and ListObjectsV2, which needs s3:ListBucket: ordinary reads that generate no exploitation signal. No source reports that Codefinger made them, so do not build a proposal on the claim that it did.
 
-Some proposals will lean on the page's own defenses. Alerting on unfamiliar source IPs on existing keys is one. The matrix ties it to stage 02's detection gap, not to the listing calls, so stretching it to stage 03 is the group's own argument.
+Some proposals will lean on the page's own defenses. Alerting on unfamiliar source IPs on existing keys is one. The matrix ties it to stage 02's detection gap, not to stage 03, so stretching it to stage 03 is the group's own argument. Keeping backups in a separate account the leaked key cannot reach is another. Stage 03 lists backups among typical targets, but the page does not tie that defense to stage 03, so that argument is the group's own too.
 
 == Sources
 layout: links
@@ -366,10 +390,15 @@ link: Halcyon, abusing AWS native services (SSE-C) | https://www.halcyon.ai/blog
 link: Arctic Wolf, S3 SSE-C ransomware | https://arcticwolf.com/resources/blog/ransomware-campaign-encrypting-amazon-s3-buckets-using-sse-c/
 link: The Register, Codefinger coverage | https://www.theregister.com/2025/01/13/ransomware_crew_abuses_compromised_aws/
 link: MITRE ATT&CK T1486 | https://attack.mitre.org/techniques/T1486/
+link: AWS Security Blog, preventing unintended encryption of S3 objects | https://aws.amazon.com/blogs/security/preventing-unintended-encryption-of-amazon-s3-objects/
+link: AWS, default SSE-C setting for new buckets FAQ | https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-s3-c-encryption-setting-faq.html
+link: AWS, logging S3 API calls with CloudTrail | https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudtrail-logging-s3-info.html
 notes:
 These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
 
 Halcyon disclosed the campaign on January 13, 2025, and its post is the first link in the page's header. Arctic Wolf's post on the campaign is the second. The Register covered Codefinger, and the MITRE page defines T1486, Data Encrypted for Impact, behind stage 04.
+
+The three AWS pages back the page's AWS statements: the Security Blog post with the CopyObject pattern AWS describes, which Halcyon says was published in response to its report; the FAQ on the SSE-C default change; and the guide to which S3 calls CloudTrail records by default.
 
 The background slides name their own sources, from AWS documentation and the csoh.org glossary.
 
