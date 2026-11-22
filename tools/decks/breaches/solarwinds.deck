@@ -1,0 +1,485 @@
+title: SolarWinds 2020
+page: breaches/solarwinds.html
+as-of: 2026-11-22
+promise: Russian SVR put the SUNBURST backdoor into signed Orion updates that up to 18,000 customers may have installed, then forged Golden SAML tokens at high-value government targets to reach Azure AD and Microsoft 365.
+
+== At a glance
+layout: stats
+stat: 18,000 | organizations, at most, may have installed the malicious update | up to 18,000, from March 2020
+stat: ~100 | actively exploited | most installs were never actively exploited
+stat: 14 | months from build compromise to discovery | October 2019 to December 2020
+The page names the threat actor as APT29, also called Cozy Bear, of the Russian SVR.
+notes:
+Start with the page's headline figures, and with the hedges that come with them.
+
+The page says up to 18,000 organizations may have installed the malicious update. Keep both hedges, up to and may have, when you say the number aloud.
+
+About 100 were actively exploited, per the page's headline. The page adds that most of the customers that may have installed the update were never actively exploited. A later slide sets the two sides next to each other.
+
+From the build compromise in October 2019 to discovery in December 2020 took about 14 months.
+
+The page names the threat actor as APT29, also called Cozy Bear, of the Russian SVR. SVR is Russia's Foreign Intelligence Service, and APT stands for advanced persistent threat.
+
+== What happened, and when
+layout: timeline
+event: October 2019 | SolarWinds build environment breached; SUNSPOT injects SUNBURST into an Orion DLL at compile time
+event: From March 2020 | Customers install trojanized Orion updates; SUNBURST beacons over DNS
+event: Date not given | At selected targets: domain admin on-premises, then forged SAML into Azure AD and M365
+event: December 13, 2020 | FireEye's public disclosure triggers CISA's Emergency Directive 21-01
+About 14 months from build compromise to discovery. Removing Orion did not remove the cloud backdoors. Spacing is not to scale.
+notes:
+The timeline shows only the dates the page gives.
+
+In October 2019, SVR breached SolarWinds' build environment and installed SUNSPOT, which injected SUNBURST into an Orion DLL as it was compiled. A DLL is a library of code that programs load.
+
+From March 2020, customers installed the trojanized Orion updates, and SUNBURST beaconed to an attacker-controlled domain over DNS.
+
+At selected high-value targets, SVR reached domain admin on-premises, stole the ADFS token-signing certificate and forged SAML tokens to reach Azure AD and Microsoft 365. The page gives no date for these steps, so the slide does not invent one. Its summary says the access lasted for months.
+
+On December 13, 2020, FireEye's public disclosure triggered a global incident response and CISA Emergency Directive 21-01. CISA is the US Cybersecurity and Infrastructure Security Agency.
+
+The markers are evenly spaced, so do not read the gaps between them as durations.
+
+== Installed is not the same as exploited
+layout: compare
+col: Up to 18,000 may have installed | Customers installed trojanized Orion updates from March 2020 | Most were never actively exploited
+col: Fewer than 100 hacked through SUNBURST | SolarWinds' later estimate | SVR selectively activated only high-value targets for further exploitation
+The headline gives ~100 actively exploited. Stage 05 names Treasury, Commerce, DHS, State and DOJ among victims, with ~95 other organisations.
+notes:
+Slow down here. The size of the exposure and the size of the exploitation are very different numbers.
+
+Up to 18,000 customers may have installed the trojanized update. Most of them, the page says, were never actively exploited. SVR selectively activated only high-value targets for further exploitation.
+
+SolarWinds later estimated that fewer than 100 were hacked through SUNBURST. The page's headline separately gives about 100 as actively exploited. When you quote either figure, say which one it is and where it comes from.
+
+Stage 05 names five victims, the US Treasury, Commerce, the Department of Homeland Security, the State Department and the Department of Justice, and counts about 95 other organisations.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Supply Chain: Build System Compromise | SUNSPOT in the build | T1195.002
+step: 02 | Backdoor Activation and C2 Beaconing | Beacons over DNS | T1071.004
+step: 03 | On-Prem Privilege Escalation | Domain admin on-prem | T1078.002
+step: 04 | On-Prem to Cloud Pivot: Golden SAML | ADFS signing key stolen | T1606.002
+step: 05 | Cloud Espionage and Persistence | M365 mail, backdoors | T1114.002
+step: 06 | Discovery | FireEye traces Orion | -
+notes:
+Here is the whole chain on one slide: the page's six stages, each with its phase and primary ATT&CK technique.
+
+Stage 01 is the build system compromise, where SUNSPOT put SUNBURST into Orion. Stage 02 is the backdoor's activation and its beaconing over DNS. C2 means command and control, the channel an attacker uses to direct malware. Stage 03 is privilege escalation on-premises, through TEARDROP and Cobalt Strike BEACON to domain admin. Stage 04 is the pivot to the cloud: the ADFS token-signing key stolen and Golden SAML tokens forged. Stage 05 is long-term email access in Microsoft 365 and backdoors in Azure AD. Stage 06 is discovery, which the page maps to no technique, so its box shows none.
+
+Read the arrows as the order of stages. The page says SVR selectively activated only high-value targets for further exploitation, and that most customers that may have installed the update were never actively exploited. The next slides take each stage in turn.
+
+== October 2019: SUNSPOT in Orion's build
+layout: stage
+stage: 01
+phase: Supply Chain: Build System Compromise
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: Implant | SUNSPOT, watching MSBuild.exe, injecting at compile time
+fact: Target | Orion.Core.BusinessLayer.dll
+fact: Signing | SolarWinds' legitimate certificate, trusted by customers
+fact: Dormancy | ~2 weeks after installation, to evade sandbox detection
+Signed with the legitimate certificate, the trojanized DLL appeared authentic.
+notes:
+Stage 01 is where the attack entered the software itself. The page maps it to T1195.002, Compromise Software Supply Chain.
+
+SVR gained access to SolarWinds' internal build system and installed SUNSPOT, a build-time implant. It monitored the MSBuild.exe process, which is Microsoft's build engine, and injected SUNBURST's malicious code into Orion.Core.BusinessLayer.dll during compilation.
+
+The resulting DLL was then signed with SolarWinds' legitimate code-signing certificate, the certificate customers trusted. The page says that signature made the DLL appear authentic.
+
+The page also notes that SUNBURST waited about two weeks after installation before activating, to evade sandbox detection. A sandbox is an isolated environment where suspicious software is run and watched.
+
+The next slide explains, in general terms, what a code signature proves.
+
+== What a code signature proves, and what it does not
+layout: background
+source: Microsoft Learn, Introduction to Code Signing | https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/ms537361(v=vs.85)
+credit: Also from Authenticode digital signatures (learn.microsoft.com)
+Code signing addresses authenticity, telling users where code came from, and integrity, showing it has not been tampered with since its publication.
+
+Microsoft adds that Authenticode itself cannot guarantee that signed code is safe to run.
+notes:
+This is a background slide. It explains code signing in general, from Microsoft's documentation, and says nothing about the incident.
+
+Microsoft names two issues to address for software distributed over the internet. Authenticity assures users where the code came from. Integrity verifies that the code has not been tampered with since its publication.
+
+Authenticode is Microsoft's code-signing technology. It identifies the publisher of signed software and verifies that the software has not changed since it was signed and published. The publisher's certificate is issued by a certification authority after it verifies the publisher's identity, and it chains up to a trusted root.
+
+The signature itself works on a hash. A one-way hash of the code is signed with the publisher's private key; the recipient hashes the code again and checks the signed hash with the publisher's public key. If the two match, the signature is valid and the code is intact.
+
+Microsoft is careful about the limit: Authenticode itself cannot guarantee that signed code is safe to run.
+
+Also from Authenticode digital signatures: https://learn.microsoft.com/en-us/windows-hardware/drivers/install/authenticode
+
+== From March 2020, SUNBURST beaconed over DNS
+layout: stage
+stage: 02
+phase: Backdoor Activation and C2 Beaconing
+technique: T1071.004 | Application Layer Protocol: DNS
+fact: Delivery | trojanized Orion updates, installed by customers
+fact: C2 domain | avsvmcloud[.]com, attacker-controlled
+fact: Encoding | victim environment information in DNS subdomain queries
+fact: Evasion | traffic mimicked legitimate SolarWinds telemetry
+SVR activated only high-value targets; most installs were never actively exploited.
+notes:
+From March 2020, customers installed the trojanized Orion updates. The page maps this stage to T1071.004, Application Layer Protocol: DNS.
+
+SUNBURST beaconed to the attacker-controlled domain avsvmcloud[.]com using DNS subdomain queries that encoded information about the victim's environment. DNS is the Domain Name System, which turns names into network addresses. A beacon is a periodic check-in from malware to its controller.
+
+The traffic mimicked legitimate SolarWinds telemetry, and the page says the dormancy period, from stage 01, bypassed sandbox detection.
+
+SVR then selectively activated only high-value targets for further exploitation. Most of the up to 18,000 customers that may have installed the update were never actively exploited. SolarWinds later estimated that fewer than 100 were hacked through SUNBURST.
+
+The page ties no defense to this stage. That gap comes back in the discussion at the end.
+
+The next slide explains, in general terms, how DNS can carry command and control traffic.
+
+== How DNS can carry command and control traffic
+layout: background
+source: MITRE ATT&CK T1071.004 | https://attack.mitre.org/techniques/T1071/004/
+ATT&CK says adversaries may use DNS for command and control to blend in with existing traffic.
+
+DNS is common, may be allowed even before network authentication completes, and its packets have many fields where data can be concealed.
+notes:
+Background, from MITRE ATT&CK, in general terms.
+
+ATT&CK says adversaries may communicate using the Domain Name System application layer protocol to avoid detection or network filtering by blending in with existing traffic. Commands to the remote system, and often their results, are embedded in the traffic between client and server.
+
+DNS serves an administrative function in networking, so it may be very common in an environment, and it may be allowed even before network authentication is completed. DNS packets contain many fields and headers in which data can be concealed. ATT&CK says this is often known as DNS tunneling.
+
+It also describes DNS beaconing, where commands are sent through DNS queries and may be embedded in different record types, such as TXT or A records. ATT&CK says DNS beacons may be difficult to detect because they communicate infrequently, which hides the malicious traffic among normal DNS traffic.
+
+== TEARDROP and BEACON led to domain admin
+layout: stage
+stage: 03
+phase: On-Prem Privilege Escalation
+technique: T1078.002 | Valid Accounts: Domain Accounts
+fact: Dropper | TEARDROP, memory-resident, at selected high-value targets
+fact: BEACON | Cobalt Strike, for interactive C2 and lateral movement
+fact: Result | domain admin on the on-premises Active Directory
+fact: Goal | reach ADFS and steal the SAML token-signing certificate
+Domain admin positioned SVR to attack cloud identity through the ADFS server.
+notes:
+At selected high-value targets, SUNBURST delivered TEARDROP, a memory-resident dropper. A dropper is malware whose job is to install other malware. TEARDROP deployed Cobalt Strike BEACON for interactive command and control and for lateral movement, which means moving from one system to others in the same network.
+
+SVR used BEACON to escalate to domain admin privileges on the victim's on-premises Active Directory. The page maps this to T1078.002, Valid Accounts: Domain Accounts.
+
+The page states the goal of this on-premises access: reach the ADFS server and steal the SAML token-signing certificate. ADFS is Active Directory Federation Services, Microsoft's on-premises service that signs users in to other services.
+
+All of this traffic masqueraded as legitimate SolarWinds API activity, the page says.
+
+The page ties no defense to the TEARDROP, BEACON or domain admin steps; the discussion at the end returns to that.
+
+The next slide explains Cobalt Strike in general terms.
+
+== What Cobalt Strike is
+layout: background
+source: MITRE ATT&CK, Cobalt Strike software entry | https://attack.mitre.org/software/S0154/
+ATT&CK describes Cobalt Strike as a commercial, full-featured remote access tool that bills itself as adversary simulation software.
+
+Its interactive post-exploit capabilities cover the full range of ATT&CK tactics, in one integrated system.
+notes:
+Background, from MITRE ATT&CK's software entry, in general terms.
+
+ATT&CK describes Cobalt Strike as a commercial, full-featured, remote access tool. It bills itself as adversary simulation software designed to execute targeted attacks and emulate the post-exploitation actions of advanced threat actors.
+
+ATT&CK says Cobalt Strike's interactive post-exploit capabilities cover the full range of ATT&CK tactics, all executed within a single, integrated system. Post-exploitation means what an operator does after first gaining access to a system.
+
+In addition to its own capabilities, ATT&CK says, Cobalt Strike uses those of other well-known tools such as Metasploit and Mimikatz.
+
+== Golden SAML: tokens forged as any user
+layout: stage
+stage: 04
+phase: On-Prem to Cloud Pivot: Golden SAML
+technique: T1606.002 | Forge Web Credentials: SAML Tokens
+technique: T1550 | Use Alternate Authentication Material
+fact: Taken | the ADFS token-signing private key and certificate
+fact: From | the on-prem federation server, with domain admin privileges
+fact: Forged | SAML as any user, accepted by Azure AD and M365 as legitimate
+fact: Persistence | signing certs rarely rotated, so access persisted indefinitely
+Forged SAML bypasses MFA entirely: the assertion is the proof of authentication.
+notes:
+With domain admin privileges, SVR extracted the ADFS token-signing private key and certificate from the on-premises federation server. Using that key, it could forge SAML assertions impersonating any user. The page calls this Golden SAML, and maps it to T1606.002, Forge Web Credentials: SAML Tokens, and T1550, Use Alternate Authentication Material.
+
+SAML, the Security Assertion Markup Language, is a standard for one system to vouch for a user's sign-in to another. A SAML assertion is that signed statement.
+
+The page explains why MFA did not help. Forged SAML tokens bypass MFA entirely because the SAML assertion is the proof of authentication, and no second factor is requested when a valid SAML response is presented. MFA is multi-factor authentication.
+
+The page adds that SAML signing certificates are rarely rotated, so access persisted indefinitely without re-exploitation.
+
+The next slide lists the attack steps as the page gives them.
+
+== Golden SAML in four steps, as the page lists them
+layout: table
+row: Step | What the attacker does
+row: 1 | Extract the ADFS private signing key and certificate, which requires domain admin
+row: 2 | Forge a SAML assertion claiming to be any privileged user, such as Global Admin
+row: 3 | Present it to Azure AD or M365, which accept it as fully legitimate
+row: 4 | MFA is bypassed, because the forged SAML is the authentication proof
+No second factor is requested when a valid SAML response is presented.
+notes:
+These are the page's own four steps for a Golden SAML attack.
+
+First, extract the ADFS private signing key and certificate. The page notes this requires domain admin, which is why stage 03 mattered.
+
+Second, forge a SAML assertion claiming to be any privileged user, such as a Global Admin, the highest-privilege administrator role in Azure AD.
+
+Third, present the assertion to Azure AD or Microsoft 365, where it is accepted as fully legitimate.
+
+Fourth, MFA is bypassed, because the forged SAML is itself the authentication proof. No second factor is requested when a valid SAML response is presented.
+
+The next slide explains, in general terms, what a token-signing certificate does in AD FS.
+
+== What an AD FS token-signing certificate does
+layout: background
+source: Microsoft Learn, Token-Signing Certificates | https://learn.microsoft.com/en-us/windows-server/identity/ad-fs/design/token-signing-certificates
+A federation server signs each security token with the private key of its token-signing certificate.
+
+A partner checks the signature with the public key, confirming that a valid federation server issued the token and that it was not modified.
+notes:
+Background, from Microsoft's AD FS documentation, in general terms.
+
+Microsoft says federation servers require token-signing certificates to prevent attackers from altering or counterfeiting security tokens in an attempt to gain unauthorized access to federated resources.
+
+Every token-signing certificate has a private key and a public key. The federation server digitally signs a security token with the private key. A partner that receives the token uses the public key to verify that it was in fact issued by that federation server and was not modified in transit.
+
+Microsoft calls this key pairing the most important validation mechanism of any federated partnership. For a token-signing certificate to sign a security token at all, it must contain a private key, and the AD FS service account must have access to that private key.
+
+== M365 mail access, and Azure AD backdoors
+layout: stage
+stage: 05
+phase: Cloud Espionage and Persistence
+technique: T1114.002 | Email Collection: Remote Email Collection
+technique: T1098 | Account Manipulation
+fact: Victims | Treasury, Commerce, DHS, State, DOJ, ~95 other organisations
+fact: Federation | new trusted identity providers added to Azure AD
+fact: OAuth | app permissions granted for API-based access
+fact: Service principals | credentials added for ongoing access
+These backdoors persisted even after Orion was removed from victim networks.
+notes:
+SVR accessed Microsoft 365 environments at multiple US government agencies, including the Treasury, Commerce, the Department of Homeland Security, the State Department and the Department of Justice. The page lists about 95 other organisations as victims. It maps the email access to T1114.002, Remote Email Collection.
+
+SVR also modified Azure AD. It added new trusted federated identity providers, granted OAuth application permissions for API-based access, and added service principal credentials for ongoing access. The page maps these changes to T1098, Account Manipulation. OAuth is a standard that lets an application act with granted permissions instead of a user's password. A service principal is an application's identity in a tenant.
+
+The page calls the lesson a key one. These cloud-layer backdoors persisted even after SolarWinds Orion was removed from victim networks, so Azure AD had to be separately evicted.
+
+The next slide explains service principals in general terms.
+
+== What a service principal is in Microsoft Entra ID
+layout: background
+source: Microsoft Learn, Application and service principal objects in Microsoft Entra ID | https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals
+credit: Also from New name for Azure Active Directory (learn.microsoft.com)
+Microsoft Entra ID is the new name for Azure AD. An application reaches a tenant's resources through a service principal.
+
+It defines what the app can do in that tenant, who can access it, and what it can access.
+notes:
+Background, from Microsoft Learn, in general terms.
+
+Microsoft renamed Azure Active Directory, or Azure AD, to Microsoft Entra ID. Existing deployments and configurations kept working under the new name.
+
+To access resources secured by a Microsoft Entra tenant, an entity must be represented by a security principal: a user principal for a person, and a service principal for an application. The security principal defines the access policy and permissions for that user or application in the tenant.
+
+When an application is registered, it gets an application object, a template that lives in its home tenant. A service principal is created in every tenant where the application is used, including when the application is given permission through consent. The service principal object defines what the app can do in that tenant, who can access the app, and what resources it can access.
+
+An app registration can also hold secrets or certificates, the credentials the app uses to work.
+
+Also from New name for Azure Active Directory: https://learn.microsoft.com/en-us/entra/fundamentals/new-name
+
+== FireEye traced its stolen tools to Orion
+layout: stage
+stage: 06
+phase: Discovery
+fact: Found by | FireEye, investigating its own breach
+fact: Disclosed | December 13, 2020
+fact: Dwell | about 14 months from build compromise to discovery
+fact: Response | CISA ED 21-01: all federal agencies disconnect Orion immediately
+fact: After Orion removal | Azure AD federation and OAuth app backdoors persisted
+Removing Orion did not remove cloud persistence; Azure AD needed separate eviction.
+notes:
+FireEye discovered the theft of its proprietary red team offensive tools during an internal investigation, and traced the intrusion to a trojanized SolarWinds Orion update. A red team is a group that attacks its own organization, or a client's, to test its defenses. The page maps this stage to no ATT&CK technique.
+
+FireEye's public disclosure on December 13, 2020 triggered a global incident response and CISA Emergency Directive 21-01, which required all federal agencies to immediately disconnect Orion. ED 21-01 on the slide is that directive. The page puts the time from build compromise to discovery at about 14 months.
+
+Then the complication the page stresses. Removing Orion did not remove cloud persistence. The cloud-layer backdoors in Azure AD federation and OAuth apps persisted after Orion was removed, and required a separate, comprehensive eviction process.
+
+The next slides draw that pattern out.
+
+== From a build system to cloud identity, as the page describes it
+layout: layers
+layer: SolarWinds | SUNSPOT injects SUNBURST into Orion's build
+layer: Customers | SUNBURST; selected targets: TEARDROP, BEACON, domain admin
+layer: ADFS server | Token-signing key and certificate stolen
+layer: Cloud identity | Azure AD and M365 accept forged SAML; backdoors added
+The page calls this the first major nation-state supply chain attack that explicitly pivoted from on-premises to cloud identity.
+notes:
+This slide draws the path the page describes, from one vendor's build system into its customers' cloud identity. Each arrow is a step the page states.
+
+SUNSPOT put SUNBURST into Orion during SolarWinds' build. Customers installed the trojanized updates. At selected high-value targets, SUNBURST delivered TEARDROP and Cobalt Strike BEACON, which SVR used to reach domain admin. With domain admin, SVR stole the ADFS token-signing key and certificate. Forged SAML tokens were then accepted by Azure AD and Microsoft 365, where SVR added backdoors.
+
+Remember the scale from earlier. The page says most customers that may have installed the update were never actively exploited; SVR selectively activated only high-value targets.
+
+The page calls this the first major nation-state supply chain attack that explicitly pivoted from on-premises to cloud identity. That pivot is why the next slide matters.
+
+== Disconnecting Orion left the cloud backdoors in place
+layout: compare
+col: Disconnecting Orion | CISA ED 21-01 ordered all federal agencies to disconnect it immediately | Removing Orion did not remove cloud access
+col: Cloud persistence added in Azure AD | New federated identity providers | OAuth app permissions for API-based access | Service principal credentials for ongoing access
+Azure AD had to be separately evicted, the page says.
+notes:
+This is the lesson the page returns to at stages 05 and 06.
+
+When FireEye's disclosure triggered CISA Emergency Directive 21-01, all federal agencies were ordered to disconnect SolarWinds Orion immediately. Removing Orion did not remove cloud persistence.
+
+At stage 05, SVR added new federated identity providers to Azure AD, granted OAuth app permissions for API-based access, and added service principal credentials for ongoing access. The page says these cloud-layer backdoors persisted even after Orion was removed from victim networks.
+
+So Azure AD had to be separately evicted, in what the page calls a separate, comprehensive eviction process. Keep that sequence in mind for the defenses.
+
+== Five defenses against six stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: ADFS as a Tier 0 asset | 04
+row: Correlate ADFS and Azure AD sign-in logs | 04
+row: Audit federated IdPs, OAuth apps, service principals | 05
+row: Supply chain integrity for build systems | 01
+row: Cloud eviction as a separate step | 05 | 06
+No defense on the page names stage 02's DNS beaconing, or TEARDROP, BEACON or domain admin at stage 03.
+notes:
+This matrix sets the page's five defenses against its six stages. A cell is marked only where the defense's own words name something from that stage.
+
+Treating ADFS as a Tier 0 asset protects the signing keys taken at stage 04. Correlating ADFS and Azure AD sign-in logs detects Golden SAML, also stage 04. Auditing federated identity providers, OAuth app permissions and service principals names the three backdoors added at stage 05. Supply chain integrity for build systems names the build environment of stage 01. Planning cloud eviction as a separate step names stage 05's backdoors and the separate eviction stage 06 describes.
+
+Now the empty columns. No defense names stage 02's DNS beaconing, or TEARDROP, BEACON or the domain admin escalation at stage 03. Stage 03 names the ADFS server as the goal of its on-premises access, and the Tier 0 defense protects that server. The theft it guards against, of the signing keys, happened at stage 04, so the matrix marks 04 and leaves 03 empty. Weigh that for yourself in the discussion at the end.
+
+== Protect ADFS as Tier 0, and watch for Golden SAML
+layout: compare
+col: ADFS as Tier 0 (stage 04) | The ADFS server holds the keys to all federated services | Privileged access workstations and no internet exposure | HSM-protected signing keys; monitor it like your most critical system
+col: Detect Golden SAML (stage 04) | Correlate ADFS event logs with Azure AD sign-in logs | Legitimate ADFS authentications leave traces in both | An Azure AD sign-in with no ADFS event (IDs 1202, 1200) is highly suspicious
+Treat your ADFS or identity provider as a Tier 0 asset, equal to domain controllers.
+notes:
+Two defenses answer stage 04.
+
+First, treat your ADFS or identity provider as a Tier 0 asset, equal to domain controllers. Tier 0 means the systems that control identity for everything else. The page says the ADFS server holds the keys to all federated services. Protect it with privileged access workstations, which are hardened machines used only for administration, keep it off the internet, and keep its signing keys in an HSM, a hardware security module that holds keys so they cannot simply be copied out. Monitor it as you would your most critical production system.
+
+Second, detect Golden SAML by correlating ADFS event logs with Azure AD sign-in logs. Legitimate ADFS authentications leave traces in both systems. An Azure AD sign-in with no corresponding ADFS authentication event, IDs 1202 or 1200, is highly suspicious. Keep the page's wording, highly suspicious, when you say it aloud.
+
+== Audit Azure AD, and plan cloud eviction as its own step
+layout: compare
+col: Audit regularly (stage 05) | Federated IdPs, OAuth app permissions, service principals | Entra audit logs or Defender for Cloud Apps | Detect new high-privilege applications
+col: Evict separately (stages 05 and 06) | Any on-prem compromise may have resulted in cloud backdoors | Review and evict Azure AD, OAuth permissions, federated IdPs | A step separate from on-prem remediation
+SVR's cloud persistence survived Orion removal, the page says.
+notes:
+Two defenses deal with what SVR left in the cloud.
+
+First, audit Azure AD federated identity providers, OAuth app permissions and service principals regularly, because SVR's cloud persistence survived Orion removal. The page names two tools: Microsoft Entra audit logs, or Defender for Cloud Apps, to detect new high-privilege applications. An IdP is an identity provider, the system that signs users in.
+
+Second, plan for cloud-specific eviction as a separate step from on-prem remediation. The page says any on-prem compromise may have resulted in cloud-layer backdoors. Azure AD, OAuth app permissions and federated identity providers must be independently reviewed and evicted. Keep the word may when you say this aloud.
+
+== Treat the build pipeline as production infrastructure
+layout: text
+The page calls for software supply chain integrity verification for build systems.
+- Monitor build environments with endpoint security.
+- Verify build artifact integrity, and implement reproducible builds.
+- Treat your CI/CD pipeline as production infrastructure.
+notes:
+This defense answers stage 01, where SUNSPOT sat inside SolarWinds' build system and injected SUNBURST during compilation.
+
+The page calls for software supply chain integrity verification for build systems. Monitor build environments with endpoint security. Verify build artifact integrity. Implement reproducible builds, meaning builds that produce the same output from the same source. And treat your CI/CD pipeline as production infrastructure. CI/CD is continuous integration and continuous delivery, the automated pipeline that builds, tests and ships code.
+
+Recall stage 01: SUNSPOT ran inside the build, and the trojanized DLL was then signed with SolarWinds' legitimate certificate, which made it appear authentic.
+
+== Check your own environment
+layout: checklist
+check: Is your ADFS server, or other identity provider, protected as a Tier 0 asset?
+check: Are its signing keys HSM-protected, and is it kept off the internet?
+check: Would an Azure AD sign-in with no matching ADFS event raise an alert?
+check: When did you last audit federated IdPs, OAuth app permissions and service principals?
+check: Would you notice a new high-privilege application in your audit logs?
+check: Are your build environments monitored, with artifact integrity verified?
+check: Does your incident plan treat cloud eviction as a step separate from on-prem remediation?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether your ADFS server, or whatever identity provider you federate through, is protected as a Tier 0 asset: privileged access workstations, no internet exposure, and HSM-protected signing keys.
+
+Ask whether anything would alert on an Azure AD sign-in with no corresponding ADFS authentication event, IDs 1202 or 1200.
+
+Ask when federated identity providers, OAuth app permissions and service principals were last audited, and whether Microsoft Entra audit logs or Defender for Cloud Apps would show a new high-privilege application.
+
+Ask whether your build environments run endpoint security, and whether you verify build artifact integrity.
+
+Finally, ask whether your incident plan treats cloud eviction as its own step, separate from on-prem remediation.
+
+== After on-premises cleanup, what could remain in your cloud?
+layout: question
+At stage 05, SVR added federated identity providers, OAuth app permissions and service principal credentials in Azure AD. Removing Orion did not remove cloud access, the page says.
+
+Your on-premises incident is closed. What would you check in your cloud?
+notes:
+Give the room a minute with this one before moving on.
+
+At stage 05, SVR added new federated identity providers to Azure AD, granted OAuth app permissions and added service principal credentials. When CISA Emergency Directive 21-01 ordered federal agencies to disconnect Orion, those cloud-layer backdoors persisted.
+
+Ask each person to imagine their own on-premises incident has just been closed. What in their cloud tenant would they look at, with which logs, and who would own the work? The answer slide gives what the page says.
+
+== What the page says about cloud eviction
+layout: answer
+Plan cloud-specific eviction as a separate step from on-prem remediation.
+- Independently review and evict Azure AD, OAuth app permissions and federated IdPs.
+- Audit federated IdPs, OAuth app permissions and service principals regularly.
+notes:
+The page's answer has two parts.
+
+Plan for cloud-specific eviction as a separate step from on-prem remediation. The page says any on-prem compromise may have resulted in cloud-layer backdoors, so Azure AD, OAuth app permissions and federated identity providers must be independently reviewed and evicted.
+
+Audit Azure AD federated identity providers, OAuth app permissions and service principals regularly, using Microsoft Entra audit logs or Defender for Cloud Apps to detect new high-privilege applications.
+
+Bring the group's answers back to this. If a plan ends when the on-premises malware is gone, the page's guidance is that the cloud identity layer still needs its own review and eviction.
+
+== What would you add for stages 02 and 03?
+layout: question
+No defense on the page names stage 02's DNS beaconing, or TEARDROP, BEACON and the domain admin escalation at stage 03.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the empty columns in the defense matrix.
+
+At stage 02, SUNBURST beaconed over DNS, encoding victim environment information in subdomain queries, with traffic that mimicked legitimate SolarWinds telemetry. At stage 03, at selected high-value targets, TEARDROP deployed Cobalt Strike BEACON, and SVR escalated to domain admin on the on-premises Active Directory.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== The page ties no defense to stages 02 and 03
+layout: answer
+Any control you propose is your own. Test it against reported details: DNS subdomain encoding, traffic mimicking SolarWinds telemetry, the ~2 week dormancy, and TEARDROP running in memory.
+notes:
+Be clear that the page stops here. It ties no defense to stage 02 or stage 03, and this deck adds none of its own.
+
+One page defense comes close. Treating ADFS as a Tier 0 asset protects the server that stage 03 was positioning SVR to reach, though its words name the signing keys taken at stage 04. The group may argue that it reaches stage 03; that argument is the group's own.
+
+Test each proposal against the facts the page reports. For stage 02: the DNS subdomain queries to avsvmcloud[.]com that encoded victim environment information, traffic that mimicked legitimate SolarWinds telemetry, and the dormancy of about two weeks. For stage 03: TEARDROP as a memory-resident dropper, Cobalt Strike BEACON for interactive command and control and lateral movement, traffic masquerading as legitimate SolarWinds API activity, and the escalation to domain admin.
+
+== Sources
+layout: links
+link: MITRE ATT&CK, Campaign C0024 | https://attack.mitre.org/campaigns/C0024/
+link: CISA, remediation guidance | https://www.cisa.gov/news-events/news/remediating-networks-affected-solarwinds-and-active-directorym365-compromise
+link: CyberArk, Golden SAML (archived) | https://web.archive.org/web/20260412233530/https://www.cyberark.com/resources/blog/the-anatomy-of-the-solarwinds-attack-chain
+link: Sygnia, Golden SAML detection | https://www.sygnia.co/threat-reports-and-advisories/golden-saml-attack/
+link: Palo Alto Networks, timeline | https://unit42.paloaltonetworks.com/solarstorm-supply-chain-attack-timeline/
+link: MITRE ATT&CK T1606.002 | https://attack.mitre.org/techniques/T1606/002/
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+MITRE ATT&CK documents the campaign, and CISA published remediation guidance. CyberArk's analysis, linked here as an archived copy, covers Golden SAML, and Sygnia covers detecting it. Palo Alto Networks published a timeline. The MITRE technique page defines T1606.002, SAML token forgery, the technique behind stage 04.
+
+The background slides name their own sources, from Microsoft Learn and MITRE ATT&CK.
+
+== Related defense topics
+layout: links
+link: IAM and federated identity | iam.html
+link: CI/CD pipeline security | ci-cd.html
+link: Detection engineering | detection-engineering.html
+link: Cloud threat research | threat-research.html
+link: Zero Trust architecture | zero-trust.html
+The page names no related kill chain. These are its related defense topics.
+notes:
+The page names no related kill chain on csoh.org. These five are the related defense topics it links: IAM and federated identity, CI/CD pipeline security, detection engineering, cloud threat research, and Zero Trust architecture.
+
+IAM stands for identity and access management. Zero Trust is a security model that grants no implicit trust based on network location.
