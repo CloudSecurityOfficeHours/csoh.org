@@ -1,0 +1,467 @@
+title: Promptware
+page: breaches/promptware.html
+as-of: 2026-11-22
+promise: Researchers demonstrated a seven-stage kill chain against cloud-connected AI assistants, from a malicious Google Calendar invite to covert Zoom video streaming.
+
+== At a glance
+layout: stats
+stat: 36 | real-world incidents analysed | documented by Schneier, Nassi et al.
+stat: 21 | traverse 4+ kill chain stages | listed beside the 36 incidents analysed
+stat: 73% | of threat classes rated High-Critical | stated at stage 06, beside Nassi et al.'s two lateral movement paths
+The page lists the threat actor as researchers (Nassi, Schneier et al.), with criminal adoption ongoing.
+notes:
+Start with the page's headline figures, and with who stands behind each one.
+
+The page says Schneier, Nassi et al. documented the promptware pattern across 36 real-world incidents. Beside that figure it gives 21 that traverse four or more kill chain stages.
+
+The third figure comes from stage 06. After Nassi et al.'s two lateral movement paths, the page says 73% of analysed threat classes were rated High-Critical. That is a share of threat classes, so keep it apart from the 36 incidents.
+
+The page lists the threat actor as researchers, Nassi, Schneier et al., with criminal adoption ongoing. It names no criminal actor and gives no detail of that adoption, so present the stages in this deck as the researchers' demonstrations and the disclosed attacks the page describes.
+
+== What happened
+layout: text
+Researchers demonstrated a seven-stage kill chain against cloud-connected AI assistants, from a malicious Google Calendar invite to covert Zoom video streaming, triggered by the victim typing "thanks."
+
+The pattern, termed promptware, executes entirely through the LLM prompt layer.
+notes:
+This is the page's summary.
+
+Researchers demonstrated a seven-stage kill chain against cloud-connected AI assistants. It ran from a malicious Google Calendar invite to covert Zoom video streaming, all triggered by the victim typing thanks.
+
+Schneier, Nassi et al. documented the pattern across 36 real-world incidents. The page says the pattern, termed promptware, mirrors classical malware kill chains but executes entirely through the LLM prompt layer. LLM stands for large language model, the kind of model behind chat assistants.
+
+The page says C2, command and control, was confirmed in two attacks: ZombAI against ChatGPT in October 2024, and Reprompt against Microsoft Copilot in January 2026, tracked as CVE-2026-24307. Both were patched after disclosure.
+
+The next slide shows which stages draw on which attack.
+
+== Which attack each stage draws on
+layout: table
+row: Attack | Assistant | When | Stages on the page
+row: Calendar invite attack, Nassi et al. | Google Gemini | Not dated on the page | 01, 02, 03, 04, 06, 07
+row: ZombAI | ChatGPT | October 2024 | 04, 05
+row: Reprompt, CVE-2026-24307 | Microsoft Copilot | January 2026, patched January 13 | 05, 07
+row: Email assistant worm, Nassi et al. | An email assistant | Not dated on the page | 06
+The page tells one seven-stage chain. Its C2 stage describes ZombAI and Reprompt, and it calls the email worm a parallel threat class.
+notes:
+The page tells one seven-stage chain, but its stages draw on more than one attack. This table shows where each one appears.
+
+The Calendar invite attack against Google Gemini runs through stages 01, 02, 03, 04, 06 and 07. Stage 06 says Nassi et al. demonstrated its on-device pivot, and the page gives it no date. Google deployed mitigations after SafeBreach's disclosure.
+
+ZombAI, against ChatGPT in October 2024, appears at stage 04, where a prompt injection wrote to ChatGPT's persistent memory, and at stage 05 as a C2 channel.
+
+Reprompt, against Microsoft Copilot in January 2026, appears at stage 05 as a C2 channel and at stage 07 for its data exfiltration. It is tracked as CVE-2026-24307 and was patched on January 13, 2026. CVE stands for Common Vulnerabilities and Exposures, the public list of IDs for disclosed vulnerabilities.
+
+At stage 06 the page adds a worm in what it calls a parallel threat class: a compromised email assistant forwards the payload to every contact. Nassi et al. demonstrated that path too.
+
+When you present a stage, say which attack it comes from.
+
+== The kill chain on one slide
+layout: flow
+step: 01 | Initial Access | Poisoned Calendar invite | T1566
+step: 02 | Privilege Escalation | Delayed tool invocation | T1548
+step: 03 | Reconnaissance | Tool enumeration | T1082
+step: 04 | Persistence | Memory poisoning | T1546
+step: 05 | Command & Control | C2 in the prompt layer | T1071.001
+step: 06 | Lateral Movement | Agent pivot, email worm | T1534
+step: 07 | Actions on Objective | Covert camera stream | T1125
+Stages draw on several attacks; arrows show the page's stage order only.
+notes:
+Here are the page's seven stages, each with its phase and its ATT&CK technique. ATT&CK is MITRE's public catalog of adversary tactics and techniques.
+
+Stage 01, Initial Access, is the poisoned Calendar invite title. Stage 02, Privilege Escalation, is the delayed tool invocation that bypasses real-time guardrails. Stage 03, Reconnaissance, lists the assistant's connected apps, tools and the user's stored memories. Stage 04, Persistence, brings the instructions back in later sessions. Stage 05, Command and Control, runs C2 through the prompt layer. Stage 06, Lateral Movement, pivots to other agents and apps, or spreads as an email worm. Stage 07, Actions on Objective, is the covert camera stream.
+
+Two things about the arrows. The page points out that reconnaissance comes after initial access here, the reverse of classical malware. And the stages draw on several attacks, as the last slide showed, so read the arrows as the page's stage order, not as one attack's timeline.
+
+The next slides take each stage in turn.
+
+== A poisoned Calendar invite reached Gemini
+layout: stage
+stage: 01
+phase: Initial Access
+technique: T1566 | Phishing
+fact: Delivery vector | a Google Calendar event title, a shared workspace artifact
+fact: Trigger | the victim asks Gemini "What are my meetings today?"
+fact: Path | the Calendar Agent feeds the title into Gemini's context
+fact: Victim sees | only Gemini's response, never the raw title
+This is indirect prompt injection. LLMs read system prompts, user queries and retrieved data as one sequence; there is no code/data boundary.
+notes:
+Stage 01 is initial access, and the page maps it to T1566, Phishing.
+
+The attacker sends the target a Google Calendar meeting invitation with a malicious prompt embedded in the event title. When the victim asks Gemini, "What are my meetings today?", the Google Calendar Agent retrieves the event, poisoned title included, and feeds it directly into Gemini's active context.
+
+The victim never sees the raw title, only Gemini's natural-language response.
+
+This is indirect prompt injection. The attacker's instructions enter the model through a trusted data retrieval the user asked for, not through direct user input. The page explains why it works: language models process system prompts, user queries and retrieved data as a single undifferentiated sequence, with no boundary between code and data.
+
+The next slide explains prompt injection in general.
+
+== What prompt injection is
+layout: background
+source: csoh.org glossary, Prompt Injection | https://csoh.org/glossary.html#term-prompt-injection
+credit: Also from the csoh.org glossary entry Indirect Prompt Injection
+The csoh.org glossary defines prompt injection as untrusted input that overrides the system prompt or coerces the model into actions it shouldn't take.
+
+Indirect injection arrives in content the model retrieves, rather than in the user's message.
+notes:
+This is a background slide. It explains a general idea from the csoh.org glossary.
+
+The glossary defines prompt injection as untrusted input that overrides the system prompt or coerces the model into actions it shouldn't take, and calls it the defining LLM vulnerability.
+
+Its entry for indirect prompt injection describes injection delivered through content the model retrieves, such as web pages, emails and documents, rather than through the user's message.
+
+The page uses the indirect form for stage 01: the injected text arrived in a calendar event title that Gemini retrieved. The glossary entries are general and add nothing about this attack.
+
+Also from the csoh.org glossary entry Indirect Prompt Injection: https://csoh.org/glossary.html#term-indirect-prompt-injection
+
+== The injected prompt waited for a benign turn
+layout: stage
+stage: 02
+phase: Privilege Escalation: Safety Guardrail Bypass
+technique: T1548 | Abuse Elevation Control Mechanism
+fact: Technique | delayed tool invocation, staged at retrieval time
+fact: Trigger | the next benign turn, such as the victim typing "thanks"
+fact: Guardrail failure | checks run at prompt parse time, not at deferred execution
+fact: Effect | the command runs with Gemini's full tool permissions
+Triggering immediately would fire safety checks against the payload, so the instructions wait for a benign turn.
+notes:
+Stage 02 is the page's privilege escalation, a safety guardrail bypass. The page maps it to T1548, Abuse Elevation Control Mechanism.
+
+The injected prompt uses a technique called delayed tool invocation. Triggering immediately would fire safety checks against the payload, so the instructions stage the malicious action and wait for a neutral follow-up, such as the user thanking Gemini.
+
+When the user types thanks, Gemini re-enters a new inference step, and the guardrails that evaluated the calendar retrieval do not re-evaluate the deferred instruction. The command then executes with Gemini's full tool permissions. The page describes the effect as attacker instructions treated as trusted system-level directives with full tool access.
+
+The page tags this stage Jailbreak and Guardrail Bypass. The next slide defines both terms in general.
+
+The page says one of its defenses, explicit user confirmation before agentic tool execution, would have broken the chain at this step.
+
+== What guardrails and jailbreaks are
+layout: background
+source: csoh.org glossary, Guardrails | https://csoh.org/glossary.html#term-guardrails
+credit: Also from the csoh.org glossary entry Jailbreak
+The csoh.org glossary defines guardrails as input and output filters around an LLM, to block prompt injection, PII leaks or off-topic responses.
+
+A jailbreak is input that bypasses an LLM's safety training to elicit prohibited content.
+notes:
+This is a background slide, from the csoh.org glossary.
+
+The glossary defines guardrails as input and output filters around an LLM to block prompt injection, PII leaks or off-topic responses. It calls them helpful, not sufficient.
+
+It defines a jailbreak as inputs that bypass an LLM's safety training to elicit prohibited content.
+
+Both definitions are general. The page uses the words at stage 02, where it tags the stage Jailbreak and Guardrail Bypass and says the guardrails that evaluated the calendar retrieval do not re-evaluate the deferred instruction. The glossary adds nothing about this attack.
+
+Also from the csoh.org glossary entry Jailbreak: https://csoh.org/glossary.html#term-jailbreak
+
+== Gemini queried for tools, apps and memories
+layout: stage
+stage: 03
+phase: Reconnaissance: Enumerating Connected Services
+technique: T1082 | System Information Discovery
+fact: Connected agents | Google Calendar, Google Home, Gmail, Meet
+fact: Installed apps | Zoom and a browser
+fact: Also gathered | the user's stored memories and calendar data
+fact: Victim sees | nothing; results go to model context, not the chat UI
+Unlike classical malware, recon comes after initial access: the tool inventory is only enumerable once the assistant is under attacker control.
+notes:
+Stage 03 is reconnaissance, which the page maps to T1082, System Information Discovery.
+
+Following the jailbreak, the injected prompt queries Gemini for its available tool inventory. That covers connected agents, namely Google Calendar, Google Home, Gmail and Meet; installed mobile applications, Zoom and a browser; and the user's stored memories and calendar data.
+
+The results feed back into the attacker's context silently. They go to the model's context and are not rendered in the chat, so nothing is displayed to the victim.
+
+The page points out the order. Classical malware reconnaissance precedes initial access. Here it comes after context poisoning, because the assistant's tool inventory is only enumerable once the assistant is under attacker control.
+
+No defense on the page names this stage's enumeration. That gap is the second discussion question.
+
+== What an AI agent is
+layout: background
+source: csoh.org glossary, Agent / Agentic System | https://csoh.org/glossary.html#term-agent
+credit: Also from the csoh.org glossary entry Blast Radius
+The csoh.org glossary defines an agent, or agentic system, as an LLM that can take actions via tools, often in multi-step loops.
+
+It says agents expand the blast radius of prompt injection.
+notes:
+This is a background slide, from the csoh.org glossary.
+
+The glossary defines an agent, or agentic system, as an LLM that can take actions through tools, often in multi-step loops. It adds that agents expand the blast radius of prompt injection.
+
+The glossary defines blast radius as the scope of damage if a credential, identity or system is compromised.
+
+The page's word for what stage 03 reads is the assistant's tool inventory: the connected agents and installed apps an injected prompt can ask about. The glossary entries are general and add nothing about this attack.
+
+Also from the csoh.org glossary entry Blast Radius: https://csoh.org/glossary.html#term-blast-radius
+
+== Memory poisoning made the injection durable
+layout: stage
+stage: 04
+phase: Persistence: Memory Poisoning
+technique: T1546 | Event Triggered Execution
+fact: Calendar | the poisoned title is re-retrieved on each calendar query
+fact: ZombAI (ChatGPT) | October 2024: a prompt injection wrote to persistent memory
+fact: Each conversation | ChatGPT fetches C2 instructions from an attacker's GitHub page
+fact: Gap | no audit, alert or user consent for unexpected memory writes
+A one-time calendar event becomes a durable implant. The page says ZombAI demonstrated the same mechanism more explicitly.
+notes:
+Stage 04 is persistence through memory poisoning. The page maps it to T1546, Event Triggered Execution.
+
+Because the malicious prompt is embedded in a Google Calendar artifact, it persists in the workspace's long-term agent memory. Every later session in which Gemini accesses calendar data re-injects the attacker's instructions, which turns a one-time event into a durable implant.
+
+The page sets a parallel attack beside it. ZombAI, against ChatGPT in October 2024, demonstrated the same mechanism more explicitly, the page says. A prompt injection wrote to ChatGPT's persistent memory store, and that caused the model to fetch C2 instructions from an attacker-controlled GitHub page at the start of every new conversation, indefinitely. That channel is stage 05.
+
+The page names the gap here: there is no mechanism to audit, alert on, or require user consent for unexpected memory writes. One of its defenses answers that gap directly.
+
+== C2 ran entirely through the prompt layer
+layout: stage
+stage: 05
+phase: Command & Control
+technique: T1071.001 | Application Layer Protocol: Web Protocols
+fact: ZombAI channel | a GitHub Issues page ChatGPT fetches at session start
+fact: Fresh commands | sequential issues; a COUNTER increment defeats page caching
+fact: Reprompt entry | a crafted Copilot URL with a malicious q parameter
+fact: Reprompt channel | an attacker HTTPS server, fetched for follow-up instructions
+The page calls ZombAI the first confirmed promptware-native C2. The channel needs no injected binary and no network backdoor.
+notes:
+Stage 05 is command and control, C2, the channel an attacker uses to direct what it has compromised. The page maps it to T1071.001, Web Protocols, and gives two examples.
+
+ZombAI, October 2024: the persisted memory instructs ChatGPT to fetch a GitHub Issues page at session start. The attacker posts updated instructions as sequential issues, and a COUNTER increment in the payload defeats ChatGPT's page caching, so each beacon retrieves fresh commands. The page calls this the first confirmed promptware-native C2 capability.
+
+Reprompt, January 2026, CVE-2026-24307: a crafted Microsoft Copilot URL with a malicious q parameter caused Copilot to fetch follow-up instructions from an attacker server, exfiltrating session and profile data incrementally, with no limit on type or volume. The page says a double-request technique bypasses Copilot's guardrails on re-issue.
+
+What makes it novel, per the page, is that the channel runs entirely through the LLM prompt layer, with no injected binary and no network backdoor.
+
+The next slide explains command and control over web protocols in general.
+
+== What command and control over web protocols is
+layout: background
+source: MITRE ATT&CK T1071.001 | https://attack.mitre.org/techniques/T1071/001/
+ATT&CK says adversaries may communicate over web protocols such as HTTP/S, blending in with existing traffic. Commands, and often their results, are embedded in the traffic between client and server.
+notes:
+This is a background slide, from MITRE ATT&CK, in general terms.
+
+ATT&CK describes T1071.001 as adversaries communicating with application layer protocols associated with web traffic, to avoid detection or network filtering by blending in with existing traffic. Commands to the remote system, and often the results of those commands, are embedded within the protocol traffic between client and server.
+
+It notes that protocols such as HTTP/S and WebSocket carry web traffic that may be very common in an environment, and that HTTP/S packets have many fields and headers in which data can be concealed.
+
+ATT&CK's description is general and says nothing about this attack. At stage 05 the page's point is that the channel ran entirely through the LLM prompt layer.
+
+== Two paths: an agent pivot and an email worm
+layout: stage
+stage: 06
+phase: Lateral Movement: Agent Pivot and Self-Replication
+technique: T1534 | Internal Spearphishing
+fact: On-device | the prompt instructs Gemini to invoke a second agent or app
+fact: On mobile | Automatic App Invocation can launch Zoom or trigger Google Home
+fact: Off-device worm | in a parallel threat class, an email assistant forwards the payload to every contact
+Nassi et al. demonstrated both paths. Smart home device control carries a digital breach into the physical environment.
+notes:
+Stage 06 is lateral movement, which the page maps to T1534, Internal Spearphishing. It describes two paths, and Nassi et al. demonstrated both.
+
+On-device, the injected calendar prompt instructs Gemini to invoke a second agent or app. On mobile, Automatic App Invocation allows the assistant to launch Zoom, open a browser URL, or trigger Google Home actions, such as unlocking smart windows or activating a boiler, all from a single compromised calendar entry.
+
+Off-device, in what the page calls a parallel threat class, a compromised email assistant is instructed to forward the poisoned payload to every address in the victim's contact book. The page says that achieves org-wide spread without any further attacker action. A worm is anything that spreads copies of itself like this, with no further action by the attacker.
+
+Smart home device control was demonstrated, so a digital breach crosses into the physical environment.
+
+The page adds that 73% of analysed threat classes were rated High-Critical.
+
+== Zoom silently streamed the victim's camera
+layout: stage
+stage: 07
+phase: Actions on Objective: Covert Video Capture
+technique: T1125 | Video Capture
+technique: T1530 | Data from Cloud Storage
+fact: Trigger | the victim types "thanks" and the delayed invocation fires
+fact: Reprompt objective | incremental exfiltration, queries refined on each reply
+fact: Also demonstrated | spam from the victim's account, disinformation, home devices
+fact: Fixes | Google mitigations after SafeBreach's disclosure; Reprompt patched January 13, 2026
+No camera indicator activates before the session starts; the victim has no warning.
+notes:
+Stage 07 is the objective. The page maps it to T1125, Video Capture, and also tags T1530, Data from Cloud Storage.
+
+When the user enters a benign follow-up response, the staged delayed invocation fires. Gemini automatically launches Zoom and initiates a video session, covertly streaming the victim's camera. No camera indicator activates before the session starts, so the victim has no warning.
+
+Reprompt's objective is different. In its data exfiltration variants, the attacker's C2 server incrementally extracts session context, personal profile data and any detail inferred from prior responses, while the attacker refines its queries based on each reply.
+
+Nassi et al. also demonstrated other objectives: sending spam email from the victim's account, publishing disinformation, and controlling physical home devices.
+
+Google deployed mitigations after SafeBreach's disclosure, and Reprompt, CVE-2026-24307, was patched on January 13, 2026.
+
+== Familiar stages, run through the prompt layer
+layout: text
+The page says promptware mirrors classical malware kill chains but executes entirely through the LLM prompt layer.
+- Recon follows initial access.
+- C2 needs no injected binary or network backdoor.
+- LLM input has no code/data boundary.
+notes:
+The page draws one pattern across these attacks.
+
+Promptware, it says, mirrors classical malware kill chains but executes entirely through the LLM prompt layer. Three details on the page show the difference.
+
+Reconnaissance moves. Classical malware reconnaissance precedes initial access; here it comes after context poisoning, because the assistant's tool inventory is only enumerable once the assistant is under attacker control.
+
+The C2 channel needs no conventional malware infrastructure. The page says ZombAI's attacker remotely controlled ChatGPT that way, and that the channel runs with no injected binary and no network backdoor.
+
+And the page explains why stage 01 works at all. Language models process system prompts, user queries and retrieved data as a single undifferentiated sequence, so there is no boundary between code and data.
+
+== Five defenses against seven stages
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06 | 07
+row: Confirm before agentic tool execution | 02 | 04 | 06 | 07
+row: Treat retrieved content as untrusted | 01 | 04 | 05
+row: Audit and gate memory writes | 04
+row: Least privilege for agent tool permissions | 02 | 06 | 07
+row: Block parameter-to-prompt URL patterns | 05 | 07
+No defense on the page names stage 03's enumeration of tools, apps and memories.
+notes:
+This matrix sets the page's five defenses against the seven stages. A cell is marked only where a defense's instruction names that stage's own artifact or action.
+
+Confirmation before tool execution: the page says it would have broken the chain at step 2. It also names writing to long-term memory, stage 04, and invoking installed apps like Zoom, which stages 06 and 07 do.
+
+Treating retrieved content as untrusted names calendar titles, stage 01's vector and the title stage 04 re-retrieves, and web page content, such as the GitHub Issues page ZombAI's C2 fetches at stage 05.
+
+Gating memory writes answers the gap stage 04 names.
+
+Least privilege names tool permissions, which stage 02's command runs with in full, and launching video apps or controlling smart home devices, as at stages 06 and 07.
+
+Blocking parameter-to-prompt URLs names Reprompt's q parameter and sequential requests to external servers, stage 05's channel, and the C2 exfiltration that is Reprompt's objective at stage 07.
+
+Column 03 is empty. Least privilege comes near, since it scopes the tools an agent can invoke, but no defense names the enumeration itself. That is the second discussion question.
+
+== Confirm before tools run; treat retrieved content as untrusted
+layout: compare
+col: Confirmation (02, 04, 06, 07) | Surface a confirmation prompt rather than silently infer intent | Before invoking installed apps like Zoom, sending emails or writing long-term memory | Google deployed this as a mitigation after the Calendar attack disclosure | The page says this single control would have broken the chain at Step 2
+col: Untrusted input (01, 04, 05) | Sanitise calendar titles, email subjects, document names and web page content | Before they are added to context, like parameterised SQL queries | Detect instruction-like patterns in retrieved workspace artifacts before they reach the model
+notes:
+These two defenses work on what the assistant reads and on what it does next.
+
+First, require explicit user confirmation before any agentic tool execution involving external apps. The page says assistants should interrupt and surface a confirmation prompt, not silently infer intent, before invoking installed apps like Zoom, sending emails, or writing to long-term memory. Google deployed this as a specific mitigation after the Calendar attack disclosure, and the page says this single control would have broken the chain at step 2.
+
+Second, treat all LLM-retrieved content as untrusted input. Calendar titles, email subjects, document names and web page content must be sanitised before they are added to context, which the page compares to parameterised SQL queries. A parameterised query keeps user-supplied data apart from the query's code, so the data cannot run as a command.
+
+The page also calls for content-inspection layers that detect instruction-like patterns, such as imperative sentences and tool invocation syntax, in retrieved workspace artifacts before they reach the model's context.
+
+== Gate memory writes; scope agent permissions
+layout: compare
+col: Memory writes (04) | Alert on unexpected writes to ChatGPT Memory, Copilot and Gemini Saved Info | Persist no instructions without explicit user consent and a visible confirmation flow | Log every memory change with the source artifact that triggered it
+col: Least privilege (02, 06, 07) | A calendar assistant should not have permission to launch video apps by default | Nor to send emails or control smart home devices | Scope every tool, as with IAM roles and OAuth scopes | Revoke over-broad agent permissions in Google Workspace and Microsoft 365 Copilot
+notes:
+These two defenses limit what a compromised assistant can keep and do.
+
+Audit and gate long-term memory writes. Alert on unexpected writes to AI persistent memory stores, such as ChatGPT Memory, Copilot and Gemini Saved Info. The page says no prompt injection should be able to persist instructions without explicit user consent and a visible confirmation flow, and that all memory mutations should be logged with the source artifact that triggered them. That is the gap stage 04 names.
+
+Apply least privilege to every AI agent's tool permissions. A calendar assistant should not have permission to launch video applications, send emails, or control smart home devices by default. Scope-limit every tool an LLM agent can invoke, with the same discipline used for IAM roles and OAuth scopes. Review and revoke over-broad agent permissions in Google Workspace, Microsoft 365 Copilot and any enterprise AI integration.
+
+IAM is identity and access management. OAuth scopes are the named permissions an app receives when a user authorizes it.
+
+== Block parameter-to-prompt URLs at the network and DLP layer
+layout: text
+Reprompt (CVE-2026-24307) used a q= URL parameter to prefill a malicious Copilot prompt.
+- Enforce Microsoft Purview DLP policies for Copilot.
+- Flag outbound requests whose AI query parameters contain instruction-like text.
+- Monitor for LLM sessions issuing sequential requests to external servers.
+notes:
+The fifth defense comes from Reprompt.
+
+Reprompt, CVE-2026-24307, used a q= URL parameter to prefill a malicious Copilot prompt. The page says to block parameter-to-prompt URL patterns at the network and DLP layer. DLP is data loss prevention, tooling that detects and blocks sensitive data leaving its boundary.
+
+The page gives three steps. Enforce Microsoft Purview DLP policies for Copilot; Purview is Microsoft's data governance and compliance platform. Flag outbound requests where AI query parameters contain instruction-like text. And monitor for LLM sessions issuing sequential requests to external servers, which the page calls the signature of C2 chain-request exfiltration.
+
+That last signal fits what stages 05 and 07 report of Reprompt: Copilot fetching follow-up instructions from an attacker server, and the attacker's C2 server extracting data incrementally.
+
+== Check your own environment
+layout: checklist
+check: Does your assistant ask before launching apps, sending email or writing memory?
+check: Is content your assistant retrieves, like calendar titles, treated as untrusted input?
+check: Would an unexpected write to an assistant's memory raise an alert?
+check: Is each memory change logged with the artifact that triggered it?
+check: Can your calendar assistant launch video apps or control smart home devices by default?
+check: Have you reviewed agent permissions in Google Workspace and Microsoft 365 Copilot?
+check: Would you flag AI query parameters that contain instruction-like text?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask whether your AI assistants interrupt with a confirmation prompt before invoking apps, sending emails or writing to long-term memory. Ask whether retrieved content, from calendar titles to web pages, is treated as untrusted input before it reaches the model.
+
+Ask whether an unexpected write to an AI memory store would raise an alert, and whether memory changes are logged with the artifact that triggered them.
+
+Ask whether a calendar assistant in your environment can launch video applications, send emails or control smart home devices by default, and when agent permissions in Google Workspace and Microsoft 365 Copilot were last reviewed.
+
+Finally, ask whether anything flags AI query parameters that contain instruction-like text, or LLM sessions making sequential requests to external servers.
+
+== What can an outsider put in front of your assistant?
+layout: question
+Stage 01 began with a calendar invite title that Gemini retrieved on the victim's behalf. The victim never saw the raw title.
+
+Which assistants in your environment read content that people outside your organization can write?
+notes:
+Give the room a minute with this one before moving on.
+
+In stage 01 the attacker wrote one thing, a calendar invitation, and Gemini read it on the victim's behalf when the victim asked about the day's meetings.
+
+Ask each person to name one specific source in their own environment that an assistant reads and an outsider can write to. Then show the answer slide, which gives the page's list of such content and what it says to do about it.
+
+== The page says to treat all retrieved content as untrusted
+layout: answer
+The page lists calendar titles, email subjects, document names and web page content.
+- Sanitise them before they are added to the model's context.
+- Require confirmation before the assistant invokes apps, sends email or writes memory.
+notes:
+The page's answer has two parts.
+
+First, treat all LLM-retrieved content as untrusted input. The page names calendar titles, email subjects, document names and web page content, and says they must be sanitised before being added to context, with content inspection for instruction-like patterns such as imperative sentences and tool invocation syntax.
+
+Second, require explicit user confirmation before any agentic tool execution involving external apps. The page says this single control would have broken the chain at step 2, and that Google deployed it as a specific mitigation after the Calendar attack disclosure.
+
+Bring the group's examples back to these. Each source someone named is a place where the untrusted-input defense applies.
+
+== What would you add for stage 03?
+layout: question
+No defense on the page names stage 03, where the injected prompt enumerated Gemini's tools, installed apps and the user's stored memories, with nothing shown to the victim.
+
+What would you add, and which reported detail would it catch?
+notes:
+This question comes from the empty column in the defense matrix.
+
+At stage 03 the injected prompt queried Gemini for its tool inventory: connected agents such as Google Calendar, Google Home, Gmail and Meet, installed apps such as Zoom and a browser, and the user's stored memories and calendar data. The results went to the model's context, not the chat, so nothing was displayed to the victim.
+
+No defense on the page names that enumeration. Least privilege comes nearest, since it scopes the tools an agent can invoke, but it does not name the inventory query.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page that it would have caught.
+
+== No defense on the page names stage 03's enumeration
+layout: answer
+Any control you propose is your own suggestion. Test it against what the page reports: the inventory query, the agents and apps it covered, and results that reach the model's context, not the chat.
+notes:
+Be clear that the page stops here. No defense on the page names stage 03's enumeration, and this deck adds none of its own.
+
+The group may argue that least privilege reaches this stage, since an agent with fewer tools has less to enumerate. That argument is the group's own; the page does not tie least privilege to stage 03.
+
+Test each proposal against what the page reports: the tool inventory query, the connected agents and installed apps, the stored memories and calendar data, and results that go to the model's context rather than the chat, so the victim sees nothing.
+
+== Sources
+layout: links
+link: arXiv, The Promptware Kill Chain | https://arxiv.org/abs/2601.09625
+link: arXiv, Invitation Is All You Need | https://arxiv.org/abs/2508.12175
+link: Schneier on Security | https://www.schneier.com/blog/archives/2026/02/the-promptware-kill-chain.html
+link: Lawfare | https://www.lawfaremedia.org/article/the-promptware-kill-chain
+link: SafeBreach, the Gemini attack | https://www.safebreach.com/blog/invitation-is-all-you-need-hacking-gemini/
+link: Embrace The Red, ZombAI | https://embracethered.com/blog/posts/2025/spaiware-and-chatgpt-command-and-control-via-prompt-injection-zombai/
+link: Varonis, Reprompt | https://www.varonis.com/blog/reprompt
+link: Black Hat webinar | https://blackhat.com/html/webcast/02262026.html
+notes:
+These are the primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+The two arXiv papers are The Promptware Kill Chain and Invitation Is All You Need. Schneier on Security and Lawfare both cover the promptware kill chain. SafeBreach's post covers the Gemini attack, Embrace The Red's covers ZombAI, and Varonis's covers Reprompt. The last link is a Black Hat webinar.
+
+The background slides name their own sources: the csoh.org glossary and MITRE ATT&CK.
+
+== Related defense topics
+layout: links
+link: AI/ML security | ai-ml-security.html
+link: Cloud threat research | threat-research.html
+link: Detection engineering | detection-engineering.html
+The page links no related kill chain; these are its related defense topics on csoh.org.
+notes:
+The page links no related kill chains, so this slide carries its related defense topics on csoh.org instead.
+
+They cover AI and machine learning security, cloud threat research, and detection engineering.
