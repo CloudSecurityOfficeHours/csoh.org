@@ -24,7 +24,7 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:type" content="article">
     <meta property="article:published_time" content="2026-04-30">
-    <meta property="article:modified_time" content="2026-09-27">
+    <meta property="article:modified_time" content="2026-11-22">
     <meta property="article:author" content="Cloud Security Office Hours">
     <meta property="article:section" content="Breach Kill Chains">
     <meta property="article:tag" content="ChaosDB">
@@ -78,7 +78,7 @@
     }
   },
   "datePublished": "2026-04-30",
-  "dateModified": "2026-09-27",
+  "dateModified": "2026-11-22",
   "mainEntityOfPage": "https://csoh.org/breaches/chaosdb-cosmos.html",
   "speakable": {
     "@type": "SpeakableSpecification",
@@ -349,16 +349,17 @@
       <span class="prov-tag prov-azure">Azure Cosmos DB</span>
     </div>
     <h2 class="inc-title">ChaosDB - A Notebook Feature in a Managed Database → Local Privilege Escalation → Firewall Rules Rewritten → Full Admin on Other Tenants' Databases</h2>
-    <p class="inc-summary">In August 2021 Wiz researchers found that the Jupyter Notebook feature added to Azure Cosmos DB in 2019 could be used to escalate out of a customer's own notebook container, reach the Cosmos DB backend, and retrieve the primary keys of <em>other customers' databases</em>. The result was complete unrestricted read, write and delete access to the accounts and databases of several thousand Azure customers, including many in the Fortune 500. Microsoft disabled the feature within roughly 48 hours of the report and advised every Cosmos DB customer to regenerate their primary keys. <strong>Like the <a href="entra-id-actor-token.html">Entra ID Actor token</a> flaw, this was research rather than a breach, but it is the more fundamental one.</strong> Actor tokens broke authentication. ChaosDB broke <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> isolation, the property every multi-tenant cloud service is built on, and the one customers have no ability to verify or compensate for.</p>
+    <p class="inc-summary">In August 2021 Wiz researchers found that the Jupyter Notebook feature added to Azure Cosmos DB in 2019 could be used to escalate out of a customer's own notebook container, reach the Cosmos DB backend, and retrieve the primary keys of <em>other customers' databases</em>. The result was complete unrestricted read, write and delete access to the accounts and databases of several thousand Azure customers, including many in the Fortune 500. Microsoft disabled the feature within roughly 48 hours of the report and notified the customers it found potentially affected, advising them to regenerate their primary keys. Wiz recommended that all Cosmos DB customers do the same. <strong>Like the <a href="entra-id-actor-token.html">Entra ID Actor token</a> flaw, this was research rather than a breach, but it is the more fundamental one.</strong> Actor tokens broke authentication. ChaosDB broke <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a> isolation, the property every multi-tenant cloud service is built on, and the one customers have no ability to verify or compensate for.</p>
     <div class="inc-stats">
       <div class="inc-stat"><strong>Several thousand</strong> Azure customers exposed, many Fortune 500</div>
       <div class="inc-stat"><strong>Tenant isolation.</strong> The property you cannot verify or compensate for</div>
       <div class="inc-stat"><strong>~48 hours</strong> from report to Microsoft disabling the feature</div>
-      <div class="inc-stat"><strong>The keys were long-lived</strong>, so exposure predated discovery by months</div>
+      <div class="inc-stat"><strong>Exploitable for months</strong> before discovery, per Wiz; the keys were long-lived, so exposure could outlast the fix</div>
     </div>
     <p class="inc-summary"><strong>Disclosure:</strong> this reconstruction is sourced to research published by Wiz, and the site's author works at Wiz. The primary sources are linked below so you can read them directly; Microsoft's own advisory and customer guidance are cited alongside them where they exist. Caveat the trust you grant accordingly.</p>
     <a class="pm-link" href="https://chaosdb.wiz.io/" target="_blank" rel="noopener">📄 Wiz - ChaosDB: unauthorized privileged access to Azure Cosmos DB ↗</a>
     <a class="pm-link" href="https://www.wiz.io/blog/chaosdb-explained-azures-cosmos-db-vulnerability-walkthrough" target="_blank" rel="noopener">📄 Wiz - ChaosDB explained: a walkthrough ↗</a>
+    <a class="pm-link" href="https://www.microsoft.com/en-us/msrc/blog/2021/08/update-on-vulnerability-in-the-azure-cosmos-db-jupyter-notebook-feature" target="_blank" rel="noopener">📄 MSRC: Update on the vulnerability in the Azure Cosmos DB Jupyter Notebook feature ↗</a>
   </div>
   <div class="kill-chain">
 
@@ -367,14 +368,14 @@
       <div class="step-num">01</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Cosmos DB gained an embedded Jupyter Notebook feature in 2019, giving every customer a code-execution environment inside the managed service</div>
+          <div class="step-title">Cosmos DB gained an embedded Jupyter Notebook feature in 2019, offering every customer a code-execution environment inside the managed service</div>
           <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
         </div>
         <p class="step-desc">The feature is genuinely useful: query your data, visualize it, run Python next to it, without moving anything. It is also, structurally, the provider offering to run arbitrary customer code inside its own managed service, which changes the isolation problem completely. </p>
         <p class="step-desc">A managed database normally exposes a query interface; adding notebooks means the provider now has to contain a general-purpose runtime, per tenant, correctly. Wiz's later PEACH framework grew out of exactly this class of finding: the more capability a managed service offers inside the tenant boundary, the more surface there is for that boundary to fail on.</p>
         <div class="step-code">
           <span class="hl">Feature:</span> Embedded Jupyter Notebooks, added to Cosmos DB in 2019<br>
-          <span class="hl">Enabled:</span> By default for Cosmos DB accounts<br>
+          <span class="hl">Enabled:</span> By default for new Cosmos DB accounts from February 2021, per Wiz (switched off after three days if unused)<br>
           <span class="hl">What it changes:</span> The provider must now contain a general-purpose runtime per tenant<br>
           <span class="hl">Customer visibility:</span> None into how that containment is implemented<br>
           <span class="hl">Later formalized as:</span> Wiz's PEACH tenant isolation framework
@@ -413,31 +414,33 @@
           <div class="step-title">From the backend the researchers retrieved and decrypted credentials belonging to other customers, obtaining full read, write and delete access to their databases</div>
           <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/" target="_blank" rel="noopener">T1552 - Unsecured Credentials</a>
         </div>
-        <p class="step-desc">The prize was the primary keys, which are Cosmos DB's long-lived, full-privilege credentials. With them, an attacker has complete administrative control of a victim's database from anywhere on the internet, independent of the vulnerability that produced them. </p>
-        <p class="step-desc">Two consequences follow. First, the access is not bounded by the flaw's lifetime: a key obtained in August 2021 keeps working until it is rotated, which is why Microsoft's advice was to regenerate keys rather than simply to apply a fix. Second, because these keys are long-lived by design and rarely rotated in practice, the honest position for any customer was to assume exposure over an extended window rather than a moment.</p>
+        <p class="step-desc">The prize was the primary keys, which are Cosmos DB's long-lived, full-privilege credentials. With them, an attacker has complete administrative control of a victim's database from any network the account accepts connections from, independent of the vulnerability that produced them. </p>
+        <p class="step-desc">Two consequences follow. First, the access is not bounded by the flaw's lifetime: a key obtained in August 2021 keeps working until it is rotated, which is why Microsoft's advice was to regenerate keys rather than simply to apply a fix. Second, because these keys are long-lived by design and rarely rotated in practice, the honest position for any customer was to assume exposure over an extended window rather than a moment. Microsoft said its investigation "indicates that no customer data was accessed because of this vulnerability by third parties or security researchers"; Wiz says it does not know whether the flaw was exploited in the wild.</p>
         <div class="step-code">
           <span class="hl">Obtained:</span> Other customers' Cosmos DB primary keys, retrieved and decrypted<br>
-          <span class="hl">Access granted:</span> Full read, write and delete, from anywhere<br>
+          <span class="hl">Access granted:</span> Full read, write and delete, wherever the account accepted connections<br>
           <span class="hl">Key property:</span> Long-lived and rarely rotated, so the access outlives the vulnerability<br>
           <span class="hl">Microsoft's advice:</span> Regenerate primary keys - not merely wait for the fix<br>
-          <span class="hl">Honest customer position:</span> Assume exposure across months, not a moment
+          <span class="hl">Honest customer position:</span> Assume exposure across months, not a moment<br>
+          <span class="hl">Microsoft's investigation:</span> No customer data accessed by third parties or researchers
         </div>
         <div class="step-tags"><span class="stag">Primary Keys</span><span class="stag">Cross-Tenant</span><span class="stag">Long-Lived Credentials</span><span class="stag">T1552</span></div>
       </div>
     </div>
 
-    <div class="phase-lbl ph-impact">🏢 Impact: Thousands of Tenants, and Nothing a Customer Could Have Done</div>
+    <div class="phase-lbl ph-impact">🏢 Impact: Thousands of Tenants, and No Customer Control That Stopped the Key Theft</div>
     <div class="kc-step step-p">
       <div class="step-num">04</div>
       <div class="step-body">
         <div class="step-hdr">
-          <div class="step-title">Several thousand Azure customers were exposed, including many Fortune 500 companies, with no customer-side configuration that would have prevented it</div>
+          <div class="step-title">Several thousand Azure customers were exposed, including many Fortune 500 companies, with no customer-side configuration that would have prevented the key theft</div>
         </div>
-        <p class="step-desc">This is the point of including a research finding on a page of breaches. Every customer-side control the industry recommends was irrelevant here: network restrictions, <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a>, <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>, <a class="glossary-link" href="../glossary.html#term-encryption-at-rest">encryption at rest</a>, private endpoints. None of them sit between one tenant's notebook and another tenant's keys, because that boundary is the provider's to enforce and the customer has no visibility into it. </p>
+        <p class="step-desc">This is the point of including a research finding on a page of breaches. No customer-side control the industry recommends stopped the key theft: network restrictions, <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a>, <a class="glossary-link" href="../glossary.html#term-mfa">MFA</a>, <a class="glossary-link" href="../glossary.html#term-encryption-at-rest">encryption at rest</a>, private endpoints. None of them sit between one tenant's notebook and another tenant's keys, because that boundary is the provider's to enforce and the customer has no visibility into it. Network isolation still limited where a stolen key could be used. Microsoft told affected customers that accounts with a vNET or firewall enabled "are protected by additional security mechanisms that prevent risk of unauthorized access". Wiz says that in practice most accounts allowed cross-tenant access even behind the IP firewall, because they were open to other Azure services, and that the only practical way to block it completely was to use only private endpoints.</p>
         <p class="step-desc">It maps directly onto the <a href="../shared-responsibility-model.html">shared responsibility model</a>, where isolation is unambiguously the provider's side of the line, and it is the clearest available demonstration that the provider's side is not a formality. Microsoft disabled the feature within about 48 hours, which is a genuinely fast response, and notified affected customers.</p>
         <div class="step-code">
           <span class="hl">Exposed:</span> Several thousand Azure customers, many Fortune 500<br>
-          <span class="hl">Customer controls that would have helped:</span> None<br>
+          <span class="hl">Customer controls that stopped the key theft:</span> None<br>
+          <span class="hl">Network isolation:</span> Limited where a stolen key could be used; in practice, Wiz says, only accounts using private endpoints alone were fully blocked<br>
           <span class="hl">Whose responsibility:</span> Tenant isolation is unambiguously the provider's<br>
           <span class="hl">Microsoft response:</span> Feature disabled within ~48 hours; affected customers notified<br>
           <span class="hl">The uncomfortable part:</span> You cannot audit, test or compensate for this boundary
@@ -463,7 +466,10 @@
       <div class="src-links">
         <a class="src-link" href="https://chaosdb.wiz.io/" target="_blank" rel="noopener">Wiz - ChaosDB disclosure</a>
         <a class="src-link" href="https://www.wiz.io/blog/chaosdb-explained-azures-cosmos-db-vulnerability-walkthrough" target="_blank" rel="noopener">Wiz - Technical walkthrough</a>
+        <a class="src-link" href="https://www.wiz.io/blog/chaosdb-how-we-hacked-thousands-of-azure-customers-databases" target="_blank" rel="noopener">Wiz, original announcement</a>
+        <a class="src-link" href="https://www.wiz.io/blog/protecting-your-environment-from-chaosdb" target="_blank" rel="noopener">Wiz, discovery and protection guidance</a>
         <a class="src-link" href="https://www.wiz.io/blog/introducing-peach-a-tenant-isolation-framework-for-cloud-applications" target="_blank" rel="noopener">Wiz - PEACH tenant isolation framework</a>
+        <a class="src-link" href="https://www.microsoft.com/en-us/msrc/blog/2021/08/update-on-vulnerability-in-the-azure-cosmos-db-jupyter-notebook-feature" target="_blank" rel="noopener">MSRC, Cosmos DB Jupyter Notebook update</a>
         <a class="src-link" href="https://attack.mitre.org/techniques/T1611/" target="_blank" rel="noopener">MITRE T1611</a>
       </div>
     </div>

@@ -576,7 +576,7 @@ PAGES = [
      "Breach Kill Chain"),
     ("breaches/chaosdb-cosmos.html",
      "ChaosDB / Cosmos DB 2021 Kill Chain",
-     "Tenant isolation broke: full admin on other customers' databases, and no customer control would have helped.",
+     "Tenant isolation broke: full admin on other customers' databases, and no customer control stopped the key theft.",
      "Breach Kill Chain"),
     ("breaches/midnight-blizzard-microsoft.html",
      "Midnight Blizzard / Microsoft 2024 Kill Chain",
