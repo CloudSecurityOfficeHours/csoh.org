@@ -98,6 +98,8 @@ because of the attack (see the design: `docs/superpowers/specs/2026-11-23-breach
 
 Victims the readers recalled from their own knowledge, which the breach pages do not mention.
 They are unverified and are not tags; each would need a sourced sentence on the page first.
+The leads that held up were sourced and added to the pages; see
+[2026-11-23-breach-victim-sources.md](2026-11-23-breach-victim-sources.md).
 
 - **LiteLLM / TeamPCP:** The cited PyPI incident report covers 'LiteLLM and Telnyx'; the Telnyx Python package was reportedly also trojanized by TeamPCP. Telnyx would be Telecom, but the page body never says Telnyx was hit. Trivy is maintained by Aqua Security (Technology); the page names Trivy as compromised but not Aqua by name.
 - **GTG-1002:** As far as I know Anthropic did not publicly name any of the victim organizations.
