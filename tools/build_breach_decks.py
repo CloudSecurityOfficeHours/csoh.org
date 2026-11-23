@@ -658,7 +658,8 @@ def main_text(html: str) -> str:
 # The prev/next links at the foot of a breach page. They follow the timeline's
 # order, so adding a chain changes its neighbours' links; they are navigation,
 # not anything a deck restates, so the page hash leaves them out.
-PAGER_RE = re.compile(r'<nav\b[^>]*\bclass="incident-pager"[^>]*>.*?</nav>', re.S)
+PAGER_RE = re.compile(
+    r'<nav\b[^>]*\bclass\s*=\s*["\'][^"\']*\bincident-pager\b[^"\']*["\'][^>]*>.*?</nav\s*>', re.S | re.I)
 
 
 def page_sha256(html: str) -> str:
@@ -2559,6 +2560,12 @@ def _case_page_hash_ignores_pager(tmp: Path) -> None:
     assert page_sha256(page) != page_sha256(page.replace("Body text", "Other text")), \
         "control: a change to the page's text does change the hash"
     assert "Next breach" in main_text(page), "main_text keeps the pager; only the hash leaves it out"
+    for label, variant in (
+            ("an extra class", page.replace('class="incident-pager"', 'class="incident-pager u-mt-1"')),
+            ("single quotes", page.replace('class="incident-pager"', "class='incident-pager'")),
+            ("upper case and </nav >", page.replace("<nav class", "<NAV class").replace("</nav>", "</nav >"))):
+        assert variant != page, f"plant did nothing: {label}"
+        assert page_sha256(variant) == page_sha256(page), f"a pager with {label} is left out of the hash too"
 
 
 def _case_stale_outline_changed(tmp: Path) -> None:

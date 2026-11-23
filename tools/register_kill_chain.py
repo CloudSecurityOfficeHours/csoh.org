@@ -73,7 +73,10 @@ ITEMLIST_HEAD = {
 
 LINK_RE = re.compile(r'\bhref="breaches/([a-z0-9-]+)\.html"')
 JSONLD_RE = re.compile(r'(<script type="application/ld\+json">)(.*?)(</script>)', re.S)
-PAGER_RE = re.compile(r'<nav\b[^>]*\bclass="incident-pager"[^>]*>.*?</nav>', re.S)
+# Any class list holding incident-pager, either quote style, any case: a
+# pager someone edited is still the pager, so it is rewritten, not doubled.
+PAGER_RE = re.compile(
+    r'<nav\b[^>]*\bclass\s*=\s*["\'][^"\']*\bincident-pager\b[^"\']*["\'][^>]*>.*?</nav\s*>', re.S | re.I)
 SITEMAP_URL_RE = re.compile(
     r'([ \t]*)<url>\s*<loc>https://csoh\.org/breaches/([a-z0-9-]+)\.html</loc>.*?</url>', re.S)
 OG_META_RE = re.compile(r'<meta\b[^>]*\bproperty="og:image"[^>]*>')
@@ -152,8 +155,14 @@ def pager_html(prev: str | None, next_: str | None, indent: str) -> str:
 def page_with_pager(page_html: str, prev: str | None, next_: str | None) -> str:
     """page_html with its pager rewritten, or added on its own line before
     </main> when it has none."""
-    m = PAGER_RE.search(page_html)
-    if m:
+    found = list(PAGER_RE.finditer(page_html))
+    if found:
+        # Any pager after the first is a stale copy: drop it with its line.
+        for extra in reversed(found[1:]):
+            start = page_html.rfind("\n", 0, extra.start())
+            start = start if page_html[start + 1:extra.start()].strip() == "" else extra.start()
+            page_html = page_html[:start] + page_html[extra.end():]
+        m = PAGER_RE.search(page_html)
         line_start = page_html.rfind("\n", 0, m.start()) + 1
         indent = re.match(r"[ \t]*", page_html[line_start:]).group(0)
         return page_html[: m.start()] + pager_html(prev, next_, indent) + page_html[m.end():]
@@ -255,6 +264,8 @@ def check(root: Path) -> list[str]:
     order = _ordered(chains, pages)
     for i, slug in enumerate(order):
         page = _read(root / "breaches" / f"{slug}.html")
+        if len(PAGER_RE.findall(page)) > 1:
+            findings.append(f"{slug}: has more than one pager; {FIX_HINT}")
         if page_with_pager(page, order[i - 1] if i else None, order[i + 1] if i + 1 < len(order) else None) != page:
             findings.append(f"{slug}: its pager is out of step with the timeline; {FIX_HINT}")
 
@@ -526,6 +537,33 @@ def self_test() -> int:
         expect(has(check(r), "mid-one", "pager"), "a hand-edited pager is out of step")
         fix(r, "2026-11-23")
         expect(p.read_text(encoding="utf-8") == s, "--fix restores the pager and leaves the rest byte-identical")
+
+        # Other realistic edits: a utility class beside incident-pager,
+        # single quotes, upper case and a spaced closing tag are all still
+        # the pager, so --fix rewrites it in place instead of adding a second.
+        for label, mutate in (
+                ("an extra class", lambda t: t.replace('class="incident-pager"', 'class="incident-pager u-mt-1"')),
+                ("single quotes", lambda t: t.replace('class="incident-pager"', "class='incident-pager'")),
+                ("upper case and </nav >", lambda t: t.replace("<nav class", "<NAV class").replace("</nav>", "</nav >"))):
+            r = fresh(tmp, "variant-" + label.split()[0])
+            p = r / "breaches" / "mid-one.html"
+            s = p.read_text(encoding="utf-8")
+            v = mutate(s)
+            assert v != s, f"plant did nothing: {label}"
+            p.write_text(v, encoding="utf-8")
+            expect(has(check(r), "mid-one", "pager"), f"a pager with {label} is out of step")
+            fix(r, "2026-11-23")
+            expect(p.read_text(encoding="utf-8") == s, f"--fix rewrites a pager with {label} in place, in one run")
+
+        # A second, stale pager on the same page is caught and removed.
+        r = fresh(tmp, "twopagers")
+        p = r / "breaches" / "mid-one.html"
+        s = p.read_text(encoding="utf-8")
+        stale = '        <nav class="incident-pager" aria-label="x"><a href="gone.html">Old</a></nav>\n'
+        p.write_text(s.replace("    </main>", stale + "    </main>"), encoding="utf-8")
+        expect(has(check(r), "mid-one", "more than one pager"), "a page with two pagers is a finding")
+        fix(r, "2026-11-23")
+        expect(p.read_text(encoding="utf-8") == s, "--fix leaves exactly one pager")
 
         # A page with no pager gets one before </main>.
         r = fresh(tmp, "nopager")

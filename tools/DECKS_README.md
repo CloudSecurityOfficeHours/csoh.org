@@ -282,9 +282,10 @@ Speaker notes run to the next "== " line. Every slide has them.
   and no page may link a Google Slides deck anywhere else. It exits 1 on any
   finding, and when it finds no outlines it says nothing was checked and exits 1.
 - A deck is stale when its outline or its page changed since `--record`. The
-  page hash covers the text of the page's `<main>` with deck lines removed,
-  so stamping a deck line, glossary cross-linking and nav or footer edits do
-  not flag a deck; a changed sentence does. `--stale` prints one line per
+  page hash covers the text of the page's `<main>` with deck lines and the
+  prev/next pager removed, so stamping a deck line, glossary cross-linking,
+  nav or footer edits, and a new chain changing its neighbours' pagers do not
+  flag a deck; a changed sentence does. `--stale` prints one line per
   reason: the outline changed (the public deck needs re-publishing) or the
   page changed (review the deck against the page). It exits 0 whether or not
   decks are stale, and CI reports each as a warning.
