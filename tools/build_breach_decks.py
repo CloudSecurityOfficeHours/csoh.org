@@ -655,8 +655,15 @@ def main_text(html: str) -> str:
     return _strip_tags(_main_html(html))
 
 
+# The prev/next links at the foot of a breach page. They follow the timeline's
+# order, so adding a chain changes its neighbours' links; they are navigation,
+# not anything a deck restates, so the page hash leaves them out.
+PAGER_RE = re.compile(r'<nav\b[^>]*\bclass="incident-pager"[^>]*>.*?</nav>', re.S)
+
+
 def page_sha256(html: str) -> str:
-    return hashlib.sha256(main_text(html).encode("utf-8")).hexdigest()
+    """Hash of the page's <main> text, without its deck line or its pager."""
+    return hashlib.sha256(main_text(PAGER_RE.sub("", html)).encode("utf-8")).hexdigest()
 
 
 def _normalize_number(raw: str) -> str:
@@ -2537,6 +2544,23 @@ def _hashes(slug: str, root: Path) -> tuple[str, str]:
     )
 
 
+def _case_page_hash_ignores_pager(tmp: Path) -> None:
+    page = ('<html><body><main><p>Body text, 2026.</p>\n'
+            '        <nav class="incident-pager" aria-label="Other breach kill chains">\n'
+            '            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>\n'
+            '            <a class="pager-link pager-next" href="b.html">Next breach \u2192</a>\n'
+            '        </nav>\n</main></body></html>')
+    with_prev = page.replace(
+        '<a class="pager-link pager-index"',
+        '<a class="pager-link pager-prev" href="a.html">\u2190 Previous breach</a>\n'
+        '            <a class="pager-link pager-index"')
+    assert with_prev != page, "plant did nothing"
+    assert page_sha256(page) == page_sha256(with_prev), "a pager-only change must not change the page hash"
+    assert page_sha256(page) != page_sha256(page.replace("Body text", "Other text")), \
+        "control: a change to the page's text does change the hash"
+    assert "Next breach" in main_text(page), "main_text keeps the pager; only the hash leaves it out"
+
+
 def _case_stale_outline_changed(tmp: Path) -> None:
     slugs = ("aa", "bb", "cc")
     _tree(tmp, {s: _tree_outline(s) for s in slugs}, {s: PM_PAGE for s in slugs}, None)
@@ -2769,6 +2793,7 @@ CASES: list = [
     ("mapping_findings", _case_mapping_findings),
     ("stale_outline_changed", _case_stale_outline_changed),
     ("stale_page_changed", _case_stale_page_changed),
+    ("page_hash_ignores_pager", _case_page_hash_ignores_pager),
     ("stale_exit_zero", _case_stale_exit_zero),
     ("check_empty_tree", _case_check_empty_tree),
     ("check_reports_findings", _case_check_reports_findings),
