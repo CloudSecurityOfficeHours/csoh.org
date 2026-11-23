@@ -428,7 +428,7 @@ Comprehensive catalog of **<!--count:resources_floor-->750+<!--/count--> cloud s
 - **AI Vulnerable Environments** - AIGoat, AI Security CTFs
 - **AI Security Research** - Papers, whitepapers, research resources
 
-#### 💼 Job Search & Career Development (<!--count:cat_jobs_floor-->110+<!--/count--> entries)
+#### 💼 Job Search & Career Development (<!--count:cat_jobs_floor-->120+<!--/count--> entries)
 - **Job Boards** - LinkedIn, Dice, CyberSecJobs, CloudSecurityJobs
 - **Resume Services** - Resume optimization platforms
 - **Interview Prep** - Technical interview guides
