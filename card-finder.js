@@ -21,9 +21,12 @@
 //   whole word: the Crypto button finds the cards tagged Crypto, not a card
 //   whose summary says "cryptographically". Any other typing searches the
 //   whole card as usual.
-// - data-finder-synonyms on the finder holds "word=term" pairs. A typed word
-//   that is a synonym also matches a card holding its term as a whole word,
-//   so "bank" finds the cards tagged Finance.
+// - data-finder-synonyms on the finder holds "word=term" pairs. A synonym
+//   typed on its own acts as its industry's button: "bank" lights Finance
+//   and finds the cards tagged Finance. Beside other words, a synonym
+//   matches a card holding it as a whole word, or tagged with its industry.
+//   Synonyms are matched as whole words, so "hospital" does not find
+//   "Hospitality" and "law" does not find "flaw".
 (function () {
     // Lower-cased, accents dropped, and every run of punctuation turned into
     // one space, so "shai hulud" finds "Shai-Hulud" and "tj actions" finds
@@ -77,17 +80,24 @@
         const groups = Array.from(index.querySelectorAll('.card-finder-group'));
         const total = entries.length;
 
+        // Where a card's industry is looked for: its filter part when the
+        // page names one, otherwise the whole card.
+        const tagged = (e, term) => (filterSelector ? e.filterText : e.text).includes(' ' + term + ' ');
+
         function refresh() {
             // Every word must appear somewhere in the card, in any order.
             const query = fold(input.value);
             const terms = query.split(' ').filter(Boolean);
-            const lit = query !== '' && buttons.find(b => fold(b.dataset.finderQuery) === query);
+            // A lone synonym asks for its industry, as that industry's button does.
+            const wanted = terms.length === 1 && synonyms[query] !== undefined ? synonyms[query] : query;
+            const lit = query !== '' && buttons.find(b => fold(b.dataset.finderQuery) === wanted);
             let shown = 0;
             entries.forEach(e => {
-                const match = lit && filterSelector
-                    ? e.filterText.includes(' ' + query + ' ')
-                    : terms.every(t => e.text.includes(t)
-                        || (synonyms[t] !== undefined && e.text.includes(' ' + synonyms[t] + ' ')));
+                const match = lit
+                    ? tagged(e, wanted)
+                    : terms.every(t => synonyms[t] !== undefined
+                        ? e.text.includes(' ' + t + ' ') || tagged(e, synonyms[t])
+                        : e.text.includes(t));
                 e.card.classList.toggle('is-hidden', !match);
                 if (e.item) e.item.classList.toggle('is-hidden', !match);
                 if (match) shown++;
@@ -116,7 +126,8 @@
             clearTimeout(timer);
             timer = setTimeout(refresh, 100);
         });
-        input.addEventListener('keydown', e => {
+        // On the whole bar, so Escape also clears while focus is on a button.
+        bar.addEventListener('keydown', e => {
             if (e.key === 'Escape' && input.value) {
                 e.preventDefault();
                 clear();

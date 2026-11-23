@@ -954,7 +954,9 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `crosslink_glossary.py` | Adds `id="term-…"` to glossary `<dt>`s and links every term mention inside `<dd>`s | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_GLOSSARY_README.md) |
 | `crosslink_pages.py` | Links the first occurrence of each glossary term across the rest of the site | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CROSSLINK_PAGES_README.md) |
 | `sync_glossary_usage.py` | Lists, under each glossary entry, every page that links to it ("Used on N pages") | docstring |
-| `sync_breach_timeline_index.py` | Renders the search field and kill chain index on `breach-timeline.html` from its breach cards | docstring |
+| `sync_breach_timeline_index.py` | Renders the search field, industry buttons and kill chain index on `breach-timeline.html` from its breach cards | docstring |
+| `breach_industries.py` | The industries a kill chain can be tagged with, their synonyms, and the exact "Industries hit" line on a card | docstring |
+| `check_card_finder_js.py` | Runs `card-finder.js` in a browser against a fixture page; run by hand after changing the search script | docstring |
 | `sync_breach_deck_index.py` | Renders the deck index, search field and cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
 | `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
