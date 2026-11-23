@@ -23,6 +23,13 @@ index of the decks by incident year, each entry linking its card. The slide
 count and as-of tags carry data-finder-skip, because every card has them and
 a search for this year's number would otherwise match every deck.
 
+The line above the finder says whether every kill chain on the timeline has a
+deck. While some do not, it says "so far" and a note below the cards tells
+readers a missing deck is still being written. Once every one has a deck, the
+line says so and the note is left out. The tool writes both because only it
+compares the list with the timeline, so the page cannot keep saying decks are
+on their way after the last one is published.
+
 A deck that is published but has no card here is a deck readers cannot find,
 so `--check` (in validate-html.yml) fails when the list is out of step, and
 also when a mapped deck has no outline, no breach page, or no timeline card.
@@ -107,17 +114,18 @@ def timeline_order(timeline_html: str) -> dict[str, tuple[int, str, str]]:
     return order
 
 
-def collect(root: Path) -> tuple[list[Deck], list[str]]:
-    """Every published deck that can be listed, newest incident first, and a
-    finding for each one that cannot."""
+def collect(root: Path) -> tuple[list[Deck], list[str], int]:
+    """Every published deck that can be listed, newest incident first, a
+    finding for each one that cannot, and how many kill chains on the
+    timeline have no listed deck."""
     findings: list[str] = []
     mapping_path = root / DECKS_DIR / "published.json"
     try:
         mapping = json.loads(mapping_path.read_text(encoding="utf-8")) if mapping_path.exists() else {}
     except (OSError, ValueError) as e:
-        return [], [f"{mapping_path.relative_to(root)}: cannot be read as JSON: {e}"]
+        return [], [f"{mapping_path.relative_to(root)}: cannot be read as JSON: {e}"], 0
     if not isinstance(mapping, dict):
-        return [], [f"{mapping_path.relative_to(root)}: must be a JSON object keyed by slug"]
+        return [], [f"{mapping_path.relative_to(root)}: must be a JSON object keyed by slug"], 0
 
     timeline_path = root / TIMELINE
     order = timeline_order(timeline_path.read_text(encoding="utf-8")) if timeline_path.exists() else {}
@@ -125,7 +133,7 @@ def collect(root: Path) -> tuple[list[Deck], list[str]]:
         # A parse that sees no cards would otherwise report every deck as
         # missing from the timeline, or, worse, pass an empty list.
         findings.append(f"{TIMELINE}: no breach cards found; the timeline markup changed")
-        return [], findings
+        return [], findings, 0
 
     placed: list[tuple[int, Deck]] = []
     for slug in sorted(mapping):
@@ -165,7 +173,10 @@ def collect(root: Path) -> tuple[list[Deck], list[str]]:
             provider=provider,
         )))
     placed.sort(key=lambda p: p[0])
-    return [d for _, d in placed], findings
+    decks = [d for _, d in placed]
+    listed = {d.slug for d in decks}
+    missing = sum(1 for slug in order if slug not in listed)
+    return decks, findings, missing
 
 
 def _text(s: str) -> str:
@@ -219,12 +230,14 @@ def render_index(decks: list[Deck]) -> list[str]:
     )
 
 
-def render_region(decks: list[Deck]) -> list[str]:
-    """The lines between the markers, before indentation."""
+def render_region(decks: list[Deck], missing: int) -> list[str]:
+    """The lines between the markers, before indentation. `missing` is how
+    many kill chains on the timeline have no listed deck."""
     if not decks:
         return ['<p><span class="no-glossary">No decks are published yet.</span></p>']
     n = len(decks)
-    count = f"{n} deck so far" if n == 1 else f"{n} decks so far"
+    noun = "deck" if n == 1 else "decks"
+    count = f"{n} {noun} so far" if missing else f"{n} {noun}, one for every kill chain"
     lines = [
         f'<p><span class="no-glossary">{count}, newest incident first.</span></p>',
         *render_index(decks),
@@ -233,6 +246,12 @@ def render_region(decks: list[Deck]) -> list[str]:
     for d in decks:
         lines += ["    " + ln for ln in render_card(d)]
     lines.append("</div>")
+    if missing:
+        lines.append(
+            '<p><span class="no-glossary">Looking for a kill chain that is not listed yet? Its deck is still '
+            'being written, and the <a href="breach-timeline.html">full kill chain</a> is there to read in the '
+            "meantime.</span></p>"
+        )
     return lines
 
 
@@ -243,13 +262,13 @@ def splice(page_html: str, region: list[str]) -> str:
 
 
 def sync(root: Path, check: bool) -> int:
-    decks, findings = collect(root)
+    decks, findings, missing = collect(root)
     for f in findings:
         print(f"FINDING: {f}")
     page_path = root / PAGE
     try:
         raw = page_path.read_text(encoding="utf-8")
-        new = splice(raw, render_region(decks))
+        new = splice(raw, render_region(decks, missing))
     except (OSError, ValueError) as e:
         print(f"FINDING: {e}")
         return 1
@@ -358,16 +377,32 @@ def self_test() -> int:
                and '<span class="tag no-glossary">2024</span>' in first,
                "the slide count and as-of tags are left out of the search, the year is not")
         expect("2 decks so far" in first, "the count is plural for two")
+        expect("one for every kill chain" not in first,
+               "a timeline kill chain with no deck (zzz) keeps the count at 'so far'")
+        expect(first.index('<div class="resource-grid">') < first.index("not listed yet"),
+               "while a kill chain has no deck, a note below the cards says its deck is being written")
         expect("<p>Before.</p>" in first and "<p>After.</p>" in first and "stale" not in first,
                "only the region between the markers is replaced")
         expect("\n        <div class=\"resource-grid\">\n" in first, "the region takes the start marker's indent")
         for link in (f"{ID_A}/export/pdf", f"{ID_A}/copy", f"{ID_A}/embed", 'href="breaches/aaa.html"'):
             expect(link in first, f"the card links {link}")
 
-        # One deck: singular count.
-        root = _fixture(tmp / "2", {"aaa": {"id": ID_A}}, [("aaa", "2026")])
+        # One deck while another kill chain waits: singular count.
+        root = _fixture(tmp / "2", {"aaa": {"id": ID_A}}, [("aaa", "2026"), ("zzz", "2025")])
         sync(root, check=False)
         expect("1 deck so far" in (root / PAGE).read_text(encoding="utf-8"), "the count is singular for one")
+
+        # Every kill chain on the timeline has a deck: the count says so and
+        # the "still being written" note is gone.
+        root = _fixture(tmp / "2b", {"aaa": {"id": ID_A}, "bbb": {"id": ID_B}}, [("bbb", "2026"), ("aaa", "2024")])
+        expect(sync(root, check=False) == 0, "a fully covered timeline rewrites cleanly")
+        full = (root / PAGE).read_text(encoding="utf-8")
+        expect("2 decks, one for every kill chain, newest incident first." in full,
+               "with every kill chain covered, the count says so")
+        expect("so far" not in full and "not listed yet" not in full,
+               "with every kill chain covered, nothing says more decks are coming")
+        expect(sync(root, check=False) == 0 and (root / PAGE).read_text(encoding="utf-8") == full,
+               "a second run on a fully covered timeline changes nothing")
 
         # Each way a mapped deck can fail to be listed is a finding.
         root = _fixture(tmp / "3", {"aaa": {"id": ID_A}}, [("other", "2026")])
@@ -409,7 +444,8 @@ def self_test() -> int:
         words = " ".join(keys)
         probe = Deck(slug="probe", title=words, promise=words, as_of=words,
                      slides=99, pres_id=ID_A, year=words, provider=words)
-        region = "\n".join(render_region([probe, probe]))
+        region = "\n".join(render_region([probe, probe], missing=1))
+        expect("not listed yet" in region, "the probe region includes the 'still being written' note")
         masked, placeholders = cl.mask_skip_zones(region)
         linked, linked_words = cl.link_text_segments(masked, patterns, keys_to_slug, "")
         expect(not linked_words, "no glossary key is linked inside the generated list")
