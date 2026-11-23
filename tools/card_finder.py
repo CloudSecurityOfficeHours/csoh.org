@@ -14,6 +14,9 @@ no per-page code; it reads everything from the markup rendered here:
     data-finder-skip      on anything inside a card that must not be searched
     data-finder-noun(s)   words for the status line ("Showing 3 of 40 decks.")
     data-finder-query     on a filter button: what it puts in the search field
+    data-finder-filter    selector for the part of a card a button filters on;
+                          while the field holds exactly a button's query, only
+                          that part is matched, as a whole word
     data-finder-synonyms  "word=term" pairs: typing the word also finds the term
 
 Filter buttons sit inside the search bar, so like the field they stay hidden
@@ -93,11 +96,15 @@ def render_finder(
     filters: Sequence[str] = (),
     filter_label: str = "",
     synonyms: Mapping[str, str] | None = None,
+    filter_selector: str = "",
 ) -> list[str]:
     """The finder's lines, before indentation.
 
     `filters` become buttons under the field, in the order given, each
     putting its own text in the field; `filter_label` names the row.
+    `filter_selector` names the part of a card the buttons filter on, so a
+    pressed "Crypto" finds the cards tagged Crypto and not a card whose
+    summary says "cryptographically".
     `synonyms` maps a folded word a reader might type to the folded term it
     should also find.
 
@@ -110,6 +117,8 @@ def render_finder(
     if synonyms:
         pairs = " ".join(f"{w}={t}" for w, t in sorted(synonyms.items()))
         syn_attr = f' data-finder-synonyms="{_attr(pairs)}"'
+    if filter_selector:
+        syn_attr = f' data-finder-filter="{_attr(filter_selector)}"' + syn_attr
     lines = [
         f'<div class="card-finder" data-finder-text="{_attr(text_selector)}"'
         f' data-finder-noun="{_attr(noun)}" data-finder-nouns="{_attr(nouns)}"{syn_attr}>',

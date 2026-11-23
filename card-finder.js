@@ -16,7 +16,11 @@
 // - Buttons carrying data-finder-query sit in the search bar. Pressing one
 //   puts its query in the field; pressing it again clears the field. The
 //   button whose query is what the field holds is marked aria-pressed, so
-//   typing "finance" lights the Finance button too.
+//   typing "finance" lights the Finance button too. While a button is lit,
+//   only the part of each card named by data-finder-filter is matched, as a
+//   whole word: the Crypto button finds the cards tagged Crypto, not a card
+//   whose summary says "cryptographically". Any other typing searches the
+//   whole card as usual.
 // - data-finder-synonyms on the finder holds "word=term" pairs. A typed word
 //   that is a synonym also matches a card holding its term as a whole word,
 //   so "bank" finds the cards tagged Finance.
@@ -34,6 +38,7 @@
         const clearBtn = finder.querySelector('.card-finder-clear');
         const index = finder.querySelector('.card-finder-index');
         const textSelector = finder.dataset.finderText;
+        const filterSelector = finder.dataset.finderFilter;
         const noun = finder.dataset.finderNoun || 'card';
         const nouns = finder.dataset.finderNouns || noun + 's';
         if (!bar || !input || !status || !clearBtn || !index || !textSelector) return;
@@ -62,7 +67,11 @@
                 .filter(n => !n.closest('[data-finder-skip]'))
                 .map(searchedText)
                 .join(' ');
-            entries.push({ card, item: link.closest('li'), text: ' ' + fold(text) + ' ' });
+            const filterText = filterSelector
+                ? Array.from(card.querySelectorAll(filterSelector)).map(searchedText).join(' ')
+                : '';
+            entries.push({ card, item: link.closest('li'), text: ' ' + fold(text) + ' ',
+                filterText: ' ' + fold(filterText) + ' ' });
         });
         if (!entries.length) return;
         const groups = Array.from(index.querySelectorAll('.card-finder-group'));
@@ -72,10 +81,13 @@
             // Every word must appear somewhere in the card, in any order.
             const query = fold(input.value);
             const terms = query.split(' ').filter(Boolean);
+            const lit = query !== '' && buttons.find(b => fold(b.dataset.finderQuery) === query);
             let shown = 0;
             entries.forEach(e => {
-                const match = terms.every(t => e.text.includes(t)
-                    || (synonyms[t] !== undefined && e.text.includes(' ' + synonyms[t] + ' ')));
+                const match = lit && filterSelector
+                    ? e.filterText.includes(' ' + query + ' ')
+                    : terms.every(t => e.text.includes(t)
+                        || (synonyms[t] !== undefined && e.text.includes(' ' + synonyms[t] + ' ')));
                 e.card.classList.toggle('is-hidden', !match);
                 if (e.item) e.item.classList.toggle('is-hidden', !match);
                 if (match) shown++;
@@ -83,8 +95,7 @@
             groups.forEach(g => g.classList.toggle('is-hidden', !g.querySelector('li:not(.is-hidden)')));
             index.classList.toggle('is-hidden', shown === 0);
             clearBtn.classList.toggle('is-hidden', terms.length === 0);
-            buttons.forEach(b => b.setAttribute('aria-pressed',
-                String(query !== '' && fold(b.dataset.finderQuery) === query)));
+            buttons.forEach(b => b.setAttribute('aria-pressed', String(b === lit)));
             if (!terms.length) {
                 status.textContent = '';
             } else if (shown === 0) {

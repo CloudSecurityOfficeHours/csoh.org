@@ -238,6 +238,7 @@ def render_index(decks: list[Deck]) -> list[str]:
         text_selector="h3, p, .tag",
         filters=sorted({x for d in decks for x in d.industries}),
         filter_label="Industries",
+        filter_selector=".industries-hit",
         synonyms=synonym_map(),
     )
 
@@ -461,6 +462,8 @@ def self_test() -> int:
         expect('placeholder="Search by company, actor, platform or industry"' in page,
                "the placeholder names industries")
         expect('data-finder-synonyms="' in page and "bank=finance" in page, "the synonym map is rendered")
+        expect('data-finder-filter=".industries-hit"' in page,
+               "a pressed industry matches only the cards' industries lines")
         expect(sync(root, check=False) == 0 and (root / PAGE).read_text(encoding="utf-8") == page,
                "a second run with industries changes nothing")
 

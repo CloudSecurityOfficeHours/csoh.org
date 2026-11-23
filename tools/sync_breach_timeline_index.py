@@ -130,6 +130,7 @@ def render_region(entries: list[Entry], industries: list[str]) -> list[str]:
         text_selector=".breach-card-meta, .breach-card-title, .breach-card-summary, .industries-hit",
         filters=industries,
         filter_label="Industries",
+        filter_selector=".industries-hit",
         synonyms=synonym_map(),
     )
 
@@ -248,6 +249,8 @@ def self_test() -> int:
         expect(queries == ["Crypto", "Finance"], "one button per industry a card carries, alphabetical")
         expect('data-finder-query="Legal"' not in page, "no button for an industry no card carries")
         expect('data-finder-synonyms="' in page and "bank=finance" in page, "the synonym map is rendered")
+        expect('data-finder-filter=".industries-hit"' in page,
+               "a pressed industry matches only the cards' industries lines")
         expect('placeholder="Search by company, actor, technique or industry"' in page,
                "the placeholder names industries")
         expect('data-finder-text=".breach-card-meta, .breach-card-title, .breach-card-summary, .industries-hit"'
