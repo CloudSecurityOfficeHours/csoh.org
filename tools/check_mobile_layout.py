@@ -2,6 +2,9 @@
 """Mobile layout regression check.
 
 Renders a representative sample of pages at iPhone-13 viewport and asserts:
+  0. Every stylesheet loaded and the browser refused nothing under Subresource
+     Integrity. If not, the page is reported once and its other checks are
+     skipped, since they would be measuring an unstyled page.
   1. The page has no horizontal overflow at the body or document level, and
      nothing inside a horizontal scroller starts left of the scroller's edge,
      where scrolling can't reach it.
@@ -84,6 +87,24 @@ MAX_PADDING_VARIANCE_PX = 1.0
 MAX_HEIGHT_VARIANCE_PX = 4.0
 
 
+# Resolves to the hrefs of stylesheets that failed to load. It waits for the
+# window's load event, by which point every stylesheet has loaded or failed.
+# Chromium leaves `sheet` null for a sheet it refused under SRI but gives a
+# sheet that failed to fetch (a 404) an empty one, so no rules counts as not
+# loaded too. Reading cssRules throws only for a cross-origin sheet, which the
+# site's CSP rules out; that case counts as loaded.
+STYLESHEETS_NOT_LOADED_JS = """() => new Promise(done => {
+    const check = () => done(
+        Array.from(document.querySelectorAll('link[rel~="stylesheet"]')).filter(l => {
+            if (!l.sheet) return true;
+            try { return l.sheet.cssRules.length === 0; } catch (e) { return false; }
+        }).map(l => l.href));
+    if (document.readyState === 'complete') return check();
+    window.addEventListener('load', check, { once: true });
+    setTimeout(check, 5000);
+})"""
+
+
 def find_free_port() -> int:
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -111,9 +132,37 @@ def check_page(page, url: str, page_path: str, screenshots_dir: Optional[Path]) 
     """Run all assertions against a single page. Returns a list of failure
     messages - empty if the page passes."""
     failures: list[str] = []
-    page.goto(url, wait_until="domcontentloaded")
-    # Give CSS animations / fonts a beat to settle.
-    page.wait_for_timeout(200)
+    # Chromium reports a resource it refused under Subresource Integrity only
+    # as a console error, so listen while the page loads.
+    refused: list[str] = []
+
+    def on_console(msg) -> None:
+        if msg.type == "error" and "integrity" in msg.text:
+            refused.append(msg.text)
+
+    page.on("console", on_console)
+    try:
+        page.goto(url, wait_until="domcontentloaded")
+        # Give CSS animations / fonts a beat to settle.
+        page.wait_for_timeout(200)
+        unloaded = page.evaluate(STYLESHEETS_NOT_LOADED_JS)
+    finally:
+        page.remove_listener("console", on_console)
+
+    # --- 0. Every stylesheet and script actually loaded.
+    # A stale integrity= hash makes the browser drop the whole asset. The page
+    # then renders unstyled, and every measurement below fails for a reason
+    # that has nothing to do with layout, while the hamburger and dropdown
+    # clicks wait out their timeouts. Report the cause once and skip the rest.
+    if refused or unloaded:
+        failures.extend(f"refused by the browser: {t}" for t in refused)
+        failures.extend(f"stylesheet did not load: {href}" for href in unloaded)
+        failures.append(
+            "layout checks skipped for this page: they would measure it without its "
+            "stylesheet or scripts. A refused integrity check means stale hashes; "
+            "run `python3 update_sri.py`, and check the asset is in its ASSETS list."
+        )
+        return failures
 
     # --- 1. No horizontal overflow on the document.
     # The reference width is documentElement.clientWidth, NOT window.innerWidth.

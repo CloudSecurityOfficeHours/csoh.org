@@ -1,9 +1,12 @@
 # =============================================================================
 # Check Mobile Layout
 # -----------------------------------------------------------------------------
-# Renders a 20-page sample at iPhone-13 width (390x844) in headless Chromium and
-# asserts the things that only break visually, where no parser or linter looks:
+# Renders a sample of pages (DEFAULT_PAGES in the checker) at iPhone-13 width
+# (390x844) in headless Chromium and asserts the things that only break
+# visually, where no parser or linter looks:
 #
+#   0. Every stylesheet loaded and nothing was refused under SRI (otherwise
+#      the page is reported once and its layout checks are skipped).
 #   1. No horizontal overflow at the body or document level.
 #   2. With the hamburger menu OPEN - every nav link inside the viewport, every
 #      tap target >= 40px tall, and sibling rows in a dropdown sharing a
@@ -11,7 +14,8 @@
 #   3. The hero h1 doesn't visually overflow.
 #
 # tools/check_mobile_layout.py holds the actual assertions and serves the repo
-# itself, so there is no build step here - it is `pip install`, then run.
+# itself, so there is no build step here - it is `pip install`, re-stamp the
+# SRI hashes (see that step), then run.
 #
 # WHY THIS IS ITS OWN WORKFLOW AND NOT A STEP IN validate-html.yml
 # ----------------------------------------------------------------
@@ -61,6 +65,7 @@ on:
       - '**.js'
       - 'tools/check_mobile_layout.py'
       - 'tools/sync_chrome.py'
+      - 'update_sri.py'
       - '.github/workflows/check-mobile-layout.yml'
   # Weekly safety net, 07:20 UTC on Mondays - just after Validate HTML's 07:00 so
   # the two don't contend. Catches drift that slipped past both triggers above.
@@ -119,8 +124,9 @@ jobs:
       # The set is wider than it looks like it needs to be, on purpose. Beyond
       # the nav itself the script asserts document-level horizontal overflow and
       # hero-heading overflow, which any stylesheet or page can break - so every
-      # .html, .css and .js file counts, plus the checker and the script that
-      # generates the nav markup. As with path filters, widening this regex
+      # .html, .css and .js file counts, plus the checker, the script that
+      # generates the nav markup, and update_sri.py, which stamps the pages
+      # before they are rendered. As with path filters, widening this regex
       # costs one redundant run, and narrowing it costs a regression that
       # ships.
       - name: Detect layout-affecting changes
@@ -141,7 +147,7 @@ jobs:
             exit 0
           fi
           if git diff --name-only "$BASE_SHA"...HEAD \
-              | grep -qE '\.(html|css|js)$|^tools/(check_mobile_layout|sync_chrome)\.py$|^\.github/workflows/check-mobile-layout\.yml$'; then
+              | grep -qE '\.(html|css|js)$|^tools/(check_mobile_layout|sync_chrome)\.py$|^update_sri\.py$|^\.github/workflows/check-mobile-layout\.yml$'; then
             echo "This pull request can affect rendered layout: rendering the sample."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
@@ -167,6 +173,26 @@ jobs:
         run: |
           pip install 'playwright==1.59.0'
           playwright install chromium
+
+      # Re-stamp SRI hashes and ?v= cache-busts before rendering, as deploy.yml
+      # does before it publishes. A CSS or JS edit can reach main before the
+      # pages' integrity= values are updated; housekeeping corrects them later
+      # in a commit with a CI-skip marker, which never re-runs this check. With
+      # a stale hash the browser refuses the stylesheet, every page renders
+      # unstyled, and the run fails on measurements that say nothing about the
+      # layout that will ship. Deploy re-stamps the same way, so this renders
+      # the pages as they will be served. A stylesheet or script still refused
+      # after this step (an asset missing from ASSETS in update_sri.py, say)
+      # fails the checker on its own, with a message naming it.
+      - name: Re-stamp SRI hashes
+        if: steps.layout.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          out=$(python3 update_sri.py)
+          echo "$out"
+          if ! echo "$out" | grep -q "Modified 0 of"; then
+            echo "::notice::Pages were committed with stale SRI hashes; re-stamped for this check, as deploy does before publishing."
+          fi
 
       # The script serves the repo from a throwaway localhost port itself, so
       # there is nothing to build or start first. Exit 1 on any failed
