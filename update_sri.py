@@ -35,7 +35,6 @@ ASSETS: List[Tuple[str, str, str]] = [
     ('theme.js', 'script', 'src'),
     ('chat-resources.js', 'script', 'src'),
     ('breach-timeline.css', 'link', 'href'),
-    ('breach-timeline.js', 'script', 'src'),
     ('meetings.js', 'script', 'src'),
     ('glossary.js', 'script', 'src'),
     # The card finder (search field + index above a page's cards) on

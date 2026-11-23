@@ -840,7 +840,6 @@ csoh.org/
 ├── glossary.js                 # glossary.html-specific search/filter
 ├── card-finder.js              # search field + index above the cards (deck list, breach timeline)
 ├── breach-timeline.css         # breach-timeline.html-specific styles
-├── breach-timeline.js          # breach-timeline.html-specific tab/panel logic
 ├── countdown.css               # countdown.html styles (dark clock face, self-hosted fonts)
 ├── countdown.js                # countdown.html split-flap clock logic
 ├── 404.js                      # 404-page "did you mean" suggestions
@@ -1170,7 +1169,7 @@ The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five
   That failure is silent: nothing errors, the push looks fine, and the change
   waits for the next unrelated commit.
 - `style.css`, `search.css`, `breach-timeline.css`, `noscript.css`, `countdown.css`
-- `main.js`, `theme.js`, `chat-resources.js`, `breach-timeline.js`, `meetings.js`, `glossary.js`, `card-finder.js`, `404.js`, `resources-hub.js`, `search-init.js`, `countdown.js`
+- `main.js`, `theme.js`, `chat-resources.js`, `meetings.js`, `glossary.js`, `card-finder.js`, `404.js`, `resources-hub.js`, `search-init.js`, `countdown.js`
 - `resources-index.json`, `vendor/**`, `fonts/**`, `chat-screenshots/**`, `img/**`
 - `update_sri.py`, `csoh.ics`, `tools/sync_next_session.py`
 - Manual trigger via the GitHub Actions tab

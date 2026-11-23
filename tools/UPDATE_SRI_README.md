@@ -68,7 +68,7 @@ This Python script does all the work. Note that `style.css` includes a large dar
 
 1. Reads each asset in the `ASSETS` list at the top of the script:
    - `style.css`, `main.js`, `theme.js`
-   - `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`
+   - `chat-resources.js`, `breach-timeline.css`
    - `meetings.js`, `glossary.js`, `card-finder.js`, `404.js`, `resources-hub.js`
    - `noscript.css` (rules that apply only when JavaScript is off)
    - `countdown.css`, `countdown.js` (the stand-alone `/countdown.html`)
@@ -130,7 +130,7 @@ SRI and cache-busting are handled as part of the unified workflow, not a separat
 
 ### Triggers
 
-- **On push to main:** Runs automatically when any `*.html` file, `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `breach-timeline.js`, `update_sri.py`, `img/**`, `vendor/**`, or `chat-screenshots/**` change (the authoritative list is the `paths:` block in the workflow)
+- **On push to main:** Runs automatically when any `*.html` file, `style.css`, `main.js`, `chat-resources.js`, `breach-timeline.css`, `update_sri.py`, `img/**`, `vendor/**`, or `chat-screenshots/**` change (the authoritative list is the `paths:` block in the workflow)
 - **Also stamped at build time:** `deploy.yml` re-runs `update_sri.py` before staging `dist/`. That is the load-bearing one - housekeeping commits carry a CI-skip marker, so a fix committed there does not itself reach production. Re-stamping in the build makes the published artifact self-consistent by construction.
 - **Manual:** Can be triggered from the GitHub Actions tab
 
