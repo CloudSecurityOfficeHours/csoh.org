@@ -160,9 +160,13 @@ SUBDIR_TYPES: list[tuple[str, str]] = [
 MAIN_RE = re.compile(r"<main\b[^>]*>(.*?)</main>", re.DOTALL | re.IGNORECASE)
 BODY_RE = re.compile(r"<body\b[^>]*>(.*?)</body>", re.DOTALL | re.IGNORECASE)
 TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.DOTALL | re.IGNORECASE)
+# Prose attribute values end at the quote that opened them, never at the
+# other kind: a double-quoted description or tooltip may contain apostrophes
+# ("it's", "AWS's"), and a character class excluding both quotes would cut
+# the value there.
 META_DESC_RE = re.compile(
-    r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']+)["\']',
-    re.IGNORECASE,
+    r'<meta\s+name=["\']description["\']\s+content=(?P<q>["\'])(?P<v>.*?)(?P=q)',
+    re.IGNORECASE | re.DOTALL,
 )
 
 # Blocks to strip entirely (chrome, scripts, hidden machinery).
@@ -207,7 +211,10 @@ CARD_RE = re.compile(
     r'[^>]*>(.*?)</a>',
     re.DOTALL | re.IGNORECASE,
 )
-TOOLTIP_RE = re.compile(r'\bdata-tooltip=["\']([^"\']*)["\']', re.IGNORECASE)
+# Same quote rule as META_DESC_RE.
+TOOLTIP_RE = re.compile(
+    r'\bdata-tooltip=(?P<q>["\'])(?P<v>.*?)(?P=q)', re.IGNORECASE | re.DOTALL
+)
 # The card's own opening <a> tag, so its id="" can be read back out. Sliced
 # from the start of a CARD_RE match rather than matched independently: the
 # two values have to come from the same element or they describe different
@@ -258,7 +265,7 @@ def page_description(raw: str) -> str:
     m = META_DESC_RE.search(raw)
     if not m:
         return ""
-    return html.unescape(m.group(1).strip())
+    return html.unescape(m.group("v").strip())
 
 
 def body(raw: str) -> str:
@@ -392,7 +399,7 @@ def emit_card_docs(filename: str, main: str, page_title_: str) -> Iterable[dict]
         if not name:
             continue
         tooltip = TOOLTIP_RE.search(card_html)
-        tooltip = html.unescape(tooltip.group(1).strip()) if tooltip else ""
+        tooltip = html.unescape(tooltip.group("v").strip()) if tooltip else ""
         body_text = strip_html(card_html)
         # The card's own text, its tooltip blurb, and the destination host
         # all describe the resource; index them together so "tumeryk.com"
