@@ -1,6 +1,7 @@
 # Breach industry tags: evidence
 
 Each tag on a kill chain card rests on the sentence quoted here from that chain's breach page.
+This record covers the chains as of 2026-11-23; a chain added later carries its evidence in the body of the commit that adds it.
 Every quote was checked by script as text that appears on the page. A tag means the page says an
 organization in that industry was compromised, lost data, money or access, or took services offline
 because of the attack (see the design: `docs/superpowers/specs/2026-11-23-breach-industry-search-design.md`).

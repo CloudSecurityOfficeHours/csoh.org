@@ -119,6 +119,13 @@ on:
       # The industry vocabulary and synonyms both index gates render, and
       # whose self-test the kill chain index step runs.
       - 'tools/breach_industries.py'
+      # The kill chain registration gate, and the files it reads that no
+      # other pattern here covers: the sitemap, the breach preview images and
+      # the list that generates them.
+      - 'tools/register_kill_chain.py'
+      - 'sitemap.xml'
+      - 'img/og/breaches/**'
+      - 'tools/generate_og_images.py'
       # The news date gate reads feed.xml as well as news.html, and
       # imports FUTURE_DATE_GRACE from update_news.py. Anything a step
       # here reads has to be able to trigger the step.
@@ -597,6 +604,23 @@ jobs:
           python3 tools/sync_breach_timeline_index.py --check 2>&1 | tee -a check-breach-timeline-index.log || status=1
           exit "$status"
 
+      # Every page in breaches/ must appear everywhere a kill chain is listed
+      # or linked: its timeline card, the timeline ItemList, prev/next pagers
+      # in timeline order, sitemap.xml, a preview image and og:image, a
+      # README.md row, breach-lessons.html's list and table, a year-in-review
+      # page (2021 and later), and a published deck. A chain added without one
+      # of them is otherwise caught by nothing. Unconditional, because the
+      # pages it reads span the whole site. The self-test runs first as the
+      # control.
+      - name: Assert every kill chain is registered
+        id: kill-chain-registration
+        run: |
+          set -o pipefail
+          status=0
+          python3 tools/register_kill_chain.py --self-test 2>&1 | tee check-kill-chain-registration.log || status=1
+          python3 tools/register_kill_chain.py --check 2>&1 | tee -a check-kill-chain-registration.log || status=1
+          exit "$status"
+
       # The resource-card pipeline harvests links out of the community chat,
       # so a members-only join link (like the CSOH Signal invite, which
       # community.html says is never posted publicly) can arrive as an
@@ -708,6 +732,8 @@ jobs:
           OUTCOME_HOWTO_DECKS: ${{ steps.howto-decks.outcome }}
           OUTCOME_BREACH_DECKS: ${{ steps.breach-decks.outcome }}
           OUTCOME_BREACH_DECK_INDEX: ${{ steps.breach-deck-index.outcome }}
+          OUTCOME_BREACH_TIMELINE_INDEX: ${{ steps.breach-timeline-index.outcome }}
+          OUTCOME_KILL_CHAIN_REGISTRATION: ${{ steps.kill-chain-registration.outcome }}
           OUTCOME_NEWS_DATES: ${{ steps.news-dates.outcome }}
           OUTCOME_HTML5: ${{ steps.html5.outcome }}
         with:
@@ -731,6 +757,8 @@ jobs:
               { name: 'Assert how-to deck outlines and links', outcome: process.env.OUTCOME_HOWTO_DECKS, file: 'check-howto-decks.log' },
               { name: 'Assert breach deck outlines and links', outcome: process.env.OUTCOME_BREACH_DECKS, file: 'check-breach-decks.log' },
               { name: 'Assert the breach deck list is current', outcome: process.env.OUTCOME_BREACH_DECK_INDEX, file: 'check-breach-deck-index.log' },
+              { name: 'Assert the kill chain index is current', outcome: process.env.OUTCOME_BREACH_TIMELINE_INDEX, file: 'check-breach-timeline-index.log' },
+              { name: 'Assert every kill chain is registered', outcome: process.env.OUTCOME_KILL_CHAIN_REGISTRATION, file: 'check-kill-chain-registration.log' },
               { name: 'Reject future publish dates (news freshness gate)', outcome: process.env.OUTCOME_NEWS_DATES, file: 'check-news-dates.log' },
               { name: 'Validate HTML5', outcome: process.env.OUTCOME_HTML5, file: 'log.log' },
             ];
