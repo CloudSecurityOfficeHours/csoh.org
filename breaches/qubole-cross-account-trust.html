@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="How credentials for a Qubole-linked AWS account opened dormant customer integration roles in October 2026, leading to secret harvesting and S3 data theft.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="Qubole Cross-Account Trust Abuse 2026, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, Qubole, Idera, AWS, cross-account IAM role, sts:AssumeRole, External ID, trust policy, dormant integration role, Secrets Manager, SSM Parameter Store, Lambda environment variables, TruffleHog, S3 data theft, third-party access">
+    <title>Qubole Cross-Account Trust Abuse 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/qubole-cross-account-trust.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/qubole-cross-account-trust.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/qubole-cross-account-trust.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="Qubole Cross-Account Trust Abuse 2026 Breach Kill Chain">
+    <meta property="og:description" content="Customer AWS roles that still trusted an account associated with Qubole let an attacker read secrets and download S3 data. How it got the vendor's credentials has not been disclosed.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-23">
+    <meta property="article:modified_time" content="2026-11-23">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="Qubole Cross-Account Trust Abuse 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="Qubole">
+    <meta property="article:tag" content="cross-account IAM role">
+    <meta property="article:tag" content="External ID">
+    <meta property="article:tag" content="AssumeRole">
+    <meta property="article:tag" content="Secrets Manager">
+    <meta property="article:tag" content="TruffleHog">
+    <meta property="article:tag" content="S3">
+    <meta property="og:url" content="https://csoh.org/breaches/qubole-cross-account-trust.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/qubole-cross-account-trust.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Qubole Cross-Account Trust Abuse 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Customer AWS roles that still trusted an account associated with Qubole let an attacker read secrets and download S3 data. How it got the vendor's credentials has not been disclosed.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/qubole-cross-account-trust.jpg">
+
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=d0ce5478" as="style"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/style.css?v=d0ce5478"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/breach-timeline.css?v=a2469e23" integrity="sha384-rmpFuzCn6UkelLpKe109kBx+yoPABmR7h+5VwIwk6eygz4kedbAkeGGDZiH59T7R">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "Qubole Cross-Account Trust Abuse - Credentials for Two Vendor IAM Users, Source Undisclosed → AssumeRole Into Dormant Customer Roles → Enumeration → Secrets From Lambda, Secrets Manager and SSM → TruffleHog Checks Against AWS, Entra ID and Okta → S3 Data Taken",
+  "description": "How credentials for a Qubole-linked AWS account opened dormant customer integration roles in October 2026, leading to secret harvesting and S3 data theft.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-23",
+  "dateModified": "2026-11-23",
+  "mainEntityOfPage": "https://csoh.org/breaches/qubole-cross-account-trust.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "Abuse of Qubole cross-account IAM roles",
+    "description": "Between October 14 and October 26, 2026, a threat actor used IAM credentials from an AWS account associated with Qubole to assume cross-account integration roles that Qubole customers had created, most of them dormant. Inside, it enumerated resources, read secrets from Lambda environment variables, Secrets Manager and SSM Parameter Store, tested them against AWS, Entra ID and Okta, and downloaded S3 data. How the actor obtained the credentials has not been disclosed."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Qubole"
+    },
+    {
+      "@type": "Organization",
+      "name": "Idera"
+    },
+    {
+      "@type": "Organization",
+      "name": "Amazon Web Services"
+    },
+    {
+      "@type": "Organization",
+      "name": "Wiz"
+    },
+    {
+      "@type": "Organization",
+      "name": "Google"
+    },
+    {
+      "@type": "Organization",
+      "name": "Sentra"
+    },
+    {
+      "@type": "Organization",
+      "name": "Mandiant"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Qubole Cross-Account Trust Abuse 2026",
+      "item": "https://csoh.org/breaches/qubole-cross-account-trust.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../breach-kill-chain-decks.html">Kill Chain Slide Decks</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                            <li><a href="../what-practitioners-think-about-human-risk.html">Human Risk</a></li>
+                            <li><a href="../what-practitioners-think-about-identity.html">Identity &amp; Passwords</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../cloud-deployment.html">How We Deploy</a></li>
+                            <li><a href="../how-csoh-org-is-secured.html">How We Secure It</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">Qubole Cross-Account Trust Abuse 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>Qubole Cross-Account Trust Abuse 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="qubole-cross-account-trust-2026">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">October 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-aws">AWS / Cross-Account <a class="glossary-link" href="../glossary.html#term-iam">IAM</a></span>
+    </div>
+    <h2 class="inc-title">Qubole Cross-Account Trust Abuse - Credentials for Two Vendor IAM Users, Source Undisclosed &rarr; AssumeRole Into Dormant Customer Roles &rarr; Enumeration &rarr; Secrets From Lambda, Secrets Manager and SSM &rarr; TruffleHog Checks Against AWS, Entra ID and Okta &rarr; S3 Data Taken</h2>
+    <p class="inc-summary">Wiz and Sentra published their accounts on November 9, 2026. Between October 14 and October 26, Wiz observed a threat actor using IAM credentials from an AWS account it describes as associated with Qubole, a data lake platform that Idera acquired in 2020 and, by Idera's account, sold to Gsudoers in March 2025. Wiz observes Qubole's platform using that account to assume roles in customer environments. The actor used two IAM users in it to call <code>sts:AssumeRole</code> against the integration roles that Qubole customers had created to trust the account. Every request Wiz attributed to the actor carried an External ID, and every one succeeded. Most of the roles were dormant, including roles left behind by customers who had stopped using Qubole, but their trust policies were still in place. Inside the victims' accounts the actor enumerated storage, compute, databases, IAM and <a class="glossary-link" href="../glossary.html#term-kms">KMS</a>, read secrets from <a class="glossary-link" href="../glossary.html#term-lambda">Lambda</a> environment variables, <a class="glossary-link" href="../glossary.html#term-secrets-manager">Secrets Manager</a> and SSM Parameter Store, tested what it found with <a class="glossary-link" href="../glossary.html#term-trufflehog">TruffleHog</a> against AWS, <a class="glossary-link" href="../glossary.html#term-entra-id">Entra ID</a> and Okta, and downloaded <a class="glossary-link" href="../glossary.html#term-s3">S3</a> data, in some cases whole buckets. Sentra, which detected the activity and reported it to Wiz, leading to a joint investigation with Wiz and Mandiant, counts more than a dozen organizations hit; Wiz says multiple and declined to give a number. <strong>Nobody has said how the actor got the vendor's credentials.</strong> Wiz, Sentra, AWS and Qubole have not disclosed it, nor how the actor held a valid External ID for each role, nor whether the credentials have since been disabled. AWS says its services were not compromised and operated as designed. Qubole had made no public statement as of the sources' dates.</p>
+    <p class="inc-summary">Wiz also reports a separate cluster of activity that it has not been able to link to the role assumptions. From October 8 to October 11, an actor used AWS access keys owned by customers, which Wiz believes were created for Qubole integrations. On October 8 it tested all of those keys within a single hour, and in a small number of cases it went on to compromise the victim's cloud environment. Wiz does not say where the keys came from. The Hacker News notes that Qubole also supports onboarding with access keys rather than a role.</p>
+    <p class="inc-summary">On November 11 an extortion group calling itself n0n claimed the Qubole intrusion on its leak site, and Wiz added a note to its post reporting the claim, without saying whether the claim is genuine. n0n's claims about how much data it holds are unverified. Press reports and Check Point's Cyberint team have since raised Qubole as a possible source of breaches that other companies disclosed at third-party providers. Cyberint found no Qubole-specific markers in the files released, and neither the researchers nor those companies have confirmed a link.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>October 14 to 26</strong> window of the role assumptions Wiz observed; Wiz and Sentra published on November 9</div>
+      <div class="inc-stat"><strong>More than a dozen</strong> organizations hit, according to Sentra; Wiz says multiple and gave no count</div>
+      <div class="inc-stat"><strong>Every</strong> <a class="glossary-link" href="../glossary.html#term-assumerole">AssumeRole</a> request Wiz attributed to the actor carried an External ID and succeeded</div>
+      <div class="inc-stat"><strong>Threat actor:</strong> not named by Wiz or Sentra; Wiz says the targeting appears opportunistic and does not match typical state-backed priorities, while noting it has no direct insight into motive. n0n's claim is unverified</div>
+    </div>
+    <p class="inc-summary"><strong>Disclosure:</strong> this page draws mainly on research published by Wiz, whose <a class="glossary-link" href="../glossary.html#term-incident-response">incident response</a> team investigated with Sentra and with Mandiant, which is part of Google. Google acquired Wiz in March 2026, and the site's author works at Wiz. Sentra, the page's second main source, is a cloud data security company. Every source is linked so you can read it directly.</p>
+    <a class="pm-link" href="https://www.wiz.io/blog/qubole-cross-account-access-abused-in-the-wild" target="_blank" rel="noopener">📄 Wiz - Trusted by Default: Qubole Cross-Account Access Abused in the Wild ↗</a>
+    <a class="pm-link" href="https://sentra.io/blog/breaches/inside-the-qubole-supply-chain-attack" target="_blank" rel="noopener">📄 Sentra - Inside the Qubole Supply Chain Attack ↗</a>
+    <a class="pm-link" href="https://www.theregister.com/security/2026/11/09/attackers-backdoor-trusted-aws-integrations-to-steal-secrets/5308553" target="_blank" rel="noopener">📄 The Register - Reporting, with AWS's statement ↗</a>
+    <a class="pm-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_common-scenarios_third-party.html" target="_blank" rel="noopener">📄 AWS IAM User Guide - Access to AWS accounts owned by third parties ↗</a>
+    <p class="u-mt-075" data-breach-deck><strong>Slides:</strong> <a href="https://docs.google.com/presentation/d/1NE73vYcyVkdGTLjp6YddiJveUpwwlBijYjdxV2KNxoA/export/pdf" target="_blank" rel="noopener noreferrer">download the PDF</a> or <a href="https://docs.google.com/presentation/d/1NE73vYcyVkdGTLjp6YddiJveUpwwlBijYjdxV2KNxoA/copy" target="_blank" rel="noopener noreferrer">make your own editable copy</a> (copying needs a Google account). The slides are licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>.</p>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-recon">🧰 Resource Development: A Server, VPN Exits and a Secret Scanner</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor worked from an OVH server and Mullvad VPN addresses, used TruffleHog, and kept a bootable image on its server</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1583/003/" target="_blank" rel="noopener">T1583.003 - Acquire Infrastructure: Virtual Private Server</a>
+        </div>
+        <p class="step-desc">Wiz's indicator tables lay out the infrastructure. An OVH virtual private server at 57.129.54[.]120 was the actor's primary address for role assumption, enumeration and credential harvesting, seen from October 15 to October 26, and an OVH IPv6 address, 2001:41d0:70d[:]7800::, carried credential enumeration and verification from October 16 to October 24. Wiz ties three more addresses to Mullvad VPN: 45.83.220[.]211 on October 14 and 15, 185.209.199[.]73 from October 18 to 21, and 89.37.63[.]175, which Wiz lists as Mullvad-registered (Datacamp Limited), on October 25 only. To check the credentials it harvested, the actor used TruffleHog, an open-source secret scanner that, as Wiz points out, legitimate security teams also run.</p>
+        <p class="step-desc">Wiz also found a file named sso_agent.iso hosted on the OVH server. It is a bootable Linux image that Wiz believes is designed to be booted remotely on a victim machine. Once started it begins a 90-minute clock, gathers system information and uploads its network interfaces and its disk and partition lists to 57.129.54[.]120. Wiz has not identified any deployment of the image and cannot confirm if or how it has been used.</p>
+        <div class="step-code">
+          <span class="hl">Primary host:</span> 57.129.54[.]120, an OVH VPS, October 15 to 26<br>
+          <span class="hl">OVH IPv6:</span> 2001:41d0:70d[:]7800::, credential enumeration and verification<br>
+          <span class="hl">Mullvad VPN:</span> 45.83.220[.]211, 185.209.199[.]73, 89.37.63[.]175<br>
+          <span class="hl">Tool:</span> TruffleHog, also run by legitimate security teams<br>
+          <span class="hl">Staged:</span> sso_agent.iso, SHA-256 65f061281c9a712e9502793dc4c5035cae490b84da05f7d4223cefa65ad396e4, polling port TCP 23458; no deployment seen by Wiz
+        </div>
+        <div class="step-tags"><span class="stag">OVH VPS</span><span class="stag">Mullvad VPN</span><span class="stag">TruffleHog</span><span class="stag">T1583.003</span><span class="stag">T1588.002</span><span class="stag">T1608.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: The Vendor's Own Identity</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor held working credentials for two IAM users in the AWS account Qubole's platform uses to reach customers, and nobody has said how it got them</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">Wiz lists AWS account 805246085872 as the source of every role assumption it observed. It describes the account as associated with Qubole and says it observes Qubole's platform using it to assume roles in customer environments. From October 14 the actor used the IAM user AIDA3W7DIFLYOLTK63SFS. From October 18 it also used a second IAM user in the same account, AIDAJYRRH5Y3A7AAJM2HW, which also carries legitimate Qubole platform traffic from AWS infrastructure. From then on, the actor was using an identity that Qubole's own platform also uses.</p>
+        <p class="step-desc">How the actor obtained those credentials has not been disclosed, as The Hacker News notes, and the researchers did not say whether the credentials have since been disabled or whether the activity has stopped. Sentra writes that the attacker went quiet without ever losing access. Sentra's headline calls it a stolen vendor key, and BleepingComputer and SecurityWeek describe the credentials as compromised; Wiz does not describe the IAM users either way. Wiz's advice to <a class="glossary-link" href="../glossary.html#term-saas">SaaS</a> providers, to assume customer roles from workload roles with short-lived credentials rather than long-lived IAM user keys, describes the safer design, but Wiz does not say that long-lived keys are how this happened.</p>
+        <p class="step-desc">ATT&amp;CK lists Valid Accounts: Cloud Accounts under Stealth as well as Initial Access, and both fit here: to AWS, every role assumption in this chain came from the vendor's trusted account. No source reports the actor tampering with logs or security tools, so this page maps nothing to Defense Impairment.</p>
+        <div class="step-code">
+          <span class="hl">Source account:</span> 805246085872 (Wiz)<br>
+          <span class="hl">First IAM user:</span> AIDA3W7DIFLYOLTK63SFS, from October 14<br>
+          <span class="hl">Second IAM user:</span> AIDAJYRRH5Y3A7AAJM2HW, from October 18; also carries legitimate Qubole traffic from AWS addresses<br>
+          <span class="hl">How obtained:</span> not disclosed<br>
+          <span class="hl">Disabled since:</span> not disclosed
+        </div>
+        <div class="step-tags"><span class="stag">Vendor Credentials</span><span class="stag">IAM User</span><span class="stag">Stealth</span><span class="stag">T1078.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access: Roles Nobody Had Removed</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor called AssumeRole against integration roles that customers had created to trust the Qubole account, and every request it made succeeded</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">T1199 - Trusted Relationship</a>
+        </div>
+        <p class="step-desc">To connect Qubole to an AWS account, a customer creates an IAM role whose trust policy lets the Qubole account assume it, on condition that the caller presents an External ID. Every AssumeRole request Wiz attributed to the actor included an External ID, and every one succeeded. Wiz's explanation: "The trust policies were still in place, so the requests succeeded." Many organizations had left those policies active after they stopped using the platform, Wiz told The Register. Most of the roles were otherwise unused, and in a majority of the environments Wiz saw, the actor's requests were the only AssumeRole activity from the vendor account in October. Sentra says the Qubole roles at its customers had been dormant since the spring, and that it had already flagged one of them as unused for months yet able to reach sensitive data.</p>
+        <p class="step-desc">The External ID was not designed to stop this. AWS's IAM User Guide says "AWS does not treat the external ID as a secret." Its purpose is the confused deputy problem: stopping another of the vendor's customers from tricking the vendor into using its access to your account. Wiz adds that the External ID is logged in plaintext in <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a> and is often stored by the vendor and in <a class="glossary-link" href="../glossary.html#term-iac">infrastructure as code</a>, and Sentra says the attacker presented the right one every time. How the actor had a valid External ID for each customer's role has not been disclosed. Sentra says the actor read the vendor's own tokens and ExternalIds out of victims' Secrets Manager, but that happened after it was inside, so it does not explain the first entry.</p>
+        <p class="step-desc">The calls came from the OVH server and Mullvad exits, not from AWS addresses. On October 18 one Mullvad address assumed roles across multiple victims in quick succession, and Sentra puts the time to assume each role at about a second. Role session names began with <code>quiam-</code>, as in <code>quiam-enum</code> and <code>quiam-scope-full</code>. AWS told The Register and BleepingComputer that its services "were not compromised by this issue and operated as designed."</p>
+        <div class="step-code">
+          <span class="hl">Call:</span> sts:AssumeRole from 805246085872, with an External ID, into customer integration roles<br>
+          <span class="hl">Result:</span> every attributed request succeeded (Wiz)<br>
+          <span class="hl">Session names:</span> quiam-enum, quiam-scope-full<br>
+          <span class="hl">Why it worked:</span> trust policies left in place on dormant roles, with no network condition on where the caller could be<br>
+          <span class="hl">Detect:</span> AssumeRole from 805246085872 whose sourceIPAddress is not an AWS address
+        </div>
+        <div class="step-tags"><span class="stag">AssumeRole</span><span class="stag">External ID</span><span class="stag">Dormant Role</span><span class="stag">T1199</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-disco">🔍 Discovery: Mapping Each Account</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Inside each account the actor enumerated storage, compute, databases, IAM roles and KMS keys</div>
+          <a class="mt mt-di" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">T1580 - Cloud Infrastructure Discovery</a>
+        </div>
+        <p class="step-desc">Wiz says the actor enumerated broadly across services once inside. For storage and data it called ListBuckets, ListObjects, GetDatabases, ListTables and DescribeClusters. For compute it called DescribeInstances, DescribeImages, DescribeSecurityGroups and DescribeVpcs, and for databases DescribeDBInstances and DescribeDBSnapshots. For identity and keys it called ListRoles, ListKeys, ListAliases, DescribeKey and GetKeyPolicy. Every call ran with the integration role's own permissions, so what came back depended on how much each customer had granted Qubole.</p>
+        <p class="step-desc">ATT&amp;CK spreads this across several techniques: Cloud Infrastructure Discovery for instances, images, networks and snapshots, Cloud Storage Object Discovery for the bucket and object listings, Cloud Service Discovery for the sweep across services, and Account Discovery: Cloud Account for the role listing.</p>
+        <div class="step-code">
+          <span class="hl">Storage and data:</span> ListBuckets, ListObjects, GetDatabases, ListTables, DescribeClusters<br>
+          <span class="hl">Compute:</span> DescribeInstances, DescribeImages, DescribeSecurityGroups, DescribeVpcs<br>
+          <span class="hl">Databases:</span> DescribeDBInstances, DescribeDBSnapshots<br>
+          <span class="hl">Identity and keys:</span> ListRoles, ListKeys, ListAliases, DescribeKey, GetKeyPolicy<br>
+          <span class="hl">Detect:</span> a burst of List and Describe calls from a vendor role session in an account where the role had been idle
+        </div>
+        <div class="step-tags"><span class="stag">Enumeration</span><span class="stag">KMS</span><span class="stag">RDS</span><span class="stag">T1580</span><span class="stag">T1619</span><span class="stag">T1526</span><span class="stag">T1087.004</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: Where the Secrets Were Kept</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor read Lambda environment variables, Secrets Manager secrets and SSM parameters</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1555/006/" target="_blank" rel="noopener">T1555.006 - Credentials from Password Stores: Cloud Secrets Management Stores</a>
+        </div>
+        <p class="step-desc">Wiz describes three routes. In Lambda the actor listed functions and called GetFunctionConfiguration on each, which returns the function's environment variables. In Secrets Manager it called ListSecrets, then GetSecretValue. In SSM Parameter Store it called DescribeParameters and GetParameter. Wiz says integration roles are often granted this kind of access, along with broad S3 read, for convenience. The Hacker News reports that Qubole's setup guide includes a sample S3 policy that lets the role read every bucket in the account, and Qubole's own documentation for creating the cross-account role shows it: the sample grants <code>s3:GetObject</code> and <code>s3:ListBucket</code> on every resource.</p>
+        <p class="step-desc">Sentra reports more than Wiz does, and these details are Sentra's alone. It saw the actor scrape <a class="glossary-link" href="../glossary.html#term-ec2">EC2</a> user data, the startup scripts where tokens and passwords are often left, and try a second route to Lambda when the first was blocked, without naming that route. It counts about 100 passwords and keys read in seven minutes from three different stores, plus thousands of credential records inside files the actor downloaded. By Sentra's account they included source-control, identity-provider, <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> and database credentials, monitoring and scanner agent keys, and the vendor's own tokens and ExternalIds. In Sentra's words, "every secret that leaked came from permissions Qubole never needed."</p>
+        <p class="step-desc">Secrets Manager and Parameter Store map to Cloud Secrets Management Stores. Lambda environment variables and EC2 user data fit Unsecured Credentials, with no sub-technique that matches exactly.</p>
+        <div class="step-code">
+          <span class="hl">Lambda:</span> GetFunctionConfiguration on each function, returning environment variables<br>
+          <span class="hl">Secrets Manager:</span> ListSecrets, then GetSecretValue<br>
+          <span class="hl">SSM Parameter Store:</span> DescribeParameters and GetParameter<br>
+          <span class="hl">Sentra adds:</span> EC2 user data; about 100 passwords and keys in 7 minutes<br>
+          <span class="hl">Why it worked:</span> the vendor role could read secrets the integration had no need for
+        </div>
+        <div class="step-tags"><span class="stag">Secrets Manager</span><span class="stag">Parameter Store</span><span class="stag">Lambda</span><span class="stag">T1555.006</span><span class="stag">T1552</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ Initial Access: Testing What It Found</div>
+    <div class="kc-step step-c">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">TruffleHog checked the harvested credentials against AWS, Entra ID and Okta</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">T1078.004 - Valid Accounts: Cloud Accounts</a>
+        </div>
+        <p class="step-desc">The credentials tested in this step belonged to the victims, not the vendor. Wiz says TruffleHog called AWS GetCallerIdentity with discovered IAM user keys, checking keys from several AWS accounts in bursts lasting seconds. TruffleHog also signed in as Entra ID service principals using discovered client secrets, and requested OAuth tokens using discovered Okta client credentials.</p>
+        <p class="step-desc">No source says whether any of these checks succeeded, which Entra ID or Okta endpoints were called, or what was done with a credential that worked. Wiz's indicator table lists the TruffleHog user agent against AWS GetCallerIdentity and Entra ID sign-ins only, while its text adds Okta, so check Okta's logs as well. Wiz saw the TruffleHog user agent from October 16 to October 19. Its detection pairs the user agent with one of the actor's addresses, and it notes that legitimate security teams run TruffleHog too.</p>
+        <div class="step-code">
+          <span class="hl">AWS:</span> GetCallerIdentity with discovered IAM user keys, in bursts lasting seconds<br>
+          <span class="hl">Entra ID:</span> <a class="glossary-link" href="../glossary.html#term-service-principal">service principal</a> sign-ins with discovered client secrets<br>
+          <span class="hl">Okta:</span> OAuth token requests with discovered client credentials<br>
+          <span class="hl">Outcome:</span> not reported by any source<br>
+          <span class="hl">Detect:</span> the TruffleHog user agent from an indicator address, in CloudTrail and in <a class="glossary-link" href="../glossary.html#term-idp">identity provider</a> sign-in logs
+        </div>
+        <div class="step-tags"><span class="stag">TruffleHog</span><span class="stag">Entra ID</span><span class="stag">Okta</span><span class="stag">T1078.004</span><span class="stag">T1588.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📤 Collection: Whole Buckets, Then Database Backups</div>
+    <div class="kc-step step-g">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The actor listed buckets and downloaded S3 objects, sometimes whole buckets in one session</div>
+          <a class="mt mt-co" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">T1530 - Data from Cloud Storage</a>
+        </div>
+        <p class="step-desc">Wiz saw a consistent sequence: ListBuckets, then ListObjects and HeadObject, then GetObject. Wiz says the actor appears to have been opportunistic, sometimes taking a whole bucket in one session. Sentra describes an initial theft of thousands of customer-profile files, bulk downloads that ran in the background over the following days, and a final pass from a different VPN address that pulled production database backups. Across one company's accounts, Sentra says, the downloads came to millions of files. It saw no write actions at all.</p>
+        <p class="step-desc">Seeing which objects left took more than CloudTrail's defaults. Wiz points out that CloudTrail management events record the role assumption and the bucket listing but not the object reads, and that in several affected environments missing logs meant responders could not see which objects the actor read. Sentra rebuilt the picture from S3 access logs and, for objects encrypted with KMS keys, matched the downloads against KMS decrypt records. Objects under default S3 encryption leave no such record, Sentra notes, so the real number taken is likely higher, and a missing decrypt record does not show an object stayed put. On a bucket that uses an S3 Bucket Key, AWS's documentation adds, KMS events in CloudTrail log the bucket's ARN rather than each object's, so even KMS-encrypted objects may not show up one by one. The data went straight from S3 to the actor's own hosts, so this page maps no separate <a class="glossary-link" href="../glossary.html#term-exfiltration">exfiltration</a> technique.</p>
+        <div class="step-code">
+          <span class="hl">Sequence:</span> ListBuckets, then ListObjects and HeadObject, then GetObject (Wiz)<br>
+          <span class="hl">Scale:</span> whole buckets in some sessions (Wiz); millions of files at one company (Sentra)<br>
+          <span class="hl">Taken, per Sentra:</span> customer-profile files, then production database backups<br>
+          <span class="hl">Writes:</span> none, per Sentra<br>
+          <span class="hl">Defence gap:</span> no S3 data events or server access logs in several environments (Wiz)
+        </div>
+        <div class="step-tags"><span class="stag">S3</span><span class="stag">GetObject</span><span class="stag">Database Backups</span><span class="stag">T1530</span></div>
+      </div>
+    </div>
+
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Hunt CloudTrail from October 1, 2026, in every account that holds a Qubole integration role.</strong> That is Wiz's window, and it gives no reason for the start date, which comes before both clusters of activity. Wiz's indicators: AssumeRole events where <code>userIdentity.accountId</code> is 805246085872 and <code>sourceIPAddress</code> is not an AWS address; any activity by AIDA3W7DIFLYOLTK63SFS; AIDAJYRRH5Y3A7AAJM2HW from addresses outside AWS, since it also carries legitimate Qubole traffic; role session names beginning <code>quiam-</code>; and the addresses 57.129.54[.]120, 2001:41d0:70d[:]7800::, 45.83.220[.]211, 185.209.199[.]73 and 89.37.63[.]175. Wiz notes that the three Mullvad addresses are shared VPN exits, so activity from one of them alone is not conclusive. Wiz also lists user agents beginning Boto3/1.37.9 (the most common), Boto3/1.43.113, Boto3/1.43.108 and aws-cli/2.37.12, each given in full in its table, and TruffleHog. Ordinary tooling sends the same strings, so use them only alongside the addresses, principal IDs or another of Wiz's indicators. Sentra's advice is to preserve the logs before they expire.</div>
+        <div class="def-item"><strong>Follow every session you find to the end, especially into Secrets Manager, Parameter Store, Lambda and S3.</strong> Wiz's second step is to review all activity from each role session the actor opened. For S3 that takes data events or server access logs, because management events show the listing but not the object reads; Sentra used S3 access logs, and KMS decrypt records for objects encrypted with KMS keys, to establish which objects left. Objects under default S3 encryption leave no decrypt record, and a bucket with an S3 Bucket Key logs the bucket rather than each object, so an empty KMS search does not clear them. Then, as Wiz advises, check your identity provider's sign-in logs, Entra ID and Okta included, for the TruffleHog user agent, because the credentials tested there came out of your own secrets.</div>
+        <div class="def-item"><strong>Take the vendor out of the trust policy the same day.</strong> Sentra's five same-day actions are to remove Qubole from every role that trusts it, rotate every secret that was read, block the attacker's IP addresses, preserve the logs before they expire, and let Qubole know. Wiz says to remove the trust for integrations you no longer use, and both say to rotate what was read. An AWS spokesperson gave similar advice: review cross-account IAM roles, remove unused integrations, grant <a class="glossary-link" href="../glossary.html#term-least-privilege">least privilege</a>, add source IP conditions, and follow AWS's guidance for potentially compromised credentials.</div>
+        <div class="def-item"><strong>Rotate everything the role could read, and revoke the role's sessions as a separate step.</strong> Wiz's instruction is that if the actor assumed an integration role, you rotate every secret, parameter and Lambda environment variable the role could read and revoke the role's active sessions, because rotating a credential does not end temporary sessions already issued. In IAM, revoking a role's sessions attaches a policy that denies credentials issued before that moment. It reaches only those earlier sessions: while the role still trusts the vendor account, the actor can assume it again and the deny does not apply, so remove the trust first or in the same change. Rotate any Entra ID client secret or Okta client credential that sat in those stores too. If you ever gave Qubole long-lived access keys, the kind the separate October 8 to 11 activity used, deactivate them first, then review their last-used data and CloudTrail history, and only then delete them.</div>
+        <div class="def-item"><strong>Delete integration roles you no longer use, and find every role that trusts an outside account.</strong> Most of the roles assumed here were dormant, and some belonged to customers who had stopped using Qubole. Wiz's <a class="glossary-link" href="../glossary.html#term-hardening">hardening</a> steps start with an inventory of external trust and the removal of unused integration roles. One way to build that inventory, which is this page's suggestion rather than the researchers', is <a class="glossary-link" href="../glossary.html#term-iam-access-analyzer">IAM Access Analyzer</a>'s external access findings, which flag roles whose trust policies allow principals outside your account or organization. In a majority of the environments Wiz saw, the actor's requests were the only vendor role assumptions that month, so an assumption of a role that has been idle deserves an alert on its own.</div>
+        <div class="def-item"><strong>Limit who can assume a vendor role, and from where.</strong> Where the vendor supports it, Wiz recommends narrowing the trust policy's principal from the vendor's whole account to the identity that needs it. It also recommends an <code>aws:SourceIp</code> or <code>aws:SourceVpce</code> condition limited to the vendor's documented network ranges. Wiz says a source IP condition alone would have blocked every role assumption it observed, and Sentra says, separately, that a network restriction alone would have blocked every login it saw. This page's reading is that a narrowed principal would likely not have stopped this actor, which used the vendor's own IAM users, one of them also used by Qubole's platform. The network condition is the only control Wiz and Sentra say would have blocked everything they saw. A source IP condition needs the vendor to publish the addresses it calls from, which Wiz asks SaaS providers to do. Treat the External ID as an identifier rather than a secret and, as Wiz advises after an event like this, rotate it with the vendor and use a distinct value per role where the vendor supports that.</div>
+        <div class="def-item"><strong>Give vendor roles only what the integration needs.</strong> Wiz notes that Lambda configuration, Secrets Manager, SSM parameters and broad S3 read are often granted to integration roles for convenience, and calls for least privilege. In practice that means keeping Secrets Manager, Parameter Store and Lambda configuration access off integration roles, and scoping S3 read to the buckets the service uses (this page's reading, not Wiz's wording). By Sentra's account, none of the secrets that leaked needed to be readable by the integration at all. Check the S3 policy you copied at setup: The Hacker News reports, and Qubole's own setup documentation shows, a sample policy that lets the role read every bucket in the account.</div>
+        <div class="def-item"><strong>Log object reads, and alert on vendor role assumptions from new networks.</strong> Wiz recommends an organization trail plus S3 data events or server access logs on buckets that matter, and an alert when a vendor's account assumes a role from a network it does not normally use. Here the actor called from an OVH server and VPN exits, while the vendor's own traffic came from AWS addresses.</div>
+        <div class="def-item"><strong>If your platform assumes customer roles, do it with short-lived credentials.</strong> Wiz's advice to SaaS providers is to assume customer roles from workload roles with short-lived credentials rather than long-lived IAM user keys, restrict principals by source IP or <a class="glossary-link" href="../glossary.html#term-vpc">VPC</a>, publish <a class="glossary-link" href="../glossary.html#term-ingress">egress</a> ranges so customers can pin them, and watch your own CloudTrail for AssumeRole calls into customer accounts from unexpected networks.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.wiz.io/blog/qubole-cross-account-access-abused-in-the-wild" target="_blank" rel="noopener">Wiz - Qubole cross-account access abused in the wild</a>
+        <a class="src-link" href="https://sentra.io/blog/breaches/inside-the-qubole-supply-chain-attack" target="_blank" rel="noopener">Sentra - Inside the Qubole supply chain attack</a>
+        <a class="src-link" href="https://www.theregister.com/security/2026/11/09/attackers-backdoor-trusted-aws-integrations-to-steal-secrets/5308553" target="_blank" rel="noopener">The Register - Reporting, with AWS's statement</a>
+        <a class="src-link" href="https://www.bleepingcomputer.com/news/security/hackers-exploit-trusted-aws-access-to-breach-multiple-cloud-environments/" target="_blank" rel="noopener">BleepingComputer - Reporting, with AWS's statement</a>
+        <a class="src-link" href="https://thehackernews.com/2026/11/hackers-exploit-quboles-trusted-aws.html" target="_blank" rel="noopener">The Hacker News - Undisclosed access, access-key onboarding, sample S3 policy</a>
+        <a class="src-link" href="https://www.securityweek.com/over-a-dozen-organizations-hit-in-qubole-supply-chain-attack/" target="_blank" rel="noopener">SecurityWeek - Reporting</a>
+        <a class="src-link" href="https://docs.qubole.com/en/latest/user-guide/managing-accounts/aws/iam-roles/create-iam-roles.html" target="_blank" rel="noopener">Qubole - Creating a Cross-account IAM Role for QDS (sample S3 policy)</a>
+        <a class="src-link" href="https://bsky.app/profile/campuscodi.risky.biz/post/3n22h4dxfck2x" target="_blank" rel="noopener">Catalin Cimpanu - n0n's claim</a>
+        <a class="src-link" href="https://www.bleepingcomputer.com/news/security/vendor-data-breach-exposes-chase-visa-mastercard-customer-info/" target="_blank" rel="noopener">BleepingComputer - n0n's data claims and the suspected Qubole link (November 20)</a>
+        <a class="src-link" href="https://cyberint.com/blog/threat-intelligence/threat-actor-investigation-n0n/" target="_blank" rel="noopener">Check Point Cyberint - Threat actor investigation: n0n</a>
+        <a class="src-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_common-scenarios_third-party.html" target="_blank" rel="noopener">AWS - Access to AWS accounts owned by third parties (External ID)</a>
+        <a class="src-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_revoke-sessions.html" target="_blank" rel="noopener">AWS - Revoke IAM role temporary security credentials</a>
+        <a class="src-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/what-is-access-analyzer.html" target="_blank" rel="noopener">AWS - IAM Access Analyzer</a>
+        <a class="src-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-key.html" target="_blank" rel="noopener">AWS - Reducing the cost of SSE-KMS with Amazon S3 Bucket Keys (CloudTrail logs the bucket ARN)</a>
+        <a class="src-link" href="https://www.techtarget.com/searchdatamanagement/news/252490555/Idera-targets-cloud-data-lake-market-with-Qubole-acquisition" target="_blank" rel="noopener">TechTarget - Idera targets cloud data lake market with Qubole acquisition (2020)</a>
+        <a class="src-link" href="https://www.ideracorp.com/pressreleases/divests-qubole" target="_blank" rel="noopener">Idera - Idera, Inc. Divests Qubole (2025)</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1583/003/" target="_blank" rel="noopener">MITRE T1583.003</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1078/004/" target="_blank" rel="noopener">MITRE T1078.004</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1199/" target="_blank" rel="noopener">MITRE T1199</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1580/" target="_blank" rel="noopener">MITRE T1580</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1555/006/" target="_blank" rel="noopener">MITRE T1555.006</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1530/" target="_blank" rel="noopener">MITRE T1530</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../aws-security.html">AWS security</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../data-security.html">Cloud data security</a>
+    <a class="src-link" href="../detection-engineering.html">Detection engineering</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="storm-0940-connectwise.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="black-october-ai-platforms.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>
