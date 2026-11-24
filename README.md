@@ -969,12 +969,14 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_card_finder_js.py` | Runs `card-finder.js` in a browser against a fixture page; run by hand after changing the search script | docstring |
 | `sync_breach_deck_index.py` | Renders the deck index, search field and cards on `breach-kill-chain-decks.html` from the published breach decks | docstring |
 | `sync_page_finder.py` | Stamps the "Find on this page" field into the contents box of the long guides it lists and above every kill chain | docstring |
-| `glossary_terms.py` | Shared headword parsing behind both cross-linkers - one answer to "what strings link to this `<dt>`?", after two drifting copies each carried a bug the other had fixed | docstring |
+| `card_finder.py` | Shared markup for a card finder (search field plus a year-grouped index of a page's cards), used by both index generators above; `card-finder.js` reads everything it needs from this markup | docstring |
+| `glossary_terms.py` | Shared headword parsing behind both cross-linkers, so there is one answer to "what strings link to this `<dt>`?" and no second copy to drift | docstring |
 | `inject_meeting_topic_links.py` | Injects contextual topic-page links into recap bodies | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_MEETING_TOPIC_LINKS_README.md) |
 | `inject_session_blocks.py` | Stamps a "From the Friday sessions" block onto topic pages | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/INJECT_SESSION_BLOCKS_README.md) |
 | `inject_goatcounter.py` | Stamps the GoatCounter analytics tag onto every page | docstring |
 | `update_presentations_schema.py` | Regenerates the `VideoObject` JSON-LD on `presentations.html` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_PRESENTATIONS_SCHEMA_README.md) |
 | `sync_recap_videos.py` | Carries each recorded session's link and `VideoObject` from its `presentations.html` card onto its recap in `meetings/` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_RECAP_VIDEOS_README.md) |
+| `sync_latest_recap.py` | Points the "Latest recap" link on `sessions.html` (`data-latest-recap`) at the newest recap in `meetings/`; `add_meeting.py` runs it, and `--check` gates it in CI | docstring |
 | `sync_next_session.py` | Stamps the next Friday session's date into the visible banner on `index.html` / `sessions.html` and into `sessions.html`'s `Event` JSON-LD, read from `csoh.ics` | docstring |
 | `sync_calendar.py` | Renders the next twelve occurrences from the CSOH Google Calendar's public feed into the cards on `calendar.html`, scrubbing join links | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/SYNC_CALENDAR_README.md) |
 | `update_sitemap.py` | Refreshes `<lastmod>` in `sitemap.xml` (does **not** discover new pages) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/UPDATE_SITEMAP_README.md) |
@@ -1000,6 +1002,14 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `generate_webp.py` | `.webp` siblings for every raster image | docstring |
 | `wrap_img_webp.py` | Wraps `<img>` in `<picture>` with a WebP `<source>` | docstring |
 
+**Slide decks and editorial passes**
+
+| Script | What it does | Docs |
+|---|---|---|
+| `build_howto_decks.py` | Parses the how-to deck outlines in `tools/decks/`, enforces the deck style limits (`--check` in CI), builds `.pptx` files and stamps each guide's deck links from `tools/decks/published.json`. Rendering lives in `howto_deck_render.py` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DECKS_README.md) |
+| `build_breach_decks.py` | The same for the breach kill chain decks in `tools/decks/breaches/`, with each outline gated against its breach page. Rendering lives in `breach_deck_render.py` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DECKS_README.md#breach-kill-chain-decks) |
+| `deai_segments.py` | Extracts prose segments for a style-only rewrite and applies a rewrite only when a mechanical check proves it changed no markup, link, number, hedge or quote ([EDITORIAL_STANDARDS.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/docs/EDITORIAL_STANDARDS.md) section 9) | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DEAI_SEGMENTS_README.md) |
+
 **CI gates and audits (report or fail, never edit content)**
 
 | Script | What it does | Docs |
@@ -1009,21 +1019,23 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 | `check_jsonld.py` | Every JSON-LD block must be valid JSON, and every breadcrumb trail must end at its own page and name the same pages as the visible breadcrumb | docstring |
 | `check_no_inline_scripts.py` | No inline `<script>` blocks (the CSP forbids them) | docstring |
 | `check_svg_dimensions.py` | `width`/`height` on every `<svg>` that has a `viewBox` | docstring |
-| `check_crosslink_coverage.py` | Every root page is either cross-linked or explicitly opted out - `crosslink_pages.py` skips unlisted pages silently, so omissions never surfaced | docstring |
+| `check_crosslink_coverage.py` | Every root page is either cross-linked or explicitly opted out. `crosslink_pages.py` skips an unlisted page silently, so without this gate an omission never surfaces | docstring |
 | `check_glossary_coverage.py` | Glossary invariants: unique `<dt>` ids, no alias claimed by two entries, anchors resolve, no unreachable entry added by accident | docstring |
 | `check_docs_consistency.py` | The mechanical half of the weekly documentation review: visible dates vs JSON-LD, social-card assets, false count claims, glossary orphans. Fixes what is derivable, reports the rest, deletes nothing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/DOCS_CONSISTENCY_README.md) |
-| `check_readme_coverage.py` | Every in-repo Markdown link resolves (over 400 of them, across every tracked doc - lychee reads none, and the tool prints the real counts, so do not trust one written here); every root page is named in README.md and DEVELOPMENT.md; every published subdirectory is documented *and* crawled; no count marker sits inside a code fence. Self-tests before reporting, so a broken detector fails loudly instead of passing quietly | docstring |
-| `check_faq_jsonld_parity.py` | FAQPage answers and glossary DefinedTerm names and descriptions must match the visible text they copy, word for word, and every visible glossary term must have a DefinedTerm. The JSON-LD copy is the text a search engine shows, and three docs-review findings in September 2026 were corrections that never reached it. `--fix` regenerates every copy from its page; `--check` for CI. Self-tests before reporting | docstring |
+| `check_readme_coverage.py` | Every in-repo Markdown link in every tracked doc resolves (lychee reads no Markdown; the tool prints the real counts); every root page is named in README.md and DEVELOPMENT.md; every published subdirectory is documented *and* crawled; every link from a published page or `.tf` file into this repo on GitHub names a path that exists; no count marker sits inside a code fence. Self-tests before reporting, so a broken detector fails loudly instead of passing quietly | docstring |
+| `check_faq_jsonld_parity.py` | FAQPage answers and glossary DefinedTerm names and descriptions must match the visible text they copy, word for word, and every visible glossary term must have a DefinedTerm. The JSON-LD copy is the text a search engine shows, so a correction made only to the visible text never reaches search results. `--fix` regenerates every copy from its page; `--check` for CI. Self-tests before reporting | docstring |
 | `check_news_banners.py` | Every news source has an on-disk banner image | docstring |
+| `check_news_dates.py` | No publish date in `news.html` or `feed.xml` lies in the future. A future date taken from a feed pins its card to the top slot and re-stamps itself on every news run; `update_news.py` clamps these at ingest, and this gate covers hand edits and restored backups | docstring |
+| `check_private_invites.py` | No private join link (Signal group or contact links, private Telegram and WhatsApp invites) in anything published. Public Discord invites and public `t.me/<name>` channels are allowed. Runs in `validate-html.yml` and both deploy workflows | docstring |
 | `add_theme_script.py` | Stamps the render-blocking `theme.js` tag into every page's `<head>`, above the stylesheet. A page that misses it renders a flash of the wrong theme for any visitor whose stored choice differs from their OS, which is invisible in a screenshot and in every static check. `--check` for CI | docstring |
-| `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step - the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
+| `sync_dark_branch.py` | Keeps `style.css`'s two dark branches in step: the `[data-theme="dark"]` toggle branch and the `prefers-color-scheme` system branch, which is what a dark-OS visitor renders through before `main.js` runs (and permanently, with JS off). `--check` for CI | docstring |
 | `check_mobile_layout.py` | Mobile layout regression check | docstring |
 | `pr_security_triage.py` | Deterministic security triage of an untrusted PR diff, behind `security-impact-review.yml` | docstring |
 | `pr_files_to_diff.py` | Rebuilds a unified diff from the paginated pull request files API, with file modes from the git trees API, for PRs too large for GitHub's whole-PR diff. `--self-test` reads its output back through the triage parser | docstring |
 | `run_seo_audit.py` | Deterministic structural SEO audit → `seo-audits/` + SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/RUN_SEO_AUDIT_README.md) |
 | `check_pagespeed.py` | Google PageSpeed Insights (mobile + desktop) → SCORECARD | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_PAGESPEED_README.md) |
 | `check_lighthouse.py` | Lighthouse SEO / a11y / perf threshold check | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_LIGHTHOUSE_README.md) |
-| `check_edge_headers.py` | Asserts the live security headers match `rules.tf` - the Cloudflare ruleset is inert after creation, so Terraform cannot catch drift | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_EDGE_HEADERS_README.md) |
+| `check_edge_headers.py` | Asserts the live security headers match `rules.tf`. The Cloudflare ruleset ignores changes to its rules after creation, so Terraform cannot catch drift | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_EDGE_HEADERS_README.md) |
 | `check_robots_parity.py` | Asserts the live `robots.txt` matches the repo, catching an edge-injected managed `robots.txt` | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_ROBOTS_PARITY_README.md) |
 | `check_reading_list_staleness.py` | Flags reading-list sources that stopped publishing | [README](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/tools/CHECK_READING_LIST_STALENESS_README.md) |
 | `check_meeting_staleness.py` | Flags a stalled meeting-recap cadence | docstring |
@@ -1033,11 +1045,11 @@ Every script is stdlib-first, idempotent, and only writes when content actually 
 
 | File | What it does |
 |---|---|
-| `stage_site.sh` | Produces `dist/` - the exact public file set every origin serves |
+| `stage_site.sh` | Produces `dist/`, the exact public file set the S3 and Azure origins serve (GCP builds its image from the checkout, under exclusions that must match it) |
 | `site-publish.filter` | rsync filter listing what `stage_site.sh` includes and excludes |
 | `url_resolution_cache.json` | CI-seeded redirect cache for `normalize_urls.py` (never commit a local copy) |
 | `awesome-list-submissions.md` | Tracking notes for awesome-list outreach |
-| `rotate_secrets.py` | Inventories, audits, and rolls the short tail of long-lived credentials that cannot federate. Everything else in the deploy path is OIDC or App tokens that expire in ~1h; this tail is the part with no forcing function - nothing breaks and nothing warns, the tokens just get older | docstring |
+| `rotate_secrets.py` | Inventories, audits, and rolls the short tail of long-lived credentials that cannot federate. Everything else in the deploy path is OIDC or App tokens that expire in ~1h; this tail is the part with no forcing function, because nothing breaks and nothing warns as those tokens age | docstring |
 
 ---
 
@@ -1132,7 +1144,7 @@ The homepage is three doors and the next-session strip - there is no resource-ca
 
 This site uses **GitHub Actions workflows** to automate all major site updates. Every workflow file is commented line by line - they double as the teaching material behind [github-actions.html](https://csoh.org/github-actions.html), so read them if you want the full story.
 
-The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->23<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
+The table below covers 18 of the <!--count:workflows-->23<!--/count-->. The five not listed here are `check-mobile-layout` (Playwright mobile-layout gate, Mon 07:20), `publish-recaps` (Zoom recap PR, Sat 15:00), `weekly-docs-review` (rotating accuracy review, Mon 15:00), and the two QA-pipeline workflows `deploy-qa` and `promote-qa`. For all <!--count:workflows-->23<!--/count--> in one table see [DEVELOPMENT.md → Workflows at a Glance](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/DEVELOPMENT.md#workflows-at-a-glance); for the QA pipeline see [.github/workflows/QA_PIPELINE_README.md](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/QA_PIPELINE_README.md). Times are UTC.
 
 **Content automation (writes to the site)**
 
@@ -1150,6 +1162,7 @@ The table below covers 17 of the <!--count:workflows-->23<!--/count-->. The five
 | Workflow | When | What it does |
 |---|---|---|
 | [`deploy.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/deploy.yml) | push to `main` on site files | Builds once, publishes active/active to AWS + GCP + Azure behind Cloudflare, keyless OIDC per cloud |
+| [`pr-preview.yml`](https://github.com/CloudSecurityOfficeHours/csoh.org/blob/main/.github/workflows/pr-preview.yml) | PR opened or updated from a branch in this repo (not forks); approval, changes requested or close; daily sweep | Builds the PR head into its own preview URL on the `csoh-site-preview` Cloud Run service and posts the link as a PR comment; removes it on approval, changes requested or close. Preview images never go to the production image repository |
 
 **PR quality gates**
 

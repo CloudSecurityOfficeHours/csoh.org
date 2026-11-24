@@ -437,6 +437,8 @@ never hand-edit the output.
 | Search field and kill chain index on breach-timeline.html (between `breach-index` markers) | `tools/sync_breach_timeline_index.py`, after adding or renaming a timeline card | `--check` in `validate-html.yml` |
 | Deck index, search field and cards on breach-kill-chain-decks.html (between `breach-decks` markers) | `tools/sync_breach_deck_index.py`, after every `build_breach_decks.py --record` | `--check` in `validate-html.yml` |
 | "Find on this page" field, and its script tag: in the On this page box on the pages in its `PAGES` list, and above the chain on every breaches/ page | `tools/sync_page_finder.py`, then `update_sri.py` | `--check` in `validate-html.yml` |
+| Breach timeline `ItemList`, the prev/next pager on every breaches/ page, sitemap entries for breach pages | `tools/register_kill_chain.py --fix`, from the card order on breach-timeline.html | `--check` in `validate-html.yml`, which also wants each chain's OG image, README row and breach-lessons list |
+| Upcoming-session cards on calendar.html | `tools/sync_calendar.py`, from the public Google Calendar feed | none: it goes stale with time, so `update-calendar.yml` runs it every 6 hours and opens a PR |
 | Dark-mode mirror block | `tools/sync_dark_branch.py` | `--check` in Lint |
 
 All are idempotent. **Run any generator twice before trusting it.** The second
@@ -908,6 +910,13 @@ Policies: `keep-recent-10`, `delete-old-tagged` (1d), `delete-old-untagged`
 out when it's promoted, `deploy.yml` rebuilds the commit from source; what's
 lost is the exact bytes QA tested. Retention has to account for promotion.
 
+`csoh-previews` (`preview.tf`) holds pull request preview images and has one
+rule, `delete-after-30d`, on every image whatever its tag state. Nothing is
+promoted from it, so no image there has to outlive its pull request. Its tags
+are mutable because the block is omitted, which is the API default; don't add
+`docker_config { immutable_tags = false }`, because the API leaves the block
+out for a mutable repository and every plan would show it being added.
+
 Policies take effect within about a day. Past that, a policy that isn't
 deleting is a defect. A hand-run delete of one image is the fastest way to make
 a silent failure speak. Audit logs won't help: DATA_WRITE logging is off.
@@ -923,23 +932,31 @@ gcloud artifacts docker images list \
 
 ### Binary Authorization is enforcing
 
-Cloud Run only starts images from
-`us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/`. The policy is
-`infra/terraform/gcp/binary_authorization.tf`: project-level, an allowlist plus
-default `ALWAYS_DENY`. Both `csoh-site` and `csoh-site-qa` opt in with
+Cloud Run only starts images from two repositories:
+`us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/` (production and
+QA) and `us-central1-docker.pkg.dev/csoh-org-495800/csoh-previews/` (pull
+request previews). The policy is `infra/terraform/gcp/binary_authorization.tf`:
+project-level, an allowlist plus default `ALWAYS_DENY`. `csoh-site`,
+`csoh-site-qa` and `csoh-site-preview` all opt in with
 `binary_authorization { use_default = true }`.
 
 It checks provenance, not attestations, because:
 
 - Cloud Run accepts only the project's single default policy, so one rule
-  governs production and QA, and QA images are born before anything could
-  attest them.
+  governs production, QA and previews, and QA images are born before anything
+  could attest them.
 - Signing would be gated on the same GitHub Environment boundary as registry
   write, adding no independent lock while the builder and deployer are the same
   job.
 
-Both deployer identities can push to the registry, so this doesn't stop a
-compromised deployer; it stops running images from anywhere else.
+Every deployer identity can push to an allowlisted repository, so this doesn't
+stop a compromised deployer; it stops running images from anywhere else.
+
+The same single policy means a preview image is admitted on any service in the
+project. IAM keeps it off production: only `csoh-deployer-preview` writes to
+`csoh-previews`, it can deploy only to `csoh-site-preview`, and no production
+or QA job references that repository. Keep both halves: no production or QA job
+reads from `csoh-previews`, and no preview job writes to `csoh-containers`.
 
 **A denied deploy fails quietly.** The revision is created and fails, traffic
 stays on the previous revision, and the service `spec` now names the rejected
@@ -975,13 +992,15 @@ gcloud run services describe csoh-site --project csoh-org-495800 \
 
 Config traps:
 
-- In an allowlist pattern `*` doesn't cross `/`; `csoh-containers/**` is the
-  whole repository.
-- Both services are declared with the placeholder `hello` image, which the
-  policy denies. The policy `depends_on` both services so a from-scratch apply
-  creates them first. If either is ever force-replaced while enforcing, comment
-  out its `binary_authorization` block for that apply, or deploy through CI
-  before re-enforcing.
+- In an allowlist pattern `*` doesn't cross `/`; `csoh-containers/**` and
+  `csoh-previews/**` are the whole repositories.
+- All three services are declared with the placeholder `hello` image, which the
+  policy denies. The policy `depends_on` all three so a from-scratch apply
+  creates them first. A service added or force-replaced while enforcing is
+  created with the placeholder and denied: apply with its
+  `binary_authorization` block commented out, deploy to it once through CI so
+  its template names an allowlisted image, then restore the block and apply
+  again.
 
 ---
 

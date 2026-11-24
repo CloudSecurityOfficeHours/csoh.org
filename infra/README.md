@@ -52,7 +52,9 @@ infra/
   terraform/
     aws/          S3 (private) + CloudFront/OAC + response-headers policy + OIDC role
     azure/        Storage account + $web static website + Entra federated cred
-    gcp/          Cloud Run + Artifact Registry + WIF + Binary Authorization
+    gcp/          Cloud Run + Artifact Registry + WIF + Binary Authorization,
+                  plus preview.tf: the pull request preview service, its
+                  image repository and its deployer identity
     cloudflare/   Load Balancer + pool/monitor + header/redirect/cache rules,
                   plus the DNS security records:
                     dns_caa.tf     CAA - which CAs may issue for this domain
@@ -124,10 +126,15 @@ mismatch.
 with an admission control in front of it. **Binary Authorization is enforcing**
 at the project level (`infra/terraform/gcp/binary_authorization.tf`): an
 allowlist of `us-central1-docker.pkg.dev/csoh-org-495800/csoh-containers/**`
-plus a default `ALWAYS_DENY`, opted into by both `csoh-site` and `csoh-site-qa`
-with `binary_authorization { use_default = true }`. Cloud Run will not start an
-image that did not come out of that repository. Three things about it are easy
-to get wrong:
+(production and QA) and `us-central1-docker.pkg.dev/csoh-org-495800/csoh-previews/**`
+(pull request previews), plus a default `ALWAYS_DENY`, opted into by
+`csoh-site`, `csoh-site-qa` and `csoh-site-preview` with
+`binary_authorization { use_default = true }`. Cloud Run will not start an
+image that did not come out of one of those repositories. The policy cannot be
+scoped per service, so a preview image would be admitted on production too; IAM
+is what prevents it, because only `csoh-deployer-preview` writes to
+`csoh-previews` and that identity can deploy only to `csoh-site-preview`.
+Three things about it are easy to get wrong:
 
 - **It checks provenance, not signatures.** A project has exactly one default
   policy and Cloud Run accepts only that one, so requiring an attestation would
@@ -342,10 +349,19 @@ carries, and the `production` environment's own deployment branch policy
 environment pin is a superset of the ref pin, not an alternative to it.
 
 Only `deploy.yml`'s `publish-gcp` job uses production GCP auth, and it declares
-`environment: production`. GCP additionally accepts `environment:qa` for
-`deploy-qa.yml`, bound only to the narrowly scoped QA deployer (see
-`gcp/wif.tf`). If you add a job that needs cloud credentials, it
-must declare that environment or it will be rejected at the token exchange.
+`environment: production`. GCP additionally accepts two more subjects, each
+bound to its own narrowly scoped service account (see `gcp/wif.tf`):
+
+- `environment:qa` for `deploy-qa.yml`, bound to `csoh-deployer-qa`.
+- `environment:pr-preview` for `pr-preview.yml`, bound to
+  `csoh-deployer-preview` (`gcp/preview.tf`), which can deploy only to
+  `csoh-site-preview` and write only to the `csoh-previews` image repository.
+  The `pr-preview` environment has no branch policy, because pull request heads
+  are arbitrary branches, so that identity must never be bound to anything
+  broader.
+
+If you add a job that needs cloud credentials, it must declare one of these
+environments or it will be rejected at the token exchange.
 
 Confirm the live provider carries both halves of the condition:
 
@@ -356,7 +372,9 @@ terraform -chdir=infra/terraform/gcp state show \
   google_service_account_iam_member.deployer_wif_binding | grep member
 ```
 
-Both must name `repo:CloudSecurityOfficeHours/csoh.org:environment:production`.
+The condition must require the repository and allow exactly the `production`,
+`qa` and `pr-preview` environment subjects, and the production deployer's
+binding must name `repo:CloudSecurityOfficeHours/csoh.org:environment:production`.
 Read the live state, not the `.tf` file - the whole point of this section is
 that the two can disagree.
 
@@ -490,13 +508,14 @@ provider and state prefix, so they are independent of each other.
 [`MANUAL_SECURITY_STEPS.md`](MANUAL_SECURITY_STEPS.md) section 1 covers the
 local toolchain traps for applying them.
 
-**1. GCP - the WIF trust pins the production environment**
+**1. GCP: the WIF trust pins named environments**
 (`gcp/wif.tf`, `gcp/variables.tf`; see *OIDC trust* above)
 
 ```bash
 terraform -chdir=infra/terraform/gcp state show \
   google_iam_workload_identity_pool_provider.github | grep attribute_condition
-# want: assertion.repository == '...' && assertion.sub == 'repo:...:environment:production'
+# want: assertion.repository == '...' && (assertion.sub == 'repo:...:environment:production'
+#       || assertion.sub == 'repo:...:environment:qa' || assertion.sub == 'repo:...:environment:pr-preview')
 ```
 
 The end-to-end check is the deploy workflow: if `publish-gcp` fails at the
@@ -639,6 +658,15 @@ since then with no setting changed, because deploys fell from 6.6 a day to 5.3.
 | Terraform state (GCS), GCP logging, billing export | $0.00 | $0.00 | measured - inside the free tier |
 | Staging origin (qa.csoh.org): Cloud Run, Worker, Access | $0.00 | $0.00 | measured - no rows in the resource-level export |
 | **Total** | **~$14/mo** | ~$14/mo | ~$17 when the AWS credits lapse; ~$27 in early September, ~$97 in August |
+
+**Not yet in this table: pull request previews** (`gcp/preview.tf`), which went
+live on 13 November, after this window. Measured so far: the resource-level
+export shows `csoh-site-preview` at $0.002 gross and $0.00 net for 13-24
+November, so the Cloud Run side is inside the free allowance. The registry side
+is not measured, because the export does not split Artifact Registry storage by
+repository. Read the inventory instead: on 24 November `csoh-previews` held
+4.8 GB against 4.6 GB in `csoh-containers`, and its rule keeps every image for
+30 days, so the Artifact Registry row above will rise at the next re-measure.
 
 **What drives it.** Beyond the Cloudflare subscription, nearly all of the rest
 is write and PUT operations: every deploy re-uploads the whole site to two
