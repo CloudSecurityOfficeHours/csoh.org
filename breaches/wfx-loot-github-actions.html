@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="description" content="From November 10, 2026, tokens for about 4,800 GitHub accounts opened probe pull requests, and in thousands of repositories the operator pushed a CI secret stealer that read runner memory and tried to swap GitHub OIDC tokens for cloud access. Where permissions allowed, it tried to leave Azure and AWS access that survives secret rotation.">
+    <meta name="author" content="Cloud Security Office Hours">
+    <meta name="keywords" content="wfx-loot / WFX Phantom 2026, wfx-loot, WFX Phantom, wfx, breach analysis, kill chain, MITRE ATT&amp;CK, cloud security incident, post-mortem, 2026, GitHub Actions, CI/CD, stolen GitHub tokens, poisoned pipeline execution, Runner.Worker, OIDC, federated identity credential, Entra ID, AWS IAM trust policy, IAM access keys, npm postinstall, Fly.io, Nextcloud, WebdriverIO, GhostAction">
+    <title>wfx-loot / WFX Phantom 2026 Kill Chain - CSOH</title>
+
+    <link rel="canonical" href="https://csoh.org/breaches/wfx-loot-github-actions.html">
+    <link rel="alternate" hreflang="en-US" href="https://csoh.org/breaches/wfx-loot-github-actions.html">
+    <link rel="alternate" hreflang="x-default" href="https://csoh.org/breaches/wfx-loot-github-actions.html">
+    <link rel="alternate" type="application/rss+xml" title="CSOH Cloud Security News" href="/feed.xml">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="CSOH">
+
+    <meta property="og:title" content="wfx-loot / WFX Phantom 2026 Breach Kill Chain">
+    <meta property="og:description" content="Stolen GitHub tokens pushed a CI secret stealer into thousands of repositories, ran it where nothing held it, then reverted the change and often deleted the run. Where cloud permissions allowed, the code also tried to leave Azure and AWS access that rotating GitHub secrets does not remove.">
+    <meta property="og:site_name" content="Cloud Security Office Hours">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-11-24">
+    <meta property="article:modified_time" content="2026-11-24">
+    <meta property="article:author" content="Cloud Security Office Hours">
+    <meta property="article:section" content="Breach Kill Chains">
+    <meta property="article:tag" content="wfx-loot / WFX Phantom 2026">
+    <meta property="article:tag" content="breach analysis">
+    <meta property="article:tag" content="kill chain">
+    <meta property="article:tag" content="MITRE ATT&amp;CK">
+    <meta property="article:tag" content="cloud security incident">
+    <meta property="article:tag" content="post-mortem">
+    <meta property="article:tag" content="2026">
+    <meta property="article:tag" content="GitHub Actions">
+    <meta property="article:tag" content="CI/CD">
+    <meta property="article:tag" content="stolen GitHub tokens">
+    <meta property="article:tag" content="OIDC">
+    <meta property="article:tag" content="Entra ID">
+    <meta property="article:tag" content="AWS IAM">
+    <meta property="article:tag" content="npm">
+    <meta property="article:tag" content="supply chain">
+    <meta property="og:url" content="https://csoh.org/breaches/wfx-loot-github-actions.html">
+    <meta property="og:image" content="https://csoh.org/img/og/breaches/wfx-loot-github-actions.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="wfx-loot / WFX Phantom 2026 Breach Kill Chain">
+    <meta name="twitter:description" content="Stolen GitHub tokens pushed a CI secret stealer into thousands of repositories, ran it where nothing held it, then reverted the change and often deleted the run. Where cloud permissions allowed, the code also tried to leave Azure and AWS access that rotating GitHub secrets does not remove.">
+    <meta name="twitter:image" content="https://csoh.org/img/og/breaches/wfx-loot-github-actions.jpg">
+    <link rel="preconnect" href="https://csoh.kit.com" crossorigin>
+    <link rel="preconnect" href="https://github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://github.com">
+    <link rel="dns-prefetch" href="https://buymeacoffee.com">
+    <link rel="dns-prefetch" href="https://img.youtube.com">
+
+    <script defer src="/theme.js?v=4a2aa0b9" integrity="sha384-KB7Ps+2ycZ8Q/2EoXYf48KCJ2b1GWGufz/a/DynzfalXUbVrBHfcVKx46+udF7WC"></script>
+    <link rel="preload" href="/style.css?v=d0ce5478" as="style"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/style.css?v=d0ce5478"
+        integrity="sha384-1j+JFhDnLVV9ZQ5vgoHmdpTST3Kdn0Cy5lHDQBgDVQiHsXMEZy2KbAmPQ5wyjd02">
+    <link rel="stylesheet" href="/breach-timeline.css?v=a2469e23" integrity="sha384-rmpFuzCn6UkelLpKe109kBx+yoPABmR7h+5VwIwk6eygz4kedbAkeGGDZiH59T7R">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "wfx-loot / WFX Phantom - Tokens for 4,837 Compromised GitHub Accounts → Probe Pull Requests in 61,764 Repositories → Stealer Pushed, Run and Reverted → Runner Memory and Cloud Tokens Swept → Cloud Access Built to Outlive Rotation",
+  "description": "From November 10, 2026, tokens for about 4,800 GitHub accounts opened probe pull requests, and in thousands of repositories the operator pushed a CI secret stealer that read runner memory and tried to swap GitHub OIDC tokens for cloud access. Where permissions allowed, it tried to leave Azure and AWS access that survives secret rotation.",
+  "author": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "url": "https://csoh.org/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Cloud Security Office Hours",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://csoh.org/banner.png"
+    }
+  },
+  "datePublished": "2026-11-24",
+  "dateModified": "2026-11-24",
+  "mainEntityOfPage": "https://csoh.org/breaches/wfx-loot-github-actions.html",
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      "main p:first-of-type"
+    ]
+  },
+  "image": "https://csoh.org/banner.png",
+  "articleSection": "Cloud Security Breach Analysis",
+  "about": {
+    "@type": "Event",
+    "name": "wfx-loot / WFX Phantom: a CI secret stealer pushed to GitHub repositories with stolen account tokens",
+    "startDate": "2026-11-10",
+    "description": "Starting at about 12:45 UTC on November 10, 2026, someone holding GitHub tokens for thousands of accounts opened probe pull requests titled docs: dependency audit notes, from a branch named wfx-docs, to confirm write access; Aikido counts 4,837 accounts and 61,764 repositories. In a subset of repositories the operator pushed a shell stealer of about 1,500 lines, authored as real users of the repository, in one of four forms: steps added to an existing workflow, code appended to a shell script the repository runs, a new workflow file on a throwaway branch, or a hidden script run by an npm postinstall hook. All but the new workflow went straight to the default branch. It then reverted the change and deleted most workflow runs with their logs. The stealer read the memory of the runner's Runner.Worker process, took every Actions secret and variable directly when it ran from a workflow file, swept credential files and AI tool keys, tried to exchange GitHub OIDC tokens for AWS, Google Cloud and Azure access, and sent the results to bare IP addresses on port 8080 and, from November 12, to Telegram. Where permissions allowed, the code tried to leave access that survives secret rotation: federated identity credentials named wfx-ci on Azure app registrations, an AWS chained role's trust policy set to any AWS account, and access keys for up to two IAM users. No source reports those changes found in a victim's cloud. How the tokens were stolen is unconfirmed for the campaign as a whole; one subset leaked from Fly.io-hosted apps that served their .git/config files publicly. Aikido assesses wfx and the earlier GhostAction wave as distinct campaigns likely carried out by different threat actors, and no actor is named. Vendors call it wfx-loot (Aikido), WFX Phantom (StepSecurity) and wfx (SafeDep, Endor Labs)."
+  },
+  "mentions": [
+    {
+      "@type": "Organization",
+      "name": "Nextcloud"
+    },
+    {
+      "@type": "Thing",
+      "name": "WebdriverIO"
+    },
+    {
+      "@type": "Organization",
+      "name": "GitHub"
+    },
+    {
+      "@type": "Organization",
+      "name": "Fly.io"
+    },
+    {
+      "@type": "Organization",
+      "name": "Aikido Security"
+    },
+    {
+      "@type": "Organization",
+      "name": "StepSecurity"
+    },
+    {
+      "@type": "Organization",
+      "name": "SafeDep"
+    },
+    {
+      "@type": "Organization",
+      "name": "Endor Labs"
+    },
+    {
+      "@type": "Organization",
+      "name": "GitGuardian"
+    },
+    {
+      "@type": "Organization",
+      "name": "Semgrep"
+    },
+    {
+      "@type": "Organization",
+      "name": "OX Security"
+    },
+    {
+      "@type": "Organization",
+      "name": "Corgea"
+    },
+    {
+      "@type": "Organization",
+      "name": "Cloud Security Alliance"
+    },
+    {
+      "@type": "Organization",
+      "name": "Amazon Web Services"
+    },
+    {
+      "@type": "Organization",
+      "name": "Microsoft"
+    },
+    {
+      "@type": "Thing",
+      "name": "GitHub Actions"
+    },
+    {
+      "@type": "Thing",
+      "name": "Packagist"
+    },
+    {
+      "@type": "Thing",
+      "name": "GhostAction"
+    },
+    {
+      "@type": "Organization",
+      "name": "MITRE"
+    }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://csoh.org/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Breach Kill Chains",
+      "item": "https://csoh.org/breach-timeline.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "wfx-loot / WFX Phantom 2026",
+      "item": "https://csoh.org/breaches/wfx-loot-github-actions.html"
+    }
+  ]
+}
+    </script>
+  <noscript><link rel="stylesheet" href="/noscript.css?v=8806b2fa" integrity="sha384-a09IU6jBKCeHhGoD/YQr7jM3op0Sr57wzMvZzTx/cD/PXrCRHINeWLhwU3Ya6T3n"></noscript>
+</head>
+
+<body class="js-enabled">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <svg class="logo-mark" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="CSOH logo"><defs><linearGradient id="lm-cloud" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><path d="M7 19 a4 4 0 0 1 4-4 a6 6 0 0 1 11 0 a3.5 3.5 0 0 1 3.5 3.5 a3.5 3.5 0 0 1 -3.5 3.5 H8 a3.5 3.5 0 0 1 -1-7 z" fill="url(#lm-cloud)"/><path d="M11 13 L21 13 L21 18 a5 5.5 0 0 1 -5 5 a5 5.5 0 0 1 -5 -5 z" fill="#f59e0b"/><path d="M13.5 16.7 L15.3 18.4 L18.6 15" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <div class="logo-title">CSOH</div>
+                </a>
+                <p>Cloud Security Office Hours</p>
+            </div>
+            <a href="https://csoh.kit.com/39feb4f397" class="nav-cta nav-cta--mobile" target="_blank" rel="noopener noreferrer"><span class="nav-cta__lead">Get the </span>Zoom link</a>
+            <button class="hamburger" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+            <button class="theme-toggle" aria-label="Switch to dark mode" data-theme-icon="dark"><svg class="theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M17.5 14.2A7.2 7.2 0 0 1 9.8 6.5 7.5 7.5 0 1 0 17.5 14.2z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M5.1 18.9l1.6-1.6M17.3 6.7l1.6-1.6"/></svg></button>
+            <nav id="site-nav" aria-label="Main">
+                <ul>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Learn <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Foundations</span>
+                          <ul>
+                            <li><a href="../what-is-cloud-security.html">What is Cloud Security?</a></li>
+                            <li><a href="../shared-responsibility-model.html">Shared Responsibility</a></li>
+                            <li><a href="../cspm-vs-cnapp.html">CSPM vs CNAPP</a></li>
+                            <li><a href="../cloud-security-best-practices.html">Best Practices</a></li>
+                            <li><a href="../vendor-landscape.html">Vendor Landscape</a></li>
+                            <li><a href="../glossary.html">Glossary</a></li>
+                            <li><a href="../faq.html">FAQ</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">By Cloud</span>
+                          <ul>
+                            <li><a href="../aws-security.html">AWS Security</a></li>
+                            <li><a href="../azure-security.html">Azure Security</a></li>
+                            <li><a href="../gcp-security.html">GCP Security</a></li>
+                            <li><a href="../cloud-security-comparison.html">AWS vs Azure vs GCP</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">The subject</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../learning-path.html">Learning Path<span class="mega-tag">New to this, or changing careers</span></a></li>
+                            <li class="mega-featured"><a href="../cloud-security-how-to.html">How-To Guides<span class="mega-tag">OPA &middot; regex &middot; jq &middot; Sigma</span></a></li>
+                            <li><a href="../iam.html">IAM &amp; identity</a></li>
+                            <li><a href="../topics.html#workloads">Workloads</a></li>
+                            <li><a href="../topics.html#detect-respond">Detection &amp; response</a></li>
+                            <li><a href="../cloud-logging.html">Logging &amp; telemetry</a></li>
+                            <li><a href="../working-a-finding.html">Working a finding</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../topics.html">Browse every topic <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Resources <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../resources.html">Browse All Resources</a></li>
+                        <li><a href="../resources-security-tools.html">Security Tools</a></li>
+                        <li><a href="../resources-labs-training.html">Labs &amp; Training</a></li>
+                        <li><a href="../resources-certifications.html">Certifications</a></li>
+                        <li><a href="../ctfs.html">CTF Challenges</a></li>
+                        <li><a href="../resources-ai-security.html">AI Security</a></li>
+                        <li><a href="../resources-job-search.html">Job Search</a></li>
+                        <li><a href="../resources-newsletters.html">Newsletters</a></li>
+                        <li><a href="../resources-github-projects.html">GitHub Projects</a></li>
+                        <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                        <li><a href="../chat-resources.html">Chat Resources</a></li>
+                        <li><a href="../contribute-resources.html">Add a Resource</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown">
+                      <button class="dropdown-toggle active" aria-expanded="false" aria-haspopup="true">Threat Intel <span class="caret" aria-hidden="true">▾</span></button>
+                      <ul class="dropdown-menu">
+                        <li><a href="../news.html">News</a></li>
+                        <li><a href="../threat-research.html">Threat Research</a></li>
+                        <li><a href="../breach-timeline.html" aria-current="page">Breach Kill Chains</a></li>
+                        <li><a href="../breach-kill-chain-decks.html">Kill Chain Slide Decks</a></li>
+                        <li><a href="../cloud-breach-year-in-review.html">Year in Review</a></li>
+                      </ul>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Careers <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-3col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Getting Started</span>
+                          <ul>
+                            <li><a href="../breaking-into-cloud-security.html">Breaking In</a></li>
+                            <li><a href="../learning-path.html">Learning Path</a></li>
+                            <li><a href="../cloud-security-certifications.html">Certifications</a></li>
+                            <li><a href="../cloud-security-degree-programs.html">Degree Programs</a></li>
+                            <li><a href="../cloud-security-home-lab.html">Home Lab</a></li>
+                            <li><a href="../cloud-security-portfolio-projects.html">Portfolio Projects</a></li>
+                            <li><a href="../cloud-security-reading-list.html">Reading List</a></li>
+                            <li><a href="../cloud-security-interview-questions.html">Interview Questions</a></li>
+                            <li><a href="../cloud-security-resume-guide.html">Resume Guide</a></li>
+                            <li><a href="../mentorship.html">Mentorship</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Engineering Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-engineer.html">Cloud Security Engineer</a></li>
+                            <li><a href="../cloud-security-architect.html">Security Architect</a></li>
+                            <li><a href="../cloud-security-platform-engineer.html">Platform / Security SRE</a></li>
+                            <li><a href="../cloud-security-appsec-engineer.html">AppSec / IaC Engineer</a></li>
+                            <li><a href="../cloud-security-cnapp-analyst.html">CSPM / CNAPP Analyst</a></li>
+                            <li><a href="../cloud-security-iam-architect.html">IAM / Identity Architect</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Specialist &amp; Field Roles</span>
+                          <ul>
+                            <li><a href="../cloud-security-detection-engineer.html">Detection Engineer</a></li>
+                            <li><a href="../cloud-security-incident-responder.html">Incident Responder (DFIR)</a></li>
+                            <li><a href="../cloud-security-penetration-tester.html">Penetration Tester / Red Team</a></li>
+                            <li><a href="../cloud-security-grc-engineer.html">GRC / Compliance Engineer</a></li>
+                            <li><a href="../cloud-security-sales-engineer.html">Sales Engineer</a></li>
+                            <li><a href="../cloud-security-customer-success-engineer.html">Customer Success Engineer</a></li>
+                          </ul>
+                        </div>
+                        <a class="mega-all" href="../cloud-security-careers.html">All career guides <span class="mega-all-arrow" aria-hidden="true">&rarr;</span></a>
+                      </div>
+                    </li>
+                    <li class="has-dropdown has-mega">
+                      <button class="dropdown-toggle" aria-expanded="false" aria-haspopup="true">Community <span class="caret" aria-hidden="true">▾</span></button>
+                      <div class="dropdown-menu mega-menu mega-4col">
+                        <div class="mega-col">
+                          <span class="mega-heading">Live</span>
+                          <ul>
+                            <li><a href="../sessions.html">Friday Zoom Sessions</a></li>
+                            <li><a href="../calendar.html">Calendar</a></li>
+                            <li><a href="../community.html">Community &amp; Signal</a></li>
+                            <li><a href="../conferences.html">Conferences</a></li>
+                            <li><a href="../present.html">Present at CSOH</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Archive</span>
+                          <ul>
+                            <li><a href="../meetings.html">Meeting Recaps</a></li>
+                            <li><a href="../presentations.html">Presentations</a></li>
+                            <li><a href="../speakers.html">Guest Speakers</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Session Digests</span>
+                          <ul>
+                            <li class="mega-featured"><a href="../what-practitioners-think.html">What Practitioners Think<span class="mega-tag">All the session digests</span></a></li>
+                            <li><a href="../what-practitioners-think-about-ai-security.html">AI Security</a></li>
+                            <li><a href="../what-breaking-into-cloud-security-really-takes.html">Breaking In</a></li>
+                            <li><a href="../what-practitioners-think-about-vulnerability-management.html">Vulnerability Management</a></li>
+                            <li><a href="../what-practitioners-think-about-supply-chain-security.html">Supply Chain</a></li>
+                            <li><a href="../what-practitioners-think-about-security-regulation.html">Regulation</a></li>
+                            <li><a href="../what-practitioners-think-about-security-conferences.html">Attending Conferences</a></li>
+                            <li><a href="../what-practitioners-think-about-human-risk.html">Human Risk</a></li>
+                            <li><a href="../what-practitioners-think-about-identity.html">Identity &amp; Passwords</a></li>
+                          </ul>
+                        </div>
+                        <div class="mega-col">
+                          <span class="mega-heading">Connect</span>
+                          <ul>
+                            <li><a href="mailto:admin@csoh.org">Contact</a></li>
+                            <li><a href="https://csoh.kit.com/39feb4f397" target="_blank" rel="noopener noreferrer">Mailing List</a></li>
+                            <li><a href="https://github.com/CloudSecurityOfficeHours/csoh.org" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li><a href="../cloud-deployment.html">How We Deploy</a></li>
+                            <li><a href="../how-csoh-org-is-secured.html">How We Secure It</a></li>
+                            <li><a href="../rss.html">RSS Feed</a></li>
+                            <li><a href="../contribute.html">Contribute</a></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="nav-coffee-item"><a href="https://buymeacoffee.com/csoh" class="nav-coffee" target="_blank" rel="noopener noreferrer" title="Support CSOH on Buy Me a Coffee" aria-label="Support CSOH on Buy Me a Coffee"><span class="nav-coffee-icon" aria-hidden="true"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M2.8 6.2h8.4v3.4a3.6 3.6 0 0 1-3.6 3.6H6.4a3.6 3.6 0 0 1-3.6-3.6z"/><path d="M11.2 7.3h1.3a1.75 1.75 0 0 1 0 3.5h-1.3"/><path d="M5.6 2.2v1.7M8.4 2.2v1.7"/></svg></span> <span class="nav-coffee-label">Support</span></a></li>
+                    <li class="nav-cta-item"><a href="https://csoh.kit.com/39feb4f397" class="nav-cta" target="_blank" rel="noopener noreferrer">Get the Zoom link →</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol>
+            <li><a href="../index.html">Home</a></li>
+            <li><a href="../breach-timeline.html">Breach Kill Chains</a></li>
+            <li><span aria-current="page">wfx-loot / WFX Phantom 2026</span></li>
+        </ol>
+    </nav>
+
+    <section class="hero hero--compact">
+        <picture><source srcset="../banner.webp" type="image/webp"><img src="../banner.png" alt="Cloud Security Office Hours Banner" width="1200" height="400" class="hero-img" decoding="async" loading="eager"></picture>
+        <h1>wfx-loot / WFX Phantom 2026</h1>
+        <p>Step-by-step <a class="glossary-link" href="../glossary.html#term-kill-chain">kill chain</a> mapped to <a class="glossary-link" href="../glossary.html#term-mitre-att-ck">MITRE ATT&amp;CK</a> Cloud, sourced from official post-mortems and primary technical analyses.</p>
+    </section>
+
+    <main class="kc-main kc-page" id="main-content">
+<div class="incident-panel active" role="article" id="wfx-loot-github-actions">
+
+  <div class="inc-header">
+    <div class="inc-meta">
+      <span class="inc-year">November 2026</span>
+      <span class="sev-badge sev-critical">Critical</span>
+      <span class="prov-tag prov-green">GitHub Actions / AWS / Azure</span>
+    </div>
+    <h2 class="inc-title">wfx-loot / WFX Phantom - Tokens for 4,837 Compromised GitHub Accounts &rarr; Probe Pull Requests in 61,764 Repositories &rarr; Stealer Pushed, Run and Reverted &rarr; Runner Memory and Cloud Tokens Swept &rarr; Cloud Access Built to Outlive Rotation</h2>
+    <p class="inc-summary">Starting at about 12:45 UTC on November 10, 2026, someone holding GitHub credentials for thousands of accounts opened a pull request titled <code>docs: dependency audit notes</code>, from a branch named <code>wfx-docs</code>, in each repository it was testing. Aikido Security, which SafeDep says first reported the campaign, counts "4,837 compromised accounts opened probe pull requests in 61,764 repositories." In a smaller set of those repositories the operator then pushed a shell stealer of about 1,500 lines in one of four forms: steps added to an existing workflow, code appended to a shell script the repository already runs, a new workflow file on a throwaway branch, or a hidden script run by an <a class="glossary-link" href="../glossary.html#term-npm">npm</a> <code>postinstall</code> hook. All but the new workflow went straight to the default branch. "The commits are authored as real users of the repository, with their noreply email and no signature," SafeDep says. Within at most a minute, by Aikido's account, the operator reverted the change and deleted the workflow run along with its logs. Where it ran, the stealer read the memory of the runner process that holds decrypted secrets, took every Actions secret and variable directly when it ran from a workflow file, swept credential files and <a class="glossary-link" href="../glossary.html#term-ai">AI</a> tool keys, tried to exchange GitHub <a class="glossary-link" href="../glossary.html#term-oidc">OIDC</a> tokens for AWS, Google Cloud and Azure access, and sent the lot as one archive to a bare IP address on port 8080 and, from November 12, to a Telegram bot. The vendors name it differently: Aikido calls it wfx-loot, StepSecurity WFX Phantom, and SafeDep and Endor Labs wfx. The names refer to one campaign, and SafeDep explains the shared part: "The name wfx comes from the prefix the payload puts on its files, branches and cloud objects."</p>
+    <p class="inc-summary"><strong>What this chain adds is cloud access that rotating GitHub secrets does not remove.</strong> The site already covers <a href="megalodon-github-actions.html">Megalodon</a>, a May 2026 campaign that pushed workflows into thousands of repositories to sweep <a class="glossary-link" href="../glossary.html#term-ci-cd">CI</a> runners for credentials. wfx does that too, and then, where the cloud permissions it finds allow, it tries to leave access behind. In Azure it adds federated identity credentials named <code>wfx-ci-&lt;n&gt;</code> (StepSecurity) to app registrations, after which, in SafeDep's words, "Any workflow on the repository's main branch can then log in to Azure as that app, even after you rotate client secrets." In AWS, having assumed one role through GitHub OIDC and then a second, chained role, it sets the chained role's trust policy to <code>"Principal": {"AWS": "*"}</code>, "which opens the role to any AWS account" (Aikido), and it "lists <a class="glossary-link" href="../glossary.html#term-iam">IAM</a> users and calls <code>iam:CreateAccessKey</code> for up to two of them" (GitGuardian). Each change succeeds only where the stolen session holds the permission for it. GitGuardian says the code "tries to rewrite the chained role's trust policy", and no source reports a rewritten role, a created key or a <code>wfx-ci-</code> credential found in a victim's cloud. The two clouds differ in a way that matters for clean-up, as the <a class="glossary-link" href="../glossary.html#term-csa">CSA</a> note points out. The Azure credential works only for a workflow on one branch of that repository, the branch the payload names (<code>main</code> in SafeDep's samples), so taking away the hijacked account's write access also blunts it, though in the CSA's words it "grants renewed access to anyone who later regains write access to that repository." The open AWS role gives "immediate access that is independent of GitHub" (CSA). No source links wfx to Megalodon beyond similar techniques. Megalodon pushed from throwaway accounts under forged bot names; wfx commits as the real account, reverts its change and deletes the run, and reads the runner's memory.</p>
+    <p class="inc-summary"><strong>How the operator got the tokens is unconfirmed, and the published counts measure different things.</strong> Endor Labs: "How the credentials were stolen has not been confirmed for the campaign as a whole." Three partial explanations are on record, and no source offers any of them as the root cause. Fly.io says tokens issued to its GitHub App leaked from <code>.git/config</code> files that some of its customers' apps served on the internet, and that "Fly.io's systems were not breached." The owner of one hit repository says the probe on it "was created with a leaked GitHub CLI OAuth token". And GitGuardian found that "431 of the accounts used in the wfx campaign, about 20%, were already compromised in the GhostAction wave", an earlier campaign it tracks. Aikido nonetheless assesses the two as "distinct campaigns likely carried out by different threat actors", and no actor is named. Repository counts run from 61,764 probed down to "at least 1,806" with indications that the payload ran; step 10 sets them side by side and says what each one counts.</p>
+    <p class="inc-summary"><strong>Confirmed cases are few, partly because the evidence was deleted.</strong> At Nextcloud's <code>nextcloud/docker</code> repository the cleanup failed, and the surviving run shows that the stealer, appended to a script the repository runs, ran and, by StepSecurity's reading of the log, uploaded its archive. The owner of <code>StringKe/kxen</code> posted a notice on the probe pull request there saying that the attacker's workflow change read all Actions secrets and sent them to 18.143.168.96, and told maintainers to treat every secret as compromised; the notice names no run in kxen itself. At WebdriverIO, two commits were pushed as the project's bot account, which was allowed to bypass branch protection; StepSecurity says no WebdriverIO package release was affected. GitHub has published no statement on the campaign that this page could find. What is on record from GitHub is a hold, introduced in July, on potentially malicious workflow runs in public repositories. GitGuardian found that it held every November workflow-form run it could still see, seven of seven, and that the npm-hook form, which changes no workflow file, was not held and ran (public job logs from 19 repositories). StepSecurity's surviving Nextcloud run shows that the shell-script form ran too.</p>
+    <div class="inc-stats">
+      <div class="inc-stat"><strong>4,837 accounts</strong> opened probe pull requests in 61,764 repositories (Aikido); SafeDep's own search found 4,833 accounts and 61,734 repositories</div>
+      <div class="inc-stat"><strong>8,093 public default branches</strong> received a payload commit by 04:36 UTC on November 12 (SafeDep); Aikido has indications that the payload ran in "at least 1,806" repositories</div>
+      <div class="inc-stat"><strong>Azure and AWS footholds</strong> built to outlive a secret rotation, attempted where permissions allow: <code>wfx-ci-</code> federated credentials in Azure, an AWS role opened to any AWS account, and access keys for up to two IAM users</div>
+      <div class="inc-stat"><strong>No actor named</strong>; Aikido assesses wfx and GhostAction as "distinct campaigns likely carried out by different threat actors"</div>
+    </div>
+    <p class="inc-summary">This page rests on security vendors' write-ups (Aikido, StepSecurity, SafeDep, Endor Labs, GitGuardian, Semgrep, OX Security and Corgea), the Cloud Security Alliance's research note, Fly.io's notice and one repository owner's comment. They agree on the mechanism and differ on the counts and on the order of clean-up. Every source is linked so you can read it directly.</p>
+    <a class="pm-link" href="https://www.aikido.dev/blog/compromised-github-accounts-push-ci-secret-stealer-to-tens-of-thousands-of-repositories" target="_blank" rel="noopener">📄 Aikido Security: wfx-loot campaign pushes CI secret stealer to tens of thousands of repositories ↗</a>
+    <a class="pm-link" href="https://www.stepsecurity.io/blog/wfx-phantom-the-github-actions-secret-stealer" target="_blank" rel="noopener">📄 StepSecurity: WFX Phantom, the GitHub Actions secret stealer that deletes its tracks ↗</a>
+    <a class="pm-link" href="https://safedep.io/blog/github-actions-wfx-credential-stealer" target="_blank" rel="noopener">📄 SafeDep: wfx, GitHub Actions credential stealer hits 8,000 repositories ↗</a>
+    <a class="pm-link" href="https://blog.gitguardian.com/wfx-loot-a-ci-secret-stealer-pushed-with-stolen-github-credentials/" target="_blank" rel="noopener">📄 GitGuardian: wfx-loot, a CI secret stealer pushed with stolen GitHub credentials ↗</a>
+    <p class="u-mt-075" data-breach-deck><strong>Slides:</strong> <a href="https://docs.google.com/presentation/d/1Dy71hvBuNG9JWN_SAKx4Dwv2CjT_oeIIrqhIOyE3Cf8/export/pdf" target="_blank" rel="noopener noreferrer">download the PDF</a> or <a href="https://docs.google.com/presentation/d/1Dy71hvBuNG9JWN_SAKx4Dwv2CjT_oeIIrqhIOyE3Cf8/copy" target="_blank" rel="noopener noreferrer">make your own editable copy</a> (copying needs a Google account). The slides are licensed <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>.</p>
+  </div>
+  <div class="kill-chain">
+
+    <div class="phase-lbl ph-cred">🔑 Credential Exposure: Tokens From More Than One Place</div>
+    <div class="kc-step step-r">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The operator held working GitHub tokens for thousands of accounts; how it got them is unconfirmed for the campaign as a whole, but one subset leaked from .git/config files that some apps hosted on Fly.io served to the internet</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Unsecured Credentials: Credentials In Files</a>
+        </div>
+        <p class="step-desc">No source says how most of the tokens were obtained. Endor Labs: "How the credentials were stolen has not been confirmed for the campaign as a whole." The Cloud Security Alliance's research note calls it "unconfirmed for the campaign as a whole." Semgrep says the operator used "GitHub tokens stolen in earlier breaches", and that "how they first obtained them remains unknown." StepSecurity: "Most of the campaign's activity uses other credentials, such as personal access tokens." In two of the cases it examined, drunomics and WebdriverIO, "the token the attacker used belonged to a bot."</p>
+        <p class="step-desc">One subset has an explanation. StepSecurity found that 173 of the probe pull requests, opened from 19 accounts, were made through the Fly.io GitHub App. Fly.io's notice of November 12 says its deploy-from-GitHub process "left a GitHub access token in the <code>.git/config</code> file of the build directory." "Some apps include the whole build directory in their image and serve it over HTTP," and for those apps the file and the token in it "could be fetched from the app's public URL." Fly.io is explicit: "To be clear: Fly.io's systems were not breached." It counts "more than 250 in total" probe pull requests in affected customers' repositories, made with tokens "belonging to a small number of Fly.io accounts", and it started revoking all user tokens issued to its GitHub App, for every customer. In an addendum on November 13 it said that GitHub support "acknowledged the process had started and then stopped partway through."</p>
+        <p class="step-desc">Two more pieces come from a victim and a researcher. The owner of the repository <code>StringKe/kxen</code> wrote on the probe pull request there that it was created "with a leaked GitHub CLI OAuth token". GitGuardian found that "431 of the accounts used in the wfx campaign, about 20%, were already compromised in the GhostAction wave", an earlier credential-theft campaign it tracks, and the CSA note, citing Aikido, counts more than 100 repositories where the wfx payload was injected into GhostAction's leftover workflow files. Shared accounts do not show a shared operator: Aikido assesses "these are distinct campaigns likely carried out by different threat actors." No wfx source traces the tokens to <a class="glossary-link" href="../glossary.html#term-infostealer">infostealer</a> logs, which is where Hudson Rock traced many of Megalodon's, though GitGuardian lists infostealer logs among the ways stolen GitHub credentials in general are traded and reused.</p>
+        <p class="step-desc">This page maps the Fly.io subset, a token in a file served to the internet, to Credentials In Files. The rest of the tokens have no known origin and no technique here. What they share is that each was long-lived, carried write access, and still worked when the operator used it.</p>
+        <div class="step-code">
+          <span class="hl">Confirmed for the campaign as a whole:</span> no ("has not been confirmed", Endor Labs; "unconfirmed", CSA)<br>
+          <span class="hl">Fly.io subset:</span> 173 probe pull requests from 19 accounts through the Fly.io GitHub App (StepSecurity); "more than 250 in total" (Fly.io)<br>
+          <span class="hl">How those leaked:</span> a GitHub token in the build directory's .git/config, served over HTTP by apps that shipped the directory<br>
+          <span class="hl">One owner's account:</span> a leaked GitHub CLI OAuth token (StringKe/kxen)<br>
+          <span class="hl">Other credentials:</span> mostly personal access tokens; bot tokens at drunomics and WebdriverIO (StepSecurity)<br>
+          <span class="hl">GhostAction overlap:</span> 431 accounts, about 20% (GitGuardian); distinct campaigns, per Aikido<br>
+          <span class="hl">Why it worked:</span> long-lived tokens with write access stayed valid after they leaked<br>
+          <span class="hl">Detect:</span> request https://&lt;your-app&gt;.fly.dev/.git/config for any app deployed from GitHub, as Fly.io advises; give tokens an expiry and review which still hold write access (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Stolen Tokens</span><span class="stag">Fly.io</span><span class="stag">GitHub CLI</span><span class="stag">Personal Access Tokens</span><span class="stag">T1552.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-init">⚡ <a class="glossary-link" href="../glossary.html#term-initial-access">Initial Access</a>: A Pull Request That Tests the Token</div>
+    <div class="kc-step step-o">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">With each token the operator opened a pull request titled "docs: dependency audit notes" from a branch named wfx-docs, adding a two-line Markdown file, to confirm it could write to the repository</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 - Valid Accounts</a>
+        </div>
+        <p class="step-desc">StepSecurity describes the probe: a pull request titled <code>docs: dependency audit notes</code>, with the body "Routine dependency audit notes.", from a branch named <code>wfx-docs</code>, adding a two-line file, <code>docs/wfx-audit.md</code>, that is byte-identical in every pull request StepSecurity checked. Endor Labs: "Its job is to confirm write access." Its attack chain adds a second purpose: "It tests write access and triggers PR workflows." The owner of <code>StringKe/kxen</code> reads it the same way, writing that "its purpose was to trigger <code>pull_request</code> workflows against the poisoned default branch."</p>
+        <p class="step-desc">Aikido counts 4,837 accounts and 61,764 repositories for probe pull requests opened between 12:45 UTC on November 10 and 15:00 UTC on November 11, and 10,431 of the pull requests went to repositories the account did not own, reached through collaborator or organization access. SafeDep: "A probe pull request on its own means the account is compromised, even if no payload commit followed." Most were left in place: Aikido found 92% still open, which it says suggests most owners have not noticed. Nothing was exploited here; the token was valid and carried write access. This page maps the probe to Valid Accounts. ATT&amp;CK has no technique for testing what a token can do.</p>
+        <div class="step-code">
+          <span class="hl">Title:</span> docs: dependency audit notes<br>
+          <span class="hl">Body:</span> "Routine dependency audit notes."<br>
+          <span class="hl">Branch:</span> wfx-docs<br>
+          <span class="hl">File:</span> docs/wfx-audit.md, two lines, byte-identical in every pull request StepSecurity checked<br>
+          <span class="hl">Purpose:</span> confirm write access (Aikido, Endor Labs); trigger pull_request workflows (Endor Labs, StringKe/kxen's owner)<br>
+          <span class="hl">Scale:</span> 4,837 accounts, 61,764 repositories, 10,431 pull requests in repositories the account did not own (Aikido)<br>
+          <span class="hl">Why it worked:</span> a valid token with write access needs nothing more<br>
+          <span class="hl">Detect:</span> search your organizations for this title and branch; alert on a pull request from a branch pushed to the base repository by an account with no recent history there (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Probe Pull Request</span><span class="stag">Write Access Test</span><span class="stag">wfx-docs</span><span class="stag">T1078</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exec">🧪 Execution: Four Ways Into the Repository's CI</div>
+    <div class="kc-step step-y">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">In a subset of the probed repositories the operator pushed the stealer, authored as a real user of the repository, in one of four forms; three went straight to the default branch, and two change no workflow file</div>
+          <a class="mt mt-ex" href="https://attack.mitre.org/techniques/T1677/" target="_blank" rel="noopener">T1677 - Poisoned Pipeline Execution</a>
+        </div>
+        <p class="step-desc">StepSecurity and GitGuardian describe four ways the same script, about 1,500 lines of shell, reached a repository's CI (Aikido, SafeDep and Endor Labs list three, leaving out the shell-script form). The first, a commit titled <code>ci: refresh build cache</code>, adds two steps to an existing workflow: one, "Pass runtime", uses <code>actions/github-script@v7</code> to export the Actions runtime tokens, and the other runs the script with <code>WF_SECRETS: ${{ toJSON(secrets) }}</code> and <code>WF_VARS: ${{ toJSON(vars) }}</code>, handing it every secret and variable. The second appends the script to a shell script the repository already runs, as at Nextcloud, where it went into <code>update.sh</code>. The third, <code>chore: add dependency audit workflow</code>, adds a new workflow file, <code>build-audit-&lt;6 characters&gt;.yml</code>, that runs on every push, with permissions that include <code>id-token: write</code> (SafeDep). It went on a throwaway <code>chore/&lt;8 characters&gt;</code> branch (Aikido, StepSecurity, GitGuardian), except in empty repositories, where SafeDep found it pushed to the default branch after a <code>chore: initial commit</code>. The fourth, <code>chore: add ci helper</code>, adds a hidden <code>.ci-&lt;6 characters&gt;.sh</code> and a <code>package.json</code> script, usually <code>postinstall</code>, which SafeDep notes runs on each <code>npm install</code>, on developers' laptops as well as in CI. The first, second and fourth forms went straight to the default branch.</p>
+        <p class="step-desc">"The commits are authored as real users of the repository, with their noreply email and no signature," SafeDep says, a pattern it reads as pointing to stolen tokens. Endor Labs calls them sandwich commits: "The theft happens on the default branch, wrapped between two ordinary-looking commits." At WebdriverIO, StepSecurity says, the two <code>chore: add ci helper</code> commits were pushed as the project's bot account, <code>wdio-bot</code>, "which was allowed to bypass branch protection." StepSecurity, SafeDep and OX Security count 28 WebdriverIO repositories reached through that bot (Endor Labs says 20). No source cites a WebdriverIO run that completed; Endor Labs' case study says "The script sent secrets and cloud credentials to 194.150.166[.]244:8080/exfil" without citing a run, and StepSecurity says "no WebdriverIO package release was affected."</p>
+        <p class="step-desc">GitHub's newest control stopped some of this. Since July 28, 2026, GitHub Actions has held potentially malicious workflows for approval, a protection that "currently applies to public repositories on github.com only." GitGuardian found it held the workflow forms: "Every November payload run we could still observe was put in <code>action_required</code> and never started", seven of seven. The npm-hook form got past it. GitGuardian says the hook version "does not change any workflow file" and that "GitHub's hold never applies, which we validated by observing the public job logs": of 30 repositories that ran jobs on the hook commit, none was blocked, and it has job logs from 19 where the script executed. The shell-script form changes no workflow file either, and it ran at Nextcloud, where StepSecurity found the surviving run. Nor does the hold cover private repositories, and Aikido says the code's handling of private repositories "suggests that the payload may be being deployed in private repositories." A payload commit is therefore not proof that the payload ran (step 10).</p>
+        <p class="step-desc">The script can also forge required status checks. Aikido: "the payload posts forged <code>success</code> status checks against the commit SHA", which clear branch protection because it matches on the check's name rather than on the app that posted it. StepSecurity found the feature switched off: "None of the 101 copies we examined had this turned on." This page treats it as a capability, not something observed. It maps the payload commits to Poisoned Pipeline Execution: the operator changed what the repository's own CI runs.</p>
+        <div class="step-code">
+          <span class="hl">Form 1:</span> ci: refresh build cache, two steps added to an existing workflow on the default branch (7,309 repositories, SafeDep; may include form 2, which uses the same commit message, per Semgrep's note on counts by that message)<br>
+          <span class="hl">Form 2:</span> ci: refresh build cache, the script appended to a shell script CI already runs (Nextcloud's update.sh)<br>
+          <span class="hl">Form 3:</span> chore: add dependency audit workflow, a new build-audit-*.yml on a throwaway chore/* branch (Aikido, StepSecurity, GitGuardian); on the default branch in empty repositories (16, SafeDep)<br>
+          <span class="hl">Form 4:</span> chore: add ci helper, a hidden .ci-*.sh plus an npm postinstall script (771 repositories, SafeDep)<br>
+          <span class="hl">Author:</span> a real user of the repository, noreply email, unsigned (SafeDep)<br>
+          <span class="hl">GitHub's approval hold:</span> held every visible November workflow-form run, seven of seven (GitGuardian); form 4 not held and ran (GitGuardian); form 2 ran at Nextcloud (StepSecurity)<br>
+          <span class="hl">Capability, not observed:</span> forged required status checks, off in all 101 copies StepSecurity examined<br>
+          <span class="hl">Why it worked:</span> a push to the default branch, or a new on-push workflow on any branch, changes what CI runs, with no review, and a bot token could bypass branch protection<br>
+          <span class="hl">Detect:</span> unsigned commits to the default branch that touch workflows, scripts CI runs or package.json lifecycle hooks, followed within a minute by a revert, and new workflow files on short-lived chore/* branches (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Poisoned Pipeline</span><span class="stag">Default Branch</span><span class="stag">npm postinstall</span><span class="stag">Bot Account</span><span class="stag">Approval Hold</span><span class="stag">T1677</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-cred">🔑 Credential Access: Runner Memory, Files and AI Keys</div>
+    <div class="kc-step step-p">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stealer read the memory of the runner process that holds decrypted secrets, took every secret and variable when it ran from a workflow file, and swept other processes' environments, credential files and AI tool keys</div>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1003/007/" target="_blank" rel="noopener">T1003.007 - OS Credential Dumping: Proc Filesystem</a>
+          <a class="mt mt-ca" href="https://attack.mitre.org/techniques/T1552/001/" target="_blank" rel="noopener">T1552.001 - Unsecured Credentials: Credentials In Files</a>
+        </div>
+        <p class="step-desc">Aikido, StepSecurity and SafeDep describe the same collection. When the script runs from a workflow file, the workflow hands it every Actions secret and variable, the job's <code>GITHUB_TOKEN</code> and the Actions runtime tokens; GitGuardian limits that route to the existing-workflow and new-workflow forms. In every form, where <code>python3</code> is available (GitGuardian), it reads the memory of the runner's <code>Runner.Worker</code> process (Aikido and GitGuardian add <code>Runner.Listener</code>). StepSecurity says that process holds decrypted secrets, including ones the workflow never asked for, which, the CSA note explains, is why the shell-script and npm-hook forms can take secrets without editing a workflow. GitGuardian adds a limit: the memory scan "matches eight token families only", among them JWTs, GitHub, AWS and some AI provider tokens, so a secret in another format is taken only if it also sits in a process environment or a file.</p>
+        <p class="step-desc">It also reads other processes' environments under <code>/proc</code> and sweeps credential files for AWS, Azure, Google Cloud, Docker, <a class="glossary-link" href="../glossary.html#term-kubernetes">Kubernetes</a>, npm, <a class="glossary-link" href="../glossary.html#term-pypi">PyPI</a>, Git, SSH, GPG, Vault and <a class="glossary-link" href="../glossary.html#term-terraform">Terraform</a>, along with <code>.env</code> files, private keys and keystores, kubeconfig, Terraform variable and state files, shell histories and, SafeDep adds, cryptocurrency wallets. It looks for AI tool credentials too, for OpenAI, Anthropic, Gemini, Hugging Face, Cursor, Copilot and more. GitGuardian counts about 90 AI provider prefixes matched in environment variables, more than 90 fixed credential file paths plus a search of the home directory, and 92 secret patterns used to pick which repository files go into the archive. On self-hosted runners it also takes instance metadata credentials, container state and the runner's own credentials and RSA key (Aikido, GitGuardian). Nextcloud's job ran on one: StepSecurity says it "ran on Nextcloud's own server rather than one hosted by GitHub", so the stealer collected extra data from the machine itself, and Semgrep agrees. For self-hosted runners StepSecurity and the CSA note add the host's own credentials to the rotation list. The script also takes a snapshot of the repository and its last 100 commits.</p>
+        <p class="step-desc">The site's <a href="mini-shai-hulud-tanstack.html">Mini Shai-Hulud</a> page describes another campaign that read secrets from runner memory. No source links the actors; Semgrep remarks only that WFX "did learn something from Shai-Hulud." This page maps the memory read to Proc Filesystem and the file sweep to Credentials In Files.</p>
+        <div class="step-code">
+          <span class="hl">Secrets (workflow forms):</span> ${{ toJSON(secrets) }}, ${{ toJSON(vars) }}, GITHUB_TOKEN, Actions runtime tokens<br>
+          <span class="hl">Memory (every form):</span> Runner.Worker (and Runner.Listener, per Aikido and GitGuardian), which holds decrypted secrets; the scan matches eight token families (GitGuardian)<br>
+          <span class="hl">Environments:</span> /proc/*/environ<br>
+          <span class="hl">Files:</span> cloud, container, registry, Git, SSH, GPG, Vault and Terraform credentials; .env, .pem, .p12, .jks, .kdbx, kubeconfig, *.tfvars, *.tfstate; shell histories; wallets<br>
+          <span class="hl">AI keys:</span> about 90 AI provider prefixes in environment variables (GitGuardian)<br>
+          <span class="hl">Self-hosted runners:</span> instance metadata credentials, container state, the runner's own credentials (Aikido, GitGuardian); Nextcloud's job ran on one (StepSecurity, Semgrep)<br>
+          <span class="hl">Why it worked:</span> code on the default branch runs with the job's secrets, and the runner process holds more than the job asked for<br>
+          <span class="hl">Detect:</span> on runners, a process reading another process's memory or every /proc/*/environ (this page's suggestion); GitHub's audit log event workflows.prepared_workflow_job "Includes the list of secrets that were provided to the job" (GitHub Docs; organizations only, and only through the REST API, audit log streaming or exports), a starting list for rotation (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Runner Memory</span><span class="stag">Credential Files</span><span class="stag">AI Keys</span><span class="stag">T1003.007</span><span class="stag">T1552.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-priv">🔀 <a class="glossary-link" href="../glossary.html#term-lateral-movement">Lateral Movement</a>: GitHub's OIDC Token Into Three Clouds</div>
+    <div class="kc-step step-b">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stealer minted GitHub OIDC tokens and tried to exchange them for AWS, Google Cloud and Azure access; where AWS accepted one, it chained from the first role into a second</div>
+          <a class="mt mt-lm" href="https://attack.mitre.org/techniques/T1550/001/" target="_blank" rel="noopener">T1550.001 - Use Alternate Authentication Material: Application Access Token</a>
+        </div>
+        <p class="step-desc">GitHub Actions can issue a job a short-lived OIDC token, and a cloud that has been told to trust GitHub as an <a class="glossary-link" href="../glossary.html#term-idp">identity provider</a> exchanges that token for cloud credentials with no stored secret involved (this page's explanation). The stealer uses that path. In AWS it calls <code>AssumeRoleWithWebIdentity</code> for a role it finds named in the secrets, variables or repository, then assumes a further role, which Aikido and GitGuardian call the chained role; SafeDep says the sessions "are named <code>wfx-&lt;pid&gt;</code>". In Google Cloud it signs tokens with service-account keys it found and calls <code>generateAccessToken</code> and <code>signJwt</code> to impersonate service accounts. In Azure it exchanges OIDC tokens or client secrets for Azure Resource Manager tokens, lists subscriptions and Key Vaults and, per Aikido, replays refresh tokens from cached Azure CLI sessions against Microsoft's own client IDs for Graph, Resource Manager and <a class="glossary-link" href="../glossary.html#term-key-vault">Key Vault</a>. It replays the OIDC token against Vault and Kubernetes too.</p>
+        <p class="step-desc">An OIDC token is issued to whatever runs in the job, so a cloud trust that admits any workflow in the repository admits the stealer, which runs from the default branch or, in one form, from a throwaway branch (this page's reading). The CSA note: "Cloud OIDC trust should be scoped as tightly as GitHub's subject claims allow." This page maps the use of the exchanged tokens to Application Access Token.</p>
+        <div class="step-code">
+          <span class="hl">AWS:</span> AssumeRoleWithWebIdentity, then <a class="glossary-link" href="../glossary.html#term-assumerole">AssumeRole</a> into the chained role; sessions named wfx-&lt;pid&gt; (SafeDep)<br>
+          <span class="hl">Google Cloud:</span> found service-account keys used to sign tokens; generateAccessToken and signJwt<br>
+          <span class="hl">Azure:</span> Resource Manager tokens from OIDC tokens or client secrets; cached Azure CLI refresh tokens replayed (Aikido)<br>
+          <span class="hl">Vault and Kubernetes:</span> the OIDC token replayed<br>
+          <span class="hl">Why it worked:</span> cloud trust for GitHub OIDC admitted a workflow on a branch the stolen token could push to<br>
+          <span class="hl">Detect:</span> in <a class="glossary-link" href="../glossary.html#term-cloudtrail">CloudTrail</a>, AssumeRoleWithWebIdentity or AssumeRole with session name wfx-* (SafeDep, CSA); in Google Cloud, GenerateAccessToken and SignJwt from the GitHub <a class="glossary-link" href="../glossary.html#term-service-account">workload identity</a> pool; <a class="glossary-link" href="../glossary.html#term-jwt">JWT</a> logins to Vault, and Kubernetes secret reads, by identities from token.actions.githubusercontent.com (StepSecurity, GitGuardian; Vault also SafeDep, CSA)
+        </div>
+        <div class="step-tags"><span class="stag">OIDC</span><span class="stag">Workload Identity</span><span class="stag">AssumeRole</span><span class="stag">Role Chaining</span><span class="stag">T1550.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🪝 <a class="glossary-link" href="../glossary.html#term-persistence">Persistence</a>: A Federated Credential on Azure App Registrations</div>
+    <div class="kc-step step-r">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Where its Azure token can write app registrations, the stealer tries to add federated identity credentials named wfx-ci-&lt;n&gt; that let a workflow on one branch of the compromised repository, main in SafeDep's samples, sign in as the app</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1098/001/" target="_blank" rel="noopener">T1098.001 - Account Manipulation: Additional Cloud Credentials</a>
+        </div>
+        <p class="step-desc">Aikido: "it adds new federated identity credentials, named <code>wfx-ci-…</code>, to <a class="glossary-link" href="../glossary.html#term-entra-id">Azure AD</a> applications", pointing back to the compromised repository. StepSecurity gives the name as <code>wfx-ci-&lt;n&gt;</code>. A federated identity credential tells Entra ID to accept a token from an outside issuer, here GitHub's OIDC issuer, for a named subject, in place of a client secret or certificate (this page's explanation). SafeDep spells out the effect: "Any workflow on the repository's main branch can then log in to Azure as that app, even after you rotate client secrets." Aikido says such a workflow "can then authenticate to Azure without a stored secret, even after every token has been rotated."</p>
+        <p class="step-desc">The sources word the trusted branch differently. SafeDep and the CSA note name the repository's <code>main</code> branch; Aikido writes "Any workflow in that repository", and StepSecurity "trusting workflows in the compromised repository." Corgea's excerpt of the code sets the credential's subject to <code>ref:refs/heads/${WF_REF:-main}</code>, so the branch is whichever one the payload copy is configured with, <code>main</code> unless set otherwise, and <code>main</code> in SafeDep's samples.</p>
+        <p class="step-desc">The step works only where the identity the stealer obtained may write to app registrations. No source says it grants the app new permissions, so a later sign-in gets whatever roles and Microsoft Graph permissions the app already held (this page's reading). No source reports a <code>wfx-ci-</code> credential found in a victim <a class="glossary-link" href="../glossary.html#term-tenant">tenant</a>.</p>
+        <p class="step-desc">This credential is tied to GitHub. Using it takes a workflow run on that branch of that repository, so revoking the hijacked account's write access also blunts it. The CSA note puts the risk that remains: it "grants renewed access to anyone who later regains write access to that repository, whether the original attacker or someone holding another compromised account." Delete it either way. This page maps it to Additional Cloud Credentials, which covers credentials added to applications and service principals; ATT&amp;CK does not name federated credentials.</p>
+        <div class="step-code">
+          <span class="hl">Name:</span> wfx-ci-&lt;n&gt; (StepSecurity); wfx-ci-… (Aikido)<br>
+          <span class="hl">Added to:</span> Azure app registrations the stolen token could write<br>
+          <span class="hl">Trusts:</span> GitHub OIDC tokens for workflows on the branch the payload names in the compromised repository: main in SafeDep's samples (SafeDep, CSA); "Any workflow in that repository" (Aikido); subject ref:refs/heads/${WF_REF:-main} (Corgea)<br>
+          <span class="hl">Survives:</span> rotation of client secrets (SafeDep); "even after every token has been rotated" (Aikido)<br>
+          <span class="hl">Depends on GitHub:</span> yes; it needs a workflow run on that branch, and grants renewed access to anyone who regains write access (CSA)<br>
+          <span class="hl">Found in a victim tenant:</span> no source reports one<br>
+          <span class="hl">Why it worked:</span> an identity with write access to app registrations was reachable from CI<br>
+          <span class="hl">Detect:</span> Entra ID audit events that add a federated identity credential; az ad app federated-credential list --id &lt;app-id&gt; on every app registration (this page's suggestion), deleting any wfx-ci-* you did not create (StepSecurity, SafeDep, CSA, Endor Labs)
+        </div>
+        <div class="step-tags"><span class="stag">Entra ID</span><span class="stag">Federated Credential</span><span class="stag">App Registration</span><span class="stag">Survives Rotation</span><span class="stag">T1098.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-persist">🪝 Persistence: An AWS Role Opened to Any Account, and New Keys</div>
+    <div class="kc-step step-o">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">In AWS the stealer tries to set the chained role's trust policy to admit any AWS account and to create access keys for up to two IAM users; where it succeeds, the changes do not depend on GitHub</div>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 - Account Manipulation</a>
+          <a class="mt mt-pe" href="https://attack.mitre.org/techniques/T1098/001/" target="_blank" rel="noopener">T1098.001 - Account Manipulation: Additional Cloud Credentials</a>
+        </div>
+        <p class="step-desc">Aikido: "It sets the chained role's trust policy to <code>"Principal": {"AWS": "*"}</code>, which opens the role to any AWS account." StepSecurity: "It rewrites an assumed role's trust policy to <code>"Principal": {"AWS": "*"}</code>". GitGuardian is more cautious: the code "tries to rewrite the chained role's trust policy." The role changed is the second one in the chain, not the role that GitHub's OIDC trust admitted, and the sources describe the policy being set to that principal, not a condition on the OIDC trust being loosened. The CSA note qualifies the result: such a role "can be assumed from any AWS account in the world (absent restrictive trust-policy conditions)". The change succeeds only if the session is allowed to update that role's trust policy (this page's explanation).</p>
+        <p class="step-desc">Separately, GitGuardian says the code "lists IAM users and calls <code>iam:CreateAccessKey</code> for up to two of them", and Aikido that it calls <code>iam:CreateAccessKey</code> "to create long-lived credentials for IAM users." An IAM user's access key works until someone deletes it.</p>
+        <p class="step-desc">Neither change involves GitHub. The CSA note calls the open role "immediate access that is independent of GitHub", and the access keys are standalone credentials (this page's reading), so revoking the hijacked GitHub account and rotating GitHub secrets leave both in place; they have to be found and removed in AWS. As with Azure, no source reports a rewritten role or a created key found in a victim's account. ATT&amp;CK has no technique for replacing a role's trust policy, so this page maps it to the parent Account Manipulation; Trust Modification (T1484.002) concerns domain and tenant <a class="glossary-link" href="../glossary.html#term-federation">federation</a> trusts and fits less well. The access keys map to Additional Cloud Credentials, whose page names <code>CreateAccessKey</code>.</p>
+        <div class="step-code">
+          <span class="hl">Trust policy:</span> the chained role set to "Principal": {"AWS": "*"}, "which opens the role to any AWS account" (Aikido)<br>
+          <span class="hl">Access keys:</span> iam:CreateAccessKey "for up to two" IAM users (GitGuardian)<br>
+          <span class="hl">Succeeds only if:</span> the session may update the role's trust policy or create user keys (this page's explanation)<br>
+          <span class="hl">Depends on GitHub:</span> no; the open role is "independent of GitHub" (CSA)<br>
+          <span class="hl">Found in a victim account:</span> no source reports one<br>
+          <span class="hl">Why it worked:</span> a role reachable from CI could rewrite a trust policy or create user keys<br>
+          <span class="hl">Detect:</span> in CloudTrail, UpdateAssumeRolePolicy or CreateAccessKey from sessions named wfx-* (SafeDep, CSA); any role trust policy naming "AWS": "*" (CSA, Semgrep, OX Security); IAM access keys created since November 10 (Endor Labs, GitGuardian); <a class="glossary-link" href="../glossary.html#term-iam-access-analyzer">IAM Access Analyzer</a> findings for roles shared outside your organization (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">IAM Trust Policy</span><span class="stag">Access Keys</span><span class="stag">Role Chaining</span><span class="stag">Survives Rotation</span><span class="stag">T1098</span><span class="stag">T1098.001</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-exfil">📦 <a class="glossary-link" href="../glossary.html#term-exfiltration">Exfiltration</a>: A Bare IP on Port 8080, Then Telegram</div>
+    <div class="kc-step step-y">
+      <div class="step-num">08</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The stealer packed what it found into one gzipped archive and posted it to a bare IP address on port 8080; from November 12 new copies also sent it to a Telegram bot, and later only there</div>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1041/" target="_blank" rel="noopener">T1041 - Exfiltration Over C2 Channel</a>
+          <a class="mt mt-ef" href="https://attack.mitre.org/techniques/T1567/" target="_blank" rel="noopener">T1567 - Exfiltration Over Web Service</a>
+        </div>
+        <p class="step-desc">StepSecurity describes the deployed configuration: one gzipped tarball, sent by HTTP POST to <code>194.150.166[.]244:8080/exfil</code> or <code>18.143.168[.]96:8080/exfil</code> with a callback token, and later to <code>153.75.82[.]159:8080</code> alongside Telegram. "Telegram first appears in our samples at 01:10 UTC on November 12", and in StepSecurity's samples, "From about 05:30 UTC, new copies send stolen data only to a Telegram chat and carry no collection IP at all." Other vendors saw it earlier: GitGuardian dates its first Telegram-only copy to 01:48 UTC, and Endor Labs a Telegram-first test build to 01:52. The owner of <code>StringKe/kxen</code> wrote, in a notice on the probe pull request, that the attacker's workflow change read all Actions secrets and sent them to 18.143.168.96; the notice names no run in kxen. Nextcloud's surviving run log shows an 8,971-byte archive (<code>archive_bytes 8971</code>) and no retry message, from which StepSecurity concludes that the first upload, to 194.150.166[.]244, succeeded; Semgrep agrees. The code also carries channels inside GitHub, among them the Actions cache, the job's step summary and an artifact named <code>wfx-loot-&lt;run id&gt;</code>; Aikido and SafeDep say those were switched off in the copies they examined.</p>
+        <p class="step-desc">This page maps the HTTP upload to Exfiltration Over <a class="glossary-link" href="../glossary.html#term-c2">C2</a> Channel and the Telegram upload to Exfiltration Over Web Service. A runner allowed to reach only the hosts its builds need would have refused both (this page's reading). The CSA note: "Runner <a class="glossary-link" href="../glossary.html#term-ingress">egress</a> to the three collection IPs and to <code>api.telegram.org</code> should be blocked unless business-justified."</p>
+        <div class="step-code">
+          <span class="hl">Archive:</span> one gzipped tarball<br>
+          <span class="hl">HTTP:</span> POST to 194.150.166[.]244:8080/exfil or 18.143.168[.]96:8080/exfil; later 153.75.82[.]159:8080 (StepSecurity)<br>
+          <span class="hl">Telegram:</span> from 01:10 UTC on November 12; Telegram only from about 05:30 UTC (StepSecurity's samples); Telegram only from 01:48 (GitGuardian)<br>
+          <span class="hl">Upload on record:</span> Nextcloud's run log, archive_bytes 8971 and no retry message, so the first upload succeeded (StepSecurity, Semgrep)<br>
+          <span class="hl">Switched off:</span> Actions cache, step summary and artifact channels (Aikido, SafeDep)<br>
+          <span class="hl">Why it worked:</span> runners could reach arbitrary IP addresses and api.telegram.org<br>
+          <span class="hl">Detect:</span> a runner connecting to a raw IP address on an unusual port, or to api.telegram.org from a build that never uses it (CSA)
+        </div>
+        <div class="step-tags"><span class="stag">HTTP POST</span><span class="stag">Telegram</span><span class="stag">Runner Egress</span><span class="stag">T1041</span><span class="stag">T1567</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-de">🧹 Stealth: Revert, Then Delete the Run</div>
+    <div class="kc-step step-c">
+      <div class="step-num">09</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Usually within a minute the operator pushed a revert titled "ci: restore" and deleted the workflow run with its logs, leaving a gap in the run numbers as the main trace</div>
+          <a class="mt mt-de" href="https://attack.mitre.org/techniques/T1070/" target="_blank" rel="noopener">T1070 - Indicator Removal</a>
+        </div>
+        <p class="step-desc">Aikido: "the threat actor reverts within at most one minute and deletes the workflow run, along with its logs." StepSecurity's summary says "usually within a minute", and its examples vary: at <code>zerosoul/rc-bullets</code> "The revert landed two minutes later." The revert commit is titled <code>ci: restore</code>, sometimes <code>ci: cleanup</code>. Aikido and GitGuardian attribute the deletion to the actor, and it did not always happen: GitGuardian says "The actor deletes most payload runs." At Nextcloud, Semgrep writes, "The attacker's plan to clean up their mess failed, so the run log survived", and a Nextcloud developer reverted the commit 27 minutes later. At drunomics the revert came 12 seconds after the payload commit, and the Actions history "goes from run #1963 straight to run #1965. Run #1964, the run for the injected commit, is gone" (StepSecurity); Semgrep calls #1964 "the one that executed the stealer".</p>
+        <p class="step-desc">Endor Labs: "Because the payload sits on the default branch for only seconds, a scan of the current code finds nothing." What remains is history. StepSecurity: "The gap is the most reliable sign that the stealer ran." GitGuardian sets a limit on that: "A gap in run numbers proves a run was created. It does not prove the run executed." Of 65 November injection commits it examined, 37 have a gap in the workflow's run numbers at the payload commit. In an organization, GitHub's audit log records a deletion as <code>workflows.delete_workflow_run</code>, "A workflow run was deleted." The probe pull requests and <code>wfx-docs</code> branches were mostly left in place. This page maps the run and log deletion to Indicator Removal, under Stealth in ATT&amp;CK v19.</p>
+        <div class="step-code">
+          <span class="hl">Revert:</span> ci: restore, sometimes ci: cleanup, "within at most one minute" (Aikido); "usually within a minute" (StepSecurity), two minutes at zerosoul/rc-bullets<br>
+          <span class="hl">Deleted:</span> the workflow run and its logs, by the actor; "most payload runs" (GitGuardian)<br>
+          <span class="hl">Survived:</span> Nextcloud's run #2675, after the cleanup failed (StepSecurity, Semgrep)<br>
+          <span class="hl">Trace:</span> a gap in the run numbers, for example drunomics #1963 to #1965 (StepSecurity, Semgrep); 37 of 65 November injection commits (GitGuardian)<br>
+          <span class="hl">Limit:</span> a gap shows a run was created, not that it executed (GitGuardian)<br>
+          <span class="hl">Audit log:</span> workflows.delete_workflow_run, in organizations<br>
+          <span class="hl">Why it worked:</span> the token that pushed the code could also delete the run, and no copy of the log was kept elsewhere<br>
+          <span class="hl">Detect:</span> stream the organization audit log off GitHub (CSA) and alert on workflows.delete_workflow_run and on reverts that follow a push within a minute (this page's suggestion)
+        </div>
+        <div class="step-tags"><span class="stag">Run Deletion</span><span class="stag">Revert</span><span class="stag">Run-Number Gap</span><span class="stag">Audit Log</span><span class="stag">T1070</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">📊 Scale: Three Stages, Counted Different Ways</div>
+    <div class="kc-step step-p">
+      <div class="step-num">10</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">The published counts disagree because they count different stages: repositories probed, repositories that received a payload commit, and repositories where there are signs the payload ran</div>
+        </div>
+        <p class="step-desc">Read the counts as three stages, each smaller than the last (this page's framing): an account probed a repository with a pull request; in some of those the operator pushed a payload commit; in some of those the payload ran. Each source counts a different stage, by its own method and at its own time, and the campaign was still running when they searched. Each count below keeps its source's wording of what it measures.</p>
+        <div class="step-code">
+          <span class="hl">Probed, Aikido:</span> "4,837 compromised accounts opened probe pull requests in 61,764 repositories", from 12:45 UTC on November 10 to 15:00 UTC on November 11<br>
+          <span class="hl">Probed, SafeDep:</span> "61,879 of these pull requests in 61,734 repositories, opened from 4,833 accounts"<br>
+          <span class="hl">Probe pull requests, StepSecurity:</span> "more than 63,000", a count of pull requests, not repositories<br>
+          <span class="hl">Received a payload commit, SafeDep:</span> "8,093 repositories received malicious commits" between 12:46 UTC on November 10 and 04:36 UTC on November 12, counting public default branches only; by form 7,309 existing workflow, 771 npm hook and 16 new workflow in empty repositories, which sums to 8,096; the 7,309 may also take in the shell-script form, which shares the ci: refresh build cache message (see Semgrep's note below)<br>
+          <span class="hl">Payload patches, GitGuardian:</span> "28,500 payload patches from 2,367 accounts across 17,715 repositories" in its own dataset; window not stated<br>
+          <span class="hl">Payload commits, StepSecurity:</span> "more than 21,000 commits" titled ci: refresh build cache, a count of commits, not repositories, and one that, Semgrep notes, "also includes the next variant", the shell-script append<br>
+          <span class="hl">Pushed, StepSecurity:</span> the stealer goes "only where the token's permissions and the repository's setup let it run, which is thousands of repositories"; no exact count (its 63,000 counts probe pull requests)<br>
+          <span class="hl">Ran, Aikido:</span> "indications that the payload ran in at least 1,806 repositories, but this number may understate impact"; the same article also says "At least 1,835 repositories ran the payload and have had credentials exfiltrated", and explains neither method<br>
+          <span class="hl">Ran, GitGuardian:</span> public job logs from "a sample of 19 repositories where the script executed"
+        </div>
+        <p class="step-desc">Three cautions apply. SafeDep's 8,093 is a floor for its own stage: "Private repositories and other branches are missing, so the true total is higher." Receiving a payload is not running it. SecurityWeek notes of that count that it "does not necessarily indicate successful execution", and GitGuardian found that GitHub's approval hold stopped every visible November workflow-form run, seven of seven, while the npm-hook form was not held and ran; StepSecurity's surviving Nextcloud run shows the shell-script form ran too. And the counts of runs are floors because the operator deleted most runs and their logs (step 09). At the other end, SafeDep treats the probe alone as enough to act on: "A probe pull request on its own means the account is compromised, even if no payload commit followed." GitGuardian also traces an earlier wave, from October 24 to 29: "80 payload patches, 7 accounts, 12 repositories, all four delivery forms."</p>
+        <div class="step-tags"><span class="stag">Probed vs Pushed vs Ran</span><span class="stag">Counts</span><span class="stag">Approval Hold</span><span class="stag">Floors, Not Totals</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">📦 Supply Chain: A Release From a Hijacked Publisher</div>
+    <div class="kc-step step-b">
+      <div class="step-num">11</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Some hijacked accounts publish packages, and at least one release, Packagist's digitalelvis/neuronai-studio 3.14.3, shipped the stealer, though only an npm install inside the installed package runs it</div>
+          <a class="mt mt-ta" href="https://attack.mitre.org/techniques/T1195/002/" target="_blank" rel="noopener">T1195.002 - Compromise Software Supply Chain</a>
+        </div>
+        <p class="step-desc">Aikido: "At least 50 compromised users appear to publish packages for ecosystems including npm, Go, Packagist, PyPI or crates." It lists Packagist <code>digitalelvis/neuronai-studio</code> version 3.14.3 as malicious. SafeDep shows the sequence in that repository on November 11: the payload and a <code>postinstall</code> hook committed, the tag <code>v3.14.3</code> pushed, and a revert eight seconds later. SafeDep says its data "does not show who ran" the release, the owner or the attacker. The release ships the hidden script and its <code>postinstall</code> hook, which run only when someone runs <code>npm install</code> or <code>npm ci</code> inside the vendored package; <code>composer install</code> does not run them (StepSecurity, SafeDep, CSA). Aikido and Endor Labs still advise treating machines that installed the compromised Packagist version as compromised. Go module versions from hijacked accounts also carry the payload, but only in a workflow file, which a Go build does not run, and SafeDep's scan of "218 npm, Go and Packagist packages whose source repositories received malicious commits" found no further malicious versions, without checking PyPI. This page maps the release to Compromise Software Supply Chain.</p>
+        <div class="step-code">
+          <span class="hl">Publishers:</span> "At least 50 compromised users appear to publish packages" (Aikido)<br>
+          <span class="hl">Malicious release:</span> Packagist digitalelvis/neuronai-studio 3.14.3 (Aikido, SafeDep, StepSecurity)<br>
+          <span class="hl">Sequence:</span> payload and postinstall hook committed, tag v3.14.3 pushed, revert eight seconds later (SafeDep)<br>
+          <span class="hl">Who published:</span> not shown (SafeDep)<br>
+          <span class="hl">Runs on:</span> npm install or npm ci inside the vendored package, not composer install (StepSecurity, SafeDep, CSA)<br>
+          <span class="hl">Go modules:</span> payload only in a workflow file, which Go builds do not run<br>
+          <span class="hl">Why it worked:</span> a tag on a commit that existed for seconds was enough to publish a version (this page's reading)<br>
+          <span class="hl">Detect:</span> a release whose tag points at a commit reverted seconds later (this page's suggestion); newly introduced lifecycle hooks in a package manifest (CSA)
+        </div>
+        <div class="step-tags"><span class="stag">Packagist</span><span class="stag">Release</span><span class="stag">Lifecycle Hook</span><span class="stag">T1195.002</span></div>
+      </div>
+    </div>
+
+    <div class="phase-lbl ph-impact">🚨 Detection: Vendors, a Hosting Provider and One Owner</div>
+    <div class="kc-step step-r">
+      <div class="step-num">12</div>
+      <div class="step-body">
+        <div class="step-hdr">
+          <div class="step-title">Security vendors searching GitHub put the campaign on record on November 12, Fly.io started revoking its app's tokens the same day, and GitHub has said nothing public about it that this page could find</div>
+        </div>
+        <p class="step-desc">SafeDep says Aikido first reported the campaign. Aikido, StepSecurity, SafeDep, Endor Labs, Semgrep, OX Security and Corgea published on November 12, as did the CSA note, and GitGuardian followed on November 13. Their counts come from searching GitHub for the probe pull requests and the payload commits, which stayed in public history after the reverts. The owner of <code>StringKe/kxen</code> had already posted a notice on November 11 saying that the attacker's workflow change read all Actions secrets and sent them to 18.143.168.96, with the advice: "If you maintain this repository, treat every Actions secret it had on 2026-11-10 as compromised and rotate it."</p>
+        <p class="step-desc">Fly.io says it learned on November 12 that tokens issued to its GitHub App had been used by an unauthorized party. It notified the affected customers, started revoking all user tokens issued to the app, and changed its deploy process so that <code>.git</code> is no longer included in images built from GitHub. On November 13 it reported that GitHub's bulk revocation had "started and then stopped partway through."</p>
+        <p class="step-desc">GitHub has published no statement on the campaign that this page could find, and no source reports GitHub suspending the compromised accounts or revoking their tokens in bulk. Its July hold on potentially malicious workflows held the workflow-form runs GitGuardian could see; CSO Online says it "worked as designed for the payloads it could see." StepSecurity's summary of the root cause: "The attacker does not exploit a bug in GitHub Actions."</p>
+        <div class="step-code">
+          <span class="hl">October 24 to 29:</span> earlier wave, 80 payload patches across 12 repositories (GitGuardian)<br>
+          <span class="hl">November 10, about 12:45 UTC:</span> probe pull requests begin (Aikido); first malicious commit at 12:46 (SafeDep)<br>
+          <span class="hl">November 11:</span> Nextcloud's run survives the cleanup; StringKe/kxen's owner posts a notice that the attacker's workflow change sent Actions secrets to 18.143.168.96<br>
+          <span class="hl">November 12, 01:10 UTC:</span> Telegram exfiltration first seen (StepSecurity)<br>
+          <span class="hl">November 12:</span> Aikido, StepSecurity, SafeDep, Endor Labs, Semgrep, OX Security, Corgea and the CSA note publish; Fly.io starts revoking its GitHub App's user tokens<br>
+          <span class="hl">November 13:</span> GitGuardian publishes; Fly.io says GitHub's bulk revocation stopped partway through
+        </div>
+        <div class="step-tags"><span class="stag">Vendor Research</span><span class="stag">Fly.io</span><span class="stag">Token Revocation</span><span class="stag">GitHub</span></div>
+      </div>
+    </div>
+
+    <div class="def-box">
+      <h3>🛡 How to Defend Against This Chain</h3>
+      <div class="def-items">
+        <div class="def-item"><strong>Revoke the hijacked account's access, and choose the order on purpose.</strong> The sources disagree on order. SafeDep puts the account first: "Revoke the commit author's tokens, OAuth app grants, SSH keys and sessions, and turn on 2FA. That account is the likely entry point." Endor Labs also locks the accounts before rotating, and the CSA note lists the account ahead of rotation. StepSecurity and GitGuardian list rotation first and the account later, and GitGuardian adds that "Rotating the secrets the payload stole is not enough." The order matters because while the account can still push to the repository, the operator can push the stealer again and capture the secrets you have just rotated. This page suggests revoking the account's tokens, OAuth grants, SSH keys and sessions first, or in the same hour as rotation, and removing any bot's branch-protection bypass at the same time (this page's reasoning). If you deploy to Fly.io from GitHub, check that https://&lt;your-app&gt;.fly.dev/.git/config returns nothing, as Fly.io advises.</div>
+        <div class="def-item"><strong>Rotate everything the job could reach, not only what it used.</strong> "Where the payload ran, responders should rotate every secret the job could reach, not just those it referenced," says the CSA note, because the stealer read the runner's memory as well as the job's own secrets. That covers repository, environment and organization secrets, registry tokens, cloud keys and AI service keys, and on a self-hosted runner the host's own credentials (StepSecurity, CSA). In an organization, GitHub's audit log event <code>workflows.prepared_workflow_job</code> lists the secrets that were provided to each job, available only through the REST API, audit log streaming or exports (GitHub Docs), which gives you a starting list. Treat developer machines that ran <code>npm install</code> on an affected commit as compromised (StepSecurity, SafeDep, GitGuardian, CSA).</div>
+        <div class="def-item"><strong>Remove the cloud persistence yourself, because rotation leaves it in place.</strong> StepSecurity's heading says it: "Remove the persistence, because rotation alone does not." In Entra ID, list the federated identity credentials on every app registration (<code>az ad app federated-credential list --id &lt;app-id&gt;</code>) and delete any <code>wfx-ci-*</code> you did not create. In AWS, find roles whose trust policy names <code>"AWS": "*"</code> and restore the intended policy, delete IAM access keys created since November 10 that you cannot account for, and search CloudTrail for <code>AssumeRoleWithWebIdentity</code> or <code>AssumeRole</code> sessions named <code>wfx-*</code> followed by <code>CreateAccessKey</code> or <code>UpdateAssumeRolePolicy</code> (SafeDep, CSA). In Google Cloud, look for <code>GenerateAccessToken</code> and <code>SignJwt</code> from the GitHub workload identity pool, and in Vault and Kubernetes for JWT logins from <code>token.actions.githubusercontent.com</code>. Do the AWS part before or together with rotation (this page's suggestion): the CSA note calls the open role's access "independent of GitHub", and new access keys stand alone too, so nothing on the GitHub side touches either.</div>
+        <div class="def-item"><strong>Find what was pushed and what it left behind.</strong> Search every repository your developers can write to (Endor Labs) for the probe pull request (<code>docs: dependency audit notes</code> from <code>wfx-docs</code>), the commit titles <code>ci: refresh build cache</code>, <code>chore: add ci helper</code>, <code>chore: add dependency audit workflow</code> and <code>ci: restore</code>, and gaps in workflow run numbers. Because the code can forge required checks, look for commit statuses with the description <code>wfx</code> (GitGuardian), review the status checks posted on the attacker's commits (Endor Labs), and check that no commit was merged on the strength of a check the attacker marked as passed (StepSecurity). Endor Labs also suggests rulesets that expect each required check from a specific GitHub App. Close the probe pull requests and delete the <code>wfx-docs</code> and <code>chore/*</code> branches (StepSecurity, Endor Labs).</div>
+        <div class="def-item"><strong>Make the default branch refuse a lone token.</strong> Three of the four forms arrived as a direct push to the default branch. The CSA note's <a class="glossary-link" href="../glossary.html#term-hardening">hardening</a> list: require review for pushes to default and release branches, extend CODEOWNERS to the scripts and manifests CI runs, include admins in branch protection and audit the bypass lists, make <code>GITHUB_TOKEN</code> read-only by default, and keep deployment secrets in environments that need approval. Default-branch protection does not stop the new-workflow form, which went on a throwaway <code>chore/&lt;8 characters&gt;</code> branch (Aikido, StepSecurity, GitGuardian) and runs on any push; in public repositories GitHub's approval hold caught the workflow forms (GitGuardian), and secrets kept in environments that need approval are not handed to a workflow on an arbitrary branch (this page's reading). A bot allowed to bypass branch protection, as at WebdriverIO, skips all of it.</div>
+        <div class="def-item"><strong>Scope the cloud's trust in GitHub, and alert on anything that changes it.</strong> "Cloud OIDC trust should be scoped as tightly as GitHub's subject claims allow" (CSA). Trusting a subject that names a protected deployment environment, rather than any ref in the repository, means a push to the default branch alone does not get the role (this page's suggestion). Do not let a role CI can reach rewrite trust policies or create IAM user keys; an organization policy that denies <code>iam:UpdateAssumeRolePolicy</code> and <code>iam:CreateAccessKey</code> outside an administration path does that (this page's suggestion). And, in the CSA note's words: "Alerting on any creation or modification of federated identity credentials and IAM trust policies".</div>
+        <div class="def-item"><strong>Do not run lifecycle scripts in CI, and limit where runners can send data.</strong> The CSA note: "Teams should also use <code>npm ci --ignore-scripts</code> where feasible, alert on newly introduced lifecycle hooks". The npm-hook form runs on developers' laptops as well as in CI, and it got past GitHub's workflow hold because it changed no workflow file (GitGuardian). On runners, allow outbound traffic only to the hosts your builds need; the CSA note: "Runner egress to the three collection IPs and to <code>api.telegram.org</code> should be blocked unless business-justified."</div>
+        <div class="def-item"><strong>Keep the audit trail where the token cannot reach it.</strong> The operator deleted most runs and their logs with the same token that pushed the code. Stream the organization audit log off GitHub (CSA), alert on <code>workflows.delete_workflow_run</code>, and keep the run logs you would need for an investigation outside GitHub (this page's suggestion). Personal repositories have no organization audit log. For them, Fly.io advises looking for workflow runs you did not start, "including deleted runs in your GitHub security log", alongside the gap in the run numbers.</div>
+      </div>
+    </div>
+
+    <div class="src-box">
+      <h4>Primary Sources</h4>
+      <div class="src-links">
+        <a class="src-link" href="https://www.aikido.dev/blog/compromised-github-accounts-push-ci-secret-stealer-to-tens-of-thousands-of-repositories" target="_blank" rel="noopener">Aikido Security: wfx-loot campaign pushes CI secret stealer to tens of thousands of repositories, by Oliver Smith (November 12, 2026)</a>
+        <a class="src-link" href="https://www.stepsecurity.io/blog/wfx-phantom-the-github-actions-secret-stealer" target="_blank" rel="noopener">StepSecurity: WFX Phantom, The GitHub Actions Secret Stealer That Deletes Its Tracks, by Owais Shaikh (November 12, 2026)</a>
+        <a class="src-link" href="https://safedep.io/blog/github-actions-wfx-credential-stealer" target="_blank" rel="noopener">SafeDep: wfx, GitHub Actions Credential Stealer Hits 8,000 Repositories, by Kunal Singh (November 12, 2026)</a>
+        <a class="src-link" href="https://www.endorlabs.com/learn/github-actions-supply-chain-attack-targeting-ci-secrets-at-scale" target="_blank" rel="noopener">Endor Labs: Hijacked GitHub Accounts Push "wfx" CI Secret Stealer to Thousands of Repositories, by Bhavik Malhotra and Henrik Plate (November 12, 2026; updated November 13)</a>
+        <a class="src-link" href="https://blog.gitguardian.com/wfx-loot-a-ci-secret-stealer-pushed-with-stolen-github-credentials/" target="_blank" rel="noopener">GitGuardian: wfx-loot, A CI Secret Stealer Pushed With Stolen GitHub Credentials, by Gaetan Ferry (November 13, 2026)</a>
+        <a class="src-link" href="https://semgrep.dev/blog/2026/seconds-from-disaster-wfx-phantom-and-the-ci-pipeline-nobody-was-watching/" target="_blank" rel="noopener">Semgrep: Seconds from Disaster, WFX Phantom and the CI Pipeline Nobody Was Watching (November 12, 2026)</a>
+        <a class="src-link" href="https://www.ox.security/blog/thousands-of-github-accounts-hijacked-with-wfx-loot-ci-secret-stealing-malware-via-github-actions-npm/" target="_blank" rel="noopener">OX Security: Thousands Of GitHub Accounts Hijacked With wfx-loot CI Secret Stealing Malware Via GitHub Actions &amp; npm (November 12, 2026)</a>
+        <a class="src-link" href="https://corgea.com/research/wfx-phantom-wfx-loot-github-actions-secret-stealer-neuronai-studio-gocurl-redock-november-2026" target="_blank" rel="noopener">Corgea: WFX Phantom (wfx-loot) GitHub Actions secret stealer hits 8,093 repositories and leaks into Packagist neuronai-studio and Go modules (gocurl, redock) (November 12, 2026)</a>
+        <a class="src-link" href="https://labs.cloudsecurityalliance.org/research/csa-research-note-wfx-github-ci-secret-stealer-20261112-csa/" target="_blank" rel="noopener">Cloud Security Alliance AI Safety Initiative: The wfx Campaign, Hijacked GitHub Accounts Harvest CI Secrets (November 12, 2026)</a>
+        <a class="src-link" href="https://community.fly.io/t/security-github-tokens-exposed-by-apps-deployed-from-github/29070" target="_blank" rel="noopener">Fly.io community: Security, GitHub tokens exposed by apps deployed from GitHub (November 12, 2026; addendum November 13)</a>
+        <a class="src-link" href="https://github.com/StringKe/kxen/pull/52" target="_blank" rel="noopener">GitHub: StringKe/kxen pull request #52, the repository owner's comment (November 11, 2026)</a>
+        <a class="src-link" href="https://github.blog/changelog/2026-07-28-github-actions-holds-potentially-malicious-workflows-for-approval/" target="_blank" rel="noopener">GitHub changelog: GitHub Actions holds potentially malicious workflows for approval (July 28, 2026)</a>
+        <a class="src-link" href="https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/audit-log-events-for-your-organization" target="_blank" rel="noopener">GitHub Docs: Audit log events for your organization (workflows.delete_workflow_run, workflows.prepared_workflow_job)</a>
+        <a class="src-link" href="https://docs.github.com/en/actions/concepts/security/openid-connect" target="_blank" rel="noopener">GitHub Docs: OpenID Connect in GitHub Actions</a>
+        <a class="src-link" href="https://www.securityweek.com/attacker-targets-60000-github-repositories-in-credential-theft-campaign/" target="_blank" rel="noopener">SecurityWeek: Attacker Targets 60,000 GitHub Repositories in Credential Theft Campaign (November 12, 2026)</a>
+        <a class="src-link" href="https://www.csoonline.com/article/4248672/thousands-of-github-repos-hit-with-secret-stealing-malware.html" target="_blank" rel="noopener">CSO Online: Thousands of GitHub repos hit with secret-stealing malware (November 13, 2026)</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1677/" target="_blank" rel="noopener">MITRE T1677</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1003/007/" target="_blank" rel="noopener">MITRE T1003.007</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1098/001/" target="_blank" rel="noopener">MITRE T1098.001</a>
+        <a class="src-link" href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">MITRE T1098</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="src-box defense-topics-box">
+  <h4>Related defense topics</h4>
+  <div class="src-links">
+    <a class="src-link" href="../ci-cd.html">CI/CD security</a>
+    <a class="src-link" href="../github-actions.html">GitHub Actions</a>
+    <a class="src-link" href="../non-human-identity.html">Non-human identity</a>
+    <a class="src-link" href="../iam.html">IAM &amp; cloud identity</a>
+    <a class="src-link" href="../incident-response.html">Incident response</a>
+  </div>
+</div>
+        <nav class="incident-pager" aria-label="Other breach kill chains">
+            <a class="pager-link pager-prev" href="microsoft-agent-framework-pypi.html">← Previous breach</a>
+            <a class="pager-link pager-index" href="../breach-timeline.html">All breaches</a>
+            <a class="pager-link pager-next" href="barracuda-44-hour-intrusion.html">Next breach →</a>
+        </nav>
+    </main>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section footer-about">
+        <h3>CSOH</h3>
+        <p>A free community for cloud security professionals. Weekly Zoom sessions and curated resources.</p>
+      </div>
+      <div class="footer-section footer-support">
+        <h3>Support CSOH</h3>
+        <p>Free since 2023, and staying that way. If it has helped you, a coffee covers the hosting.</p>
+        <a href="https://buymeacoffee.com/csoh" class="footer-coffee" target="_blank" rel="noopener noreferrer"><span class="footer-coffee-icon" aria-hidden="true">&#9749;</span> Buy me a coffee</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2023-2026 Cloud Security Office Hours</p>
+      <ul class="footer-legal">
+        <li><a href="../about.html">About</a></li>
+        <li><a href="../privacy.html">Privacy</a></li>
+        <li><a href="../code-of-conduct.html">Code of Conduct</a></li>
+        <li><a href="../security-policy.html">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+    <script src="/main.js?v=59aab5a3" integrity="sha384-dB+qVv0Bh2JDBA+wsSREO9+89koSh2YyQ8me5SLY/soyhmbIrWeGiV4HHvxFAq3N"
+        defer></script>
+  <script data-goatcounter="https://csoh.goatcounter.com/count" src="/vendor/goatcounter-count.js?v=32a32552" defer integrity="sha384-ObOhzog52CljOXuYB632Z7vqGPbDMFN6J9jxRkkgcseQi+82fyfDkZYzPmr3zrIi"></script>
+</body>
+
+</html>

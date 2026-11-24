@@ -1,0 +1,586 @@
+title: wfx-loot / WFX Phantom
+page: breaches/wfx-loot-github-actions.html
+as-of: 2026-11-24
+promise: From November 10, 2026, someone holding tokens for thousands of GitHub accounts pushed a CI secret stealer into thousands of repositories, then reverted it; where permissions allowed, the code tried to leave cloud access that outlives secret rotation.
+
+== At a glance
+layout: stats
+stat: 4,837 | accounts opened probe pull requests | In 61,764 repositories (Aikido); SafeDep found 4,833 and 61,734
+stat: 8,093 | default branches got a payload commit | Public only, by November 12 (SafeDep); receiving is not running
+stat: 1,806 | repositories with signs it ran | "At least" (Aikido), which "may understate impact"
+The code tried to leave Azure and AWS access that outlives rotation, where permissions allowed; none is reported found. No actor is named.
+notes:
+Start with the figures the page leads with, and with whose they are. Each one counts a different stage of the campaign.
+
+Aikido Security, which SafeDep says first reported the campaign, counts 4,837 compromised accounts that opened probe pull requests in 61,764 repositories, between 12:45 UTC on November 10 and 15:00 UTC on November 11. SafeDep's own search found 4,833 accounts and 61,734 repositories.
+
+SafeDep counts 8,093 repositories whose public default branches received a malicious commit by 04:36 UTC on November 12. SafeDep says private repositories and other branches are missing, so the true total is higher. And receiving a payload is not running it.
+
+Aikido has indications that the payload ran in at least 1,806 repositories, and says that number may understate impact. The same article also says at least 1,835 repositories ran the payload, and explains neither method.
+
+Where cloud permissions allowed, the code tried to leave Azure and AWS access that outlives a secret rotation. No source reports that access found in a victim's cloud, and no actor is named.
+
+The vendors name the campaign differently: Aikido calls it wfx-loot, StepSecurity WFX Phantom, and SafeDep and Endor Labs wfx. The names refer to one campaign.
+
+== What happened, and when
+layout: timeline
+event: October 24 to 29 | An earlier wave: 80 payload patches in 12 repositories (GitGuardian)
+event: November 10, about 12:45 UTC | Probe pull requests begin (Aikido); SafeDep counts commits from 12:46
+event: November 11 | Nextcloud's run survives the cleanup; kxen's owner posts a notice
+event: November 12, 01:10 UTC | Telegram exfiltration first seen (StepSecurity)
+event: November 12 | Vendors and the CSA note publish; Fly.io starts revoking its app's tokens
+event: November 13 | GitGuardian publishes; GitHub's Fly.io token revocation stopped partway (Fly.io)
+All dates are 2026. Spacing is not to scale.
+notes:
+Every date on this slide is one the page gives, and the markers are evenly spaced, not to scale.
+
+GitGuardian traces an earlier wave, from October 24 to 29: 80 payload patches, 7 accounts, 12 repositories, all four delivery forms.
+
+The probe pull requests began at about 12:45 UTC on November 10, by Aikido's account, and SafeDep's count of malicious commits starts at 12:46.
+
+On November 11, at Nextcloud, the attacker's cleanup failed and the run survived. The owner of StringKe/kxen posted a notice on the probe pull request there the same day.
+
+StepSecurity first sees Telegram in its samples at 01:10 UTC on November 12. That day Aikido, StepSecurity, SafeDep, Endor Labs, Semgrep, OX Security, Corgea and the CSA note published, and Fly.io started revoking all user tokens issued to its GitHub App.
+
+On November 13 GitGuardian published, and Fly.io reported that GitHub's bulk revocation of its app's tokens had started and then stopped partway through. No source reports GitHub revoking the compromised accounts' tokens in bulk.
+
+GitHub's hold on potentially malicious workflows, which comes up at stage 03, dates from July 28, 2026.
+
+== What the sources say, and the page's caveats
+layout: table
+row: What the sources say | The caveat the page keeps
+row: Tokens for thousands of accounts | Origin unconfirmed overall; none offered as the root cause
+row: Probed, received and ran counts | Each counts its own stage; not all payloads ran
+row: Azure and AWS access that outlives rotation | Attempted where allowed; none reported found
+row: 431 accounts also in GhostAction (GitGuardian) | Aikido: "distinct campaigns likely carried out by different threat actors"
+row: Techniques like Megalodon's | No source links the actors; no actor is named
+The sources differ on the counts and on the order of clean-up.
+notes:
+This table keeps each claim beside the caveat the page keeps with it. The page rests on security vendors' write-ups, the Cloud Security Alliance's research note, Fly.io's notice and one repository owner's comment.
+
+How the operator got the tokens is unconfirmed for the campaign as a whole, in Endor Labs' words. Stage 01 has three partial explanations, and no source offers any of them as the root cause.
+
+The counts measure different things: repositories probed, repositories that received a payload commit, and repositories where there are signs the payload ran. Stage 10 sets them side by side.
+
+A payload commit is not proof the payload ran. In public repositories GitHub's approval hold held every November workflow-form run GitGuardian could still see, seven of seven. The npm-hook and shell-script forms, which change no workflow file, ran.
+
+The cloud persistence is what the code tries where the stolen session holds the permission. No source reports a rewritten role, a created key or a wfx-ci credential found in a victim's cloud.
+
+GitGuardian found 431 accounts, about 20%, already compromised in the GhostAction wave; Aikido still assesses the two as distinct campaigns. No source links the actors to Megalodon or Mini Shai-Hulud.
+
+== The kill chain, stages 01 to 06
+layout: flow
+step: 01 | Credential Exposure | Tokens from more than one place | T1552.001
+step: 02 | Initial Access | A pull request tests write access | T1078
+step: 03 | Execution | The stealer pushed, in four forms | T1677
+step: 04 | Credential Access | Runner memory, files and AI keys | T1003.007
+step: 05 | Lateral Movement | GitHub's OIDC token tried in three clouds | T1550.001
+step: 06 | Persistence | Tries an Azure federated credential | T1098.001
+Stage 01's technique covers only the Fly.io subset; other tokens have no known origin.
+notes:
+The page has twelve stages, so the chain takes two slides. Each step shows its phase and one ATT&CK technique the page maps to it.
+
+Stage 01 is the tokens: working GitHub tokens for thousands of accounts, from more than one place. The page maps only the Fly.io subset, a token in a file served to the internet, to Credentials In Files; the rest have no known origin and no technique.
+
+Stage 02 is the probe, a pull request that tests whether the token can write, mapped to Valid Accounts. Stage 03 is the stealer pushed in one of four forms, mapped to Poisoned Pipeline Execution. Stage 04 is collection from the runner's memory, credential files and AI tool keys. Stage 05 is the attempt to exchange GitHub's OIDC token for access in AWS, Google Cloud and Azure. Stage 06 is the attempt to add a federated credential to Azure app registrations, where the stolen token can write them; none is reported found.
+
+== The kill chain, stages 07 to 12
+layout: flow
+step: 07 | Persistence | An AWS role opened; new access keys | T1098
+step: 08 | Exfiltration | A bare IP on port 8080, then Telegram | T1041
+step: 09 | Stealth | Revert, then delete the run | T1070
+step: 10 | Scale | Three stages, counted different ways | -
+step: 11 | Supply Chain | A Packagist release shipped the stealer | T1195.002
+step: 12 | Detection | Vendors, Fly.io and one owner | -
+Stage 07 is tried where allowed; none is reported found. No technique for 10 or 12.
+notes:
+The second half runs from the AWS changes to how the campaign came to light.
+
+Stage 07 is AWS: the code tries to open the chained role's trust policy to any AWS account and to create access keys for up to two IAM users. Stage 08 is exfiltration, one archive posted to a bare IP address on port 8080 and, from November 12, to Telegram. Stage 09 is the cleanup: a revert, usually within a minute, and the run deleted with its logs. Stage 10 is the counts, which disagree because they count different stages. Stage 11 is a Packagist release from a hijacked publisher that shipped the stealer. Stage 12 is detection by vendors, a hosting provider and one repository owner.
+
+Stages 06 and 07 succeed only where the stolen session holds the permission, and no source reports either found in a victim's cloud. The page maps no technique to stages 10 and 12.
+
+The next slides take each stage in turn.
+
+== Working tokens for thousands of accounts, from more than one place
+layout: stage
+stage: 01
+phase: Credential Exposure
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Overall | unconfirmed for the campaign as a whole (Endor Labs, CSA)
+fact: Fly.io subset | a token in .git/config that some apps served over HTTP
+fact: One owner | "a leaked GitHub CLI OAuth token" (StringKe/kxen)
+fact: GhostAction | 431, about 20% (GitGuardian); distinct campaigns, per Aikido
+None is offered as the root cause. Fly.io: "Fly.io's systems were not breached."
+notes:
+No source says how most of the tokens were obtained. Endor Labs says it has not been confirmed for the campaign as a whole; Semgrep calls it unknown. StepSecurity says most of the activity uses other credentials, such as personal access tokens; at drunomics and WebdriverIO the token belonged to a bot.
+
+One subset has an explanation. StepSecurity found 173 probe pull requests, from 19 accounts, made through the Fly.io GitHub App. Fly.io says its deploy-from-GitHub process left a GitHub access token in the .git/config file of the build directory, and some apps served that directory over HTTP. Fly.io counts more than 250 probe pull requests in all, and is explicit that its own systems were not breached.
+
+The owner of StringKe/kxen says the probe there used a leaked GitHub CLI OAuth token. GitGuardian found 431 accounts, about 20%, already compromised in the GhostAction wave, an earlier campaign it tracks. Shared accounts do not show a shared operator: Aikido assesses distinct campaigns, likely by different threat actors.
+
+No wfx source traces the tokens to infostealer logs, which is where Hudson Rock traced many of Megalodon's.
+
+The page maps only the Fly.io subset to Credentials In Files. What the tokens share, it says, is that each was long-lived, carried write access, and still worked when the operator used it.
+
+== A pull request that tests the token
+layout: stage
+stage: 02
+phase: Initial Access
+technique: T1078 | Valid Accounts
+fact: Pull request | "docs: dependency audit notes", from a branch named wfx-docs
+fact: Purpose | confirm write access; trigger pull_request workflows
+fact: Not their own | 10,431 went to repositories the account did not own (Aikido)
+fact: Left open | 92% still open, per Aikido
+SafeDep: a probe pull request "on its own means the account is compromised."
+notes:
+With each token the operator opened a pull request titled docs: dependency audit notes, with the body Routine dependency audit notes, from a branch named wfx-docs. It adds a two-line file, docs/wfx-audit.md, byte-identical in every pull request StepSecurity checked.
+
+Endor Labs says its job is to confirm write access, and adds a second purpose: it triggers pull request workflows. The owner of StringKe/kxen reads it the same way, writing that its purpose was to trigger pull_request workflows against the poisoned default branch.
+
+Aikido counts 4,837 accounts and 61,764 repositories for probes opened between 12:45 UTC on November 10 and 15:00 UTC on November 11. Of the pull requests, 10,431 went to repositories the account did not own, reached through collaborator or organization access. Aikido found 92% still open, which it says suggests most owners have not noticed.
+
+Nothing was exploited here: the token was valid and carried write access. The page maps the probe to Valid Accounts, and notes that ATT&CK has no technique for testing what a token can do.
+
+Its suggestion: search your organizations for this title and branch.
+
+== The stealer, pushed as a real user, in four forms
+layout: stage
+stage: 03
+phase: Execution
+technique: T1677 | Poisoned Pipeline Execution
+fact: Default branch | forms 1, 2 and 4; form 3's new workflow went on a chore/* branch
+fact: Forms 1 and 2 | ci: refresh build cache, as workflow steps or in a CI script
+fact: Form 4 | chore: add ci helper, a hidden script run by npm postinstall
+fact: GitHub's hold | public repositories only: held seven of seven visible workflow-form runs (GitGuardian)
+fact: Ran anyway | forms 2 and 4, which change no workflow file
+notes:
+In a subset of the probed repositories the operator pushed the same script, about 1,500 lines of shell, in one of four forms. StepSecurity and GitGuardian describe four; Aikido, SafeDep and Endor Labs list three, leaving out the shell-script form.
+
+Form 1 adds two steps to an existing workflow that hand the script every secret and variable. Form 2 appends the script to a shell script the repository already runs, as in Nextcloud's update.sh. Form 3 adds a new workflow that runs on every push, on a throwaway branch except in empty repositories. Form 4 adds a hidden script and an npm postinstall hook, which runs on developers' laptops as well as in CI.
+
+At WebdriverIO the commits came from the project's bot account, which was allowed to bypass branch protection. StepSecurity says no WebdriverIO package release was affected.
+
+GitHub's hold on potentially malicious workflows, for public repositories only, held every November workflow-form run GitGuardian could still see, seven of seven. The npm-hook form was not held and ran, and the shell-script form ran at Nextcloud. Aikido says the code's handling of private repositories suggests the payload may be deployed in them. SafeDep says the commits came as real users, unsigned.
+
+It can also forge required status checks, switched off in all 101 copies StepSecurity examined.
+
+== Runner memory, credential files and AI keys
+layout: stage
+stage: 04
+phase: Credential Access
+technique: T1003.007 | OS Credential Dumping: Proc Filesystem
+technique: T1552.001 | Unsecured Credentials: Credentials In Files
+fact: Forms 1 and 3 | every secret and variable, GITHUB_TOKEN, runtime tokens
+fact: Every form | Runner.Worker's memory, where python3 is available
+fact: Runner.Worker | holds secrets the workflow never asked for (StepSecurity)
+fact: Memory scan | "matches eight token families only" (GitGuardian)
+fact: Files and keys | cloud, Kubernetes, SSH and Terraform credentials; AI keys
+notes:
+When the script runs from a workflow file, the workflow hands it every Actions secret and variable, the job's GITHUB_TOKEN and the Actions runtime tokens. GitGuardian limits that route to the two workflow forms.
+
+In every form, where python3 is available, it reads the memory of the runner's Runner.Worker process. StepSecurity says that process holds decrypted secrets, including ones the workflow never asked for, which, the CSA note explains, is why the shell-script and npm-hook forms can take secrets without editing a workflow. GitGuardian adds a limit: the memory scan matches eight token families only, so a secret in another format is taken only if it also sits in a process environment or a file.
+
+It also reads other processes' environments under /proc, sweeps credential files and looks for AI tool keys. On self-hosted runners it takes instance metadata credentials and the runner's own credentials; Nextcloud's job ran on Nextcloud's own server.
+
+The Mini Shai-Hulud kill chain describes another campaign that read secrets from runner memory. No source links the actors; Semgrep remarks only that WFX did learn something from Shai-Hulud.
+
+The next slide explains the proc filesystem in general terms.
+
+== What ATT&CK calls the proc filesystem
+layout: background
+source: MITRE ATT&CK T1003.007 | https://attack.mitre.org/techniques/T1003/007/
+ATT&CK: on Linux, /proc is an interface to kernel data. Each process's maps file shows its memory layout; its mem file, there for debugging, exposes that memory. With root, an adversary can search every process for credentials.
+notes:
+This is a background slide. It explains a general idea from MITRE ATT&CK's entry for T1003.007, OS Credential Dumping: Proc Filesystem, a Credential Access technique on Linux.
+
+ATT&CK describes the proc filesystem as a pseudo-filesystem that serves as an interface to the kernel data structures Linux uses to manage virtual memory. For each process, the maps file shows how memory is mapped within its virtual address space, and the mem file, exposed for debugging, gives access to that address space.
+
+With root privileges, ATT&CK says, adversaries can search those memory locations, for every process on a system, for patterns that indicate credentials, for example by filtering with regular expressions. Without privileged access, a process can still read its own memory, and some programs keep credentials there in cleartext.
+
+ATT&CK's mitigations include restricting access to privileged accounts, and its detection strategy watches for access to process memory through /proc.
+
+The page maps stage 04's read of Runner.Worker's memory to this technique. It does not say which privileges the script ran with, so read this slide as the general idea only.
+
+== GitHub's OIDC token, tried in three clouds
+layout: stage
+stage: 05
+phase: Lateral Movement
+technique: T1550.001 | Use Alternate Authentication Material: Application Access Token
+fact: AWS | AssumeRoleWithWebIdentity; where AWS accepted, AssumeRole into a chained role
+fact: Sessions | named wfx-<pid> (SafeDep)
+fact: Google Cloud | found keys sign tokens; generateAccessToken, signJwt
+fact: Azure | Resource Manager tokens; cached CLI refresh tokens (Aikido)
+CSA: OIDC trust "should be scoped as tightly as GitHub's subject claims allow."
+notes:
+The stealer minted GitHub OIDC tokens and tried to exchange them in three clouds. GitHub Actions can issue a job a short-lived OIDC token, and a cloud that has been told to trust GitHub as an identity provider exchanges that token for cloud credentials with no stored secret involved. That is the page's explanation.
+
+In AWS it calls AssumeRoleWithWebIdentity for a role it finds named in the secrets, variables or repository and, where AWS accepted one, then assumes a further role, which Aikido and GitGuardian call the chained role. SafeDep says the sessions are named wfx followed by the process ID. In Google Cloud it signs tokens with service-account keys it found and calls generateAccessToken and signJwt to impersonate service accounts. In Azure it exchanges OIDC tokens or client secrets for Azure Resource Manager tokens, lists subscriptions and Key Vaults and, per Aikido, replays refresh tokens from cached Azure CLI sessions. It replays the OIDC token against Vault and Kubernetes too.
+
+On the page's reading, an OIDC token is issued to whatever runs in the job, so a cloud trust that admits any workflow in the repository admits the stealer. The page maps the use of the exchanged tokens to Application Access Token.
+
+The next slide explains, in general terms, how AWS limits which workflows a role trusts.
+
+== How AWS limits which GitHub workflows a role trusts
+layout: background
+source: AWS IAM User Guide, a role for GitHub OIDC | https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-idp_oidc.html
+AWS: a trust policy condition on the subject claim can limit a role to a GitHub organization, repository or branch. Not limited to an organization or repository, it warns, workflows outside your control can assume the role.
+notes:
+This is a background slide, from AWS's IAM User Guide, in general terms.
+
+When GitHub's OIDC provider is the trusted principal for a role, AWS calls it best practice to limit which entities can assume it. A condition in the trust policy on the key token.actions.githubusercontent.com:sub, the subject claim, can limit the role to a specific GitHub organization, repository or branch, and AWS recommends limiting it to a specific set of repositories or branches. IAM refuses a trust policy where that key is missing or is only a wildcard. If the key is not limited to a specific organization or repository, AWS warns, GitHub Actions from organizations or repositories outside your control can assume the role.
+
+AWS's examples range from one branch of one repository to any repository in an organization. Where workflows use GitHub environments, AWS strongly recommends protection rules on the environment, with deployment branches and tags restricting which can deploy.
+
+The page's own suggestion, at the defenses, is to trust a subject that names a protected deployment environment rather than any ref in the repository. Read this slide as the general mechanism only.
+
+== A federated credential, tried on Azure app registrations
+layout: stage
+stage: 06
+phase: Persistence
+technique: T1098.001 | Account Manipulation: Additional Cloud Credentials
+fact: Name | wfx-ci-<n>, on apps its Azure token could write
+fact: Trusts | one branch of that repository; main in SafeDep's samples
+fact: Survives | rotation of client secrets (SafeDep)
+fact: Found in a tenant | no source reports one
+CSA: it "grants renewed access to anyone who later regains write access."
+notes:
+Aikido says the stealer adds new federated identity credentials, named wfx-ci and a suffix, to Azure AD applications, pointing back to the compromised repository. StepSecurity writes the name as wfx-ci-<n>.
+
+The page explains the mechanism: a federated identity credential tells Entra ID to accept a token from an outside issuer, here GitHub's OIDC issuer, for a named subject, in place of a client secret or certificate. SafeDep: any workflow on the repository's main branch can then log in to Azure as that app, even after you rotate client secrets.
+
+The sources word the trusted branch differently. SafeDep and the CSA note name main; Aikido writes any workflow in that repository. Corgea's excerpt of the code sets the subject to the branch the payload copy is configured with, main unless set otherwise.
+
+The step works only where the stolen identity may write to app registrations. No source says it grants the app new permissions, so, on the page's reading, a later sign-in gets whatever the app already held. No source reports a wfx-ci credential found in a victim tenant.
+
+Because using it takes a workflow run on that branch, revoking the hijacked account's write access blunts it. Delete it either way. The page maps it to Additional Cloud Credentials.
+
+== An AWS role opened to any account, and new access keys
+layout: stage
+stage: 07
+phase: Persistence
+technique: T1098 | Account Manipulation
+technique: T1098.001 | Account Manipulation: Additional Cloud Credentials
+fact: Trust policy | the chained role set to "Principal": {"AWS": "*"} (Aikido)
+fact: Access keys | iam:CreateAccessKey "for up to two" IAM users (GitGuardian)
+fact: Succeeds only if | the session may update the trust policy or create user keys
+fact: Depends on GitHub | no; the open role is "independent of GitHub" (CSA)
+GitGuardian: the code "tries to" rewrite it. Neither change is reported found.
+notes:
+Aikido says the stealer sets the chained role's trust policy to a principal of any AWS account, which opens the role to any AWS account. StepSecurity says it rewrites an assumed role's trust policy the same way. GitGuardian is more cautious: the code tries to rewrite it.
+
+The role changed is the second one in the chain, not the role GitHub's OIDC trust admitted, and the sources describe the policy being set to that principal, not a condition on the OIDC trust being loosened. The CSA note qualifies the result: such a role can be assumed from any AWS account in the world, absent restrictive trust-policy conditions. The change succeeds only if the session may update that role's trust policy.
+
+Separately, GitGuardian says the code lists IAM users and calls iam:CreateAccessKey for up to two of them. An IAM user's access key works until someone deletes it.
+
+Neither change involves GitHub, so revoking the hijacked account and rotating GitHub secrets leave both in place; they have to be found and removed in AWS. As with Azure, no source reports either found in a victim's account.
+
+ATT&CK has no technique for replacing a role's trust policy, so the page maps it to the parent, Account Manipulation, and the keys to Additional Cloud Credentials.
+
+== One archive to a bare IP on port 8080, then Telegram
+layout: stage
+stage: 08
+phase: Exfiltration
+technique: T1041 | Exfiltration Over C2 Channel
+technique: T1567 | Exfiltration Over Web Service
+fact: HTTP POST | 194.150.166[.]244 or 18.143.168[.]96, port 8080
+fact: Later | 153.75.82[.]159:8080, alongside Telegram
+fact: Telegram | from 01:10 UTC on November 12 (StepSecurity's samples)
+fact: Upload on record | Nextcloud: archive_bytes 8971, no retry (StepSecurity, Semgrep)
+CSA: runner egress to these hosts "should be blocked unless business-justified."
+notes:
+StepSecurity describes the deployed configuration: one gzipped tarball, sent by HTTP POST to one of two addresses on port 8080 with a callback token, and later to a third alongside Telegram. In its samples Telegram first appears at 01:10 UTC on November 12, and from about 05:30 UTC new copies send only to a Telegram chat. Other vendors saw that earlier: GitGuardian dates its first Telegram-only copy to 01:48 UTC, and Endor Labs a Telegram-first test build to 01:52.
+
+Nextcloud's surviving run log shows an 8,971-byte archive and no retry message, from which StepSecurity concludes the first upload succeeded; Semgrep agrees. The owner of StringKe/kxen wrote that the attacker's workflow change sent all Actions secrets to 18.143.168.96; that notice names no run in kxen itself.
+
+The code also carries channels inside GitHub, among them the Actions cache, the job's step summary and an artifact named wfx-loot plus the run ID. Aikido and SafeDep say those were switched off in the copies they examined.
+
+The page maps the HTTP upload to Exfiltration Over C2 Channel and the Telegram upload to Exfiltration Over Web Service. C2 is command and control. On the page's reading, a runner allowed to reach only the hosts its builds need would have refused both.
+
+== Revert, usually within a minute, then delete the run
+layout: stage
+stage: 09
+phase: Stealth
+technique: T1070 | Indicator Removal
+fact: Revert | ci: restore, "usually within a minute" (StepSecurity)
+fact: Deleted | the run and its logs; "most payload runs" (GitGuardian)
+fact: Trace | a gap in run numbers: drunomics #1963 to #1965 (StepSecurity)
+fact: Limit | GitGuardian: a gap shows a run was created, not executed
+Endor Labs: "a scan of the current code finds nothing."
+notes:
+Aikido says the actor reverts within at most one minute and deletes the workflow run, along with its logs. StepSecurity's summary says usually within a minute, and its examples vary: at zerosoul/rc-bullets the revert landed two minutes later. The revert is titled ci: restore, sometimes ci: cleanup.
+
+The deletion did not always happen. GitGuardian says the actor deletes most payload runs. At Nextcloud, Semgrep writes, the cleanup failed and the run log survived, and a Nextcloud developer reverted the commit 27 minutes later. At drunomics the revert came 12 seconds after the payload commit, and the history goes from run #1963 straight to #1965; Semgrep calls #1964 the one that executed the stealer.
+
+What remains is history. StepSecurity calls the gap in run numbers the most reliable sign that the stealer ran. GitGuardian sets a limit: a gap proves a run was created, not that it executed. Of 65 November injection commits it examined, 37 have a gap at the payload commit.
+
+In an organization, GitHub's audit log records a deletion as workflows.delete_workflow_run. The probe pull requests and wfx-docs branches were mostly left in place. The page maps the deletion to Indicator Removal, under Stealth in ATT&CK v19.
+
+== Three stages, counted different ways
+layout: stage
+stage: 10
+phase: Scale
+fact: Probed (Aikido) | 61,764 repositories, 4,837 accounts, November 10 to 11
+fact: Received (SafeDep) | 8,093 public default branches by November 12; a floor
+fact: Ran (Aikido) | indications in at least 1,806; method not explained
+fact: Ran (GitGuardian) | job logs from 19 repositories where the script executed
+fact: Floors | private repositories missing; most runs deleted with their logs
+Each counts its own stage, its own way. Receiving a payload is not running it.
+notes:
+The page reads the counts as three stages, each smaller than the last, and labels that framing its own: an account probed a repository; in some of those the operator pushed a payload commit; in some of those the payload ran. Each source counted while the campaign was still running.
+
+Probed: Aikido counts 4,837 accounts and 61,764 repositories. SafeDep counts 61,879 pull requests in 61,734 repositories from 4,833 accounts. StepSecurity's more than 63,000 counts pull requests, not repositories.
+
+Received: SafeDep counts 8,093 public default branches by 04:36 UTC on November 12. GitGuardian's own dataset has 28,500 payload patches from 2,367 accounts across 17,715 repositories, window not stated. StepSecurity counts more than 21,000 commits titled ci: refresh build cache, which Semgrep notes also includes the shell-script variant.
+
+Ran: Aikido has indications in at least 1,806 repositories, and in the same article says at least 1,835, explaining neither method. GitGuardian has public job logs from 19 repositories where the script executed.
+
+SafeDep's 8,093 is a floor for its stage, and the run counts are floors because the operator deleted most runs. SecurityWeek notes that SafeDep's count does not necessarily indicate successful execution.
+
+== A Packagist release that shipped the stealer
+layout: stage
+stage: 11
+phase: Supply Chain
+technique: T1195.002 | Supply Chain Compromise: Compromise Software Supply Chain
+fact: Release | Packagist digitalelvis/neuronai-studio 3.14.3
+fact: Sequence (SafeDep) | hook committed, tag pushed, reverted eight seconds later
+fact: Who published | not shown in SafeDep's data
+fact: Runs on | npm install or npm ci inside the package, not composer install
+Aikido: at least 50 compromised users appear to publish packages.
+notes:
+Aikido says at least 50 compromised users appear to publish packages for ecosystems including npm, Go, Packagist, PyPI or crates, and lists Packagist digitalelvis/neuronai-studio version 3.14.3 as malicious.
+
+SafeDep shows the sequence in that repository on November 11: the payload and a postinstall hook committed, the version tag pushed, and a revert eight seconds later. Its data does not show who ran the release, the owner or the attacker.
+
+The release ships the hidden script and its postinstall hook, which run only when someone runs npm install or npm ci inside the vendored package; composer install does not run them. Aikido and Endor Labs still advise treating machines that installed the compromised version as compromised.
+
+Go module versions from hijacked accounts also carry the payload, but only in a workflow file, which a Go build does not run. SafeDep's scan of 218 npm, Go and Packagist packages whose source repositories received malicious commits found no further malicious versions, without checking PyPI.
+
+On the page's reading, a tag on a commit that existed for seconds was enough to publish a version. It maps the release to Compromise Software Supply Chain.
+
+== Found by vendors, a hosting provider and one owner
+layout: stage
+stage: 12
+phase: Detection
+fact: November 11 | StringKe/kxen's owner posts a notice on the probe pull request
+fact: November 12 | write-ups published; Fly.io starts revoking its app's tokens
+fact: November 13 | GitHub's revocation of Fly.io app tokens "stopped partway through" (Fly.io)
+fact: GitHub | no public statement on the campaign that the page could find
+fact: Counts from | searching the public history the reverts left behind
+StepSecurity: "The attacker does not exploit a bug in GitHub Actions."
+notes:
+SafeDep says Aikido first reported the campaign. Aikido, StepSecurity, SafeDep, Endor Labs, Semgrep, OX Security and Corgea published on November 12, as did the CSA note, and GitGuardian followed on November 13. Their counts come from searching GitHub for the probe pull requests and the payload commits, which stayed in public history after the reverts.
+
+The owner of StringKe/kxen had already posted a notice on November 11, telling maintainers to treat every Actions secret the repository had on 2026-11-10 as compromised and rotate it.
+
+Fly.io says it learned on November 12 that tokens issued to its GitHub App had been used by an unauthorized party. It notified affected customers, started revoking all user tokens issued to the app, and stopped including .git in images built from GitHub. On November 13 it reported that GitHub's bulk revocation of those app tokens had started and then stopped partway through.
+
+GitHub has published no statement on the campaign that the page could find, and no source reports GitHub suspending the accounts or revoking their tokens in bulk. Its July hold held the workflow-form runs GitGuardian could see; CSO Online says it worked as designed for the payloads it could see.
+
+== What rotating GitHub secrets leaves in place
+layout: compare
+col: Azure federated credential (06) | Works only for a workflow on that branch of that repository | Revoking write access blunts it | CSA: "renewed access to anyone who later regains write access" | Delete it either way
+col: AWS role and access keys (07) | The open role: "immediate access that is independent of GitHub" (CSA) | New access keys stand alone (the page's reading) | Rotating GitHub secrets leaves both | Find and remove them in AWS
+Both are attempts where allowed; none is reported found in a victim's cloud.
+notes:
+This is what the page says the chain adds. The site already covers Megalodon, a May 2026 campaign that pushed workflows into thousands of repositories to sweep CI runners for credentials. wfx does that too, and then, where the cloud permissions it finds allow, it tries to leave access behind.
+
+The two clouds differ in a way that matters for clean-up, as the CSA note points out. The Azure credential works only for a workflow on one branch of that repository, the branch the payload names, so taking away the hijacked account's write access also blunts it. In the CSA's words it still grants renewed access to anyone who later regains write access to that repository, whether the original attacker or someone holding another compromised account.
+
+The open AWS role gives, in the CSA's words, immediate access that is independent of GitHub, and new access keys stand alone, on the page's reading. Nothing on the GitHub side touches either.
+
+Keep the hedge: each change succeeds only where the stolen session holds the permission for it, and no source reports a rewritten role, a created key or a wfx-ci credential found in a victim's cloud.
+
+== Defenses against stages 01 to 06
+layout: matrix
+columns: 01 | 02 | 03 | 04 | 05 | 06
+row: Revoke the account first, or with rotation | 01 | 02 | 03
+row: Rotate everything the job could reach | 04
+row: Remove the cloud persistence yourself | 05 | 06
+row: Find what was pushed and left behind | 02 | 03
+row: Make the default branch refuse a lone token | 03 | 04
+row: Scope cloud trust; alert on changes | 05 | 06
+row: No lifecycle scripts in CI; limit egress | 03
+A defense is marked only where its wording counters that stage. Every stage from 01 to 06 has at least one.
+notes:
+The page gives eight defenses. A cell is marked only where the defense's wording counters that stage, not where it merely mentions something from it.
+
+Revoking the account counters stage 01's stolen tokens, with Fly.io's check of .git/config, and ends the tokens' validity, which is all stage 02's probe needs; its warning that the account can push the stealer again, and its removal of bot bypasses, counter stage 03. Rotating everything the job could reach counters stage 04's collection. Removing the cloud persistence counters stage 06 and, on the next slide, 07; its searches in Google Cloud, Vault and Kubernetes look for stage 05's token exchanges. Finding what was pushed counters the probe pull requests at stage 02 and the payload commits and forged checks at stage 03. Making the default branch refuse a lone token counters stage 03's direct pushes, and, on the page's reading, secrets kept in environments that need approval are not handed to a workflow on an arbitrary branch, which limits what stage 04 can take. Scoping cloud trust counters stage 05 and alerts on stage 06's credential. The lifecycle-script defense counters the npm-hook form at stage 03.
+
+Every stage in this half has at least one defense. The order of the revocation is the first discussion question.
+
+== Defenses against stages 07 to 12
+layout: matrix
+columns: 07 | 08 | 09 | 10 | 11 | 12
+row: Remove the cloud persistence yourself | 07
+row: Scope cloud trust; alert on changes | 07
+row: No lifecycle scripts in CI; limit egress | 08 | 11
+row: Find what was pushed and left behind | 09
+row: Keep the audit trail out of reach | 09
+No defense addresses stage 10, the counts, or stage 12, how the campaign came to light.
+notes:
+Five defenses reach the second half of the chain.
+
+Removing the cloud persistence counters stage 07: restore any role trust policy that names any AWS account, and delete access keys created since November 10 that you cannot account for. Scoping cloud trust counters it too, with a deny on iam:UpdateAssumeRolePolicy and iam:CreateAccessKey outside an administration path, which is the page's suggestion. Limiting runner egress counters stage 08's uploads to bare IP addresses and Telegram. Alerting on newly introduced lifecycle hooks, and not running them in CI, counters the postinstall hook the stage 11 release ships; that alert is stage 11's own detect line. Finding what was pushed counters stage 09's cleanup through the revert commits and run-number gaps, and keeping the audit trail off GitHub counters the deleted runs and logs.
+
+Now look at the empty columns. Stage 10 is the counts, not an attacker step. Stage 12 is how the campaign came to light: vendors searching public GitHub, a hosting provider and one repository owner. None of the page's eight defenses addresses it, and that is the second discussion question.
+
+The next four slides take the defenses in pairs.
+
+== Revoke the account on purpose; rotate all the job could reach
+layout: compare
+col: Revoke the account, order chosen | Account first: SafeDep, Endor Labs, CSA; rotation first: StepSecurity, GitGuardian | While it can push, the operator can take rotated secrets | Account first or in the same hour; remove bot bypasses
+col: Rotate all the job could reach | CSA: "every secret the job could reach, not just those it referenced" | Includes registry, cloud and AI keys, and a self-hosted host's credentials | Organizations: workflows.prepared_workflow_job gives a starting list of each job's secrets
+The order and its reasoning are the page's suggestion; the sources disagree.
+notes:
+Two defenses for the response, and the sources disagree on their order.
+
+Revoke the hijacked account's access, and choose the order on purpose. SafeDep puts the account first: revoke the commit author's tokens, OAuth app grants, SSH keys and sessions, and turn on 2FA, because that account is the likely entry point. Endor Labs also locks the accounts before rotating, and the CSA note lists the account ahead of rotation. StepSecurity and GitGuardian list rotation first and the account later, and GitGuardian adds that rotating the secrets the payload stole is not enough. The order matters because while the account can still push, the operator can push the stealer again and capture the secrets you have just rotated. The page suggests revoking the account first, or in the same hour as rotation, and removing any bot's branch-protection bypass at the same time. Label that as the page's reasoning.
+
+Rotate everything the job could reach, not only what it used, says the CSA note, because the stealer read the runner's memory. In an organization, the audit log event workflows.prepared_workflow_job lists the secrets provided to each job, through the REST API, audit log streaming or exports only. Treat developer machines that ran npm install on an affected commit as compromised.
+
+== Remove the cloud persistence; scope the cloud's trust in GitHub
+layout: compare
+col: Remove the cloud persistence | Entra ID: delete wfx-ci-* credentials you did not create | AWS: fix trust policies naming "AWS": "*"; delete unexplained new keys | GCP SignJwt, GenerateAccessToken; Vault, Kubernetes JWT logins from GitHub | The page: AWS before or with rotation
+col: Scope the cloud's trust in GitHub | CSA: "as tightly as GitHub's subject claims allow" | The page: trust a protected environment, not any ref | The page: roles CI can reach may not rewrite trust or create keys
+CSA: alert on any creation or change of federated credentials and trust policies.
+notes:
+Two defenses for the clouds.
+
+Remove the cloud persistence yourself, because rotation leaves it in place; that is StepSecurity's heading too. In Entra ID, list the federated identity credentials on every app registration and delete any wfx-ci credential you did not create. In AWS, find roles whose trust policy names any AWS account and restore the intended policy, delete IAM access keys created since November 10 that you cannot account for, and search CloudTrail for sessions named wfx followed by CreateAccessKey or UpdateAssumeRolePolicy (SafeDep, CSA). In Google Cloud, look for GenerateAccessToken and SignJwt from the GitHub workload identity pool, and in Vault and Kubernetes for JWT logins from GitHub's token issuer. The page suggests doing the AWS part before or together with rotation, since nothing on the GitHub side touches it.
+
+Scope the cloud's trust in GitHub. The CSA note says OIDC trust should be scoped as tightly as GitHub's subject claims allow. The page suggests trusting a subject that names a protected deployment environment, so a push to the default branch alone does not get the role, and an organization policy that denies iam:UpdateAssumeRolePolicy and iam:CreateAccessKey outside an administration path. The CSA note adds alerting on any creation or modification of federated identity credentials and IAM trust policies.
+
+== Find what was pushed; keep the audit trail out of reach
+layout: compare
+col: Find what was pushed | Search every repository your developers can write to (Endor Labs) | Probe, payload and revert titles; run-number gaps | Forged checks: wfx statuses (GitGuardian); app-bound checks (Endor Labs)
+col: Keep the audit trail out of reach | Stream the organization audit log off GitHub (CSA) | The page: alert on workflows.delete_workflow_run; keep logs off GitHub | Personal repositories: deleted runs in the security log (Fly.io)
+Then close the probe pull requests and delete the wfx-docs and chore/* branches.
+notes:
+Two defenses for finding what happened, and for keeping the evidence.
+
+Find what was pushed and what it left behind. Search every repository your developers can write to, as Endor Labs advises, for the probe pull request from wfx-docs, the commit titles ci: refresh build cache, chore: add ci helper, chore: add dependency audit workflow and ci: restore, and gaps in workflow run numbers. Because the code can forge required checks, look for commit statuses with the description wfx (GitGuardian), review the status checks posted on the attacker's commits (Endor Labs), and check that no commit was merged on the strength of a check the attacker marked as passed (StepSecurity). Endor Labs also suggests rulesets that expect each required check from a specific GitHub App. Close the probe pull requests and delete the wfx-docs and chore branches.
+
+Keep the audit trail where the token cannot reach it. The operator deleted most runs and their logs with the same token that pushed the code. Stream the organization audit log off GitHub, as the CSA note says, and, as the page suggests, alert on workflows.delete_workflow_run and keep the run logs you would need outside GitHub. Personal repositories have no organization audit log; Fly.io advises looking for runs you did not start, including deleted runs in your GitHub security log.
+
+== Refuse a lone token; skip lifecycle scripts; limit runner egress
+layout: compare
+col: Protect the default branch | CSA: review pushes to default and release branches | CODEOWNERS on what CI runs; admins in branch protection | Read-only GITHUB_TOKEN; secrets in approval-gated environments
+col: Lifecycle scripts, runner egress | CSA: npm ci --ignore-scripts where feasible; alert on new hooks | Egress only to hosts builds need; CSA: block the IPs and Telegram unless justified
+Default-branch protection misses the new-workflow form. A bot allowed to bypass it skips all of it.
+notes:
+Two defenses that harden the repository and the runner.
+
+Make the default branch refuse a lone token. Three of the four forms arrived as a direct push to the default branch. The CSA note's hardening list: require review for pushes to default and release branches, extend CODEOWNERS to the scripts and manifests CI runs, include admins in branch protection and audit the bypass lists, make GITHUB_TOKEN read-only by default, and keep deployment secrets in environments that need approval. Default-branch protection does not stop the new-workflow form, which went on a throwaway branch and runs on any push. In public repositories GitHub's approval hold caught the workflow forms, and, on the page's reading, secrets kept in environments that need approval are not handed to a workflow on an arbitrary branch. A bot allowed to bypass branch protection, as at WebdriverIO, skips all of it.
+
+Do not run lifecycle scripts in CI, and limit where runners can send data. The CSA note says to use npm ci with ignore-scripts where feasible, and to alert on newly introduced lifecycle hooks. The npm-hook form runs on developers' laptops as well as in CI. On runners, allow outbound traffic only to the hosts your builds need; the CSA note says egress to the three collection IPs and to api.telegram.org should be blocked unless business-justified.
+
+== Check your own environment
+layout: checklist
+check: Could you revoke a hijacked account's tokens, keys and sessions within the hour?
+check: Could you list every secret a job could reach, not only those it used?
+check: Would you notice a federated credential or role trust policy you did not create?
+check: Can a push to the default branch alone get a role in your cloud?
+check: Can one token, a bot's included, push to your default branch unreviewed?
+check: Do CI jobs run npm lifecycle scripts? Where can your runners send data?
+check: If a run were deleted, would its logs and audit record survive off GitHub?
+notes:
+Turn the page's defenses into questions about your own estate. Each question comes from one of them.
+
+Ask how fast you could revoke a hijacked account's tokens, OAuth grants, SSH keys and sessions, and whether you could list every secret a job could reach, not only the ones it used.
+
+Ask whether you would notice a federated identity credential or a role trust policy you did not create, and whether a push to the default branch alone can get a role in your cloud.
+
+Ask whether one token can push to your default branch with no review, a bot's included, and whether CI jobs run npm lifecycle scripts or can send data anywhere.
+
+Finally, ask whether a deleted run would leave its logs and an audit record somewhere the token cannot reach, and whether you could search every repository your developers can write to for this campaign's commits.
+
+== Revoke the account first, or rotate the secrets first?
+layout: question
+The sources disagree. SafeDep, Endor Labs and the CSA note put the account first; StepSecurity and GitGuardian list rotation first. Which order would you choose, and why?
+notes:
+Give the room a minute with this one.
+
+The page's facts: the sources disagree on the order of clean-up. SafeDep puts the account first, calling it the likely entry point. Endor Labs locks the accounts before rotating, and the CSA note lists the account ahead of rotation. StepSecurity and GitGuardian list rotation first and the account later, and GitGuardian adds that rotating the secrets the payload stole is not enough.
+
+Ask each person to pick an order and give one reason before you show the answer slide. If anyone asks about AWS, note that the open role and new access keys do not depend on GitHub at all, so neither step on the GitHub side removes them.
+
+== The page's suggestion: revoke first, or in the same hour
+layout: answer
+The page's reasoning, labelled as its own:
+- While the account can push, the stealer can return for rotated secrets.
+- Remove any bot's branch-protection bypass at the same time.
+- Check for and remove any AWS persistence before or with rotation.
+notes:
+The page's answer is a suggestion, and it says so.
+
+It suggests revoking the account's tokens, OAuth grants, SSH keys and sessions first, or in the same hour as rotation, and removing any bot's branch-protection bypass at the same time. The reason: while the account can still push to the repository, the operator can push the stealer again and capture the secrets you have just rotated.
+
+For the clouds, it suggests doing the AWS part before or together with rotation, because the CSA note calls the open role's access independent of GitHub, and new access keys stand alone too, so nothing on the GitHub side touches either.
+
+Whatever the order, rotate every secret the job could reach, not only what it used, as the CSA note says. If you deploy to Fly.io from GitHub, check that your app's .git/config returns nothing, as Fly.io advises.
+
+Bring the group's answers back to this, and keep the disagreement between the sources on the record.
+
+== What would you add for stage 12?
+layout: question
+None of the page's eight defenses addresses stage 12: vendors searching public GitHub, a hosting provider and one owner brought the campaign to light. How would you have learned of it first?
+notes:
+This question comes from the empty column in the second defense matrix. Stage 10, the other empty column, is the counts, not an attacker step.
+
+At stage 12, security vendors searching GitHub put the campaign on record on November 12, from probe pull requests and payload commits that stayed in public history after the reverts. The owner of StringKe/kxen had posted a notice the day before. Fly.io learned on November 12 that tokens issued to its GitHub App had been used. GitHub has published no statement on the campaign that the page could find. Aikido found 92% of the probe pull requests still open, which it says suggests most owners have not noticed.
+
+Let the group propose ideas before you show the answer slide. Ask each proposal to name the detail from the page it would have caught: the probe pull request, the payload commit, the revert, the deleted run or the token's use.
+
+== The page's defenses do not address stage 12
+layout: answer
+This deck adds none. Stage 12 records:
+- Vendor counts came from history the reverts left behind.
+- GitHub published no statement the page could find.
+- The page's detect suggestions at stages 02 and 09 are a place to start.
+notes:
+Be clear that the page's defenses stop here. None of the page's eight defenses addresses stage 12, and this deck adds none of its own.
+
+What stage 12 records: the vendors' counts come from searching GitHub for the probe pull requests and payload commits, which stayed in public history after the reverts. The owner of StringKe/kxen posted a notice on the probe pull request there, telling maintainers to treat every Actions secret as compromised and rotate it. GitHub has published no statement that the page could find.
+
+The group may point to the defense on finding what was pushed, which searches for those same pull requests and commit titles, or to streaming the audit log off GitHub. The deck's matrix ties those defenses to stages 02, 03 and 09, not to stage 12, so keep that argument the group's own. The page's own detect suggestions point earlier: at stage 02, alert on a pull request from a branch pushed to the base repository by an account with no recent history there; at stage 09, alert on reverts that follow a push within a minute.
+
+== Primary sources
+layout: links
+link: Aikido Security, wfx-loot campaign pushes a CI secret stealer | https://www.aikido.dev/blog/compromised-github-accounts-push-ci-secret-stealer-to-tens-of-thousands-of-repositories
+link: StepSecurity, WFX Phantom, the GitHub Actions secret stealer | https://www.stepsecurity.io/blog/wfx-phantom-the-github-actions-secret-stealer
+link: SafeDep, wfx GitHub Actions credential stealer | https://safedep.io/blog/github-actions-wfx-credential-stealer
+link: Endor Labs, hijacked GitHub accounts push the wfx stealer | https://www.endorlabs.com/learn/github-actions-supply-chain-attack-targeting-ci-secrets-at-scale
+link: GitGuardian, wfx-loot, a CI secret stealer | https://blog.gitguardian.com/wfx-loot-a-ci-secret-stealer-pushed-with-stolen-github-credentials/
+link: Cloud Security Alliance, research note on the wfx campaign | https://labs.cloudsecurityalliance.org/research/csa-research-note-wfx-github-ci-secret-stealer-20261112-csa/
+link: Fly.io, GitHub tokens exposed by apps deployed from GitHub | https://community.fly.io/t/security-github-tokens-exposed-by-apps-deployed-from-github/29070
+link: GitHub changelog, Actions holds potentially malicious workflows | https://github.blog/changelog/2026-07-28-github-actions-holds-potentially-malicious-workflows-for-approval/
+notes:
+These are primary sources the csoh.org kill chain cites. Every fact about the incident in this deck comes from that page, which draws on these.
+
+Aikido, StepSecurity, SafeDep and Endor Labs published on November 12, and GitGuardian on November 13. The Cloud Security Alliance's research note is from November 12. Fly.io's community notice of November 12, with its addendum of November 13, covers the tokens issued to its GitHub App. GitHub's changelog of July 28 introduced the hold on potentially malicious workflows in public repositories.
+
+The page also cites Semgrep, OX Security and Corgea, the StringKe/kxen owner's comment on pull request #52, GitHub's documentation on audit log events and on OpenID Connect, SecurityWeek, CSO Online and MITRE ATT&CK pages for four techniques. They are left off this slide for space.
+
+The background slides name their own sources: MITRE ATT&CK and AWS's IAM documentation.
+
+== Related kill chains and defense topics
+layout: links
+link: Megalodon / GitHub Actions | breaches/megalodon-github-actions.html
+link: Mini Shai-Hulud / TanStack npm | breaches/mini-shai-hulud-tanstack.html
+link: CI/CD security | ci-cd.html
+link: GitHub Actions | github-actions.html
+link: Non-human identity | non-human-identity.html
+link: IAM and cloud identity | iam.html
+link: Incident response | incident-response.html
+No source links wfx to Megalodon beyond similar techniques, or its actors to Mini Shai-Hulud's.
+notes:
+The page links two other kill chains on csoh.org.
+
+Megalodon was a May 2026 campaign that pushed workflows into thousands of repositories to sweep CI runners for credentials. No source links wfx to it beyond similar techniques. Megalodon pushed from throwaway accounts under forged bot names; wfx commits as the real account, reverts its change and deletes the run, and reads the runner's memory. Hudson Rock traced many of Megalodon's tokens to infostealer logs; no wfx source does that.
+
+Mini Shai-Hulud describes another campaign that read secrets from runner memory. No source links the actors; Semgrep remarks only that WFX did learn something from Shai-Hulud.
+
+GhostAction, the earlier wave GitGuardian tracks, shares 431 accounts with wfx; Aikido assesses them as distinct campaigns, likely carried out by different threat actors. The page does not link a GhostAction kill chain.
+
+The defense topics cover CI/CD security, GitHub Actions, non-human identity, IAM and cloud identity, and incident response.
